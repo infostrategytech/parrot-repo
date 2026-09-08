@@ -32,8 +32,8 @@ jobs:
       - name: Build & deploy on server
         uses: appleboy/ssh-action@v1.2.0
         with:
-          host: ${{ vars.SERVER_HOST }}
-          username: ${{ vars.SERVER_USER || 'ubuntu' }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER || 'ubuntu' }}
           key: ${{ secrets.PARROT_PRIVATE_KEY }}
           script: |
             set -euo pipefail
