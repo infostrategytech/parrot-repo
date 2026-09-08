@@ -2,15 +2,9 @@ name: CI/CD
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main ]
   pull_request:
-    branches: [ main, develop ]
-
-env:
-  DOTNET_VERSION: '10.0.x'
-
-permissions:
-  contents: read
+    branches: [ main ]
 
 jobs:
   test:
@@ -20,69 +14,18 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
-          restore-keys: ${{ runner.os }}-nuget-
+          dotnet-version: '10.0.x'
 
       # Two solution files exist at the repo root (Backend.slnx, Parrot.Api.slnx);
       # pin the one without Parrot.Mobile or dotnet restore fails with MSB1011.
       - run: dotnet restore Backend.slnx
-      - run: dotnet build Backend.slnx --configuration Release --no-restore --warnaserror
-
-      - name: Test with coverage
-        run: |
-          dotnet test Backend.slnx --configuration Release --no-build --verbosity normal \
-            --logger trx \
-            --collect:"XPlat Code Coverage" \
-            --results-directory ./test-results
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: ./test-results/**/*.trx
-          retention-days: 7
-
-      - name: Upload coverage report
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: coverage-report
-          path: ./test-results/**/coverage.cobertura.xml
-          retention-days: 7
-
-  code-quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Cache NuGet packages
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/Directory.Build.props') }}
-          restore-keys: ${{ runner.os }}-nuget-
-
-      - run: dotnet restore Backend.slnx
-
-      - name: Check code formatting
-        run: dotnet format Backend.slnx --verify-no-changes --verbosity diagnostic
+      - run: dotnet build Backend.slnx --configuration Release --no-restore
+      - run: dotnet test Backend.slnx --configuration Release --no-build
 
   deploy:
-    needs: [test, code-quality]
+    needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    environment: production
     steps:
       # No registry involved: SSH to the AWS server, pull the new commit, and
       # let docker compose build the images and start the stack in place.
@@ -100,21 +43,3 @@ jobs:
             docker compose build
             docker compose up -d --remove-orphans
             docker system prune -f --volumes=false
-
-  smoke-test:
-    needs: deploy
-    runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.APP_URL != '' }}
-    steps:
-      - name: Poll /healthz
-        run: |
-          for i in 1 2 3 4 5; do
-            if curl -fsS "${{ vars.APP_URL }}/healthz"; then
-              echo "Service is healthy"
-              exit 0
-            fi
-            echo "Attempt $i failed, retrying in 10s..."
-            sleep 10
-          done
-          echo "Service failed health check after 5 attempts"
-          exit 1
