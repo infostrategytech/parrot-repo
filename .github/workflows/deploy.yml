@@ -42,6 +42,9 @@ jobs:
           script: |
             set -euo pipefail
             cd ${{ vars.SERVER_APP_DIR || '/home/ubuntu/Parrot' }}
+            if [ ! -w .git/objects ]; then
+              sudo chown -R "$(id -un)":"$(id -gn)" .git
+            fi
             git fetch https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git main
             git reset --hard FETCH_HEAD
             docker compose build
