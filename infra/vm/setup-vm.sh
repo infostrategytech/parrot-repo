@@ -68,9 +68,10 @@ cat > /app/deploy.sh << 'DEPLOY'
 #!/usr/bin/env bash
 set -euo pipefail
 IMAGE_TAG="${IMAGE_TAG:?IMAGE_TAG is required}"
+export IMAGE_TAG
 cd /app
-docker compose -f docker-compose.prod.yml pull
-docker compose -f docker-compose.prod.yml up -d --remove-orphans
+docker compose --env-file .env.prod -f docker-compose.prod.yml pull
+docker compose --env-file .env.prod -f docker-compose.prod.yml up -d --remove-orphans
 docker system prune -f --volumes=false
 DEPLOY
 chmod +x /app/deploy.sh

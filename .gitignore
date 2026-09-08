@@ -36,7 +36,7 @@ publish/
 local.settings.json
 
 # vscode
-.github/
+.vscode/
 
 # ASP.NET/Blazor/WASM
 wwwroot/_framework/
