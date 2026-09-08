@@ -43,3 +43,4 @@ jobs:
             docker compose build
             docker compose up -d --remove-orphans
             docker system prune -f --volumes=false
+            #maro
