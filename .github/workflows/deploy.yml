@@ -42,9 +42,11 @@ jobs:
           script: |
             set -euo pipefail
             cd ${{ vars.SERVER_APP_DIR || '/home/ubuntu/Parrot' }}
+            # .git ownership can drift after manual sudo commands on the server;
+            # reclaim it before fetching or git refuses to write new objects.
+            sudo chown -R "$(id -un)":"$(id -gn)" .git
             git fetch https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git main
             git reset --hard FETCH_HEAD
             docker compose build
             docker compose up -d --remove-orphans
             docker system prune -f --volumes=false
-            #maro
