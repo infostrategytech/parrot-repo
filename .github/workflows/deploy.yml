@@ -48,6 +48,6 @@ jobs:
             sudo chown -R "$(id -un)":"$(id -gn)" .
             git fetch https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git main
             git reset --hard FETCH_HEAD
-            docker compose build
-            docker compose up -d --remove-orphans
-            docker system prune -f --volumes=false
+            sudo docker compose build
+            sudo docker compose up -d --remove-orphans
+            sudo docker system prune -f --volumes=false
