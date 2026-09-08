@@ -196,7 +196,9 @@
     private void UpdateTime()
     {
         _now = DateTime.Now;
-        _greeting = _now.Hour switch { < 12 => "Good morning", < 18 => "Good afternoon", _ => "Good evening" };
+        _greeting = _now.Hour < 12 ? "Good morning"
+        : _now.Hour < 18 ? "Good afternoon"
+        : "Good evening";
         _dateStr = _now.ToString("dddd, MMMM d");
         _clockStr = _now.ToString("hh:mm:ss tt");
     }

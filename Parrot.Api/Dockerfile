@@ -1,4 +1,5 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 USER $APP_UID
 WORKDIR /app
 EXPOSE 8080
@@ -16,6 +17,7 @@ RUN dotnet restore "Parrot.Api/Parrot.Api.Rest.csproj"
 
 COPY . .
 WORKDIR "/src/Parrot.Api"
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 RUN dotnet publish "Parrot.Api.Rest.csproj" -c $BUILD_CONFIGURATION -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
