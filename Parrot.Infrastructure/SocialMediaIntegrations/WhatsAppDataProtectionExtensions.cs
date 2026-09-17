@@ -25,7 +25,7 @@ public static class WhatsAppDataProtectionExtensions
         IDataProtectionBuilder builder = services.AddDataProtection()
             .SetApplicationName("Parrot")
             .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
-        //TODO: throw exception.....
+        
           try 
           {
                 if (!string.IsNullOrWhiteSpace(certificatePath))
@@ -43,7 +43,14 @@ public static class WhatsAppDataProtectionExtensions
                     builder.ProtectKeysWithCertificate(certificate);
                 }
           }
-        catch {}
+        catch (Exception ex)
+        {
+            //TODO: throw exception.....
+            // inject ILogger if you have one here; otherwise:
+            Console.Error.WriteLine(
+                $"Data Protection certificate load failed ({certificatePath}): {ex}");
+            // do not call ProtectKeysWithCertificate
+        }
 
         services.AddSingleton<IWhatsAppTokenProtector, WhatsAppTokenProtector>();
         return services;
