@@ -155,6 +155,7 @@ services:
     restart: unless-stopped
     environment:
       DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
       Kafka__BootstrapServers: kafka:9092
       Kafka__Topic: whatsapp.messages
       Kafka__ConsumerGroupId: whatsapp-ingestor-local

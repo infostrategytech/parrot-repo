@@ -17,7 +17,7 @@
             <span class="cws-step-indicator">2</span><span class="cws-step-label">Receive Message</span>
         </div>
         <div class="cws-step-divider"></div>
-        <div class="cws-step"><span class="cws-step-indicator">3</span><span class="cws-step-label">Finish</span></div>
+        <div class="cws-step @(IsReceiving ? "cws-step--done" : "")"><span class="cws-step-indicator">3</span><span class="cws-step-label">Finish</span></div>
     </div>
 
     <div class="cws-body">
@@ -39,6 +39,15 @@
                 else
                 {
                     <p class="cws-panel-sub">Connection: <strong>@_setup.Connection.Name</strong></p>
+                    <label class="cws-field-label" for="business-account-id">WhatsApp Business Account ID</label>
+                    <input id="business-account-id" class="cws-input" @bind="_businessAccountId" maxlength="64" inputmode="numeric" disabled="@IsReceiving" />
+                    <label class="cws-field-label" for="phone-number-id">Phone Number ID</label>
+                    <input id="phone-number-id" class="cws-input" @bind="_phoneNumberId" maxlength="64" inputmode="numeric" disabled="@IsReceiving" />
+                    <p class="cws-token-helper">Copy these IDs from Meta's WhatsApp API Setup page. The Phone Number ID is different from the displayed phone number.</p>
+                    @if (!IsReceiving)
+                    {
+                        <button class="cws-copy-btn" @onclick="SaveAccountAsync" disabled="@_busy">Save account details</button>
+                    }
                     <label class="cws-field-label" for="webhook-url">Your webhook URL</label>
                     <div class="cws-copy-row">
                         <input id="webhook-url" class="cws-input" readonly value="@_setup.WebhookUrl" />
@@ -66,18 +75,19 @@
                     </div>
                     <div class="cws-actions">
                         <button class="cws-copy-btn" @onclick="CheckStatusAsync" disabled="@_busy">Check verification</button>
-                        <button class="cws-primary-btn" @onclick="Continue" disabled="@(_busy || !IsVerified)">Next →</button>
+                        <button class="cws-primary-btn" @onclick="Continue" disabled="@(_busy || !IsVerified || !HasAccount)">Next →</button>
                     </div>
                 }
             }
             else
             {
-                <h1 class="cws-panel-title">Receive Message</h1>
-                <p class="cws-panel-sub">Your webhook verification is saved. Message reception for this connection is not available yet.</p>
-                <div class="cws-info-box">You can return to channels and resume this setup later. Your connection is not marked as fully connected.</div>
+                <h1 class="cws-panel-title">@(IsReceiving ? "Receiving configured" : "Receive a test message")</h1>
+                <p class="cws-panel-sub">@(IsReceiving ? "A valid WhatsApp message has been saved for this connection." : "Subscribe to the messages field in Meta, then send a WhatsApp message to your business number from another phone.")</p>
+                <div class="cws-info-box" role="status">@(IsReceiving ? "Incoming messages are configured. Sending messages requires separate authorization." : "Waiting for a verified incoming message to be saved. You can leave and resume later.")</div>
                 <div class="cws-actions">
                     <button class="cws-copy-btn" @onclick="() => _currentStep = 0">Back</button>
-                    <a class="cws-primary-btn" href="/dashboard/channels">Save and exit</a>
+                    <button class="cws-copy-btn" @onclick="CheckStatusAsync" disabled="@_busy">Check for message</button>
+                    <a class="cws-primary-btn" href="/dashboard/channels">@(IsReceiving ? "Finish" : "Save and exit")</a>
                 </div>
             }
             @if (_busy)
@@ -113,6 +123,9 @@
     private string? _error, _notice;
     private bool _busy, _interactive, _disposed;
     private int _currentStep;
+    private string _businessAccountId = string.Empty, _phoneNumberId = string.Empty;
+    private bool IsReceiving => IsVerified && _setup?.Connection.FirstMessageReceivedAt is not null;
+    private bool HasAccount => !string.IsNullOrEmpty(_setup?.Connection.WhatsAppBusinessAccountId) && !string.IsNullOrEmpty(_setup?.Connection.PhoneNumberId);
     private bool IsVerified => _setup?.Connection.WebhookVerifiedAt is not null && _setup.Connection.DisabledAt is null;
     private string Token => AuthState.CurrentUser?.Token ?? throw new InvalidOperationException("Sign in to continue.");
 
@@ -141,6 +154,9 @@
         await RunAsync(async () =>
         {
             _setup = await IntegrationsService.CreateWhatsAppSetupAsync("WhatsApp Business", Token, _lifetime.Token);
+            _businessAccountId = _setup.Connection.WhatsAppBusinessAccountId ?? string.Empty;
+            _phoneNumberId = _setup.Connection.PhoneNumberId ?? string.Empty;
+            if (IsReceiving) _currentStep = 1;
         }, "Could not load your connection. Try again to continue with the same saved connection.");
     }
 
@@ -151,13 +167,32 @@
         {
             var connection = await IntegrationsService.GetWhatsAppStatusAsync(_setup.Connection.Id, Token, _lifetime.Token);
             _setup = _setup with { Connection = connection };
-            _notice = IsVerified ? "Verification confirmed." : "Verification has not been confirmed. Complete Verify and save in Meta, then check again.";
+            _notice = IsReceiving ? "Message saved. Receiving is configured."
+                : IsVerified ? "Webhook verified. Waiting for a test message to be saved."
+                : "Verification has not been confirmed. Complete Verify and save in Meta, then check again.";
         }, "Could not check verification. Please try again.");
     }
 
     private void Continue()
     {
-        if (IsVerified && !_busy) { _currentStep = 1; _notice = null; }
+        if (IsVerified && HasAccount && !_busy) { _currentStep = 1; _notice = null; }
+    }
+
+    private async Task SaveAccountAsync()
+    {
+        if (_setup is null) return;
+        if (string.IsNullOrWhiteSpace(_businessAccountId) || string.IsNullOrWhiteSpace(_phoneNumberId)
+            || !_businessAccountId.All(char.IsAsciiDigit) || !_phoneNumberId.All(char.IsAsciiDigit))
+        {
+            _error = "Enter the numeric Business Account ID and Phone Number ID from Meta.";
+            return;
+        }
+        await RunAsync(async () =>
+        {
+            await IntegrationsService.ConfigureWhatsAppAccountAsync(_setup.Connection.Id, _businessAccountId, _phoneNumberId, Token, _lifetime.Token);
+            _setup = _setup with { Connection = await IntegrationsService.GetWhatsAppStatusAsync(_setup.Connection.Id, Token, _lifetime.Token) };
+            _notice = "Account details saved.";
+        }, "Could not save account details. Check the IDs and try again.");
     }
 
     private async Task RunAsync(Func<Task> action, string failureMessage)

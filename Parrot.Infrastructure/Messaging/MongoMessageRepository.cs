@@ -32,7 +32,12 @@ public sealed class MongoMessageRepository : IMessageRepository
         }
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
         {
-            // Already stored — safe to skip on Kafka redelivery.
+            MessageDocument existing = await _collection.Find(d => d.MessageId == message.MessageId)
+                .FirstOrDefaultAsync(cancellationToken);
+            if (existing is null || existing.ConnectionId != message.ConnectionId || existing.OwnerUserId != message.OwnerUserId)
+            {
+                throw new InvalidOperationException("Message ID already belongs to another connection.", ex);
+            }
         }
     }
 
@@ -57,6 +62,8 @@ public sealed class MongoMessageRepository : IMessageRepository
     {
         MessagingPlatform.WhatsApp => new WhatsAppMessageDocument
         {
+            ConnectionId = message.ConnectionId,
+            OwnerUserId = message.OwnerUserId,
             MessageId = message.MessageId,
             Platform = message.Platform,
             ExternalAccountId = message.ExternalAccountId,

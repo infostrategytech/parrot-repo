@@ -8,6 +8,9 @@ namespace Parrot.Domain.Entities.Messages;
 [BsonKnownTypes(typeof(WhatsAppMessageDocument))]
 public abstract class MessageDocument
 {
+    [BsonRepresentation(BsonType.String)]
+    public Guid? ConnectionId { get; set; }
+    public string? OwnerUserId { get; set; }
     [BsonId]
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; } = ObjectId.GenerateNewId().ToString();

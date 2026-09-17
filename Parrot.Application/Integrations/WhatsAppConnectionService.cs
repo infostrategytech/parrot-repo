@@ -104,6 +104,17 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         await _repository.DisableAsync(id, ownerUserId, DateTime.UtcNow);
     }
 
+    public async Task ConfigureAccountAsync(string ownerUserId, Guid id, WhatsAppAccountRequest request)
+    {
+        await GetOwnedAsync(ownerUserId, id);
+        if (!IsMetaId(request.WhatsAppBusinessAccountId) || !IsMetaId(request.PhoneNumberId))
+            throw new ValidationException("Enter valid numeric Meta business account and phone number IDs (up to 64 digits).");
+        await _repository.ConfigureAccountAsync(id, ownerUserId, request.WhatsAppBusinessAccountId, request.PhoneNumberId);
+    }
+
+    private static bool IsMetaId(string? value) =>
+        value is { Length: > 0 and <= 64 } && value.All(c => c is >= '0' and <= '9');
+
     public async Task<bool> VerifyWebhookAsync(string identifier, string mode, string verifyToken)
     {
         if (mode != "subscribe" || string.IsNullOrEmpty(identifier) || string.IsNullOrEmpty(verifyToken))

@@ -13,6 +13,22 @@ public class IntegrationsService : IIntegrationsService
         _httpClient = httpClient;
     }
 
+    public Task ConfigureWhatsAppAccountAsync(Guid id, string businessAccountId, string phoneNumberId, string token, CancellationToken cancellationToken = default) =>
+        SendCommandAsync(HttpMethod.Put, $"api/whatsapp/connections/{id}/account", token,
+            new { WhatsAppBusinessAccountId = businessAccountId, PhoneNumberId = phoneNumberId }, cancellationToken);
+
+    public Task DisableWhatsAppAsync(Guid id, string token, CancellationToken cancellationToken = default) =>
+        SendCommandAsync(HttpMethod.Post, $"api/whatsapp/connections/{id}/disable", token, null, cancellationToken);
+
+    private async Task SendCommandAsync(HttpMethod method, string path, string token, object? body, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (body is not null) request.Content = JsonContent.Create(body);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
     public Task<List<WhatsAppConnectionInfo>> GetWhatsAppConnectionsAsync(string token, CancellationToken cancellationToken = default) =>
         SendAsync<List<WhatsAppConnectionInfo>>(HttpMethod.Get, "api/whatsapp/connections", token, null, cancellationToken);
 

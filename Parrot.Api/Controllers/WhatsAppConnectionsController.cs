@@ -42,6 +42,13 @@ public class WhatsAppConnectionsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id:guid}/account")]
+    public async Task<IActionResult> ConfigureAccount(Guid id, [FromBody] WhatsAppAccountRequest request)
+    {
+        await _service.ConfigureAccountAsync(GetUserId(), id, request);
+        return NoContent();
+    }
+
     private string GetUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue("sub")

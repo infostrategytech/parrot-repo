@@ -72,4 +72,24 @@ public class WhatsAppConnectionRepository : IWhatsAppConnectionRepository
                 .SetProperty(c => c.DisabledAt, disabledAt)
                 .SetProperty(c => c.UpdatedAt, disabledAt));
     }
+
+    public async Task ConfigureAccountAsync(Guid id, string ownerUserId, string businessAccountId, string phoneNumberId)
+    {
+        try
+        {
+            int count = await _db.WhatsAppConnections
+                .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null
+                    && c.FirstMessageReceivedAt == null)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(c => c.WhatsAppBusinessAccountId, businessAccountId)
+                    .SetProperty(c => c.PhoneNumberId, phoneNumberId)
+                    .SetProperty(c => c.UpdatedAt, DateTime.UtcNow));
+            if (count == 0)
+                throw new ConflictException("Account details cannot change after receiving a message or disabling the connection.");
+        }
+        catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
+        {
+            throw new ConflictException("This phone number already has an active connection.");
+        }
+    }
 }

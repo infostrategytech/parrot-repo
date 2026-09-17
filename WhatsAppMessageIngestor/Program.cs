@@ -1,7 +1,9 @@
 using Microsoft.Extensions.Options;
+using Microsoft.EntityFrameworkCore;
 using MongoDB.Driver;
 using Parrot.Application.Integrations;
 using Parrot.Infrastructure.Messaging;
+using Parrot.Infrastructure.Data;
 using WhatsAppMessageIngestor;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
@@ -18,7 +20,12 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
     return new MongoClient(settings.ConnectionString);
 });
 
-builder.Services.AddSingleton<IMessageRepository, MongoMessageRepository>();
+builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddSingleton<IConnectionMessageReceipt, ConnectionMessageReceipt>();
+builder.Services.AddSingleton<MongoMessageRepository>();
+builder.Services.AddSingleton<IMessageRepository>(sp => new ConnectionTrackingMessageRepository(
+    sp.GetRequiredService<MongoMessageRepository>(), sp.GetRequiredService<IConnectionMessageReceipt>()));
 
 builder.Services.AddSingleton<IPlatformMessageHandler, WhatsAppMessageHandler>();
 builder.Services.AddSingleton<IPlatformMessageHandlerFactory, PlatformMessageHandlerFactory>();
