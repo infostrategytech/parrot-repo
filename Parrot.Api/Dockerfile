@@ -1,7 +1,8 @@
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS base
 RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
-RUN mkdir -p /app/data-protection-keys && chown $APP_UID:$APP_UID /app/data-protection-keys
+RUN mkdir -p /app/data-protection-keys /run/secrets && chown $APP_UID:$APP_UID /run/secrets /app/data-protection-keys && chmod 755 /app/data-protection-keys /run/secrets
 USER $APP_UID
+
 WORKDIR /app
 EXPOSE 8080
 
