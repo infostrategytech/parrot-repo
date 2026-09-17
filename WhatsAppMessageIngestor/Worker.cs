@@ -103,11 +103,7 @@ public sealed class KafkaConsumerWorker : BackgroundService
 
                             if (message is null)
                             {
-                                _logger.LogWarning(
-                                    "Null deserialization. Partition={Partition} Offset={Offset}",
-                                    result.Partition.Value,
-                                    result.Offset.Value);
-                                return;
+                                throw new InvalidOperationException("Kafka message deserialized to null.");
                             }
 
                             await _messageService.ProcessAsync(message, ct);
@@ -119,6 +115,7 @@ public sealed class KafkaConsumerWorker : BackgroundService
                                 "Failed to process message. Partition={Partition} Offset={Offset}",
                                 result.Partition.Value,
                                 result.Offset.Value);
+                            throw;
                         }
                     });
 

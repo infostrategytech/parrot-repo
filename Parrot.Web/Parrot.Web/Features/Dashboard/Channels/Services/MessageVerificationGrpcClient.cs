@@ -1,16 +1,19 @@
 using Grpc.Core;
 using Parrot.Grpc.Contracts.Messaging.V1;
 using Parrot.Web.Features.Dashboard.Channels.Models;
+using Parrot.Web.Features.Auth.State;
 
 namespace Parrot.Web.Features.Dashboard.Channels.Services;
 
 public class MessageVerificationGrpcClient : IMessageVerificationGrpcClient
 {
     private readonly MessageVerificationService.MessageVerificationServiceClient _client;
+    private readonly AuthState _authState;
 
-    public MessageVerificationGrpcClient(MessageVerificationService.MessageVerificationServiceClient client)
+    public MessageVerificationGrpcClient(MessageVerificationService.MessageVerificationServiceClient client, AuthState authState)
     {
         _client = client;
+        _authState = authState;
     }
 
     public async Task<MessageCheckResult> CheckForMessageAsync(
@@ -21,7 +24,10 @@ public class MessageVerificationGrpcClient : IMessageVerificationGrpcClient
         CancellationToken cancellationToken = default)
     {
         var headers = new Metadata { { "Authorization", $"Bearer {bearerToken}" } };
-        CheckForMessageResponse response = await _client.CheckForMessageAsync(
+        CheckForMessageResponse response;
+        try
+        {
+            response = await _client.CheckForMessageAsync(
             new CheckForMessageRequest
             {
                 ChannelId = channelId,
@@ -29,6 +35,12 @@ public class MessageVerificationGrpcClient : IMessageVerificationGrpcClient
                 Platform = platform,
             },
             new CallOptions(headers: headers, cancellationToken: cancellationToken));
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Unauthenticated)
+        {
+            _authState.ReportUnauthorized(bearerToken);
+            throw;
+        }
 
         if (!response.MessageReceived)
             return new MessageCheckResult(false, null, null);

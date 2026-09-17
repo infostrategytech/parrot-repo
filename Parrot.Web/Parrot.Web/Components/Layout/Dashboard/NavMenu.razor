@@ -1,3 +1,7 @@
+@inject AuthState AuthState
+@inject TokenStorageService TokenStorage
+@inject NavigationManager Nav
+
 <div class="sidebar" @onclick="ClosePopup">
     <div class="sidebar-aurora sidebar-aurora--1" aria-hidden="true"></div>
     <div class="sidebar-aurora sidebar-aurora--2" aria-hidden="true"></div>
@@ -126,15 +130,20 @@
                     Settings
                 </NavLink>
                 <div class="sidebar-popup-divider"></div>
-                <button class="sidebar-popup-item sidebar-popup-item--danger">
+                <button type="button" class="sidebar-popup-item sidebar-popup-item--danger"
+                        @onclick="LogoutAsync" disabled="@_loggingOut">
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                          stroke-linecap="round" stroke-linejoin="round">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                         <polyline points="16 17 21 12 16 7" />
                         <line x1="21" y1="12" x2="9" y2="12" />
                     </svg>
-                    Logout Account
+                    @(_loggingOut ? "Logging out…" : "Logout Account")
                 </button>
+                @if (_logoutError is not null)
+                {
+                    <p class="sidebar-popup-item sidebar-popup-item--danger" role="alert">@_logoutError</p>
+                }
             </div>
         }
     </div>
@@ -142,6 +151,32 @@
 
 @code {
     bool _showPopup;
+    private bool _loggingOut;
+    private string? _logoutError;
+
+    private async Task LogoutAsync()
+    {
+        if (_loggingOut) return;
+        _loggingOut = true;
+        _logoutError = null;
+        try
+        {
+            // Remove persisted credentials before navigating so refresh cannot restore the session.
+            await TokenStorage.ClearAsync();
+            AuthState.ClearUser();
+            // A fresh circuit also clears user-specific scoped dashboard state.
+            Nav.NavigateTo("/login", forceLoad: true, replace: true);
+        }
+        catch (JSException)
+        {
+            _logoutError = "Could not clear your saved session. Please try logging out again.";
+        }
+        finally
+        {
+            _loggingOut = false;
+        }
+    }
+
     void TogglePopup() => _showPopup = !_showPopup;
     void ClosePopup() => _showPopup = false;
 

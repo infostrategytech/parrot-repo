@@ -116,7 +116,7 @@ public class AuthService : IAuthService
             throw new ValidationException("An error occurred while creating the user.");
         }
 
-        if (!_env.IsDevelopment())
+        if (!_env.IsDevelopment() || _emailSettings.SendInDevelopment)
         {
             await SendVerificationEmailAsync(user);
         }

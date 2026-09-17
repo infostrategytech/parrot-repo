@@ -4,6 +4,8 @@ namespace Parrot.Application.DTOs.Integrations;
 
 public record IncomingMessage
 {
+    public Guid? ConnectionId { get; init; }
+    public string? OwnerUserId { get; init; }
     public required string MessageId { get; init; }
     public required MessagingPlatform Platform { get; init; }
     public required string ExternalAccountId { get; init; }

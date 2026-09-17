@@ -7,6 +7,7 @@ public class TokenStorageService
 {
     private const string StorageKey = "auth";
     private readonly ProtectedLocalStorage _localStorage;
+    public bool LastLoadExpired { get; private set; }
 
     public TokenStorageService(ProtectedLocalStorage localStorage)
     {
@@ -20,6 +21,7 @@ public class TokenStorageService
 
     public async Task<AuthResponse?> LoadAsync()
     {
+        LastLoadExpired = false;
         try
         {
             ProtectedBrowserStorageResult<AuthResponse> result =
@@ -31,6 +33,7 @@ public class TokenStorageService
             // Discard expired tokens
             if (result.Value.ExpiresAt <= DateTime.UtcNow)
             {
+                LastLoadExpired = true;
                 await ClearAsync();
                 return null;
             }

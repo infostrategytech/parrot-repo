@@ -39,8 +39,13 @@ builder.Services.AddHttpClient<IRegisterService, RegisterService>(c => c.BaseAdd
 builder.Services.AddHttpClient<IForgotPasswordService, ForgotPasswordService>(c => c.BaseAddress = new Uri(apiBaseUrl));
 builder.Services.AddHttpClient<IResetPasswordService, ResetPasswordService>(c => c.BaseAddress = new Uri(apiBaseUrl));
 builder.Services.AddHttpClient<IVerifyEmailService, VerifyEmailService>(c => c.BaseAddress = new Uri(apiBaseUrl));
-builder.Services.AddHttpClient<IIntegrationsService, IntegrationsService>(c => c.BaseAddress = new Uri(apiBaseUrl));
-builder.Services.AddHttpClient<IBusinessSetupService, BusinessSetupService>(c => c.BaseAddress = new Uri(apiBaseUrl));
+// Authenticated clients share the current circuit's AuthState for session-expiry notifications.
+builder.Services.AddScoped<HttpClient>(sp => new HttpClient(new SessionExpiryHandler(sp.GetRequiredService<AuthState>())
+{
+    InnerHandler = new HttpClientHandler(),
+}) { BaseAddress = new Uri(apiBaseUrl) });
+builder.Services.AddScoped<IIntegrationsService, IntegrationsService>();
+builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {

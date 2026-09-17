@@ -93,6 +93,7 @@ appsettings.*.json
 .env
 .env.*
 !.env.example
+!.env.docker.example
 
 # Temporary files
 *.tmp
@@ -116,3 +117,6 @@ TestResults/
 *.vsp
 
 # End of .gitignore
+
+# Markdown documentation stays local.
+*.[mM][dD]

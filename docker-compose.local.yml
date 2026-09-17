@@ -1,0 +1,196 @@
+name: parrot-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:15432:5432"
+    environment:
+      POSTGRES_DB: parrot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-parrot_dev_password}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d parrot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [parrot]
+
+  mongodb:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [parrot]
+
+  kafka:
+    image: apache/kafka:3.8.0
+    restart: unless-stopped
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks: [parrot]
+
+  kafka-topic-init:
+    image: apache/kafka:3.8.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint:
+      - /opt/kafka/bin/kafka-topics.sh
+      - --bootstrap-server
+      - kafka:9092
+      - --create
+      - --if-not-exists
+      - --topic
+      - whatsapp.messages
+      - --partitions
+      - "3"
+      - --replication-factor
+      - "1"
+    restart: "no"
+    networks: [parrot]
+
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+    networks: [parrot]
+
+  parrot-api:
+    build:
+      context: .
+      dockerfile: Parrot.Api/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
+      Database__ApplyMigrations: "true"
+      DataProtection__KeyRingPath: /app/data-protection-keys
+      WhatsApp__WebhookBaseUrl: ${WHATSAPP_WEBHOOK_BASE_URL:-http://localhost:5222}
+      JwtSettings__Secret: ${JWT_SECRET:-parrot-local-development-secret-change-me}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__Topic: whatsapp.messages
+      GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-local-placeholder.apps.googleusercontent.com}
+      GoogleOAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-local-placeholder}
+      EmailSettings__SmtpHost: mailpit
+      EmailSettings__SmtpPort: 1025
+      EmailSettings__UseStartTls: "false"
+      EmailSettings__RequiresAuthentication: "false"
+      EmailSettings__SendInDevelopment: "true"
+      EmailSettings__SmtpUser: ""
+      EmailSettings__SmtpPassword: ""
+      EmailSettings__FromAddress: no-reply@parrot.local
+      EmailSettings__FromName: Parrot Local
+      EmailSettings__BaseUrl: http://localhost:5255
+      FrontendSettings__BaseUrl: http://localhost:5255
+    ports:
+      - "5222:8080"
+    volumes:
+      - api_data_protection_keys:/app/data-protection-keys
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    networks: [parrot]
+
+  parrot-grpc:
+    build:
+      context: .
+      dockerfile: Parrot.APi.Grpc/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Kestrel__EndpointDefaults__Protocols: Http2
+      JwtSettings__Secret: ${JWT_SECRET:-parrot-local-development-secret-change-me}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+      MongoDB__ConnectionString: mongodb://mongodb:27017
+      MongoDB__Database: parrot
+      MongoDB__Collection: messages
+    ports:
+      - "5288:8080"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks: [parrot]
+
+  whatsapp-ingestor:
+    build:
+      context: .
+      dockerfile: WhatsAppMessageIngestor/Dockerfile
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
+      Kafka__BootstrapServers: kafka:9092
+      Kafka__Topic: whatsapp.messages
+      Kafka__ConsumerGroupId: whatsapp-ingestor-local
+      MongoDB__ConnectionString: mongodb://mongodb:27017
+      MongoDB__Database: parrot
+      MongoDB__Collection: messages
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+    networks: [parrot]
+
+  parrot-web:
+    build:
+      context: .
+      dockerfile: Parrot.Web/Dockerfile
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ApiSettings__BaseUrl: http://parrot-api:8080/
+      GrpcSettings__BaseUrl: http://parrot-grpc:8080
+    ports:
+      - "5255:8080"
+    depends_on:
+      - parrot-api
+      - parrot-grpc
+    networks: [parrot]
+
+networks:
+  parrot:
+
+volumes:
+  api_data_protection_keys:
+  postgres_data:
+  mongo_data:
+  kafka_data:
