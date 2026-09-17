@@ -23,6 +23,7 @@
     <ProjectReference Include="..\Parrot.Api\Parrot.Api.Rest.csproj" />
     <ProjectReference Include="..\Parrot.Application\Parrot.Application.csproj" />
     <ProjectReference Include="..\Parrot.Domain\Parrot.Domain.csproj" />
+    <ProjectReference Include="..\Parrot.Web\Parrot.Web\Parrot.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

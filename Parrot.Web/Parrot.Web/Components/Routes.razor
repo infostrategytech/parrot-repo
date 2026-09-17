@@ -1,11 +1,19 @@
 @inject NavigationManager Nav
 @inject AuthState AuthState
 @inject TokenStorageService TokenStorage
+@implements IDisposable
 
 <Router AppAssembly="typeof(Program).Assembly" AdditionalAssemblies="new[] { typeof(Client._Imports).Assembly }" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
-        <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.Dashboard.DashboardLayout)" />
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        @if (IsPublicPath() || (_ready && !_endingSession && AuthState.IsAuthenticated))
+        {
+            <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.Dashboard.DashboardLayout)" />
+            <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        }
+        else
+        {
+            <p role="status">Checking your session…</p>
+        }
     </Found>
 </Router>
 
@@ -13,36 +21,121 @@
     private static readonly HashSet<string> PublicPaths =
     [
         "/", "/login", "/register", "/forgot-password", "/reset-password",
-        "/verify-email", "/sso-callback",
+        "/verify-email", "/sso-callback", "/error", "/not-found",
     ];
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool _ready, _endingSession, _disposed;
+
+    private bool IsPublicPath() => PublicPaths.Contains(new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant())
+        || new Uri(Nav.Uri).AbsolutePath == "/";
 
     protected override void OnInitialized()
     {
-        Uri uri = new Uri(Nav.Uri);
-        if (uri.AbsolutePath == "/" || uri.AbsolutePath == string.Empty)
+        AuthState.OnChange += AuthChanged;
+        AuthState.SessionExpired += SessionExpired;
+        Nav.LocationChanged += LocationChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (AuthState.CurrentUser is null)
+        {
+            AuthResponse? stored = await TokenStorage.LoadAsync();
+            if (_disposed) return;
+            if (stored is not null && AuthState.CurrentUser is null) AuthState.SetUser(stored);
+        }
+        _ready = true;
+        if (TokenStorage.LastLoadExpired || (AuthState.CurrentUser is not null && !AuthState.IsAuthenticated))
+        {
+            await EndSessionAsync();
+            return;
+        }
+        await EnforceSessionAsync();
+        if (!_disposed)
+        {
+            string path = new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant();
+            if (AuthState.IsAuthenticated && (path == "" || path == "/login"))
+                Nav.NavigateTo("/dashboard", replace: true);
+            StateHasChanged();
+            _ = MonitorExpiryAsync(_lifetime.Token);
+        }
+    }
+
+    private void AuthChanged() => _ = InvokeAsync(async () =>
+    {
+        if (_disposed) return;
+        if (AuthState.IsAuthenticated) _endingSession = false;
+        await EnforceSessionAsync();
+        StateHasChanged();
+    });
+
+    private void SessionExpired() => _ = InvokeAsync(EndSessionAsync);
+
+    private void LocationChanged(object? sender, LocationChangedEventArgs args) => _ = InvokeAsync(async () =>
+    {
+        if (_disposed) return;
+        await EnforceSessionAsync();
+        StateHasChanged();
+    });
+
+    private async Task EnforceSessionAsync()
+    {
+        if (!_ready || _disposed || _endingSession) return;
+        if (AuthState.CurrentUser is not null && !AuthState.IsAuthenticated)
+        {
+            await EndSessionAsync();
+        }
+        else if (!AuthState.IsAuthenticated && !IsPublicPath())
         {
             Nav.NavigateTo("/login", replace: true);
         }
     }
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    private async Task MonitorExpiryAsync(CancellationToken cancellationToken)
     {
-        if (!firstRender)
-            return;
-
-        if (AuthState.IsAuthenticated)
-            return;
-
-        AuthResponse? stored = await TokenStorage.LoadAsync();
-        if (stored is null)
-            return;
-
-        AuthState.SetUser(stored);
-
-        Uri uri = new Uri(Nav.Uri);
-        if (PublicPaths.Contains(uri.AbsolutePath.ToLowerInvariant()))
+        using PeriodicTimer timer = new(TimeSpan.FromSeconds(1));
+        try
         {
-            Nav.NavigateTo("/dashboard");
+            while (await timer.WaitForNextTickAsync(cancellationToken))
+            {
+                await InvokeAsync(async () =>
+                {
+                    if (!_disposed && AuthState.CurrentUser is not null && !AuthState.IsAuthenticated)
+                        await EndSessionAsync();
+                });
+            }
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
+    }
+
+    private async Task EndSessionAsync()
+    {
+        if (_endingSession || _disposed) return;
+        _endingSession = true;
+        AuthState.ClearUser();
+        StateHasChanged();
+        try
+        {
+            await TokenStorage.ClearAsync();
+            // Reset the circuit's user-specific state as well as navigating to sign-in.
+            Nav.NavigateTo("/login?sessionExpired=true", forceLoad: true, replace: true);
+        }
+        catch (JSException)
+        {
+            // A disconnected browser cannot be navigated. Keep the circuit signed out;
+            // restoration will reject the expired token when the browser reconnects/reloads.
+            Nav.NavigateTo("/login?sessionExpired=true", replace: true);
+        }
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        AuthState.OnChange -= AuthChanged;
+        AuthState.SessionExpired -= SessionExpired;
+        Nav.LocationChanged -= LocationChanged;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
     }
 }
