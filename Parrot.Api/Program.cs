@@ -39,6 +39,9 @@ if (!builder.Environment.IsDevelopment() &&
 
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
 builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
+builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
+builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
+builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.Configure<BrightDataSettings>(builder.Configuration.GetSection(BrightDataSettings.SectionName));
@@ -207,6 +210,13 @@ builder.Services.AddControllers();
 builder.Services.AddOpenApi();
 
 WebApplication app = builder.Build();
+
+if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
+{
+    using IServiceScope scope = app.Services.CreateScope();
+    ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
 
 // Global Exception Handler (must be first in pipeline)
 app.UseGlobalExceptionHandler();

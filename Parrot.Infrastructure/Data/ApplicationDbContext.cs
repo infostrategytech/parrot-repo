@@ -9,6 +9,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
     public DbSet<Agent> Agents => Set<Agent>();
 
+    public DbSet<WhatsAppConnection> WhatsAppConnections => Set<WhatsAppConnection>();
+
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
@@ -34,5 +36,55 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(a => a.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(a => a.UserId);
         });
+
+        builder.Entity<WhatsAppConnection>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.OwnerUserId).IsRequired();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(c => c.Name).HasMaxLength(128).IsRequired();
+            entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
+            entity.Property(c => c.VerifyTokenEncrypted).IsRequired();
+            entity.Property(c => c.WhatsAppBusinessAccountId).HasMaxLength(64);
+            entity.Property(c => c.PhoneNumberId).HasMaxLength(64);
+            entity.Property(c => c.DisplayPhoneNumber).HasMaxLength(32);
+            entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Ignore(c => c.SetupStatus);
+            entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
+            entity.HasIndex(c => c.OwnerUserId);
+            entity.HasIndex(c => c.PhoneNumberId).IsUnique()
+                .HasFilter("\"PhoneNumberId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+        });
+    }
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        UpdateConnectionTimestamps();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        UpdateConnectionTimestamps();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    private void UpdateConnectionTimestamps()
+    {
+        DateTime now = DateTime.UtcNow;
+        foreach (Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<WhatsAppConnection> entry in ChangeTracker.Entries<WhatsAppConnection>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = now;
+                entry.Entity.UpdatedAt = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+            }
+        }
     }
 }

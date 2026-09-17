@@ -8,6 +8,12 @@ public class EmailSettings
 
     public int SmtpPort { get; init; } = 587;
 
+    public bool UseStartTls { get; init; } = true;
+
+    public bool RequiresAuthentication { get; init; } = true;
+
+    public bool SendInDevelopment { get; init; }
+
     public required string SmtpUser { get; init; }
 
     public required string SmtpPassword { get; init; }

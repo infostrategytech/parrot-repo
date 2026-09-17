@@ -17,7 +17,7 @@ public class WhatsAppWebhookController : ControllerBase
         _whatsAppWebhookService = whatsAppWebhookService;
     }
 
-    [HttpGet]
+    [NonAction]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public IActionResult VerifyWebhook(
@@ -38,7 +38,35 @@ public class WhatsAppWebhookController : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<IActionResult> HandleEvent([FromBody] WhatsAppWebhookPayload payload)
     {
+        // Per-connection ingestion must validate the applicable Meta App Secret before publishing.
+        if (Request.Query.ContainsKey("ref"))
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+        }
+
         await _whatsAppWebhookService.ProcessEventAsync(payload);
         return Ok();
+    }
+
+    [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
+    public async Task<IActionResult> VerifyConnectionWebhook(
+        [FromQuery(Name = "ref")] string? identifier,
+        [FromQuery(Name = "hub.mode")] string hubMode,
+        [FromQuery(Name = "hub.verify_token")] string hubVerifyToken,
+        [FromQuery(Name = "hub.challenge")] string hubChallenge,
+        [FromServices] IWhatsAppConnectionService connections)
+    {
+        if (!Request.Query.ContainsKey("ref"))
+        {
+            return VerifyWebhook(hubMode, hubVerifyToken, hubChallenge);
+        }
+
+        if (!await connections.VerifyWebhookAsync(identifier ?? string.Empty, hubMode, hubVerifyToken))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        return Content(hubChallenge, "text/plain");
     }
 }

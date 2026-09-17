@@ -277,6 +277,75 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("Agents");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.WhatsAppConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("DisabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("DisplayPhoneNumber")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime?>("FirstMessageReceivedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhoneNumberId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("VerifyTokenEncrypted")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("WebhookIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("WebhookVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WhatsAppBusinessAccountId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerUserId");
+
+                    b.HasIndex("PhoneNumberId")
+                        .IsUnique()
+                        .HasFilter("\"PhoneNumberId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+
+                    b.HasIndex("WebhookIdentifier")
+                        .IsUnique();
+
+                    b.ToTable("WhatsAppConnections");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -325,6 +394,15 @@ namespace Parrot.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.WhatsAppConnection", b =>
+                {
+                    b.HasOne("Parrot.Application.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 #pragma warning restore 612, 618

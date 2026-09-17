@@ -24,8 +24,17 @@ public class EmailService : IEmailService
         message.Body = new TextPart("html") { Text = htmlBody };
 
         using SmtpClient client = new SmtpClient();
-        await client.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, SecureSocketOptions.StartTls);
-        await client.AuthenticateAsync(_settings.SmtpUser, _settings.SmtpPassword);
+        SecureSocketOptions socketOptions = _settings.UseStartTls
+            ? SecureSocketOptions.StartTls
+            : SecureSocketOptions.None;
+
+        await client.ConnectAsync(_settings.SmtpHost, _settings.SmtpPort, socketOptions);
+
+        if (_settings.RequiresAuthentication)
+        {
+            await client.AuthenticateAsync(_settings.SmtpUser, _settings.SmtpPassword);
+        }
+
         await client.SendAsync(message);
         await client.DisconnectAsync(true);
     }
