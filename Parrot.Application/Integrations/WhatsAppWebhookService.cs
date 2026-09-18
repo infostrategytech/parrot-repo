@@ -1,6 +1,9 @@
+using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Options;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Integrations;
@@ -10,15 +13,18 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
     private readonly WhatsAppSettings _settings;
     private readonly IAppLogger<WhatsAppWebhookService> _logger;
     private readonly IMessagePublisher _publisher;
+    private readonly IWhatsAppConnectionRepository _connections;
 
     public WhatsAppWebhookService(
         IOptions<WhatsAppSettings> settings,
         IAppLogger<WhatsAppWebhookService> logger,
-        IMessagePublisher publisher)
+        IMessagePublisher publisher,
+        IWhatsAppConnectionRepository connections)
     {
         _settings = settings.Value;
         _logger = logger;
         _publisher = publisher;
+        _connections = connections;
     }
 
     public string GetWebhookUrl() =>
@@ -38,7 +44,69 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         return true;
     }
 
-    public async Task ProcessEventAsync(WhatsAppWebhookPayload payload)
+    public bool IsValidSignature(string rawBody, string signatureHeader)
+    {
+        if (string.IsNullOrWhiteSpace(_settings.AppSecret)
+            || !signatureHeader.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        string receivedHash = signatureHeader["sha256=".Length..];
+        if (receivedHash.Length != 64)
+        {
+            return false;
+        }
+
+        byte[] expected = HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes(_settings.AppSecret),
+            Encoding.UTF8.GetBytes(rawBody));
+
+        try
+        {
+            byte[] received = Convert.FromHexString(receivedHash);
+            return CryptographicOperations.FixedTimeEquals(received, expected);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    public Task ProcessEventAsync(WhatsAppWebhookPayload payload, CancellationToken cancellationToken = default) =>
+        ProcessEventAsync(payload, null, null, cancellationToken);
+
+    public async Task<bool> ProcessConnectionEventAsync(
+        string identifier,
+        WhatsAppWebhookPayload payload,
+        CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(identifier))
+        {
+            return false;
+        }
+
+        WhatsAppConnection? connection = await _connections.GetActiveByIdentifierAsync(identifier);
+        if (connection?.WebhookVerifiedAt is null
+            || string.IsNullOrEmpty(connection.WhatsAppBusinessAccountId)
+            || string.IsNullOrEmpty(connection.PhoneNumberId)
+            || payload.Entry.Count == 0
+            || payload.Entry.Any(entry => entry.Id != connection.WhatsAppBusinessAccountId
+                || entry.Changes.Any(change => change.Field == "messages"
+                    && change.Value.Metadata.PhoneNumberId != connection.PhoneNumberId)))
+        {
+            return false;
+        }
+
+        await ProcessEventAsync(payload, connection.Id, connection.OwnerUserId, cancellationToken);
+        return true;
+    }
+
+    private async Task ProcessEventAsync(
+        WhatsAppWebhookPayload payload,
+        Guid? connectionId,
+        string? ownerUserId,
+        CancellationToken cancellationToken)
     {
         foreach (WhatsAppEntry entry in payload.Entry)
         {
@@ -67,6 +135,8 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
 
                         batch.Add(new IncomingMessage
                         {
+                            ConnectionId = connectionId,
+                            OwnerUserId = ownerUserId,
                             MessageId = msg.Id,
                             Platform = MessagingPlatform.WhatsApp,
                             ExternalAccountId = entry.Id,
@@ -81,7 +151,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
                         });
                     }
 
-                    await _publisher.PublishBatchAsync(batch);
+                    await _publisher.PublishBatchAsync(batch, cancellationToken);
                 }
 
                 if (change.Value.Statuses is { Count: > 0 } statuses)

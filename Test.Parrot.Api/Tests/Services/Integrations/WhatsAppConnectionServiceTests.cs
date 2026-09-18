@@ -216,7 +216,7 @@ public class WhatsAppConnectionServiceTests
     }
 
     [Fact]
-    public async Task IncomingReference_IsNotPublishedThroughUnvalidatedLegacyFlow()
+    public async Task IncomingReference_WithInvalidSignature_IsRejected()
     {
         Mock<IWhatsAppWebhookService> legacy = new();
         WhatsAppWebhookController controller = new(legacy.Object)
@@ -224,13 +224,63 @@ public class WhatsAppConnectionServiceTests
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
         controller.Request.QueryString = new QueryString("?ref=identifier");
-        StatusCodeResult result = Assert.IsType<StatusCodeResult>(await controller.HandleEvent(new WhatsAppWebhookPayload
+        UnauthorizedResult result = Assert.IsType<UnauthorizedResult>(await controller.HandleEvent(null, "identifier", new WhatsAppWebhookPayload
         {
             Object = "whatsapp_business_account",
             Entry = [],
         }));
-        Assert.Equal(503, result.StatusCode);
-        legacy.VerifyNoOtherCalls();
+        Assert.Equal(401, result.StatusCode);
+        legacy.Verify(s => s.IsValidSignature(string.Empty, It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task IncomingReference_WithValidSignature_IsProcessed()
+    {
+        WhatsAppWebhookPayload payload = new()
+        {
+            Object = "whatsapp_business_account",
+            Entry = [],
+        };
+        Mock<IWhatsAppWebhookService> webhooks = new();
+        webhooks.Setup(s => s.IsValidSignature("raw-body", "sha256=valid")).Returns(true);
+        webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        WhatsAppWebhookController controller = new(webhooks.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+        controller.HttpContext.Items["RawBody"] = "raw-body";
+        controller.Request.QueryString = new QueryString("?ref=identifier");
+
+        Assert.IsType<OkResult>(await controller.HandleEvent("sha256=valid", "identifier", payload));
+        webhooks.Verify(s => s.ProcessConnectionEventAsync(
+            "identifier", payload, controller.HttpContext.RequestAborted), Times.Once);
+        webhooks.Verify(s => s.ProcessEventAsync(
+            It.IsAny<WhatsAppWebhookPayload>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task IncomingReference_WithUnknownConnection_IsRejected()
+    {
+        WhatsAppWebhookPayload payload = new()
+        {
+            Object = "whatsapp_business_account",
+            Entry = [],
+        };
+        Mock<IWhatsAppWebhookService> webhooks = new();
+        webhooks.Setup(s => s.IsValidSignature("raw-body", "sha256=valid")).Returns(true);
+        webhooks.Setup(s => s.ProcessConnectionEventAsync("unknown", payload, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(false);
+        WhatsAppWebhookController controller = new(webhooks.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+        controller.HttpContext.Items["RawBody"] = "raw-body";
+        controller.Request.QueryString = new QueryString("?ref=unknown");
+
+        StatusCodeResult result = Assert.IsType<StatusCodeResult>(
+            await controller.HandleEvent("sha256=valid", "unknown", payload));
+        Assert.Equal(403, result.StatusCode);
     }
 
     [Theory]
