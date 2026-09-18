@@ -44,10 +44,10 @@ public class WhatsAppWebhookController : ControllerBase
         [FromBody] WhatsAppWebhookPayload payload)
     {
         string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
-        //if (string.IsNullOrEmpty(signature) || !_whatsAppWebhookService.IsValidSignature(rawBody, signature))
-        //{
-        //    return Unauthorized();
-        //}
+        if (string.IsNullOrEmpty(signature) || !_whatsAppWebhookService.IsValidSignature(rawBody, signature))
+        {
+            return Unauthorized();
+        }
 
         if (Request.Query.ContainsKey("ref"))
         {
