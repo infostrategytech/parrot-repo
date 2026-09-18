@@ -62,6 +62,28 @@ public class WhatsAppWebhookController : ControllerBase
         return Ok();
     }
 
+    [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
+    public async Task<IActionResult> VerifyConnectionWebhook(
+        [FromQuery(Name = "ref")] string? identifier,
+        [FromQuery(Name = "hub.mode")] string hubMode,
+        [FromQuery(Name = "hub.verify_token")] string hubVerifyToken,
+        [FromQuery(Name = "hub.challenge")] string hubChallenge,
+        [FromServices] IWhatsAppConnectionService connections)
+    {
+        if (!Request.Query.ContainsKey("ref"))
+        {
+            return VerifyWebhook(hubMode, hubVerifyToken, hubChallenge);
+        }
+
+        if (!await connections.VerifyWebhookAsync(identifier ?? string.Empty, hubMode, hubVerifyToken))
+        {
+            return StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        return Content(hubChallenge, "text/plain");
+    }
+
     [HttpPost("v1")]
     [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
     [ProducesResponseType(StatusCodes.Status200OK)]
