@@ -78,8 +78,8 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
                 _logger.LogWarning("WhatsApp webhook rejected because its signature does not match the configured App Secret.");
             }
 
-            //return valid;
-            return true; // test webhook notifications first
+            return valid;
+            
         }
         catch (FormatException)
         {
