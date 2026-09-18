@@ -46,15 +46,22 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
 
     public bool IsValidSignature(string rawBody, string signatureHeader)
     {
-        if (string.IsNullOrWhiteSpace(_settings.AppSecret)
-            || !signatureHeader.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+        if (string.IsNullOrWhiteSpace(_settings.AppSecret))
         {
+            _logger.LogError("WhatsApp webhook rejected because WhatsApp:AppSecret is not configured.");
+            return false;
+        }
+
+        if (!signatureHeader.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogWarning("WhatsApp webhook rejected because X-Hub-Signature-256 is malformed.");
             return false;
         }
 
         string receivedHash = signatureHeader["sha256=".Length..];
         if (receivedHash.Length != 64)
         {
+            _logger.LogWarning("WhatsApp webhook rejected because X-Hub-Signature-256 has an invalid length.");
             return false;
         }
 
@@ -65,10 +72,17 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         try
         {
             byte[] received = Convert.FromHexString(receivedHash);
-            return CryptographicOperations.FixedTimeEquals(received, expected);
+            bool valid = CryptographicOperations.FixedTimeEquals(received, expected);
+            if (!valid)
+            {
+                _logger.LogWarning("WhatsApp webhook rejected because its signature does not match the configured App Secret.");
+            }
+
+            return valid;
         }
         catch (FormatException)
         {
+            _logger.LogWarning("WhatsApp webhook rejected because X-Hub-Signature-256 is not hexadecimal.");
             return false;
         }
     }
@@ -83,20 +97,43 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
     {
         if (string.IsNullOrWhiteSpace(identifier))
         {
+            _logger.LogWarning("WhatsApp webhook rejected because its connection reference is empty.");
             return false;
         }
 
         WhatsAppConnection? connection = await _connections.GetActiveByIdentifierAsync(identifier);
-        if (connection?.WebhookVerifiedAt is null
-            || string.IsNullOrEmpty(connection.WhatsAppBusinessAccountId)
-            || string.IsNullOrEmpty(connection.PhoneNumberId)
-            || payload.Entry.Count == 0
+        if (connection is null)
+        {
+            _logger.LogWarning("WhatsApp webhook rejected because its connection reference is unknown or disabled.");
+            return false;
+        }
+
+        if (connection.WebhookVerifiedAt is null)
+        {
+            _logger.LogWarning("WhatsApp webhook rejected for unverified connection. ConnectionId={ConnectionId}", connection.Id);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(connection.WhatsAppBusinessAccountId)
+            || string.IsNullOrEmpty(connection.PhoneNumberId))
+        {
+            _logger.LogWarning("WhatsApp webhook rejected because account IDs are incomplete. ConnectionId={ConnectionId}", connection.Id);
+            return false;
+        }
+
+        if (payload.Entry.Count == 0
             || payload.Entry.Any(entry => entry.Id != connection.WhatsAppBusinessAccountId
                 || entry.Changes.Any(change => change.Field == "messages"
                     && change.Value.Metadata.PhoneNumberId != connection.PhoneNumberId)))
         {
+            _logger.LogWarning("WhatsApp webhook rejected because Meta account IDs do not match. ConnectionId={ConnectionId}", connection.Id);
             return false;
         }
+
+        _logger.LogInformation(
+            "WhatsApp webhook accepted. ConnectionId={ConnectionId} Entries={EntryCount}",
+            connection.Id,
+            payload.Entry.Count);
 
         await ProcessEventAsync(payload, connection.Id, connection.OwnerUserId, cancellationToken);
         return true;
