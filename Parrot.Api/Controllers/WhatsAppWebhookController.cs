@@ -62,7 +62,36 @@ public class WhatsAppWebhookController : ControllerBase
         return Ok();
     }
 
-    [HttpGet]
+    [HttpPost("v1")]
+    [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> HandleEvent(
+        [FromHeader(Name = "X-Hub-Signature-256")] string? signature,
+        [FromQuery(Name = "ref")] string? identifier,
+        [FromBody] WhatsAppWebhookPayload payload)
+    {
+        string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
+        // if (string.IsNullOrEmpty(signature) || !_whatsAppWebhookService.IsValidSignature(rawBody, signature))
+        // {
+        //     return Unauthorized();
+        // }
+
+        if (Request.Query.ContainsKey("ref"))
+        {
+            bool accepted = await _whatsAppWebhookService.ProcessConnectionEventAsync(
+                identifier ?? string.Empty,
+                payload,
+                HttpContext.RequestAborted);
+            return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        await _whatsAppWebhookService.ProcessEventAsync(payload, HttpContext.RequestAborted);
+        return Ok();
+    }
+
+    [HttpGet("v1")]
     [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
     public async Task<IActionResult> VerifyConnectionWebhook(
         [FromQuery(Name = "ref")] string? identifier,
