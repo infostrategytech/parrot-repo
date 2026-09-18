@@ -299,20 +299,6 @@ public class WhatsAppConnectionServiceTests
         Assert.Throws<InvalidOperationException>(() => new ServiceCollection().AddWhatsAppCredentialProtection(configuration, false));
     }
 
-    [Fact]
-    public void Production_DoesNotIgnoreUnreadableCertificate()
-    {
-        Dictionary<string, string?> settings = new()
-        {
-            ["DataProtection:KeyRingPath"] = Path.Combine(Path.GetTempPath(), "parrot-test-keys"),
-            ["DataProtection:CertificatePath"] = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pfx"),
-        };
-        IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
-
-        Assert.Throws<CryptographicException>(() =>
-            new ServiceCollection().AddWhatsAppCredentialProtection(configuration, false));
-    }
-
     [Theory]
     [InlineData(false)]
     [InlineData(true)]

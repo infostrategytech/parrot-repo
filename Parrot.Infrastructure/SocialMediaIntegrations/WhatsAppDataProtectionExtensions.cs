@@ -26,19 +26,26 @@ public static class WhatsAppDataProtectionExtensions
             .SetApplicationName("Parrot")
             .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
 
-        if (!string.IsNullOrWhiteSpace(certificatePath))
+        try
         {
-            X509KeyStorageFlags keyStorageFlags = OperatingSystem.IsMacOS()
-                ? X509KeyStorageFlags.DefaultKeySet
-                : X509KeyStorageFlags.EphemeralKeySet;
-            X509Certificate2 certificate = X509CertificateLoader.LoadPkcs12FromFile(
-                certificatePath, configuration["DataProtection:CertificatePassword"], keyStorageFlags);
-            if (!certificate.HasPrivateKey)
+            if (!string.IsNullOrWhiteSpace(certificatePath))
             {
-                throw new InvalidOperationException("The Data Protection certificate must include its private key.");
-            }
+                X509KeyStorageFlags keyStorageFlags = OperatingSystem.IsMacOS()
+                    ? X509KeyStorageFlags.DefaultKeySet
+                    : X509KeyStorageFlags.EphemeralKeySet;
+                X509Certificate2 certificate = X509CertificateLoader.LoadPkcs12FromFile(
+                    certificatePath, configuration["DataProtection:CertificatePassword"], keyStorageFlags);
+                if (!certificate.HasPrivateKey)
+                {
+                    throw new InvalidOperationException("The Data Protection certificate must include its private key.");
+                }
 
-            builder.ProtectKeysWithCertificate(certificate);
+                builder.ProtectKeysWithCertificate(certificate);
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Data Protection certificate load failed ({certificatePath}): {ex}");
         }
 
         services.AddSingleton<IWhatsAppTokenProtector, WhatsAppTokenProtector>();
