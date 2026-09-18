@@ -36,15 +36,29 @@ public class WhatsAppWebhookController : ControllerBase
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
     [ProducesResponseType(StatusCodes.Status200OK)]
-    public async Task<IActionResult> HandleEvent([FromBody] WhatsAppWebhookPayload payload)
+    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> HandleEvent(
+        [FromHeader(Name = "X-Hub-Signature-256")] string? signature,
+        [FromQuery(Name = "ref")] string? identifier,
+        [FromBody] WhatsAppWebhookPayload payload)
     {
-        // Per-connection ingestion must validate the applicable Meta App Secret before publishing.
-        if (Request.Query.ContainsKey("ref"))
+        string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
+        if (string.IsNullOrEmpty(signature) || !_whatsAppWebhookService.IsValidSignature(rawBody, signature))
         {
-            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+            return Unauthorized();
         }
 
-        await _whatsAppWebhookService.ProcessEventAsync(payload);
+        if (Request.Query.ContainsKey("ref"))
+        {
+            bool accepted = await _whatsAppWebhookService.ProcessConnectionEventAsync(
+                identifier ?? string.Empty,
+                payload,
+                HttpContext.RequestAborted);
+            return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
+        }
+
+        await _whatsAppWebhookService.ProcessEventAsync(payload, HttpContext.RequestAborted);
         return Ok();
     }
 

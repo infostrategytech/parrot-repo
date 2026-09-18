@@ -95,6 +95,7 @@ services:
       Database__ApplyMigrations: "true"
       DataProtection__KeyRingPath: /app/data-protection-keys
       WhatsApp__WebhookBaseUrl: ${WHATSAPP_WEBHOOK_BASE_URL:-http://localhost:5222}
+      WhatsApp__AppSecret: ${WHATSAPP_APP_SECRET:-your-app-secret}
       JwtSettings__Secret: ${JWT_SECRET:-parrot-local-development-secret-change-me}
       JwtSettings__Issuer: ParrotApi
       JwtSettings__Audience: ParrotApp

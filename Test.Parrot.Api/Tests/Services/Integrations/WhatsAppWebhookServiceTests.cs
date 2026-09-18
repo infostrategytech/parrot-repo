@@ -3,7 +3,10 @@ using Moq;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Logging;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace Test.Parrot.Api.Tests.Services.Integrations;
 
@@ -11,12 +14,14 @@ public class WhatsAppWebhookServiceTests
 {
     private readonly Mock<IMessagePublisher> _publisherMock;
     private readonly Mock<IAppLogger<WhatsAppWebhookService>> _loggerMock;
+    private readonly Mock<IWhatsAppConnectionRepository> _connectionRepositoryMock;
     private readonly WhatsAppWebhookService _sut;
 
     public WhatsAppWebhookServiceTests()
     {
         _publisherMock = new Mock<IMessagePublisher>();
         _loggerMock = new Mock<IAppLogger<WhatsAppWebhookService>>();
+        _connectionRepositoryMock = new Mock<IWhatsAppConnectionRepository>();
 
         _loggerMock
             .Setup(l => l.BeginEntityScope(It.IsAny<string>(), It.IsAny<string>()))
@@ -29,7 +34,11 @@ public class WhatsAppWebhookServiceTests
             AppSecret = "test-secret",
         });
 
-        _sut = new WhatsAppWebhookService(settings, _loggerMock.Object, _publisherMock.Object);
+        _sut = new WhatsAppWebhookService(
+            settings,
+            _loggerMock.Object,
+            _publisherMock.Object,
+            _connectionRepositoryMock.Object);
     }
 
     [Fact]
@@ -65,6 +74,69 @@ public class WhatsAppWebhookServiceTests
 
         Assert.False(result);
         Assert.Empty(echo);
+    }
+
+    [Fact]
+    public void IsValidSignature_ValidHmac_ReturnsTrue()
+    {
+        const string rawBody = "{\"object\":\"whatsapp_business_account\"}";
+        string hash = Convert.ToHexString(HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes("test-secret"),
+            Encoding.UTF8.GetBytes(rawBody))).ToLowerInvariant();
+
+        Assert.True(_sut.IsValidSignature(rawBody, $"sha256={hash}"));
+        Assert.False(_sut.IsValidSignature(rawBody + " ", $"sha256={hash}"));
+        Assert.False(_sut.IsValidSignature(rawBody, "sha256=invalid"));
+    }
+
+    [Fact]
+    public async Task ProcessConnectionEventAsync_ValidConnection_AddsOwnershipToPublishedMessage()
+    {
+        Guid connectionId = Guid.NewGuid();
+        _connectionRepositoryMock.Setup(r => r.GetActiveByIdentifierAsync("reference")).ReturnsAsync(new WhatsAppConnection
+        {
+            Id = connectionId,
+            OwnerUserId = "owner-1",
+            Name = "Support",
+            VerifyTokenEncrypted = "encrypted",
+            WebhookVerifiedAt = DateTime.UtcNow,
+            WhatsAppBusinessAccountId = "business-account-1",
+            PhoneNumberId = "phone-123",
+        });
+        WhatsAppWebhookPayload payload = BuildPayload(
+            "business-account-1", "phone-123", "+1", [("15550001111", "msg-001", "1700000000", "text", "Hello")]);
+
+        Assert.True(await _sut.ProcessConnectionEventAsync("reference", payload));
+
+        _publisherMock.Verify(p => p.PublishBatchAsync(
+            It.Is<IReadOnlyList<IncomingMessage>>(messages =>
+                messages.Count == 1
+                && messages[0].ConnectionId == connectionId
+                && messages[0].OwnerUserId == "owner-1"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Theory]
+    [InlineData("other-business", "phone-123")]
+    [InlineData("business-account-1", "other-phone")]
+    public async Task ProcessConnectionEventAsync_AccountMismatch_IsRejected(string businessId, string phoneId)
+    {
+        _connectionRepositoryMock.Setup(r => r.GetActiveByIdentifierAsync("reference")).ReturnsAsync(new WhatsAppConnection
+        {
+            OwnerUserId = "owner-1",
+            Name = "Support",
+            VerifyTokenEncrypted = "encrypted",
+            WebhookVerifiedAt = DateTime.UtcNow,
+            WhatsAppBusinessAccountId = "business-account-1",
+            PhoneNumberId = "phone-123",
+        });
+        WhatsAppWebhookPayload payload = BuildPayload(
+            businessId, phoneId, "+1", [("15550001111", "msg-001", "1700000000", "text", "Hello")]);
+
+        Assert.False(await _sut.ProcessConnectionEventAsync("reference", payload));
+        _publisherMock.Verify(
+            p => p.PublishBatchAsync(It.IsAny<IReadOnlyList<IncomingMessage>>(), It.IsAny<CancellationToken>()),
+            Times.Never);
     }
 
     [Fact]

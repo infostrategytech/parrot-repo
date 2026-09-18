@@ -6,5 +6,10 @@ public interface IWhatsAppWebhookService
 {
     string GetWebhookUrl();
     bool TryVerifyChallenge(string hubMode, string hubVerifyToken, string hubChallenge, out string echoChallenge);
-    Task ProcessEventAsync(WhatsAppWebhookPayload payload);
+    bool IsValidSignature(string rawBody, string signatureHeader);
+    Task ProcessEventAsync(WhatsAppWebhookPayload payload, CancellationToken cancellationToken = default);
+    Task<bool> ProcessConnectionEventAsync(
+        string identifier,
+        WhatsAppWebhookPayload payload,
+        CancellationToken cancellationToken = default);
 }
