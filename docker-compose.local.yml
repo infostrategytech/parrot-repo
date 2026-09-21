@@ -96,6 +96,12 @@ services:
       DataProtection__KeyRingPath: /app/data-protection-keys
       WhatsApp__WebhookBaseUrl: ${WHATSAPP_WEBHOOK_BASE_URL:-http://localhost:5222}
       WhatsApp__AppSecret: ${WHATSAPP_APP_SECRET:-your-app-secret}
+      WhatsApp__AccessToken: ${WHATSAPP_ACCESS_TOKEN:-}
+      WhatsApp__PhoneNumberId: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WhatsApp__BusinessAccountId: ${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      MongoDB__ConnectionString: mongodb://mongodb:27017
+      MongoDB__Database: parrot
+      MongoDB__Collection: messages
       JwtSettings__Secret: ${JWT_SECRET:-parrot-local-development-secret-change-me}
       JwtSettings__Issuer: ParrotApi
       JwtSettings__Audience: ParrotApp

@@ -1,147 +1,47 @@
+using Parrot.Application.Conversations;
+
 namespace Parrot.Web.Components.Pages.Dashboard.Conversations;
 
 public class ConversationsState
 {
-    public List<ConversationItem> Conversations { get; } = new()
+    public List<ConversationItem> Conversations { get; } = new();
+    public static readonly List<ConvSearchResult> SearchResults = new();
+    public ConversationItem? GetConversation(string id) => Conversations.FirstOrDefault(x => x.Id == id);
+    public void Clear() => Conversations.Clear();
+
+    public void Apply(IEnumerable<ConversationSummary> summaries)
+    {
+        foreach (var summary in summaries)
         {
-            new ConversationItem
+            string id = $"{summary.ConnectionId}:{summary.Sender}";
+            var item = GetConversation(id);
+            if (item is null)
             {
-                Id = "conv-1",
-                CustomerName = "Michael Wong",
-                CustomerAvatar = "assets/images/avatars/avatar-1.png",
-                PrimaryChannel = "instagram",
-                AgentName = "Bakerbot",
-                Status = "Open",
-                LastMessage = "Great, thanks for the info! I will order i...",
-                TimeAgo = "2 mins ago",
-                Tags = new() { "VIP", "Frequent buyer" },
-                OrderCount = 24,
-                AiHandling = "Bakerbot",
-                DetectedSteps = new() { "Ask for price", "Place order" },
-                Channels = new()
+                item = new ConversationItem
                 {
-                    new ConvChannel { Key = "whatsapp", Name = "WhatsApp Business", Handle = "+2348012345678" },
-                    new ConvChannel { Key = "instagram", Name = "Instagram", Handle = "@john_doe" }
-                },
-                Messages = new()
-                {
-                    new ConvMessage { Text = "2 plates of Jollof Rice with chicken and a Pepsi", IsAi = false },
-                    new ConvMessage { Text = "Got it! So that's:\n• Jollof Rice x2\n• Chicken x1\n• Pepsi x1\nWould you like anything else?", IsAi = true },
-                    new ConvMessage { Text = "No, that's all. Make the jollof extra spicy please", IsAi = false },
-                    new ConvMessage { Text = "Noted — extra spicy Jollof Rice. Your total comes to ₦7,000. Should I go ahead and place this order?", IsAi = true },
-                    new ConvMessage { Text = "Yes please. Deliver to 14 Admiralty Way, Lekki. Gate code is #204. Before 1pm if possible.", IsAi = false, HasTask = true },
-                    new ConvMessage { Text = "Perfect! I've placed your order. Here's your summary:\n• Jollof Rice x2 (extra spicy)\n• Chicken x1\n• Pepsi x1\n• Total: ₦7,000\n• Delivery: 14 Admiralty Way, Lekki. You'll receive a confirmation shortly. Thank you!", IsAi = true }
-                },
-                Tasks = new()
-                {
-                    new ConvTask { Title = "Task Created", Status = "Pending", TimeAgo = "1hr ago" }
-                }
-            },
-            new ConversationItem
-            {
-                Id = "conv-2",
-                CustomerName = "Guest User",
-                CustomerAvatar = "assets/images/avatars/avatar-2.png",
-                PrimaryChannel = "whatsapp",
-                AgentName = "Bakerbot",
-                Status = "Closed",
-                LastMessage = "Great, thanks for the info! I will order i...",
-                TimeAgo = "2 mins ago",
-                Tags = new(),
-                OrderCount = 0,
-                AiHandling = "Bakerbot",
-                DetectedSteps = new(),
-                HasDuplicate = true,
-                DuplicateName = "Sonia Uzor",
-                DuplicateChannel = "instagram",
-                Channels = new()
-                {
-                    new ConvChannel { Key = "whatsapp", Name = "WhatsApp", Handle = "+2348012345678" }
-                },
-                Messages = new()
-                {
-                    new ConvMessage { Text = "2 plates of Jollof Rice with chicken and a Pepsi", IsAi = false }
-                }
-            },
-            new ConversationItem
-            {
-                Id = "conv-3",
-                CustomerName = "Kalau Isiagu",
-                CustomerAvatar = "assets/images/avatars/avatar-3.png",
-                PrimaryChannel = "facebook",
-                AgentName = "Bakerbot",
-                Status = "Closed",
-                LastMessage = "Great, thanks for the info! I will order i...",
-                TimeAgo = "2 mins ago",
-                Tags = new(),
-                OrderCount = 5,
-                AiHandling = "Bakerbot",
-                DetectedSteps = new() { "Place order" },
-                Channels = new()
-                {
-                    new ConvChannel { Key = "facebook", Name = "Facebook", Handle = "@kalau.isiagu" }
-                },
-                Messages = new()
-                {
-                    new ConvMessage { Text = "I'd like to place an order", IsAi = false },
-                    new ConvMessage { Text = "Sure! What would you like to order?", IsAi = true }
-                }
-            },
-            new ConversationItem
-            {
-                Id = "conv-4",
-                CustomerName = "Isong Benedict",
-                CustomerAvatar = "assets/images/avatars/avatar-4.png",
-                PrimaryChannel = "facebook",
-                AgentName = "Bakerbot",
-                Status = "Closed",
-                LastMessage = "Great, thanks for the info! I will order i...",
-                TimeAgo = "2 mins ago",
-                Tags = new(),
-                OrderCount = 2,
-                AiHandling = "Bakerbot",
-                DetectedSteps = new(),
-                Channels = new()
-                {
-                    new ConvChannel { Key = "facebook", Name = "Facebook", Handle = "@isong.ben" }
-                },
-                Messages = new()
-                {
-                    new ConvMessage { Text = "Hello, do you deliver to Abuja?", IsAi = false },
-                    new ConvMessage { Text = "Yes we do! Delivery to Abuja takes 2-3 business days.", IsAi = true }
-                }
-            },
-            new ConversationItem
-            {
-                Id = "conv-5",
-                CustomerName = "Umanah Cynthia",
-                CustomerAvatar = "assets/images/avatars/avatar-5.png",
-                PrimaryChannel = "instagram",
-                AgentName = "Bakerbot",
-                Status = "Closed",
-                LastMessage = "Great, thanks for the info! I will order i...",
-                TimeAgo = "2 mins ago",
-                Tags = new(),
-                OrderCount = 8,
-                AiHandling = "Bakerbot",
-                DetectedSteps = new() { "Ask for price" },
-                Channels = new()
-                {
-                    new ConvChannel { Key = "instagram", Name = "Instagram", Handle = "@cynthia_u" }
-                },
-                Messages = new()
-                {
-                    new ConvMessage { Text = "How much is the Jollof Rice?", IsAi = false },
-                    new ConvMessage { Text = "A plate of Jollof Rice is ₦2,500. Would you like to order?", IsAi = true }
-                }
+                    Id = id, ConnectionId = summary.ConnectionId, Sender = summary.Sender,
+                    CustomerAvatar = "assets/images/avatars/avatar-1.png", AgentName = "Manual replies", AiHandling = "Manual replies",
+                    Channels = new() { new ConvChannel { Key = "whatsapp", Name = "WhatsApp", Handle = summary.Sender } },
+                };
+                Conversations.Add(item);
             }
-        };
+            item.CustomerName = summary.Name;
+            item.LastMessage = summary.Preview;
+            item.UpdatedAt = summary.UpdatedAt;
+            item.TimeAgo = summary.UpdatedAt.ToLocalTime().ToString("g");
+        }
+        Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
+    }
 
-    public static readonly List<ConvSearchResult> SearchResults = new()
-        {
-            new ConvSearchResult { Id = "r-1", Name = "Sonia Uzor", Channel = "Instagram", Username = "@Mhiz_SoniaU", Avatar = "assets/images/avatars/avatar-4.png" }
-        };
-
-    public ConversationItem? GetConversation(string id) =>
-        Conversations.FirstOrDefault(c => c.Id == id);
+    public static void Merge(ConversationItem item, IEnumerable<ConversationMessage> messages)
+    {
+        var unique = item.Messages.ToDictionary(m => m.Id);
+        foreach (var message in messages)
+            unique[message.Id] = new ConvMessage
+            {
+                Id = message.Id, Text = message.Text, IsOutgoing = message.Outgoing,
+                Status = message.Status, ReceivedAt = message.ReceivedAt,
+            };
+        item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
+    }
 }

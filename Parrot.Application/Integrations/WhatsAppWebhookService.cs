@@ -79,6 +79,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
             }
 
             return valid;
+            
         }
         catch (FormatException)
         {

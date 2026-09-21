@@ -43,12 +43,13 @@ services:
     restart: unless-stopped
     env_file: .env.prod
     environment:
-       - DataProtection__KeyRingPath=/app/data-protection-keys
-       - DataProtection__CertificatePath=/run/secrets/parrot-data-protection.pfx
-       - DataProtection__CertificatePassword=${DATA_PROTECTION_CERTIFICATE_PASSWORD}
+      - DataProtection__KeyRingPath=/app/data-protection-keys
+      - DataProtection__CertificatePath=/run/secrets/parrot-data-protection.pfx
+      - DataProtection__CertificatePassword=${DATA_PROTECTION_CERTIFICATE_PASSWORD}
+      - Database__ApplyMigrations=true
     volumes:
-       - /home/ubuntu/app/data-protection-keys:/app/data-protection-keys
-       - /home/ubuntu/app/secrets/parrot-data-protection.pfx:/run/secrets/parrot-data-protection.pfx:ro
+      - /home/ubuntu/app/data-protection-keys:/app/data-protection-keys
+      - /home/ubuntu/app/secrets/parrot-data-protection.pfx:/run/secrets/parrot-data-protection.pfx:ro
 #    healthcheck:
 #      test: ["CMD", "curl", "-f", "http://localhost:8080/healthz"]
 #      interval: 15s
