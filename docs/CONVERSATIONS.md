@@ -10,17 +10,26 @@ The API and ingestor must use the **same MongoDB database and collection**. Conf
 MongoDB__ConnectionString=mongodb://mongodb:27017
 MongoDB__Database=parrot
 MongoDB__Collection=messages
-WhatsApp__AccessToken=<Meta token authorized for this business number>
-WhatsApp__PhoneNumberId=1075139625685928
-WhatsApp__BusinessAccountId=1270095535252576
 WhatsApp__ApiVersion=v25.0
 ```
 
-Keep the token on the API server, not in browser configuration or git. This implementation deliberately supports the server-configured business credential only: it refuses to send for a connection whose saved phone/account IDs differ. Per-tenant credential onboarding is future work.
+Each WhatsApp connection stores its own encrypted Meta access token. In **Channels → WhatsApp setup**, save the Business Account ID and Phone Number ID, then enter the Meta access token in the password field and click **Save access token**. Existing connections can use Back from the receiving step to return to configuration. Tokens can be replaced after messages have been received. Reads return only `HasAccessToken`, never the saved token or ciphertext. A saved token indicator does not verify Meta permissions or expiry.
 
-For the local Docker stack, set `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, and `WHATSAPP_BUSINESS_ACCOUNT_ID` in `.env.docker`; see `.env.docker.example`. Mongo settings for the API are now supplied by `docker-compose.local.yml`.
+Sending uses only the selected connection's token and phone ID. Global `WhatsApp__AccessToken`, `WhatsApp__PhoneNumberId`, and `WhatsApp__BusinessAccountId` values are no longer used for sending. Existing connections must save a token before replying. Tokens are protected with the existing ASP.NET Data Protection provider; retain the configured shared key ring and certificate across deployments/replicas.
 
-Rebuild/redeploy API, web, ingestor, and gRPC together: they share the extended message document model. No PostgreSQL migration is required. Mongo indexes are created when repositories initialize. Existing incoming documents without the new fields remain readable.
+Apply the PostgreSQL migration **AddWhatsAppConnectionAccessToken** before starting the updated API. It adds a nullable `AccessTokenEncrypted` column without modifying existing account IDs or messages. Rebuild/redeploy API, web, ingestor, and gRPC together.
+
+The owner-authenticated token endpoint is:
+
+```http
+PUT /api/whatsapp/connections/{connectionId}/access-token
+Authorization: Bearer <Parrot JWT>
+Content-Type: application/json
+
+{"accessToken":"<Meta access token>"}
+```
+
+It returns 204 on success. Saving does not send a message or validate the credential against Meta. Incoming messages and sent/delivered/read notifications arrive through the webhook; tokens are not used to poll an inbox. Delivery status reconciliation remains unimplemented (status events are logged). A status webhook's message ID must match a send response's message ID to describe that send.
 
 1. Save the actual account IDs in the existing WhatsApp setup flow. Verify the callback and subscribe to messages in Meta.
 2. Send a message from your personal WhatsApp phone to the business number. The connection-scoped webhook URL must include its generated `ref` so the archive has `OwnerUserId` and `ConnectionId`.
@@ -65,7 +74,7 @@ History pages contain at most 100 messages in chronological order and a `nextBef
 | `Parrot.Api/Controllers/ConversationsController.cs` | Authenticated list, history and reply endpoints; ownership checks |
 | `Parrot.Api/Program.cs` | Mongo, conversation service and WhatsApp HTTP client registrations |
 | `Parrot.Application/Conversations/ConversationContracts.cs` | API models, repository/sender interfaces and provider rejection exception |
-| `Parrot.Application/Conversations/ConversationService.cs` | Reply validation, credential ownership, 24-hour window, atomic reservation and uncertain-outcome handling |
+| `Parrot.Application/Conversations/ConversationService.cs` | Reply validation, connection token decryption, 24-hour window, atomic reservation and uncertain-outcome handling |
 | `Parrot.Infrastructure/Conversations/MongoConversationStore.cs` | Scoped queries, pagination, grouping, unique reservation and send state persistence |
 | `Parrot.Infrastructure/Conversations/WhatsAppSender.cs` | Server-to-Meta text send, no automatic retry |
 | `Parrot.Domain/Entities/Messages/MessageDocument.cs` | Outgoing direction, send state and Meta message ID |
@@ -87,7 +96,7 @@ History pages contain at most 100 messages in chronological order and a `nextBef
 | `Test.Parrot.Api/Tests/Services/WhatsAppSenderTests.cs` | Meta HTTP request and outcome handling |
 | `docs/CONVERSATIONS.md` | This setup/audit guide |
 
-Pre-existing working-tree changes to `WhatsAppWebhookController.cs` and staged `docker-compose.yaml` were preserved, not edited by this implementation. In particular, the controller's disabled signature validation remains unchanged. The existing test `IncomingReference_WithInvalidSignature_IsRejected` fails because of that pre-existing edit. Reinstate signature validation before exposing real production traffic; synthetic curl requests then need a valid signature.
+Webhook signature validation remains intentionally bypassed by the existing controller implementation. Tests cover processing accepted connections with missing or invalid signatures.
 
 ## Verification
 
@@ -103,5 +112,3 @@ PARROT_TEST_MONGO=mongodb://127.0.0.1:27028 dotnet test Test.Parrot.Api/Test.Par
 ```
 
 Automated tests use a fake Meta HTTP endpoint and a real temporary MongoDB. They do not send messages to real phones. A real delivery check requires your server credentials and the phone steps above.
-
-Verification result: solution build succeeded with 0 errors (existing analyzer/dependency warnings remain). Full suite: 129 passed, 1 failed, 0 skipped. All 15 new test cases passed, including the real MongoDB test. The single failure is the pre-existing disabled-signature case identified above. The temporary MongoDB container was removed after testing.

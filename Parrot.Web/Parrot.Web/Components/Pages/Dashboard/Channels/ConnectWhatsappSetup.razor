@@ -48,6 +48,10 @@
                     {
                         <button class="cws-copy-btn" @onclick="SaveAccountAsync" disabled="@_busy">Save account details</button>
                     }
+                    <label class="cws-field-label" for="access-token">WhatsApp access token</label>
+                    <input id="access-token" class="cws-input" type="password" autocomplete="new-password" spellcheck="false" maxlength="8192" @bind="_accessToken" />
+                    <p class="cws-token-helper">@(_setup.Connection.HasAccessToken ? "An access token is saved. Enter a new token to replace it." : "Save your Meta access token to send replies from this connection.")</p>
+                    <button class="cws-copy-btn" @onclick="SaveAccessTokenAsync" disabled="@(_busy || string.IsNullOrWhiteSpace(_accessToken))">Save access token</button>
                     <label class="cws-field-label" for="webhook-url">Your webhook URL</label>
                     <div class="cws-copy-row">
                         <input id="webhook-url" class="cws-input" readonly value="@_setup.WebhookUrl" />
@@ -83,7 +87,7 @@
             {
                 <h1 class="cws-panel-title">@(IsReceiving ? "Receiving configured" : "Receive a test message")</h1>
                 <p class="cws-panel-sub">@(IsReceiving ? "A valid WhatsApp message has been saved for this connection." : "Subscribe to the messages field in Meta, then send a WhatsApp message to your business number from another phone.")</p>
-                <div class="cws-info-box" role="status">@(IsReceiving ? "Incoming messages are configured. Sending messages requires separate authorization." : "Waiting for a verified incoming message to be saved. You can leave and resume later.")</div>
+                <div class="cws-info-box" role="status">@(IsReceiving ? "Incoming messages are configured. Use Back to save or replace the access token for sending replies." : "Waiting for a verified incoming message to be saved. You can leave and resume later.")</div>
                 <div class="cws-actions">
                     <button class="cws-copy-btn" @onclick="() => _currentStep = 0">Back</button>
                     <button class="cws-copy-btn" @onclick="CheckStatusAsync" disabled="@_busy">Check for message</button>
@@ -120,6 +124,7 @@
 @code {
     private readonly CancellationTokenSource _lifetime = new();
     private WhatsAppSetup? _setup;
+    private string _accessToken = string.Empty;
     private string? _error, _notice;
     private bool _busy, _interactive, _disposed;
     private int _currentStep;
@@ -142,6 +147,7 @@
     private void AuthChanged() => _ = InvokeAsync(async () =>
     {
         if (_disposed) return;
+        _accessToken = string.Empty;
         _setup = null;
         _currentStep = 0;
         if (_interactive) await LoadAsync();
@@ -176,6 +182,18 @@
     private void Continue()
     {
         if (IsVerified && HasAccount && !_busy) { _currentStep = 1; _notice = null; }
+    }
+
+    private async Task SaveAccessTokenAsync()
+    {
+        if (_setup is null) return;
+        await RunAsync(async () =>
+        {
+            await IntegrationsService.SaveWhatsAppAccessTokenAsync(_setup.Connection.Id, _accessToken, Token, _lifetime.Token);
+            _accessToken = string.Empty;
+            _setup = _setup with { Connection = await IntegrationsService.GetWhatsAppStatusAsync(_setup.Connection.Id, Token, _lifetime.Token) };
+            _notice = "Access token saved.";
+        }, "Could not save the access token. Please try again.");
     }
 
     private async Task SaveAccountAsync()
@@ -230,6 +248,7 @@
 
     public void Dispose()
     {
+        _accessToken = string.Empty;
         _disposed = true;
         AuthState.OnChange -= AuthChanged;
         _lifetime.Cancel();

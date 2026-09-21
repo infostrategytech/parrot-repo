@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
-using Microsoft.Extensions.Options;
+using Microsoft.AspNetCore.DataProtection;
+using Parrot.Infrastructure.SocialMediaIntegrations;
 using Moq;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
@@ -22,18 +23,22 @@ public class ConversationServiceTests
     private readonly Mock<IWhatsAppSender> _sender = new();
     private readonly MemoryStore _store = new();
 
+    private readonly IWhatsAppTokenProtector _protector = new WhatsAppTokenProtector(new EphemeralDataProtectionProvider());
+
+    public ConversationServiceTests() => _connection.AccessTokenEncrypted = _protector.Protect("connection-token");
+
     private ConversationService Create()
     {
         _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
         return new ConversationService(_store, _connections.Object, _sender.Object,
-            Options.Create(new WhatsAppSettings { AccessToken = "test", PhoneNumberId = "123", BusinessAccountId = "456" }));
+            _protector);
     }
 
     [Fact]
     public async Task ConcurrentAndRepeatedRequestsSendOnlyOnce()
     {
         var release = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        _sender.Setup(x => x.SendAsync("123", Recipient, "Hello", It.IsAny<CancellationToken>())).Returns(release.Task);
+        _sender.Setup(x => x.SendAsync("123", "connection-token", Recipient, "Hello", It.IsAny<CancellationToken>())).Returns(release.Task);
         var service = Create();
         var request = new SendReplyRequest(Guid.NewGuid(), "Hello");
         var first = service.SendAsync(Owner, _connection.Id, Recipient, request, default);
@@ -42,38 +47,38 @@ public class ConversationServiceTests
         release.SetResult("wamid.unique");
         Assert.Equal("accepted", (await first).Status);
         Assert.Equal("accepted", (await service.SendAsync(Owner, _connection.Id, Recipient, request, default)).Status);
-        _sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
         Assert.Single(_store.Messages);
     }
 
     [Fact]
     public async Task TimeoutIsNotAutomaticallyResent()
     {
-        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new TaskCanceledException());
         var service = Create();
         var request = new SendReplyRequest(Guid.NewGuid(), "Hello");
         Assert.Equal("unknown", (await service.SendAsync(Owner, _connection.Id, Recipient, request, default)).Status);
         Assert.Equal("unknown", (await service.SendAsync(Owner, _connection.Id, Recipient, request, default)).Status);
-        _sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task PersistenceFailureAfterMetaAcceptanceDoesNotResend()
     {
         _store.FailComplete = true;
-        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.accepted");
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.accepted");
         var service = Create();
         var request = new SendReplyRequest(Guid.NewGuid(), "Hello");
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.SendAsync(Owner, _connection.Id, Recipient, request, default));
         Assert.Equal("pending", (await service.SendAsync(Owner, _connection.Id, Recipient, request, default)).Status);
-        _sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        _sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
     public async Task SameRequestIdWithDifferentTextIsRejected()
     {
-        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.accepted");
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.accepted");
         var service = Create();
         var request = new SendReplyRequest(Guid.NewGuid(), "Hello");
         await service.SendAsync(Owner, _connection.Id, Recipient, request, default);
@@ -99,9 +104,9 @@ public class ConversationServiceTests
     }
 
     [Fact]
-    public async Task CredentialAccountMismatchCannotSend()
+    public async Task MissingConnectionTokenCannotSend()
     {
-        _connection.PhoneNumberId = "different";
+        _connection.AccessTokenEncrypted = null;
         var service = Create();
         await Assert.ThrowsAsync<ConflictException>(() => service.SendAsync(Owner, _connection.Id, Recipient, new(Guid.NewGuid(), "Hi"), default));
         Assert.Empty(_store.Messages);
@@ -110,9 +115,30 @@ public class ConversationServiceTests
     [Fact]
     public async Task ExplicitProviderRejectionIsStoredAsFailed()
     {
-        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ThrowsAsync(new WhatsAppRejectedException());
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>())).ThrowsAsync(new WhatsAppRejectedException());
         var service = Create();
         Assert.Equal("failed", (await service.SendAsync(Owner, _connection.Id, Recipient, new(Guid.NewGuid(), "Hi"), default)).Status);
+    }
+
+    [Fact]
+    public async Task UsesTheOwnedConnectionsTokenAndPhoneNumber()
+    {
+        _connection.PhoneNumberId = "789";
+        _connection.AccessTokenEncrypted = _protector.Protect("another-connection-token");
+        _sender.Setup(x => x.SendAsync("789", "another-connection-token", Recipient, "Hi", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("wamid.other");
+        Assert.Equal("accepted", (await Create().SendAsync(Owner, _connection.Id, Recipient, new(Guid.NewGuid(), "Hi"), default)).Status);
+        _sender.Verify(x => x.SendAsync("789", "another-connection-token", Recipient, "Hi", It.IsAny<CancellationToken>()), Times.Once);
+        _sender.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task UnreadableConnectionTokenDoesNotReserveOrSend()
+    {
+        _connection.AccessTokenEncrypted = "unreadable";
+        await Assert.ThrowsAsync<ConflictException>(() => Create().SendAsync(Owner, _connection.Id, Recipient, new(Guid.NewGuid(), "Hi"), default));
+        Assert.Empty(_store.Messages);
+        _sender.VerifyNoOtherCalls();
     }
 
     private sealed class MemoryStore : IConversationStore

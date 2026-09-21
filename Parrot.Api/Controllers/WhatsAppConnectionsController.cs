@@ -49,6 +49,13 @@ public class WhatsAppConnectionsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id:guid}/access-token")]
+    public async Task<IActionResult> SaveAccessToken(Guid id, [FromBody] WhatsAppAccessTokenRequest request)
+    {
+        await _service.SaveAccessTokenAsync(GetUserId(), id, request);
+        return NoContent();
+    }
+
     private string GetUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue("sub")
