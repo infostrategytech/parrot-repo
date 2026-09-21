@@ -15,6 +15,10 @@ public abstract class MessageDocument
     [BsonRepresentation(BsonType.ObjectId)]
     public string Id { get; set; } = ObjectId.GenerateNewId().ToString();
 
+    public bool Outgoing { get; set; }
+    public string SendStatus { get; set; } = "received";
+    public string? ProviderMessageId { get; set; }
+
     public required string MessageId { get; set; }
     public required MessagingPlatform Platform { get; set; }
     public required string ExternalAccountId { get; set; }

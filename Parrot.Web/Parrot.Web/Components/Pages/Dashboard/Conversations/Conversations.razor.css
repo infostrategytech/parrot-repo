@@ -1,0 +1,9 @@
+.conversation-sidebar-container {
+    display: flex;
+    flex-direction: column;
+    width: 320px;
+    flex-shrink: 0;
+    min-height: 0;
+}
+.conversation-sidebar-container ::deep .cv-sidebar { flex: 1; min-height: 0; }
+p[role="alert"] { color: #9b1c1c; padding: 8px; background: #fff; }

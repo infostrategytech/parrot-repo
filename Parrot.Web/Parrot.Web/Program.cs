@@ -62,6 +62,7 @@ builder.Services.AddScoped<ResetPasswordState>();
 builder.Services.AddScoped<VerifyEmailState>();
 builder.Services.AddScoped<AppState>();
 
+builder.Services.AddScoped<ConversationClient>();
 builder.Services.AddScoped<AiAgentsState>();
 builder.Services.AddScoped<CatalogState>();
 builder.Services.AddScoped<ChannelsState>();
