@@ -7,6 +7,7 @@ public class WhatsAppSettings
     public string WebhookBaseUrl { get; set; } = string.Empty;
     public string VerifyToken { get; set; } = string.Empty;
     public string AppSecret { get; set; } = string.Empty;
+    // Legacy configuration retained for compatibility; sending uses the connection credential.
     public string AccessToken { get; set; } = string.Empty;
     public string PhoneNumberId { get; set; } = string.Empty;
     public string BusinessAccountId { get; set; } = string.Empty;

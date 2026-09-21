@@ -19,7 +19,7 @@ public interface IConversationStore
 
 public interface IWhatsAppSender
 {
-    Task<string> SendAsync(string phoneNumberId, string recipient, string text, CancellationToken ct);
+    Task<string> SendAsync(string phoneNumberId, string accessToken, string recipient, string text, CancellationToken ct);
 }
 
 public sealed class WhatsAppRejectedException : Exception

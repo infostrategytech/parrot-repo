@@ -279,6 +279,9 @@ namespace Parrot.Infrastructure.Migrations
 
             modelBuilder.Entity("Parrot.Domain.Entities.WhatsAppConnection", b =>
                 {
+                    b.Property<string>("AccessTokenEncrypted")
+                        .HasColumnType("text");
+
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");

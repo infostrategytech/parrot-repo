@@ -28,6 +28,54 @@ public class WhatsAppConnectionServiceTests
     }
 
     [Fact]
+    public async Task SaveAccessToken_EncryptsAndCanRotateAfterReceivingMessages()
+    {
+        var connection = Connection();
+        connection.FirstMessageReceivedAt = DateTime.UtcNow;
+        _repository.Setup(r => r.GetByOwnerAndIdAsync("owner", connection.Id)).ReturnsAsync(connection);
+        string? stored = null;
+        _repository.Setup(r => r.SaveAccessTokenAsync(connection.Id, "owner", It.IsAny<string>()))
+            .Callback<Guid, string, string>((id, owner, encrypted) => stored = encrypted)
+            .Returns(Task.CompletedTask);
+        await CreateService().SaveAccessTokenAsync("owner", connection.Id, new() { AccessToken = "test-token" });
+        Assert.NotEqual("test-token", stored);
+        Assert.Equal("test-token", _protector.Unprotect(stored!));
+        connection.AccessTokenEncrypted = stored;
+        var response = await CreateService().GetByIdAsync("owner", connection.Id);
+        Assert.True(response.HasAccessToken);
+        string json = System.Text.Json.JsonSerializer.Serialize(response);
+        Assert.DoesNotContain("test-token", json);
+        Assert.DoesNotContain(stored!, json);
+        await CreateService().SaveAccessTokenAsync("owner", connection.Id, new() { AccessToken = "replacement-token" });
+        Assert.Equal("replacement-token", _protector.Unprotect(stored!));
+    }
+
+    [Fact]
+    public async Task SaveAccessToken_RejectsOtherOwnerAndDisabledConnection()
+    {
+        var connection = Connection();
+        var service = CreateService();
+        await Assert.ThrowsAsync<NotFoundException>(() => service.SaveAccessTokenAsync("other", connection.Id, new() { AccessToken = "test" }));
+        connection.DisabledAt = DateTime.UtcNow;
+        _repository.Setup(r => r.GetByOwnerAndIdAsync("owner", connection.Id)).ReturnsAsync(connection);
+        await Assert.ThrowsAsync<ConflictException>(() => service.SaveAccessTokenAsync("owner", connection.Id, new() { AccessToken = "test" }));
+        _repository.Verify(r => r.SaveAccessTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("  ")]
+    [InlineData("bad token")]
+    [InlineData("bad\r\ntoken")]
+    public async Task SaveAccessToken_RejectsInvalidToken(string token)
+    {
+        var connection = Connection();
+        _repository.Setup(r => r.GetByOwnerAndIdAsync("owner", connection.Id)).ReturnsAsync(connection);
+        await Assert.ThrowsAsync<ValidationException>(() => CreateService().SaveAccessTokenAsync("owner", connection.Id, new() { AccessToken = token }));
+        _repository.Verify(r => r.SaveAccessTokenAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
     public async Task Create_OmittedNameDefaultsToWhatsAppBusiness()
     {
         CreateWhatsAppConnectionRequest request = System.Text.Json.JsonSerializer

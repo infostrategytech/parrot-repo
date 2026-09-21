@@ -4,6 +4,7 @@ namespace Parrot.Application.Integrations;
 
 public interface IWhatsAppConnectionRepository
 {
+    Task SaveAccessTokenAsync(Guid id, string ownerUserId, string encryptedToken);
     Task ConfigureAccountAsync(Guid id, string ownerUserId, string businessAccountId, string phoneNumberId);
     Task AddAsync(WhatsAppConnection connection);
     Task<IReadOnlyList<WhatsAppConnection>> GetByOwnerAsync(string ownerUserId);

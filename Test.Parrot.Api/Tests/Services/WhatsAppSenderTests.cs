@@ -19,10 +19,10 @@ public class WhatsAppSenderTests
     {
         var handler = new FakeHandler((HttpStatusCode)status, body);
         using var http = new HttpClient(handler);
-        var sender = new WhatsAppSender(http, Options.Create(new WhatsAppSettings { AccessToken = "secret", ApiVersion = "v25.0" }));
-        if (outcome == "accepted") Assert.Equal("wamid.reply", await sender.SendAsync("123", "2348012345678", "Hello", default));
-        else if (outcome == "failed") await Assert.ThrowsAsync<WhatsAppRejectedException>(() => sender.SendAsync("123", "2348012345678", "Hello", default));
-        else await Assert.ThrowsAnyAsync<Exception>(() => sender.SendAsync("123", "2348012345678", "Hello", default));
+        var sender = new WhatsAppSender(http, Options.Create(new WhatsAppSettings { AccessToken = "unused-global-token", ApiVersion = "v25.0" }));
+        if (outcome == "accepted") Assert.Equal("wamid.reply", await sender.SendAsync("123", "secret", "2348012345678", "Hello", default));
+        else if (outcome == "failed") await Assert.ThrowsAsync<WhatsAppRejectedException>(() => sender.SendAsync("123", "secret", "2348012345678", "Hello", default));
+        else await Assert.ThrowsAnyAsync<Exception>(() => sender.SendAsync("123", "secret", "2348012345678", "Hello", default));
         Assert.Equal(1, handler.Calls);
         Assert.Equal("https://graph.facebook.com/v25.0/123/messages", handler.Url);
         Assert.Equal("Bearer secret", handler.Authorization);

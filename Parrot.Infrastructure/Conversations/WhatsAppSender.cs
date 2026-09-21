@@ -9,12 +9,12 @@ namespace Parrot.Infrastructure.Conversations;
 
 public sealed class WhatsAppSender(HttpClient http, IOptions<WhatsAppSettings> options) : IWhatsAppSender
 {
-    public async Task<string> SendAsync(string phoneNumberId, string recipient, string text, CancellationToken ct)
+    public async Task<string> SendAsync(string phoneNumberId, string accessToken, string recipient, string text, CancellationToken ct)
     {
         WhatsAppSettings settings = options.Value;
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,
             $"https://graph.facebook.com/{Uri.EscapeDataString(settings.ApiVersion)}/{Uri.EscapeDataString(phoneNumberId)}/messages");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", settings.AccessToken);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         request.Content = JsonContent.Create(new
         {
             messaging_product = "whatsapp", recipient_type = "individual", to = recipient,
