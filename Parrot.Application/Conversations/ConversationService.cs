@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Options;
+using System.Security.Cryptography;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
@@ -7,7 +7,7 @@ using Parrot.Domain.Exceptions;
 namespace Parrot.Application.Conversations;
 
 public sealed class ConversationService(IConversationStore store, IWhatsAppConnectionRepository connections,
-    IWhatsAppSender sender, IOptions<WhatsAppSettings> options)
+    IWhatsAppSender sender, IWhatsAppTokenProtector protector)
 {
     public async Task<ConversationMessage> SendAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
@@ -23,11 +23,17 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
         if (existing is not null) return Match(existing, connectionId, recipient, request.Text);
 
-        // This first integration uses the server-configured business credential. Never use it for another account.
-        WhatsAppSettings settings = options.Value;
-        if (string.IsNullOrWhiteSpace(settings.AccessToken) || connection.PhoneNumberId != settings.PhoneNumberId
-            || connection.WhatsAppBusinessAccountId != settings.BusinessAccountId)
-            throw new ConflictException("Sending is not configured for this business. Configure its WhatsApp credentials on the server.");
+        if (string.IsNullOrWhiteSpace(connection.AccessTokenEncrypted)
+            || string.IsNullOrWhiteSpace(connection.PhoneNumberId) || string.IsNullOrWhiteSpace(connection.WhatsAppBusinessAccountId))
+            throw new ConflictException("Save the account IDs and access token in this WhatsApp connection's setup before sending.");
+        string accessToken;
+        try { accessToken = protector.Unprotect(connection.AccessTokenEncrypted); }
+        catch (CryptographicException)
+        {
+            throw new ConflictException("The saved access token cannot be read. Save a replacement token in this connection's setup.");
+        }
+        if (string.IsNullOrWhiteSpace(accessToken))
+            throw new ConflictException("Save a replacement access token in this connection's setup.");
         DateTime? latest = await store.LastIncomingAsync(owner, connectionId, recipient, ct);
         if (latest is null || latest < DateTime.UtcNow.AddHours(-24))
             throw new ConflictException("Ask this customer to message your business first. Text replies require an incoming message within 24 hours.");
@@ -55,7 +61,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         string? providerId = null;
         try
         {
-            providerId = await sender.SendAsync(connection.PhoneNumberId!, recipient, request.Text, timeout.Token);
+            providerId = await sender.SendAsync(connection.PhoneNumberId!, accessToken, recipient, request.Text, timeout.Token);
             status = "accepted";
         }
         catch (WhatsAppRejectedException) { status = "failed"; }

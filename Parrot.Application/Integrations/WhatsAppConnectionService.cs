@@ -112,6 +112,17 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         await _repository.ConfigureAccountAsync(id, ownerUserId, request.WhatsAppBusinessAccountId, request.PhoneNumberId);
     }
 
+    public async Task SaveAccessTokenAsync(string ownerUserId, Guid id, WhatsAppAccessTokenRequest request)
+    {
+        WhatsAppConnection connection = await GetOwnedAsync(ownerUserId, id);
+        if (connection.DisabledAt.HasValue)
+            throw new ConflictException("This WhatsApp connection is disabled.");
+        string token = request.AccessToken?.Trim() ?? string.Empty;
+        if (token.Length is 0 or > 8192 || token.Any(char.IsWhiteSpace) || token.Any(char.IsControl))
+            throw new ValidationException("Enter a valid access token of up to 8192 characters.");
+        await _repository.SaveAccessTokenAsync(id, ownerUserId, _protector.Protect(token));
+    }
+
     private static bool IsMetaId(string? value) =>
         value is { Length: > 0 and <= 64 } && value.All(c => c is >= '0' and <= '9');
 
@@ -172,6 +183,7 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
 
     private static WhatsAppConnectionResponse ToResponse(WhatsAppConnection connection) => new()
     {
+        HasAccessToken = !string.IsNullOrEmpty(connection.AccessTokenEncrypted),
         Id = connection.Id,
         Name = connection.Name,
         SetupStatus = connection.SetupStatus,

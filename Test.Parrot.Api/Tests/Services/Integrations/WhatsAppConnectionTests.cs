@@ -1,4 +1,6 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Parrot.Application.Models;
 using Parrot.Domain.Entities;
 using Parrot.Infrastructure.Data;
@@ -29,6 +31,20 @@ public class WhatsAppConnectionTests
         };
 
         Assert.Equal(expected, connection.SetupStatus);
+    }
+
+    [Fact]
+    public void AccessTokenMigration_MatchesModelAndAddsNullableColumn()
+    {
+        using var context = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+            .UseNpgsql("Host=localhost;Database=model_test;Username=test;Password=test").Options);
+        Assert.False(context.Database.HasPendingModelChanges());
+        Assert.True(context.Model.FindEntityType(typeof(WhatsAppConnection))!
+            .FindProperty(nameof(WhatsAppConnection.AccessTokenEncrypted))!.IsNullable);
+        string sql = context.GetService<IMigrator>().GenerateScript(
+            "20260916134101_AddWhatsAppConnections", "20260921120000_AddWhatsAppConnectionAccessToken");
+        Assert.Contains("ADD \"AccessTokenEncrypted\" text", sql);
+        Assert.DoesNotContain("DROP TABLE", sql);
     }
 
     [Fact]

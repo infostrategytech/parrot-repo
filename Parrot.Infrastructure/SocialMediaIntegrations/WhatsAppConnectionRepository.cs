@@ -73,6 +73,16 @@ public class WhatsAppConnectionRepository : IWhatsAppConnectionRepository
                 .SetProperty(c => c.UpdatedAt, disabledAt));
     }
 
+    public async Task SaveAccessTokenAsync(Guid id, string ownerUserId, string encryptedToken)
+    {
+        int count = await _db.WhatsAppConnections
+            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.AccessTokenEncrypted, encryptedToken)
+                .SetProperty(c => c.UpdatedAt, DateTime.UtcNow));
+        if (count == 0) throw new ConflictException("This WhatsApp connection is unavailable.");
+    }
+
     public async Task ConfigureAccountAsync(Guid id, string ownerUserId, string businessAccountId, string phoneNumberId)
     {
         try

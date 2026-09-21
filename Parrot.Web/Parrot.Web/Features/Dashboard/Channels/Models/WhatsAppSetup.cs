@@ -4,6 +4,7 @@ public sealed record WhatsAppConnectionInfo(
     Guid Id, string Name, string SetupStatus, string? PhoneNumberId,
     string? DisplayPhoneNumber, DateTime? WebhookVerifiedAt, DateTime? DisabledAt)
 {
+    public bool HasAccessToken { get; init; }
     public string? WhatsAppBusinessAccountId { get; init; }
     public DateTime? FirstMessageReceivedAt { get; init; }
 }

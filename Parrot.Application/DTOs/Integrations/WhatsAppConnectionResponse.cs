@@ -2,6 +2,7 @@ namespace Parrot.Application.DTOs.Integrations;
 
 public class WhatsAppConnectionResponse
 {
+    public bool HasAccessToken { get; init; }
     public Guid Id { get; init; }
     public required string Name { get; init; }
     public required string SetupStatus { get; init; }

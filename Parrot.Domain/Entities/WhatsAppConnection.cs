@@ -18,6 +18,8 @@ public class WhatsAppConnection
 
     public string? WhatsAppBusinessAccountId { get; set; }
 
+    public string? AccessTokenEncrypted { get; set; }
+
     public string? PhoneNumberId { get; set; }
 
     public string? DisplayPhoneNumber { get; set; }

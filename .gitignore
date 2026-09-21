@@ -121,5 +121,3 @@ TestResults/
 # Markdown documentation stays local.
 *.[mM][dD]
 
-# Keep the conversation implementation audit guide.
-!docs/CONVERSATIONS.md
