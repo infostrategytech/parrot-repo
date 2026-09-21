@@ -2,6 +2,16 @@ namespace Parrot.Web.Components.Pages.Dashboard.Conversations;
 
 public class ConversationItem
 {
+    public Guid ConnectionId { get; set; }
+    public string Sender { get; set; } = "";
+    public DateTime UpdatedAt { get; set; }
+    public string? NextBefore { get; set; }
+    public bool HistoryLoaded { get; set; }
+    public string Draft { get; set; } = "";
+    public Guid? DraftRequestId { get; set; }
+    public bool Sending { get; set; }
+    public string? SendError { get; set; }
+
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string CustomerName { get; set; } = string.Empty;
     public string CustomerAvatar { get; set; } = "👤";
@@ -31,6 +41,10 @@ public class ConvChannel
 
 public class ConvMessage
 {
+    public bool IsOutgoing { get; set; }
+    public string Status { get; set; } = "received";
+    public DateTime ReceivedAt { get; set; }
+
     public string Id { get; set; } = Guid.NewGuid().ToString();
     public string Text { get; set; } = string.Empty;
     public bool IsAi { get; set; }

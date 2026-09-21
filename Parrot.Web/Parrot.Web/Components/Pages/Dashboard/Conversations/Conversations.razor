@@ -1,104 +1,124 @@
-﻿@page "/dashboard/conversations"
+@page "/dashboard/conversations"
 @layout DashboardLayout
+@implements IDisposable
 @inject ConversationsState ConversationsState
+@inject Parrot.Web.Services.ConversationClient Client
+@inject AuthState AuthState
 @using Parrot.Web.Components.Pages.Dashboard.Conversations
 
-<div class="cv-page" @onclick="CloseDropdowns">
-    <ConvSidebar
-        Conversations="ConversationsState.Conversations"
-        SelectedId="@_selectedId"
-        OnSelect="SelectConversation" />
-
+@if (_error is not null) { <p role="alert">@_error</p> }
+<div class="cv-page">
+    <div class="conversation-sidebar-container">
+        <ConvSidebar Conversations="ConversationsState.Conversations" SelectedId="@(_selected?.Id ?? "")" OnSelect="SelectAsync" />
+        @if (_more) { <button @onclick="LoadMoreAsync" disabled="@_busy">Load more conversations</button> }
+    </div>
     @if (_selected is not null)
     {
-        <ConvChat
-            Conv="_selected"
-            InControlMode="_inControl"
-            ControlTimeLeft="@_controlTimeLeft"
-            OnTakeControl="OpenTakeControl"
-            OnLinkAccounts="OpenLinkAccounts" />
-
-        <ConvDetails Conv="_selected" />
+        <ConvChat @key="_selected.Id" Conv="_selected" OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" />
+        <aside class="cv-details">
+            <h2>Conversation details</h2>
+            <p>@_selected.CustomerName</p>
+            <p>WhatsApp: @_selected.Sender</p>
+            <p>Manual replies</p>
+        </aside>
     }
     else
     {
-        <div class="cv-empty-state">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#D1D5DB" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-            </svg>
-            <p>Select a conversation to view</p>
-        </div>
+        <div class="cv-empty-state"><p>@(_busy ? "Loading conversations…" : "No messages yet. Send a WhatsApp message to your connected business number.")</p></div>
     }
 </div>
 
-@if (_showLinkModal)
-{
-    <LinkAccountsModal OnCancel="CloseLinkModal" OnSelect="ShowMergeConfirm" />
-}
-
-@if (_showMergeModal)
-{
-    <MergeConfirmModal OnCancel="CloseMergeModal" OnConfirm="ConfirmMerge" />
-}
-
-@if (_showTakeControlModal)
-{
-    <TakeControlModal OnCancel="CloseTakeControl" OnConfirm="ConfirmTakeControl" />
-}
-
 @code {
-    private string _selectedId = string.Empty;
+    private readonly CancellationTokenSource _lifetime = new();
     private ConversationItem? _selected;
-    private bool _showLinkModal;
-    private bool _showMergeModal;
-    private bool _showTakeControlModal;
-    private bool _inControl;
-    private string _controlTimeLeft = "14:32";
+    private string? _error;
+    private bool _busy, _more, _disposed;
+    private int _loaded = 50;
 
     protected override void OnInitialized()
     {
-        _selected = ConversationsState.Conversations.FirstOrDefault();
-        _selectedId = _selected?.Id ?? string.Empty;
+        ConversationsState.Clear();
+        AuthState.OnChange += AuthChanged;
     }
-
-    private void SelectConversation(string id)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _selectedId = id;
-        _selected = ConversationsState.GetConversation(id);
-        _inControl = false;
+        if (!firstRender) return;
+        await RefreshAsync();
+        _ = PollAsync();
     }
-
-    private void CloseDropdowns() { }
-
-    private void OpenLinkAccounts() => _showLinkModal = true;
-    private void CloseLinkModal() => _showLinkModal = false;
-
-    private void ShowMergeConfirm(ConvSearchResult _)
+    private void AuthChanged() => _ = InvokeAsync(async () =>
     {
-        _showLinkModal = false;
-        _showMergeModal = true;
+        ConversationsState.Clear(); _selected = null; _loaded = 50;
+        await RefreshAsync();
+        StateHasChanged();
+    });
+    private async Task PollAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+        try { while (await timer.WaitForNextTickAsync(_lifetime.Token)) await InvokeAsync(RefreshAsync); }
+        catch (OperationCanceledException) { }
     }
-
-    private void CloseMergeModal() => _showMergeModal = false;
-
-    private void ConfirmMerge()
+    private async Task RunAsync(Func<Task> action)
     {
-        if (_selected is not null) _selected.HasDuplicate = false;
-        _showMergeModal = false;
+        if (_busy || _disposed || !AuthState.IsAuthenticated) return;
+        _busy = true;
+        try { await action(); _error = null; }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
+        { _error = ex is HttpRequestException ? ex.Message : "Could not load messages. Retrying shortly."; }
+        finally { _busy = false; if (!_disposed) StateHasChanged(); }
     }
-
-    private void OpenTakeControl() => _showTakeControlModal = true;
-    private void CloseTakeControl() => _showTakeControlModal = false;
-
-    private void ConfirmTakeControl(string duration)
+    private Task RefreshAsync() => RunAsync(async () =>
     {
-        _inControl = true;
-        _controlTimeLeft = duration switch
+        var token = AuthState.CurrentUser?.Token;
+        var summaries = new List<Parrot.Application.Conversations.ConversationSummary>();
+        for (int skip = 0; skip < _loaded; skip += 50)
         {
-            "30 minutes" => "29:59",
-            "1 hour" => "59:59",
-            _ => "14:59"
-        };
-        _showTakeControlModal = false;
+            var page = await Client.ListAsync(skip, _lifetime.Token);
+            summaries.AddRange(page); _more = page.Count == 50;
+            if (!_more) break;
+        }
+        if (token != AuthState.CurrentUser?.Token || _disposed) return;
+        ConversationsState.Apply(summaries);
+        _selected ??= ConversationsState.Conversations.FirstOrDefault();
+        if (_selected is not null) await ReadSelectedAsync(false);
+    });
+    private async Task SelectAsync(string id)
+    {
+        if (_busy) return;
+        _selected = ConversationsState.GetConversation(id);
+        await RunAsync(() => ReadSelectedAsync(false));
+    }
+    private Task LoadOlderAsync() => RunAsync(() => ReadSelectedAsync(true));
+    private async Task ReadSelectedAsync(bool older)
+    {
+        var item = _selected;
+        var token = AuthState.CurrentUser?.Token;
+        if (item is null) return;
+        var page = await Client.ReadAsync(item.ConnectionId, item.Sender, older ? item.NextBefore : null, _lifetime.Token);
+        if (token != AuthState.CurrentUser?.Token || _disposed) return;
+        var messages = page.Messages.ToList();
+        var cursor = page.NextBefore;
+        // Catch up across multiple pages after a burst without leaving gaps in loaded history.
+        if (!older && item.HistoryLoaded && item.Messages.Count > 0)
+        {
+            var known = item.Messages.Select(m => m.Id).ToHashSet();
+            while (cursor is not null && !messages.Any(m => known.Contains(m.Id)))
+            {
+                var previous = await Client.ReadAsync(item.ConnectionId, item.Sender, cursor, _lifetime.Token);
+                if (token != AuthState.CurrentUser?.Token || _disposed) return;
+                messages.AddRange(previous.Messages);
+                cursor = previous.NextBefore;
+            }
+        }
+        ConversationsState.Merge(item, messages);
+        if (older || !item.HistoryLoaded) item.NextBefore = page.NextBefore;
+        item.HistoryLoaded = true;
+    }
+    private async Task LoadMoreAsync() { _loaded += 50; await RefreshAsync(); }
+    public void Dispose()
+    {
+        _disposed = true; AuthState.OnChange -= AuthChanged;
+        _lifetime.Cancel(); _lifetime.Dispose();
     }
 }

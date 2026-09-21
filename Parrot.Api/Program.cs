@@ -1,3 +1,8 @@
+using MongoDB.Driver;
+using Microsoft.Extensions.Options;
+using Parrot.Infrastructure.Messaging;
+using Parrot.Infrastructure.Conversations;
+using Parrot.Application.Conversations;
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Google;
@@ -204,6 +209,12 @@ builder.Services.AddHttpClient<IBrightDataScraperService, BrightDataScraperServi
     c.BaseAddress = new Uri("https://api.brightdata.com/"));
 builder.Services.AddSingleton(new AnthropicClient { ApiKey = anthropicSettings.ApiKey });
 builder.Services.AddScoped<IBusinessProfileEnrichmentService, BusinessProfileEnrichmentService>();
+
+builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection(MongoDbSettings.SectionName));
+builder.Services.AddSingleton<IMongoClient>(sp => new MongoClient(sp.GetRequiredService<IOptions<MongoDbSettings>>().Value.ConnectionString));
+builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+builder.Services.AddScoped<ConversationService>();
+builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 
 // Controllers & OpenAPI
 builder.Services.AddControllers();
