@@ -215,22 +215,32 @@ public class WhatsAppConnectionServiceTests
         legacy.VerifyNoOtherCalls();
     }
 
-    [Fact]
-    public async Task IncomingReference_WithInvalidSignature_IsRejected()
+    [Theory]
+    [InlineData(null)]
+    [InlineData("sha256=invalid")]
+    public async Task IncomingReference_WithMissingOrInvalidSignature_IsProcessedWhenValidationIsBypassed(string? signature)
     {
-        Mock<IWhatsAppWebhookService> legacy = new();
-        WhatsAppWebhookController controller = new(legacy.Object)
+        WhatsAppWebhookPayload payload = new()
+        {
+            Object = "whatsapp_business_account",
+            Entry = [],
+        };
+        Mock<IWhatsAppWebhookService> webhooks = new();
+        webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+        WhatsAppWebhookController controller = new(webhooks.Object)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
         };
         controller.Request.QueryString = new QueryString("?ref=identifier");
-        UnauthorizedResult result = Assert.IsType<UnauthorizedResult>(await controller.HandleEvent(null, "identifier", new WhatsAppWebhookPayload
-        {
-            Object = "whatsapp_business_account",
-            Entry = [],
-        }));
-        Assert.Equal(401, result.StatusCode);
-        legacy.Verify(s => s.IsValidSignature(string.Empty, It.IsAny<string>()), Times.Never);
+        controller.HttpContext.Items["RawBody"] = "raw-body";
+
+        OkResult result = Assert.IsType<OkResult>(await controller.HandleEvent(signature, "identifier", payload));
+
+        Assert.Equal(200, result.StatusCode);
+        webhooks.Verify(s => s.ProcessConnectionEventAsync("identifier", payload, It.IsAny<CancellationToken>()), Times.Once);
+        webhooks.Verify(s => s.IsValidSignature(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+        webhooks.VerifyNoOtherCalls();
     }
 
     [Fact]
