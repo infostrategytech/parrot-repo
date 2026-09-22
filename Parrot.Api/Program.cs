@@ -217,7 +217,29 @@ builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 
 // Controllers & OpenAPI
-builder.Services.AddControllers();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    Func<Microsoft.AspNetCore.Mvc.ActionContext, Microsoft.AspNetCore.Mvc.IActionResult> defaultResponseFactory = options.InvalidModelStateResponseFactory;
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        if (context.HttpContext.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
+        {
+            ILogger logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                .CreateLogger("WhatsAppWebhookValidation");
+            var errors = context.ModelState
+                .Where(entry => entry.Value?.Errors.Count > 0)
+                .SelectMany(entry => entry.Value!.Errors.Select(error => new
+                {
+                    Field = entry.Key,
+                    Reason = string.IsNullOrEmpty(error.ErrorMessage) ? error.Exception?.Message : error.ErrorMessage,
+                }));
+            logger.LogWarning("WhatsApp webhook validation failed. CorrelationId={CorrelationId} Errors={Errors}",
+                context.HttpContext.Response.Headers["X-Correlation-ID"].ToString(),
+                System.Text.Json.JsonSerializer.Serialize(errors));
+        }
+        return defaultResponseFactory(context);
+    };
+});
 builder.Services.AddOpenApi();
 
 WebApplication app = builder.Build();

@@ -20,7 +20,7 @@ public sealed class RawBodyMiddleware
         if (context.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
         {
             // Log arrival before reading/deserializing so invalid payloads are visible too.
-            // Do not log query values, headers or bodies: they may contain credentials or customer content.
+            // Keep query values and headers out of logs; they may contain credentials.
             _logger.LogInformation(
                 "WhatsApp webhook received. Method={Method} Path={Path} CorrelationId={CorrelationId} HasConnectionReference={HasConnectionReference} ContentLength={ContentLength}",
                 context.Request.Method,
@@ -38,8 +38,35 @@ public sealed class RawBodyMiddleware
             context.Items["RawBody"] = await reader.ReadToEndAsync(context.RequestAborted);
 
             context.Request.Body.Position = 0;
+
+            if (context.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
+            {
+                // Temporary full-payload diagnostics, explicitly enabled for webhook troubleshooting.
+                // Includes customer message content; remove when troubleshooting is complete.
+                _logger.LogInformation(
+                    "WhatsApp webhook raw payload. CorrelationId={CorrelationId} Payload={Payload}",
+                    context.Response.Headers["X-Correlation-ID"].ToString(),
+                    context.Items["RawBody"]);
+            }
         }
 
-        await _next(context);
+        bool isWhatsApp = context.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            await _next(context);
+            if (isWhatsApp)
+            {
+                _logger.Log(context.Response.StatusCode >= 400 ? LogLevel.Warning : LogLevel.Information,
+                    "WhatsApp webhook completed. CorrelationId={CorrelationId} StatusCode={StatusCode}",
+                    context.Response.Headers["X-Correlation-ID"].ToString(), context.Response.StatusCode);
+            }
+        }
+        catch (Exception ex) when (isWhatsApp)
+        {
+            _logger.LogError(ex,
+                "WhatsApp webhook processing failed. CorrelationId={CorrelationId} Reason={Reason}",
+                context.Response.Headers["X-Correlation-ID"].ToString(), ex.Message);
+            throw;
+        }
     }
 }
