@@ -5,6 +5,7 @@
 bin/
 obj/
 out/
+docker-compose.yaml
 
 # Visual Studio
 .vs/
