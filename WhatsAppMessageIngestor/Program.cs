@@ -20,8 +20,12 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
     return new MongoClient(settings.ConnectionString);
 });
 
+string postgresConnection = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings__DefaultConnection is required to record WhatsApp message receipts. Use the same PostgreSQL database as the API.");
+if (string.IsNullOrWhiteSpace(postgresConnection))
+    throw new InvalidOperationException("ConnectionStrings__DefaultConnection must not be empty.");
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(postgresConnection));
 builder.Services.AddSingleton<IConnectionMessageReceipt, ConnectionMessageReceipt>();
 builder.Services.AddSingleton<MongoMessageRepository>();
 builder.Services.AddSingleton<IMessageRepository>(sp => new ConnectionTrackingMessageRepository(
