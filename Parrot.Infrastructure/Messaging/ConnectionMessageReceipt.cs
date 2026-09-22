@@ -18,7 +18,7 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
     {
         await using ApplicationDbContext db = await _contexts.CreateDbContextAsync(cancellationToken);
         DateTime now = DateTime.UtcNow;
-        await db.WhatsAppConnections
+        int updated = await db.WhatsAppConnections
             .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
                 && c.DisabledAt == null && c.WebhookVerifiedAt != null
                 && c.WhatsAppBusinessAccountId == message.ExternalAccountId && c.PhoneNumberId == message.ChannelId
@@ -26,5 +26,29 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.FirstMessageReceivedAt, now)
                 .SetProperty(c => c.UpdatedAt, now), cancellationToken);
+        if (updated > 0) return;
+
+        // Duplicate Kafka deliveries are successful only when the matching receipt already exists.
+        // A missing/mismatched row must not silently commit the Kafka offset after Mongo succeeds.
+        var connection = await db.WhatsAppConnections.AsNoTracking()
+            .Where(c => c.Id == message.ConnectionId)
+            .Select(c => new
+            {
+                c.OwnerUserId, c.DisabledAt, c.WebhookVerifiedAt, c.FirstMessageReceivedAt,
+                c.WhatsAppBusinessAccountId, c.PhoneNumberId,
+            })
+            .SingleOrDefaultAsync(cancellationToken);
+        if (connection is null)
+            throw new InvalidOperationException("Message was stored in MongoDB, but its WhatsApp connection was not found in PostgreSQL. Check that the API and ingestor use the same ConnectionStrings__DefaultConnection.");
+        if (connection.OwnerUserId != message.OwnerUserId
+            || connection.WhatsAppBusinessAccountId != message.ExternalAccountId
+            || connection.PhoneNumberId != message.ChannelId)
+            throw new InvalidOperationException("Message was stored in MongoDB, but its owner or Meta account IDs do not match the PostgreSQL connection. Receipt was not recorded.");
+        // Connections disabled after the event was queued should not block the consumer.
+        if (connection.DisabledAt.HasValue) return;
+        if (connection.WebhookVerifiedAt is null)
+            throw new InvalidOperationException("Message was stored in MongoDB, but its PostgreSQL connection is not webhook-verified. Receipt was not recorded.");
+        if (connection.FirstMessageReceivedAt.HasValue) return;
+        throw new InvalidOperationException("Message was stored in MongoDB, but the connection receipt was not updated. Retry the event.");
     }
 }

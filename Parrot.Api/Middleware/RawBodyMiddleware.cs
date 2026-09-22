@@ -7,13 +7,29 @@ public sealed class RawBodyMiddleware
 {
     private readonly RequestDelegate _next;
 
-    public RawBodyMiddleware(RequestDelegate next)
+    private readonly ILogger<RawBodyMiddleware> _logger;
+
+    public RawBodyMiddleware(RequestDelegate next, ILogger<RawBodyMiddleware> logger)
     {
         _next = next;
+        _logger = logger;
     }
 
     public async Task InvokeAsync(HttpContext context)
     {
+        if (context.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
+        {
+            // Log arrival before reading/deserializing so invalid payloads are visible too.
+            // Do not log query values, headers or bodies: they may contain credentials or customer content.
+            _logger.LogInformation(
+                "WhatsApp webhook received. Method={Method} Path={Path} CorrelationId={CorrelationId} HasConnectionReference={HasConnectionReference} ContentLength={ContentLength}",
+                context.Request.Method,
+                context.Request.Path.Value,
+                context.Response.Headers["X-Correlation-ID"].ToString(),
+                context.Request.Query.ContainsKey("ref"),
+                context.Request.ContentLength);
+        }
+
         if (context.Request.Path.StartsWithSegments("/api/webhooks", StringComparison.OrdinalIgnoreCase))
         {
             context.Request.EnableBuffering();
