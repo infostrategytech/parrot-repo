@@ -32,6 +32,7 @@ builder.Services.AddSingleton<IMessageRepository>(sp => new ConnectionTrackingMe
     sp.GetRequiredService<MongoMessageRepository>(), sp.GetRequiredService<IConnectionMessageReceipt>()));
 
 builder.Services.AddSingleton<IPlatformMessageHandler, WhatsAppMessageHandler>();
+builder.Services.AddSingleton<IPlatformMessageHandler, FacebookMessageHandler>();
 builder.Services.AddSingleton<IPlatformMessageHandlerFactory, PlatformMessageHandlerFactory>();
 builder.Services.AddSingleton<IPlatformMessageService, PlatformMessageService>();
 

@@ -10,6 +10,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Agent> Agents => Set<Agent>();
 
     public DbSet<WhatsAppConnection> WhatsAppConnections => Set<WhatsAppConnection>();
+    public DbSet<FacebookConnection> FacebookConnections => Set<FacebookConnection>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -56,6 +57,23 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(c => c.OwnerUserId);
             entity.HasIndex(c => c.PhoneNumberId).IsUnique()
                 .HasFilter("\"PhoneNumberId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+        });
+
+        builder.Entity<FacebookConnection>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.OwnerUserId).IsRequired();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(c => c.VerifyTokenEncrypted).IsRequired();
+            entity.Property(c => c.PageId).HasMaxLength(64);
+            entity.Property(c => c.PageName).HasMaxLength(128);
+            entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(c => c.OwnerUserId).IsUnique()
+                .HasFilter("\"DisabledAt\" IS NULL");
+            entity.HasIndex(c => c.PageId).IsUnique()
+                .HasFilter("\"PageId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
         });
     }
 

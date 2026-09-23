@@ -70,25 +70,24 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
 
         foreach (FacebookEntry entry in payload.Entry)
         {
-            string? tenantId = await _pageRegistry.ResolveTenantAsync(entry.Id, cancellationToken);
+            FacebookPageRegistration? registration = await _pageRegistry.ResolveAsync(entry.Id, cancellationToken);
 
-            if (tenantId is null)
+            if (registration is null)
             {
                 _logger.LogWarning("Facebook event received for unregistered page. PageId={PageId}", entry.Id);
                 continue;
             }
 
             if (entry.Messaging is { Count: > 0 } messagingEvents)
-                await ProcessMessagingEventsAsync(entry.Id, tenantId, messagingEvents, cancellationToken);
+                await ProcessMessagingEventsAsync(registration, messagingEvents, cancellationToken);
 
             if (entry.Changes is { Count: > 0 } changes)
-                ProcessPageChanges(entry.Id, tenantId, changes);
+                ProcessPageChanges(entry.Id, registration.OwnerUserId, changes);
         }
     }
 
     private async Task ProcessMessagingEventsAsync(
-        string pageId,
-        string tenantId,
+        FacebookPageRegistration registration,
         List<FacebookMessagingEvent> events,
         CancellationToken cancellationToken)
     {
@@ -104,7 +103,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             {
                 _logger.LogInformation(
                     "Facebook message received. TenantId={TenantId} PageId={PageId} SenderId={Sender} Mid={Mid}",
-                    tenantId, pageId, evt.Sender.Id, evt.Message.Mid);
+                    registration.OwnerUserId, registration.PageId, evt.Sender.Id, evt.Message.Mid);
 
                 string type = evt.Message.Attachments is { Count: > 0 }
                     ? evt.Message.Attachments[0].Type
@@ -112,15 +111,17 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
 
                 batch.Add(new IncomingMessage
                 {
+                    ConnectionId = registration.ConnectionId,
+                    OwnerUserId = registration.OwnerUserId,
                     MessageId = evt.Message.Mid,
                     Platform = MessagingPlatform.Facebook,
-                    ExternalAccountId = tenantId,
+                    ExternalAccountId = registration.PageId,
                     From = evt.Sender.Id,
                     Timestamp = evt.Timestamp.ToString(),
                     Type = type,
                     TextBody = evt.Message.Text,
-                    ChannelId = pageId,
-                    ChannelDisplayName = pageId,
+                    ChannelId = registration.PageId,
+                    ChannelDisplayName = registration.PageName,
                     ReceivedAt = DateTime.UtcNow,
                 });
 
@@ -131,19 +132,21 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             {
                 _logger.LogInformation(
                     "Facebook postback received. TenantId={TenantId} PageId={PageId} SenderId={Sender} Payload={Payload}",
-                    tenantId, pageId, evt.Sender.Id, evt.Postback.Payload);
+                    registration.OwnerUserId, registration.PageId, evt.Sender.Id, evt.Postback.Payload);
 
                 batch.Add(new IncomingMessage
                 {
+                    ConnectionId = registration.ConnectionId,
+                    OwnerUserId = registration.OwnerUserId,
                     MessageId = evt.Postback.Mid,
                     Platform = MessagingPlatform.Facebook,
-                    ExternalAccountId = tenantId,
+                    ExternalAccountId = registration.PageId,
                     From = evt.Sender.Id,
                     Timestamp = evt.Timestamp.ToString(),
                     Type = "postback",
                     TextBody = evt.Postback.Payload,
-                    ChannelId = pageId,
-                    ChannelDisplayName = pageId,
+                    ChannelId = registration.PageId,
+                    ChannelDisplayName = registration.PageName,
                     ReceivedAt = DateTime.UtcNow,
                 });
 
@@ -154,7 +157,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             {
                 _logger.LogInformation(
                     "Facebook delivery confirmation. TenantId={TenantId} PageId={PageId} Watermark={Watermark}",
-                    tenantId, pageId, evt.Delivery.Watermark);
+                    registration.OwnerUserId, registration.PageId, evt.Delivery.Watermark);
                 continue;
             }
 
@@ -162,7 +165,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             {
                 _logger.LogInformation(
                     "Facebook read confirmation. TenantId={TenantId} PageId={PageId} Watermark={Watermark}",
-                    tenantId, pageId, evt.Read.Watermark);
+                    registration.OwnerUserId, registration.PageId, evt.Read.Watermark);
                 continue;
             }
 
@@ -170,7 +173,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             {
                 _logger.LogInformation(
                     "Facebook reaction. TenantId={TenantId} PageId={PageId} Mid={Mid} Action={Action}",
-                    tenantId, pageId, evt.Reaction.Mid, evt.Reaction.Action);
+                    registration.OwnerUserId, registration.PageId, evt.Reaction.Mid, evt.Reaction.Action);
             }
         }
 

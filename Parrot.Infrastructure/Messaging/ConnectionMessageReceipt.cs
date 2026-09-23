@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Infrastructure.Data;
+using Parrot.Domain.Enums;
 
 namespace Parrot.Infrastructure.Messaging;
 
@@ -18,6 +19,17 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
     {
         await using ApplicationDbContext db = await _contexts.CreateDbContextAsync(cancellationToken);
         DateTime now = DateTime.UtcNow;
+        if (message.Platform == MessagingPlatform.Facebook)
+        {
+            int facebookUpdated = await db.FacebookConnections
+                .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
+                    && c.DisabledAt == null && c.WebhookVerifiedAt != null && c.PageId == message.ChannelId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UpdatedAt, now), cancellationToken);
+            if (facebookUpdated == 0)
+                throw new InvalidOperationException("Facebook message was stored, but its Page connection did not match PostgreSQL.");
+            return;
+        }
+
         int updated = await db.WhatsAppConnections
             .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
                 && c.DisabledAt == null && c.WebhookVerifiedAt != null

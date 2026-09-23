@@ -17,6 +17,14 @@ public class IntegrationsService : IIntegrationsService
         SendCommandAsync(HttpMethod.Put, $"api/whatsapp/connections/{id}/access-token", token,
             new { AccessToken = accessToken }, cancellationToken);
 
+    public Task<FacebookWebhookSetup> GetFacebookSetupAsync(string token, CancellationToken cancellationToken = default) =>
+        SendAsync<FacebookWebhookSetup>(HttpMethod.Get, "api/facebook/setup", token, null, cancellationToken);
+
+    public Task SaveFacebookPageAsync(string pageId, string pageName, string accessToken, string token,
+        CancellationToken cancellationToken = default) =>
+        SendCommandAsync(HttpMethod.Put, "api/facebook/setup/page", token,
+            new { PageId = pageId, PageName = pageName, AccessToken = accessToken }, cancellationToken);
+
     public Task ConfigureWhatsAppAccountAsync(Guid id, string businessAccountId, string phoneNumberId, string token, CancellationToken cancellationToken = default) =>
         SendCommandAsync(HttpMethod.Put, $"api/whatsapp/connections/{id}/account", token,
             new { WhatsAppBusinessAccountId = businessAccountId, PhoneNumberId = phoneNumberId }, cancellationToken);

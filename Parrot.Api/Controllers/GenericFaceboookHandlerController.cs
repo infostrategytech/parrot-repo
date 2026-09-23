@@ -11,10 +11,12 @@ namespace Parrot.Api.Rest.Controllers;
 public class FacebookWebhookController : ControllerBase
 {
     private readonly IFacebookWebhookService _facebookWebhookService;
+    private readonly IFacebookConnectionService _connections;
 
-    public FacebookWebhookController(IFacebookWebhookService facebookWebhookService)
+    public FacebookWebhookController(IFacebookWebhookService facebookWebhookService, IFacebookConnectionService connections)
     {
         _facebookWebhookService = facebookWebhookService;
+        _connections = connections;
     }
 
     // Meta calls this GET when the customer subscribes their page to Parrot.
@@ -22,11 +24,13 @@ public class FacebookWebhookController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
-    public IActionResult VerifyWebhook(
+    public async Task<IActionResult> VerifyWebhook(
         [FromQuery(Name = "hub.mode")] string hubMode,
         [FromQuery(Name = "hub.verify_token")] string hubVerifyToken,
         [FromQuery(Name = "hub.challenge")] string hubChallenge)
     {
+        if (await _connections.VerifyWebhookAsync(hubMode, hubVerifyToken, HttpContext.RequestAborted))
+            return Content(hubChallenge, "text/plain");
         if (!_facebookWebhookService.TryVerifyChallenge(hubMode, hubVerifyToken, hubChallenge, out string echoChallenge))
         {
             return Forbid();
