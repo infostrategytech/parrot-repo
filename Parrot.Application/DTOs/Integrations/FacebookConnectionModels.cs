@@ -2,6 +2,7 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Parrot.Application.DTOs.Integrations;
 
+// Everything the Channels setup screen needs to render the current step.
 public sealed record FacebookSetupResponse(
     Guid ConnectionId,
     string WebhookUrl,
@@ -11,6 +12,7 @@ public sealed record FacebookSetupResponse(
     string? PageName,
     bool HasAccessToken);
 
+// Page details the customer pastes in after Meta verifies the webhook.
 public sealed class FacebookPageRequest
 {
     [Required, RegularExpression("^[0-9]{1,64}$")]

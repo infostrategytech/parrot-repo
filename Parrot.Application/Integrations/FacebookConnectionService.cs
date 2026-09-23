@@ -6,11 +6,13 @@ using Parrot.Domain.Exceptions;
 
 namespace Parrot.Application.Integrations;
 
+// Setup orchestration for Messenger; the send path and /subscribed_apps call are not wired up yet.
 public sealed class FacebookConnectionService(
     IFacebookConnectionRepository repository,
     IFacebookCredentialProtector protector,
     IOptions<FacebookSettings> options) : IFacebookConnectionService
 {
+    // Creates the connection and its verify token on first call; afterwards replays the same credentials.
     public async Task<FacebookSetupResponse> GetSetupAsync(string ownerUserId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
@@ -41,6 +43,7 @@ public sealed class FacebookConnectionService(
             !string.IsNullOrEmpty(connection.AccessTokenEncrypted));
     }
 
+    // Meta sends no connection reference, so the token is matched against every active connection.
     public async Task<bool> VerifyWebhookAsync(string mode, string verifyToken, CancellationToken cancellationToken = default)
     {
         if (mode != "subscribe" || string.IsNullOrWhiteSpace(verifyToken)) return false;
@@ -51,6 +54,7 @@ public sealed class FacebookConnectionService(
         return connection is not null && await repository.MarkVerifiedAsync(connection.Id, DateTime.UtcNow, cancellationToken);
     }
 
+    // Validates the token shape and encrypts it; rejects Pages saved before webhook verification.
     public async Task SavePageAsync(string ownerUserId, FacebookPageRequest request, CancellationToken cancellationToken = default)
     {
         FacebookConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
@@ -65,6 +69,7 @@ public sealed class FacebookConnectionService(
     }
 }
 
+// Kept off IFacebookConnectionRepository so decrypt-and-compare stays in the data layer, out of the public API.
 public interface IFacebookVerifyTokenLookup
 {
     Task<FacebookConnection?> FindByVerifyTokenAsync(string verifyToken, IFacebookCredentialProtector protector,

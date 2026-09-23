@@ -8,21 +8,25 @@ using Parrot.Infrastructure.Data;
 
 namespace Parrot.Infrastructure.SocialMediaIntegrations;
 
+// EF Core store for Facebook connections; also serves webhook routing and verify-token lookups.
 public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
     IFacebookConnectionRepository, IFacebookPageRegistry, IFacebookVerifyTokenLookup
 {
+    // Reads this owner's active connection.
     public async Task<FacebookConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default)
     {
         return await db.FacebookConnections.AsNoTracking()
             .SingleOrDefaultAsync(c => c.OwnerUserId == ownerUserId && c.DisabledAt == null, cancellationToken);
     }
 
+    // Reads the active connection that owns a Page ID.
     public async Task<FacebookConnection?> GetByPageIdAsync(string pageId, CancellationToken cancellationToken = default)
     {
         return await db.FacebookConnections.AsNoTracking()
             .SingleOrDefaultAsync(c => c.PageId == pageId && c.DisabledAt == null, cancellationToken);
     }
 
+    // Inserts a connection, translating the unique-index violation into a ConflictException.
     public async Task AddAsync(FacebookConnection connection, CancellationToken cancellationToken = default)
     {
         db.FacebookConnections.Add(connection);
@@ -33,6 +37,7 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
         }
     }
 
+    // Records the first verification only, so repeat challenges from Meta are idempotent.
     public async Task<bool> MarkVerifiedAsync(Guid id, DateTime verifiedAt, CancellationToken cancellationToken = default)
     {
         return await db.FacebookConnections.Where(c => c.Id == id && c.DisabledAt == null)
@@ -41,6 +46,7 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
                 .SetProperty(c => c.UpdatedAt, verifiedAt), cancellationToken) == 1;
     }
 
+    // Writes the Page and token in one statement; the WHERE clause enforces ownership and verification.
     public async Task SavePageAsync(Guid id, string ownerUserId, string pageId, string pageName,
         string encryptedAccessToken, CancellationToken cancellationToken = default)
     {
@@ -61,6 +67,7 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
         }
     }
 
+    // Webhook routing: turns an inbound Page ID into the owner and connection to attribute messages to.
     public async Task<FacebookPageRegistration?> ResolveAsync(string pageId, CancellationToken cancellationToken = default)
     {
         FacebookConnection? connection = await GetByPageIdAsync(pageId, cancellationToken);
@@ -68,6 +75,7 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
             connection.Id, connection.OwnerUserId, pageId, connection.PageName ?? pageId);
     }
 
+    // Linear decrypt-and-compare over active connections; revisit if connection counts grow large.
     public async Task<FacebookConnection?> FindByVerifyTokenAsync(string verifyToken,
         IFacebookCredentialProtector protector, CancellationToken cancellationToken = default)
     {
