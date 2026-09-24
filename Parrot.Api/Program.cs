@@ -223,10 +223,12 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
     Func<Microsoft.AspNetCore.Mvc.ActionContext, Microsoft.AspNetCore.Mvc.IActionResult> defaultResponseFactory = options.InvalidModelStateResponseFactory;
     options.InvalidModelStateResponseFactory = context =>
     {
-        if (context.HttpContext.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
+        // Covers every provider webhook: a payload that fails model binding is rejected with a 400
+        // before the controller runs, so without this the reason is never recorded anywhere.
+        if (context.HttpContext.Request.Path.StartsWithSegments("/api/webhooks", StringComparison.OrdinalIgnoreCase))
         {
             ILogger logger = context.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
-                .CreateLogger("WhatsAppWebhookValidation");
+                .CreateLogger("WebhookValidation");
             var errors = context.ModelState
                 .Where(entry => entry.Value?.Errors.Count > 0)
                 .SelectMany(entry => entry.Value!.Errors.Select(error => new
@@ -234,7 +236,8 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
                     Field = entry.Key,
                     Reason = string.IsNullOrEmpty(error.ErrorMessage) ? error.Exception?.Message : error.ErrorMessage,
                 }));
-            logger.LogWarning("WhatsApp webhook validation failed. CorrelationId={CorrelationId} Errors={Errors}",
+            logger.LogWarning("Webhook validation failed. Path={Path} CorrelationId={CorrelationId} Errors={Errors}",
+                context.HttpContext.Request.Path.Value,
                 context.HttpContext.Response.Headers["X-Correlation-ID"].ToString(),
                 System.Text.Json.JsonSerializer.Serialize(errors));
         }

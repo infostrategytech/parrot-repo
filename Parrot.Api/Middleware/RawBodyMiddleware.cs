@@ -17,16 +17,24 @@ public sealed class RawBodyMiddleware
 
     public async Task InvokeAsync(HttpContext context)
     {
-        if (context.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
+        // Diagnostics cover every provider webhook, not just WhatsApp: a platform without them is
+        // impossible to troubleshoot, because a payload rejected by model binding never reaches a
+        // controller and so logs nothing about itself.
+        string? platform = WebhookPlatform(context.Request.Path);
+
+        if (platform is not null)
         {
             // Log arrival before reading/deserializing so invalid payloads are visible too.
-            // Keep query values and headers out of logs; they may contain credentials.
+            // Keep query values and headers out of logs; they may contain credentials. Presence alone
+            // separates "the provider sent no signature" from "the signature did not match".
             _logger.LogInformation(
-                "WhatsApp webhook received. Method={Method} Path={Path} CorrelationId={CorrelationId} HasConnectionReference={HasConnectionReference} ContentLength={ContentLength}",
+                "{Platform} webhook received. Method={Method} Path={Path} CorrelationId={CorrelationId} HasConnectionReference={HasConnectionReference} HasSignature={HasSignature} ContentLength={ContentLength}",
+                platform,
                 context.Request.Method,
                 context.Request.Path.Value,
                 context.Response.Headers["X-Correlation-ID"].ToString(),
                 context.Request.Query.ContainsKey("ref"),
+                context.Request.Headers.ContainsKey("X-Hub-Signature-256"),
                 context.Request.ContentLength);
         }
 
@@ -39,34 +47,40 @@ public sealed class RawBodyMiddleware
 
             context.Request.Body.Position = 0;
 
-            if (context.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
+            if (platform is not null)
             {
                 // Temporary full-payload diagnostics, explicitly enabled for webhook troubleshooting.
                 // Includes customer message content; remove when troubleshooting is complete.
                 _logger.LogInformation(
-                    "WhatsApp webhook raw payload. CorrelationId={CorrelationId} Payload={Payload}",
+                    "{Platform} webhook raw payload. CorrelationId={CorrelationId} Payload={Payload}",
+                    platform,
                     context.Response.Headers["X-Correlation-ID"].ToString(),
                     context.Items["RawBody"]);
             }
         }
 
-        bool isWhatsApp = context.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase);
         try
         {
             await _next(context);
-            if (isWhatsApp)
+            if (platform is not null)
             {
                 _logger.Log(context.Response.StatusCode >= 400 ? LogLevel.Warning : LogLevel.Information,
-                    "WhatsApp webhook completed. CorrelationId={CorrelationId} StatusCode={StatusCode}",
-                    context.Response.Headers["X-Correlation-ID"].ToString(), context.Response.StatusCode);
+                    "{Platform} webhook completed. CorrelationId={CorrelationId} StatusCode={StatusCode}",
+                    platform, context.Response.Headers["X-Correlation-ID"].ToString(), context.Response.StatusCode);
             }
         }
-        catch (Exception ex) when (isWhatsApp)
+        catch (Exception ex) when (platform is not null)
         {
             _logger.LogError(ex,
-                "WhatsApp webhook processing failed. CorrelationId={CorrelationId} Reason={Reason}",
-                context.Response.Headers["X-Correlation-ID"].ToString(), ex.Message);
+                "{Platform} webhook processing failed. CorrelationId={CorrelationId} Reason={Reason}",
+                platform, context.Response.Headers["X-Correlation-ID"].ToString(), ex.Message);
             throw;
         }
     }
+
+    // Null for any path that is not a provider webhook, which leaves those requests unlogged here.
+    private static string? WebhookPlatform(PathString path) =>
+        path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase) ? "WhatsApp"
+        : path.StartsWithSegments("/api/webhooks/facebook", StringComparison.OrdinalIgnoreCase) ? "Facebook"
+        : null;
 }
