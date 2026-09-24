@@ -49,6 +49,7 @@ public static class WhatsAppDataProtectionExtensions
         }
 
         services.AddSingleton<IWhatsAppTokenProtector, WhatsAppTokenProtector>();
+        services.AddSingleton<IFacebookCredentialProtector, FacebookCredentialProtector>();
         return services;
     }
 }

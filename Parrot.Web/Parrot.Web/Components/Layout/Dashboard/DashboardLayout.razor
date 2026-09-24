@@ -22,9 +22,9 @@
                 else
                 {
                     <span class="dashboard-topbar-title">
-                        @if (GetPathSegments().LastOrDefault() == "connect-facebook-marketplace")
+                        @if (GetPathSegments().LastOrDefault() is "connect-facebook" or "connect-facebook-marketplace")
                         {
-                            @:Channels <span class="topbar-breadcrumb-sep">/</span> Connect facebook marketplace
+                            @:Channels <span class="topbar-breadcrumb-sep">/</span> Connect Facebook Messenger
                         }
                         else if (GetPathSegments().LastOrDefault() == "connect-instagram")
                         {
@@ -83,6 +83,7 @@
         var segs = GetPathSegments();
         return (segs.Length == 1 && segs[0] == "connect-whatsapp") ||
                (segs.Length == 1 && segs[0] == "connect-facebook-marketplace") ||
+               (segs.Length == 1 && segs[0] == "connect-facebook") ||
                (segs.Length == 1 && segs[0] == "connect-instagram") ||
                (segs.Length == 1 && segs[0] == "connect-x") ||
                (segs.Length >= 3 && segs[1] == "ai-agents");

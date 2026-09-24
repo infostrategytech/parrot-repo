@@ -11,3 +11,12 @@ public sealed record WhatsAppConnectionInfo(
 
 public sealed record WhatsAppSetup(
     WhatsAppConnectionInfo Connection, string WebhookUrl, string VerifyToken);
+
+public sealed record FacebookWebhookSetup(
+    Guid ConnectionId,
+    string WebhookUrl,
+    string VerifyToken,
+    bool WebhookVerified,
+    string? PageId,
+    string? PageName,
+    bool HasAccessToken);
