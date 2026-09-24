@@ -44,6 +44,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             MessageId = RequestKey(owner, request.RequestId), OwnerUserId = owner, ConnectionId = connectionId,
             Platform = MessagingPlatform.WhatsApp, ExternalAccountId = connection.WhatsAppBusinessAccountId!,
             ChannelId = connection.PhoneNumberId!, ChannelDisplayName = connection.DisplayPhoneNumber ?? "",
+            // Outgoing replies never pass through a webhook, so SentAt is our own clock.
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), SentAt = now,
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
             Outgoing = true, SendStatus = "pending",

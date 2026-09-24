@@ -214,6 +214,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         ExternalAccountId = registration.PageId,
         From = evt.Sender.Id,
         Timestamp = evt.Timestamp.ToString(),
+        // Messenger sends milliseconds; WhatsApp sends whole seconds.
         SentAt = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp),
         Type = type,
         TextBody = textBody,

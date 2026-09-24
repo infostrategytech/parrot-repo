@@ -28,6 +28,7 @@ public sealed class MongoMessageRepository : IMessageRepository
 
     public async Task InsertAsync(IncomingMessage message, CancellationToken cancellationToken = default)
     {
+        // Replaces the switch that threw for any non-WhatsApp platform, stopping the shared consumer.
         MessageDocument doc = _mappers.ToDocument(message);
 
         try

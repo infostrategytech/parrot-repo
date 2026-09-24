@@ -62,10 +62,7 @@ public sealed class MongoConversationStore : IConversationStore
         FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(
             x => x.OwnerUserId == owner && x.ConnectionId == connection && x.From == sender)
             & Builders<MessageDocument>.Filter.Ne(x => x.Outgoing, true);
-        // Ordered by ReceivedAt, which every document has and which is always our own clock. Timestamp
-        // is a provider string in platform-specific units, so sorting it compared milliseconds against
-        // seconds and parsing it as seconds put Messenger messages 55,000 years in the future — which
-        // failed the range check, returned null, and refused every Messenger reply.
+        // Ordered by ReceivedAt: Timestamp is a provider string whose units differ per platform.
         MessageDocument? doc = await _messages.Find(filter).SortByDescending(x => x.ReceivedAt).FirstOrDefaultAsync(ct);
 
         // SentAt is absent on documents written before it existed; ReceivedAt is within seconds of it.
