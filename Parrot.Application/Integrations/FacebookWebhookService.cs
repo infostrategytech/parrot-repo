@@ -214,6 +214,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         ExternalAccountId = registration.PageId,
         From = evt.Sender.Id,
         Timestamp = evt.Timestamp.ToString(),
+        SentAt = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp),
         Type = type,
         TextBody = textBody,
         AttachmentUrls = attachmentUrls,

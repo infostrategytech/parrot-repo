@@ -180,6 +180,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
                             ExternalAccountId = entry.Id,
                             From = msg.From,
                             Timestamp = msg.Timestamp,
+                            SentAt = ProviderTimestamp.FromUnixSeconds(msg.Timestamp),
                             Type = msg.Type,
                             TextBody = msg.Text?.Body,
                             ChannelId = change.Value.Metadata.PhoneNumberId,

@@ -29,7 +29,11 @@ public abstract class MessageDocument
     public required MessagingPlatform Platform { get; set; }
     public required string ExternalAccountId { get; set; }
     public required string From { get; set; }
+    // Raw provider value: WhatsApp sends seconds, Messenger milliseconds. Compare SentAt instead.
     public required string Timestamp { get; set; }
+
+    // Timestamp normalised to UTC. Null on documents written before this field existed.
+    public DateTime? SentAt { get; set; }
     public required string Type { get; set; }
     public string? TextBody { get; set; }
     public string? ContactName { get; set; }

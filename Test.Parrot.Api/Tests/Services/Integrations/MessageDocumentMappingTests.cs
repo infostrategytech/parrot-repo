@@ -102,12 +102,53 @@ public class MessageDocumentMappingTests
             [
                 "ChannelDisplayName", "ChannelId", "ConnectionId", "ContactName", "ExternalAccountId",
                 "From", "MessageId", "Outgoing", "OwnerUserId", "Platform", "ProviderMessageId",
-                "ReceivedAt", "SendStatus", "StoredAt", "TextBody", "Timestamp", "Type", "_id", "_t",
+                "ReceivedAt", "SendStatus", "SentAt", "StoredAt", "TextBody", "Timestamp", "Type", "_id", "_t",
             ],
             bson.Names.Order(StringComparer.Ordinal).ToArray());
 
         Assert.Equal("whatsapp", bson["_t"].AsString);
         Assert.Equal(1, bson["Platform"].AsInt32);
+    }
+
+    [Fact]
+    public void TheNormalisedSendTimeReachesTheStoredDocumentIdenticallyForBothPlatforms()
+    {
+        MessageSerializationRegistry.Register();
+        DateTime instant = new(2025, 9, 24, 9, 20, 0, DateTimeKind.Utc);
+
+        MessageDocument whatsApp = NewFactory().ToDocument(NewMessage(MessagingPlatform.WhatsApp) with
+        {
+            Timestamp = "1758705600",
+            SentAt = ProviderTimestamp.FromUnixSeconds("1758705600"),
+        });
+        MessageDocument messenger = NewFactory().ToDocument(NewMessage(MessagingPlatform.Facebook) with
+        {
+            Timestamp = "1758705600000",
+            SentAt = ProviderTimestamp.FromUnixMilliseconds(1758705600000),
+        });
+
+        // The raw provider strings differ by three zeroes; the normalised instant must not.
+        Assert.NotEqual(whatsApp.Timestamp, messenger.Timestamp);
+        Assert.Equal(instant, whatsApp.SentAt);
+        Assert.Equal(instant, messenger.SentAt);
+
+        // And it must survive the round trip through the shared collection.
+        MessageDocument roundTripped = BsonSerializer.Deserialize<MessageDocument>(
+            messenger.ToBsonDocument<MessageDocument>());
+        Assert.Equal(instant, roundTripped.SentAt);
+    }
+
+    [Fact]
+    public void DocumentsWrittenBeforeSentAtExistedDeserialiseWithItNull()
+    {
+        MessageSerializationRegistry.Register();
+
+        BsonDocument bson = NewFactory().ToDocument(NewMessage(MessagingPlatform.WhatsApp)).ToBsonDocument<MessageDocument>();
+        bson.Remove("SentAt");
+
+        // LastIncomingAsync falls back to ReceivedAt for these rather than refusing the reply.
+        MessageDocument document = BsonSerializer.Deserialize<MessageDocument>(bson);
+        Assert.Null(document.SentAt);
     }
 
     [Fact]
