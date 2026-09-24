@@ -3,25 +3,29 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Integrations;
 
+// The connection a webhook event was routed to, flattened for message building.
+public sealed record FacebookPageRegistration(Guid ConnectionId, string OwnerUserId, string PageId, string PageName);
+
 public sealed class FacebookWebhookService : IFacebookWebhookService
 {
     private readonly FacebookSettings _settings;
-    private readonly IFacebookPageRegistry _pageRegistry;
+    private readonly IFacebookConnectionRepository _connections;
     private readonly IMessagePublisher _publisher;
     private readonly IAppLogger<FacebookWebhookService> _logger;
 
     public FacebookWebhookService(
         IOptions<FacebookSettings> settings,
-        IFacebookPageRegistry pageRegistry,
+        IFacebookConnectionRepository connections,
         IMessagePublisher publisher,
         IAppLogger<FacebookWebhookService> logger)
     {
         _settings = settings.Value;
-        _pageRegistry = pageRegistry;
+        _connections = connections;
         _publisher = publisher;
         _logger = logger;
     }
@@ -29,61 +33,97 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
     public string GetWebhookUrl() =>
         $"{_settings.WebhookBaseUrl.TrimEnd('/')}/api/webhooks/facebook";
 
-    public bool TryVerifyChallenge(string hubMode, string hubVerifyToken, string hubChallenge, out string echoChallenge)
+    public bool IsValidSignature(string rawBody, string signatureHeader)
     {
-        echoChallenge = string.Empty;
-
-        if (hubMode != "subscribe" || hubVerifyToken != _settings.VerifyToken)
+        if (string.IsNullOrWhiteSpace(_settings.AppSecret))
         {
-            _logger.LogWarning("Facebook webhook challenge rejected. Mode={Mode} TokenMatch={Match}", hubMode, hubVerifyToken == _settings.VerifyToken);
+            _logger.LogError("Facebook webhook rejected because Facebook:AppSecret is not configured.");
             return false;
         }
 
-        echoChallenge = hubChallenge;
-        return true;
-    }
-
-    public bool IsValidSignature(string rawBody, string signatureHeader)
-    {
         if (!signatureHeader.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
             return false;
 
         string receivedHash = signatureHeader["sha256=".Length..];
+        if (receivedHash.Length != 64)
+            return false;
 
-        byte[] key = Encoding.UTF8.GetBytes(_settings.AppSecret);
-        byte[] body = Encoding.UTF8.GetBytes(rawBody);
-        byte[] expectedBytes = HMACSHA256.HashData(key, body);
-        string expectedHash = Convert.ToHexString(expectedBytes).ToLowerInvariant();
+        byte[] expected = HMACSHA256.HashData(
+            Encoding.UTF8.GetBytes(_settings.AppSecret),
+            Encoding.UTF8.GetBytes(rawBody));
 
-        return CryptographicOperations.FixedTimeEquals(
-            Encoding.ASCII.GetBytes(receivedHash.ToLowerInvariant()),
-            Encoding.ASCII.GetBytes(expectedHash));
+        try
+        {
+            return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(receivedHash), expected);
+        }
+        catch (FormatException)
+        {
+            _logger.LogWarning("Facebook webhook rejected because X-Hub-Signature-256 is not hexadecimal.");
+            return false;
+        }
     }
 
-    public async Task ProcessEventAsync(FacebookWebhookPayload payload, CancellationToken cancellationToken = default)
+    public async Task<bool> ProcessConnectionEventAsync(
+        string identifier,
+        FacebookWebhookPayload payload,
+        CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(identifier))
+        {
+            _logger.LogWarning("Facebook webhook rejected because its connection reference is empty.");
+            return false;
+        }
+
         if (payload.Object is not ("page" or "instagram"))
         {
             _logger.LogWarning("Unrecognised Facebook webhook object type: {Object}", payload.Object);
-            return;
+            return false;
         }
+
+        FacebookConnection? connection = await _connections.GetActiveByIdentifierAsync(identifier, cancellationToken);
+        if (connection is null)
+        {
+            _logger.LogWarning("Facebook webhook rejected because its connection reference is unknown or disabled.");
+            return false;
+        }
+
+        if (connection.WebhookVerifiedAt is null)
+        {
+            _logger.LogWarning("Facebook webhook rejected for unverified connection. ConnectionId={ConnectionId}", connection.Id);
+            return false;
+        }
+
+        if (string.IsNullOrEmpty(connection.PageId))
+        {
+            _logger.LogWarning("Facebook webhook rejected because no Page is linked. ConnectionId={ConnectionId}", connection.Id);
+            return false;
+        }
+
+        // For Messenger, entry.id is the Page ID. A mismatch means the ?ref= belongs to a different customer.
+        if (payload.Entry.Count == 0 || payload.Entry.Any(entry => entry.Id != connection.PageId))
+        {
+            _logger.LogWarning("Facebook webhook rejected because Page IDs do not match. ConnectionId={ConnectionId}", connection.Id);
+            return false;
+        }
+
+        FacebookPageRegistration registration = new(
+            connection.Id, connection.OwnerUserId, connection.PageId!, connection.PageName ?? connection.PageId!);
+
+        _logger.LogInformation(
+            "Facebook webhook accepted. ConnectionId={ConnectionId} Entries={EntryCount}",
+            connection.Id,
+            payload.Entry.Count);
 
         foreach (FacebookEntry entry in payload.Entry)
         {
-            FacebookPageRegistration? registration = await _pageRegistry.ResolveAsync(entry.Id, cancellationToken);
-
-            if (registration is null)
-            {
-                _logger.LogWarning("Facebook event received for unregistered page. PageId={PageId}", entry.Id);
-                continue;
-            }
-
             if (entry.Messaging is { Count: > 0 } messagingEvents)
                 await ProcessMessagingEventsAsync(registration, messagingEvents, cancellationToken);
 
             if (entry.Changes is { Count: > 0 } changes)
                 ProcessPageChanges(entry.Id, registration.OwnerUserId, changes);
         }
+
+        return true;
     }
 
     private async Task ProcessMessagingEventsAsync(
@@ -109,22 +149,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
                     ? evt.Message.Attachments[0].Type
                     : "text";
 
-                batch.Add(new IncomingMessage
-                {
-                    ConnectionId = registration.ConnectionId,
-                    OwnerUserId = registration.OwnerUserId,
-                    MessageId = evt.Message.Mid,
-                    Platform = MessagingPlatform.Facebook,
-                    ExternalAccountId = registration.PageId,
-                    From = evt.Sender.Id,
-                    Timestamp = evt.Timestamp.ToString(),
-                    Type = type,
-                    TextBody = evt.Message.Text,
-                    ChannelId = registration.PageId,
-                    ChannelDisplayName = registration.PageName,
-                    ReceivedAt = DateTime.UtcNow,
-                });
-
+                batch.Add(ToIncoming(registration, evt, evt.Message.Mid, type, evt.Message.Text));
                 continue;
             }
 
@@ -134,22 +159,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
                     "Facebook postback received. TenantId={TenantId} PageId={PageId} SenderId={Sender} Payload={Payload}",
                     registration.OwnerUserId, registration.PageId, evt.Sender.Id, evt.Postback.Payload);
 
-                batch.Add(new IncomingMessage
-                {
-                    ConnectionId = registration.ConnectionId,
-                    OwnerUserId = registration.OwnerUserId,
-                    MessageId = evt.Postback.Mid,
-                    Platform = MessagingPlatform.Facebook,
-                    ExternalAccountId = registration.PageId,
-                    From = evt.Sender.Id,
-                    Timestamp = evt.Timestamp.ToString(),
-                    Type = "postback",
-                    TextBody = evt.Postback.Payload,
-                    ChannelId = registration.PageId,
-                    ChannelDisplayName = registration.PageName,
-                    ReceivedAt = DateTime.UtcNow,
-                });
-
+                batch.Add(ToIncoming(registration, evt, evt.Postback.Mid, "postback", evt.Postback.Payload));
                 continue;
             }
 
@@ -180,6 +190,27 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         if (batch.Count > 0)
             await _publisher.PublishBatchAsync(batch, cancellationToken);
     }
+
+    private static IncomingMessage ToIncoming(
+        FacebookPageRegistration registration,
+        FacebookMessagingEvent evt,
+        string messageId,
+        string type,
+        string? textBody) => new()
+    {
+        ConnectionId = registration.ConnectionId,
+        OwnerUserId = registration.OwnerUserId,
+        MessageId = messageId,
+        Platform = MessagingPlatform.Facebook,
+        ExternalAccountId = registration.PageId,
+        From = evt.Sender.Id,
+        Timestamp = evt.Timestamp.ToString(),
+        Type = type,
+        TextBody = textBody,
+        ChannelId = registration.PageId,
+        ChannelDisplayName = registration.PageName,
+        ReceivedAt = DateTime.UtcNow,
+    };
 
     private void ProcessPageChanges(string pageId, string tenantId, List<FacebookChange> changes)
     {

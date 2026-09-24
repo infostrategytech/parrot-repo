@@ -1,4 +1,3 @@
-using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Parrot.Application.Integrations;
@@ -8,9 +7,8 @@ using Parrot.Infrastructure.Data;
 
 namespace Parrot.Infrastructure.SocialMediaIntegrations;
 
-// EF Core store for Facebook connections; also serves webhook routing and verify-token lookups.
-public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
-    IFacebookConnectionRepository, IFacebookPageRegistry, IFacebookVerifyTokenLookup
+// EF Core store for Facebook connections; also serves ?ref= webhook routing.
+public sealed class FacebookConnectionRepository(ApplicationDbContext db) : IFacebookConnectionRepository
 {
     // Reads this owner's active connection.
     public async Task<FacebookConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default)
@@ -19,11 +17,11 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
             .SingleOrDefaultAsync(c => c.OwnerUserId == ownerUserId && c.DisabledAt == null, cancellationToken);
     }
 
-    // Reads the active connection that owns a Page ID.
-    public async Task<FacebookConnection?> GetByPageIdAsync(string pageId, CancellationToken cancellationToken = default)
+    // Indexed lookup on the webhook reference; replaces the decrypt-every-row verify token scan.
+    public async Task<FacebookConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default)
     {
         return await db.FacebookConnections.AsNoTracking()
-            .SingleOrDefaultAsync(c => c.PageId == pageId && c.DisabledAt == null, cancellationToken);
+            .SingleOrDefaultAsync(c => c.WebhookIdentifier == identifier && c.DisabledAt == null, cancellationToken);
     }
 
     // Inserts a connection, translating the unique-index violation into a ConflictException.
@@ -65,33 +63,5 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) :
         {
             throw new ConflictException("This Facebook Page is already connected to another Parrot account.");
         }
-    }
-
-    // Webhook routing: turns an inbound Page ID into the owner and connection to attribute messages to.
-    public async Task<FacebookPageRegistration?> ResolveAsync(string pageId, CancellationToken cancellationToken = default)
-    {
-        FacebookConnection? connection = await GetByPageIdAsync(pageId, cancellationToken);
-        return connection is null ? null : new FacebookPageRegistration(
-            connection.Id, connection.OwnerUserId, pageId, connection.PageName ?? pageId);
-    }
-
-    // Linear decrypt-and-compare over active connections; revisit if connection counts grow large.
-    public async Task<FacebookConnection?> FindByVerifyTokenAsync(string verifyToken,
-        IFacebookCredentialProtector protector, CancellationToken cancellationToken = default)
-    {
-        List<FacebookConnection> connections = await db.FacebookConnections.AsNoTracking()
-            .Where(c => c.DisabledAt == null).ToListAsync(cancellationToken);
-        foreach (FacebookConnection connection in connections)
-        {
-            try
-            {
-                string expected = protector.Unprotect(connection.VerifyTokenEncrypted);
-                if (CryptographicOperations.FixedTimeEquals(
-                    System.Text.Encoding.UTF8.GetBytes(expected), System.Text.Encoding.UTF8.GetBytes(verifyToken)))
-                    return connection;
-            }
-            catch (CryptographicException) { }
-        }
-        return null;
     }
 }

@@ -8,8 +8,8 @@ public interface IFacebookConnectionRepository
     // Returns this owner's active connection, or null before setup has started.
     Task<FacebookConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default);
 
-    // Resolves the connection that owns an inbound Page ID; used to route webhook events.
-    Task<FacebookConnection?> GetByPageIdAsync(string pageId, CancellationToken cancellationToken = default);
+    // Resolves the connection named by a webhook's ?ref= value; the only routing path for inbound events.
+    Task<FacebookConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default);
 
     // Inserts a new connection; throws ConflictException if the owner already has one.
     Task AddAsync(FacebookConnection connection, CancellationToken cancellationToken = default);

@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using System.Text;
 using Microsoft.Extensions.Options;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Domain.Entities;
@@ -16,11 +17,15 @@ public sealed class FacebookConnectionService(
     public async Task<FacebookSetupResponse> GetSetupAsync(string ownerUserId, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+
+        // Validated before the insert so a misconfigured server cannot leave orphaned connection rows behind.
+        string baseUrl = RequireBaseUrl();
+
         FacebookConnection? connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken);
         string verifyToken;
         if (connection is null)
         {
-            verifyToken = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+            verifyToken = NewCredential();
             connection = new FacebookConnection
             {
                 OwnerUserId = ownerUserId,
@@ -33,25 +38,37 @@ public sealed class FacebookConnectionService(
             verifyToken = protector.Unprotect(connection.VerifyTokenEncrypted);
         }
 
-        string baseUrl = options.Value.WebhookBaseUrl.TrimEnd('/');
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps
-            || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.UserInfo))
-            throw new InvalidOperationException("Facebook:WebhookBaseUrl must be a public HTTPS URL without query, fragment or credentials.");
-
-        return new FacebookSetupResponse(connection.Id, $"{baseUrl}/api/webhooks/facebook", verifyToken,
+        return new FacebookSetupResponse(connection.Id,
+            $"{baseUrl}/api/webhooks/facebook?ref={connection.WebhookIdentifier}", verifyToken,
             connection.WebhookVerifiedAt.HasValue, connection.PageId, connection.PageName,
             !string.IsNullOrEmpty(connection.AccessTokenEncrypted));
     }
 
-    // Meta sends no connection reference, so the token is matched against every active connection.
-    public async Task<bool> VerifyWebhookAsync(string mode, string verifyToken, CancellationToken cancellationToken = default)
+    // Resolves the connection by ?ref= and compares the verify token in fixed time.
+    public async Task<bool> VerifyWebhookAsync(string identifier, string mode, string verifyToken,
+        CancellationToken cancellationToken = default)
     {
-        if (mode != "subscribe" || string.IsNullOrWhiteSpace(verifyToken)) return false;
-        // One connection per owner keeps this scan bounded by the number of Parrot customers during manual onboarding.
-        // The repository implementation performs the protected-token lookup without exposing tokens through an API.
-        if (repository is not IFacebookVerifyTokenLookup lookup) return false;
-        FacebookConnection? connection = await lookup.FindByVerifyTokenAsync(verifyToken, protector, cancellationToken);
-        return connection is not null && await repository.MarkVerifiedAsync(connection.Id, DateTime.UtcNow, cancellationToken);
+        if (mode != "subscribe" || string.IsNullOrWhiteSpace(identifier) || string.IsNullOrWhiteSpace(verifyToken))
+            return false;
+
+        FacebookConnection? connection = await repository.GetActiveByIdentifierAsync(identifier, cancellationToken);
+        if (connection is null) return false;
+
+        string expected;
+        try
+        {
+            expected = protector.Unprotect(connection.VerifyTokenEncrypted);
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+
+        if (!CryptographicOperations.FixedTimeEquals(
+            Encoding.UTF8.GetBytes(expected), Encoding.UTF8.GetBytes(verifyToken)))
+            return false;
+
+        return await repository.MarkVerifiedAsync(connection.Id, DateTime.UtcNow, cancellationToken);
     }
 
     // Validates the token shape and encrypts it; rejects Pages saved before webhook verification.
@@ -67,11 +84,17 @@ public sealed class FacebookConnectionService(
         await repository.SavePageAsync(connection.Id, ownerUserId, request.PageId, request.PageName.Trim(),
             protector.Protect(token), cancellationToken);
     }
-}
 
-// Kept off IFacebookConnectionRepository so decrypt-and-compare stays in the data layer, out of the public API.
-public interface IFacebookVerifyTokenLookup
-{
-    Task<FacebookConnection?> FindByVerifyTokenAsync(string verifyToken, IFacebookCredentialProtector protector,
-        CancellationToken cancellationToken = default);
+    private static string NewCredential() =>
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
+
+    // Meta refuses plaintext callbacks, so HTTPS is required here even though WhatsApp also accepts HTTP.
+    private string RequireBaseUrl()
+    {
+        string baseUrl = options.Value.WebhookBaseUrl.TrimEnd('/');
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? uri) || uri.Scheme != Uri.UriSchemeHttps
+            || !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment) || !string.IsNullOrEmpty(uri.UserInfo))
+            throw new InvalidOperationException("Facebook:WebhookBaseUrl must be a public HTTPS URL without query, fragment or credentials.");
+        return baseUrl;
+    }
 }

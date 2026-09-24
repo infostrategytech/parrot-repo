@@ -315,6 +315,11 @@ namespace Parrot.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("WebhookIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
                     b.Property<DateTime?>("WebhookVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
@@ -327,6 +332,9 @@ namespace Parrot.Infrastructure.Migrations
                     b.HasIndex("PageId")
                         .IsUnique()
                         .HasFilter("\"PageId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+
+                    b.HasIndex("WebhookIdentifier")
+                        .IsUnique();
 
                     b.ToTable("FacebookConnections");
                 });

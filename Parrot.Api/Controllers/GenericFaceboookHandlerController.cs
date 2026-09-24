@@ -19,24 +19,24 @@ public class FacebookWebhookController : ControllerBase
         _connections = connections;
     }
 
-    // Meta calls this GET when the customer subscribes their page to Parrot.
-    // We echo back hub.challenge to prove we own the endpoint.
+    // Meta calls this GET when the customer subscribes their Page to Parrot. The ?ref= value names the
+    // connection whose verify token must match, so one customer's token cannot verify another's callback.
     [HttpGet]
+    [EnableRateLimiting(RateLimitPolicies.FacebookWebhook)]
     [ProducesResponseType(typeof(string), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> VerifyWebhook(
+        [FromQuery(Name = "ref")] string? identifier,
         [FromQuery(Name = "hub.mode")] string hubMode,
         [FromQuery(Name = "hub.verify_token")] string hubVerifyToken,
         [FromQuery(Name = "hub.challenge")] string hubChallenge)
     {
-        if (await _connections.VerifyWebhookAsync(hubMode, hubVerifyToken, HttpContext.RequestAborted))
-            return Content(hubChallenge, "text/plain");
-        if (!_facebookWebhookService.TryVerifyChallenge(hubMode, hubVerifyToken, hubChallenge, out string echoChallenge))
+        if (!await _connections.VerifyWebhookAsync(identifier ?? string.Empty, hubMode, hubVerifyToken, HttpContext.RequestAborted))
         {
-            return Forbid();
+            return StatusCode(StatusCodes.Status403Forbidden);
         }
 
-        return Content(echoChallenge, "text/plain");
+        return Content(hubChallenge, "text/plain");
     }
 
     // Meta posts all page events here — messages, reactions, deliveries, postbacks, page changes.
@@ -45,8 +45,10 @@ public class FacebookWebhookController : ControllerBase
     [EnableRateLimiting(RateLimitPolicies.FacebookWebhook)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> HandleEvent(
         [FromHeader(Name = "X-Hub-Signature-256")] string? signature,
+        [FromQuery(Name = "ref")] string? identifier,
         [FromBody] FacebookWebhookPayload payload)
     {
         string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
@@ -56,7 +58,8 @@ public class FacebookWebhookController : ControllerBase
             return Unauthorized();
         }
 
-        await _facebookWebhookService.ProcessEventAsync(payload, HttpContext.RequestAborted);
-        return Ok();
+        bool accepted = await _facebookWebhookService.ProcessConnectionEventAsync(
+            identifier ?? string.Empty, payload, HttpContext.RequestAborted);
+        return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
     }
 }
