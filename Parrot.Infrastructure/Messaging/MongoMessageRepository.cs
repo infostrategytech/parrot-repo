@@ -3,16 +3,20 @@ using MongoDB.Driver;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Entities.Messages;
-using Parrot.Domain.Enums;
 
 namespace Parrot.Infrastructure.Messaging;
 
 public sealed class MongoMessageRepository : IMessageRepository
 {
     private readonly IMongoCollection<MessageDocument> _collection;
+    private readonly IMessageDocumentMapperFactory _mappers;
 
-    public MongoMessageRepository(IMongoClient mongoClient, IOptions<MongoDbSettings> settings)
+    public MongoMessageRepository(
+        IMongoClient mongoClient,
+        IOptions<MongoDbSettings> settings,
+        IMessageDocumentMapperFactory mappers)
     {
+        _mappers = mappers;
         IMongoDatabase db = mongoClient.GetDatabase(settings.Value.Database);
         _collection = db.GetCollection<MessageDocument>(settings.Value.Collection);
 
@@ -24,7 +28,7 @@ public sealed class MongoMessageRepository : IMessageRepository
 
     public async Task InsertAsync(IncomingMessage message, CancellationToken cancellationToken = default)
     {
-        MessageDocument doc = ToDocument(message);
+        MessageDocument doc = _mappers.ToDocument(message);
 
         try
         {
@@ -46,8 +50,9 @@ public sealed class MongoMessageRepository : IMessageRepository
         DateTime since,
         CancellationToken cancellationToken = default)
     {
+        // ChannelId now lives on the base document, so this no longer needs an untyped field name.
         FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.And(
-            Builders<MessageDocument>.Filter.Eq("ChannelId", channelId),
+            Builders<MessageDocument>.Filter.Eq(x => x.ChannelId, channelId),
             Builders<MessageDocument>.Filter.Gte(x => x.ReceivedAt, since));
 
         MessageDocument? doc = await _collection
@@ -57,26 +62,4 @@ public sealed class MongoMessageRepository : IMessageRepository
 
         return doc is null ? null : new ReceivedMessageSummary(doc.MessageId, doc.From, doc.ReceivedAt);
     }
-
-    private static MessageDocument ToDocument(IncomingMessage message) => message.Platform switch
-    {
-        MessagingPlatform.WhatsApp => new WhatsAppMessageDocument
-        {
-            ConnectionId = message.ConnectionId,
-            OwnerUserId = message.OwnerUserId,
-            MessageId = message.MessageId,
-            Platform = message.Platform,
-            ExternalAccountId = message.ExternalAccountId,
-            From = message.From,
-            Timestamp = message.Timestamp,
-            Type = message.Type,
-            TextBody = message.TextBody,
-            ContactName = message.ContactName,
-            ReceivedAt = message.ReceivedAt,
-            StoredAt = DateTime.UtcNow,
-            ChannelId = message.ChannelId,
-            ChannelDisplayName = message.ChannelDisplayName,
-        },
-        _ => throw new ArgumentOutOfRangeException(nameof(message.Platform), message.Platform, "Unsupported messaging platform."),
-    };
 }

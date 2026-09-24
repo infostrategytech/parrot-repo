@@ -213,7 +213,13 @@ builder.Services.AddScoped<IBusinessProfileEnrichmentService, BusinessProfileEnr
 
 builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection(MongoDbSettings.SectionName));
 builder.Services.AddSingleton<IMongoClient>(sp => new MongoClient(sp.GetRequiredService<IOptions<MongoDbSettings>>().Value.ConnectionString));
+builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+
+// Registers every "_t" discriminator before the API reads anything from the collection.
+Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 
@@ -244,6 +250,9 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 builder.Services.AddOpenApi();
 
 WebApplication app = builder.Build();
+
+// Resolved eagerly so a platform missing its mapper fails the boot, not the first message of that kind.
+app.Services.GetRequiredService<IMessageDocumentMapperFactory>();
 
 if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
 {

@@ -16,5 +16,8 @@ public record IncomingMessage
     public required string ChannelId { get; init; }
     public required string ChannelDisplayName { get; init; }
     public string? ContactName { get; init; }
+
+    // Messenger attachment payloads; null for platforms and message types that have none.
+    public IReadOnlyList<string>? AttachmentUrls { get; init; }
     public DateTime ReceivedAt { get; init; }
 }
