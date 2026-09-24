@@ -201,9 +201,7 @@ builder.Services.AddSingleton<IMessagePublisher>(sp => sp.GetRequiredService<Kaf
 builder.Services.AddHostedService(sp => sp.GetRequiredService<KafkaMessagePublisher>());
 builder.Services.AddScoped<IWhatsAppWebhookService, WhatsAppWebhookService>();
 builder.Services.AddScoped<IFacebookWebhookService, FacebookWebhookService>();
-builder.Services.AddScoped<FacebookConnectionRepository>();
-builder.Services.AddScoped<IFacebookConnectionRepository>(sp => sp.GetRequiredService<FacebookConnectionRepository>());
-builder.Services.AddScoped<IFacebookPageRegistry>(sp => sp.GetRequiredService<FacebookConnectionRepository>());
+builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepository>();
 builder.Services.AddScoped<IFacebookConnectionService, FacebookConnectionService>();
 builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<RequestContext>());

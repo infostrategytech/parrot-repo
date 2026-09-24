@@ -65,11 +65,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(c => c.OwnerUserId).IsRequired();
             entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
             entity.Property(c => c.VerifyTokenEncrypted).IsRequired();
             entity.Property(c => c.PageId).HasMaxLength(64);
             entity.Property(c => c.PageName).HasMaxLength(128);
             entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
             entity.HasIndex(c => c.OwnerUserId).IsUnique()
                 .HasFilter("\"DisabledAt\" IS NULL");
             entity.HasIndex(c => c.PageId).IsUnique()
