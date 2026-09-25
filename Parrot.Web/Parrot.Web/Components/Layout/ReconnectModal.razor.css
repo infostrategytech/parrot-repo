@@ -1,116 +1,164 @@
-/* The reconnect dialog as a brand moment: the Thread loader on an elevated
-   card, the brand's serif for the one line that matters, its sans for the
-   rest, and its square-cornered button. Surfaces come from the Aurora tokens
-   so the card reads in both themes; the motion and the accents are Cadence.
+/* The reconnect state as a status line, not a wall. The root spans the
+   viewport only so that a hairline can sit at its top edge and a pill at its
+   foot; it takes no pointer events itself, so the page beneath stays
+   readable and scrollable throughout. The pill is the one thing that can be
+   clicked, and only grows buttons once there is something to decide.
 
    The state classes are the framework's and must keep their names. */
+
+.reconnect {
+    /* Gaps in the token set: the toast's own geometry is a brand decision. */
+    --ds-reconnect-width: 440px;
+    --ds-reconnect-line: 3px;
+    --ds-reconnect-hairline: 1px;
+    --ds-reconnect-enter: 320ms;
+    --ds-reconnect-lift: 12px;
+    --ds-reconnect-button-height: 40px;
+    --ds-reconnect-foot: calc(env(safe-area-inset-bottom, 0px) + var(--spacing-xl));
+
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    display: none;
+    pointer-events: none;
+}
+
+/* Present in any state the framework can put us in. */
+.reconnect.components-reconnect-show,
+.reconnect.components-reconnect-retrying,
+.reconnect.components-reconnect-failed,
+.reconnect.components-reconnect-paused,
+.reconnect.components-reconnect-resume-failed,
+.reconnect.components-reconnect-rejected {
+    display: block;
+}
+
+/* ---- Which lines show in which state ---------------------------------- */
 
 .components-reconnect-first-attempt-visible,
 .components-reconnect-repeated-attempt-visible,
 .components-reconnect-failed-visible,
 .components-pause-visible,
-.components-resume-failed-visible,
-.components-rejoining-animation {
+.components-resume-failed-visible {
     display: none;
 }
 
-#components-reconnect-modal.components-reconnect-show .components-reconnect-first-attempt-visible,
-#components-reconnect-modal.components-reconnect-show .components-rejoining-animation,
-#components-reconnect-modal.components-reconnect-paused .components-pause-visible,
-#components-reconnect-modal.components-reconnect-resume-failed .components-resume-failed-visible,
-#components-reconnect-modal.components-reconnect-retrying,
-#components-reconnect-modal.components-reconnect-retrying .components-reconnect-repeated-attempt-visible,
-#components-reconnect-modal.components-reconnect-retrying .components-rejoining-animation,
-#components-reconnect-modal.components-reconnect-failed,
-#components-reconnect-modal.components-reconnect-failed .components-reconnect-failed-visible {
+.reconnect.components-reconnect-show .components-reconnect-first-attempt-visible,
+.reconnect.components-reconnect-retrying .components-reconnect-repeated-attempt-visible,
+.reconnect.components-reconnect-failed .components-reconnect-failed-visible,
+.reconnect.components-reconnect-paused .components-pause-visible,
+.reconnect.components-reconnect-resume-failed .components-resume-failed-visible {
     display: block;
 }
 
-/* The loader runs while an attempt is in progress; otherwise the mark rests. */
-.reconnect__rest { display: block; }
-#components-reconnect-modal.components-reconnect-show .reconnect__rest,
-#components-reconnect-modal.components-reconnect-retrying .reconnect__rest { display: none; }
+/* The relay dots run while an attempt is in progress; otherwise the mark rests. */
+.reconnect__loader { display: none; }
+.reconnect__rest { display: grid; }
+.reconnect.components-reconnect-show .reconnect__loader,
+.reconnect.components-reconnect-retrying .reconnect__loader { display: grid; }
+.reconnect.components-reconnect-show .reconnect__rest,
+.reconnect.components-reconnect-retrying .reconnect__rest { display: none; }
 
-#components-reconnect-modal {
-    /* Gaps in the token set: no component width scale, no motion scale, and
-       the dialog's own geometry is a brand decision. */
-    --ds-reconnect-width: 420px;
-    --ds-reconnect-offset: 18vh;
-    --ds-reconnect-enter: 500ms;
-    --ds-reconnect-lift: 24px;
-    --ds-reconnect-hairline: 1px;
-    --ds-reconnect-button-height: 48px;
+/* ---- The hairline along the top edge ----------------------------------- */
 
-    width: min(var(--ds-reconnect-width), calc(100vw - var(--spacing-3xl)));
-    margin: var(--ds-reconnect-offset) auto;
-    padding: var(--spacing-4xl) var(--spacing-3xl) var(--spacing-3xl);
+.reconnect__line {
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: var(--ds-reconnect-line);
+    display: none;
+    overflow: hidden;
+    background-color: color-mix(in srgb, var(--cadence-teal) 18%, transparent);
+}
+
+.reconnect__line::after {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 32%;
+    background: linear-gradient(90deg, transparent, var(--cadence-teal), var(--cadence-terracotta), transparent);
+    animation: reconnect-sweep 1.4s var(--cadence-ease) infinite;
+}
+
+.reconnect.components-reconnect-show .reconnect__line,
+.reconnect.components-reconnect-retrying .reconnect__line { display: block; }
+
+/* Once the attempt has given up the line rests in terracotta, no sweep. */
+.reconnect.components-reconnect-failed .reconnect__line,
+.reconnect.components-reconnect-resume-failed .reconnect__line {
+    display: block;
+    background-color: var(--cadence-terracotta);
+}
+.reconnect.components-reconnect-failed .reconnect__line::after,
+.reconnect.components-reconnect-resume-failed .reconnect__line::after { display: none; }
+
+@keyframes reconnect-sweep {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(400%); }
+}
+
+/* ---- The pill at the foot ---------------------------------------------- */
+
+.reconnect__toast {
+    position: absolute;
+    left: 50%;
+    bottom: var(--ds-reconnect-foot);
+    width: min(var(--ds-reconnect-width), calc(100vw - 2 * var(--spacing-lg)));
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: var(--spacing-md);
+    row-gap: var(--spacing-md);
+    align-items: center;
+    padding: var(--spacing-md) var(--spacing-lg);
     color: var(--colors-text-primary);
     background-color: var(--colors-surface-elevated);
     border: var(--ds-reconnect-hairline) solid var(--colors-surface-border);
-    border-radius: var(--radius-radius-3xl);
+    border-radius: var(--radius-radius-3xl) var(--radius-radius-3xl) var(--radius-radius-3xl) var(--radius-radius-sm);
     box-shadow:
         0 var(--spacing-2xs) var(--spacing-md) var(--colors-surface-shadow),
         0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow-diffuse);
-    opacity: 0;
-    transition: display var(--ds-reconnect-enter) allow-discrete, overlay var(--ds-reconnect-enter) allow-discrete;
-    animation: reconnect-fade-out var(--ds-reconnect-enter) both;
-
-    &[open] {
-        animation:
-            reconnect-rise 900ms var(--cadence-ease) 0.2s,
-            reconnect-fade-in var(--ds-reconnect-enter) ease-in-out 0.2s;
-        animation-fill-mode: both;
-    }
-}
-
-#components-reconnect-modal::backdrop {
-    background-color: var(--colors-surface-overlay);
-    backdrop-filter: blur(6px);
-    animation: reconnect-fade-in var(--ds-reconnect-enter) ease-in-out;
-    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, 0);
+    animation: reconnect-rise var(--ds-reconnect-enter) var(--cadence-ease) both;
 }
 
 @keyframes reconnect-rise {
-    0% { transform: translateY(var(--ds-reconnect-lift)) scale(0.98); }
-    100% { transform: translateY(0); }
-}
-
-@keyframes reconnect-fade-in {
-    0% { opacity: 0; }
-    100% { opacity: 1; }
-}
-
-@keyframes reconnect-fade-out {
-    0% { opacity: 1; }
-    100% { opacity: 0; }
-}
-
-.reconnect {
-    display: grid;
-    justify-items: center;
-    gap: var(--spacing-xl);
-    text-align: center;
+    0%   { opacity: 0; transform: translate(-50%, var(--ds-reconnect-lift)); }
+    100% { opacity: 1; transform: translate(-50%, 0); }
 }
 
 .reconnect__figure {
     display: grid;
     place-items: center;
+    width: 24px;
+    height: 24px;
 }
 
 .reconnect__copy {
     display: grid;
-    gap: var(--spacing-sm);
+    gap: var(--spacing-2xs);
+    min-width: 0;
 }
 
-/* Brand type on a brand surface. */
+/* One line in the brand's sans while reconnecting; the serif title only
+   appears once there is a decision to make. */
 .reconnect__title {
     margin: 0;
-    font-family: var(--cadence-font-serif);
-    font-size: var(--typography-size-text-3xl); /* text-style-exempt: brand serif */
-    font-weight: 400; /* text-style-exempt: Instrument Serif has one weight */
-    line-height: 1.1;
-    letter-spacing: -0.01em;
+    font-family: var(--cadence-font-sans);
+    font-size: var(--typography-size-text-sm); /* text-style-exempt: brand sans */
+    font-weight: 600; /* text-style-exempt: brand status weight */
+    line-height: var(--typography-leading-leading-base);
     color: var(--colors-text-primary);
+    text-wrap: pretty;
+}
+
+.reconnect.components-reconnect-failed .reconnect__title,
+.reconnect.components-reconnect-paused .reconnect__title,
+.reconnect.components-reconnect-resume-failed .reconnect__title {
+    font-family: var(--cadence-font-serif);
+    font-size: var(--typography-size-text-xl); /* text-style-exempt: brand serif */
+    font-weight: 400; /* text-style-exempt: Instrument Serif has one weight */
+    line-height: 1.15;
+    letter-spacing: -0.01em;
 }
 
 .reconnect__body {
@@ -127,14 +175,26 @@
     color: var(--cadence-terracotta);
 }
 
-.reconnect__actions { display: contents; }
+/* Actions sit under the copy, spanning the full width, only in the states
+   that have any; otherwise the row collapses to nothing. */
+.reconnect__actions {
+    grid-column: 1 / -1;
+    display: none;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+}
 
-/* The brand's button: slate, square corner at the foot, relay-dot ready. */
+.reconnect.components-reconnect-failed .reconnect__actions,
+.reconnect.components-reconnect-paused .reconnect__actions,
+.reconnect.components-reconnect-resume-failed .reconnect__actions { display: flex; }
+
+/* The brand's button: slate, square corner at the foot. */
 .reconnect__button {
+    display: none;
     min-height: var(--ds-reconnect-button-height);
-    padding: 0 var(--spacing-xl);
+    padding: 0 var(--spacing-lg);
     font-family: var(--cadence-font-sans);
-    font-size: var(--typography-size-text-base); /* text-style-exempt: brand sans */
+    font-size: var(--typography-size-text-sm); /* text-style-exempt: brand sans */
     font-weight: 600; /* text-style-exempt: brand button weight */
     color: var(--cadence-linen);
     background-color: var(--cadence-slate);
@@ -144,5 +204,33 @@
     transition: background-color var(--cadence-action) var(--cadence-ease), transform var(--cadence-action) var(--cadence-ease);
 }
 
+.reconnect.components-reconnect-failed .components-reconnect-failed-visible.reconnect__button,
+.reconnect.components-reconnect-paused .components-pause-visible.reconnect__button,
+.reconnect.components-reconnect-resume-failed .components-resume-failed-visible.reconnect__button { display: inline-flex; align-items: center; }
+
 .reconnect__button:hover { background-color: var(--cadence-night); }
 .reconnect__button:active { transform: translateY(1px); }
+
+.reconnect__button--quiet {
+    color: var(--colors-text-primary);
+    background-color: transparent;
+    border: var(--ds-reconnect-hairline) solid var(--colors-surface-border);
+}
+.reconnect__button--quiet:hover { background-color: color-mix(in srgb, var(--colors-text-primary) 6%, transparent); }
+
+.reconnect__button:focus-visible {
+    outline: 2px solid var(--cadence-teal);
+    outline-offset: 2px;
+}
+
+/* ---- Small screens and reduced motion ---------------------------------- */
+
+@media (max-width: 480px) {
+    .reconnect__actions { justify-content: stretch; }
+    .reconnect__actions .reconnect__button { flex: 1; justify-content: center; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reconnect__toast { animation: none; }
+    .reconnect__line::after { animation: none; width: 100%; }
+}

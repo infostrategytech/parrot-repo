@@ -1,21 +1,20 @@
-// Set up event handlers
+// The framework toggles the state classes on the element and fires
+// components-reconnect-state-changed; the CSS reads the classes, so nothing
+// here needs to open or close anything. This file only wires the buttons and
+// the retry-on-return behaviour.
 const reconnectModal = document.getElementById("components-reconnect-modal");
 reconnectModal.addEventListener("components-reconnect-state-changed", handleReconnectStateChanged);
 
-const retryButton = document.getElementById("components-reconnect-button");
-retryButton.addEventListener("click", retry);
-
-const resumeButton = document.getElementById("components-resume-button");
-resumeButton.addEventListener("click", resume);
+document.getElementById("components-reconnect-button").addEventListener("click", retry);
+document.getElementById("components-resume-button").addEventListener("click", resume);
+document.getElementById("components-reload-button").addEventListener("click", () => location.reload());
 
 function handleReconnectStateChanged(event) {
-    if (event.detail.state === "show") {
-        reconnectModal.showModal();
-    } else if (event.detail.state === "hide") {
-        reconnectModal.close();
-    } else if (event.detail.state === "failed") {
+    if (event.detail.state === "failed") {
         document.addEventListener("visibilitychange", retryWhenDocumentBecomesVisible);
     } else if (event.detail.state === "rejected") {
+        // The server no longer has this circuit: a reload is the quickest way
+        // back to a working page.
         location.reload();
     }
 }
@@ -31,12 +30,10 @@ async function retry() {
         const successful = await Blazor.reconnect();
         if (!successful) {
             // We have been able to reach the server, but the circuit is no longer available.
-            // We'll reload the page so the user can continue using the app as quickly as possible.
+            // Resume if we can; otherwise reload so the person can carry on as quickly as possible.
             const resumeSuccessful = await Blazor.resumeCircuit();
             if (!resumeSuccessful) {
                 location.reload();
-            } else {
-                reconnectModal.close();
             }
         }
     } catch (err) {

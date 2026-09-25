@@ -1,50 +1,58 @@
 ﻿<script type="module" src="@Assets["Components/Layout/ReconnectModal.razor.js"]"></script>
 
-@* Blazor Server's reconnect dialog, drawn as a brand moment rather than the
-   framework template's box. The ids and the components-reconnect-* classes
-   are the framework's contract: blazor.web.js toggles them on the dialog to
-   say which state it is in, and ReconnectModal.razor.js wires the buttons.
-   Everything inside those hooks is ours.
+@* Blazor Server's reconnect state, drawn as a status line rather than a
+   wall. The id and the components-reconnect-* classes are the framework's
+   contract: blazor.web.js toggles them on this element to say which state
+   it is in, fills in the countdown, and fires components-reconnect-state-
+   changed for ReconnectModal.razor.js. Everything inside those hooks is ours.
 
-   While the circuit is being rejoined the Thread loader runs — the mark
-   writing itself bar by bar. When the attempt has failed or the session is
-   paused, the loader rests as the static mark and the person gets a button. *@
+   A dropped circuit means nothing interactive will answer until it is back,
+   but nothing on the page has gone anywhere, so the page stays where it is
+   and readable. While the circuit is being rejoined, a hairline runs along
+   the top edge and a small pill at the foot says so. Only when the attempt
+   has given up, or the session was paused, does the pill grow a title and
+   a button. *@
 
-<dialog id="components-reconnect-modal" data-nosnippet>
-    <div class="components-reconnect-container reconnect">
+<div id="components-reconnect-modal" class="reconnect" data-nosnippet>
+    <div class="reconnect__line" aria-hidden="true"></div>
+
+    <div class="reconnect__toast" role="status" aria-live="polite">
         <div class="reconnect__figure" aria-hidden="true">
-            <span class="components-rejoining-animation reconnect__loader">
-                <CadenceLoader Kind="CadenceLoaderKind.Thread" Size="72" />
+            <span class="reconnect__loader">
+                <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="20" />
             </span>
             <span class="reconnect__rest">
-                <CadenceMark Size="72" />
+                <CadenceMark Size="22" />
             </span>
         </div>
 
         <div class="reconnect__copy">
             <p class="components-reconnect-first-attempt-visible reconnect__title">Reconnecting…</p>
-            <p class="components-reconnect-first-attempt-visible reconnect__body">Your connection to the server dropped. Everything you were doing is safe.</p>
 
-            <p class="components-reconnect-repeated-attempt-visible reconnect__title">Still reconnecting…</p>
-            <p class="components-reconnect-repeated-attempt-visible reconnect__body">Next attempt in <span id="components-seconds-to-next-attempt" class="reconnect__count"></span> seconds.</p>
+            <p class="components-reconnect-repeated-attempt-visible reconnect__title">
+                Still reconnecting — next try in <span id="components-seconds-to-next-attempt" class="reconnect__count"></span>s
+            </p>
 
-            <p class="components-reconnect-failed-visible reconnect__title">We couldn’t reconnect</p>
-            <p class="components-reconnect-failed-visible reconnect__body">Check your connection, then try again — or reload the page.</p>
+            <p class="components-reconnect-failed-visible reconnect__title">Connection lost</p>
+            <p class="components-reconnect-failed-visible reconnect__body">Your work is safe. We’ll try again when you return to this tab, or you can try now.</p>
 
-            <p class="components-pause-visible reconnect__title">Your session was paused</p>
+            <p class="components-pause-visible reconnect__title">Session paused</p>
             <p class="components-pause-visible reconnect__body">The server paused this session while it was idle. Pick up where you left off.</p>
 
-            <p class="components-resume-failed-visible reconnect__title">We couldn’t resume your session</p>
-            <p class="components-resume-failed-visible reconnect__body">Try again, or reload the page to start a fresh session.</p>
+            <p class="components-resume-failed-visible reconnect__title">Couldn’t resume</p>
+            <p class="components-resume-failed-visible reconnect__body">Reload to start a fresh session.</p>
         </div>
 
         <div class="reconnect__actions">
             <button id="components-reconnect-button" class="components-reconnect-failed-visible reconnect__button" type="button">
                 Try again
             </button>
-            <button id="components-resume-button" class="components-pause-visible components-resume-failed-visible reconnect__button" type="button">
+            <button id="components-resume-button" class="components-pause-visible reconnect__button" type="button">
                 Resume
+            </button>
+            <button id="components-reload-button" class="components-reconnect-failed-visible components-resume-failed-visible reconnect__button reconnect__button--quiet" type="button">
+                Reload
             </button>
         </div>
     </div>
-</dialog>
+</div>
