@@ -6,6 +6,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Application.Email;
+using Parrot.Application.FeatureFlags;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Application.Utils;
@@ -26,6 +27,7 @@ public class AuthService : IAuthService
     private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
     private readonly IJwtHelper _jwtHelper;
     private readonly IEmailService _emailService;
+    private readonly IFeatureFlagService _featureFlags;
     private readonly EmailSettings _emailSettings;
     private readonly AuthSettings _authSettings;
     private readonly IAppLogger<AuthService> _logger;
@@ -36,6 +38,7 @@ public class AuthService : IAuthService
         IPasswordHasher<ApplicationUser> passwordHasher,
         IJwtHelper jwtHelper,
         IEmailService emailService,
+        IFeatureFlagService featureFlags,
         IOptions<EmailSettings> emailSettings,
         IOptions<AuthSettings> authSettings,
         IAppLogger<AuthService> logger,
@@ -45,6 +48,7 @@ public class AuthService : IAuthService
         _passwordHasher = passwordHasher;
         _jwtHelper = jwtHelper;
         _emailService = emailService;
+        _featureFlags = featureFlags;
         _emailSettings = emailSettings.Value;
         _authSettings = authSettings.Value;
         _logger = logger;
@@ -85,16 +89,23 @@ public class AuthService : IAuthService
 
         if (!user.EmailConfirmed)
         {
-            // The password is right, so this is the account's owner coming back
-            // to a sign-up they never finished. Send a fresh code and let the
-            // client take them straight to the verification screen.
-            using (_logger.BeginEntityScope("User", user.Id))
+            if (await RequireEmailVerificationAsync())
             {
-                _logger.LogWarning("Login attempt before email verification; sending a new code. Email: {Email}", request.Email);
+                // The password is right, so this is the account's owner coming back
+                // to a sign-up they never finished. Send a fresh code and let the
+                // client take them straight to the verification screen.
+                using (_logger.BeginEntityScope("User", user.Id))
+                {
+                    _logger.LogWarning("Login attempt before email verification; sending a new code. Email: {Email}", request.Email);
+                }
+
+                await TrySendVerificationEmailAsync(user);
+                throw new EmailNotVerifiedException();
             }
 
-            await TrySendVerificationEmailAsync(user);
-            throw new EmailNotVerifiedException();
+            // Verification is switched off: let them in and stop asking.
+            user.EmailConfirmed = true;
+            await _userManager.UpdateAsync(user);
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
@@ -107,8 +118,10 @@ public class AuthService : IAuthService
         return BuildAuthResponse(user);
     }
 
-    public async Task RegisterAsync(RegisterRequest request)
+    public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
     {
+        bool requireVerification = await RequireEmailVerificationAsync();
+
         ApplicationUser? existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser is not null)
         {
@@ -116,12 +129,13 @@ public class AuthService : IAuthService
             // stuck for good: signing up again conflicts, and signing in is refused
             // until the address is confirmed. Treat the retry as a resend instead.
             // The password is deliberately left alone, so a pending sign-up cannot be
-            // taken over by someone else registering the same address.
-            if (!existingUser.EmailConfirmed)
+            // taken over by someone else registering the same address. With
+            // verification switched off the account can simply sign in.
+            if (!existingUser.EmailConfirmed && requireVerification)
             {
                 _logger.LogWarning("Registration retried for an unverified account; resending verification to {Email}", request.Email);
                 await TrySendVerificationEmailAsync(existingUser);
-                return;
+                return null;
             }
 
             _logger.LogWarning("Registration attempt with already-registered email {Email}", request.Email);
@@ -133,6 +147,7 @@ public class AuthService : IAuthService
             UserName = request.Email,
             Email = request.Email,
             BusinessName = request.BusinessName,
+            EmailConfirmed = !requireVerification,
         };
 
         IdentityResult result = await _userManager.CreateAsync(user, request.Password);
@@ -144,13 +159,28 @@ public class AuthService : IAuthService
             throw new ValidationException(result.Errors.Select(e => e.Description));
         }
 
+        if (!requireVerification)
+        {
+            using (_logger.BeginEntityScope("User", user.Id))
+            {
+                _logger.LogWarning("User registered with email verification switched off; signing in directly. Email: {Email}", request.Email);
+            }
+
+            return BuildAuthResponse(user);
+        }
+
         await TrySendVerificationEmailAsync(user);
 
         using (_logger.BeginEntityScope("User", user.Id))
         {
             _logger.LogInformation("User registered. Email: {Email}", request.Email);
         }
+
+        return null;
     }
+
+    private Task<bool> RequireEmailVerificationAsync() =>
+        _featureFlags.IsEnabledAsync(FeatureFlagKeys.RequireEmailVerification, defaultValue: true);
 
     public async Task<AuthResponse> VerifyEmailAsync(VerifyEmailRequest request)
     {

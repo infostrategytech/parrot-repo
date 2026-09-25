@@ -22,14 +22,18 @@ public class AuthController : ControllerBase
 
     [HttpPost("register")]
     [EnableRateLimiting(RateLimitPolicies.Register)]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     [ProducesResponseType(StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> RegisterAsync([FromBody] RegisterRequest request)
     {
-        await _authService.RegisterAsync(request);
-        return StatusCode(StatusCodes.Status201Created);
+        AuthResponse? response = await _authService.RegisterAsync(request);
+
+        // 200 with a session when verification is switched off; 201 with
+        // nothing when a code is on its way.
+        return response is null ? StatusCode(StatusCodes.Status201Created) : Ok(response);
     }
 
     [HttpPost("login")]

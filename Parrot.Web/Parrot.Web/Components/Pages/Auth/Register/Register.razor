@@ -4,6 +4,8 @@
 @using Parrot.Web.Services
 @inject IRegisterService RegisterService
 @inject RegisterState RegisterState
+@inject AuthState AuthState
+@inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
 @implements IDisposable
 
@@ -109,7 +111,7 @@
 
         try
         {
-            await RegisterService.RegisterAsync(new RegisterRequest
+            AuthResponse? response = await RegisterService.RegisterAsync(new RegisterRequest
             {
                 BusinessName = _businessName!.Trim(),
                 Email = _email!.Trim(),
@@ -117,6 +119,15 @@
                 // One password field, as designed; the API wants it confirmed.
                 ConfirmPassword = _password!,
             });
+
+            if (response is not null)
+            {
+                // Verification is switched off on this deployment: the account is live already.
+                AuthState.SetUser(response);
+                await TokenStorage.SaveAsync(response);
+                Navigation.NavigateTo("/dashboard");
+                return;
+            }
 
             Navigation.NavigateTo($"/verify-email?email={Uri.EscapeDataString(_email!.Trim())}&sent=true");
         }

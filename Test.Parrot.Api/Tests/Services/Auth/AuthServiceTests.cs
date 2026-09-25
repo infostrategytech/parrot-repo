@@ -6,6 +6,7 @@ using Moq;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Application.Email;
+using Parrot.Application.FeatureFlags;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Application.Utils;
@@ -19,6 +20,7 @@ public class AuthServiceTests
     private readonly Mock<IPasswordHasher<ApplicationUser>> _passwordHasherMock;
     private readonly Mock<IJwtHelper> _jwtHelperMock;
     private readonly Mock<IEmailService> _emailServiceMock;
+    private readonly Mock<IFeatureFlagService> _featureFlagsMock;
     private readonly Mock<IAppLogger<AuthService>> _loggerMock;
     private readonly Mock<IWebHostEnvironment> _envMock;
     private readonly AuthService _sut;
@@ -32,6 +34,8 @@ public class AuthServiceTests
         _passwordHasherMock = new Mock<IPasswordHasher<ApplicationUser>>();
         _jwtHelperMock = new Mock<IJwtHelper>();
         _emailServiceMock = new Mock<IEmailService>();
+        _featureFlagsMock = new Mock<IFeatureFlagService>();
+        RequireVerification(true);
         _loggerMock = new Mock<IAppLogger<AuthService>>();
         _envMock = new Mock<IWebHostEnvironment>();
         _envMock.SetupGet(e => e.EnvironmentName).Returns("Production");
@@ -50,6 +54,11 @@ public class AuthServiceTests
 
         _sut = CreateSut(EmailOptions());
     }
+
+    private void RequireVerification(bool required) =>
+        _featureFlagsMock
+            .Setup(f => f.IsEnabledAsync(FeatureFlagKeys.RequireEmailVerification, It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(required);
 
     private static IOptions<EmailSettings> EmailOptions(bool sendInDevelopment = false) =>
         Options.Create(new EmailSettings
@@ -72,6 +81,7 @@ public class AuthServiceTests
             _passwordHasherMock.Object,
             _jwtHelperMock.Object,
             _emailServiceMock.Object,
+            _featureFlagsMock.Object,
             emailSettings,
             Options.Create(new AuthSettings { DevelopmentVerificationCode = "222222", CheckBreachedPasswords = false }),
             _loggerMock.Object,
@@ -450,6 +460,103 @@ public class AuthServiceTests
             e => e.SendEmailAsync("new@test.com", It.IsAny<string>(), It.Is<string>(body => body.Contains("222222"))),
             Times.Once);
         _userManagerMock.Verify(m => m.GenerateEmailConfirmationTokenAsync(It.IsAny<ApplicationUser>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenVerificationRequired_HandsBackNoSession()
+    {
+        _userManagerMock
+            .Setup(m => m.FindByEmailAsync("new@test.com"))
+            .ReturnsAsync((ApplicationUser?)null);
+        _userManagerMock
+            .Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>(), "Pass123!"))
+            .ReturnsAsync(IdentityResult.Success);
+        _userManagerMock
+            .Setup(m => m.GenerateEmailConfirmationTokenAsync(It.IsAny<ApplicationUser>()))
+            .ReturnsAsync("123456");
+
+        AuthResponse? response = await _sut.RegisterAsync(new RegisterRequest
+        {
+            Email = "new@test.com",
+            Password = "Pass123!",
+            ConfirmPassword = "Pass123!",
+            BusinessName = "My Biz",
+        });
+
+        Assert.Null(response);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenVerificationSwitchedOff_CreatesAConfirmedAccount_AndSignsIn()
+    {
+        RequireVerification(false);
+        ApplicationUser? created = null;
+        _userManagerMock
+            .Setup(m => m.FindByEmailAsync("new@test.com"))
+            .ReturnsAsync((ApplicationUser?)null);
+        _userManagerMock
+            .Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>(), "Pass123!"))
+            .Callback<ApplicationUser, string>((u, _) => created = u)
+            .ReturnsAsync(IdentityResult.Success);
+
+        AuthResponse? response = await _sut.RegisterAsync(new RegisterRequest
+        {
+            Email = "new@test.com",
+            Password = "Pass123!",
+            ConfirmPassword = "Pass123!",
+            BusinessName = "My Biz",
+        });
+
+        Assert.NotNull(response);
+        Assert.Equal("test-jwt-token", response.Token);
+        Assert.NotNull(created);
+        Assert.True(created.EmailConfirmed);
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenVerificationSwitchedOff_AnUnverifiedExistingAccountConflicts()
+    {
+        // It can sign in now, so a retry is a duplicate rather than a resend.
+        RequireVerification(false);
+        ApplicationUser existing = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(existing.Email!)).ReturnsAsync(existing);
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            _sut.RegisterAsync(new RegisterRequest
+            {
+                Email = existing.Email!,
+                Password = "Pass123!",
+                ConfirmPassword = "Pass123!",
+                BusinessName = "Biz",
+            }));
+
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenVerificationSwitchedOff_LetsAnUnverifiedAccountIn_AndConfirmsIt()
+    {
+        RequireVerification(false);
+        ApplicationUser user = CreateUser(emailConfirmed: false);
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "correct")).ReturnsAsync(true);
+        _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        AuthResponse response = await _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "correct" });
+
+        Assert.Equal("test-jwt-token", response.Token);
+        Assert.True(user.EmailConfirmed);
+        _userManagerMock.Verify(m => m.UpdateAsync(user), Times.Once);
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
     }
 
     [Fact]

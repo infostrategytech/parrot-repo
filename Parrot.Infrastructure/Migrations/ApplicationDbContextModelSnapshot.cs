@@ -339,6 +339,29 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("FacebookConnections");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.FeatureFlag", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("FeatureFlags");
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.WhatsAppConnection", b =>
                 {
                     b.Property<Guid>("Id")

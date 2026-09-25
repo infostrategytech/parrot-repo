@@ -16,6 +16,7 @@ using Anthropic;
 using Parrot.Application.Agents;
 using Parrot.Application.Auth;
 using Parrot.Application.Email;
+using Parrot.Application.FeatureFlags;
 using Parrot.Application.Integrations;
 using Parrot.Application.Integrations.BusinessEnrichment;
 using Parrot.Application.Logging;
@@ -25,6 +26,7 @@ using Parrot.Infrastructure.Agents;
 using Parrot.Infrastructure.Auth;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.Email;
+using Parrot.Infrastructure.FeatureFlags;
 using Parrot.Infrastructure.SocialMediaIntegrations;
 using Parrot.Api.Middleware;
 using Parrot.Api.Utils;
@@ -229,6 +231,8 @@ builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddScoped<IFeatureFlagService, FeatureFlagService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddHttpClient<IPasswordBreachChecker, PwnedPasswordsBreachChecker>(client =>
 {
@@ -303,6 +307,15 @@ if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
     using IServiceScope scope = app.Services.CreateScope();
     ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
     db.Database.Migrate();
+}
+
+// Off means anyone can create a working account without proving they own the
+// address: right for a deployment with no working mail, wrong for production.
+if (!builder.Configuration.GetValue("FeatureFlags:" + FeatureFlagKeys.RequireEmailVerification, true))
+{
+    app.Logger.LogWarning(
+        "Email verification at sign-up is OFF by configuration. A FeatureFlags row with Key '{Key}' overrides this without a deploy.",
+        FeatureFlagKeys.RequireEmailVerification);
 }
 
 // Restores the client address and scheme before anything downstream reads them.

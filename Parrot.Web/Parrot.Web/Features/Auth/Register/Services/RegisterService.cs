@@ -18,7 +18,10 @@ public class RegisterService : IRegisterService
     {
         HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
         await response.EnsureApiSuccessAsync();
-        // API returns 201 Created with no body — registration requires email verification before login
-        return null;
+
+        // 200 carries a session (verification switched off); 201 means a code is on its way.
+        return response.StatusCode == System.Net.HttpStatusCode.OK
+            ? await response.Content.ReadFromJsonAsync<AuthResponse>()
+            : null;
     }
 }

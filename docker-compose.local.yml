@@ -124,6 +124,8 @@ services:
       # outside Development. The breach lookup is off to keep the stack offline.
       Auth__DevelopmentVerificationCode: "222222"
       Auth__CheckBreachedPasswords: "false"
+      # Keep the code flow on locally; the deployed dev environment has it off.
+      FeatureFlags__RequireEmailVerification: "true"
     ports:
       - "5222:8080"
     volumes:
