@@ -98,6 +98,18 @@ public class AuthService : IAuthService
         ApplicationUser? existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser is not null)
         {
+            // An account that never received its verification email would otherwise be
+            // stuck for good: signing up again conflicts, and signing in is refused
+            // until the address is confirmed. Treat the retry as a resend instead.
+            // The password is deliberately left alone, so a pending sign-up cannot be
+            // taken over by someone else registering the same address.
+            if (!existingUser.EmailConfirmed)
+            {
+                _logger.LogWarning("Registration retried for an unverified account; resending verification to {Email}", request.Email);
+                await TrySendVerificationEmailAsync(existingUser);
+                return;
+            }
+
             _logger.LogWarning("Registration attempt with already-registered email {Email}", request.Email);
             throw new ConflictException("A user with this email already exists.");
         }
@@ -116,14 +128,22 @@ public class AuthService : IAuthService
             throw new ValidationException("An error occurred while creating the user.");
         }
 
+        bool verificationEmailSent = false;
         if (!_env.IsDevelopment() || _emailSettings.SendInDevelopment)
         {
-            await SendVerificationEmailAsync(user);
+            verificationEmailSent = await TrySendVerificationEmailAsync(user);
         }
 
         using (_logger.BeginEntityScope("User", user.Id))
         {
-            _logger.LogInformation("User registered and verification email sent. Email: {Email}", request.Email);
+            if (verificationEmailSent)
+            {
+                _logger.LogInformation("User registered and verification email sent. Email: {Email}", request.Email);
+            }
+            else
+            {
+                _logger.LogWarning("User registered but no verification email went out. Email: {Email}", request.Email);
+            }
         }
     }
 
@@ -165,11 +185,15 @@ public class AuthService : IAuthService
             return;
         }
 
-        await SendVerificationEmailAsync(user);
-
-        using (_logger.BeginEntityScope("User", user.Id))
+        // Kept quiet on failure for the same reason the unknown-address case is:
+        // a 500 here only for addresses that exist would answer the enumeration
+        // question the silent return above is there to avoid.
+        if (await TrySendVerificationEmailAsync(user))
         {
-            _logger.LogInformation("Verification email resent. Email: {Email}", request.Email);
+            using (_logger.BeginEntityScope("User", user.Id))
+            {
+                _logger.LogInformation("Verification email resent. Email: {Email}", request.Email);
+            }
         }
     }
 
@@ -296,6 +320,29 @@ public class AuthService : IAuthService
         }
 
         return BuildAuthResponse(user);
+    }
+
+    // The account row is already committed by the time the verification email
+    // goes out, so letting an SMTP fault bubble up reports failure for a sign-up
+    // that actually succeeded, and the address is then unusable: registering
+    // again conflicts and signing in is refused as unverified. Swallow the fault
+    // and let the caller decide; the verify-email screen can resend.
+    private async Task<bool> TrySendVerificationEmailAsync(ApplicationUser user)
+    {
+        try
+        {
+            await SendVerificationEmailAsync(user);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            using (_logger.BeginEntityScope("User", user.Id))
+            {
+                _logger.LogError(ex, "Could not send the verification email to {Email}", user.Email);
+            }
+
+            return false;
+        }
     }
 
     private async Task SendVerificationEmailAsync(ApplicationUser user)

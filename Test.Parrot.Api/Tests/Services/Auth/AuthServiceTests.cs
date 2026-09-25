@@ -191,7 +191,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_WhenEmailAlreadyRegistered_ThrowsConflictException()
     {
-        ApplicationUser existing = CreateUser();
+        ApplicationUser existing = CreateUser(emailConfirmed: true);
         _userManagerMock.Setup(m => m.FindByEmailAsync(existing.Email!)).ReturnsAsync(existing);
 
         await Assert.ThrowsAsync<ConflictException>(() =>
@@ -207,7 +207,7 @@ public class AuthServiceTests
     [Fact]
     public async Task RegisterAsync_WhenEmailAlreadyRegistered_DoesNotSendVerificationEmail()
     {
-        ApplicationUser existing = CreateUser();
+        ApplicationUser existing = CreateUser(emailConfirmed: true);
         _userManagerMock.Setup(m => m.FindByEmailAsync(existing.Email!)).ReturnsAsync(existing);
 
         await Assert.ThrowsAsync<ConflictException>(() =>
@@ -222,6 +222,105 @@ public class AuthServiceTests
         _emailServiceMock.Verify(
             e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenAccountExistsButIsUnverified_ResendsVerificationInsteadOfConflicting()
+    {
+        ApplicationUser existing = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(existing.Email!)).ReturnsAsync(existing);
+        _userManagerMock
+            .Setup(m => m.GenerateEmailConfirmationTokenAsync(existing))
+            .ReturnsAsync("confirm-token");
+
+        await _sut.RegisterAsync(new RegisterRequest
+        {
+            Email = existing.Email!,
+            Password = "Pass123!",
+            ConfirmPassword = "Pass123!",
+            BusinessName = "Biz",
+        });
+
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(existing.Email!, It.IsAny<string>(), It.IsAny<string>()),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenAccountExistsButIsUnverified_LeavesThePasswordAlone()
+    {
+        ApplicationUser existing = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(existing.Email!)).ReturnsAsync(existing);
+        _userManagerMock
+            .Setup(m => m.GenerateEmailConfirmationTokenAsync(existing))
+            .ReturnsAsync("confirm-token");
+
+        await _sut.RegisterAsync(new RegisterRequest
+        {
+            Email = existing.Email!,
+            Password = "Different123!",
+            ConfirmPassword = "Different123!",
+            BusinessName = "Biz",
+        });
+
+        _userManagerMock.Verify(
+            m => m.CreateAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()),
+            Times.Never);
+        _userManagerMock.Verify(
+            m => m.RemovePasswordAsync(It.IsAny<ApplicationUser>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_WhenVerificationEmailFails_StillReportsSuccess()
+    {
+        // The account is committed before the email goes out, so a failed send
+        // must not be reported as a failed sign-up: the caller would retry and
+        // hit a conflict on an address they cannot sign in with either.
+        _userManagerMock
+            .Setup(m => m.FindByEmailAsync("new@test.com"))
+            .ReturnsAsync((ApplicationUser?)null);
+        _userManagerMock
+            .Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>(), "Pass123!"))
+            .ReturnsAsync(IdentityResult.Success);
+        _userManagerMock
+            .Setup(m => m.GenerateEmailConfirmationTokenAsync(It.IsAny<ApplicationUser>()))
+            .ReturnsAsync("confirm-token");
+        _emailServiceMock
+            .Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("smtp is down"));
+
+        await _sut.RegisterAsync(new RegisterRequest
+        {
+            Email = "new@test.com",
+            Password = "Pass123!",
+            ConfirmPassword = "Pass123!",
+            BusinessName = "My Biz",
+        });
+
+        _userManagerMock.Verify(
+            m => m.CreateAsync(It.IsAny<ApplicationUser>(), "Pass123!"),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task ResendVerificationEmailAsync_WhenEmailSendFails_DoesNotThrow()
+    {
+        // Failing only for addresses that exist would answer the enumeration
+        // question the unknown-address path stays silent to avoid.
+        ApplicationUser existing = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(existing.Email!)).ReturnsAsync(existing);
+        _userManagerMock
+            .Setup(m => m.GenerateEmailConfirmationTokenAsync(existing))
+            .ReturnsAsync("confirm-token");
+        _emailServiceMock
+            .Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("smtp is down"));
+
+        await _sut.ResendVerificationEmailAsync(new ResendVerificationEmailRequest
+        {
+            Email = existing.Email!,
+        });
     }
 
     [Fact]
