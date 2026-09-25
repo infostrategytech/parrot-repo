@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Parrot.Web.Services;
 using Parrot.Web.Features.Auth.Models;
 using Parrot.Web.Features.Auth.Register.Models;
 
@@ -16,7 +17,7 @@ public class RegisterService : IRegisterService
     public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
     {
         HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/auth/register", request);
-        response.EnsureSuccessStatusCode();
+        await response.EnsureApiSuccessAsync();
         // API returns 201 Created with no body — registration requires email verification before login
         return null;
     }

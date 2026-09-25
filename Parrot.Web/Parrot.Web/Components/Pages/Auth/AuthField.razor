@@ -19,6 +19,9 @@
                autocomplete="@AutoComplete"
                disabled="@Disabled"
                required="@Required"
+               inputmode="@InputMode"
+               maxlength="@MaxLength"
+               pattern="@Pattern"
                value="@Value"
                @oninput="OnInput" />
         @if (IsPassword)
@@ -65,6 +68,13 @@
     [Parameter] public bool Disabled { get; set; }
 
     [Parameter] public bool Required { get; set; }
+
+    /// <summary>The on-screen keyboard to raise on touch devices: "numeric" for a code.</summary>
+    [Parameter] public string? InputMode { get; set; }
+
+    [Parameter] public int? MaxLength { get; set; }
+
+    [Parameter] public string? Pattern { get; set; }
 
     private bool IsPassword => Type == "password";
 

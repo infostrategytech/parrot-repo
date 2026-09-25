@@ -16,6 +16,7 @@ namespace Test.Parrot.Api.Tests.Services.Auth;
 public class AuthServiceTests
 {
     private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
+    private readonly Mock<IPasswordHasher<ApplicationUser>> _passwordHasherMock;
     private readonly Mock<IJwtHelper> _jwtHelperMock;
     private readonly Mock<IEmailService> _emailServiceMock;
     private readonly Mock<IAppLogger<AuthService>> _loggerMock;
@@ -28,6 +29,7 @@ public class AuthServiceTests
         _userManagerMock = new Mock<UserManager<ApplicationUser>>(
             store.Object, null!, null!, null!, null!, null!, null!, null!, null!);
 
+        _passwordHasherMock = new Mock<IPasswordHasher<ApplicationUser>>();
         _jwtHelperMock = new Mock<IJwtHelper>();
         _emailServiceMock = new Mock<IEmailService>();
         _loggerMock = new Mock<IAppLogger<AuthService>>();
@@ -46,7 +48,11 @@ public class AuthServiceTests
             .Setup(j => j.GenerateToken(It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTime?>()))
             .Returns("test-jwt-token");
 
-        IOptions<EmailSettings> emailSettings = Options.Create(new EmailSettings
+        _sut = CreateSut(EmailOptions());
+    }
+
+    private static IOptions<EmailSettings> EmailOptions(bool sendInDevelopment = false) =>
+        Options.Create(new EmailSettings
         {
             SmtpHost = "localhost",
             SmtpPort = 587,
@@ -55,16 +61,21 @@ public class AuthServiceTests
             FromAddress = "from@test.com",
             FromName = "Test",
             BaseUrl = "http://localhost:3000",
+            SendInDevelopment = sendInDevelopment,
         });
 
-        _sut = new AuthService(
+    // The fixture carries the development code so tests can show it is honoured
+    // only when the environment says Development as well.
+    private AuthService CreateSut(IOptions<EmailSettings> emailSettings) =>
+        new AuthService(
             _userManagerMock.Object,
+            _passwordHasherMock.Object,
             _jwtHelperMock.Object,
             _emailServiceMock.Object,
             emailSettings,
+            Options.Create(new AuthSettings { DevelopmentVerificationCode = "222222", CheckBreachedPasswords = false }),
             _loggerMock.Object,
             _envMock.Object);
-    }
 
     // ---------------------------------------------------------------------------
     // LoginAsync
@@ -123,17 +134,53 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task LoginAsync_WhenEmailNotConfirmed_ThrowsUnauthorizedException()
+    public async Task LoginAsync_WhenEmailNotConfirmed_ThrowsEmailNotVerified_AndSendsAFreshCode()
     {
         ApplicationUser user = CreateUser(emailConfirmed: false);
         _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
         _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
         _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "correct")).ReturnsAsync(true);
+        _userManagerMock.Setup(m => m.GenerateEmailConfirmationTokenAsync(user)).ReturnsAsync("123456");
 
-        UnauthorizedException ex = await Assert.ThrowsAsync<UnauthorizedException>(() =>
+        EmailNotVerifiedException ex = await Assert.ThrowsAsync<EmailNotVerifiedException>(() =>
             _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "correct" }));
 
-        Assert.Contains("verify your email", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(System.Net.HttpStatusCode.Forbidden, ex.StatusCode);
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(user.Email!, It.IsAny<string>(), It.Is<string>(body => body.Contains("123456"))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenEmailNotConfirmed_ButPasswordWrong_GivesTheGenericAnswer()
+    {
+        // Verification state must not leak to someone who does not hold the password.
+        ApplicationUser user = CreateUser(emailConfirmed: false);
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "wrong")).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.AccessFailedAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "wrong" }));
+
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenUserNotFound_StillRunsAPasswordHash()
+    {
+        // So an unknown address takes as long to answer as a wrong password.
+        _userManagerMock
+            .Setup(m => m.FindByEmailAsync(It.IsAny<string>()))
+            .ReturnsAsync((ApplicationUser?)null);
+
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginRequest { Email = "nobody@test.com", Password = "pass" }));
+
+        _passwordHasherMock.Verify(h => h.HashPassword(It.IsAny<ApplicationUser>(), "pass"), Times.Once);
     }
 
     [Fact]
@@ -177,7 +224,7 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
         _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "correct")).ReturnsAsync(true);
 
-        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+        await Assert.ThrowsAsync<EmailNotVerifiedException>(() =>
             _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "correct" }));
 
         _userManagerMock.Verify(m => m.AccessFailedAsync(It.IsAny<ApplicationUser>()), Times.Never);
@@ -324,6 +371,88 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task RegisterAsync_WhenIdentityRejectsThePassword_SurfacesItsWording()
+    {
+        _userManagerMock
+            .Setup(m => m.FindByEmailAsync(It.IsAny<string>()))
+            .ReturnsAsync((ApplicationUser?)null);
+        _userManagerMock
+            .Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError
+            {
+                Code = "PasswordBreached",
+                Description = "That password has appeared in a data breach. Choose a different one.",
+            }));
+
+        ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.RegisterAsync(new RegisterRequest
+            {
+                Email = "new@test.com",
+                Password = "password2024!!",
+                ConfirmPassword = "password2024!!",
+                BusinessName = "Biz",
+            }));
+
+        Assert.Contains("data breach", string.Join(" ", ex.Errors ?? []));
+    }
+
+    [Fact]
+    public async Task RegisterAsync_EmailCarriesTheSixDigitCode_NotALink()
+    {
+        _userManagerMock
+            .Setup(m => m.FindByEmailAsync("new@test.com"))
+            .ReturnsAsync((ApplicationUser?)null);
+        _userManagerMock
+            .Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>(), "Pass123!"))
+            .ReturnsAsync(IdentityResult.Success);
+        _userManagerMock
+            .Setup(m => m.GenerateEmailConfirmationTokenAsync(It.IsAny<ApplicationUser>()))
+            .ReturnsAsync("482913");
+
+        await _sut.RegisterAsync(new RegisterRequest
+        {
+            Email = "new@test.com",
+            Password = "Pass123!",
+            ConfirmPassword = "Pass123!",
+            BusinessName = "My Biz",
+        });
+
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync(
+                "new@test.com",
+                It.IsAny<string>(),
+                It.Is<string>(body => body.Contains("482913") && !body.Contains("token="))),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task RegisterAsync_InDevelopment_EmailCarriesTheConfiguredCode()
+    {
+        // What a local mailbox shows must be what the verify screen accepts.
+        _envMock.SetupGet(e => e.EnvironmentName).Returns("Development");
+        AuthService sut = CreateSut(EmailOptions(sendInDevelopment: true));
+        _userManagerMock
+            .Setup(m => m.FindByEmailAsync("new@test.com"))
+            .ReturnsAsync((ApplicationUser?)null);
+        _userManagerMock
+            .Setup(m => m.CreateAsync(It.IsAny<ApplicationUser>(), "Pass123!"))
+            .ReturnsAsync(IdentityResult.Success);
+
+        await sut.RegisterAsync(new RegisterRequest
+        {
+            Email = "new@test.com",
+            Password = "Pass123!",
+            ConfirmPassword = "Pass123!",
+            BusinessName = "My Biz",
+        });
+
+        _emailServiceMock.Verify(
+            e => e.SendEmailAsync("new@test.com", It.IsAny<string>(), It.Is<string>(body => body.Contains("222222"))),
+            Times.Once);
+        _userManagerMock.Verify(m => m.GenerateEmailConfirmationTokenAsync(It.IsAny<ApplicationUser>()), Times.Never);
+    }
+
+    [Fact]
     public async Task RegisterAsync_WhenIdentityCreationFails_ThrowsValidationException()
     {
         _userManagerMock
@@ -388,44 +517,123 @@ public class AuthServiceTests
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task VerifyEmailAsync_WhenUserNotFound_ThrowsNotFoundException()
+    public async Task VerifyEmailAsync_WhenEmailUnknown_AnswersLikeAWrongCode()
     {
+        // A 404 here would say which addresses have accounts.
         _userManagerMock
-            .Setup(m => m.FindByIdAsync("missing-id"))
+            .Setup(m => m.FindByEmailAsync("nobody@test.com"))
             .ReturnsAsync((ApplicationUser?)null);
 
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            _sut.VerifyEmailAsync(new VerifyEmailRequest { UserId = "missing-id", Token = "tok" }));
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.VerifyEmailAsync(new VerifyEmailRequest { Email = "nobody@test.com", Code = "123456" }));
     }
 
     [Fact]
-    public async Task VerifyEmailAsync_WhenTokenInvalid_ThrowsValidationException()
+    public async Task VerifyEmailAsync_WhenCodeMalformed_RejectsBeforeLookingAnythingUp()
+    {
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.VerifyEmailAsync(new VerifyEmailRequest { Email = "user@test.com", Code = "12" }));
+
+        _userManagerMock.Verify(m => m.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task VerifyEmailAsync_WhenCodeWrong_ThrowsValidationException_AndCountsAFailedAttempt()
     {
         ApplicationUser user = CreateUser();
-        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
         _userManagerMock
-            .Setup(m => m.ConfirmEmailAsync(user, "bad-token"))
+            .Setup(m => m.ConfirmEmailAsync(user, "000000"))
             .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Invalid token" }));
+        _userManagerMock.Setup(m => m.AccessFailedAsync(user)).ReturnsAsync(IdentityResult.Success);
 
         await Assert.ThrowsAsync<ValidationException>(() =>
-            _sut.VerifyEmailAsync(new VerifyEmailRequest { UserId = user.Id, Token = "bad-token" }));
+            _sut.VerifyEmailAsync(new VerifyEmailRequest { Email = user.Email!, Code = "000000" }));
+
+        _userManagerMock.Verify(m => m.AccessFailedAsync(user), Times.Once);
     }
 
     [Fact]
-    public async Task VerifyEmailAsync_WhenTokenValid_ReturnsAuthResponse()
+    public async Task VerifyEmailAsync_WhenLockedOut_RefusesWithoutCheckingTheCode()
     {
         ApplicationUser user = CreateUser();
-        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
-        _userManagerMock
-            .Setup(m => m.ConfirmEmailAsync(user, "good-token"))
-            .ReturnsAsync(IdentityResult.Success);
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(true);
+
+        await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.VerifyEmailAsync(new VerifyEmailRequest { Email = user.Email!, Code = "123456" }));
+
+        _userManagerMock.Verify(m => m.ConfirmEmailAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task VerifyEmailAsync_WhenCodeRight_ReturnsAuthResponse_AndClearsFailedAttempts()
+    {
+        ApplicationUser user = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.ConfirmEmailAsync(user, "123456")).ReturnsAsync(IdentityResult.Success);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
 
         AuthResponse response = await _sut.VerifyEmailAsync(
-            new VerifyEmailRequest { UserId = user.Id, Token = "good-token" });
+            new VerifyEmailRequest { Email = user.Email!, Code = "123456" });
 
         Assert.Equal("test-jwt-token", response.Token);
         Assert.Equal(user.Id, response.UserId);
         Assert.Equal(user.Email, response.Email);
+        _userManagerMock.Verify(m => m.ResetAccessFailedCountAsync(user), Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyEmailAsync_AcceptsTheCodeTypedWithSpaces()
+    {
+        ApplicationUser user = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.ConfirmEmailAsync(user, "123456")).ReturnsAsync(IdentityResult.Success);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        await _sut.VerifyEmailAsync(new VerifyEmailRequest { Email = user.Email!, Code = " 123 456 " });
+
+        _userManagerMock.Verify(m => m.ConfirmEmailAsync(user, "123456"), Times.Once);
+    }
+
+    [Fact]
+    public async Task VerifyEmailAsync_InDevelopment_AcceptsTheConfiguredCode_WithoutAskingIdentity()
+    {
+        _envMock.SetupGet(e => e.EnvironmentName).Returns("Development");
+        ApplicationUser user = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        AuthResponse response = await _sut.VerifyEmailAsync(
+            new VerifyEmailRequest { Email = user.Email!, Code = "222222" });
+
+        Assert.True(user.EmailConfirmed);
+        Assert.Equal(user.Id, response.UserId);
+        _userManagerMock.Verify(m => m.ConfirmEmailAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task VerifyEmailAsync_OutsideDevelopment_TreatsTheConfiguredCodeLikeAnyOther()
+    {
+        // The fixture carries the code; only the environment stands between it and production.
+        ApplicationUser user = CreateUser();
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock
+            .Setup(m => m.ConfirmEmailAsync(user, "222222"))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError { Description = "Invalid token" }));
+        _userManagerMock.Setup(m => m.AccessFailedAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.VerifyEmailAsync(new VerifyEmailRequest { Email = user.Email!, Code = "222222" }));
+
+        Assert.False(user.EmailConfirmed);
+        _userManagerMock.Verify(m => m.UpdateAsync(It.IsAny<ApplicationUser>()), Times.Never);
     }
 
     // ---------------------------------------------------------------------------
@@ -586,6 +794,57 @@ public class AuthServiceTests
     }
 
     [Fact]
+    public async Task ResetPasswordAsync_WhenIdentityRejectsThePassword_SurfacesItsWording_NotTheTokenMessage()
+    {
+        ApplicationUser user = CreateUser(emailConfirmed: true);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _userManagerMock
+            .Setup(m => m.ResetPasswordAsync(user, "tok", "short"))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError
+            {
+                Code = "PasswordTooShort",
+                Description = "Passwords must be at least 12 characters.",
+            }));
+
+        ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                UserId = user.Id,
+                Token = "tok",
+                NewPassword = "short",
+                ConfirmNewPassword = "short",
+            }));
+
+        Assert.Contains("12 characters", string.Join(" ", ex.Errors ?? []));
+        Assert.DoesNotContain("token", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ResetPasswordAsync_WhenTokenIsDead_SaysSo()
+    {
+        ApplicationUser user = CreateUser(emailConfirmed: true);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _userManagerMock
+            .Setup(m => m.ResetPasswordAsync(user, "stale", It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError
+            {
+                Code = nameof(IdentityErrorDescriber.InvalidToken),
+                Description = "Invalid token.",
+            }));
+
+        ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.ResetPasswordAsync(new ResetPasswordRequest
+            {
+                UserId = user.Id,
+                Token = "stale",
+                NewPassword = "a perfectly fine passphrase",
+                ConfirmNewPassword = "a perfectly fine passphrase",
+            }));
+
+        Assert.Contains("expired", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public async Task ResetPasswordAsync_WhenTokenValid_CompletesSuccessfully()
     {
         ApplicationUser user = CreateUser();
@@ -641,6 +900,54 @@ public class AuthServiceTests
                 NewPassword = "NewPass1!",
                 ConfirmNewPassword = "NewPass1!",
             }));
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WhenIdentityRejectsTheNewPassword_SurfacesItsWording()
+    {
+        ApplicationUser user = CreateUser(emailConfirmed: true);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _userManagerMock
+            .Setup(m => m.ChangePasswordAsync(user, "current", "common"))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError
+            {
+                Code = "PasswordTooCommon",
+                Description = "That password is too common.",
+            }));
+
+        ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.ChangePasswordAsync(user.Id, new ChangePasswordRequest
+            {
+                CurrentPassword = "current",
+                NewPassword = "common",
+                ConfirmNewPassword = "common",
+            }));
+
+        Assert.Contains("too common", string.Join(" ", ex.Errors ?? []));
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WhenCurrentPasswordWrong_SaysSo_ByErrorCode()
+    {
+        ApplicationUser user = CreateUser(emailConfirmed: true);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _userManagerMock
+            .Setup(m => m.ChangePasswordAsync(user, "wrong", It.IsAny<string>()))
+            .ReturnsAsync(IdentityResult.Failed(new IdentityError
+            {
+                Code = nameof(IdentityErrorDescriber.PasswordMismatch),
+                Description = "Incorrect password.",
+            }));
+
+        ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.ChangePasswordAsync(user.Id, new ChangePasswordRequest
+            {
+                CurrentPassword = "wrong",
+                NewPassword = "a perfectly fine passphrase",
+                ConfirmNewPassword = "a perfectly fine passphrase",
+            }));
+
+        Assert.Contains("Current password is incorrect", ex.Message);
     }
 
     [Fact]

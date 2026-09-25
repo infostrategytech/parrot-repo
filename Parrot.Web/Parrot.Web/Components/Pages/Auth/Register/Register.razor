@@ -1,6 +1,7 @@
 @page "/register"
 @layout AuthLayout
 @using Parrot.Web.Components.Pages.Auth
+@using Parrot.Web.Services
 @inject IRegisterService RegisterService
 @inject RegisterState RegisterState
 @inject NavigationManager Navigation
@@ -34,6 +35,7 @@
             <AuthField Id="password" Placeholder="Create Password" Glyph="IconName.RiLockFill"
                        Type="password" AutoComplete="new-password" Required
                        @bind-Value="_password" Error="@_passwordError" Disabled="@RegisterState.IsLoading" />
+            <p class="register__hint" id="password-hint">12 or more characters. No symbols or capitals required — a few unrelated words works well.</p>
 
             <p class="panel__terms">By creating an account, you agree to OmniAI's <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
 
@@ -91,8 +93,8 @@
 
         _passwordError = string.IsNullOrEmpty(_password)
             ? "Create a password."
-            : _password.Length < 8
-                ? "Use at least 8 characters."
+            : _password.Length < 12
+                ? "Use at least 12 characters — a few unrelated words is easiest to remember."
                 : null;
 
         return _businessNameError is null && _emailError is null && _passwordError is null;
@@ -116,19 +118,28 @@
                 ConfirmPassword = _password!,
             });
 
-            Navigation.NavigateTo("/verify-email");
+            Navigation.NavigateTo($"/verify-email?email={Uri.EscapeDataString(_email!.Trim())}&sent=true");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            RegisterState.SetError("An account with this email already exists.");
+            RegisterState.SetError("An account with this email already exists. Sign in instead, or reset your password.");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
         {
             RegisterState.SetError("Too many attempts. Please wait and try again.");
         }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
         {
-            _passwordError = "Use at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol.";
+            // The API's own wording: almost always the password policy, which
+            // has more to say than a length rule.
+            if (ex.UserMessage.Contains("password", StringComparison.OrdinalIgnoreCase))
+            {
+                _passwordError = ex.UserMessage;
+            }
+            else
+            {
+                RegisterState.SetError(ex.UserMessage);
+            }
         }
         catch
         {

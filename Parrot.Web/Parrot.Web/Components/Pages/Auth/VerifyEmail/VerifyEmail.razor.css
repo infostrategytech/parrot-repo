@@ -1,10 +1,12 @@
-/* While a link is being checked, the thread loader sits above the title at
-   the left edge, where a result's status disc would be. The resend carries
-   the relay dots beside its label, so it needs the gap the primary has. */
+/* The code form stacks its fields like the sign-up one. The resend sits
+   under the spam-folder line and carries the relay dots beside its label,
+   so it needs the gap the primary has. */
 .verify {
   display: grid;
-  gap: 12px;
-  justify-items: start;
+  gap: 16px;
   min-width: 0;
 }
 
+.verify__resend {
+  margin-top: 4px;
+}

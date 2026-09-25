@@ -15,25 +15,38 @@ namespace Parrot.Application.Auth;
 
 public class AuthService : IAuthService
 {
+    private const string InvalidCodeMessage = "That code isn't right or has expired. Check it and try again.";
+    private const string TooManyCodesMessage = "Too many incorrect codes. Please wait 15 minutes and request a new one.";
+
+    // Hashed against when an address is unknown, so a miss costs the same as a
+    // wrong password and the response time does not say which it was.
+    private static readonly ApplicationUser TimingPlaceholder = new() { UserName = "-", BusinessName = "-" };
+
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
     private readonly IJwtHelper _jwtHelper;
     private readonly IEmailService _emailService;
     private readonly EmailSettings _emailSettings;
+    private readonly AuthSettings _authSettings;
     private readonly IAppLogger<AuthService> _logger;
     private readonly IWebHostEnvironment _env;
 
     public AuthService(
         UserManager<ApplicationUser> userManager,
+        IPasswordHasher<ApplicationUser> passwordHasher,
         IJwtHelper jwtHelper,
         IEmailService emailService,
         IOptions<EmailSettings> emailSettings,
+        IOptions<AuthSettings> authSettings,
         IAppLogger<AuthService> logger,
         IWebHostEnvironment env)
     {
         _userManager = userManager;
+        _passwordHasher = passwordHasher;
         _jwtHelper = jwtHelper;
         _emailService = emailService;
         _emailSettings = emailSettings.Value;
+        _authSettings = authSettings.Value;
         _logger = logger;
         _env = env;
     }
@@ -42,7 +55,14 @@ public class AuthService : IAuthService
     {
         ApplicationUser? user = await _userManager.FindByEmailAsync(request.Email);
 
-        if (user is not null && await _userManager.IsLockedOutAsync(user))
+        if (user is null)
+        {
+            _passwordHasher.HashPassword(TimingPlaceholder, request.Password);
+            _logger.LogWarning("Login attempt for unrecognised email");
+            throw new UnauthorizedException("Invalid email or password.");
+        }
+
+        if (await _userManager.IsLockedOutAsync(user))
         {
             using (_logger.BeginEntityScope("User", user.Id))
             {
@@ -52,35 +72,29 @@ public class AuthService : IAuthService
             throw new UnauthorizedException("Account is temporarily locked due to too many failed login attempts. Please try again later.");
         }
 
-        bool validCredentials = user is not null && await _userManager.CheckPasswordAsync(user, request.Password);
-
-        if (!validCredentials)
+        if (!await _userManager.CheckPasswordAsync(user, request.Password))
         {
-            if (user is not null)
+            await _userManager.AccessFailedAsync(user);
+            using (_logger.BeginEntityScope("User", user.Id))
             {
-                await _userManager.AccessFailedAsync(user);
-                using (_logger.BeginEntityScope("User", user.Id))
-                {
-                    _logger.LogWarning("Failed login attempt for {Email}", request.Email);
-                }
-            }
-            else
-            {
-                _logger.LogWarning("Login attempt for unrecognised email");
+                _logger.LogWarning("Failed login attempt for {Email}", request.Email);
             }
 
             throw new UnauthorizedException("Invalid email or password.");
         }
 
-        if (!user!.EmailConfirmed)
+        if (!user.EmailConfirmed)
         {
+            // The password is right, so this is the account's owner coming back
+            // to a sign-up they never finished. Send a fresh code and let the
+            // client take them straight to the verification screen.
             using (_logger.BeginEntityScope("User", user.Id))
             {
-                _logger.LogWarning("Login attempt before email verification. Email: {Email}", request.Email);
+                _logger.LogWarning("Login attempt before email verification; sending a new code. Email: {Email}", request.Email);
             }
-            //allow users login when verfication is abandonned but prompt them to verify email
 
-            throw new UnauthorizedException("Please verify your email address before logging in.");
+            await TrySendVerificationEmailAsync(user);
+            throw new EmailNotVerifiedException();
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
@@ -98,7 +112,7 @@ public class AuthService : IAuthService
         ApplicationUser? existingUser = await _userManager.FindByEmailAsync(request.Email);
         if (existingUser is not null)
         {
-            // An account that never received its verification email would otherwise be
+            // An account that never received its verification code would otherwise be
             // stuck for good: signing up again conflicts, and signing in is refused
             // until the address is confirmed. Treat the retry as a resend instead.
             // The password is deliberately left alone, so a pending sign-up cannot be
@@ -124,48 +138,74 @@ public class AuthService : IAuthService
         IdentityResult result = await _userManager.CreateAsync(user, request.Password);
         if (!result.Succeeded)
         {
-            _logger.LogError("Identity user creation failed for {Email}", request.Email);
-            throw new ValidationException("An error occurred while creating the user.");
+            // Almost always the password policy; its own wording is what the
+            // person needs to see to fix it.
+            _logger.LogWarning("Identity user creation failed for {Email}: {Errors}", request.Email, string.Join("; ", result.Errors.Select(e => e.Code)));
+            throw new ValidationException(result.Errors.Select(e => e.Description));
         }
 
-        bool verificationEmailSent = false;
-        if (!_env.IsDevelopment() || _emailSettings.SendInDevelopment)
-        {
-            verificationEmailSent = await TrySendVerificationEmailAsync(user);
-        }
+        await TrySendVerificationEmailAsync(user);
 
         using (_logger.BeginEntityScope("User", user.Id))
         {
-            if (verificationEmailSent)
-            {
-                _logger.LogInformation("User registered and verification email sent. Email: {Email}", request.Email);
-            }
-            else
-            {
-                _logger.LogWarning("User registered but no verification email went out. Email: {Email}", request.Email);
-            }
+            _logger.LogInformation("User registered. Email: {Email}", request.Email);
         }
     }
 
     public async Task<AuthResponse> VerifyEmailAsync(VerifyEmailRequest request)
     {
-        ApplicationUser? user = await _userManager.FindByIdAsync(request.UserId);
+        string code = NormalizeCode(request.Code)
+            ?? throw new ValidationException("Enter the 6-digit code from your email.");
+
+        ApplicationUser? user = await _userManager.FindByEmailAsync(request.Email);
         if (user is null)
         {
-            _logger.LogWarning("Email verification attempt for unknown UserId: {UserId}", request.UserId);
-            throw new NotFoundException("User not found.");
+            // The same answer a wrong code gets, so this endpoint cannot be used
+            // to find out which addresses have accounts.
+            _logger.LogWarning("Email verification attempt for unrecognised email");
+            throw new ValidationException(InvalidCodeMessage);
         }
 
-        IdentityResult result = await _userManager.ConfirmEmailAsync(user, request.Token);
-        if (!result.Succeeded)
+        if (await _userManager.IsLockedOutAsync(user))
         {
             using (_logger.BeginEntityScope("User", user.Id))
             {
-                _logger.LogWarning("Email verification failed — invalid or expired token. Email: {Email}", user.Email);
+                _logger.LogWarning("Email verification blocked — account is locked out. Email: {Email}", user.Email);
             }
 
-            throw new ValidationException("Invalid or expired verification token.");
+            throw new UnauthorizedException(TooManyCodesMessage);
         }
+
+        bool confirmed;
+        if (IsDevelopmentCode(code))
+        {
+            using (_logger.BeginEntityScope("User", user.Id))
+            {
+                _logger.LogWarning("Development verification code accepted for {Email}", user.Email);
+            }
+
+            user.EmailConfirmed = true;
+            confirmed = (await _userManager.UpdateAsync(user)).Succeeded;
+        }
+        else
+        {
+            confirmed = (await _userManager.ConfirmEmailAsync(user, code)).Succeeded;
+        }
+
+        if (!confirmed)
+        {
+            // A six-digit code is small enough to guess, so wrong codes count
+            // toward the same lockout wrong passwords do.
+            await _userManager.AccessFailedAsync(user);
+            using (_logger.BeginEntityScope("User", user.Id))
+            {
+                _logger.LogWarning("Email verification failed — wrong or expired code. Email: {Email}", user.Email);
+            }
+
+            throw new ValidationException(InvalidCodeMessage);
+        }
+
+        await _userManager.ResetAccessFailedCountAsync(user);
 
         using (_logger.BeginEntityScope("User", user.Id))
         {
@@ -192,7 +232,7 @@ public class AuthService : IAuthService
         {
             using (_logger.BeginEntityScope("User", user.Id))
             {
-                _logger.LogInformation("Verification email resent. Email: {Email}", request.Email);
+                _logger.LogInformation("Verification code resent. Email: {Email}", request.Email);
             }
         }
     }
@@ -219,7 +259,20 @@ public class AuthService : IAuthService
             <p>This link expires after use. If you did not request a password reset, you can safely ignore this email.</p>
             """;
 
-        await _emailService.SendEmailAsync(user.Email!, subject, body);
+        try
+        {
+            await _emailService.SendEmailAsync(user.Email!, subject, body);
+        }
+        catch (Exception ex)
+        {
+            // Silent for the same reason the unknown-address path is.
+            using (_logger.BeginEntityScope("User", user.Id))
+            {
+                _logger.LogError(ex, "Could not send the password reset email to {Email}", user.Email);
+            }
+
+            return;
+        }
 
         using (_logger.BeginEntityScope("User", user.Id))
         {
@@ -241,10 +294,15 @@ public class AuthService : IAuthService
         {
             using (_logger.BeginEntityScope("User", user.Id))
             {
-                _logger.LogWarning("Password reset failed — invalid or expired token. Email: {Email}", user.Email);
+                _logger.LogWarning("Password reset failed: {Errors}. Email: {Email}", string.Join("; ", result.Errors.Select(e => e.Code)), user.Email);
             }
 
-            throw new ValidationException("Invalid or expired password reset token.");
+            if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.InvalidToken)))
+            {
+                throw new ValidationException("Invalid or expired password reset token.");
+            }
+
+            throw new ValidationException(result.Errors.Select(e => e.Description));
         }
 
         using (_logger.BeginEntityScope("User", user.Id))
@@ -269,10 +327,15 @@ public class AuthService : IAuthService
         {
             using (_logger.BeginEntityScope("User", user.Id))
             {
-                _logger.LogWarning("Change password failed — incorrect current password. Email: {Email}", user.Email);
+                _logger.LogWarning("Change password failed: {Errors}. Email: {Email}", string.Join("; ", result.Errors.Select(e => e.Code)), user.Email);
             }
 
-            throw new ValidationException("Current password is incorrect.");
+            if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.PasswordMismatch)))
+            {
+                throw new ValidationException("Current password is incorrect.");
+            }
+
+            throw new ValidationException(result.Errors.Select(e => e.Description));
         }
 
         using (_logger.BeginEntityScope("User", user.Id))
@@ -322,13 +385,23 @@ public class AuthService : IAuthService
         return BuildAuthResponse(user);
     }
 
-    // The account row is already committed by the time the verification email
+    // The account row is already committed by the time the verification code
     // goes out, so letting an SMTP fault bubble up reports failure for a sign-up
     // that actually succeeded, and the address is then unusable: registering
     // again conflicts and signing in is refused as unverified. Swallow the fault
     // and let the caller decide; the verify-email screen can resend.
     private async Task<bool> TrySendVerificationEmailAsync(ApplicationUser user)
     {
+        if (_env.IsDevelopment() && !_emailSettings.SendInDevelopment)
+        {
+            using (_logger.BeginEntityScope("User", user.Id))
+            {
+                _logger.LogInformation("Verification email skipped in Development. Email: {Email}", user.Email);
+            }
+
+            return false;
+        }
+
         try
         {
             await SendVerificationEmailAsync(user);
@@ -347,16 +420,21 @@ public class AuthService : IAuthService
 
     private async Task SendVerificationEmailAsync(ApplicationUser user)
     {
-        string rawToken = await _userManager.GenerateEmailConfirmationTokenAsync(user);
-        string encodedToken = Uri.EscapeDataString(rawToken);
-        string verificationUrl = $"{_emailSettings.BaseUrl}/verify-email?userId={user.Id}&token={encodedToken}";
+        // Identity's email token provider: six digits tied to the user's security
+        // stamp, good for a few minutes. The development code, when configured,
+        // is what the email carries too, so a local mailbox shows the same thing
+        // the verify screen accepts.
+        string code = DevelopmentCode() ?? await _userManager.GenerateEmailConfirmationTokenAsync(user);
+        string verifyUrl = $"{_emailSettings.BaseUrl}/verify-email?email={Uri.EscapeDataString(user.Email!)}";
 
-        string subject = "Verify your Parrot account";
+        string subject = "Your Parrot verification code";
         string body = $"""
-            <h2>Welcome to Parrot!</h2>
-            <p>Please verify your email address by clicking the link below:</p>
-            <p><a href="{verificationUrl}">Verify Email</a></p>
-            <p>This link will expire after use. If you did not create an account, you can safely ignore this email.</p>
+            <h2>Verify your email</h2>
+            <p>Enter this code in Parrot to verify your email address:</p>
+            <p style="font-size:28px;font-weight:700;letter-spacing:6px;font-family:monospace">{code}</p>
+            <p>It expires in 5 minutes.</p>
+            <p><a href="{verifyUrl}">Open Parrot to enter the code</a></p>
+            <p>If you did not create a Parrot account, you can safely ignore this email.</p>
             """;
 
         await _emailService.SendEmailAsync(user.Email!, subject, body);
@@ -377,4 +455,26 @@ public class AuthService : IAuthService
 
         return new AuthResponse(token, expiresAt, user.Id, user.Email!, user.BusinessName);
     }
+
+    // People type "222 222" as readily as "222222"; only the digits matter.
+    private static string? NormalizeCode(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return null;
+        }
+
+        string digits = new string(raw.Where(char.IsAsciiDigit).ToArray());
+        return digits.Length == 6 ? digits : null;
+    }
+
+    // Both the environment and the setting have to agree; Program.cs refuses to
+    // start with the setting present anywhere but Development as well.
+    private string? DevelopmentCode() =>
+        _env.IsDevelopment() && !string.IsNullOrEmpty(_authSettings.DevelopmentVerificationCode)
+            ? _authSettings.DevelopmentVerificationCode
+            : null;
+
+    private bool IsDevelopmentCode(string code) =>
+        DevelopmentCode() is { } fixedCode && string.Equals(code, fixedCode, StringComparison.Ordinal);
 }

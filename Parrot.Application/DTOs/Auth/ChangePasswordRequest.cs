@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Parrot.Application.Auth;
 
 namespace Parrot.Application.DTOs.Auth;
 
@@ -8,7 +9,7 @@ public record ChangePasswordRequest
     public required string CurrentPassword { get; init; }
 
     [Required(ErrorMessage = "New password is required")]
-    [StringLength(100, MinimumLength = 8, ErrorMessage = "Password must be at least 8 characters")]
+    [StringLength(PasswordPolicy.MaximumLength, MinimumLength = PasswordPolicy.MinimumLength, ErrorMessage = "Password must be between 12 and 128 characters")]
     public required string NewPassword { get; init; }
 
     [Required(ErrorMessage = "Confirm password is required")]

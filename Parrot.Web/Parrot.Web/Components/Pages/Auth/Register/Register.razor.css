@@ -5,3 +5,12 @@
   gap: 16px;
   min-width: 0;
 }
+
+/* The password hint tucks under its field in the small type the terms line
+   uses, close enough to read as part of it. */
+.register__hint {
+  margin: -8px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--cadence-field-placeholder);
+}

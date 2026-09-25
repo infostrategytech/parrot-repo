@@ -1,4 +1,5 @@
 using System.Net.Http.Json;
+using Parrot.Web.Services;
 using Parrot.Web.Features.Auth.Login.Models;
 using Parrot.Web.Features.Auth.Models;
 
@@ -16,7 +17,7 @@ public class LoginService : ILoginService
     public async Task<AuthResponse?> LoginAsync(LoginRequest request)
     {
         HttpResponseMessage response = await _httpClient.PostAsJsonAsync("api/auth/login", request);
-        response.EnsureSuccessStatusCode();
+        await response.EnsureApiSuccessAsync();
         return await response.Content.ReadFromJsonAsync<AuthResponse>();
     }
 }

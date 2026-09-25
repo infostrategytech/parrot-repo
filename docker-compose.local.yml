@@ -119,6 +119,11 @@ services:
       EmailSettings__FromName: Parrot Local
       EmailSettings__BaseUrl: http://localhost:5255
       FrontendSettings__BaseUrl: http://localhost:5255
+      # The verification code every sign-up on this stack accepts, so no
+      # mailbox is needed to finish one; the API refuses to start with it set
+      # outside Development. The breach lookup is off to keep the stack offline.
+      Auth__DevelopmentVerificationCode: "222222"
+      Auth__CheckBreachedPasswords: "false"
     ports:
       - "5222:8080"
     volumes:

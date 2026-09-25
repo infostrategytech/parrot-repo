@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
@@ -21,6 +22,7 @@ using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Application.Utils;
 using Parrot.Infrastructure.Agents;
+using Parrot.Infrastructure.Auth;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.Email;
 using Parrot.Infrastructure.SocialMediaIntegrations;
@@ -42,6 +44,18 @@ if (!builder.Environment.IsDevelopment() &&
         "JwtSettings:Secret must be changed from the default placeholder before running in a non-development environment.");
 }
 
+builder.Services.Configure<AuthSettings>(builder.Configuration.GetSection(AuthSettings.SectionName));
+AuthSettings authSettings = builder.Configuration.GetSection(AuthSettings.SectionName).Get<AuthSettings>()
+    ?? new AuthSettings();
+
+// The fixed verification code stands in for the emailed one; letting it reach
+// any other environment would let anyone confirm any address.
+if (!builder.Environment.IsDevelopment() && !string.IsNullOrEmpty(authSettings.DevelopmentVerificationCode))
+{
+    throw new InvalidOperationException(
+        "Auth:DevelopmentVerificationCode is set. It bypasses email verification and may only be configured for the Development environment.");
+}
+
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
 builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
 builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
@@ -61,18 +75,27 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
 {
-    options.Password.RequireDigit = true;
-    options.Password.RequireLowercase = true;
-    options.Password.RequireUppercase = true;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequiredLength = 8;
+    // NIST SP 800-63B: length, a breach lookup and a common-password list do
+    // more than character-class rules, and are far easier on the person typing.
+    // PasswordPolicyValidator below carries the rest of the policy.
+    options.Password.RequireDigit = false;
+    options.Password.RequireLowercase = false;
+    options.Password.RequireUppercase = false;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequiredLength = authSettings.MinimumPasswordLength;
+    options.Password.RequiredUniqueChars = 4;
     options.User.RequireUniqueEmail = true;
     options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     options.Lockout.MaxFailedAccessAttempts = 5;
     options.Lockout.AllowedForNewUsers = true;
+
+    // Six digits typed into the app rather than a long token carried in a link:
+    // the same code works on whichever device the person is signing up from.
+    options.Tokens.EmailConfirmationTokenProvider = TokenOptions.DefaultEmailProvider;
 })
 .AddEntityFrameworkStores<ApplicationDbContext>()
-.AddDefaultTokenProviders();
+.AddDefaultTokenProviders()
+.AddPasswordValidator<PasswordPolicyValidator>();
 
 // JWT + Google OAuth Authentication
 builder.Services.AddAuthentication(options =>
@@ -107,6 +130,17 @@ builder.Services.AddAuthentication(options =>
     options.CallbackPath = "/signin-google";
     options.Scope.Add("email");
     options.Scope.Add("profile");
+});
+
+// nginx terminates TLS and is the only route to this port, so the last hop of
+// X-Forwarded-For is the client. Without this every request arrives from the
+// proxy's address and all users share a single rate-limit bucket.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.ForwardLimit = 1;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
 });
 
 // Rate Limiting
@@ -196,6 +230,13 @@ builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddHttpClient<IPasswordBreachChecker, PwnedPasswordsBreachChecker>(client =>
+{
+    client.BaseAddress = new Uri("https://api.pwnedpasswords.com/");
+    client.Timeout = TimeSpan.FromSeconds(3);
+    client.DefaultRequestHeaders.Add("Add-Padding", "true");
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+});
 builder.Services.AddSingleton<KafkaMessagePublisher>();
 builder.Services.AddSingleton<IMessagePublisher>(sp => sp.GetRequiredService<KafkaMessagePublisher>());
 builder.Services.AddHostedService(sp => sp.GetRequiredService<KafkaMessagePublisher>());
@@ -264,6 +305,9 @@ if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
     db.Database.Migrate();
 }
 
+// Restores the client address and scheme before anything downstream reads them.
+app.UseForwardedHeaders();
+
 // Global Exception Handler (must be first in pipeline)
 app.UseGlobalExceptionHandler();
 
@@ -277,6 +321,11 @@ app.UseRawBodyCapture();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+}
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
 }
 
 app.UseHttpsRedirection();
