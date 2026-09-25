@@ -1,0 +1,119 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+
+@* A picture of Meta's "Add use cases" screen, with the three boxes ticking in
+   order.
+
+   Drawn rather than screenshotted for the same two reasons as the step-one
+   drawing: a screenshot of someone else's product goes stale the week they
+   redesign it, and a drawing can move. Here the movement carries the whole
+   lesson, because the screen is a long list of near-identical rows and the
+   instruction "tick three of them" is unreadable as a still.
+
+   The third row is the one that matters. Without the WhatsApp use case the
+   WhatsApp menu never appears in the Meta app at all, and every later step of
+   this guide points at something that is not there — with nothing on screen
+   saying why. So the sequence is built to end on it.
+
+   Everything inside the window frame is Meta's interface, not ours. *@
+
+<div class="meta-usecase">
+    <div class="meta-usecase__window" role="img" aria-label="@Description" @key="ReplayKey">
+        <div class="meta-usecase__toolbar">
+            <i></i><i></i><i></i>
+            <span>developers.facebook.com</span>
+        </div>
+
+        <div class="meta-usecase__page">
+            <h2>Create an app</h2>
+
+            <div class="meta-usecase__progress">
+                <span class="meta-usecase__done"><i></i>App details</span>
+                <strong><i></i>Use cases</strong>
+                <span><i></i>Business</span>
+                <span><i></i>Requirements</span>
+                <span><i></i>Overview</span>
+            </div>
+
+            <div class="meta-usecase__panel">
+                <h3>Add use cases</h3>
+
+                <div class="meta-usecase__layout">
+                    <nav>
+                        <small>Filter by</small>
+                        <span class="meta-usecase__filter-on"><i></i>Featured (6)</span>
+                        <span><i></i>All (20)</span>
+                        <span><i></i>Ads and monetization (7)</span>
+                        <span><i></i>Business messaging (3)</span>
+                    </nav>
+
+                    <ul>
+                        @* The tick is Meta's checkmark path rather than a rotated border,
+                           which renders as a slash at nine pixels. *@
+                        <li class="meta-usecase__row meta-usecase__row--marketing">
+                            <em></em>
+                            <div>
+                                <strong>Create &amp; manage ads with Marketing API</strong>
+                                <small>Create, manage and optimize ad campaigns across Meta technologies.</small>
+                            </div>
+                            <b>
+                                <svg fill="none" viewBox="0 0 12 12" aria-hidden="true"><path d="M10.8535 2.64645C11.0488 2.84171 11.0488 3.15829 10.8535 3.35355L4.85356 9.35355C4.65829 9.5488 4.34171 9.5488 4.14644 9.35355L1.14645 6.35355C0.951185 6.1583 0.951185 5.8417 1.14645 5.64645C1.34171 5.4512 1.65829 5.4512 1.85355 5.64645L4.5 8.2929L10.1465 2.64645C10.3417 2.45119 10.6583 2.45119 10.8535 2.64645Z" fill="currentColor" /></svg>
+                            </b>
+                        </li>
+                        <li class="meta-usecase__row meta-usecase__row--ads">
+                            <em></em>
+                            <div>
+                                <strong>Create &amp; manage app ads with Meta Ads Manager</strong>
+                                <small>Promote your mobile app and drive installs.</small>
+                            </div>
+                            <b>
+                                <svg fill="none" viewBox="0 0 12 12" aria-hidden="true"><path d="M10.8535 2.64645C11.0488 2.84171 11.0488 3.15829 10.8535 3.35355L4.85356 9.35355C4.65829 9.5488 4.34171 9.5488 4.14644 9.35355L1.14645 6.35355C0.951185 6.1583 0.951185 5.8417 1.14645 5.64645C1.34171 5.4512 1.65829 5.4512 1.85355 5.64645L4.5 8.2929L10.1465 2.64645C10.3417 2.45119 10.6583 2.45119 10.8535 2.64645Z" fill="currentColor" /></svg>
+                            </b>
+                        </li>
+                        <li class="meta-usecase__row meta-usecase__row--whatsapp">
+                            <em></em>
+                            <div>
+                                <strong>Connect with customers through WhatsApp</strong>
+                                <small>Start a WhatsApp conversation, send notifications and provide support.</small>
+                            </div>
+                            <b>
+                                <svg fill="none" viewBox="0 0 12 12" aria-hidden="true"><path d="M10.8535 2.64645C11.0488 2.84171 11.0488 3.15829 10.8535 3.35355L4.85356 9.35355C4.65829 9.5488 4.34171 9.5488 4.14644 9.35355L1.14645 6.35355C0.951185 6.1583 0.951185 5.8417 1.14645 5.64645C1.34171 5.4512 1.65829 5.4512 1.85355 5.64645L4.5 8.2929L10.1465 2.64645C10.3417 2.45119 10.6583 2.45119 10.8535 2.64645Z" fill="currentColor" /></svg>
+                            </b>
+                        </li>
+                    </ul>
+                </div>
+
+                <footer>
+                    <span>Cancel</span>
+                    <div>
+                        <span>Previous</span>
+                        <button type="button" tabindex="-1">Next</button>
+                    </div>
+                </footer>
+            </div>
+        </div>
+
+        <span class="meta-usecase__cursor" aria-hidden="true"></span>
+    </div>
+
+    <p class="meta-usecase__caption">
+        <span class="meta-usecase__dot" aria-hidden="true"></span>
+        <Typography TextStyle="TextStyle.Small10Medium" As="span">Follow the moving highlight</Typography>
+        <button type="button" class="meta-usecase__replay" @onclick="Replay">
+            <Icon Name="IconName.RiRefreshLine" />
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span">Replay</Typography>
+        </button>
+    </p>
+</div>
+
+@code {
+    private const string Description =
+        "Animated guide showing which use cases to tick on Meta's Add use cases screen";
+
+    // Changing the key throws the window away and builds a new one, which is
+    // the only reliable way to restart a CSS animation from the beginning.
+    // It matters more here than elsewhere: the sequence runs once and stops,
+    // so without a replay a person who looked away has no way back to it.
+    private int ReplayKey;
+
+    private void Replay() => ReplayKey++;
+}

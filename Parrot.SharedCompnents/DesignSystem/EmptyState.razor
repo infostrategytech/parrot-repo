@@ -1,0 +1,57 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One component for a pattern React drew eleven times under eleven class
+   names: agents-empty, products-empty, task-request-empty, knowledge-panel-
+   empty, notes-empty, quick-reply-empty, test-empty, meta-demo-empty,
+   mascot-empty, knowledge-usage-empty and customer-empty-copy. Same icon,
+   heading, body and optional action every time, drifting slightly each time.
+
+   Empty is a designed state, not the absence of one. Every screen that can be
+   empty says here what the person should do about it. *@
+
+<div class="empty-state empty-state--@Size.ToString().ToLowerInvariant()">
+    @if (GlyphContent is not null)
+    {
+        <span class="empty-state__icon">@GlyphContent</span>
+    }
+    else if (Glyph is not null)
+    {
+        <span class="empty-state__icon">
+            <Icon Name="Glyph.Value" Size="IconSize.Lg" />
+        </span>
+    }
+
+    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Title</Typography>
+
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="empty-state__body">
+            @Description
+        </Typography>
+    }
+
+    @if (Action is not null)
+    {
+        <div class="empty-state__action">@Action</div>
+    }
+</div>
+
+@code {
+    /// <summary>What is not here, said plainly. "No agents found", not "Empty".</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>What to do about it. Skip it only when there is genuinely nothing to suggest.</summary>
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>A glyph from the sprite. Use this unless you need custom artwork.</summary>
+    [Parameter] public IconName? Glyph { get; set; }
+
+    /// <summary>Custom artwork — a mascot, an illustration — in place of a glyph.</summary>
+    [Parameter] public RenderFragment? GlyphContent { get; set; }
+
+    /// <summary>Usually one Button. "Clear filters" on a search that found nothing.</summary>
+    [Parameter] public RenderFragment? Action { get; set; }
+
+    /// <summary><see cref="EmptyStateSize.Panel"/> for a side panel or a card, not a whole page.</summary>
+    [Parameter] public EmptyStateSize Size { get; set; } = EmptyStateSize.Page;
+}

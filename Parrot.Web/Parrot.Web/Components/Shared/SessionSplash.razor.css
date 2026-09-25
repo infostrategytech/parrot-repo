@@ -1,0 +1,30 @@
+/* The launch moment fills the window on the page colour; type here is the
+   brand's own face, because this is a brand surface rather than a screen in
+   the product. */
+
+.splash {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: var(--spacing-md);
+  width: 100vw;
+  height: 100vh;
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  animation: splash-in var(--cadence-action) var(--cadence-ease);
+}
+
+.splash__wordmark {
+  font-size: var(--typography-size-text-xl); /* text-style-exempt: brand wordmark, Figtree */
+  line-height: 1;
+}
+
+.splash__note {
+  font-family: var(--cadence-font-sans);
+  font-size: var(--typography-size-text-sm); /* text-style-exempt: brand surface, Figtree */
+  line-height: 1;
+}
+
+@keyframes splash-in {
+  from { opacity: 0; }
+}

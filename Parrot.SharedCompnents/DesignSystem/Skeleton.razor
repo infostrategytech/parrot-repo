@@ -1,0 +1,44 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* React had four bespoke skeletons — agent card, knowledge source, conversation
+   row, customer panel — each a small pile of <i>, <b> and <span> with its own
+   shimmer. This is one shape primitive; a screen composes its own placeholder
+   from a few of them.
+
+   A skeleton has to echo the layout it replaces, otherwise the page jumps when
+   the data lands. That is why this takes a Width rather than filling. *@
+
+<span class="skeleton skeleton--@Shape.ToString().ToLowerInvariant()"
+      style="@InlineSize"
+      aria-hidden="true"></span>
+
+@code {
+    [Parameter] public SkeletonShape Shape { get; set; } = SkeletonShape.Line;
+
+    /// <summary>Any CSS length or percentage. Defaults to filling the space.</summary>
+    [Parameter] public string? Width { get; set; }
+
+    /// <summary>Overrides the shape's own height. Rarely needed.</summary>
+    [Parameter] public string? Height { get; set; }
+
+    /// <summary>
+    /// Position in the stack, top to bottom. The brand's placeholders pulse in
+    /// sequence, so each one starts a beat after the one above it.
+    /// </summary>
+    [Parameter] public int Order { get; set; }
+
+    // Width and height are per-instance layout, not design values, so they are
+    // the one place an inline style is the right answer: a class per possible
+    // width would be a class nobody could name.
+    private string? InlineSize
+    {
+        get
+        {
+            var parts = new List<string>(3);
+            if (!string.IsNullOrWhiteSpace(Width)) parts.Add($"width:{Width}");
+            if (!string.IsNullOrWhiteSpace(Height)) parts.Add($"height:{Height}");
+            if (Order > 0) parts.Add($"--skeleton-order:{Order}");
+            return parts.Count == 0 ? null : string.Join(";", parts);
+        }
+    }
+}

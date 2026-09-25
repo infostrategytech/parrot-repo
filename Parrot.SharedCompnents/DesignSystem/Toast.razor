@@ -1,0 +1,60 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Presentational only. Lifetime belongs to ToastService, which is the fix for
+   the React version: five pages each ran their own dismiss timer, and one of
+   them used 3000ms while the other four used 3200ms. Nobody decided that. *@
+
+<div class="toast toast--@Status.ToString().ToLowerInvariant()"
+     role="status"
+     aria-live="@(Status == ToastStatus.Error ? "assertive" : "polite")">
+
+    <span class="toast__icon">
+        <Icon Name="@StatusIcon" Size="IconSize.Md" />
+    </span>
+
+    <div class="toast__content">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Title</Typography>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@Description</Typography>
+        }
+    </div>
+
+    @if (ActionLabel is not null)
+    {
+        <button type="button" class="toast__action" @onclick="OnAction">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@ActionLabel</Typography>
+        </button>
+    }
+
+    @if (OnDismiss.HasDelegate)
+    {
+        <button type="button" class="toast__dismiss" @onclick="OnDismiss" aria-label="Dismiss notification">
+            <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
+        </button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public string? Description { get; set; }
+
+    [Parameter] public ToastStatus Status { get; set; } = ToastStatus.Success;
+
+    /// <summary>An optional single action. Omit the label and no button renders.</summary>
+    [Parameter] public string? ActionLabel { get; set; }
+
+    [Parameter] public EventCallback OnAction { get; set; }
+
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private IconName StatusIcon => Status switch
+    {
+        ToastStatus.Info => IconName.RiInformationFill,
+        ToastStatus.Success => IconName.RiCheckboxCircleFill,
+        ToastStatus.Warning => IconName.RiAlertFill,
+        ToastStatus.Error => IconName.RiErrorWarningFill,
+        _ => IconName.RiInformationFill
+    };
+}

@@ -1,0 +1,138 @@
+/* The flow canvas: a dotted field, nodes stacked down its centre, hairline
+   connectors between them. Node accents use the accent scale so each step
+   kind keeps a colour that also works in the dark theme. */
+
+.playbook-canvas {
+  position: relative;
+  min-height: 0;
+  padding: var(--spacing-3xl) var(--spacing-xl);
+  overflow: auto;
+  background:
+    linear-gradient(color-mix(in srgb, var(--colors-surface-background) 94%, transparent), color-mix(in srgb, var(--colors-surface-background) 98%, transparent)),
+    radial-gradient(circle at 20% 20%, var(--colors-accent-neutral-border) 1px, transparent 1px);
+  background-size: auto, var(--ds-canvas-dots) var(--ds-canvas-dots);
+  border: var(--ds-canvas-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+
+.playbook-canvas {
+  /* Gaps in the token set: no node-width, connector, border-width, menu-width
+     or motion scale. */
+  --ds-canvas-dots: 18px;
+  --ds-canvas-hairline: 1px;
+  --ds-canvas-node: 360px;
+  --ds-canvas-connector: 28px;
+  --ds-canvas-connector-width: 2px;
+  --ds-canvas-glyph: 28px;
+  --ds-canvas-picker: 300px;
+  --ds-canvas-picker-layer: 20;
+  --ds-canvas-motion: 140ms;
+}
+
+.playbook-canvas__flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.playbook-node {
+  display: grid;
+  gap: var(--spacing-xs);
+  width: min(var(--ds-canvas-node), 100%);
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  text-align: left;
+  background: var(--colors-surface-card);
+  border: var(--ds-canvas-hairline) solid var(--colors-surface-border);
+  border-left: var(--spacing-xs) solid var(--ds-node-accent, var(--colors-brand-primary));
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+  cursor: pointer;
+  transition: border-color var(--ds-canvas-motion) ease, box-shadow var(--ds-canvas-motion) ease;
+}
+
+.playbook-node:hover { box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow); }
+
+.playbook-node.is-selected {
+  border-color: var(--colors-brand-primary);
+  box-shadow: 0 0 0 var(--spacing-2xs) color-mix(in srgb, var(--colors-brand-primary) 12%, transparent);
+}
+
+.playbook-node:focus-visible { outline: var(--spacing-2xs) solid var(--colors-interaction-focus); outline-offset: var(--spacing-2xs); }
+
+.playbook-node--trigger { --ds-node-accent: var(--colors-brand-primary); }
+.playbook-node--question { --ds-node-accent: var(--colors-accent-indigo-solid); }
+.playbook-node--catalog { --ds-node-accent: var(--colors-accent-green-solid); }
+.playbook-node--notification { --ds-node-accent: var(--colors-accent-orange-solid); }
+.playbook-node--payment { --ds-node-accent: var(--colors-accent-red-solid); }
+.playbook-node--contact { --ds-node-accent: var(--colors-accent-yellow-solid); }
+.playbook-node--wait { --ds-node-accent: var(--colors-accent-amber-solid); }
+.playbook-node--condition { --ds-node-accent: var(--colors-accent-blue-solid); }
+.playbook-node--end { --ds-node-accent: var(--colors-accent-neutral-solid); }
+
+.playbook-node__row {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.playbook-node__label { display: inline-flex; gap: var(--spacing-sm); align-items: center; min-width: 0; color: var(--colors-text-primary); }
+::deep .playbook-node__hint { color: var(--colors-text-subtle); }
+
+.playbook-node__glyph {
+  display: grid;
+  place-items: center;
+  width: var(--ds-canvas-glyph);
+  height: var(--ds-canvas-glyph);
+  color: var(--ds-node-accent);
+  background: color-mix(in srgb, var(--ds-node-accent) 12%, transparent);
+  border-radius: var(--radius-radius-md);
+}
+
+::deep .playbook-node__type { color: var(--colors-text-muted); }
+::deep .playbook-node__remove { color: var(--colors-feedback-destructive-text); }
+
+.playbook-canvas__connector {
+  width: var(--ds-canvas-connector-width);
+  height: var(--ds-canvas-connector);
+  background: var(--colors-surface-border);
+}
+
+.playbook-canvas__add { position: relative; display: grid; justify-items: center; }
+
+.playbook-canvas__picker {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: var(--ds-canvas-picker-layer);
+  display: grid;
+  gap: var(--spacing-2xs);
+  width: var(--ds-canvas-picker);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-popover);
+  border: var(--ds-canvas-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow);
+  transform: translateX(-50%);
+}
+
+.playbook-canvas__picker-glyph {
+  display: grid;
+  place-items: center;
+  width: var(--ds-canvas-glyph);
+  height: var(--ds-canvas-glyph);
+  color: var(--ds-node-accent);
+  background: color-mix(in srgb, var(--ds-node-accent) 12%, transparent);
+  border-radius: var(--radius-radius-md);
+}
+
+.playbook-canvas__picker-glyph--question { --ds-node-accent: var(--colors-accent-indigo-solid); }
+.playbook-canvas__picker-glyph--catalog { --ds-node-accent: var(--colors-accent-green-solid); }
+.playbook-canvas__picker-glyph--notification { --ds-node-accent: var(--colors-accent-orange-solid); }
+.playbook-canvas__picker-glyph--payment { --ds-node-accent: var(--colors-accent-red-solid); }
+.playbook-canvas__picker-glyph--contact { --ds-node-accent: var(--colors-accent-yellow-solid); }
+.playbook-canvas__picker-glyph--wait { --ds-node-accent: var(--colors-accent-amber-solid); }
+.playbook-canvas__picker-glyph--condition { --ds-node-accent: var(--colors-accent-blue-solid); }
+.playbook-canvas__picker-glyph--end { --ds-node-accent: var(--colors-accent-neutral-solid); }

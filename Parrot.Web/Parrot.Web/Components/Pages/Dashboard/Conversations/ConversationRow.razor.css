@@ -1,0 +1,68 @@
+.conversation-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-md);
+  width: 100%;
+  min-height: var(--ds-conversation-row-min);
+  padding: var(--spacing-md);
+  color: var(--colors-text-secondary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+  cursor: pointer;
+}
+
+.conversation-row:hover { background: var(--colors-interaction-hover); }
+
+.conversation-row.is-selected {
+  background: var(--colors-interaction-selected);
+  box-shadow: inset var(--ds-conversation-selected-edge) 0 0 var(--colors-brand-primary);
+}
+
+.conversation-row__copy { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.conversation-row__heading { display: flex; justify-content: space-between; gap: var(--spacing-sm); }
+.conversation-row__heading ::deep strong { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.conversation-row__heading ::deep time { flex: 0 0 auto; color: var(--colors-text-muted); }
+
+::deep .conversation-row__preview {
+  overflow: hidden;
+  color: var(--colors-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-row.has-unread ::deep .conversation-row__preview { color: var(--colors-text-secondary); }
+
+.conversation-row__meta {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  width: fit-content;
+  color: var(--colors-text-subtle);
+}
+
+.conversation-row__meta.state-needs-answer { color: var(--colors-feedback-warning-text); }
+.conversation-row__meta.state-handoff { color: var(--colors-brand-primary); }
+
+::deep .conversation-row__unread {
+  position: absolute;
+  right: var(--spacing-md);
+  bottom: var(--spacing-md);
+  display: grid;
+  place-items: center;
+  min-width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  padding-inline: var(--spacing-xs);
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+}
+
+.conversation-row {
+  /* Missing from the token set: no conversation-row height token. */
+  --ds-conversation-row-min: 108px;
+  /* Missing from the token set: no selected-edge width token. */
+  --ds-conversation-selected-edge: 3px;
+}

@@ -1,0 +1,41 @@
+@namespace Parrot.SharedComponents.Layout
+@inject NavigationManager Nav
+
+@* One row of the account menu. The same row the workspace menu draws, so the
+   two menus at the foot of the rail read as one thing. *@
+
+<button type="button"
+        role="menuitem"
+        class="@ClassName"
+        disabled="@Disabled"
+        @onclick="ActivateAsync">
+    @if (Glyph is not null)
+    {
+        <Icon Name="Glyph.Value" Size="IconSize.Sm" />
+    }
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="user-menu-item__label">@Label</Typography>
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter] public IconName? Glyph { get; set; }
+
+    /// <summary>Where the row goes. Omit it and supply <see cref="OnClick"/> instead.</summary>
+    [Parameter] public string? Href { get; set; }
+
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    /// <summary>Signing out and the like: drawn in the destructive text colour.</summary>
+    [Parameter] public bool Danger { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private string ClassName => Danger ? "user-menu-item is-danger" : "user-menu-item";
+
+    private async Task ActivateAsync()
+    {
+        if (OnClick.HasDelegate) await OnClick.InvokeAsync();
+        if (Href is not null) Nav.NavigateTo(Href);
+    }
+}

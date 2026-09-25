@@ -1,0 +1,35 @@
+@namespace Parrot.SharedComponents.Shared
+
+@* A placeholder for a module that has not been ported yet.
+
+   It exists so the rail can be navigated end to end from the first day, rather
+   than half the items leading nowhere. It names the phase, so anyone clicking
+   around knows whether a screen is missing or merely not due yet. *@
+
+<div class="coming-soon">
+    <EmptyState Glyph="Glyph" Title="@Title" Description="@Description">
+        <Action>
+            <Button Variant="ButtonVariant.Secondary" @onclick="@(() => Nav.NavigateTo("/design-system"))">
+                <IconLeft><Icon Name="IconName.RiBookOpenFill" /></IconLeft>
+                <ChildContent>See the design system</ChildContent>
+            </Button>
+        </Action>
+    </EmptyState>
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired] public int Phase { get; set; }
+
+    [Parameter, EditorRequired] public IconName Glyph { get; set; }
+
+    /// <summary>What this screen will be, so the placeholder is still informative.</summary>
+    [Parameter] public string? Summary { get; set; }
+
+    private string Description =>
+        (Summary is null ? "" : Summary + " ") +
+        $"Being rebuilt in phase {Phase}.";
+}

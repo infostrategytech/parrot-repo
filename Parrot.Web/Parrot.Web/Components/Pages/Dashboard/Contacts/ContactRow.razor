@@ -1,0 +1,66 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+
+@* One customer. The columns are set by the table that contains it; this file
+   styles what sits inside each cell. Mirrors Aurora's ProductRow. *@
+
+<article class="contact-row" role="row" @onclick="OnOpen">
+    <div class="contact-row__name" role="cell">
+        <PetalAvatar Seed="@Contact.Id.ToString()" Initials="@Initials.From(Contact.Name)" Size="AvatarSize.Sm" />
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@Contact.Name</Typography>
+    </div>
+
+    <div class="contact-row__channels" role="cell">
+        @if (Contact.HasWhatsApp)
+        {
+            <span class="contact-row__mark contact-row__mark--whatsapp" title="WhatsApp">
+                <Icon Name="IconName.RiWhatsappFill" Size="IconSize.Sm" Label="WhatsApp" />
+            </span>
+        }
+        @if (Contact.HasInstagram)
+        {
+            <span class="contact-row__mark contact-row__mark--instagram" title="Instagram">
+                <Icon Name="IconName.RiInstagramFill" Size="IconSize.Sm" Label="Instagram" />
+            </span>
+        }
+    </div>
+
+    <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="contact-row__last" role="cell">
+        @Contact.LastInteraction
+    </Typography>
+
+    <div class="contact-row__tags" role="cell">
+        @foreach (var tag in Contact.Tags)
+        {
+            <StatusBadge Tone="StatusTone.Neutral">@tag</StatusBadge>
+        }
+    </div>
+
+    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose Class="contact-row__orders" role="cell">
+        @Contact.OrderCount
+    </Typography>
+
+    <div class="contact-row__stage" role="cell">
+        @if (!string.IsNullOrEmpty(Contact.Stage))
+        {
+            <StatusBadge Tone="@ContactCopy.StageTone(Contact.Stage)">@ContactCopy.Stage(Contact.Stage)</StatusBadge>
+        }
+    </div>
+
+    <div class="contact-row__actions" role="cell">
+        @* A plain control rather than a Button: the table wants a 32px circle
+           that sits inside the row, and none of the Button sizes is that. *@
+        <button type="button"
+                class="contact-row__open"
+                aria-label="@($"View {Contact.Name}")"
+                @onclick="OnOpen"
+                @onclick:stopPropagation="true">
+            <Icon Name="IconName.RiEyeFill" Size="IconSize.Sm" />
+        </button>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
+
+    [Parameter] public EventCallback OnOpen { get; set; }
+}

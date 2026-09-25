@@ -1,0 +1,41 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The Cadence mark: three message bars, each with the square corner of a
+   speech bubble. Two slate bars (the customer) and one terracotta reply (the
+   business) — the geometry is the brand document's, in its 100×100 frame.
+
+   The slate bars take --cadence-bar so they read on dark surfaces; the reply
+   is always terracotta. Decorative unless a Label is given. *@
+
+<svg class="@ClassName"
+     width="@Size"
+     height="@(Tight ? TightHeight : Size)"
+     viewBox="@(Tight ? "14 22 72 56" : "0 0 100 100")"
+     role="@(Label is null ? null : "img")"
+     aria-label="@Label"
+     aria-hidden="@(Label is null ? "true" : null)"
+     focusable="false">
+    <rect x="14" y="22" width="52" height="14" rx="7" style="fill:var(--cadence-bar)"></rect>
+    <rect x="14" y="29" width="7" height="7" style="fill:var(--cadence-bar)"></rect>
+    <rect x="34" y="43" width="52" height="14" rx="7" style="fill:var(--cadence-reply)"></rect>
+    <rect x="79" y="50" width="7" height="7" style="fill:var(--cadence-reply)"></rect>
+    <rect x="14" y="64" width="36" height="14" rx="7" style="fill:var(--cadence-bar)"></rect>
+    <rect x="14" y="71" width="7" height="7" style="fill:var(--cadence-bar)"></rect>
+</svg>
+
+@code {
+    /// <summary>The box the mark is drawn in, in px. The bars fill 72% of it, as in the brand frame.</summary>
+    [Parameter] public int Size { get; set; } = 48;
+
+    /// <summary>Crop the frame to the bars themselves — for a lockup beside a wordmark.</summary>
+    [Parameter] public bool Tight { get; set; }
+
+    /// <summary>What a screen reader should say. Null keeps the mark decorative.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private int TightHeight => (int)Math.Round(Size * 56.0 / 72.0);
+
+    private string ClassName => string.IsNullOrWhiteSpace(Class) ? "cadence-mark" : "cadence-mark " + Class;
+}

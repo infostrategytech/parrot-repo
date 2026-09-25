@@ -1,0 +1,52 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+
+@* The end of both routes. A real message arrived, so this is the only screen
+   in the module allowed to say the channel is connected. *@
+
+<section class="connected channel-@Channel.Id.ToString().ToLowerInvariant()">
+    <span class="connected__mark"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Lg" /></span>
+
+    <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@Channel.Name is connected</Typography>
+
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="connected__lede">
+        @if (Lede is not null)
+        {
+            @Lede
+        }
+        else
+        {
+            <text>Your test message reached Parrot. New messages sent to
+            <strong>@(Channel.AccountName ?? Channel.Name)</strong> will now appear in your inbox.</text>
+        }
+    </Typography>
+
+    @if (Channel.Attention is { } note)
+    {
+        @* Connected, with a caveat — a temporary token that will expire, most
+           often. Worth saying now rather than when it breaks. *@
+        <div class="connected__note">
+            <Icon Name="IconName.RiTimeFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@note</Typography>
+        </div>
+    }
+
+    <div class="connected__actions">
+        <Button @onclick="OnOpenInbox">Open inbox</Button>
+        <Button Variant="ButtonVariant.Secondary" @onclick="OnConnectAnother">Connect another channel</Button>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    /// <summary>
+    /// Parrot only: Instagram and X connect without a message test, so their
+    /// pages say what actually happened instead of the default line.
+    /// </summary>
+    [Parameter] public RenderFragment? Lede { get; set; }
+
+    [Parameter] public EventCallback OnOpenInbox { get; set; }
+
+    [Parameter] public EventCallback OnConnectAnother { get; set; }
+}

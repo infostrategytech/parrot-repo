@@ -1,0 +1,116 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+@using System.Globalization
+@inject AuroraInterop Interop
+
+@* Parrot has no customer API: the only customer context is what the
+   conversation itself carries (name and WhatsApp number). Every Aurora
+   section is drawn; the ones with nothing behind them show Aurora's own
+   empty copy or the "—" placeholder rather than invented values. *@
+<aside class="customer-panel" aria-label="Customer 360">
+    <header class="customer-panel__header">
+        <div>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer 360</Typography>
+            <Typography TextStyle="TextStyle.Small12Regular" As="p">Context for this conversation</Typography>
+        </div>
+        <button type="button" aria-label="Close Customer 360" title="Close Customer 360" @onclick="OnClose">
+            <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
+        </button>
+    </header>
+
+    <section class="customer-profile">
+        <span class="customer-profile__avatar">@Initials.From(Conversation.CustomerName)</span>
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Conversation.CustomerName</Typography>
+        <div>
+            <Icon Name="IconName.RiWhatsappFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">WhatsApp</Typography>
+            <span aria-hidden="true">·</span>
+            <Typography TextStyle="TextStyle.Small12Regular" As="span">@Conversation.Sender</Typography>
+        </div>
+    </section>
+
+    <div class="customer-tabs" role="tablist" aria-label="Customer details">
+        <button type="button" role="tab" class="@(_view == CustomerView.Overview ? "is-active" : null)"
+                aria-selected="@(_view == CustomerView.Overview)" @onclick="() => _view = CustomerView.Overview">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Overview</Typography>
+        </button>
+        <button type="button" role="tab" class="@(_view == CustomerView.Activity ? "is-active" : null)"
+                aria-selected="@(_view == CustomerView.Activity)" @onclick="() => _view = CustomerView.Activity">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Activity</Typography>
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span">0</Typography>
+        </button>
+    </div>
+
+    <div class="customer-panel__scroll">
+        @if (_view == CustomerView.Overview)
+        {
+            <section class="customer-metrics" aria-label="Customer value">
+                <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">—</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Lifetime value</Typography></div>
+                <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">—</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Requests</Typography></div>
+                <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@ConversationCount</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Conversations</Typography></div>
+            </section>
+
+            <CustomerSection Title="Contact">
+                <div class="customer-contact-list">
+                    <button type="button" @onclick='() => CopyAsync("phone", Conversation.Sender)'>
+                        <Icon Name="IconName.RiPhoneFill" Size="IconSize.Sm" />
+                        <span><small>Phone</small><strong>@Conversation.Sender</strong></span>
+                        <Icon Name="@(_copied == "phone" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
+                    </button>
+                </div>
+            </CustomerSection>
+
+            <CustomerSection Title="Connected identities" Count="1">
+                <div class="customer-identities">
+                    <div>
+                        <ChannelGlyph Channel="whatsapp" />
+                        <span>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Conversation.Sender</Typography>
+                            <Typography TextStyle="TextStyle.Small10Regular" As="small">WhatsApp</Typography>
+                        </span>
+                    </div>
+                </div>
+            </CustomerSection>
+
+            <CustomerSection Title="Recent task requests">
+                <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No task requests yet.</Typography>
+            </CustomerSection>
+
+            <CustomerSection Title="Communication consent">
+                <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No consent record yet.</Typography>
+            </CustomerSection>
+        }
+        else
+        {
+            <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiUser3Fill"
+                        Title="No activity yet" Description="Recent activity for this customer appears here." />
+        }
+    </div>
+</aside>
+
+@code {
+    [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
+    /// <summary>Loaded conversations with this WhatsApp number — the one metric Parrot can count.</summary>
+    [Parameter] public int ConversationCount { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string? _loadedId;
+    private string? _copied;
+    private CustomerView _view;
+
+    protected override void OnParametersSet()
+    {
+        if (_loadedId == Conversation.Id) return;
+        _loadedId = Conversation.Id;
+        _view = CustomerView.Overview;
+    }
+
+    private async Task CopyAsync(string field, string value)
+    {
+        await Interop.CopyAsync(value);
+        _copied = field;
+        await Task.Delay(1400);
+        if (_copied == field) _copied = null;
+    }
+
+    private enum CustomerView { Overview, Activity }
+}

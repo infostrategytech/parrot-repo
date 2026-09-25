@@ -1,33 +1,44 @@
-<div class="st-card">
-    <h2 class="st-card-title">Profile Information</h2>
-    <p class="st-card-sub">Update your personal account details.</p>
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@inject AuthState AuthState
 
-    <div class="st-avatar-row">
-        <div class="st-avatar-circle">
-            <img src="assets/images/avatar.svg" alt="Avatar" class="st-avatar-img" />
+@* Who is signed in. Parrot's session carries an email and a user id, so the
+   avatar and the email are real; the name fields wait for a value. *@
+
+<SettingsCard Title="Profile information" Description="Update your personal account details.">
+    <ChildContent>
+        <div class="profile__avatar-row">
+            <PetalAvatar Seed="@(AuthState.CurrentUser?.UserId ?? "user")"
+                         Initials="@Initials.From(AuthState.CurrentUser?.Email)"
+                         Size="AvatarSize.Lg" />
+            <div class="profile__avatar-actions">
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">Upload image</Button>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small">Remove</Button>
+            </div>
+            <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="profile__hint">
+                JPG, GIF or PNG. 1MB max.
+            </Typography>
         </div>
-        <button class="st-upload-btn">Upload image</button>
-        <button class="st-remove-btn">Remove</button>
-        <span class="st-avatar-hint">JPG, GIF or PNG. 1MB max.</span>
-    </div>
 
-    <div class="st-field-row">
-        <div class="st-field">
-            <label class="st-label">First name</label>
-            <input class="st-input" type="text" value="Jon" />
+        <div class="profile__grid">
+            <Input FloatingLabel="First name" @bind-Value="_firstName" maxlength="80" />
+            <Input FloatingLabel="Last name" @bind-Value="_lastName" maxlength="80" />
+            <div class="profile__full">
+                <Input FloatingLabel="Email address" Type="email" @bind-Value="_email" />
+            </div>
         </div>
-        <div class="st-field">
-            <label class="st-label">Last name</label>
-            <input class="st-input" type="text" value="Doe" />
-        </div>
-    </div>
+    </ChildContent>
+    <Footer>
+        <Button>Save</Button>
+    </Footer>
+</SettingsCard>
 
-    <div class="st-field st-field--email">
-        <label class="st-label">Email address</label>
-        <input class="st-input" type="email" value="jon.doe@gmail.com" />
-    </div>
+@code {
+    private string _firstName = string.Empty;
+    private string _lastName = string.Empty;
+    private string _email = string.Empty;
 
-    <div class="st-card-footer">
-        <button class="st-save-btn">Save</button>
-    </div>
-</div>
+    protected override void OnInitialized()
+    {
+        _email = AuthState.CurrentUser?.Email ?? string.Empty;
+    }
+}

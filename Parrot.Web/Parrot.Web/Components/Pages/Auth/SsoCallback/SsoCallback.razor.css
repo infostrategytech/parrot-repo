@@ -1,0 +1,8 @@
+/* While the session is being stored, the thread loader sits above the title
+   at the left edge, where a result's status disc would be. */
+.sso {
+  display: grid;
+  gap: 12px;
+  justify-items: start;
+  min-width: 0;
+}

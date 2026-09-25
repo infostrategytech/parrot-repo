@@ -1,12 +1,35 @@
 @inherits LayoutComponentBase
 
-<div class="auth-layout">
-    <a href="/" class="auth-brand-logo"><img src="assets/images/logo.png" alt="Logo" /></a>
-    <main class="auth-main">
-        <article class="auth-content">
+@* The signed-out stage, as the sign-up design draws it: the brand lockup
+   pinned to the corner, a cool wash in the top-left of a near-white canvas,
+   and two columns centred on the window — the brand's message on the left,
+   the screen's own form on the right.
+
+   This is a brand surface, so it is set in the brand's face (Figtree) and
+   palette rather than the product's tokens; the toast host stays so a page
+   here can still speak. *@
+
+<div class="stage">
+    <a href="/" class="stage__brand" aria-label="OmniAI home">
+        <CadenceMark Size="62" Tight />
+        <span class="stage__wordmark cadence-wordmark">OmniAI</span>
+    </a>
+
+    <main class="stage__main">
+        <section class="stage__message" aria-label="About OmniAI">
+            <h1 class="stage__headline">Keep Customer Conversations Together</h1>
+            <p class="stage__lede">Manage WhatsApp, Instagram and Facebook messages from one shared inbox.</p>
+            <ol class="stage__ticks" aria-hidden="true">
+                <li></li><li></li><li></li><li class="is-active"></li>
+            </ol>
+        </section>
+
+        <section class="stage__panel">
             @Body
-        </article>
+        </section>
     </main>
+
+    <ToastHost />
 </div>
 
 <div id="blazor-error-ui" data-nosnippet>

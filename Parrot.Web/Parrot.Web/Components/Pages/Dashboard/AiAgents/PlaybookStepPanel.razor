@@ -1,40 +1,23 @@
-<div class="pb-panel" @onclick:stopPropagation>
-    <div class="pb-panel-header">
-        <div class="pb-panel-title-row">
-            <span class="pb-panel-title">@GetPanelTitle(Step.Type)</span>
-            @if (IsStepConfigured(Step))
-            {
-                <span class="pb-badge pb-badge--configured">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                    Configured
-                </span>
-            }
-            else
-            {
-                <span class="pb-badge pb-badge--incomplete">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="12" />
-                        <line x1="12" y1="16" x2="12.01" y2="16" />
-                    </svg>
-                    Incomplete
-                </span>
-            }
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+@* The configuration panel for the selected step. The kind-specific body is a
+   child component; the field, row and column styles they share live in this
+   panel's stylesheet and reach them through ::deep. *@
+
+<aside class="step-panel" aria-label="@($"{Title} settings")" @onclick:stopPropagation="true">
+    <header class="step-panel__head">
+        <div class="step-panel__title">
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2">@Title</Typography>
+            <StatusBadge Tone="@(Configured ? StatusTone.Success : StatusTone.Warning)"
+                         Glyph="@(Configured ? IconName.RiCheckFill : IconName.RiErrorWarningFill)">
+                @(Configured ? "Configured" : "Incomplete")
+            </StatusBadge>
         </div>
-        <button class="pb-panel-close" @onclick="() => OnClose.InvokeAsync()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-        </button>
-    </div>
-    <div class="pb-panel-divider"></div>
-    <div class="pb-panel-body">
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Close panel" @onclick="() => OnClose.InvokeAsync()">
+            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+        </Button>
+    </header>
+    <div class="step-panel__body">
         @switch (Step.Type)
         {
             case "AskQuestion":
@@ -63,7 +46,7 @@
                 break;
         }
     </div>
-</div>
+</aside>
 
 @code {
     [Parameter] public PlaybookStep Step { get; set; } = default!;
@@ -72,27 +55,27 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
-    private static string GetPanelTitle(string type) => type switch
+    private string Title => Step.Type switch
     {
-        "SelectFromCatalog" => "Select from Catalog",
-        "SendNotification" => "Send Notification",
-        "CollectPayment" => "Collect Payment",
-        "UpdateContact" => "Update Contact",
+        "SelectFromCatalog" => "Select from catalog",
+        "SendNotification" => "Send notification",
+        "CollectPayment" => "Collect payment",
+        "UpdateContact" => "Update contact",
         "Wait" => "Wait",
         "CheckCondition" => "Check a condition",
-        "EndProcess" => "End Process",
-        _ => "Ask Question"
+        "EndProcess" => "End process",
+        _ => "Ask question"
     };
 
-    private static bool IsStepConfigured(PlaybookStep step) => step.Type switch
+    private bool Configured => Step.Type switch
     {
-        "AskQuestion" => !string.IsNullOrEmpty(step.QuestionText) && !string.IsNullOrEmpty(step.ResponseType),
-        "SelectFromCatalog" => step.SelectedCatalogItems.Count > 0,
-        "SendNotification" => !string.IsNullOrEmpty(step.NotificationName) && !string.IsNullOrEmpty(step.MessageContent),
-        "CollectPayment" => !string.IsNullOrEmpty(step.PaymentProvider),
-        "UpdateContact" => !string.IsNullOrEmpty(step.ContactStage),
-        "Wait" => !string.IsNullOrEmpty(step.WaitDuration),
-        "CheckCondition" => !string.IsNullOrEmpty(step.ConditionField) && !string.IsNullOrEmpty(step.ConditionOperator),
+        "AskQuestion" => !string.IsNullOrEmpty(Step.QuestionText) && !string.IsNullOrEmpty(Step.ResponseType),
+        "SelectFromCatalog" => Step.SelectedCatalogItems.Count > 0,
+        "SendNotification" => !string.IsNullOrEmpty(Step.NotificationName) && !string.IsNullOrEmpty(Step.MessageContent),
+        "CollectPayment" => !string.IsNullOrEmpty(Step.PaymentProvider),
+        "UpdateContact" => !string.IsNullOrEmpty(Step.ContactStage),
+        "Wait" => !string.IsNullOrEmpty(Step.WaitDuration),
+        "CheckCondition" => !string.IsNullOrEmpty(Step.ConditionField) && !string.IsNullOrEmpty(Step.ConditionOperator),
         "EndProcess" => true,
         _ => false
     };

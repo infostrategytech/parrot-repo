@@ -1,0 +1,134 @@
+/* A row: the brand mark, the copy, and the one action. Flex with an explicit
+   order, so nothing depends on grid auto-placement. */
+
+.channel-card {
+  display: flex;
+  gap: var(--ds-channel-gutter);
+  align-items: center;
+  min-height: var(--ds-channel-min);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-channel-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  transition:
+    border-color var(--ds-channel-motion) ease,
+    box-shadow var(--ds-channel-motion) ease;
+}
+
+.channel-card {
+  /* Gaps in the token set: no card-height, control-size, border-width or
+     motion scale. The mark is 48px on a 15px radius, from the design. */
+  --ds-channel-min: 104px;
+  --ds-channel-gutter: 15px;
+  --ds-channel-hairline: 1px;
+  --ds-channel-motion: 140ms;
+  --ds-channel-mark: 48px;
+}
+
+.channel-card:hover {
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+/* The one place in this product where a colour is not ours. These are Meta's
+   brand marks; they do not shift in dark mode and they are not tokenised,
+   which tools/design-tokens/brand-literals.json records. */
+.channel-card__mark {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--ds-channel-mark);
+  height: var(--ds-channel-mark);
+  color: var(--colors-text-inverse);
+  border-radius: var(--radius-radius-xl);
+}
+
+.channel-whatsapp .channel-card__mark { background: #22a968; }
+.channel-instagram .channel-card__mark { background: #c63886; }
+.channel-facebook .channel-card__mark { background: #1877f2; }
+/* X's mark is black in every theme; it is a brand literal like the three above. */
+.channel-x .channel-card__mark { background: #000000; }
+
+/* Parrot's own X mark, drawn at the sprite's large size so the four marks line up. */
+.channel-card__x {
+  width: var(--icon-size-icon-lg);
+  height: var(--icon-size-icon-lg);
+}
+
+.channel-card__copy {
+  display: grid;
+  gap: var(--spacing-xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.channel-card__title {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.channel-card__title ::deep h2 { color: var(--colors-text-primary); }
+
+/* ::deep, because Typography renders the span itself and that element never
+   carries this component's scope attribute — without it the pill loses its
+   padding, its radius and its background, and reads as bare text. */
+::deep .channel-card__status {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-radius-full);
+}
+
+::deep .channel-card__status.is-connected {
+  color: var(--colors-feedback-success-text);
+  background: var(--colors-feedback-success-subtle);
+}
+
+::deep .channel-card__status.is-attention {
+  color: var(--colors-feedback-warning-text);
+  background: var(--colors-feedback-warning-subtle);
+}
+
+::deep .channel-card__status.is-not-connected {
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+}
+
+::deep .channel-card__description { color: var(--colors-text-muted); }
+::deep .channel-card__meta { color: var(--colors-text-subtle); }
+
+.channel-card__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.channel-card__ready {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  min-width: var(--ds-channel-ready);
+  color: var(--colors-feedback-success-text);
+}
+
+.channel-card {
+  /* Matches the width of the Start setup button it replaces, so a connected
+     row does not shift the column. */
+  --ds-channel-ready: 82px;
+}
+
+/* The design-system Secondary button, unmodified — its own height, padding,
+   type, border and hover.
+
+   The single addition is a floor on the width, and it is a layout constraint
+   rather than a restyle: the label changes with the channel's state (Start
+   setup / Continue setup / Fix connection), so without it the action column
+   shifts every time a row changes state. */
+::deep .channel-card__action {
+  min-width: var(--ds-channel-action-width);
+}
+
+.channel-card {
+  /* Gap in the token set: no control-width scale. */
+  --ds-channel-action-width: 112px;
+}

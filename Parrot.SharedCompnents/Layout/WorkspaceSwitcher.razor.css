@@ -1,0 +1,94 @@
+/* No type here. Sizes and weights come from the text styles the markup asks
+   for; this file only arranges and colours. */
+
+.workspace { position: relative; }
+
+.workspace__trigger {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm);
+  text-align: left;
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-muted);
+  border: var(--ds-workspace-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  cursor: pointer;
+}
+
+.workspace {
+  /* Gaps in the token set: no border-width scale and no z-index scale. */
+  --ds-workspace-hairline: 1px;
+  --ds-workspace-layer: 40;
+}
+
+.workspace__trigger:hover { background: var(--colors-interaction-hover); }
+
+.workspace__identity {
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+::deep .workspace__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+::deep .workspace__eyebrow { color: var(--colors-text-muted); }
+
+.workspace__dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-workspace-layer);
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+.workspace__menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-xs));
+  right: 0;
+  left: 0;
+  z-index: calc(var(--ds-workspace-layer) + 1);
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-popover);
+  border: var(--ds-workspace-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+::deep .workspace__menu-label {
+  margin: var(--spacing-none);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-muted);
+}
+
+.workspace__option,
+.workspace__add {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm);
+  color: var(--colors-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.workspace__option:hover,
+.workspace__add:hover { background: var(--colors-interaction-hover); }
+
+.workspace__option.is-active { background: var(--colors-interaction-selected); }
+
+.workspace__add { color: var(--colors-text-link); }

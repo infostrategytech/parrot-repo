@@ -1,0 +1,71 @@
+/* Subtle fill, matching border, readable text — the feedback token families
+   are built as exactly this trio, so all three tones are one rule set with the
+   colour swapped. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.inline-error {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--ds-inline-error-border-width) solid var(--inline-error-border);
+  border-radius: var(--radius-radius-md);
+  background: var(--inline-error-surface);
+  color: var(--inline-error-text);
+}
+
+.inline-error {
+  /* Gap in the token set: no border-width scale. */
+  --ds-inline-error-border-width: 1px;
+}
+
+.inline-error--error {
+  --inline-error-surface: var(--colors-feedback-destructive-subtle);
+  --inline-error-border: var(--colors-feedback-destructive-border);
+  --inline-error-text: var(--colors-feedback-destructive-text);
+}
+
+.inline-error--warning {
+  --inline-error-surface: var(--colors-feedback-warning-subtle);
+  --inline-error-border: var(--colors-feedback-warning-border);
+  --inline-error-text: var(--colors-feedback-warning-text);
+}
+
+.inline-error--info {
+  --inline-error-surface: var(--colors-feedback-info-subtle);
+  --inline-error-border: var(--colors-feedback-info-border);
+  --inline-error-text: var(--colors-feedback-info-text);
+}
+
+.inline-error__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  height: var(--typography-leading-leading-xs);
+}
+
+::deep .inline-error__message { flex: 1; min-width: 0; }
+
+.inline-error__dismiss {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: var(--spacing-none);
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-xs);
+  cursor: pointer;
+  opacity: var(--ds-inline-error-dismiss-rest);
+}
+
+.inline-error__dismiss:hover { opacity: 1; }
+
+.inline-error {
+  /* Gap in the token set: no opacity scale for a de-emphasised control. */
+  --ds-inline-error-dismiss-rest: 0.7;
+}

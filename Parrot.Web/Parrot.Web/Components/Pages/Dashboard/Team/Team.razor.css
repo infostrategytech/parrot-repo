@@ -1,0 +1,85 @@
+/* The team list. Same frame as Aurora's Products page: content capped at
+   1440 and centred, a fluid gutter, a grid table with fixed middle columns. */
+
+.team {
+  padding: var(--spacing-4xl) var(--ds-team-gutter) var(--spacing-5xl);
+}
+
+.team > * {
+  width: min(var(--ds-team-max), 100%);
+  margin-inline: auto;
+}
+
+.team {
+  /* Gaps in the token set: no page-gutter, content-width or border-width
+     scale. The gutter and cap are Aurora's Products page's. */
+  --ds-team-gutter: clamp(28px, 4vw, 66px);
+  --ds-team-max: 1440px;
+  --ds-team-hairline: 1px;
+  --ds-team-measure: 650px;
+  --ds-team-col-name: 220px;
+  --ds-team-col-role: 200px;
+  --ds-team-col-status: 120px;
+  --ds-team-head-min: 45px;
+  --ds-team-row-min: 64px;
+}
+
+.team__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-4xl);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.team__heading { display: grid; gap: var(--spacing-sm); }
+::deep .team__lede { max-width: var(--ds-team-measure); color: var(--colors-text-muted); }
+
+.team__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.team__table-wrap {
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-team-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.team__table-head,
+.team-row {
+  display: grid;
+  grid-template-columns:
+    minmax(var(--ds-team-col-name), 1.4fr)
+    minmax(0, 1.6fr)
+    var(--ds-team-col-role)
+    var(--ds-team-col-status);
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.team__table-head {
+  min-height: var(--ds-team-head-min);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border-bottom: var(--ds-team-hairline) solid var(--colors-surface-border);
+}
+
+.team-row {
+  min-height: var(--ds-team-row-min);
+  background: var(--colors-surface-card);
+}
+
+.team-row + .team-row { border-top: var(--ds-team-hairline) solid var(--colors-surface-border); }
+.team-row:hover { background: var(--colors-interaction-hover); }
+
+.team-row__name { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+.team-row__name ::deep strong { overflow: hidden; color: var(--colors-text-secondary); white-space: nowrap; text-overflow: ellipsis; }
+::deep .team-row__email { overflow: hidden; color: var(--colors-text-muted); white-space: nowrap; text-overflow: ellipsis; }
+.team-row__role,
+.team-row__status { display: flex; }

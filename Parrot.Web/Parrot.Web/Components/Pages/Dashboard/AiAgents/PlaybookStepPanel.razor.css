@@ -1,0 +1,258 @@
+/* The step panel: a card docked beside the canvas, header and scrolling body.
+   The kind panels inside it share one vocabulary — .step-field, .step-two-col,
+   .step-row, .step-hint, .step-note, .step-chips — declared here with ::deep
+   so eight small components do not each carry a copy. */
+
+.step-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 0 0 var(--ds-step-panel-width);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-step-panel-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.step-panel {
+  /* Gaps in the token set: no panel-width or border-width scale. */
+  --ds-step-panel-width: 400px;
+  --ds-step-panel-hairline: 1px;
+  --ds-step-panel-toolbar-btn: 28px;
+}
+
+.step-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: var(--ds-step-panel-hairline) solid var(--colors-surface-border);
+}
+
+.step-panel__title { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+.step-panel__title ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+.step-panel__body {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-lg);
+  min-height: 0;
+  padding: var(--spacing-xl);
+  overflow-y: auto;
+}
+
+/* ── Shared field vocabulary ─────────────────────────────────────────────── */
+
+.step-panel__body ::deep .step-field { display: grid; gap: var(--spacing-sm); min-width: 0; }
+.step-panel__body ::deep .step-field > .step-label { color: var(--colors-text-secondary); }
+.step-panel__body ::deep .step-field > .step-label em { color: var(--colors-text-subtle); font-style: normal; }
+.step-panel__body ::deep .step-hint { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.step-panel__body ::deep .step-hint--warn { color: var(--colors-feedback-warning-text); }
+
+.step-panel__body ::deep .step-two-col {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-md);
+}
+
+.step-panel__body ::deep .step-divider { height: var(--ds-step-panel-hairline); background: var(--colors-surface-border); }
+
+.step-panel__body ::deep .step-row {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.step-panel__body ::deep .step-row-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.step-panel__body ::deep .step-row-text strong { color: var(--colors-text-primary); }
+.step-panel__body ::deep .step-row-text small { color: var(--colors-text-muted); }
+
+.step-panel__body ::deep .step-field textarea {
+  width: 100%;
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-step-panel-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-md);
+  resize: vertical;
+}
+
+.step-panel__body ::deep .step-field textarea:focus { border-color: var(--colors-brand-primary); outline: 0; }
+
+.step-panel__body ::deep .step-note {
+  display: grid;
+  grid-template-columns: var(--spacing-xl) minmax(0, 1fr);
+  gap: var(--spacing-sm);
+  align-items: start;
+  padding: var(--spacing-md);
+  color: var(--colors-feedback-warning-text);
+  background: var(--colors-feedback-warning-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+
+.step-panel__body ::deep .step-note p { margin: var(--spacing-none); color: var(--colors-text-secondary); }
+
+/* Removable tags (catalog picks, trigger phrases). */
+.step-panel__body ::deep .step-chips { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+
+.step-panel__body ::deep .step-chip {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-brand-primary);
+  background: var(--colors-interaction-selected);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.step-panel__body ::deep .step-chip:hover { background: var(--colors-accent-brand-muted); }
+
+/* A grouped option block (choice options in Ask question). */
+.step-panel__body ::deep .step-block {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.step-panel__body ::deep .step-block-head { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-sm); }
+.step-panel__body ::deep .step-block-head .ds-overline { color: var(--colors-text-muted); }
+.step-panel__body ::deep .step-block-remove { color: var(--colors-feedback-destructive-text); }
+
+/* A segmented pair (amount source). */
+.step-panel__body ::deep .step-segments {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-xs);
+  background: var(--colors-accent-neutral-border);
+  border-radius: var(--radius-radius-full);
+}
+
+.step-panel__body ::deep .step-segment {
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.step-panel__body ::deep .step-segment.is-active {
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
+}
+
+/* The notification editor: a toolbar over a textarea, and dynamic-data chips. */
+.step-panel__body ::deep .step-editor {
+  overflow: hidden;
+  border: var(--ds-step-panel-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-md);
+}
+
+.step-panel__body ::deep .step-editor:focus-within { border-color: var(--colors-brand-primary); }
+
+.step-panel__body ::deep .step-toolbar {
+  display: flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: var(--colors-surface-muted);
+  border-bottom: var(--ds-step-panel-hairline) solid var(--colors-surface-border);
+}
+
+.step-panel__body ::deep .step-tool {
+  display: grid;
+  place-items: center;
+  width: var(--ds-step-panel-toolbar-btn);
+  height: var(--ds-step-panel-toolbar-btn);
+  color: var(--colors-text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-sm);
+  cursor: pointer;
+}
+
+.step-panel__body ::deep .step-tool:hover { background: var(--colors-interaction-hover); }
+.step-panel__body ::deep .step-tool--italic { font-style: italic; }
+.step-panel__body ::deep .step-tool--underline { text-decoration: underline; }
+.step-panel__body ::deep .step-tool--strike { text-decoration: line-through; }
+.step-panel__body ::deep .step-tool-sep { width: var(--ds-step-panel-hairline); height: var(--spacing-lg); margin: var(--spacing-none) var(--spacing-xs); background: var(--colors-surface-border); }
+
+.step-panel__body ::deep .step-editor textarea {
+  width: 100%;
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: 0;
+  outline: 0;
+  resize: vertical;
+}
+
+.step-panel__body ::deep .step-data { display: grid; gap: var(--spacing-md); }
+.step-panel__body ::deep .step-data-group { display: grid; gap: var(--spacing-sm); }
+.step-panel__body ::deep .step-data-group .ds-overline { color: var(--colors-text-subtle); }
+
+.step-panel__body ::deep .step-data-chip {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border: var(--ds-step-panel-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.step-panel__body ::deep .step-data-chip:hover { border-color: var(--colors-brand-primary); color: var(--colors-brand-primary); }
+
+.step-panel__body ::deep .step-preview {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.step-panel__body ::deep .step-preview-bubble {
+  justify-self: start;
+  max-width: 88%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  white-space: pre-wrap;
+  background: var(--colors-surface-card);
+  border: var(--ds-step-panel-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xs) var(--radius-radius-xl) var(--radius-radius-xl) var(--radius-radius-xl);
+}
+
+/* Condition paths. */
+.step-panel__body ::deep .step-path {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--ds-step-panel-hairline) solid var(--colors-surface-border);
+  border-left: var(--spacing-xs) solid var(--ds-path-accent);
+  border-radius: var(--radius-radius-lg);
+}
+
+.step-panel__body ::deep .step-path--yes { --ds-path-accent: var(--colors-feedback-success); }
+.step-panel__body ::deep .step-path--no { --ds-path-accent: var(--colors-feedback-destructive); }
+.step-panel__body ::deep .step-path-head { display: flex; gap: var(--spacing-sm); align-items: center; color: var(--ds-path-accent); }
+
+/* The catalog list. */
+.step-panel__body ::deep .step-catalog-list {
+  display: grid;
+  gap: var(--spacing-2xs);
+  max-height: var(--ds-step-catalog-max);
+  padding: var(--spacing-xs);
+  overflow-y: auto;
+  border: var(--ds-step-panel-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+
+.step-panel { --ds-step-catalog-max: 220px; }

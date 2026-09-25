@@ -1,0 +1,3 @@
+Figtree (Erik Kennedy) and Instrument Serif (Rodrigo Fuenzalida, Jordan Egstad) are
+licensed under the SIL Open Font License 1.1 — https://openfontlicense.org.
+Subsets taken from the Cadence brand document (Google Fonts builds).

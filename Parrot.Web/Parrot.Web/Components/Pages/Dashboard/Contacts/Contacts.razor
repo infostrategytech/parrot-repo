@@ -1,219 +1,142 @@
 @page "/dashboard/contacts"
 @layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Contacts
 @using Parrot.Web.Components.Pages.Dashboard.Contacts
 
-<div class="ct-toolbar">
-    <div class="ct-search-wrap">
-        <svg class="ct-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input class="ct-search" placeholder="search by name, phone, username or tag..." @bind="_search"
-               @bind:event="oninput" />
-    </div>
-    <div class="ct-toolbar-right">
-        <div class="ct-dropdown-wrap" @onclick:stopPropagation>
-            <button class="ct-filter-btn" @onclick="OpenStageDropdown">
-                <span class="ct-filter-label">Status:</span>
-                <span class="ct-filter-value">@(_stageFilter == "" ? "All stages" : _stageFilter == "Vip" ? "VIP" :
-                                        _stageFilter)</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round"
-                         class="ct-chevron @(_openDropdown == "stage" ? "ct-chevron--open" : "")">
-                        <path d="M6 9l6 6 6-6" />
-                    </svg>
-                </button>
-                @if (_openDropdown == "stage")
-                {
-                    <div class="ct-dropdown-menu">
-                        @foreach (var opt in _stageOptions)
-                        {
-                            var val = opt.Value;
-                            <button class="ct-dropdown-item @((_stageFilter == val) ? "ct-dropdown-item--active" : "")"
-                                    @onclick="() => SelectStage(val)">
-                                @opt.Label
-                            </button>
-                        }
-                    </div>
-                }
-            </div>
-            <div class="ct-dropdown-wrap" @onclick:stopPropagation>
-                <button class="ct-filter-btn" @onclick="OpenChannelDropdown">
-                    <span class="ct-filter-label">Channels:</span>
-                    <span class="ct-filter-value">@(_channelFilter == "" ? "All channels" : _channelFilter == "whatsapp" ?
-                           "WhatsApp" : "Instagram")</span>
-                        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round"
-                             class="ct-chevron @(_openDropdown == "channel" ? "ct-chevron--open" : "")">
-                            <path d="M6 9l6 6 6-6" />
-                        </svg>
-                    </button>
-                    @if (_openDropdown == "channel")
-                    {
-                        <div class="ct-dropdown-menu">
-                            @foreach (var opt in _channelOptions)
-                            {
-                                var val = opt.Value;
-                                <button class="ct-dropdown-item @((_channelFilter == val) ? "ct-dropdown-item--active" : "")"
-                                        @onclick="() => SelectChannel(val)">
-                                    @opt.Label
-                                </button>
-                            }
-                        </div>
-                    }
-                </div>
-                <button class="ct-btn ct-btn--ghost" @onclick="() => _showImport = true">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="17 8 12 3 7 8" />
-                        <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                    Import
-                </button>
-                <button class="ct-btn ct-btn--primary" @onclick="() => _showAdd = true">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="16" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
-                    </svg>
-                    Add contact
-                </button>
-            </div>
+<PageTitle>Customers · OmniAI</PageTitle>
+
+@* The customer list. Layout follows Aurora's Products page: content capped
+   and centred, a toolbar of tabs-free filters beside a search box, and a
+   grid table whose middle columns are fixed so every row lines up. *@
+
+<div class="contacts">
+    <header class="contacts__header">
+        <div class="contacts__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Customers</Typography>
+            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="contacts__lede">
+                Everyone who has messaged you, with the channels, tags and task requests behind each name.
+            </Typography>
         </div>
 
-        <div class="ct-table-wrap">
-            <table class="ct-table">
-                <thead>
-                    <tr>
-                        <th>Name</th>
-                        <th>Channels</th>
-                        <th>Last Interaction</th>
-                        <th>Tags</th>
-                        <th>Orders</th>
-                        <th>Stages</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
+        <div class="contacts__actions">
+            <Button Variant="ButtonVariant.Secondary" @onclick="() => _showImport = true">
+                <IconLeft><Icon Name="IconName.RiUploadCloud2Fill" /></IconLeft>
+                <ChildContent>Import CSV</ChildContent>
+            </Button>
+            <Button @onclick="() => _showAdd = true">
+                <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                <ChildContent>Add contact</ChildContent>
+            </Button>
+        </div>
+    </header>
+
+    <section class="contacts__controls">
+        <div class="contacts__search">
+            <Icon Name="IconName.RiSearch2Fill" Size="IconSize.Sm" />
+            <input class="@TextStyle.BodySmallRegular.ToClassName()"
+                   type="search"
+                   placeholder="Search by name, phone, username or tag"
+                   aria-label="Search customers"
+                   value="@_search"
+                   @oninput="OnSearchInput" />
+        </div>
+
+        <div class="contacts__controls-right">
+            <FilterPopover Label="@StageLabel"
+                           Title="Stage"
+                           Subtitle="Filter by where each customer is"
+                           Open='@(_openDropdown == "stage")'
+                           OpenChanged="@(open => _openDropdown = open ? "stage" : null)">
+                @foreach (var opt in _stageOptions)
+                {
+                    var val = opt.Value;
+                    <PopoverOption Label="@opt.Label"
+                                   Active="@(_stageFilter == val)"
+                                   OnSelect="() => SelectStage(val)" />
+                }
+            </FilterPopover>
+
+            <FilterPopover Label="@ChannelLabel"
+                           Title="Channels"
+                           Subtitle="Filter by where they message you"
+                           Open='@(_openDropdown == "channel")'
+                           OpenChanged="@(open => _openDropdown = open ? "channel" : null)">
+                @foreach (var opt in _channelOptions)
+                {
+                    var val = opt.Value;
+                    <PopoverOption Label="@opt.Label"
+                                   Active="@(_channelFilter == val)"
+                                   OnSelect="() => SelectChannel(val)" />
+                }
+            </FilterPopover>
+        </div>
+    </section>
+
+    @if (TotalCount == 0)
+    {
+        <EmptyState Glyph="IconName.RiSearch2Fill"
+                    Title="No matching customers"
+                    Description="Try a different search or clear one of the filters.">
+            <Action>
+                <Button Variant="ButtonVariant.Secondary" @onclick="ClearFilters">Clear filters</Button>
+            </Action>
+        </EmptyState>
+    }
+    else
+    {
+        <section class="contacts__table-wrap">
+            <div class="contacts__table" role="table" aria-label="Customers">
+                <div class="contacts__table-head" role="row">
+                    @foreach (var column in Columns)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Semibold"
+                                    As="span"
+                                    Class="ds-overline"
+                                    role="columnheader">@column</Typography>
+                    }
+                    <span role="columnheader" aria-label="Actions"></span>
+                </div>
+
+                <div class="contacts__table-body">
                     @foreach (var contact in PagedContacts)
                     {
-                        <tr class="ct-tr" @onclick="() => OpenDetail(contact)">
-                            <td class="ct-td ct-td--name">
-                                <div class="ct-name-cell">
-                                    @if (!string.IsNullOrEmpty(contact.AvatarUrl))
-                                    {
-                                        <img class="ct-avatar" src="@contact.AvatarUrl" alt="@contact.Name" />
-                                    }
-                                    else
-                                    {
-                                        <div class="ct-avatar ct-avatar--placeholder">@contact.Name[0]</div>
-                                    }
-                                    <span class="ct-name">@contact.Name</span>
-                                </div>
-                            </td>
-                            <td class="ct-td">
-                                <div class="ct-channels">
-                                    @if (contact.HasWhatsApp)
-                                    {
-                                        <img src="assets/images/icons/whatsapp.png" alt="WhatsApp" width="20" height="20"
-                                             class="ct-channel-icon" />
-                                    }
-                                    @if (contact.HasInstagram)
-                                    {
-                                        <img src="assets/images/icons/instagram.png" alt="Instagram" width="20" height="20"
-                                             class="ct-channel-icon" />
-                                    }
-                                </div>
-                            </td>
-                            <td class="ct-td ct-td--muted">@contact.LastInteraction</td>
-                            <td class="ct-td">
-                                <div class="ct-tags">
-                                    @foreach (var tag in contact.Tags)
-                                    {
-                                        <span class="ct-tag">@tag</span>
-                                    }
-                                </div>
-                            </td>
-                            <td class="ct-td ct-td--muted">@contact.OrderCount</td>
-                            <td class="ct-td">
-                                @if (!string.IsNullOrEmpty(contact.Stage))
-                                {
-                                    <span class="ct-stage ct-stage--@contact.Stage.ToLower().Replace(" ", "")">@contact.Stage</span>
-                                }
-                            </td>
-                            <td class="ct-td ct-td--actions" @onclick:stopPropagation>
-                                <div class="ct-action-wrap">
-                                    <button class="ct-action-btn" @onclick="() => ToggleMenu(contact.Id)">
-                                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                                            <circle cx="12" cy="5" r="1.5" />
-                                            <circle cx="12" cy="12" r="1.5" />
-                                            <circle cx="12" cy="19" r="1.5" />
-                                        </svg>
-                                    </button>
-                                    @if (_openMenuId == contact.Id)
-                                    {
-                                        <div class="ct-action-menu">
-                                            <button class="ct-action-item" @onclick="() => OpenDetail(contact)">
-                                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                                    <circle cx="12" cy="12" r="3" />
-                                                </svg>
-                                                View details
-                                            </button>
-                                        </div>
-                                    }
-                                </div>
-                            </td>
-                        </tr>
+                        <ContactRow Contact="contact" OnOpen="() => OpenDetail(contact)" />
                     }
-                </tbody>
-            </table>
-
-            <div class="ct-pagination">
-                <span class="ct-page-info">Showing @PageStart–@PageEnd of @TotalCount items</span>
-                <div class="ct-page-controls">
-                    <button class="ct-page-btn" disabled="@(_page == 1)" @onclick="() => _page--">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M15 18l-6-6 6-6" />
-                        </svg>
-                    </button>
-                    @foreach (var p in VisiblePages)
-                    {
-                        @if (p == -1)
-                        {
-                            <span class="ct-page-dots">…</span>
-                        }
-                        else
-                        {
-                            var pg = p;
-                            <button class="ct-page-btn @(pg == _page ? "ct-page-btn--active" : "")"
-                                    @onclick="() => _page = pg">@pg</button>
-                        }
-                    }
-                    <button class="ct-page-btn" disabled="@(_page == TotalPages)" @onclick="() => _page++">
-                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M9 18l6-6-6-6" />
-                        </svg>
-                    </button>
                 </div>
             </div>
-        </div>
+
+            <footer class="contacts__pagination">
+                <Typography TextStyle="TextStyle.Small12Regular" As="span">
+                    Showing @PageStart–@PageEnd of @TotalCount
+                </Typography>
+                <div class="contacts__pagination-controls">
+                    <Button Variant="ButtonVariant.Secondary"
+                            Size="ButtonSize.Small"
+                            disabled="@(CurrentPage == 1)"
+                            @onclick="() => _page = Math.Max(1, CurrentPage - 1)">Previous</Button>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="span">
+                        Page @CurrentPage of @TotalPages
+                    </Typography>
+                    <Button Variant="ButtonVariant.Secondary"
+                            Size="ButtonSize.Small"
+                            disabled="@(CurrentPage == TotalPages)"
+                            @onclick="() => _page = Math.Min(TotalPages, CurrentPage + 1)">Next</Button>
+                </div>
+            </footer>
+        </section>
+    }
+</div>
 
 <AddContactModal Visible="_showAdd" OnCancel="CloseModals" OnSave="HandleAddContact" />
 <ImportContactModal Visible="_showImport" OnCancel="CloseModals" />
 <ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" />
 
 @code {
+    private static readonly string[] Columns = ["Name", "Channels", "Last interaction", "Tags", "Orders", "Stage"];
+
     private bool _showAdd;
     private bool _showImport;
     private Contact? _selectedContact;
-    private Guid? _openMenuId;
     private string _search = string.Empty;
     private string _stageFilter = string.Empty;
     private string _channelFilter = string.Empty;
@@ -239,11 +162,25 @@
         new("instagram", "Instagram"),
     };
 
-    private void ToggleDropdown(string name) => _openDropdown = _openDropdown == name ? null : name;
-    private void OpenStageDropdown() => ToggleDropdown("stage");
-    private void OpenChannelDropdown() => ToggleDropdown("channel");
+    private string StageLabel => _stageOptions.FirstOrDefault(o => o.Value == _stageFilter)?.Label ?? "All stages";
+    private string ChannelLabel => _channelOptions.FirstOrDefault(o => o.Value == _channelFilter)?.Label ?? "All channels";
+
     private void SelectStage(string val) { _stageFilter = val; _openDropdown = null; _page = 1; }
     private void SelectChannel(string val) { _channelFilter = val; _openDropdown = null; _page = 1; }
+
+    private void OnSearchInput(ChangeEventArgs args)
+    {
+        _search = args.Value?.ToString() ?? string.Empty;
+        _page = 1;
+    }
+
+    private void ClearFilters()
+    {
+        _search = string.Empty;
+        _stageFilter = string.Empty;
+        _channelFilter = string.Empty;
+        _page = 1;
+    }
 
     private List<Contact> _contacts = new()
     {
@@ -297,27 +234,12 @@ LastInteractionChannel = "instagram", Tags = new(){"VIP","Frequent buyer"}, Orde
 
     private int TotalCount => FilteredContacts.Count;
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)_pageSize));
-    private int PageStart => TotalCount == 0 ? 0 : (_page - 1) * _pageSize + 1;
-    private int PageEnd => Math.Min(_page * _pageSize, TotalCount);
-    private IEnumerable<Contact> PagedContacts => FilteredContacts.Skip((_page - 1) * _pageSize).Take(_pageSize);
+    private int CurrentPage => Math.Min(_page, TotalPages);
+    private int PageStart => TotalCount == 0 ? 0 : (CurrentPage - 1) * _pageSize + 1;
+    private int PageEnd => Math.Min(CurrentPage * _pageSize, TotalCount);
+    private IEnumerable<Contact> PagedContacts => FilteredContacts.Skip((CurrentPage - 1) * _pageSize).Take(_pageSize);
 
-    private List<int> VisiblePages
-    {
-        get
-        {
-            var pages = new List<int>();
-            if (TotalPages <= 7) { for (int i = 1; i <= TotalPages; i++) pages.Add(i); return pages; }
-            pages.Add(1);
-            if (_page > 3) pages.Add(-1);
-            for (int i = Math.Max(2, _page - 1); i <= Math.Min(TotalPages - 1, _page + 1); i++) pages.Add(i);
-            if (_page < TotalPages - 2) pages.Add(-1);
-            pages.Add(TotalPages);
-            return pages;
-        }
-    }
-
-    private void ToggleMenu(Guid id) => _openMenuId = _openMenuId == id ? null : id;
-    private void OpenDetail(Contact c) { _selectedContact = c; _openMenuId = null; }
+    private void OpenDetail(Contact c) => _selectedContact = c;
     private void CloseDetail() => _selectedContact = null;
     private void CloseModals() { _showAdd = false; _showImport = false; }
 
@@ -330,4 +252,3 @@ LastInteractionChannel = "instagram", Tags = new(){"VIP","Frequent buyer"}, Orde
         CloseModals();
     }
 }
-

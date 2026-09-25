@@ -1,0 +1,44 @@
+.popover-option {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  color: var(--colors-text-primary);
+  text-align: left;
+  cursor: pointer;
+}
+
+.popover-option:hover { background: var(--colors-interaction-hover); }
+
+.popover-option__leading {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
+  color: var(--colors-text-subtle);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+}
+
+.popover-option.is-active {
+  background: var(--colors-interaction-selected);
+  color: var(--colors-interaction-selected-foreground);
+}
+
+.popover-option__text {
+  display: grid;
+  gap: var(--spacing-2xs);
+  flex: 1;
+  min-width: 0;
+}
+
+.popover-option__text ::deep small { color: var(--colors-text-muted); }
+
+/* The tick inherits the row's colour, so a selected row keeps it legible
+   against the selected fill without a second rule. */
+.popover-option.is-active .popover-option__text ::deep small { color: inherit; }

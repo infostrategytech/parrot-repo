@@ -1,114 +1,49 @@
-.ob-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 200;
-    animation: ob-fade-in 0.2s ease;
+/* Two doors inside the dialog, drawn as Aurora's editor kind cards. */
+
+.onboarding__options {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-lg);
 }
 
-@keyframes ob-fade-in {
-    from { opacity: 0; }
-    to   { opacity: 1; }
+.onboarding__option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  width: 100%;
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
+  text-align: left;
+  background: var(--colors-surface-card);
+  border: var(--ds-onboarding-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  cursor: pointer;
 }
 
-.ob-modal {
-    background: #ffffff;
-    border-radius: 15px;
-    padding: 2.5rem 2rem 2rem;
-    width: 100%;
-    max-width: 500px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.18);
-    animation: ob-slide-in 0.22s ease;
+.onboarding__options {
+  /* Gap in the token set: no border-width scale. */
+  --ds-onboarding-hairline: 1px;
 }
 
-@keyframes ob-slide-in {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
+.onboarding__option:hover {
+  border-color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
 }
 
-/* .ob-owl {
-    width: 90px;
-    height: 90px;
-    object-fit: contain;
-    margin-bottom: 1.25rem;
-} */
+.onboarding__option > ::deep svg:last-child { color: var(--colors-text-subtle); }
 
-.ob-title {
-    font-size: 1.375rem;
-    font-weight: 700;
-    color: #1F2937;
-    text-align: center;
-    margin: 0 0 0.5rem;
+.onboarding__option-icon {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-md);
 }
 
-.ob-subtitle {
-    font-size: 0.875rem;
-    color: #6B7280;
-    text-align: center;
-    margin: 0 0 1.5rem;
-    line-height: 1.55;
-}
+.onboarding__option-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.onboarding__option-text ::deep small { color: var(--colors-text-muted); }
 
-.ob-btn {
-    width: 100%;
-    padding: 0.875rem;
-    border-radius: 0.625rem;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    text-align: center;
-    text-decoration: none;
-    display: block;
-    cursor: pointer;
-    transition: background-color 0.15s ease, border-color 0.15s ease;
-    box-sizing: border-box;
-}
-
-.ob-btn--primary {
-    background-color: #53279E;
-    color: #ffffff;
-    border: none;
-    margin-bottom: 0.75rem;
-}
-
-.ob-btn--primary:hover {
-    background-color: #53279E;
-    color: #ffffff;
-}
-
-.ob-btn--secondary {
-    background-color: #ffffff;
-    color: #374151;
-    border: 1.5px solid #e5e7eb;
-    margin-bottom: 1.25rem;
-}
-
-.ob-btn--secondary:hover {
-    border-color: #53279E;
-    color: #53279E;
-}
-
-.ob-skip {
-    font-size: 0.8125rem;
-    color: #9CA3AF;
-    text-align: center;
-    margin: 0;
-}
-
-.ob-skip a {
-    color: #53279E;
-    font-weight: 500;
-    text-decoration: none;
-}
-
-.ob-skip a:hover {
-    text-decoration: underline;
-}
+::deep .onboarding__skip { margin-top: var(--spacing-lg); color: var(--colors-text-subtle); }

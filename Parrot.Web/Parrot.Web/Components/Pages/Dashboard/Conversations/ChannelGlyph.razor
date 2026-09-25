@@ -1,0 +1,30 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+<span class="channel-glyph channel-glyph--@Channel.ToLowerInvariant()"
+      title="@ChannelLabel"
+      aria-label="@ChannelLabel">
+    <Icon Name="Glyph" Size="IconSize.Sm" />
+</span>
+
+@code {
+    /// <summary>Parrot's conversations are WhatsApp only; the parameter keeps Aurora's shape.</summary>
+    [Parameter] public string Channel { get; set; } = "whatsapp";
+
+    private string ChannelLabel => Channel.ToLowerInvariant() switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Facebook",
+        "email" => "Email",
+        "phone" => "Phone",
+        _ => "Web"
+    };
+
+    private IconName Glyph => Channel.ToLowerInvariant() switch
+    {
+        "whatsapp" => IconName.RiWhatsappFill,
+        "instagram" => IconName.RiInstagramFill,
+        "facebook" => IconName.RiFacebookCircleFill,
+        _ => IconName.RiChat3Fill
+    };
+}

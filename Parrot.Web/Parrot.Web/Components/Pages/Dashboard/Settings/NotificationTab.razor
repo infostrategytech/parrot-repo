@@ -1,46 +1,45 @@
-<div class="st-notifications">
-    <div class="st-card">
-        <h2 class="st-card-title">Email Notifications</h2>
-        <p class="st-card-sub">Choose which updates should be sent to your email.</p>
-        <div class="st-notif-list">
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+
+@* Which updates reach the inbox and which appear in the product. Each row
+   is Aurora's Toggle with its label and description. *@
+
+<SettingsCard Title="Email notifications" Description="Choose which updates should be sent to your email.">
+    <ChildContent>
+        <div class="notifications__list">
             @foreach (var item in _emailNotifs)
             {
-                <div class="st-notif-row">
-                    <div>
-                        <div class="st-notif-label">@item.Label</div>
-                        <div class="st-notif-sub">@item.Sub</div>
-                    </div>
-                    <button class="st-toggle @(item.Enabled ? "st-toggle--on" : "")"
-                            @onclick="() => item.Enabled = !item.Enabled"></button>
+                <div class="notifications__row">
+                    <Toggle Checked="@item.Enabled"
+                            CheckedChanged="@(value => item.Enabled = value)"
+                            Label="@item.Label"
+                            Description="@item.Sub" />
                 </div>
             }
         </div>
-        <div class="st-card-footer">
-            <button class="st-save-btn">Save preference</button>
-        </div>
-    </div>
+    </ChildContent>
+    <Footer>
+        <Button>Save preference</Button>
+    </Footer>
+</SettingsCard>
 
-    <div class="st-card">
-        <h2 class="st-card-title">In-App Alerts</h2>
-        <p class="st-card-sub">Control alerts that appear inside your dashboard.</p>
-        <div class="st-notif-list">
+<SettingsCard Title="In-app alerts" Description="Control alerts that appear inside your dashboard.">
+    <ChildContent>
+        <div class="notifications__list">
             @foreach (var item in _inAppNotifs)
             {
-                <div class="st-notif-row">
-                    <div>
-                        <div class="st-notif-label">@item.Label</div>
-                        <div class="st-notif-sub">@item.Sub</div>
-                    </div>
-                    <button class="st-toggle @(item.Enabled ? "st-toggle--on" : "")"
-                            @onclick="() => item.Enabled = !item.Enabled"></button>
+                <div class="notifications__row">
+                    <Toggle Checked="@item.Enabled"
+                            CheckedChanged="@(value => item.Enabled = value)"
+                            Label="@item.Label"
+                            Description="@item.Sub" />
                 </div>
             }
         </div>
-        <div class="st-card-footer">
-            <button class="st-save-btn">Save preference</button>
-        </div>
-    </div>
-</div>
+    </ChildContent>
+    <Footer>
+        <Button>Save preference</Button>
+    </Footer>
+</SettingsCard>
 
 @code {
     class NotifItem

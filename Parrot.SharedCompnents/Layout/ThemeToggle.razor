@@ -1,0 +1,62 @@
+@namespace Parrot.SharedComponents.Layout
+@using Parrot.SharedComponents.Services
+@inject AuroraInterop Interop
+
+@* Light and dark, as a real control rather than the floating dev overlay React
+   shipped. Two changes from that one:
+
+   Its third option, "Original", is gone. It existed to compare against the
+   pre-Aurora design while styles.css was still in the tree, and that file is
+   not coming across.
+
+   It is styled with tokens rather than inline styles. React wrote it inline on
+   purpose — "so the overlay it is switching can never restyle the switch" —
+   and that reasoning dies with aurora-theme.css. Nine raw values went with it. *@
+
+<div class="theme-toggle" role="group" aria-label="Colour theme">
+    @foreach (var option in Options)
+    {
+        <button type="button"
+                class="@(option.Id == _theme ? "theme-toggle__option is-active" : "theme-toggle__option")"
+                aria-pressed="@((option.Id == _theme).ToString().ToLowerInvariant())"
+                title="@option.Label"
+                @onclick="() => ApplyAsync(option.Id)">
+            <Icon Name="option.Glyph" Label="@option.Label" />
+        </button>
+    }
+</div>
+
+@code {
+    private const string StorageKey = "aurora-theme-preview";
+
+    private sealed record ThemeOption(string Id, string Label, IconName Glyph);
+
+    private static readonly ThemeOption[] Options =
+    [
+        new("aurora-light", "Light", IconName.RiSparklingFill),
+        new("aurora-dark", "Dark", IconName.RiLock2Fill)
+    ];
+
+    private string _theme = "aurora-light";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // index.html already set the attribute before first paint, so read it
+        // back rather than reading storage again and risking a flicker.
+        var current = await Interop.GetThemeAsync();
+        if (!string.IsNullOrEmpty(current) && current != _theme)
+        {
+            _theme = current;
+            StateHasChanged();
+        }
+    }
+
+    private async Task ApplyAsync(string id)
+    {
+        _theme = id;
+        await Interop.SetThemeAsync(id);
+        await Interop.WriteStorageAsync(StorageKey, id);
+    }
+}

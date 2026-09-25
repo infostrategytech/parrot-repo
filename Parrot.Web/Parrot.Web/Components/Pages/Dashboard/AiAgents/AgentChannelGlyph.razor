@@ -1,0 +1,30 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+@* Aurora's ChannelGlyph, keyed by Parrot's channel key string ("whatsapp",
+   "instagram", "facebook") rather than the conversations enum. *@
+
+<span class="channel-glyph channel-glyph--@Key.ToLowerInvariant()"
+      title="@ChannelLabel"
+      aria-label="@ChannelLabel">
+    <Icon Name="Glyph" Size="IconSize.Sm" />
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Key { get; set; } = string.Empty;
+
+    private string ChannelLabel => Key.ToLowerInvariant() switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Facebook",
+        _ => "Web"
+    };
+
+    private IconName Glyph => Key.ToLowerInvariant() switch
+    {
+        "whatsapp" => IconName.RiWhatsappFill,
+        "instagram" => IconName.RiInstagramFill,
+        "facebook" => IconName.RiFacebookCircleFill,
+        _ => IconName.RiChat3Fill
+    };
+}

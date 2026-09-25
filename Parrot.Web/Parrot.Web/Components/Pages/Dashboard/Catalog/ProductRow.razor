@@ -1,0 +1,70 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog
+
+@* One offer. Status is edited straight from the row, because "it sold out" is
+   the change a shop makes twenty times a day and opening a form for it would
+   be absurd.
+
+   Parrot's catalog item has one switch — IsAvailable — which is what the old
+   table toggled and badged as Active/Disabled. It drives the status toggle.
+   Aurora's separate stock availability (In stock / Sold out) and the
+   product/service kind have no field in Parrot, so those cells keep their
+   place in the grid and show an em dash rather than an invented value. *@
+
+<article class="@RowClass" role="row">
+    <div class="product-row__offer" role="cell">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@Item.Name</Typography>
+        <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="product-row__description">
+            @(string.IsNullOrWhiteSpace(Item.Description) ? "—" : Item.Description)
+        </Typography>
+    </div>
+
+    <div class="product-row__type" role="cell">
+        <span class="product-row__kind product-row__empty">
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>—</Typography>
+        </span>
+        <Typography TextStyle="TextStyle.Small10Regular" As="small" Prose Class="product-row__category">
+            @(string.IsNullOrWhiteSpace(Item.Category) ? "—" : Item.Category)
+        </Typography>
+    </div>
+
+    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose Class="product-row__price" role="cell">
+        @CatalogPrice.Format(Item.Currency, Item.Price)
+    </Typography>
+
+    <div class="product-row__empty" role="cell">
+        <Typography TextStyle="TextStyle.Small12Semibold" As="span">—</Typography>
+    </div>
+
+    <div class="product-row__status" role="cell">
+        <Toggle Checked="@Item.IsAvailable"
+                CheckedChanged="@(_ => OnStatusToggled.InvokeAsync())"
+                Label="@(Item.IsAvailable ? "Active" : "Inactive")"
+                Size="ToggleSize.Sm"
+                Disabled="@Busy" />
+    </div>
+
+    <div class="product-row__actions" role="cell">
+        @* A plain control rather than a Button: the table wants a 32px circle
+           that sits inside a 78px row, and none of the Button sizes is that. *@
+        <button type="button"
+                class="product-row__edit"
+                aria-label="@($"Edit {Item.Name}")"
+                @onclick="OnEdit">
+            <Icon Name="IconName.RiPencilFill" Size="IconSize.Sm" />
+        </button>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public CatalogItem Item { get; set; } = default!;
+
+    /// <summary>A quick edit on this row is in flight.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback OnEdit { get; set; }
+
+    [Parameter] public EventCallback OnStatusToggled { get; set; }
+
+    private string RowClass =>
+        Item.IsAvailable ? "product-row" : "product-row is-inactive";
+}

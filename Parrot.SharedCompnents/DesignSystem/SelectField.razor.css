@@ -1,0 +1,167 @@
+/* The field shell, matching Input exactly — same height, radius, padding and
+   label behaviour — so a form of mixed inputs and selects reads as one column
+   of controls rather than two kinds of thing.
+
+   The shell is repeated here rather than shared with Input because Blazor's
+   scoped CSS gives each component its own stylesheet and no way to import one.
+   If a third field-shaped control appears, these rules move to a global
+   field.css and both components drop their copy. */
+
+.select-field {
+  display: grid;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  position: relative;
+  --select-float-rest: var(--colors-text-muted);
+  --select-float-lifted: var(--colors-text-secondary);
+}
+
+.select-field {
+  /* The same gaps Input records: no control-height, border-width or motion
+     scale exists, and the leading scale starts above the 12px the lifted
+     label needs. */
+  --ds-select-height: 58px;
+  --ds-select-border-width: 1px;
+  --ds-select-motion: 160ms;
+  --ds-select-float-leading: 12px;
+  --ds-select-menu: 268px;
+  --ds-select-layer: 60;
+}
+
+.select-field__box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  height: var(--ds-select-height);
+  padding: var(--spacing-none) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  text-align: left;
+  background: var(--colors-surface-card);
+  border: var(--ds-select-border-width) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+  cursor: pointer;
+  transition:
+    border-color var(--ds-select-motion) ease,
+    box-shadow var(--ds-select-motion) ease;
+}
+
+.select-field__box:hover {
+  box-shadow: inset 0 0 0 var(--ds-select-border-width) var(--colors-surface-border);
+}
+
+.select-field__box:focus-visible {
+  border-color: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-select-border-width) var(--colors-brand-primary);
+  outline: 0;
+}
+
+.select-field__box[aria-expanded="true"] {
+  border-color: var(--colors-brand-primary);
+  --select-float-lifted: var(--colors-brand-primary);
+}
+
+.select-field__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+  color: var(--colors-text-secondary);
+}
+
+.select-field__control {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.select-field__value {
+  position: absolute;
+  inset: auto 0 var(--spacing-md) 0;
+  overflow: hidden;
+  color: var(--colors-text-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.select-field__float {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--select-float-rest);
+  font-size: var(--typography-size-text-sm); /* text-style-exempt: animates to text-xxs on lift, exactly as Input's label does */
+  font-weight: var(--typography-font-weight-medium); /* text-style-exempt: matches body-small-medium */
+  line-height: var(--typography-leading-leading-sm); /* text-style-exempt: animated */
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    top var(--ds-select-motion) ease,
+    font-size var(--ds-select-motion) ease,
+    line-height var(--ds-select-motion) ease,
+    color var(--ds-select-motion) ease,
+    transform var(--ds-select-motion) ease;
+}
+
+.select-field__float.is-floated {
+  top: var(--spacing-md);
+  color: var(--select-float-lifted);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: animates from text-sm */
+  line-height: var(--ds-select-float-leading); /* text-style-exempt: animated */
+  transform: none;
+}
+
+::deep .select-field__chevron { flex: 0 0 auto; color: var(--colors-text-secondary); }
+
+.select-field__dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-select-layer);
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+.select-field__menu {
+  position: absolute;
+  top: calc(var(--ds-select-height) + var(--spacing-xs));
+  left: 0;
+  z-index: calc(var(--ds-select-layer) + 1);
+  display: grid;
+  gap: var(--spacing-2xs);
+  width: max(100%, var(--ds-select-menu));
+  max-height: var(--ds-select-menu);
+  overflow-y: auto;
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-popover);
+  border: var(--ds-select-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.select-field__helper { color: var(--colors-text-muted); }
+
+.select-field.is-error .select-field__box {
+  border-color: var(--colors-feedback-destructive-border);
+}
+
+.select-field.is-error {
+  --select-float-rest: var(--colors-feedback-destructive-text);
+  --select-float-lifted: var(--colors-feedback-destructive-text);
+}
+
+.select-field.is-error .select-field__helper { color: var(--colors-feedback-destructive-text); }
+
+.select-field.is-disabled .select-field__box {
+  background: var(--colors-interaction-disabled-background);
+  border-color: var(--colors-interaction-disabled-border);
+  cursor: not-allowed;
+}
+
+.select-field.is-disabled { --select-float-rest: var(--colors-interaction-disabled-foreground); }

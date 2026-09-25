@@ -1,0 +1,14 @@
+/* The form inside the dialog. Two columns, as Aurora's ProductEditor lays
+   out its fields; the name and the identifier span both. */
+
+::deep .contact-form__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.contact-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+  align-items: start;
+  margin-top: var(--spacing-lg);
+}
+
+.contact-form__full { grid-column: 1 / -1; }

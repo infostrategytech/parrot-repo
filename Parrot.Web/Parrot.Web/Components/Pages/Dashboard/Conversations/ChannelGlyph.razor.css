@@ -1,0 +1,25 @@
+.channel-glyph {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--ds-channel-glyph);
+  height: var(--ds-channel-glyph);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.channel-glyph--instagram {
+  color: var(--colors-accent-rose-text);
+  background: var(--colors-accent-rose-subtle);
+}
+
+.channel-glyph--whatsapp {
+  color: var(--colors-accent-teal-text);
+  background: var(--colors-accent-teal-subtle);
+}
+
+.channel-glyph {
+  /* No compact avatar-size token exists. */
+  --ds-channel-glyph: 32px;
+}

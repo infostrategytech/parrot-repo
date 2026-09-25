@@ -1,65 +1,75 @@
 @namespace Parrot.Web.Components.Shared
-@inject IJSRuntime JS
+@implements IAsyncDisposable
+@inject AuroraInterop Interop
+
+@* Parrot's legacy modal shell, re-authored as Aurora's Dialog: same backdrop,
+   same 480px card, same header/body/footer geometry, focus trapped inside and
+   returned on close. The parameters are unchanged so every remaining caller
+   keeps compiling; new modals should use Dialog directly. *@
 
 @if (Visible)
 {
-    <div class="modal-backdrop" @onclick="OnClose"></div>
-    <div class="@_dialogClass" @onclick="HandleDialogClick" @onclick:stopPropagation="true">
+    <div class="dialog-backdrop" @onmousedown="OnBackdropMouseDown">
+        <div class="@_dialogClass"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="@(string.IsNullOrEmpty(Title) ? null : _titleId)"
+             tabindex="-1"
+             @ref="_card"
+             @onkeydown="OnKeyDown"
+             @onmousedown:stopPropagation="true">
 
-        @if (!string.IsNullOrEmpty(Title))
-        {
-            <div class="modal-header">
-                <div class="modal-header-top">
-                    <h2 class="modal-title">@Title</h2>
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <header class="dialog__header">
+                    <div class="dialog__titles">
+                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
+                        @if (!string.IsNullOrEmpty(Subtitle))
+                        {
+                            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="dialog__subtitle">@Subtitle</Typography>
+                        }
+                    </div>
                     @if (ShowCloseButton)
                     {
-                        <button class="modal-close" @onclick="OnClose" aria-label="Close">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="18" y1="6" x2="6" y2="18" />
-                                <line x1="6" y1="6" x2="18" y2="18" />
-                            </svg>
-                        </button>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Close" @onclick="OnClose">
+                            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                        </Button>
                     }
-                    @if (SubtitleInline && !string.IsNullOrEmpty(Subtitle))
-                    {
-                        <p class="modal-header-sub">@Subtitle</p>
-                    }
-                </div>
-                @if (!SubtitleInline && !string.IsNullOrEmpty(Subtitle))
-                {
-                    <p class="modal-sub">@Subtitle</p>
-                }
-            </div>
-            @if (ShowDivider)
-            {
-                <div class="modal-divider"></div>
+                </header>
             }
-        }
 
-        <div class="modal-body">
-            @BodyContent
-        </div>
-
-        @if (FooterContent != null)
-        {
-            <div class="modal-footer @FooterClass">
-                @FooterContent
+            <div class="dialog__body @TextStyle.BodySmallRegular.ToClassName(prose: true)">
+                @BodyContent
             </div>
-        }
 
+            @if (FooterContent is not null)
+            {
+                <footer class="dialog__footer @FooterClass">
+                    @FooterContent
+                </footer>
+            }
+        </div>
     </div>
 }
 
 @code {
+    private readonly string _titleId = "modal-" + Guid.NewGuid().ToString("N");
+
+    private ElementReference _card;
+    private IAsyncDisposable? _trap;
+    private bool _wasOpen;
+
     [Parameter] public bool Visible { get; set; }
     [Parameter] public string Title { get; set; } = string.Empty;
     [Parameter] public string Subtitle { get; set; } = string.Empty;
+    /// <summary>"lg" / "wide" widen the card; anything else keeps Aurora's 480px dialog.</summary>
     [Parameter] public string Size { get; set; } = string.Empty;
     [Parameter] public string ExtraClass { get; set; } = string.Empty;
     [Parameter] public string FooterClass { get; set; } = string.Empty;
     [Parameter] public bool ShowCloseButton { get; set; } = false;
+    /// <summary>Kept for callers; Aurora's dialog separates sections with space, not rules.</summary>
     [Parameter] public bool ShowDivider { get; set; } = true;
+    /// <summary>Kept for callers; the subtitle always sits under the title, as in Aurora.</summary>
     [Parameter] public bool SubtitleInline { get; set; } = false;
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public RenderFragment? BodyContent { get; set; }
@@ -67,24 +77,49 @@
 
     private string _dialogClass => string.Join(" ", new[]
     {
-        "modal-dialog",
-        string.IsNullOrEmpty(Size) ? null : $"modal-dialog--{Size}",
-        ExtraClass
+        "dialog",
+        Size is "lg" or "wide" or "xl" ? "dialog--wide" : null,
+        string.IsNullOrEmpty(ExtraClass) ? null : ExtraClass
     }.Where(c => !string.IsNullOrEmpty(c)));
-
-    private bool _prevVisible;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (Visible && !_prevVisible)
-            await JS.InvokeVoidAsync("modalBodyLock.lock");
-        else if (!Visible && _prevVisible)
-            await JS.InvokeVoidAsync("modalBodyLock.unlock");
-
-        _prevVisible = Visible;
+        if (Visible && !_wasOpen)
+        {
+            _wasOpen = true;
+            await _card.FocusAsync();
+            _trap = await Interop.TrapFocusAsync(_card);
+        }
+        else if (!Visible && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseTrapAsync();
+        }
     }
 
-    private void HandleDialogClick()
+    private async Task OnKeyDown(KeyboardEventArgs args)
     {
+        if (args.Key == "Escape" && OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
     }
+
+    private async Task OnBackdropMouseDown()
+    {
+        if (OnClose.HasDelegate)
+        {
+            await OnClose.InvokeAsync();
+        }
+    }
+
+    private async Task ReleaseTrapAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap;
+        _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseTrapAsync();
 }

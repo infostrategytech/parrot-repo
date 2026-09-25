@@ -1,0 +1,331 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@implements IAsyncDisposable
+@inject AuroraInterop Interop
+@inject NavigationManager Nav
+
+@* One request, in a drawer over the list. The list behind it is the context
+   for what you are reading, which is why it is a panel and not a page.
+
+   Focus is trapped and returned, the same as Dialog and the product editor —
+   React's panel did neither. *@
+
+@if (Item is { } item)
+{
+    <div class="task-request-panel-backdrop" @onmousedown="OnClose">
+        @* stopPropagation so a drag that starts inside the card and ends on the
+           backdrop cannot dismiss it. *@
+        <aside class="task-request-panel"
+               aria-label="@($"Task request {item.RequestId}")"
+               tabindex="-1"
+               @ref="_card"
+               @onmousedown:stopPropagation="true"
+               @onkeydown="OnKeyDown">
+
+            <header class="task-request-detail-header">
+                <div>
+                    <span class="request-kind"><Icon Name="IconName.RiTaskFill" Size="IconSize.Md" /></span>
+                    <div>
+                        @* Parrot does not say whether a request is an order, a
+                           booking or an issue, so the title is Aurora's generic one. *@
+                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Request details</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p">
+                            <span>@item.RequestId</span>
+                            @if (!string.IsNullOrWhiteSpace(item.Channel))
+                            {
+                                <i>·</i>
+                                <span class="@TaskRequestPresentation.ChannelClass(item.ChannelIcon)" aria-hidden="true">
+                                    <Icon Name="@TaskRequestPresentation.ChannelGlyph(item.ChannelIcon)" />
+                                </span>
+                                <span>@item.Channel</span>
+                            }
+                            <i>·</i>
+                            <span>@item.CustomerName</span>
+                            @if (!string.IsNullOrWhiteSpace(item.DateCreated))
+                            {
+                                <i>·</i>
+                                <span>@item.DateCreated</span>
+                            }
+                        </Typography>
+                    </div>
+                </div>
+                <div class="task-request-header-actions">
+                    <StatusBadge Tone="@TaskRequestPresentation.ToneFor(item.Status)">@item.Status</StatusBadge>
+                    <Button Variant="ButtonVariant.Ghost"
+                            Size="ButtonSize.Small"
+                            aria-label="Close task request"
+                            @onclick="OnClose">
+                        <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                    </Button>
+                </div>
+            </header>
+
+            <div class="task-request-panel-scroll">
+                @* The checklist. Everything the SME agreed to, in order. Parrot
+                   has not broken a request into steps yet, so the list is the
+                   designed empty state rather than an invented one. *@
+                <section class="task-request-steps">
+                    <header>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Steps</Typography>
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span">0 of 0</Typography>
+                    </header>
+                    <EmptyState Size="EmptyStateSize.Panel"
+                                Glyph="IconName.RiTaskFill"
+                                Title="No steps yet"
+                                Description="This request has not been broken into steps. They will appear here once it is." />
+                </section>
+
+                @* What was ordered comes first — it is the question an SME opens this panel to answer. *@
+                <section>
+                    <header>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Request details</Typography>
+                    </header>
+                    @if (item.Items.Count > 0)
+                    {
+                        <div class="task-request-items">
+                            @foreach (var line in item.Items)
+                            {
+                                <article>
+                                    <div>
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@line</Typography>
+                                    </div>
+                                </article>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="task-request-no-items">
+                            @(string.IsNullOrWhiteSpace(item.Item) ? "Open the conversation to see what the customer requested." : item.Item)
+                        </Typography>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(item.Amount))
+                    {
+                        @* Parrot holds one figure for the request, so the total
+                           row stands alone: there is no subtotal or charge to sum. *@
+                        <div class="task-request-charges">
+                            <div class="is-total">
+                                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Total</Typography>
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@item.Amount</Typography>
+                            </div>
+                        </div>
+                    }
+                </section>
+
+                @if (item.ConversationNotes.Count > 0)
+                {
+                    <section class="task-request-customer-notes">
+                        <header>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Customer note</Typography>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>Everything the customer asked for, in their words.</Typography>
+                        </header>
+                        <dl>
+                            <div>
+                                <Typography TextStyle="TextStyle.Small10Semibold" As="dt" Class="ds-overline">From the conversation</Typography>
+                                @foreach (var note in item.ConversationNotes)
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Regular" As="dd" Prose>@note</Typography>
+                                }
+                            </div>
+                        </dl>
+                    </section>
+                }
+
+                <section class="task-request-customer-card">
+                    @* The contact number is the one stable thing Parrot knows
+                       about a customer, so it seeds the tint — a name would
+                       change colour on a rename. *@
+                    <PetalAvatar Seed="@(string.IsNullOrWhiteSpace(item.CustomerContact) ? item.CustomerName : item.CustomerContact)"
+                                 Initials="@Initials.From(item.CustomerName)"
+                                 Size="AvatarSize.Lg" />
+                    <div>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="small">Customer</Typography>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@item.CustomerName</Typography>
+                        @if (!string.IsNullOrWhiteSpace(item.CustomerContact))
+                        {
+                            <Typography TextStyle="TextStyle.Small12Regular" As="p">@item.CustomerContact</Typography>
+                        }
+                    </div>
+                    <Button Size="ButtonSize.Small" @onclick="OpenConversation">
+                        <IconLeft><Icon Name="IconName.RiMessage2Fill" /></IconLeft>
+                        <ChildContent>Open conversation</ChildContent>
+                    </Button>
+                </section>
+
+                <section class="task-request-manual-update">
+                    <header>
+                        <div>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Payment</Typography>
+                        </div>
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span">Manual</Typography>
+                    </header>
+                    @* Parrot records the amount, not what has arrived against it,
+                       so the received/outstanding figures have nothing to show. *@
+                    <EmptyState Size="EmptyStateSize.Panel"
+                                Glyph="IconName.RiFileList3Fill"
+                                Title="Payment not tracked yet"
+                                Description="What has been received and what is still to come will appear here once payments are recorded." />
+                    <button type="button" class="task-record-payment" disabled>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Customer says they have paid</Typography>
+                    </button>
+                </section>
+
+                @* One home for everything the team changes by hand as the work moves. *@
+                <section>
+                    <header>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Progress</Typography>
+                    </header>
+                    <div class="task-request-control-grid">
+                        <label>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="task-request-control__label">Status</Typography>
+                            <FilterPopover Label="@item.Status"
+                                           Title="Status"
+                                           Subtitle="Where the work has reached"
+                                           Open='@(_openMenu == "status")'
+                                           OpenChanged="@(open => _openMenu = open ? "status" : null)">
+                                @foreach (var status in TaskRequestPresentation.Statuses)
+                                {
+                                    <PopoverOption Label="@status"
+                                                   Active="@(item.Status == status)"
+                                                   OnSelect="() => SelectStatus(status)" />
+                                }
+                            </FilterPopover>
+                        </label>
+                        <label>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="task-request-control__label">Assigned to</Typography>
+                            <FilterPopover Label="Unassigned"
+                                           Title="Assign to"
+                                           Subtitle="Who owns the next action"
+                                           Open='@(_openMenu == "assignee")'
+                                           OpenChanged="@(open => _openMenu = open ? "assignee" : null)">
+                                <PopoverOption Label="Unassigned" Active="true" OnSelect="() => _openMenu = null" />
+                            </FilterPopover>
+                        </label>
+                        <label>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="task-request-control__label">
+                                Needed by <Typography TextStyle="TextStyle.Small10Regular" As="em">Optional</Typography>
+                            </Typography>
+                            @* Parrot has no due date on a request, so the field is
+                               present but not yet editable. *@
+                            <input class="@TextStyle.Small12Regular.ToClassName()" type="date" disabled aria-label="Needed by" />
+                        </label>
+                    </div>
+                </section>
+
+                <section>
+                    <header>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Internal note</Typography>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>Only teammates can see this.</Typography>
+                    </header>
+                    @* There is nowhere on a Parrot request for a private note
+                       to live yet, so the field waits rather than pretends. *@
+                    <textarea class="@TextStyle.Small12Regular.ToClassName(prose: true)"
+                              maxlength="500"
+                              rows="4"
+                              placeholder="Add private fulfilment context"
+                              aria-label="Internal note"
+                              disabled></textarea>
+                    <Button Size="ButtonSize.Small" Class="save-task-note" disabled>Save note</Button>
+                </section>
+
+                <details class="task-request-history">
+                    <summary>
+                        <Typography TextStyle="TextStyle.BodySmallBold" As="h3">Recent updates</Typography>
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span">@item.ActivityLog.Count</Typography>
+                        <Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Sm" />
+                    </summary>
+                    <div class="task-request-timeline">
+                        @if (item.ActivityLog.Count > 0)
+                        {
+                            @foreach (var entry in item.ActivityLog)
+                            {
+                                var (title, detail) = TaskRequestPresentation.SplitActivity(entry);
+                                <article>
+                                    <i></i>
+                                    <div>
+                                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@title</Typography>
+                                        @if (detail is not null)
+                                        {
+                                            <Typography TextStyle="TextStyle.Small10Regular" As="p" Prose>@detail</Typography>
+                                        }
+                                        <Typography TextStyle="TextStyle.Small10Regular" As="small">@entry.Timestamp</Typography>
+                                    </div>
+                                </article>
+                            }
+                        }
+                        else
+                        {
+                            <EmptyState Size="EmptyStateSize.Panel"
+                                        Glyph="IconName.RiTimeFill"
+                                        Title="No updates yet"
+                                        Description="Actions and updates related to this task will appear here." />
+                        }
+                    </div>
+                </details>
+            </div>
+        </aside>
+    </div>
+}
+
+@code {
+    private ElementReference _card;
+    private IAsyncDisposable? _trap;
+    private bool _wasOpen;
+    private string? _openMenu;
+
+    /// <summary>The request to show. Null closes the panel.</summary>
+    [Parameter] public TaskRequest? Item { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The person picked a status. The page owns the change, as it did before.</summary>
+    [Parameter] public EventCallback<string> OnStatusSelected { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        // A menu left open on one request must not still be open on the next.
+        if (Item is null) _openMenu = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var open = Item is not null;
+        if (open && !_wasOpen)
+        {
+            _wasOpen = true;
+            await _card.FocusAsync();
+            _trap = await Interop.TrapFocusAsync(_card);
+        }
+        else if (!open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseTrapAsync();
+        }
+    }
+
+    private async Task SelectStatus(string status)
+    {
+        _openMenu = null;
+        if (Item is null || Item.Status == status) return;
+        await OnStatusSelected.InvokeAsync(status);
+    }
+
+    // Parrot's conversations are not addressable by request yet, so the button
+    // opens the inbox rather than a thread. The previous page linked nowhere.
+    private void OpenConversation() => Nav.NavigateTo("/dashboard/conversations");
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") await OnClose.InvokeAsync();
+    }
+
+    private async Task ReleaseTrapAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap;
+        _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseTrapAsync();
+}

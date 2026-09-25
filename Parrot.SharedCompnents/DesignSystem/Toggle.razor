@@ -1,0 +1,82 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A switch, not a checkbox: it takes effect immediately rather than on submit.
+   role="switch" is what tells a screen reader the difference. *@
+
+<button type="button"
+        role="switch"
+        aria-checked="@Checked.ToString().ToLowerInvariant()"
+        aria-labelledby="@(HasVisibleLabel ? _labelId : null)"
+        aria-label="@(HasVisibleLabel ? null : AriaLabel)"
+        disabled="@Disabled"
+        class="@ClassName"
+        @onclick="ToggleAsync"
+        @attributes="AdditionalAttributes">
+
+    <span class="toggle__track">
+        <span class="toggle__thumb"></span>
+    </span>
+
+    @if (HasVisibleLabel)
+    {
+        <span class="toggle__text" id="@_labelId">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@Label</Typography>
+            @if (!string.IsNullOrWhiteSpace(Description))
+            {
+                <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@Description</Typography>
+            }
+        </span>
+    }
+</button>
+
+@code {
+    // Stable for the lifetime of the component, which is what aria-labelledby
+    // needs. Generated once in OnInitialized rather than per render.
+    private readonly string _labelId = "toggle-" + Guid.NewGuid().ToString("N");
+
+    [Parameter, EditorRequired] public bool Checked { get; set; }
+
+    /// <summary>Paired with <see cref="Checked"/> so callers can write @bind-Checked.</summary>
+    [Parameter] public EventCallback<bool> CheckedChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? Description { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Required when there is no visible <see cref="Label"/>.</summary>
+    [Parameter] public string? AriaLabel { get; set; }
+
+    [Parameter] public ToggleSize Size { get; set; } = ToggleSize.Md;
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool HasVisibleLabel => !string.IsNullOrWhiteSpace(Label);
+
+    protected override void OnParametersSet()
+    {
+        if (!HasVisibleLabel && string.IsNullOrWhiteSpace(AriaLabel))
+        {
+            throw new ArgumentException(
+                "Toggle needs either a visible Label or an AriaLabel — a switch nobody can name is a switch nobody can use.",
+                nameof(AriaLabel));
+        }
+    }
+
+    private Task ToggleAsync() => CheckedChanged.InvokeAsync(!Checked);
+
+    private string ClassName
+    {
+        get
+        {
+            var name = "toggle";
+            if (Size == ToggleSize.Sm) name += " toggle--sm";
+            if (Checked) name += " is-on";
+            return string.IsNullOrWhiteSpace(Class) ? name : name + " " + Class;
+        }
+    }
+}

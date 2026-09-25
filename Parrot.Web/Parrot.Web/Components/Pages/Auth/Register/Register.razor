@@ -1,107 +1,107 @@
 @page "/register"
 @layout AuthLayout
-@using Parrot.SharedComponents.Components.Forms
-@using Parrot.SharedComponents.Components.InputFields
+@using Parrot.Web.Components.Pages.Auth
 @inject IRegisterService RegisterService
 @inject RegisterState RegisterState
 @inject NavigationManager Navigation
 @implements IDisposable
 
-<div class="register-wrapper">
-    <div class="register-card">
-        <div class="register-mascot">
-            <img src="assets/images/gifs/owl-animation.gif" alt="Owl" />
-        </div>
-        <h1 class="register-title">Create your account</h1>
-        <p class="register-subtitle">Set up your account to start handling customer messages with AI.</p>
+<PageTitle>Create your account · OmniAI</PageTitle>
 
+@* The sign-up screen, as designed. Two things the design leaves to the
+   product: the account API needs the business's name at sign-up, so the
+   form asks for it first; and it accepts an email address only, so a phone
+   number is turned away with a plain sentence rather than a server error. *@
+
+<AuthPanel Title="Create Your Account">
+    <Lede>Get started now. You can tell us about your business once you are inside.</Lede>
+    <Notice>
         @if (!string.IsNullOrEmpty(RegisterState.ErrorMessage))
         {
-            <div class="form-error-banner">@RegisterState.ErrorMessage</div>
+            <p class="panel__alert" role="alert">@RegisterState.ErrorMessage</p>
         }
+    </Notice>
+    <ChildContent>
+        <form class="register" @onsubmit="HandleRegistration" @onsubmit:preventDefault novalidate>
+            <AuthField Id="businessName" Placeholder="Business Name" Glyph="IconName.RiStore2Fill"
+                       AutoComplete="organization" Required
+                       @bind-Value="_businessName" Error="@_businessNameError" Disabled="@RegisterState.IsLoading" />
 
-        <GenericForm Fields="@formFields"
-                     SubmitButtonText="@(RegisterState.IsLoading ? "Creating account..." : "Create account")"
-                     OnSubmit="HandleRegistration"
-                     OnFieldChanged="HandleFieldChanged" />
-    </div>
+            <AuthField Id="email" Placeholder="Email or Phone Number" Glyph="IconName.RiUser3Fill"
+                       Type="email" AutoComplete="email" Required
+                       @bind-Value="_email" Error="@_emailError" Disabled="@RegisterState.IsLoading" />
 
-    <div class="register-footer-pill">
-        Already have an account? <a href="/login">Sign in</a>
-    </div>
-</div>
+            <AuthField Id="password" Placeholder="Create Password" Glyph="IconName.RiLockFill"
+                       Type="password" AutoComplete="new-password" Required
+                       @bind-Value="_password" Error="@_passwordError" Disabled="@RegisterState.IsLoading" />
+
+            <p class="panel__terms">By creating an account, you agree to OmniAI's <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
+
+            <button type="submit" class="panel__primary" disabled="@RegisterState.IsLoading" aria-busy="@(RegisterState.IsLoading ? "true" : null)">
+                @if (RegisterState.IsLoading)
+                {
+                    <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
+                }
+                <span>Create Account</span>
+            </button>
+        </form>
+
+        <div class="panel__divider" role="separator" aria-label="Or continue with">Or continue with</div>
+
+        <button type="button" class="panel__google" @onclick="ContinueWithGoogle">
+            <GoogleMark />
+            <span>Continue With Google</span>
+        </button>
+    </ChildContent>
+    <Footer>
+        Already have an account? <a href="/login">Sign In</a>
+    </Footer>
+</AuthPanel>
 
 @code {
-    private List<FormInputModel> formFields = new()
-    {
-        new FormInputModel
-        {
-            Id = "businessName",
-            Label = "Business name",
-            Type = "text",
-            Placeholder = "Oma's kitchen",
-            ShowIcon = false
-        },
-        new FormInputModel
-        {
-            Id = "email",
-            Label = "Email address",
-            Type = "email",
-            Placeholder = "you@example.com",
-            ShowIcon = false
-        },
-        new FormInputModel
-        {
-            Id = "password",
-            Label = "Password",
-            Type = "password",
-            Placeholder = "Create a secure password",
-            ShowIcon = true,
-            ShowPasswordStrength = true
-        },
-        new FormInputModel
-        {
-            Id = "confirmPassword",
-            Label = "Confirm password",
-            Type = "password",
-            Placeholder = "Create a secure password",
-            ShowIcon = true
-        }
-    };
+    [Inject] private IConfiguration Configuration { get; set; } = default!;
 
-    protected override void OnInitialized()
+    private string? _businessName;
+    private string? _email;
+    private string? _password;
+    private string? _businessNameError;
+    private string? _emailError;
+    private string? _passwordError;
+
+    protected override void OnInitialized() => RegisterState.OnChange += StateHasChanged;
+
+    private void ContinueWithGoogle()
     {
-        RegisterState.OnChange += StateHasChanged;
+        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);
     }
 
-    private void HandleFieldChanged((string FieldId, string Value) change)
+    private bool Validate()
     {
-        if (change.FieldId == "password" || change.FieldId == "confirmPassword")
-        {
-            FormInputModel? passwordField = formFields.Find(f => f.Id == "password");
-            FormInputModel? confirmField = formFields.Find(f => f.Id == "confirmPassword");
+        _businessNameError = string.IsNullOrWhiteSpace(_businessName) || _businessName.Trim().Length < 2
+            ? "Tell us your business's name."
+            : null;
 
-            if (passwordField != null && confirmField != null)
-            {
-                confirmField.ErrorMessage = (!string.IsNullOrEmpty(confirmField.Value) && passwordField.Value != confirmField.Value)
-                    ? "Password mismatch"
-                    : string.Empty;
-            }
-        }
+        var email = _email?.Trim() ?? "";
+        _emailError = email.Length == 0
+            ? "Enter your email address."
+            : !email.Contains('@')
+                ? "Phone sign-up isn't available yet — use your email address."
+                : null;
+
+        _passwordError = string.IsNullOrEmpty(_password)
+            ? "Create a password."
+            : _password.Length < 8
+                ? "Use at least 8 characters."
+                : null;
+
+        return _businessNameError is null && _emailError is null && _passwordError is null;
     }
 
-    private async Task HandleRegistration(Dictionary<string, string> formData)
+    private async Task HandleRegistration()
     {
         RegisterState.Reset();
-
-        string password = formData.GetValueOrDefault("Password", string.Empty);
-        string confirmPassword = formData.GetValueOrDefault("Confirm password", string.Empty);
-
-        if (password != confirmPassword)
-        {
-            RegisterState.SetError("Passwords do not match.");
-            return;
-        }
+        if (!Validate()) return;
 
         RegisterState.SetLoading(true);
 
@@ -109,10 +109,11 @@
         {
             await RegisterService.RegisterAsync(new RegisterRequest
             {
-                BusinessName = formData.GetValueOrDefault("Business name", string.Empty),
-                Email = formData.GetValueOrDefault("Email address", string.Empty),
-                Password = password,
-                ConfirmPassword = confirmPassword,
+                BusinessName = _businessName!.Trim(),
+                Email = _email!.Trim(),
+                Password = _password!,
+                // One password field, as designed; the API wants it confirmed.
+                ConfirmPassword = _password!,
             });
 
             Navigation.NavigateTo("/verify-email");
@@ -125,6 +126,10 @@
         {
             RegisterState.SetError("Too many attempts. Please wait and try again.");
         }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            _passwordError = "Use at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol.";
+        }
         catch
         {
             RegisterState.SetError("Something went wrong. Please try again.");
@@ -135,8 +140,5 @@
         }
     }
 
-    public void Dispose()
-    {
-        RegisterState.OnChange -= StateHasChanged;
-    }
+    public void Dispose() => RegisterState.OnChange -= StateHasChanged;
 }

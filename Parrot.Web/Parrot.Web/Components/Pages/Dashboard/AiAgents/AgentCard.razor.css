@@ -1,0 +1,262 @@
+/* Aurora's .agent-card, re-authored against tokens. The geometry follows the
+   React card: 320px tall so a grid of them lines up whatever each one holds,
+   a 46px avatar, and a footer pinned to the bottom by the skill row's
+   margin-top: auto. */
+
+.agent-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: var(--ds-agent-card-min);
+  padding: var(--spacing-xl);
+  text-align: left;
+  color: inherit;
+  background: var(--colors-surface-card);
+  border: var(--ds-agent-card-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+  cursor: pointer;
+  transition: border var(--ds-agent-card-motion) ease, box-shadow var(--ds-agent-card-motion) ease, transform var(--ds-agent-card-motion) ease;
+}
+
+.agent-card {
+  /* Gaps in the token set: no card-height, avatar, control-height, border or
+     motion scale. All from the React card. */
+  --ds-agent-card-min: 320px;
+  --ds-agent-card-hairline: 1px;
+  --ds-agent-card-motion: 150ms;
+  --ds-agent-avatar: 46px;
+  --ds-agent-avatar-radius: 15px;
+  --ds-agent-status-height: 25px;
+  --ds-agent-dot: 5px;
+  --ds-agent-more: 28px;
+  --ds-agent-description-min: 63px;
+  --ds-agent-skill-min: 27px;
+  --ds-agent-action-height: 34px;
+  --ds-agent-channel-glyph: 27px;
+  --ds-agent-lift: -2px;
+}
+
+.agent-card:hover,
+.agent-card:focus-visible {
+  border-color: var(--colors-surface-border);
+  box-shadow: 0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow);
+  transform: translateY(var(--ds-agent-lift));
+}
+
+.agent-card:focus-visible { outline: var(--spacing-2xs) solid var(--colors-interaction-focus); outline-offset: var(--spacing-2xs); }
+
+/* Aurora's identity tones. Parrot stores no tone, so every card wears the
+   slate fallback Aurora uses for an agent without one. */
+.agent-tone-slate {
+  --agent-color: var(--colors-text-secondary);
+  --agent-soft: var(--colors-surface-muted);
+}
+
+.agent-card > header {
+  display: grid;
+  grid-template-columns: var(--ds-agent-avatar) minmax(0, 1fr) auto var(--ds-agent-more);
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.agent-card-avatar {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: var(--ds-agent-avatar);
+  height: var(--ds-agent-avatar);
+  color: var(--agent-color);
+  background: var(--agent-soft);
+  border-radius: var(--ds-agent-avatar-radius);
+}
+
+/* Parrot's mascot fills the avatar box Aurora drew a robot glyph in. */
+.agent-card-avatar img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.agent-card > header > div { min-width: 0; }
+
+.agent-card > header ::deep h2 {
+  overflow: hidden;
+  margin: var(--spacing-none);
+  color: var(--colors-text-primary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agent-status {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  height: var(--ds-agent-status-height);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-accent-teal-text);
+  white-space: nowrap;
+  background: var(--colors-accent-teal-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-status i {
+  width: var(--ds-agent-dot);
+  height: var(--ds-agent-dot);
+  background: currentColor;
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-status.status-inactive {
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+}
+
+.agent-more {
+  display: grid;
+  place-items: center;
+  width: var(--ds-agent-more);
+  height: var(--ds-agent-more);
+  padding: var(--spacing-none);
+  color: var(--colors-text-subtle);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.agent-more:hover {
+  color: var(--colors-text-secondary);
+  background: var(--colors-interaction-hover);
+}
+
+::deep .agent-description {
+  min-height: var(--ds-agent-description-min);
+  margin: var(--spacing-lg) var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-text-muted);
+}
+
+.agent-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-bottom: var(--spacing-md);
+  padding-top: var(--spacing-md);
+  border-top: var(--ds-agent-card-hairline) solid var(--colors-surface-border);
+}
+
+.agent-metrics > div { display: grid; gap: var(--spacing-2xs); }
+
+.agent-metrics > div + div {
+  padding-left: var(--spacing-md);
+  border-left: var(--ds-agent-card-hairline) solid var(--colors-surface-border);
+}
+
+.agent-metrics ::deep strong { color: var(--colors-text-primary); }
+.agent-metrics ::deep span { color: var(--colors-text-subtle); }
+
+.agent-skill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  min-height: var(--ds-agent-skill-min);
+  margin-top: auto;
+}
+
+.agent-skill-row ::deep span {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-card > footer {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--spacing-lg);
+  padding-top: var(--spacing-md);
+  border-top: var(--ds-agent-card-hairline) solid var(--colors-surface-border);
+}
+
+.agent-channels {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  min-width: 0;
+}
+
+.agent-channels ::deep .channel-glyph {
+  --ds-channel-glyph: var(--ds-agent-channel-glyph);
+}
+
+.agent-channels ::deep span { color: var(--colors-text-subtle); }
+
+.agent-secondary-action {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  justify-content: center;
+  height: var(--ds-agent-action-height);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+  transition: color var(--ds-agent-card-motion) ease, background var(--ds-agent-card-motion) ease;
+}
+
+.agent-secondary-action:hover {
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+}
+
+.agent-secondary-action.to-deactivate:hover {
+  color: var(--colors-accent-orange-text);
+  background: var(--colors-accent-orange-subtle);
+}
+
+.agent-secondary-action.to-reactivate:hover {
+  color: var(--colors-accent-green-text);
+  background: var(--colors-accent-teal-subtle);
+}
+
+.agent-secondary-action:disabled,
+.agent-delete-action:disabled {
+  cursor: wait;
+  /* The primitive is a percentage figure, as Button's disabled state reads it. */
+  opacity: calc(var(--p-opacity-overlay) / 100);
+}
+
+.agent-delete-action {
+  display: grid;
+  place-items: center;
+  width: var(--ds-agent-action-height);
+  height: var(--ds-agent-action-height);
+  padding: var(--spacing-none);
+  color: var(--colors-feedback-destructive-text);
+  background: var(--colors-feedback-destructive-subtle);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.agent-delete-action:hover {
+  color: var(--colors-feedback-destructive-text);
+  background: var(--colors-feedback-destructive-subtle);
+}
+
+.agent-delete-action.with-label {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  width: auto;
+  padding: var(--spacing-none) var(--spacing-md);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-card { transition: none; }
+  .agent-card:hover { transform: none; }
+}

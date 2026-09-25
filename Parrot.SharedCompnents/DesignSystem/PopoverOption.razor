@@ -1,0 +1,42 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One row inside a FilterPopover. Also duplicated byte for byte in React,
+   alongside FilterPopover itself. *@
+
+<button type="button"
+        class="@ClassName"
+        role="menuitemradio"
+        aria-checked="@Active.ToString().ToLowerInvariant()"
+        @onclick="OnSelect">
+    @if (Leading is not null)
+    {
+        <span class="popover-option__leading" aria-hidden="true">@Leading</span>
+    }
+    <span class="popover-option__text">
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@Label</Typography>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <Typography TextStyle="TextStyle.Small10Regular" As="small">@Description</Typography>
+        }
+    </span>
+
+    @if (Active)
+    {
+        @* aria-checked already announces the selection, so the tick is decorative. *@
+        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" Class="popover-option__check" />
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter] public string? Description { get; set; }
+
+    [Parameter] public RenderFragment? Leading { get; set; }
+
+    [Parameter] public bool Active { get; set; }
+
+    [Parameter] public EventCallback OnSelect { get; set; }
+
+    private string ClassName => Active ? "popover-option is-active" : "popover-option";
+}

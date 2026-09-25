@@ -1,52 +1,144 @@
-.auth-layout {
-    min-height: 100vh;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background-image: url('assets/images/background-image.svg');
-    background-size: cover;
-    background-position: center;
-    background-repeat: no-repeat;
-    position: relative;
-    padding: 5rem 1rem 3rem;
+/* Measured from the sign-up design at 2416×1372: lockup at 36/35 with a
+   62px-wide mark and a 24px wordmark; the message column 420px wide ending
+   163px left of centre; the form column 448px starting 100px right of it;
+   the wash fading out around 950px from the corner on both axes.
+
+   Locals are on the root element, never on :root — Blazor scopes ":root" to
+   nothing. Every value here is a brand decision from the design, named once. */
+.stage {
+  --stage-canvas: var(--cadence-canvas);
+  --stage-wash: var(--cadence-canvas-wash);
+  --stage-wash-mid: var(--cadence-canvas-mid);
+  --stage-ink: var(--cadence-ink);
+  --stage-brand-x: 36px;
+  --stage-brand-y: 35px;
+  --stage-brand-gap: 9px;
+  --stage-wordmark: 22px;
+  --stage-message: 440px;
+  --stage-panel: 448px;
+  --stage-gap: 243px;
+  --stage-headline: 38px;
+  --stage-lede: 17px;
+  --stage-tick-w: 20px;
+  --stage-tick-h: 3px;
+  --stage-tick-gap: 5px;
+
+  position: relative;
+  height: 100vh;
+  overflow-y: auto;
+  font-family: var(--cadence-font-sans);
+  color: var(--stage-ink);
+  background-color: var(--stage-canvas);
+  background-image: radial-gradient(1400px 1400px at 0 0, var(--stage-wash) 0%, var(--stage-wash-mid) 24%, transparent 68%);
+  background-repeat: no-repeat;
 }
 
-.auth-brand-logo {
-    position: fixed;
-    top: 1.25rem;
-    left: 1.25rem;
-    width: 5rem;
-    height: 5rem;
-    /* background: #53279E; */
-    border-radius: 0.375rem;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    font-weight: 700;
-    font-size: 0.95rem;
-    text-decoration: none;
-    z-index: 10;
-    overflow: hidden;
+/* Pinned rather than in flow, so a scrolled form never pushes it away. */
+.stage__brand {
+  position: fixed;
+  top: var(--stage-brand-y);
+  left: var(--stage-brand-x);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--stage-brand-gap);
+  color: var(--stage-ink);
+  text-decoration: none;
 }
 
-.auth-brand-logo img {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
+.stage__wordmark {
+  margin-top: 5px;
+  font-size: var(--stage-wordmark);
+  letter-spacing: -0.025em;
+  line-height: 1;
+  color: var(--stage-ink);
 }
 
-.auth-main {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* Two columns on the window — the message ends 163px before the centre
+   line and the form begins 100px after it, and the pair sits 18px left of
+   true centre, as the design places it (hence the extra right padding). */
+.stage__main {
+  display: grid;
+  grid-template-columns: var(--stage-message) var(--stage-panel);
+  column-gap: var(--stage-gap);
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 120px 84px 64px 48px;
+  box-sizing: border-box;
 }
 
-.auth-content {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* The message block's centre sits 68px above the form's in the design, so
+   its box carries that much extra room below it. */
+.stage__message {
+  display: grid;
+  gap: 18px;
+  justify-self: end;
+  width: 100%;
+  max-width: var(--stage-message);
+  margin-bottom: 136px;
+}
+
+.stage__headline {
+  margin: 0;
+  font-size: var(--stage-headline);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--cadence-terracotta);
+}
+
+.stage__lede {
+  margin: 0;
+  font-size: var(--stage-lede);
+  font-weight: 400;
+  line-height: 1.3;
+  color: var(--cadence-body);
+  max-width: 360px;
+}
+
+/* The message indicator: four ticks, the current one in sea green. */
+.stage__ticks {
+  display: flex;
+  gap: var(--stage-tick-gap);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stage__ticks li {
+  width: var(--stage-tick-w);
+  height: var(--stage-tick-h);
+  border-radius: var(--stage-tick-h);
+  background: var(--cadence-tick);
+}
+
+.stage__ticks li.is-active { background: var(--cadence-sea); }
+
+.stage__panel {
+  justify-self: start;
+  width: var(--stage-panel);
+  max-width: 100%;
+  min-width: 0;
+}
+
+/* A laptop keeps both columns, closer together. */
+@media (max-width: 1360px) {
+  .stage { --stage-gap: 120px; }
+}
+
+@media (max-width: 1180px) {
+  .stage { --stage-gap: 72px; --stage-message: 360px; --stage-headline: 34px; }
+}
+
+/* Narrower than that, the message stacks above the form. */
+@media (max-width: 960px) {
+  .stage__main {
+    grid-template-columns: minmax(0, var(--stage-panel));
+    row-gap: 40px;
+    padding: 128px 24px 64px;
+  }
+  .stage__message { margin-bottom: 0; }
+  .stage__message,
+  .stage__panel { justify-self: center; }
 }

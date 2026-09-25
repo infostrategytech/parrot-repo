@@ -1,0 +1,25 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One pill for what React drew as note-pill, delivery-status, ownership-chip,
+   attachment-chip, draft-label and knowledge-agent-chips. Same shape, six
+   names, six slightly different paddings.
+
+   The tone is semantic, never a colour. A caller asking for "green" has to be
+   revisited when the palette changes; one asking for Success does not. *@
+
+<span class="status-badge status-badge--@Tone.ToString().ToLowerInvariant() @TextStyle.Small12Medium.ToClassName()">
+    @if (Glyph is not null)
+    {
+        <Icon Name="Glyph.Value" />
+    }
+    @ChildContent
+</span>
+
+@code {
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public StatusTone Tone { get; set; } = StatusTone.Neutral;
+
+    /// <summary>Optional leading glyph. It sizes itself to the badge's text.</summary>
+    [Parameter] public IconName? Glyph { get; set; }
+}

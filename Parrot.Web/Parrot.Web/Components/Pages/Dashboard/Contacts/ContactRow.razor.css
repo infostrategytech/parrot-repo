@@ -1,0 +1,77 @@
+/* The row's columns are set by the table that contains it. This file styles
+   what sits inside each cell. Copied from Aurora's ProductRow.razor.css. */
+
+.contact-row {
+  min-height: var(--ds-row-min);
+  background: var(--colors-surface-card);
+  cursor: pointer;
+  transition: background var(--ds-row-motion) ease;
+}
+
+.contact-row {
+  /* Gaps in the token set: no row-height, control-size or motion scale. */
+  --ds-row-min: 64px;
+  --ds-row-motion: 130ms;
+  --ds-row-open: 32px;
+  --ds-row-mark: 28px;
+}
+
+.contact-row:hover { background: var(--colors-interaction-hover); }
+
+.contact-row__name {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-width: 0;
+}
+
+.contact-row__name ::deep strong {
+  overflow: hidden;
+  color: var(--colors-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.contact-row__channels { display: flex; gap: var(--spacing-xs); }
+
+/* Brand marks, not ours: WhatsApp green and Instagram magenta stay as Aurora's
+   ChannelCard draws them and are recorded in brand-literals.json. */
+.contact-row__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-row-mark);
+  height: var(--ds-row-mark);
+  color: var(--colors-text-inverse);
+  border-radius: var(--radius-radius-md);
+}
+
+.contact-row__mark--whatsapp { background: #22a968; }
+.contact-row__mark--instagram { background: #c63886; }
+
+::deep .contact-row__last { color: var(--colors-text-muted); }
+
+.contact-row__tags { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); min-width: 0; }
+
+::deep .contact-row__orders { color: var(--colors-text-secondary); }
+
+.contact-row__stage { display: flex; }
+
+.contact-row__actions { display: flex; justify-content: flex-end; }
+
+.contact-row__open {
+  display: grid;
+  place-items: center;
+  width: var(--ds-row-open);
+  height: var(--ds-row-open);
+  padding: var(--spacing-none);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.contact-row__open:hover {
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+}

@@ -1,9 +1,0 @@
-.cv-send-btn {
-    width: auto;
-    min-width: 64px;
-    padding: 0 12px;
-}
-.cv-send-btn:disabled { opacity: .6; cursor: wait; }
-.cv-msg-bubble { white-space: pre-wrap; overflow-wrap: anywhere; }
-small { display: block; margin-top: 4px; color: #6b7280; }
-p[role="alert"] { margin: 8px 16px; color: #9b1c1c; }

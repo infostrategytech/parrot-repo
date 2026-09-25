@@ -1,0 +1,77 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+
+@* After Meta hands back the code there are three real server calls.
+
+   Showing them beats a spinner at the exact moment someone has just handed
+   over access to their business account: naming what is happening is the
+   difference between waiting and wondering. *@
+
+<section class="connecting channel-@Channel.Id.ToString().ToLowerInvariant()">
+    <div class="connecting__pulse" aria-hidden="true">
+        <span class="connecting__mark"><Icon Name="@Mark" Size="IconSize.Lg" /></span>
+        <i></i><i></i><i></i>
+    </div>
+
+    <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="connecting__eyebrow ds-overline">
+        Setup is almost complete
+    </Typography>
+    <Typography TextStyle="TextStyle.HeadingH2Bold" As="h1">We’re connecting @Channel.Name</Typography>
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="connecting__lede">
+        Keep this page open while Parrot safely finishes the connection.
+    </Typography>
+
+    <ol class="connecting__steps">
+        @for (var index = 0; index < ChannelRoutes.ConnectingStages.Length; index++)
+        {
+            var position = index;
+            var state = position < CurrentIndex ? "is-done" : position == CurrentIndex ? "is-active" : "";
+
+            <li class="connecting__step @state">
+                <span class="connecting__tick">
+                    @if (position < CurrentIndex)
+                    {
+                        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                    }
+                </span>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@Label(position)</Typography>
+            </li>
+        }
+    </ol>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    private int CurrentIndex => Array.IndexOf(ChannelRoutes.ConnectingStages, Channel.Setup.Stage);
+
+    private IconName Mark => Channel.Id switch
+    {
+        ChannelId.Whatsapp => IconName.RiWhatsappFill,
+        ChannelId.Instagram => IconName.RiInstagramFill,
+        _ => IconName.RiFacebookCircleFill
+    };
+
+    /// <summary>
+    /// The middle step is named for what is actually happening to the number,
+    /// which differs by route: a new number is registered, an existing one is
+    /// checked, a migrated one is moved. Saying "registering" for all three
+    /// would be wrong twice.
+    /// </summary>
+    private string Label(int position)
+    {
+        var labels = ChannelRoutes.ConnectingSteps(Channel.Id);
+
+        if (position == 1 && Channel.Id == ChannelId.Whatsapp)
+        {
+            return Channel.Setup.Path switch
+            {
+                ChannelPath.Coexistence => "Checking your existing number",
+                ChannelPath.Migration => "Moving your business number",
+                _ => "Registering your business number"
+            };
+        }
+
+        return position < labels.Count ? labels[position] : "";
+    }
+}

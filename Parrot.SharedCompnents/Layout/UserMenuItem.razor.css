@@ -1,0 +1,24 @@
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  padding: var(--spacing-sm);
+  color: var(--colors-text-primary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-menu-item:hover:not(:disabled) { background: var(--colors-interaction-hover); }
+
+.user-menu-item:disabled {
+  color: var(--colors-interaction-disabled-foreground);
+  cursor: not-allowed;
+}
+
+.user-menu-item.is-danger { color: var(--colors-feedback-destructive-text); }
+
+::deep .user-menu-item__label { flex: 1; min-width: 0; }

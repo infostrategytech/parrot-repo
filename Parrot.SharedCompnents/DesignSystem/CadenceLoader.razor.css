@@ -1,0 +1,11 @@
+/* A loader is an inline box the size it was asked for; the SVG inside paints
+   with the brand colours and currentColor, so nothing here sets colour. */
+
+.cadence-loader {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  line-height: 0;
+}
+
+.cadence-loader svg { display: block; }

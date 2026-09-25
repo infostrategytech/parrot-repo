@@ -1,0 +1,504 @@
+/* The builder canvas page. The chrome is Blazor; the canvas inside
+   .abc-canvas-host is drawn by js/agent-builder.js, which is why every rule
+   for it goes through ::deep — the script's elements carry no scope attribute.
+   The script's node boxes, inspector and bubble carry their own inline
+   colours; the chrome, canvas field, palette and Pip are styled here. */
+
+.abc-page {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
+}
+
+.abc-page {
+  /* Gaps in the token set: no bar-height, control-height, panel-width,
+     figure-size, z-index, border-width or motion scale. All measured from the
+     script's own layout. */
+  --ds-abc-hairline: 1px;
+  --ds-abc-topbar: 60px;
+  --ds-abc-contextbar: 42px;
+  --ds-abc-back: 34px;
+  --ds-abc-icon-box: 30px;
+  --ds-abc-tab: 30px;
+  --ds-abc-dot: 7px;
+  --ds-abc-dots: 24px;
+  --ds-abc-palette-btn: 34px;
+  --ds-abc-palette-dot: 9px;
+  --ds-abc-inspector: 272px;
+  --ds-abc-pip: 120px;
+  --ds-abc-pip-height: 132px;
+  --ds-abc-pip-peek: 96px;
+  --ds-abc-pip-peek-height: 108px;
+  --ds-abc-pip-min: 22px;
+  --ds-abc-empty-card: 380px;
+  --ds-abc-empty-icon: 60px;
+  --ds-abc-mascot-max: 1040px;
+  --ds-abc-mascot-preview: 190px;
+  --ds-abc-mascot-pip: 124px;
+  --ds-abc-mascot-pip-height: 140px;
+  --ds-abc-mascot-guide-pip: 108px;
+  --ds-abc-mascot-guide-pip-height: 122px;
+  --ds-abc-mascot-measure: 620px;
+  --ds-abc-layer-edges: 1;
+  --ds-abc-layer-nodes: 2;
+  --ds-abc-layer-chrome: 6;
+  --ds-abc-layer-inspector: 8;
+  --ds-abc-layer-pip: 9;
+  --ds-abc-layer-toast: 10;
+  --ds-abc-motion: 150ms;
+  --ds-abc-peek-motion: 250ms;
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+
+.abc-topbar {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+  height: var(--ds-abc-topbar);
+  padding: var(--spacing-none) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border-bottom: var(--ds-abc-hairline) solid var(--colors-surface-border);
+}
+
+.abc-topbar-left { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+
+.abc-back {
+  display: grid;
+  place-items: center;
+  width: var(--ds-abc-back);
+  height: var(--ds-abc-back);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.abc-back:hover { color: var(--colors-text-primary); background: var(--colors-interaction-hover); }
+
+.abc-topbar-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-abc-icon-box);
+  height: var(--ds-abc-icon-box);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-md);
+}
+
+.abc-topbar-breadcrumb { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+::deep .abc-topbar-section { color: var(--colors-text-subtle); }
+::deep .abc-topbar-sep { color: var(--colors-accent-neutral-border); }
+::deep .abc-topbar-title { overflow: hidden; color: var(--colors-text-primary); white-space: nowrap; text-overflow: ellipsis; }
+
+.abc-topbar-right { display: flex; gap: var(--spacing-md); align-items: center; margin-left: auto; }
+
+.abc-tab-group {
+  display: flex;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs);
+  background: var(--colors-accent-neutral-border);
+  border-radius: var(--radius-radius-full);
+}
+
+.abc-tab-group button {
+  height: var(--ds-abc-tab);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+  transition: background var(--ds-abc-motion) ease, color var(--ds-abc-motion) ease;
+}
+
+.abc-tab-group button.is-active {
+  color: var(--colors-brand-primary);
+  background: var(--colors-surface-card);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-xs) var(--colors-surface-shadow);
+}
+
+/* ── Context bar ─────────────────────────────────────────────────────────── */
+
+.abc-contextbar {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  height: var(--ds-abc-contextbar);
+  padding: var(--spacing-none) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border-bottom: var(--ds-abc-hairline) solid var(--colors-surface-border);
+}
+
+::deep .abc-contextbar-glyph { color: var(--colors-brand-primary); }
+::deep .abc-contextbar-title { color: var(--colors-text-primary); }
+::deep .abc-contextbar-type,
+::deep .abc-contextbar-count { color: var(--colors-text-muted); }
+.abc-contextbar-div { width: var(--ds-abc-hairline); height: var(--spacing-lg); background: var(--colors-surface-border); }
+.abc-contextbar-status { display: flex; gap: var(--spacing-sm); align-items: center; margin-left: auto; color: var(--colors-text-subtle); }
+.abc-live-dot { width: var(--ds-abc-dot); height: var(--ds-abc-dot); background: var(--colors-feedback-success); border-radius: var(--radius-radius-full); }
+
+/* ── View area ───────────────────────────────────────────────────────────── */
+
+.abc-view-area { position: relative; display: flex; flex-direction: column; min-height: 0; }
+.abc-canvas-host { position: relative; flex: 1; min-height: 0; }
+
+/* ── Canvas (script-rendered) ────────────────────────────────────────────── */
+
+.abc-canvas-host ::deep .abc-cv {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+  cursor: default;
+  background-color: var(--colors-surface-background);
+  background-image: radial-gradient(circle, var(--colors-accent-neutral-border) 1.1px, transparent 1.1px);
+  background-size: var(--ds-abc-dots) var(--ds-abc-dots);
+}
+
+.abc-canvas-host ::deep .abc-cv-edges { position: absolute; inset: 0; z-index: var(--ds-abc-layer-edges); width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.abc-canvas-host ::deep .abc-cv-nodes { position: absolute; inset: 0; z-index: var(--ds-abc-layer-nodes); }
+
+.abc-canvas-host ::deep .abc-cv-empty {
+  position: absolute;
+  inset: 0;
+  z-index: var(--ds-abc-layer-nodes);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.abc-canvas-host ::deep .abc-cv-empty-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: var(--ds-abc-empty-card);
+  padding: var(--spacing-4xl) var(--spacing-3xl);
+  text-align: center;
+  background: var(--colors-surface-translucent);
+  border: var(--spacing-2xs) dashed var(--colors-accent-brand-muted);
+  border-radius: var(--radius-radius-2xl);
+  pointer-events: auto;
+}
+
+.abc-canvas-host ::deep .abc-cv-empty-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-abc-empty-icon);
+  height: var(--ds-abc-empty-icon);
+  margin-bottom: var(--spacing-lg);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+
+.abc-canvas-host ::deep .abc-cv-empty-title { margin-bottom: var(--spacing-sm); font-size: var(--typography-size-text-lg); font-weight: var(--typography-font-weight-bold); color: var(--colors-text-primary); }
+.abc-canvas-host ::deep .abc-cv-empty-sub { margin-bottom: var(--spacing-xl); font-size: var(--typography-size-text-sm); line-height: var(--typography-leading-leading-base); color: var(--colors-text-muted); }
+.abc-canvas-host ::deep .abc-cv-empty-btns { display: flex; gap: var(--spacing-sm); }
+
+/* Buttons the script draws with Parrot's old .abc-btn classes, redrawn in the
+   Button component's language. */
+.abc-canvas-host ::deep .abc-btn {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  height: var(--ds-abc-palette-btn);
+  padding: var(--spacing-none) var(--spacing-md);
+  font-size: var(--typography-size-text-xs);
+  font-weight: var(--typography-font-weight-semibold);
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+  transition: background var(--ds-abc-motion) ease;
+}
+
+.abc-canvas-host ::deep .abc-btn--ghost { color: var(--colors-text-secondary); background: var(--colors-surface-card); border: var(--ds-abc-hairline) solid var(--colors-surface-border); }
+.abc-canvas-host ::deep .abc-btn--ghost:hover { background: var(--colors-interaction-hover); }
+.abc-canvas-host ::deep .abc-btn--primary { color: var(--colors-text-on-primary); background: var(--colors-brand-primary); border: 0; }
+.abc-canvas-host ::deep .abc-btn--primary:hover { background: var(--colors-brand-primary-hover); }
+
+.abc-canvas-host ::deep .abc-palette {
+  position: absolute;
+  top: var(--spacing-lg);
+  left: var(--spacing-lg);
+  z-index: var(--ds-abc-layer-chrome);
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-card);
+  border: var(--ds-abc-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-xl) var(--colors-surface-shadow);
+}
+
+.abc-canvas-host ::deep .abc-palette-btn {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  height: var(--ds-abc-palette-btn);
+  padding: var(--spacing-none) var(--spacing-md);
+  font-size: var(--typography-size-text-xs);
+  font-weight: var(--typography-font-weight-semibold);
+  color: var(--colors-text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  cursor: pointer;
+  transition: background var(--ds-abc-motion) ease;
+}
+
+.abc-canvas-host ::deep .abc-palette-btn:hover { background: var(--colors-interaction-hover); }
+.abc-canvas-host ::deep .abc-palette-btn--sup { color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); }
+.abc-canvas-host ::deep .abc-palette-btn--sup:hover { background: var(--colors-accent-brand-muted); }
+.abc-canvas-host ::deep .abc-pdot { flex-shrink: 0; }
+.abc-canvas-host ::deep .abc-psep { width: var(--ds-abc-hairline); height: var(--spacing-xl); margin: var(--spacing-none) var(--spacing-2xs); background: var(--colors-surface-border); }
+
+.abc-canvas-host ::deep .abc-palette-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-abc-palette-btn);
+  height: var(--ds-abc-palette-btn);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  cursor: pointer;
+  transition: background var(--ds-abc-motion) ease;
+}
+
+.abc-canvas-host ::deep .abc-palette-icon:hover { background: var(--colors-interaction-hover); }
+
+.abc-canvas-host ::deep .abc-hint {
+  position: absolute;
+  top: var(--spacing-lg);
+  left: 50%;
+  z-index: var(--ds-abc-layer-chrome);
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--typography-size-text-xs);
+  font-weight: var(--typography-font-weight-medium);
+  color: var(--colors-text-inverse);
+  background: var(--colors-surface-foreground);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.abc-canvas-host ::deep .abc-inspector {
+  position: absolute;
+  top: var(--spacing-lg);
+  right: var(--spacing-lg);
+  z-index: var(--ds-abc-layer-inspector);
+  width: var(--ds-abc-inspector);
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-abc-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow);
+}
+
+.abc-canvas-host ::deep .abc-pip-wrap {
+  position: absolute;
+  right: var(--spacing-2xl);
+  bottom: var(--spacing-xl);
+  z-index: var(--ds-abc-layer-pip);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.abc-canvas-host ::deep .abc-bubble-wrap { pointer-events: auto; }
+.abc-canvas-host ::deep .abc-pip-row { display: flex; gap: var(--spacing-sm); align-items: flex-end; pointer-events: auto; }
+
+.abc-canvas-host ::deep .abc-ask-btn {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  height: var(--spacing-3xl);
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-none) var(--spacing-md);
+  font-size: var(--typography-size-text-xs);
+  font-weight: var(--typography-font-weight-semibold);
+  color: var(--colors-brand-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-abc-hairline) solid var(--colors-accent-brand-muted);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) var(--colors-surface-shadow);
+  cursor: pointer;
+}
+
+.abc-canvas-host ::deep .abc-pip-fig-wrap { position: relative; }
+.abc-canvas-host ::deep .abc-pip-fig { width: var(--ds-abc-pip); height: var(--ds-abc-pip-height); cursor: pointer; filter: drop-shadow(0 var(--spacing-sm) var(--spacing-lg) var(--colors-surface-shadow)); }
+
+.abc-canvas-host ::deep .abc-pip-min {
+  position: absolute;
+  top: 0;
+  right: calc(var(--spacing-2xs) * -1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ds-abc-pip-min);
+  height: var(--ds-abc-pip-min);
+  color: var(--colors-text-subtle);
+  background: var(--colors-surface-card);
+  border: var(--ds-abc-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-xs) var(--colors-surface-shadow);
+  cursor: pointer;
+}
+
+.abc-canvas-host ::deep .abc-pip-peek {
+  position: absolute;
+  right: calc(var(--spacing-2xl) * -1);
+  bottom: var(--spacing-2xl);
+  z-index: var(--ds-abc-layer-pip);
+  width: var(--ds-abc-pip-peek);
+  height: var(--ds-abc-pip-peek-height);
+  cursor: pointer;
+  filter: drop-shadow(calc(var(--spacing-xs) * -1) var(--spacing-xs) var(--spacing-md) var(--colors-surface-shadow));
+  transform: rotate(-12deg);
+  transition: right var(--ds-abc-peek-motion) ease;
+}
+
+.abc-canvas-host ::deep .abc-pip-peek:hover { right: var(--spacing-xs); }
+
+.abc-canvas-host ::deep .abc-toast {
+  position: absolute;
+  bottom: var(--spacing-2xl);
+  left: 50%;
+  z-index: var(--ds-abc-layer-toast);
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* ── Pip poses (shared by the canvas and the gallery) ────────────────────── */
+
+.abc-page ::deep .abc-pip-svg { display: block; width: 100%; height: 100%; transform-origin: center bottom; }
+.abc-page ::deep .abc-pip-svg--idle { animation: abc-p-idle 3.5s ease-in-out infinite; }
+.abc-page ::deep .abc-pip-svg--curious { animation: abc-p-curious 2s ease-in-out infinite; }
+.abc-page ::deep .abc-pip-svg--happy { animation: abc-p-happy 0.7s cubic-bezier(0.2, 0.7, 0.3, 1.2) 3; }
+.abc-page ::deep .abc-pip-svg--concerned { animation: abc-p-concerned 2.5s ease-in-out infinite; }
+.abc-page ::deep .abc-pip-svg--greet { animation: abc-p-greet 0.6s ease-in-out 2; }
+
+@keyframes abc-p-idle { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(calc(var(--spacing-xs) * -1)); } }
+@keyframes abc-p-curious { 0%, 100% { transform: rotate(-5deg); } 60% { transform: rotate(3deg); } }
+@keyframes abc-p-happy { 0%, 40%, 100% { transform: translateY(0) scale(1); } 20% { transform: translateY(calc(var(--spacing-md) * -1)) scale(1.08); } }
+@keyframes abc-p-concerned { 0%, 100% { transform: rotate(-3deg) translateY(var(--spacing-2xs)); } 50% { transform: rotate(3deg) translateY(var(--spacing-xs)); } }
+@keyframes abc-p-greet { 0%, 50%, 100% { transform: scale(1); } 25% { transform: scale(1.1) rotate(8deg); } }
+
+/* Referenced by the script's inline animation names. */
+@keyframes abc-nodeIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+@keyframes abc-nodeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.9); } }
+@keyframes abc-edgeDraw { to { stroke-dashoffset: 0; } }
+@keyframes abc-bubbleIn { from { transform: translateY(var(--spacing-sm)) scale(0.96); } to { transform: translateY(0) scale(1); } }
+@keyframes abc-toastIn { from { opacity: 0; transform: translateY(var(--spacing-sm)) translateX(-50%); } to { opacity: 1; transform: translateY(0) translateX(-50%); } }
+
+/* ── Mascot gallery ──────────────────────────────────────────────────────── */
+
+.abc-mascot-view {
+  position: absolute;
+  inset: 0;
+  padding: var(--spacing-3xl) var(--spacing-4xl);
+  overflow-y: auto;
+  background: var(--colors-surface-background);
+}
+
+.abc-mascot-content { max-width: var(--ds-abc-mascot-max); margin: var(--spacing-none) auto; }
+::deep .abc-mascot-hero-title { margin: var(--spacing-none); color: var(--colors-text-primary); }
+::deep .abc-mascot-hero-sub { max-width: var(--ds-abc-mascot-measure); margin: var(--spacing-sm) var(--spacing-none) var(--spacing-none); color: var(--colors-text-muted); }
+
+.abc-mascot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--spacing-xl);
+  margin-top: var(--spacing-3xl);
+}
+
+.abc-mascot-card {
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-abc-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.abc-mascot-card-preview {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: var(--ds-abc-mascot-preview);
+  padding: var(--spacing-xl);
+}
+
+.abc-mascot-card-preview--idle { background: linear-gradient(180deg, var(--colors-surface-card), var(--colors-surface-muted)); }
+.abc-mascot-card-preview--curious { background: linear-gradient(180deg, var(--colors-surface-card), var(--colors-accent-brand-subtle)); }
+.abc-mascot-card-preview--happy { background: linear-gradient(180deg, var(--colors-surface-card), var(--colors-feedback-success-subtle)); }
+.abc-mascot-card-preview--concerned { background: linear-gradient(180deg, var(--colors-surface-card), var(--colors-feedback-destructive-subtle)); }
+
+.abc-mascot-pip-wrap { width: var(--ds-abc-mascot-pip); height: var(--ds-abc-mascot-pip-height); }
+.abc-mascot-card-info { display: grid; gap: var(--spacing-sm); padding: var(--spacing-lg); }
+.abc-mascot-card-header { display: flex; gap: var(--spacing-sm); align-items: center; }
+.abc-mascot-card-header ::deep strong { color: var(--colors-text-primary); }
+.abc-mascot-dot { flex-shrink: 0; width: var(--spacing-sm); height: var(--spacing-sm); border-radius: var(--radius-radius-full); }
+.abc-mascot-dot--teal { background: var(--colors-accent-teal-solid); }
+.abc-mascot-dot--brand { background: var(--colors-brand-primary); }
+.abc-mascot-dot--green { background: var(--colors-feedback-success); }
+.abc-mascot-dot--red { background: var(--colors-feedback-destructive); }
+::deep .abc-mascot-pose-desc { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.abc-mascot-guide-card {
+  display: flex;
+  gap: var(--spacing-2xl);
+  align-items: center;
+  margin-top: var(--spacing-2xl);
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-abc-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.abc-mascot-guide-pip { flex-shrink: 0; width: var(--ds-abc-mascot-guide-pip); height: var(--ds-abc-mascot-guide-pip-height); }
+.abc-mascot-guide-body { flex: 1; min-width: 0; }
+.abc-mascot-guide-body ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+::deep .abc-mascot-guide-sub { max-width: var(--ds-abc-mascot-measure); margin: var(--spacing-xs) var(--spacing-none) var(--spacing-none); color: var(--colors-text-muted); }
+
+.abc-mascot-guide-bubble {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-muted);
+  border: var(--ds-abc-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg) var(--radius-radius-lg) var(--radius-radius-lg) var(--radius-radius-xs);
+}
+
+.abc-mascot-guide-opts { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+
+::deep .abc-mascot-opt {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-brand-primary);
+  background: var(--colors-interaction-selected);
+  border: var(--ds-abc-hairline) solid var(--colors-accent-brand-muted);
+  border-radius: var(--radius-radius-md);
+}
+
+@media (max-width: 1280px) {
+  .abc-mascot-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .abc-page ::deep .abc-pip-svg { animation: none; }
+}

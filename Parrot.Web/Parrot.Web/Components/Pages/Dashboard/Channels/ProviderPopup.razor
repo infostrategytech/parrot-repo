@@ -1,0 +1,55 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+
+@* A stand-in for Meta's own window.
+
+   We cannot style the real one, and it is the step that fails most often. This
+   exists so the experience around it — including closing it early — can be
+   built and tested at all. Everything inside it is Meta's; everything outside
+   it is ours. *@
+
+<div class="provider-backdrop">
+    <section class="provider channel-@Channel.Id.ToString().ToLowerInvariant()" role="dialog" aria-modal="true" aria-labelledby="@_titleId">
+        <header class="provider__chrome">
+            <Icon Name="Copy.Glyph" Size="IconSize.Md" Class="provider__chrome-icon" />
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span" id="@_titleId">@Copy.Header</Typography>
+        </header>
+
+        <div class="provider__body">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@Copy.Body</Typography>
+
+            @if (Path == ChannelPath.Coexistence)
+            {
+                @* The one question in Meta's window that cannot be revisited,
+                   called out before they reach it. *@
+                <div class="provider__consent">
+                    <Icon Name="IconName.RiTimeFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>
+                        Meta asks here whether to bring across the last 180 days of chats. This is offered once.
+                    </Typography>
+                </div>
+            }
+        </div>
+
+        <footer class="provider__footer">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnCancel">Close early</Button>
+            <Button Class="provider__cta" @onclick="OnComplete">@Copy.Cta</Button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    private readonly string _titleId = "provider-" + Guid.NewGuid().ToString("N");
+
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    /// <summary>The chosen route, which decides whether the chat-history warning shows.</summary>
+    [Parameter] public ChannelPath? Path { get; set; }
+
+    /// <summary>Closing early is a real outcome, not a cancel — nothing was changed.</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    [Parameter] public EventCallback OnComplete { get; set; }
+
+    private ProviderPopupCopy Copy => ChannelRoutes.Popup(Channel.Id);
+}

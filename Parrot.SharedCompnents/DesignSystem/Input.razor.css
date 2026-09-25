@@ -1,0 +1,236 @@
+/* Input — floating label, icon slots, prefix and helper row. Geometry from the
+   Figma Input spec: 16px radius, 16px/12px padding, 4px row gap, 8px in-field
+   gap, 2px between the floating label and the value.
+
+   Re-authored against tokens. The React version used --ink/--muted/--ink-soft
+   (the pre-Aurora palette) plus #fff, #d7d9dd, #c3c6cc, #dfe1e5, #ebecee and
+   #e6b9b3 — so this field could not respond to dark mode at all. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.field {
+  display: grid;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  /* The floating label's colour travels as a variable rather than as a
+     competing rule: :not(:placeholder-shown) counts as a class, so the lift
+     rule out-specifies any plain state selector trying to recolour it. */
+  --field-float-rest: var(--colors-text-muted);
+  --field-float-lifted: var(--colors-text-secondary);
+}
+
+.field__label {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--colors-text-primary);
+}
+
+.field__label > span { flex: 1; min-width: 0; }
+
+/* The icons come from the caller and carry the caller's scope attribute. */
+.field__label > ::deep svg { flex: 0 0 auto; }
+
+.field__box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  height: var(--ds-field-height);
+  padding: var(--spacing-none) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  text-align: left;
+  background: var(--colors-surface-card);
+  border: var(--ds-field-border-width) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+  transition:
+    border-color var(--ds-field-motion) ease,
+    box-shadow var(--ds-field-motion) ease;
+}
+
+.field {
+  /* Gaps in the token set: no control-height scale, no border-width scale and
+     no motion scale. The half-pixel ring is a hover weight Figma draws as a
+     stroke opacity rather than a width. */
+  --ds-field-height: 58px;
+  --ds-field-border-width: 1px;
+  --ds-field-hover-ring: 0.5px;
+  --ds-field-motion: 160ms;
+}
+
+/* Heavier states are drawn as an inset ring so the box never changes size. */
+.field__box:hover {
+  box-shadow: inset 0 0 0 var(--ds-field-hover-ring) var(--colors-surface-border);
+}
+
+.field__box:focus-within {
+  border-color: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-field-border-width) var(--colors-brand-primary);
+  outline: 0;
+}
+
+.field__box:focus-within { --field-float-lifted: var(--colors-brand-primary); }
+
+.field__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+  color: var(--colors-text-secondary);
+}
+
+.field__prefix {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--colors-text-secondary);
+}
+
+.field__divider {
+  flex: 0 0 auto;
+  width: var(--ds-field-border-width);
+  height: var(--icon-size-icon-lg);
+  background: var(--colors-surface-border);
+}
+
+.field__control {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+}
+
+.field__control > input {
+  position: absolute;
+  inset: auto 0 var(--spacing-md) 0;
+  width: 100%;
+  height: var(--typography-leading-leading-sm);
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+  background: transparent;
+  border: 0;
+  outline: 0;
+  font: inherit;
+}
+
+/* Resting: the label sits exactly where the value will, acting as the
+   placeholder, so nothing moves sideways when it lifts. */
+.field__float {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  overflow: hidden;
+  max-width: 100%;
+  color: var(--field-float-rest);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition:
+    top var(--ds-field-motion) ease,
+    font-size var(--ds-field-motion) ease,
+    line-height var(--ds-field-motion) ease,
+    color var(--ds-field-motion) ease,
+    transform var(--ds-field-motion) ease;
+}
+
+/* Lifted: focused, or holding a value. This is the whole mechanism — the one
+   space in the placeholder attribute is what makes :placeholder-shown false. */
+.field__control > input:focus ~ .field__float,
+.field__control > input:not(:placeholder-shown) ~ .field__float,
+.field__float.is-floated {
+  top: var(--spacing-md);
+  color: var(--field-float-lifted);
+  transform: none;
+}
+
+.field {
+  /* Gap in the token set: the leading scale starts at 14px, and the lifted
+     label needs 12px to sit on the baseline Figma draws it on. Using
+     leading-xxs (14px) pushes it a pixel low. */
+  --ds-field-float-leading: 12px;
+}
+
+.field__helper {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  color: var(--colors-text-muted);
+}
+
+.field__helper > span { flex: 1; min-width: 0; }
+
+.field__helper > ::deep svg {
+  flex: 0 0 auto;
+  width: var(--typography-leading-leading-xxs);
+  height: var(--typography-leading-leading-xxs);
+}
+
+/* Error — border, floating label and helper row all shift together, so the
+   state reads even if the helper text is missed. */
+.field.is-error .field__box {
+  border-color: var(--colors-feedback-destructive-border);
+  box-shadow: inset 0 0 0 var(--ds-field-border-width) var(--colors-feedback-destructive-border);
+}
+
+.field.is-error .field__box:focus-within {
+  border-color: var(--colors-feedback-destructive);
+  box-shadow: inset 0 0 0 var(--ds-field-border-width) var(--colors-feedback-destructive);
+}
+
+.field.is-error {
+  --field-float-rest: var(--colors-feedback-destructive-text);
+  --field-float-lifted: var(--colors-feedback-destructive-text);
+}
+
+.field.is-error .field__helper { color: var(--colors-feedback-destructive-text); }
+.field.is-error .field__icon { color: var(--colors-feedback-destructive-text); }
+
+/* Disabled — flat fill, no border weight, everything muted. */
+.field.is-disabled .field__label,
+.field.is-disabled .field__helper {
+  color: var(--colors-interaction-disabled-foreground);
+}
+
+.field.is-disabled .field__box {
+  background: var(--colors-interaction-disabled-background);
+  border-color: var(--colors-interaction-disabled-border);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+.field.is-disabled {
+  --field-float-rest: var(--colors-interaction-disabled-foreground);
+  --field-float-lifted: var(--colors-interaction-disabled-foreground);
+}
+
+.field.is-disabled .field__control > input,
+.field.is-disabled .field__icon,
+.field.is-disabled .field__prefix {
+  color: var(--colors-interaction-disabled-foreground);
+}
+
+/* The floating label is the one place a size is set here rather than named as
+   a text style, and it is deliberate: the label ANIMATES between two steps of
+   the scale as the field fills. A class swap cannot be transitioned, and doing
+   it in code would put back the "is filled" state the CSS approach removes.
+   Both values are scale tokens, not hand-picked numbers. */
+.field__float {
+  font-size: var(--typography-size-text-sm); /* text-style-exempt: animates to text-xxs on lift */
+  font-weight: var(--typography-font-weight-medium); /* text-style-exempt: matches body-small-medium */
+  line-height: var(--typography-leading-leading-sm); /* text-style-exempt: animated */
+}
+
+.field__control > input:focus ~ .field__float,
+.field__control > input:not(:placeholder-shown) ~ .field__float,
+.field__float.is-floated {
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: animates from text-sm */
+  line-height: var(--ds-field-float-leading); /* text-style-exempt: animated */
+}

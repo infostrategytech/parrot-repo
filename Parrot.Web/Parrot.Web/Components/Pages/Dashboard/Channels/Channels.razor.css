@@ -1,252 +1,46 @@
-/* Styles kept here for Blazor scoped specificity — mirrors app.css channel rules */
+/* The landing screen. Narrower than Products at 1040 rather than 1440, because
+   this is a short list of decisions rather than a table to scan. */
 
-.channels-info-banner {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    padding: 0.875rem 1rem;
-    background: rgba(83,39,158,0.06);
-    border: 1.5px dashed rgba(83,39,158,0.35);
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    color: #374151;
+.channels {
+  padding: var(--spacing-4xl) var(--ds-channels-gutter) var(--spacing-5xl);
 }
 
-.channels-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 1.25rem;
+.channels > * {
+  width: min(var(--ds-channels-max), 100%);
+  margin-inline: auto;
 }
 
-.channel-card {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 1.25rem;
-    border: 1px solid #EDE9FE;
-    border-top: 3px solid rgba(83,39,158,0.18);
-    border-radius: 15px;
-    background: #fff;
-    box-shadow: 0 2px 8px rgba(83,39,158,0.06);
-    transition: box-shadow .22s, transform .22s cubic-bezier(.2,.8,.2,1), border-color .18s;
+.channels {
+  /* Gaps in the token set: no page-gutter or content-width scale. Both come
+     from the design. */
+  --ds-channels-gutter: clamp(28px, 4vw, 66px);
+  --ds-channels-max: 1040px;
+  --ds-channels-measure: 640px;
 }
 
-.channel-card:hover {
-    transform: translateY(-3px);
-    border-top-color: #53279E;
-    box-shadow: 0 16px 32px -10px rgba(83,39,158,.22), 0 0 0 1px #D3BDF9;
+.channels__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-3xl);
+  margin-bottom: var(--spacing-2xl);
 }
 
-.channel-card-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+.channels__heading { display: grid; gap: var(--spacing-sm); }
+
+::deep .channels__lede {
+  max-width: var(--ds-channels-measure);
+  color: var(--colors-text-muted);
 }
 
-.channel-card-icon {
-    width: 2.5rem;
-    height: 2.5rem;
-    object-fit: contain;
+.channels__list {
+  display: grid;
+  gap: var(--spacing-sm);
 }
 
-.channel-card-status {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    font-size: 0.8125rem;
-    color: #9CA3AF;
-    background: #F9FAFB;
-    padding: 3px 9px;
-    border-radius: 20px;
-    border: 1px solid #E5E7EB;
-}
-
-.channel-card-status--connected {
-    color: #059669;
-    background: rgba(5,150,105,0.08);
-    border-color: rgba(5,150,105,0.2);
-}
-
-.channel-status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: #D1D5DB;
-    display: inline-block;
-}
-
-.channel-card-status--connected .channel-status-dot {
-    background: #059669;
-}
-
-.channel-card-name {
-    font-size: 1rem;
-    font-weight: 700;
-    color: #1F2937;
-    margin: 0.375rem 0 0;
-}
-
-.channel-card-desc {
-    font-size: 0.8125rem;
-    color: #6B7280;
-    margin: 0;
-    line-height: 1.5;
-}
-
-.channel-card-meta {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    margin-top: 0.5rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid rgba(83,39,158,0.1);
-}
-
-.channel-card-meta-item {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    font-size: 0.8125rem;
-    color: #6B7280;
-}
-
-.channel-card-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    width: 100%;
-    padding: 0.625rem 1rem;
-    border: 1.5px solid rgba(83,39,158,0.3);
-    border-radius: 0.5rem;
-    background: rgba(83,39,158,0.04);
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #53279E;
-    cursor: pointer;
-    margin-top: 0.25rem;
-    transition: background 0.15s, border-color 0.15s;
-    box-sizing: border-box;
-}
-
-.channel-card-btn:hover {
-    background: rgba(83,39,158,0.09);
-    border-color: #53279E;
-}
-
-.channel-card-btn--disconnect {
-    color: #DC2626;
-    border-color: #FECACA;
-    background: #fff;
-}
-
-.channel-card-btn--disconnect:hover {
-    background: #FEF2F2;
-    border-color: #DC2626;
-}
-
-/* ── Connect WhatsApp modal ── */
-.cwm-video-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.875rem 1rem;
-    border: 1px solid #E8E8EB;
-    border-radius: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.cwm-video-text {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.cwm-video-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #1F2937;
-}
-
-.cwm-video-sub {
-    font-size: 0.75rem;
-    color: #6B7280;
-}
-
-.cwm-watch-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.375rem;
-    padding: 0.5rem 1rem;
-    border: 1.5px solid #53279E;
-    border-radius: 0.375rem;
-    background: #fff;
-    font-size: 0.8125rem;
-    font-weight: 500;
-    color: #53279E;
-    cursor: pointer;
-    white-space: nowrap;
-}
-
-.cwm-checklist {
-    list-style: none;
-    margin: 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-}
-
-.cwm-checklist-item {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.75rem 0;
-    font-size: 0.875rem;
-    color: #374151;
-    border-bottom: 1px solid #F3F4F6;
-}
-
-.cwm-checklist-item:last-child {
-    border-bottom: none;
-}
-
-.cwm-check-icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-}
-
-.cwm-info-box {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: rgba(83,39,158,0.06);
-    border: 1.5px dashed rgba(83,39,158,0.3);
-    border-radius: 0.5rem;
-    font-size: 0.8125rem;
-    color: #374151;
-    margin-top: 1rem;
-}
-
-.cwm-btn {
-    flex: 1;
-    padding: 0.625rem 1.5rem;
-    border-radius: 0.5rem;
-    font-size: 0.9375rem;
-    font-weight: 500;
-    cursor: pointer;
-    border: 1px solid #E8E8EB;
-}
-
-.cwm-btn--cancel {
-    background: #fff;
-    color: #374151;
-}
-
-.cwm-btn--start {
-    background: #53279E;
-    color: #fff;
-    border-color: #53279E;
+/* A setup flow gets the page to itself and sits higher up it, because it is a
+   single task rather than a list to browse. */
+.channels--setup {
+  padding-top: var(--spacing-5xl);
+  padding-bottom: var(--spacing-4xl);
 }

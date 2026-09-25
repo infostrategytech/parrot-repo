@@ -1,92 +1,63 @@
-<div class="pb-field">
-    <label class="pb-field-label">Notification name</label>
-    <input class="pb-input" placeholder="e.g Order confirmation" value="@Step.NotificationName"
-           @oninput="e => Step.NotificationName = e.Value?.ToString() ?? string.Empty" />
-    <span class="pb-field-hint">For internal reference only</span>
-</div>
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 
-<div class="pb-field">
-    <label class="pb-field-label">Message content</label>
-    <div class="pb-notif-editor">
-        <div class="pb-notif-toolbar">
-            <button class="pb-notif-tool" title="Bold"><b>B</b></button>
-            <button class="pb-notif-tool pb-notif-tool--italic" title="Italic">I</button>
-            <button class="pb-notif-tool pb-notif-tool--underline" title="Underline">U</button>
-            <button class="pb-notif-tool pb-notif-tool--strike" title="Strikethrough">S</button>
-            <button class="pb-notif-tool" title="Link">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                    <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                </svg>
-            </button>
-            <div class="pb-notif-tool-sep"></div>
-            <button class="pb-notif-tool" title="Align left">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="17" y1="10" x2="3" y2="10" />
-                    <line x1="21" y1="6" x2="3" y2="6" />
-                    <line x1="21" y1="14" x2="3" y2="14" />
-                    <line x1="13" y1="18" x2="3" y2="18" />
-                </svg>
-            </button>
-            <button class="pb-notif-tool" title="Align center">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="10" x2="6" y2="10" />
-                    <line x1="21" y1="6" x2="3" y2="6" />
-                    <line x1="21" y1="14" x2="3" y2="14" />
-                    <line x1="16" y1="18" x2="8" y2="18" />
-                </svg>
-            </button>
-            <button class="pb-notif-tool" title="Align right">
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="21" y1="10" x2="7" y2="10" />
-                    <line x1="21" y1="6" x2="3" y2="6" />
-                    <line x1="21" y1="14" x2="3" y2="14" />
-                    <line x1="21" y1="18" x2="11" y2="18" />
-                </svg>
-            </button>
+<Input FloatingLabel="Notification name"
+       HelperText="For internal reference only"
+       Value="@Step.NotificationName"
+       ValueChanged="value => Step.NotificationName = value ?? string.Empty" />
+
+<div class="step-field">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Message content</Typography>
+    <div class="step-editor">
+        <div class="step-toolbar" role="toolbar" aria-label="Formatting">
+            <button type="button" class="step-tool" title="Bold" aria-label="Bold"><Typography TextStyle="TextStyle.Small12Bold" As="span">B</Typography></button>
+            <button type="button" class="step-tool step-tool--italic" title="Italic" aria-label="Italic"><Typography TextStyle="TextStyle.Small12Medium" As="span">I</Typography></button>
+            <button type="button" class="step-tool step-tool--underline" title="Underline" aria-label="Underline"><Typography TextStyle="TextStyle.Small12Medium" As="span">U</Typography></button>
+            <button type="button" class="step-tool step-tool--strike" title="Strikethrough" aria-label="Strikethrough"><Typography TextStyle="TextStyle.Small12Medium" As="span">S</Typography></button>
+            <button type="button" class="step-tool" title="Link" aria-label="Link"><Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" /></button>
         </div>
-        <textarea class="pb-notif-textarea" rows="5" placeholder="Type your message here..."
+        <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
+                  rows="5"
+                  placeholder="Type your message here..."
+                  aria-label="Message content"
                   value="@Step.MessageContent"
                   @oninput="e => Step.MessageContent = e.Value?.ToString() ?? string.Empty"></textarea>
     </div>
 </div>
 
-<div class="pb-field">
-    <div class="pb-dynamic-section">
-        <span class="pb-dynamic-title">Insert dynamic data</span>
-        <div class="pb-dynamic-group">
-            <span class="pb-dynamic-group-label">COLLECTED INFORMATION</span>
-            <div class="pb-dynamic-chips">
-                @foreach (var chip in new[] { "Customer Name", "Quantity", "Customer Order", "Delivery Address" })
-                {
-                    var chipVal = chip;
-                    <button class="pb-dynamic-chip" @onclick="() => InsertData(chipVal)">@chipVal</button>
-                }
-            </div>
+<div class="step-data">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Insert dynamic data</Typography>
+    <div class="step-data-group">
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline">Collected information</Typography>
+        <div class="step-chips">
+            @foreach (var chip in new[] { "Customer Name", "Quantity", "Customer Order", "Delivery Address" })
+            {
+                var chipVal = chip;
+                <button type="button" class="step-data-chip" @onclick="() => InsertData(chipVal)">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@chipVal</Typography>
+                </button>
+            }
         </div>
-        <div class="pb-dynamic-group">
-            <span class="pb-dynamic-group-label">SYSTEM FIELDS</span>
-            <div class="pb-dynamic-chips">
-                @foreach (var chip in new[] { "Reference Number", "Current Date", "Current Time", "Order Counter" })
-                {
-                    var chipVal = chip;
-                    <button class="pb-dynamic-chip" @onclick="() => InsertData(chipVal)">@chipVal</button>
-                }
-            </div>
+    </div>
+    <div class="step-data-group">
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline">System fields</Typography>
+        <div class="step-chips">
+            @foreach (var chip in new[] { "Reference Number", "Current Date", "Current Time", "Order Counter" })
+            {
+                var chipVal = chip;
+                <button type="button" class="step-data-chip" @onclick="() => InsertData(chipVal)">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@chipVal</Typography>
+                </button>
+            }
         </div>
     </div>
 </div>
 
 @if (!string.IsNullOrEmpty(Step.MessageContent))
 {
-    <div class="pb-field">
-        <div class="pb-preview-section">
-            <span class="pb-preview-label">Preview message</span>
-            <div class="pb-preview-bubble">@Step.MessageContent</div>
+    <div class="step-preview">
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline">Preview message</Typography>
+        <div class="step-preview-bubble">
+            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose>@Step.MessageContent</Typography>
         </div>
     </div>
 }

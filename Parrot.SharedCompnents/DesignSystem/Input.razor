@@ -1,0 +1,138 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The floating label is driven entirely by CSS. The input always carries a
+   placeholder of one space, so :placeholder-shown is false the moment there is
+   a value and the label lifts without any "is filled" state in C#. Remove that
+   placeholder and the label stops moving — with no error anywhere. *@
+
+<div class="@ClassName">
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <label class="field__label @TextStyle.Small12Medium.ToClassName()" for="@InputId">
+            @if (LabelIconLeft is not null)
+            {
+                @LabelIconLeft
+            }
+            <span>@Label</span>
+            @if (LabelIconRight is not null)
+            {
+                @LabelIconRight
+            }
+        </label>
+    }
+
+    <div class="field__box">
+        @if (IconLeft is not null)
+        {
+            <span class="field__icon">@IconLeft</span>
+        }
+
+        @if (PrefixIcon is not null || !string.IsNullOrWhiteSpace(PrefixText))
+        {
+            <span class="field__prefix">
+                @if (PrefixIcon is not null)
+                {
+                    @PrefixIcon
+                }
+                @if (!string.IsNullOrWhiteSpace(PrefixText))
+                {
+                    <b class="@TextStyle.BodySmallMedium.ToClassName()">@PrefixText</b>
+                }
+            </span>
+            <span class="field__divider"></span>
+        }
+
+        <span class="field__control">
+            <input id="@InputId"
+                   class="@TextStyle.BodySmallMedium.ToClassName()"
+                   type="@Type"
+                   value="@Value"
+                   placeholder=" "
+                   disabled="@Disabled"
+                   aria-describedby="@(string.IsNullOrWhiteSpace(HelperText) ? null : HelperId)"
+                   aria-invalid="@(Error ? "true" : null)"
+                   @oninput="OnInput"
+                   @attributes="AdditionalAttributes" />
+            <label class="field__float" for="@InputId">@FloatingLabel</label>
+        </span>
+
+        @if (IconRight is not null)
+        {
+            <span class="field__icon">@IconRight</span>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(HelperText))
+    {
+        <p class="field__helper @TextStyle.Small12Regular.ToClassName()" id="@HelperId">
+            @if (HelperIconLeft is not null)
+            {
+                @HelperIconLeft
+            }
+            <span>@HelperText</span>
+            @if (HelperIconRight is not null)
+            {
+                @HelperIconRight
+            }
+        </p>
+    }
+</div>
+
+@code {
+    private readonly string _generatedId = "field-" + Guid.NewGuid().ToString("N");
+
+    /// <summary>The label that sits in the field until it holds a value. Always required — a field with no name is not usable.</summary>
+    [Parameter, EditorRequired] public string FloatingLabel { get; set; } = "";
+
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+
+    /// <summary>An additional label above the field, for when the floating one is not enough.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public RenderFragment? LabelIconLeft { get; set; }
+    [Parameter] public RenderFragment? LabelIconRight { get; set; }
+
+    [Parameter] public string? HelperText { get; set; }
+
+    [Parameter] public RenderFragment? HelperIconLeft { get; set; }
+    [Parameter] public RenderFragment? HelperIconRight { get; set; }
+
+    [Parameter] public bool Error { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public RenderFragment? IconLeft { get; set; }
+    [Parameter] public RenderFragment? IconRight { get; set; }
+
+    [Parameter] public RenderFragment? PrefixIcon { get; set; }
+    [Parameter] public string? PrefixText { get; set; }
+
+    [Parameter] public string Type { get; set; } = "text";
+
+    [Parameter] public string? Id { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string InputId => Id ?? _generatedId;
+
+    private string HelperId => InputId + "-helper";
+
+    private Task OnInput(ChangeEventArgs args) =>
+        ValueChanged.InvokeAsync(args.Value?.ToString());
+
+    private string ClassName
+    {
+        get
+        {
+            var name = "field";
+            if (Error) name += " is-error";
+            if (Disabled) name += " is-disabled";
+            return string.IsNullOrWhiteSpace(Class) ? name : name + " " + Class;
+        }
+    }
+}

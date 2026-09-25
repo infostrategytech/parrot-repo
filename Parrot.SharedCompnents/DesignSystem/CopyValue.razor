@@ -1,0 +1,45 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using Parrot.SharedComponents.Services
+@inject AuroraInterop Interop
+
+@* A value that exists to be pasted somewhere else.
+
+   Shown in full rather than truncated, because a webhook URL that is cut off
+   is a webhook URL someone will retype by hand and get wrong. *@
+
+<div class="copy-value">
+    <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="copy-value__label ds-overline">
+        @Label
+    </Typography>
+    <Typography TextStyle="TextStyle.Code14Regular" As="code" Class="copy-value__text">@Value</Typography>
+    <button type="button"
+            class="copy-value__button"
+            aria-label="@($"Copy {Label.ToLowerInvariant()}")"
+            @onclick="CopyAsync">
+        <Icon Name="@(_copied ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
+    </button>
+</div>
+
+@code {
+    private bool _copied;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+
+    /// <summary>Raised with the label, so the page can say what was copied.</summary>
+    [Parameter] public EventCallback<string> OnCopy { get; set; }
+
+    private async Task CopyAsync()
+    {
+        await Interop.CopyAsync(Value);
+        await OnCopy.InvokeAsync(Label);
+
+        // A tick on the button itself, so the confirmation is where the eye
+        // already is rather than only in a toast across the page.
+        _copied = true;
+        await Task.Delay(1400);
+        _copied = false;
+        StateHasChanged();
+    }
+}

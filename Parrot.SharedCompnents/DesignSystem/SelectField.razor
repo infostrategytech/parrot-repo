@@ -1,0 +1,114 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A choice, shaped like a field.
+
+   FilterPopover is the right control on a toolbar, where it is a compact pill
+   sitting beside a search box. It is the wrong one inside a form: next to a
+   58px floating-label Input it reads as a different species, and a column of
+   mismatched control heights is what makes a form feel cluttered.
+
+   So this wears the field shell — same height, same radius, same floating
+   label — and opens the same menu. Options are PopoverOption, exactly as in
+   FilterPopover, so a menu row looks identical wherever it appears. *@
+
+<div class="@ClassName">
+    <div class="select-field__box"
+         role="button"
+         tabindex="0"
+         aria-haspopup="listbox"
+         aria-expanded="@Open.ToString().ToLowerInvariant()"
+         aria-disabled="@(Disabled ? "true" : null)"
+         @onclick="ToggleAsync"
+         @onkeydown="OnKeyDown">
+
+        @if (IconLeft is not null)
+        {
+            <span class="select-field__icon">@IconLeft</span>
+        }
+
+        <span class="select-field__control">
+            <span class="@ValueClass">@DisplayValue</span>
+            <span class="@FloatClass">@FloatingLabel</span>
+        </span>
+
+        <Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Sm" Class="select-field__chevron" />
+    </div>
+
+    @if (Open)
+    {
+        <button type="button"
+                class="select-field__dismiss"
+                tabindex="-1"
+                aria-hidden="true"
+                @onclick="CloseAsync"></button>
+
+        <div class="select-field__menu" role="listbox" aria-label="@FloatingLabel">
+            @ChildContent
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(HelperText))
+    {
+        <p class="select-field__helper @TextStyle.Small12Regular.ToClassName()">@HelperText</p>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string FloatingLabel { get; set; } = "";
+
+    /// <summary>The chosen option's label. Empty leaves the field looking unanswered.</summary>
+    [Parameter] public string? Value { get; set; }
+
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public RenderFragment? IconLeft { get; set; }
+
+    [Parameter] public string? HelperText { get; set; }
+
+    [Parameter] public bool Error { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    private bool HasValue => !string.IsNullOrWhiteSpace(Value);
+
+    private string DisplayValue => Value ?? "";
+
+    // The label lifts when the field has an answer, exactly as Input's does —
+    // there it is driven by :placeholder-shown, and here there is no input to
+    // ask, so the state is explicit.
+    private string FloatClass =>
+        HasValue ? "select-field__float is-floated" : "select-field__float";
+
+    private string ValueClass =>
+        "select-field__value " + TextStyle.BodySmallMedium.ToClassName();
+
+    private string ClassName
+    {
+        get
+        {
+            var name = "select-field";
+            if (Error) name += " is-error";
+            if (Disabled) name += " is-disabled";
+            return name;
+        }
+    }
+
+    private Task ToggleAsync() => Disabled ? Task.CompletedTask : OpenChanged.InvokeAsync(!Open);
+
+    private Task CloseAsync() => OpenChanged.InvokeAsync(false);
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (Disabled) return;
+
+        // A div with role="button" gets keyboard activation for free from a
+        // real button; this one has to provide it, which is the price of
+        // needing a field-shaped container.
+        if (args.Key is "Enter" or " ") await OpenChanged.InvokeAsync(!Open);
+        else if (args.Key == "Escape" && Open) await OpenChanged.InvokeAsync(false);
+    }
+}

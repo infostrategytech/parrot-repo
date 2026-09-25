@@ -1,0 +1,369 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@inject AuroraInterop Interop
+
+@* Three sections, in order, each saved as it is finished.
+
+   Two pieces of state, deliberately apart. ManualStage is the furthest point
+   reached and is what the server stores; OpenSection is merely which section is
+   expanded. Collapsing them into one made the flow one-way, so an SME who
+   mistyped a phone number had no way back to it. *@
+
+<Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="manual__intro">
+    Complete these three sections to connect your business number. Your progress is saved after each section.
+</Typography>
+
+<div class="manual">
+    @* ── 1 ─────────────────────────────────────────────────────────────── *@
+    <section class="manual__section @SectionClass(0, ManualSetupStage.Number)" @ref="_numberRef">
+        <header class="manual__header">
+            <span class="manual__marker">
+                @if (Reached > 0)
+                {
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.Small12Bold" As="span">1</Typography>
+                }
+            </span>
+            <div class="manual__titles">
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Set Up Your Number in Meta</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add and verify the business number customers will message.</Typography>
+            </div>
+            <ManualSectionAside Done="Reached > 0"
+                                IsCurrent="Reached == 0"
+                                IsOpen="OpenSection == ManualSetupStage.Number"
+                                OnReopen="() => OpenSectionChanged.InvokeAsync(ManualSetupStage.Number)" />
+        </header>
+
+        @if (OpenSection == ManualSetupStage.Number)
+        {
+            <div class="manual__body">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                    On the <strong>API Setup</strong> page, add your real business number instead of Meta's test
+                    number. Complete the business profile, then verify the number by SMS or call.
+                </Typography>
+
+                <ul class="manual__checklist">
+                    @foreach (var item in NumberChecklist)
+                    {
+                        <li>
+                            <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@item</Typography>
+                        </li>
+                    }
+                </ul>
+
+                <Button disabled="@Busy" @onclick="() => OnAdvance.InvokeAsync(ManualSetupStage.Credentials)">
+                    <ChildContent>My Number Is Verified</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            </div>
+        }
+    </section>
+
+    @* ── 2 ─────────────────────────────────────────────────────────────── *@
+    <section class="manual__section @SectionClass(1, ManualSetupStage.Credentials)" @ref="_credentialsRef">
+        <header class="manual__header">
+            <span class="manual__marker">
+                @if (Reached > 1)
+                {
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.Small12Bold" As="span">2</Typography>
+                }
+            </span>
+            <div class="manual__titles">
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Meta to Parrot</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the three details Parrot needs to send messages.</Typography>
+            </div>
+            <ManualSectionAside Done="Reached > 1"
+                                IsCurrent="Reached == 1"
+                                IsOpen="OpenSection == ManualSetupStage.Credentials"
+                                OnReopen="() => OpenSectionChanged.InvokeAsync(ManualSetupStage.Credentials)" />
+        </header>
+
+        @if (OpenSection == ManualSetupStage.Credentials)
+        {
+            <div class="manual__body">
+                @* The single most expensive mistake in this whole flow: a
+                   temporary token works today and silently takes the
+                   connection down tomorrow. *@
+                <InlineError Tone="InlineErrorTone.Warning"
+                             Message="The temporary token on API Setup is fine for testing and expires after about a day. Use a permanent token when you want Parrot to stay connected." />
+
+                <div class="manual__token-type" role="group" aria-label="Access token type">
+                    <button type="button"
+                            class="@(Permanent ? "manual__token is-selected" : "manual__token")"
+                            aria-pressed="@Permanent.ToString().ToLowerInvariant()"
+                            @onclick="() => PermanentChanged.InvokeAsync(true)">
+                        <Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Sm" />
+                        <span class="manual__token-copy">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Permanent Token</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Best for an ongoing connection</Typography>
+                        </span>
+                        <span class="manual__token-tick@(Permanent ? " is-shown" : null)" aria-hidden="true">
+                            <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                        </span>
+                    </button>
+
+                    <button type="button"
+                            class="@(Permanent ? "manual__token" : "manual__token is-selected")"
+                            aria-pressed="@((!Permanent).ToString().ToLowerInvariant())"
+                            @onclick="() => PermanentChanged.InvokeAsync(false)">
+                        <Icon Name="IconName.RiTimeFill" Size="IconSize.Sm" />
+                        <span class="manual__token-copy">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Temporary Token</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Use it to test for about one day</Typography>
+                        </span>
+                        <span class="manual__token-tick@(!Permanent ? " is-shown" : null)" aria-hidden="true">
+                            <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                        </span>
+                    </button>
+                </div>
+
+                @if (Permanent)
+                {
+                    <ol class="manual__ordered">
+                        @foreach (var item in PermanentTokenSteps)
+                        {
+                            <li>
+                                <Typography TextStyle="TextStyle.Small12Bold" As="span" Class="manual__order-marker">
+                                    @(PermanentTokenSteps.ToList().IndexOf(item) + 1)
+                                </Typography>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>
+                                    <Emphasis Text="@item" />
+                                </Typography>
+                            </li>
+                        }
+                    </ol>
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                        Copy the temporary access token shown near the top of Meta's API Setup page.
+                    </Typography>
+                }
+
+                <div class="manual__fields">
+                    <Input FloatingLabel="Phone Number ID"
+                           Value="@PhoneNumberId"
+                           ValueChanged="PhoneNumberIdChanged"
+                           inputmode="numeric"
+                           maxlength="64"
+                           HelperText="This is the ID shown in Meta, not your phone number." />
+
+                    <Input FloatingLabel="WhatsApp Business Account ID"
+                           Value="@BusinessAccountId"
+                           ValueChanged="BusinessAccountIdChanged"
+                           inputmode="numeric"
+                           maxlength="64" />
+
+                    @* type=password, autocomplete off, and cleared after
+                       saving — the server only ever stores it masked. *@
+                    @* Namespace-qualified because Razor treats a component
+                       named like an HTML void element as self-closing, and this
+                       one needs a child slot for the lock. *@
+                    <Parrot.SharedComponents.DesignSystem.Input
+                        FloatingLabel="@(Permanent ? "Permanent Access Token" : "Temporary Access Token")"
+                        Value="@AccessToken"
+                        ValueChanged="AccessTokenChanged"
+                        type="password"
+                        autocomplete="off"
+                        spellcheck="false"
+                        maxlength="8192"
+                        HelperText="@(HasSavedToken ? "An access token is saved. Enter a new token to replace it." : "Hidden as you type and cleared after saving. Never send this token in a chat or email.")">
+                        <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                    </Parrot.SharedComponents.DesignSystem.Input>
+                </div>
+
+                <Button disabled="@(!CredentialsReady || Busy)"
+                        @onclick="() => OnAdvance.InvokeAsync(ManualSetupStage.Webhook)">
+                    <ChildContent>Save Connection Details</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            </div>
+        }
+    </section>
+
+    @* ── 3 ─────────────────────────────────────────────────────────────── *@
+    <section class="manual__section @SectionClass(2, ManualSetupStage.Webhook)" @ref="_webhookRef">
+        <header class="manual__header">
+            <span class="manual__marker">
+                @if (Reached > 2)
+                {
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.Small12Bold" As="span">3</Typography>
+                }
+            </span>
+            <div class="manual__titles">
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Turn On Incoming Messages</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Connect Meta's webhook so new messages reach your inbox.</Typography>
+            </div>
+            <ManualSectionAside Done="Reached > 2"
+                                IsCurrent="Reached == 2"
+                                IsOpen="OpenSection == ManualSetupStage.Webhook"
+                                OnReopen="() => OpenSectionChanged.InvokeAsync(ManualSetupStage.Webhook)" />
+        </header>
+
+        @if (OpenSection == ManualSetupStage.Webhook)
+        {
+            <div class="manual__body">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                    Open <strong>WhatsApp → Configuration</strong>. Paste these values under Webhook, then select
+                    <strong>Verify and save</strong>.
+                </Typography>
+
+                <div class="manual__copy-values">
+                    <CopyValue Label="Callback URL" Value="@Webhook.CallbackUrl" OnCopy="OnCopy" />
+                    <CopyValue Label="Verify Token" Value="@Webhook.VerifyToken" OnCopy="OnCopy" />
+                </div>
+
+                <InlineError Tone="InlineErrorTone.Info"
+                             Message="After it verifies, select Manage and subscribe to messages." />
+
+                <Checkbox State="@(WebhookConfirmed ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                          StateChanged="@(state => WebhookConfirmedChanged.InvokeAsync(state == CheckboxState.Checked))"
+                          Label="I verified the webhook and subscribed to messages"
+                          Description="This allows new customer messages to arrive in Parrot." />
+
+                <Button disabled="@(!WebhookConfirmed || Busy)" @onclick="OnFinish">
+                    <ChildContent>Continue to Message Test</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            </div>
+        }
+    </section>
+</div>
+
+@* A route to a person, not a disclosure. An earlier version hid one paragraph
+   of advice behind a click; someone stuck on a Meta screen needs to reach
+   support, not read a tip. *@
+<p class="manual__help">
+    @if (SupportEmail is { Length: > 0 })
+    {
+        <a class="@TextStyle.Small12Semibold.ToClassName()"
+           href="@($"mailto:{SupportEmail}?subject=Help%20connecting%20WhatsApp")">
+            Need help with this setup? Contact support
+        </a>
+    }
+    else
+    {
+        @* No support address is configured for this deployment (Support:Email). *@
+        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Need help with this setup? Contact support</Typography>
+    }
+</p>
+
+@code {
+    [Inject] private IConfiguration Configuration { get; set; } = default!;
+
+    private string? SupportEmail => Configuration["Support:Email"];
+
+    private ElementReference _numberRef;
+    private ElementReference _credentialsRef;
+    private ElementReference _webhookRef;
+
+    /// <summary>
+    /// What was open at the end of the last render. Opening a section collapses
+    /// the one above it, so the panel that just opened can end up anywhere on
+    /// screen — including below the fold on a card this long.
+    /// </summary>
+    private ManualSetupStage? _scrolled;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Not on first render: arriving at the step should not move the page.
+        if (firstRender) { _scrolled = OpenSection; return; }
+        if (_scrolled == OpenSection) return;
+
+        _scrolled = OpenSection;
+        await Interop.ScrollIntoViewAsync(OpenSection switch
+        {
+            ManualSetupStage.Number => _numberRef,
+            ManualSetupStage.Credentials => _credentialsRef,
+            _ => _webhookRef
+        });
+    }
+
+    private static readonly string[] NumberChecklist =
+    [
+        "Use a number that can receive an SMS or call now",
+        "Enter the business name customers recognise",
+        "Save the six-digit two-step verification PIN"
+    ];
+
+    private static readonly string[] PermanentTokenSteps =
+    [
+        "Open **Business Settings → Users → System users**.",
+        "Add an Admin system user and assign your WhatsApp app.",
+        "Generate a token that never expires with **whatsapp_business_messaging** and **whatsapp_business_management**."
+    ];
+
+    /// <summary>The furthest section reached. The server stores this.</summary>
+    [Parameter, EditorRequired] public ManualSetupStage ManualStage { get; set; }
+
+    /// <summary>Which section is expanded. Only a view, so any finished section can be reopened.</summary>
+    [Parameter, EditorRequired] public ManualSetupStage OpenSection { get; set; }
+
+    [Parameter] public EventCallback<ManualSetupStage> OpenSectionChanged { get; set; }
+
+    [Parameter, EditorRequired] public ChannelWebhook Webhook { get; set; } = default!;
+
+    [Parameter] public string? PhoneNumberId { get; set; }
+    [Parameter] public EventCallback<string?> PhoneNumberIdChanged { get; set; }
+
+    [Parameter] public string? BusinessAccountId { get; set; }
+    [Parameter] public EventCallback<string?> BusinessAccountIdChanged { get; set; }
+
+    [Parameter] public string? AccessToken { get; set; }
+    [Parameter] public EventCallback<string?> AccessTokenChanged { get; set; }
+
+    [Parameter] public bool Permanent { get; set; } = true;
+    [Parameter] public EventCallback<bool> PermanentChanged { get; set; }
+
+    [Parameter] public bool WebhookConfirmed { get; set; }
+    [Parameter] public EventCallback<bool> WebhookConfirmedChanged { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>
+    /// Parrot stores the token and only reports that one exists, so a reopened
+    /// credentials section can be saved again without retyping it.
+    /// </summary>
+    [Parameter] public bool HasSavedToken { get; set; }
+
+    [Parameter] public EventCallback<ManualSetupStage> OnAdvance { get; set; }
+    [Parameter] public EventCallback OnFinish { get; set; }
+    [Parameter] public EventCallback<string> OnCopy { get; set; }
+
+    private int Reached => ManualStage switch
+    {
+        ManualSetupStage.Number => 0,
+        ManualSetupStage.Credentials => 1,
+        ManualSetupStage.Webhook => 2,
+        _ => 3
+    };
+
+    private bool CredentialsReady =>
+        !string.IsNullOrWhiteSpace(PhoneNumberId) &&
+        !string.IsNullOrWhiteSpace(BusinessAccountId) &&
+        (!string.IsNullOrWhiteSpace(AccessToken) || HasSavedToken);
+
+    private string SectionClass(int index, ManualSetupStage stage)
+    {
+        var name = Reached > index ? "is-complete" : Reached == index ? "is-current" : "is-upcoming";
+        return OpenSection == stage ? name + " is-open" : name;
+    }
+
+    /// <summary>
+    /// A finished section offers a way back in. Everything here is typed into
+    /// Meta by hand, so a wrong digit is likely and the fix has to be reachable
+    /// without restarting the whole setup.
+    /// </summary>
+}

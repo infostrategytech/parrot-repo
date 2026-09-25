@@ -1,0 +1,114 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Deliberately not a native <input type="checkbox">: the whole row is the hit
+   target, and the tick is drawn so it can inherit colour and grey out with the
+   box. role="checkbox" plus aria-checked keeps the semantics a native input
+   would have given, including the "mixed" state a native input cannot express
+   without script. *@
+
+<button type="button"
+        role="checkbox"
+        aria-checked="@AriaChecked"
+        aria-labelledby="@(HasVisibleLabel ? _labelId : null)"
+        aria-label="@(HasVisibleLabel ? null : AriaLabel)"
+        disabled="@Disabled"
+        class="@ClassName"
+        @onclick="ToggleAsync"
+        @attributes="AdditionalAttributes">
+
+    <span class="checkbox__box">
+        @if (State == CheckboxState.Checked)
+        {
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M10.28 2.97a.75.75 0 0 1 0 1.06l-5 5a.75.75 0 0 1-1.06 0l-2.5-2.5a.75.75 0 1 1 1.06-1.06L4.75 7.44l4.47-4.47a.75.75 0 0 1 1.06 0Z" />
+            </svg>
+        }
+        else if (State == CheckboxState.Indeterminate)
+        {
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true" focusable="false">
+                <path d="M2.5 5.25h7a.75.75 0 0 1 0 1.5h-7a.75.75 0 0 1 0-1.5Z" />
+            </svg>
+        }
+    </span>
+
+    @if (HasVisibleLabel)
+    {
+        <span class="checkbox__text" id="@_labelId">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="strong" Prose>
+                @if (Icon is not null)
+                {
+                    @Icon
+                }
+                @Label
+            </Typography>
+            @if (!string.IsNullOrWhiteSpace(Description))
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@Description</Typography>
+            }
+        </span>
+    }
+</button>
+
+@code {
+    private readonly string _labelId = "checkbox-" + Guid.NewGuid().ToString("N");
+
+    [Parameter, EditorRequired] public CheckboxState State { get; set; }
+
+    /// <summary>
+    /// Paired with <see cref="State"/> for @bind-State. Indeterminate resolves
+    /// to checked when clicked, which is the convention everywhere: a partially
+    /// selected group fills in rather than emptying.
+    /// </summary>
+    [Parameter] public EventCallback<CheckboxState> StateChanged { get; set; }
+
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Optional glyph shown before the label.</summary>
+    [Parameter] public RenderFragment? Icon { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Required when there is no visible <see cref="Label"/>.</summary>
+    [Parameter] public string? AriaLabel { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private bool HasVisibleLabel => !string.IsNullOrWhiteSpace(Label);
+
+    private string AriaChecked => State switch
+    {
+        CheckboxState.Checked => "true",
+        CheckboxState.Indeterminate => "mixed",
+        _ => "false"
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (!HasVisibleLabel && string.IsNullOrWhiteSpace(AriaLabel))
+        {
+            throw new ArgumentException(
+                "Checkbox needs either a visible Label or an AriaLabel.",
+                nameof(AriaLabel));
+        }
+    }
+
+    private Task ToggleAsync() =>
+        StateChanged.InvokeAsync(State == CheckboxState.Checked
+            ? CheckboxState.Unchecked
+            : CheckboxState.Checked);
+
+    private string ClassName
+    {
+        get
+        {
+            var name = "checkbox";
+            if (State != CheckboxState.Unchecked) name += " is-marked";
+            return string.IsNullOrWhiteSpace(Class) ? name : name + " " + Class;
+        }
+    }
+}

@@ -1,0 +1,69 @@
+@namespace Parrot.SharedComponents.Layout
+
+@* Who is signed in. A component so the rail is a list of components rather
+   than a wall of markup — and the place its menu lives now that the account
+   actions (settings, signing out) have somewhere to go.
+
+   The menu opens upward, because the card sits at the foot of the rail and a
+   menu that dropped down would leave the window. It dismisses the same way
+   the workspace menu does: a transparent full-screen button, no document
+   listener. *@
+
+<div class="user-card-wrap">
+    <button type="button"
+            class="user-card"
+            data-tooltip="@Name"
+            aria-haspopup="@(ChildContent is null ? null : "menu")"
+            aria-expanded="@(ChildContent is null ? null : _open.ToString().ToLowerInvariant())"
+            @onclick="Toggle">
+        <PetalAvatar Seed="@Seed" Initials="@Initials" />
+        <span class="user-card__identity">
+            <Typography TextStyle="TextStyle.Small12Semibold" As="strong" Prose Class="user-card__name">@Name</Typography>
+            @if (!string.IsNullOrWhiteSpace(Role))
+            {
+                <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="user-card__role">@Role</Typography>
+            }
+        </span>
+        <Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Sm" />
+    </button>
+
+    @if (_open && ChildContent is not null)
+    {
+        <button type="button"
+                class="user-card__dismiss"
+                tabindex="-1"
+                aria-hidden="true"
+                @onclick="() => _open = false"></button>
+
+        <div class="user-card__menu" role="menu" @onkeydown="OnKeyDown" @onclick="() => _open = false">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    /// <summary>Optional second line. Null hides it rather than inventing one.</summary>
+    [Parameter] public string? Role { get; set; }
+
+    [Parameter, EditorRequired] public string Initials { get; set; } = "";
+
+    /// <summary>The account id, so this person keeps the same tint elsewhere.</summary>
+    [Parameter, EditorRequired] public string Seed { get; set; } = "";
+
+    /// <summary>Menu rows — usually <see cref="UserMenuItem"/>s. Null means no menu.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _open;
+
+    private void Toggle()
+    {
+        if (ChildContent is not null) _open = !_open;
+    }
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") _open = false;
+    }
+}

@@ -1,0 +1,445 @@
+/* Meta's "Create an app" form, drawn.
+   ──────────────────────────────────────────────────────────────────────────
+   Everything inside the window frame is a picture of another company's
+   interface, so its colours are deliberately NOT design tokens. Tokenising
+   them would mean Meta's console changes appearance whenever our brand does,
+   which is exactly backwards: this has to keep looking like Meta so it is
+   recognisable when the person switches tabs.
+
+   The palette is a component-local copy of the one MetaBrowserDemo carries,
+   under the same names. Scoped stylesheets cannot share custom properties, and
+   lifting them into a common file would file a drawing of someone else's
+   product under our token set. */
+
+.meta-details {
+  /* Meta console chrome, allowlisted in brand-literals.json. Not tokens: this
+     is a drawing of another product and has to keep looking like theirs. */
+  --ds-meta-chrome: #f2f3f5;
+  --ds-meta-chrome-edge: #dfe2e7;
+  --ds-meta-frame: #d9dee7;
+  --ds-meta-surface: #ffffff;
+  --ds-meta-line: #e5e8ec;
+  --ds-meta-ink: #242b34;
+  --ds-meta-ink-soft: #5f6772;
+  --ds-meta-ink-mute: #858c96;
+  --ds-meta-dot: #bdc3cc;
+  --ds-meta-field-edge: #dce1e8;
+  --ds-meta-highlight: #eaf0f8;
+  --ds-meta-highlight-edge: #b3c9e4;
+  --ds-meta-blue: #4C77B9;
+
+  /* Geometry and timing. No token scale describes a drawing of someone
+     else's product. Seven seconds because two fields have to be typed out
+     legibly before the button wakes up; six reads as a scramble. */
+  --ds-meta-radius: 16px;
+  --ds-meta-hairline: 1px;
+  --ds-meta-loop: 7s;
+  --ds-meta-blink: 0.7s;
+
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.meta-details__window {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ds-meta-chrome);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-frame);
+  border-radius: var(--ds-meta-radius);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow-diffuse);
+}
+
+.meta-details {
+  /* Browser chrome height and the traffic-light dots — pixel facts about a
+     drawing, which no spacing or icon scale has an opinion about. */
+  --ds-meta-toolbar: 30px;
+  --ds-meta-dot-size: 6px;
+}
+
+.meta-details__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: var(--ds-meta-toolbar);
+  padding: var(--spacing-none) var(--spacing-md);
+  background: var(--ds-meta-chrome);
+  border-bottom: var(--ds-meta-hairline) solid var(--ds-meta-chrome-edge);
+}
+
+.meta-details__toolbar > i {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-details__toolbar > ::deep span {
+  min-width: 0;
+  margin-left: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-3xl);
+  overflow: hidden;
+  color: var(--ds-meta-ink-mute);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-full);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: this is a drawing of another product's chrome, not our type scale */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meta-details__page { padding: var(--ds-art-page-pad); }
+
+.meta-details__page > h2 {
+  margin: var(--ds-art-heading-gap);
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-base); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+}
+
+/* ── The five-step strip ───────────────────────────────────────────────────
+   Drawn because it is the reassurance: someone who has just been sent off to
+   a stranger's site needs to see that this form is step one of five, and that
+   the page in front of them is the page we meant. */
+
+.meta-details__progress {
+  display: grid;
+  grid-template-columns: 1.1fr repeat(4, 1fr);
+  align-items: center;
+  gap: var(--ds-art-progress-gap);
+  padding: var(--ds-art-progress-pad);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-md);
+}
+
+.meta-details__progress > * {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--ds-art-progress-gap);
+  min-width: 0;
+  color: var(--ds-meta-ink-mute);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-semibold); /* text-style-exempt: as above */
+  white-space: nowrap;
+}
+
+.meta-details__progress > *:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  min-width: var(--spacing-sm);
+  height: var(--spacing-2xs);
+  background: var(--ds-meta-line);
+}
+
+.meta-details {
+  /* The step bullet: a small ring, half-filled on the step you are on.
+     Measured off Meta's own strip — no icon-size token lands on it. */
+  --ds-meta-step: 13px;
+  --ds-meta-step-ring: 2px;
+  --ds-meta-step-fill: 6px;
+}
+
+.meta-details__progress i {
+  flex: 0 0 auto;
+  width: var(--ds-meta-step);
+  height: var(--ds-meta-step);
+  border: var(--ds-meta-step-ring) solid var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-details__progress strong { color: var(--ds-meta-blue); }
+
+.meta-details__progress strong i {
+  border-color: var(--ds-meta-blue);
+  box-shadow: inset var(--ds-meta-step-fill) 0 var(--ds-meta-blue);
+}
+
+/* ── The form ──────────────────────────────────────────────────────────────
+   Two fields and a button. The hint under each label is Meta's own wording,
+   kept verbatim: matching their sentence is what lets someone find the field
+   on the real page without reading it twice. */
+
+.meta-details__form {
+  display: grid;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-md);
+  padding: var(--ds-art-form-pad);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-md);
+}
+
+.meta-details__form label { display: grid; gap: var(--spacing-xs); }
+
+.meta-details__form label > strong {
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-details__form label > small {
+  color: var(--ds-meta-ink-soft);
+  line-height: var(--ds-art-hint-leading);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  line-height: 1.4;
+}
+
+.meta-details {
+  /* Input and footer-control heights, and the caret drawn inside them. These
+     are Meta's control sizes; ours would make it look like our form. */
+  --ds-meta-field-h: 36px;
+  --ds-meta-caret-h: 15px;
+  --ds-meta-control: 31px;
+}
+
+.meta-details__form label > ::deep span {
+  display: flex;
+  align-items: center;
+  height: var(--ds-meta-field-h);
+  margin-top: var(--ds-art-field-gap);
+  padding: var(--ds-art-field-pad);
+  overflow: hidden;
+  color: var(--ds-meta-ink);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-field-edge);
+  border-radius: var(--radius-radius-xs);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+/* Typing is a width animation over a nowrap run of text, so the characters
+   are uncovered rather than re-laid-out, and steps() lands them one at a time
+   instead of sliding a ribbon. */
+.meta-details__form label > span b {
+  display: block;
+  overflow: hidden;
+  font-weight: var(--typography-font-weight-medium); /* text-style-exempt: as above */
+  white-space: nowrap;
+}
+
+.meta-details__form label > span i {
+  width: var(--ds-meta-hairline);
+  height: var(--ds-meta-caret-h);
+  background: var(--ds-meta-blue);
+}
+
+.meta-details__name { animation: meta-details-focus-name var(--ds-meta-loop) ease-in-out infinite; }
+.meta-details__email { animation: meta-details-focus-email var(--ds-meta-loop) ease-in-out infinite; }
+
+.meta-details__name b { animation: meta-details-type-name var(--ds-meta-loop) steps(15, end) infinite; }
+.meta-details__email b { animation: meta-details-type-email var(--ds-meta-loop) steps(22, end) infinite; }
+
+/* Two animations per caret: one blinks it, the other says which field it is
+   currently sitting in, so only one caret is ever alive. */
+.meta-details__name i {
+  animation: meta-details-caret var(--ds-meta-blink) step-end infinite,
+             meta-details-caret-name var(--ds-meta-loop) step-end infinite;
+}
+
+.meta-details__email i {
+  animation: meta-details-caret var(--ds-meta-blink) step-end infinite,
+             meta-details-caret-email var(--ds-meta-loop) step-end infinite;
+}
+
+.meta-details__form footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: var(--spacing-2xs);
+}
+
+.meta-details__form footer > ::deep span {
+  display: grid;
+  place-items: center;
+  height: var(--ds-meta-control);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--ds-meta-ink-soft);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-dot);
+  border-radius: var(--radius-radius-xs);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+/* Next starts dormant and turns blue only once both fields hold something.
+   That state change is the reason this moves at all: on the real page the
+   button looks broken to anyone who filled in a name and stopped. */
+.meta-details__form footer button {
+  height: var(--ds-meta-control);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--ds-meta-surface);
+  background: var(--ds-meta-highlight-edge);
+  border: 0;
+  border-radius: var(--radius-radius-xs);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+  animation: meta-details-next var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-details {
+  /* Where the pointer starts, and the two hops it makes: down to the email
+     field, then across and down to Next. Measured against the drawing, not a
+     spacing scale. */
+  --ds-meta-cursor-top: 200px;
+  --ds-meta-cursor-left: 150px;
+  --ds-meta-cursor-w: 13px;
+  --ds-meta-cursor-h: 18px;
+  --ds-meta-walk-y1: 86px;
+  --ds-meta-walk-x2: 353px;
+  --ds-meta-walk-y2: 140px;
+  --ds-meta-exit-x: 346px;
+  --ds-meta-exit-y: 158px;
+  /* How wide each field's text runs once fully typed — the end of the
+     reveal, so it is also the still frame. */
+  --ds-meta-name-width: 91px;
+  --ds-meta-email-width: 126px;
+  /* Focus and press rings. Drawn as solid tints because the allowlist holds
+     Meta's flat chrome colours, not its translucent overlays. */
+  --ds-meta-focus-ring: 3px;
+  --ds-meta-press-ring: 4px;
+}
+
+.meta-details__cursor {
+  position: absolute;
+  z-index: 4;
+  top: var(--ds-meta-cursor-top);
+  left: var(--ds-meta-cursor-left);
+  width: var(--ds-meta-cursor-w);
+  height: var(--ds-meta-cursor-h);
+  background: var(--ds-meta-ink);
+  clip-path: polygon(0 0, 100% 67%, 56% 72%, 42% 100%);
+  animation: meta-details-cursor var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-details__caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  color: var(--colors-text-muted);
+}
+
+.meta-details__dot {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: var(--ds-meta-blue);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-details__replay {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.meta-details__replay:hover { background: var(--colors-interaction-hover); }
+
+/* ── The seven seconds ─────────────────────────────────────────────────────
+   Name, email, Next, in that order, with the cursor arriving a beat before
+   each one so the pointer looks like the cause rather than a passenger. */
+
+@keyframes meta-details-type-name {
+  0%, 8% { width: 0; }
+  30%, 100% { width: var(--ds-meta-name-width); }
+}
+
+@keyframes meta-details-type-email {
+  0%, 40% { width: 0; }
+  66%, 100% { width: var(--ds-meta-email-width); }
+}
+
+@keyframes meta-details-focus-name {
+  0%, 34% {
+    border-color: var(--ds-meta-blue);
+    box-shadow: 0 0 0 var(--ds-meta-focus-ring) var(--ds-meta-highlight);
+  }
+  40%, 100% {
+    border-color: var(--ds-meta-field-edge);
+    box-shadow: none;
+  }
+}
+
+@keyframes meta-details-focus-email {
+  0%, 38%, 70%, 100% {
+    border-color: var(--ds-meta-field-edge);
+    box-shadow: none;
+  }
+  44%, 66% {
+    border-color: var(--ds-meta-blue);
+    box-shadow: 0 0 0 var(--ds-meta-focus-ring) var(--ds-meta-highlight);
+  }
+}
+
+@keyframes meta-details-next {
+  0%, 68%, 100% {
+    background: var(--ds-meta-highlight-edge);
+    box-shadow: none;
+    transform: scale(1);
+  }
+  74%, 94% {
+    background: var(--ds-meta-blue);
+    box-shadow: 0 0 0 var(--ds-meta-press-ring) var(--ds-meta-highlight);
+    transform: scale(1.04);
+  }
+}
+
+@keyframes meta-details-cursor {
+  0%, 32% { opacity: 1; transform: translate(0, 0); }
+  44%, 66% { opacity: 1; transform: translate(0, var(--ds-meta-walk-y1)); }
+  76%, 94% { opacity: 1; transform: translate(var(--ds-meta-walk-x2), var(--ds-meta-walk-y2)); }
+  100% { opacity: 0; transform: translate(var(--ds-meta-exit-x), var(--ds-meta-exit-y)); }
+}
+
+@keyframes meta-details-caret { 50% { opacity: 0; } }
+
+@keyframes meta-details-caret-name {
+  0%, 39% { visibility: visible; }
+  40%, 100% { visibility: hidden; }
+}
+
+@keyframes meta-details-caret-email {
+  0%, 43% { visibility: hidden; }
+  44%, 69% { visibility: visible; }
+  70%, 100% { visibility: hidden; }
+}
+
+/* Stopped, the drawing still has to teach. It settles on the end of the loop:
+   both fields filled and Next live — the thing people get wrong, and the only
+   frame worth showing if there is going to be just one. */
+@media (prefers-reduced-motion: reduce) {
+  .meta-details__name,
+  .meta-details__email,
+  .meta-details__name b,
+  .meta-details__email b,
+  .meta-details__name i,
+  .meta-details__email i,
+  .meta-details__form footer button,
+  .meta-details__cursor { animation: none; }
+
+  .meta-details__name b { width: var(--ds-meta-name-width); }
+  .meta-details__email b { width: var(--ds-meta-email-width); }
+
+  /* Nothing is being typed in a still picture, and a frozen caret in both
+     fields at once reads as two cursors rather than none. */
+  .meta-details__form label > span i { display: none; }
+
+  .meta-details__form footer button { background: var(--ds-meta-blue); }
+  .meta-details__cursor { display: none; }
+}
+
+.meta-details__window {
+  /* Artwork coordinates, not layout. Every measurement here is calibrated
+     against the cursor animation's absolute travel distances, so none can come
+     from the spacing scale: moved to the nearest rung, the target shifts out
+     from under the pointer. These are the source geometry, to the pixel. */
+  --ds-art-page-pad: 18px;
+  --ds-art-progress-gap: 5px;
+  --ds-art-heading-gap: 0 0 15px;
+  --ds-art-progress-pad: 11px;
+  --ds-art-form-pad: 18px;
+  --ds-art-hint-leading: 1.4;
+  --ds-art-field-gap: 3px;
+  --ds-art-field-pad: 0 10px;
+}

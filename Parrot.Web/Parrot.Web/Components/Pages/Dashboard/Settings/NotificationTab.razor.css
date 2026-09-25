@@ -1,0 +1,16 @@
+/* One toggle per row, separated by hairlines so a long list stays scannable. */
+
+.notifications__list { display: grid; }
+
+.notifications__row {
+  padding-block: var(--spacing-md);
+}
+
+.notifications__row + .notifications__row {
+  border-top: var(--ds-notifications-hairline) solid var(--colors-surface-border);
+}
+
+.notifications__list {
+  /* Gap in the token set: no border-width scale. */
+  --ds-notifications-hairline: 1px;
+}

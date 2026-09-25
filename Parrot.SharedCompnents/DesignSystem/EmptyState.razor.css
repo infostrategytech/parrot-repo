@@ -1,0 +1,41 @@
+/* The eleven empty states React drew, measured and reconciled into two sizes:
+   Page (a whole view has nothing in it) and Panel (a card or side panel does).
+   The difference is only padding and icon weight — everything else was already
+   the same shape eleven times over. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.empty-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  text-align: center;
+  color: var(--colors-text-muted);
+}
+
+.empty-state--page { padding: var(--spacing-4xl) var(--spacing-2xl); }
+.empty-state--panel { padding: var(--spacing-2xl) var(--spacing-lg); }
+
+.empty-state__icon {
+  display: grid;
+  place-items: center;
+  color: var(--colors-text-subtle);
+}
+
+.empty-state ::deep strong { color: var(--colors-text-primary); }
+
+::deep .empty-state__body {
+  max-width: var(--ds-empty-state-measure);
+  color: var(--colors-text-muted);
+}
+
+.empty-state {
+  /* Not a token: a measure is a typographic relationship (how many characters
+     read comfortably on one line), not a design value Figma would define. */
+  --ds-empty-state-measure: 42ch;
+}
+
+.empty-state__action { margin-top: var(--spacing-sm); }

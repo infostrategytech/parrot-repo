@@ -1,0 +1,197 @@
+/* Plan well, usage strip, plan cards and the invoice table — each drawn with
+   the same surfaces Aurora's Products page and editor use. */
+
+.billing__plan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.billing__plan-text { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.billing__plan-name { display: flex; gap: var(--spacing-sm); align-items: center; color: var(--colors-text-primary); }
+.billing__plan-text ::deep p { color: var(--colors-text-muted); }
+.billing__plan-text ::deep small { color: var(--colors-text-subtle); }
+.billing__plan-actions { display: flex; flex: 0 0 auto; gap: var(--spacing-sm); }
+
+/* ── Usage ───────────────────────────────────────────────────────────────── */
+
+.billing__usage {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  border: var(--ds-billing-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.billing__usage,
+.billing__plans,
+.billing__invoices {
+  /* Gaps in the token set: no border-width, progress-height or cell-height
+     scale. */
+  --ds-billing-hairline: 1px;
+  --ds-billing-progress: 8px;
+  --ds-billing-stat-min: 72px;
+  --ds-billing-head-min: 45px;
+  --ds-billing-row-min: 56px;
+  --ds-billing-col-status: 110px;
+  --ds-billing-col-actions: 130px;
+}
+
+.billing__usage-titles { display: grid; gap: var(--spacing-2xs); }
+.billing__usage-titles ::deep h3 { color: var(--colors-text-primary); }
+.billing__usage-titles ::deep p { color: var(--colors-text-muted); }
+
+.billing__usage-label { display: flex; align-items: center; justify-content: space-between; color: var(--colors-text-secondary); }
+.billing__usage-label ::deep strong { color: var(--colors-text-primary); }
+
+.billing__progress {
+  height: var(--ds-billing-progress);
+  overflow: hidden;
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+}
+
+.billing__progress i {
+  display: block;
+  height: 100%;
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+}
+
+/* One strip divided into cells, as Aurora's summary card. */
+.billing__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: var(--spacing-xs);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.billing__stat {
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-height: var(--ds-billing-stat-min);
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.billing__stat + .billing__stat { border-left: var(--ds-billing-hairline) solid var(--colors-surface-border); }
+.billing__stat ::deep strong { color: var(--colors-text-primary); }
+.billing__stat ::deep small { color: var(--colors-text-muted); }
+
+/* ── Plans ───────────────────────────────────────────────────────────────── */
+
+.billing__cycle { display: flex; gap: var(--spacing-sm); align-items: center; }
+
+.billing__cycle-tabs {
+  display: flex;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-xs);
+  background: var(--colors-accent-neutral-border);
+  border-radius: var(--radius-radius-full);
+}
+
+.billing__cycle-tab {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--spacing-3xl);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.billing__cycle-tab:hover { background: var(--colors-interaction-hover); }
+
+.billing__cycle-tab.is-active {
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
+}
+
+.billing__plans {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-md);
+}
+
+.billing__plan-card {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-billing-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.billing__plan-card.is-current {
+  border-color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+}
+
+.billing__plan-card-top { display: flex; gap: var(--spacing-sm); align-items: center; justify-content: space-between; }
+.billing__plan-card ::deep h3 { color: var(--colors-text-primary); }
+.billing__plan-price { display: flex; gap: var(--spacing-xs); align-items: baseline; color: var(--colors-text-primary); }
+.billing__plan-price ::deep span { color: var(--colors-text-muted); }
+::deep .billing__plan-billing { color: var(--colors-text-subtle); }
+
+.billing__features {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-md) var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+.billing__features li { display: flex; gap: var(--spacing-sm); align-items: flex-start; color: var(--colors-text-secondary); }
+.billing__features li > ::deep svg { flex: 0 0 auto; color: var(--colors-feedback-success-text); }
+
+::deep .billing__plan-action { width: 100%; }
+
+/* ── Invoices ────────────────────────────────────────────────────────────── */
+
+.billing__invoices {
+  overflow: hidden;
+  border: var(--ds-billing-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.billing__invoices-head,
+.billing__invoice {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.4fr) var(--ds-billing-col-status) var(--ds-billing-col-actions);
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.billing__invoices-head {
+  min-height: var(--ds-billing-head-min);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border-bottom: var(--ds-billing-hairline) solid var(--colors-surface-border);
+}
+
+.billing__invoice { min-height: var(--ds-billing-row-min); color: var(--colors-text-secondary); }
+.billing__invoice + .billing__invoice { border-top: var(--ds-billing-hairline) solid var(--colors-surface-border); }
+.billing__invoice:hover { background: var(--colors-interaction-hover); }
+.billing__invoice ::deep strong { color: var(--colors-text-primary); }
+::deep .billing__invoice-date { color: var(--colors-text-muted); }
+.billing__invoice-actions { display: flex; justify-content: flex-end; }
+
+.billing__invoices-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border-top: var(--ds-billing-hairline) solid var(--colors-surface-border);
+}

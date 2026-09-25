@@ -1,0 +1,327 @@
+.route-choice-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-route-layer);
+  display: grid;
+  place-items: center;
+  padding: var(--ds-route-backdrop-pad);
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-route-blur));
+  animation: route-backdrop-in var(--ds-route-backdrop-enter) ease;
+}
+
+.route-choice {
+  display: grid;
+  gap: var(--spacing-xl);
+  width: min(var(--ds-route-width), 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  padding: var(--ds-route-pad);
+  background: var(--colors-surface-elevated);
+  border-radius: var(--ds-route-radius);
+  box-shadow: 0 var(--spacing-2xl) var(--spacing-6xl) var(--colors-surface-shadow-diffuse);
+  animation: route-choice-in var(--ds-route-enter) var(--ds-route-ease);
+}
+
+.route-choice-backdrop {
+  /* Geometry the token set has no scale for: React draws this dialog at 940px
+     with 32px padding and a 25px radius, none of which sit on our spacing or
+     radius rungs. */
+  --ds-route-layer: 150;
+  --ds-route-backdrop-pad: 28px;
+  --ds-route-width: 940px;
+  --ds-route-pad: 32px;
+  --ds-route-radius: 25px;
+  --ds-route-blur: 5px;
+  --ds-route-backdrop-enter: 150ms;
+  --ds-route-enter: 200ms;
+  --ds-route-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-route-hairline: 1px;
+  --ds-route-mark: 48px;
+  --ds-route-mark-radius: 15px;
+  --ds-route-close: 36px;
+}
+
+.route-choice__header {
+  display: grid;
+  grid-template-columns: var(--ds-route-mark) minmax(0, 1fr) var(--ds-route-close);
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+/* Meta's colours, as on the landing card — allowlisted, not tokens. */
+.route-choice__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-route-mark);
+  height: var(--ds-route-mark);
+  color: var(--colors-text-inverse);
+  border-radius: var(--ds-route-mark-radius);
+}
+
+.channel-whatsapp.route-choice__mark {
+  background: #22a968;
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) color-mix(in srgb, #22a968 20%, transparent);
+}
+.channel-instagram.route-choice__mark {
+  background: #c63886;
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) color-mix(in srgb, #c63886 20%, transparent);
+}
+.channel-facebook.route-choice__mark {
+  background: #1877f2;
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) color-mix(in srgb, #1877f2 20%, transparent);
+}
+
+.route-choice__intro { display: grid; gap: var(--spacing-xs); min-width: 0; }
+::deep .route-choice__lede { color: var(--colors-text-muted); }
+
+.route-choice__close {
+  display: grid;
+  place-items: center;
+  width: var(--ds-route-close);
+  height: var(--ds-route-close);
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.route-choice__close:hover { color: var(--colors-text-primary); }
+
+/* One column per route: WhatsApp always offers exactly three, and this modal
+   never renders for a channel with fewer — that screen is skipped entirely
+   when there is nothing to choose between. */
+.route-choice__cards {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ds-route-card-gap);
+}
+
+.route-choice-backdrop { --ds-route-card-gap: 14px; }
+
+.route-card {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  align-content: start;
+  min-height: var(--ds-route-card-min);
+  overflow: hidden;
+  padding: var(--ds-route-card-pad);
+  text-align: left;
+  background: var(--colors-surface-background);
+  border: var(--ds-route-hairline) solid var(--colors-accent-brand-muted);
+  border-radius: var(--ds-route-card-radius);
+  cursor: pointer;
+  transition:
+    transform var(--ds-route-card-motion) ease,
+    border-color var(--ds-route-card-motion) ease,
+    box-shadow var(--ds-route-card-motion) ease;
+}
+
+.route-choice-backdrop {
+  /* Geometry the token set has no scale for: the card is drawn to a fixed
+     302px min-height at 24px padding with a 19px radius, and the icon, arrow
+     circle and decorative corner circle are all one-off sizes from the
+     design rather than steps on any scale. */
+  --ds-route-card-min: 302px;
+  --ds-route-card-pad: 24px;
+  --ds-route-card-radius: 19px;
+  --ds-route-card-motion: 170ms;
+  --ds-route-icon: 50px;
+  --ds-route-icon-radius: 15px;
+  --ds-route-arrow: 29px;
+  --ds-route-circle: 128px;
+
+}
+
+/* A soft tinted circle bleeding off the top-right corner — decorative only,
+   so it sits behind the content (z-index -1 inside this card's own isolated
+   stacking context) and grows slightly on hover. */
+.route-card::after {
+  position: absolute;
+  z-index: -1;
+  top: -46px;
+  right: -43px;
+  width: var(--ds-route-circle);
+  height: var(--ds-route-circle);
+  content: "";
+  background: color-mix(in srgb, var(--colors-brand-primary) 5.5%, transparent);
+  border-radius: var(--radius-radius-full);
+  transition: transform var(--ds-route-circle-motion) ease;
+}
+
+.route-choice-backdrop {
+  /* Gap in the token set: no motion scale. This one differs slightly from
+     the card border/shadow transition above it, matching the source. */
+  --ds-route-circle-motion: 180ms;
+}
+
+.route-card:hover {
+  border-color: var(--colors-accent-brand-border);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-brand-primary) 11%, transparent);
+  transform: translateY(-3px);
+}
+
+.route-card:hover::after { transform: scale(1.12); }
+
+/* No focus rule: the app-wide ring in app.css covers these cards, and a
+   bespoke one here only made them inconsistent with every other control. */
+
+.route-card__icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-route-icon);
+  height: var(--ds-route-icon);
+  margin-bottom: var(--spacing-2xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-interaction-selected);
+  border-radius: var(--ds-route-icon-radius);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-lg) color-mix(in srgb, var(--colors-brand-primary) 9%, transparent);
+}
+
+::deep .route-card__marker {
+  width: max-content;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-brand-primary);
+  background: color-mix(in srgb, var(--colors-surface-card) 72%, transparent);
+  border-radius: var(--radius-radius-full);
+}
+
+::deep .route-card__label {
+  display: block;
+  max-width: var(--ds-route-label-measure);
+  margin-top: var(--spacing-md);
+  color: var(--colors-text-primary);
+}
+
+.route-choice-backdrop { --ds-route-label-measure: 220px; }
+
+::deep .route-card__explanation {
+  margin: var(--spacing-md) var(--spacing-none) var(--spacing-2xl);
+  color: var(--colors-text-muted);
+}
+
+.route-card__go {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  align-self: end;
+  gap: var(--spacing-sm);
+  color: var(--colors-brand-primary);
+}
+
+.route-card__arrow {
+  display: grid;
+  place-items: center;
+  width: var(--ds-route-arrow);
+  height: var(--ds-route-arrow);
+  color: var(--colors-text-on-primary);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+}
+
+/* Coexistence: emerald.
+   The literal colours here (#277457, #2b8d69, #dff3e9) are unambiguously
+   emerald. The generated theme mapping splits this one card across teal AND
+   green depending on which rule it looked at, so this is authored directly
+   against the emerald ramp instead of following it. */
+.route-card--coexistence {
+  border-color: var(--colors-accent-emerald-muted);
+}
+
+.route-card--coexistence::after {
+  background: color-mix(in srgb, var(--colors-accent-emerald-solid) 7%, transparent);
+}
+
+.route-card--coexistence:hover {
+  border-color: var(--colors-accent-emerald-solid);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-accent-emerald-solid) 11%, transparent);
+}
+
+.route-card--coexistence .route-card__icon {
+  color: var(--colors-accent-emerald-text);
+  background: var(--colors-accent-emerald-muted);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-lg) color-mix(in srgb, var(--colors-accent-emerald-solid) 10%, transparent);
+}
+
+.route-card--coexistence ::deep .route-card__marker { color: var(--colors-accent-emerald-text); }
+
+.route-card--coexistence .route-card__go { color: var(--colors-accent-emerald-text); }
+
+.route-card--coexistence .route-card__arrow {
+  color: var(--colors-text-on-primary);
+  background: var(--colors-accent-emerald-solid);
+}
+
+/* Migration: violet.
+   The one family the generated theme already gets right end to end — its
+   border token (#ddd6ff) matches the React literal exactly. */
+.route-card--migration {
+  border-color: var(--colors-accent-violet-border);
+}
+
+.route-card--migration::after {
+  background: color-mix(in srgb, var(--colors-accent-violet-base) 7%, transparent);
+}
+
+.route-card--migration:hover {
+  border-color: var(--colors-accent-violet-solid);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-accent-violet-solid) 11%, transparent);
+}
+
+.route-card--migration .route-card__icon {
+  color: var(--colors-accent-violet-text);
+  background: var(--colors-accent-violet-muted);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-lg) color-mix(in srgb, var(--colors-accent-violet-solid) 10%, transparent);
+}
+
+.route-card--migration ::deep .route-card__marker { color: var(--colors-accent-violet-text); }
+
+.route-card--migration .route-card__go { color: var(--colors-accent-violet-text); }
+
+.route-card--migration .route-card__arrow {
+  color: var(--colors-text-on-primary);
+  background: var(--colors-accent-violet-solid);
+}
+
+.route-choice__footer {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  justify-content: center;
+  margin-top: var(--ds-route-footer-gap);
+  color: var(--colors-text-muted);
+}
+
+.route-choice-backdrop { --ds-route-footer-gap: 21px; }
+
+.route-choice__manual-link {
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  text-underline-offset: var(--ds-route-underline-offset);
+  cursor: pointer;
+}
+
+.route-choice-backdrop {
+  /* Gap in the token set: no underline-offset scale. */
+  --ds-route-underline-offset: 3px;
+}
+
+.route-choice__manual-link:hover { color: var(--colors-text-secondary); }
+
+@keyframes route-backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes route-choice-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing-md)) scale(0.985);
+  }
+}

@@ -1,0 +1,216 @@
+/* The row's columns are set by the table that contains it, because only the
+   table can keep every row aligned with the header. This file styles what sits
+   inside each cell. Geometry is the React task-request-row's; colour is the
+   token each raw value mapped to in aurora-theme.css. */
+
+.task-request-row {
+  position: relative;
+  min-height: var(--ds-row-min);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  transition: background var(--ds-row-motion) ease;
+}
+
+.task-request-row {
+  /* Gaps in the token set: no row-height, control-height, motion or column
+     scale. The row height is the React table's, measured against a two-line
+     title cell; the kind box and the assignee pill are its exact sizes. */
+  --ds-row-min: 78px;
+  --ds-row-motion: 130ms;
+  --ds-row-kind: 44px;
+  --ds-row-assign: 34px;
+  --ds-row-owner: 26px;
+  --ds-row-dot: 6px;
+  --ds-row-view: 32px;
+  --ds-row-menu: 210px;
+  --ds-row-channel: 15px;
+}
+
+.task-request-row:hover { background: var(--colors-interaction-hover); }
+
+/* A row that is already open reads as selected rather than merely hovered. */
+.task-request-row.is-open { background: var(--colors-interaction-selected); }
+
+/* ── Items ───────────────────────────────────────────────────────────────── */
+
+.task-request-title,
+.task-request-customer {
+  display: grid;
+  align-items: center;
+  min-width: 0;
+}
+
+.task-request-title {
+  grid-template-columns: var(--ds-row-kind) minmax(0, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.request-kind {
+  display: grid;
+  place-items: center;
+  width: var(--ds-row-kind);
+  height: var(--ds-row-kind);
+  color: var(--colors-brand-primary);
+  background: var(--colors-interaction-selected);
+  border-radius: var(--radius-radius-lg);
+}
+
+.task-request-title > div {
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.task-request-title ::deep strong,
+.task-request-customer ::deep strong {
+  overflow: hidden;
+  color: var(--colors-text-secondary);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* The request ID — a reference, so it sits back rather than competing with the name. */
+.task-request-title ::deep small {
+  overflow: hidden;
+  color: var(--colors-text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+
+.task-request-title ::deep em {
+  color: var(--colors-text-subtle);
+  font-style: normal;
+}
+
+/* ── Customer ────────────────────────────────────────────────────────────── */
+
+.task-request-customer {
+  align-content: center;
+  gap: var(--spacing-xs);
+}
+
+.task-request-customer ::deep small {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  color: var(--colors-text-muted);
+  text-transform: capitalize;
+}
+
+/* The bare channel mark: no box, just the glyph in the channel's tint. */
+.channel-glyph {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: var(--ds-row-channel);
+  height: var(--ds-row-channel);
+  color: var(--colors-brand-primary);
+}
+
+.channel-glyph--instagram { color: var(--colors-accent-rose-text); }
+.channel-glyph--whatsapp { color: var(--colors-accent-teal-text); }
+
+/* ── Payment ─────────────────────────────────────────────────────────────── */
+
+.task-request-payment {
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.task-request-payment ::deep strong { color: var(--colors-text-secondary); }
+
+.task-request-payment ::deep small {
+  overflow: hidden;
+  color: var(--colors-text-subtle);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── Due ─────────────────────────────────────────────────────────────────── */
+
+::deep .task-request-due { color: var(--colors-text-muted); }
+
+/* ── Assigned to ─────────────────────────────────────────────────────────── */
+/* The row-level dropdown sits flush in the dense table: a filled pill with no
+   edge, shorter than the toolbar's. Reaching into FilterPopover needs ::deep
+   because it is a component of its own; React reached in the same way. */
+
+.task-request-assignee ::deep .filter-popover__trigger {
+  height: var(--ds-row-assign);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border: 0;
+  white-space: nowrap;
+}
+
+.task-request-assignee ::deep .filter-popover__trigger:hover {
+  background: var(--colors-interaction-hover);
+}
+
+.task-request-assignee ::deep .filter-popover__menu {
+  right: 0;
+  left: auto;
+  width: var(--ds-row-menu);
+  min-width: 0;
+}
+
+/* ── Waiting on ──────────────────────────────────────────────────────────── */
+
+.task-request-owner {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.task-request-owner ::deep span {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  height: var(--ds-row-owner);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+  white-space: nowrap;
+}
+
+.task-request-owner ::deep span::before {
+  content: "";
+  width: var(--ds-row-dot);
+  height: var(--ds-row-dot);
+  background: currentColor;
+  border-radius: var(--radius-radius-full);
+}
+
+/* ── Next step ───────────────────────────────────────────────────────────── */
+
+.task-request-row-action {
+  display: flex;
+  min-width: 0;
+  justify-content: flex-end;
+}
+
+/* A plain control rather than a Button: the table wants a 32px circle that
+   sits inside a 78px row, and none of the Button sizes is that. */
+.task-request-row__view {
+  display: grid;
+  place-items: center;
+  width: var(--ds-row-view);
+  height: var(--ds-row-view);
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.task-request-row__view:hover {
+  color: var(--colors-text-on-primary);
+  background: var(--colors-brand-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .task-request-row { transition: none; }
+}

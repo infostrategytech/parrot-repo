@@ -1,0 +1,68 @@
+/* Password fields stacked; sessions as a row of small cards; the danger
+   action on the right of its explanation. */
+
+.security__fields { display: grid; gap: var(--spacing-lg); }
+
+/* A control inside Aurora's Input icon slot: no chrome of its own, so it
+   reads as the icon it wraps. */
+.security__reveal {
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-none);
+  color: inherit;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.security__reveal:hover { color: var(--colors-brand-primary); }
+
+.security__sessions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--ds-security-session-min), 1fr));
+  gap: var(--spacing-md);
+}
+
+.security__sessions {
+  /* Gaps in the token set: no card-width or border-width scale. */
+  --ds-security-session-min: 260px;
+  --ds-security-hairline: 1px;
+}
+
+.security__session {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+  padding: var(--spacing-md);
+  background: var(--colors-surface-card);
+  border: var(--ds-security-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.security__session-icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+
+.security__session-info { display: grid; flex: 1; gap: var(--spacing-2xs); justify-items: start; min-width: 0; }
+.security__session-info ::deep strong { color: var(--colors-text-primary); }
+.security__session-info ::deep small,
+.security__session-info ::deep time { color: var(--colors-text-muted); }
+
+.security__danger {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.security__danger-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.security__danger-text ::deep strong { color: var(--colors-text-primary); }
+.security__danger-text ::deep p { color: var(--colors-text-muted); }

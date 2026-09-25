@@ -1,0 +1,128 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+
+@* One channel on the landing screen: what it is, where its connection stands,
+   and the single next thing to do about it. *@
+
+<article class="channel-card channel-@Channel.Id.ToString().ToLowerInvariant()">
+    <span class="channel-card__mark">
+        @if (Channel.Id == ChannelId.X)
+        {
+            @* The sprite has no X glyph, so this card keeps Parrot's own mark.
+               It is the one inline path in the module. *@
+            <svg class="channel-card__x" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.631 5.905-5.631Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+        }
+        else
+        {
+            <Icon Name="@Mark" Size="IconSize.Lg" />
+        }
+    </span>
+
+    <div class="channel-card__copy">
+        <div class="channel-card__title">
+            <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2" Prose>@Channel.Name</Typography>
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="@StatusClass">@StatusLabel</Typography>
+        </div>
+
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="channel-card__description">
+            @Channel.Description
+        </Typography>
+
+        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose Class="channel-card__meta">
+            @MetaLine
+        </Typography>
+    </div>
+
+    <div class="channel-card__actions">
+        @if (IsConnected)
+        {
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnDisconnect">Disconnect</Button>
+            <span class="channel-card__ready">
+                <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Ready</Typography>
+            </span>
+        }
+        else
+        {
+            @* A half-finished setup is locked to the route it started on, so
+               without this there is no way back to the other two — you would
+               have to finish a method you have already decided against. *@
+            @if (InProgress)
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnStartOver">
+                    Start over
+                </Button>
+            }
+
+            @* Secondary, not Primary: the card action is an outlined white
+               pill, not a filled brand button. Size, padding, height and
+               hover are all the design system's — the only thing this page
+               adds is a floor on the width. *@
+            <Button Variant="ButtonVariant.Secondary" Class="channel-card__action" disabled="@ActionDisabled" @onclick="OnOpen">
+                <ChildContent>@ActionLabel</ChildContent>
+                <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+            </Button>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    [Parameter] public EventCallback OnOpen { get; set; }
+
+    [Parameter] public EventCallback OnDisconnect { get; set; }
+
+    /// <summary>Abandons a half-finished setup so another route can be chosen.</summary>
+    [Parameter] public EventCallback OnStartOver { get; set; }
+
+    /// <summary>
+    /// Parrot only: a WhatsApp connection the backend has disabled cannot be
+    /// set up again from here, so the action stays but does nothing.
+    /// </summary>
+    [Parameter] public bool ActionDisabled { get; set; }
+
+    private bool IsConnected => Channel.Status == ChannelStatus.Connected;
+    private bool NeedsAttention => Channel.Status == ChannelStatus.NeedsAttention;
+
+    /// <summary>Started but not finished. Worth saying, because it changes the button.</summary>
+    private bool InProgress => !IsConnected && !NeedsAttention && Channel.Setup.Mode is not null;
+
+    private IconName Mark => Channel.Id switch
+    {
+        ChannelId.Whatsapp => IconName.RiWhatsappFill,
+        ChannelId.Instagram => IconName.RiInstagramFill,
+        _ => IconName.RiFacebookCircleFill
+    };
+
+    private string StatusLabel =>
+        IsConnected ? "Connected"
+        : NeedsAttention ? "Needs attention"
+        : InProgress ? "Setup in progress"
+        : "Not connected";
+
+    private string StatusClass =>
+        IsConnected ? "channel-card__status is-connected"
+        : NeedsAttention ? "channel-card__status is-attention"
+        : "channel-card__status is-not-connected";
+
+    /// <summary>
+    /// The most useful line for where this channel actually stands: what is
+    /// wrong, or which account is live, or what setup will cost you.
+    /// </summary>
+    private string? MetaLine =>
+        NeedsAttention ? Channel.Attention
+        : IsConnected ? Channel.AccountName
+        : Channel.Id == ChannelId.Whatsapp
+            ? "Connect with Facebook · about 5 minutes"
+            : Channel.GuidedMinutes > 0
+                ? $"You'll need: {Channel.Requirement} · about {Channel.GuidedMinutes} minutes"
+                : $"You'll need: {Channel.Requirement}";
+
+    private string ActionLabel =>
+        NeedsAttention ? "Fix connection"
+        : InProgress ? "Continue setup"
+        : "Start setup";
+}

@@ -1,0 +1,44 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+
+@* The right-hand end of a section header: how far this section has got, or a
+   way back into one that is already finished.
+
+   The pill is a plain span this component renders itself, with Typography
+   inside it. Putting the class on the Typography instead left the rule needing
+   ::deep, and ::deep moves the scope attribute onto an ancestor — of which
+   there was none, because that element was the component's own root. The rule
+   matched nothing and the pill lost its background. *@
+
+@if (Done && !IsOpen)
+{
+    <button type="button" class="aside__reopen" @onclick="OnReopen">
+        <Icon Name="IconName.RiEditFill" Size="IconSize.Sm" />
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span">Edit</Typography>
+    </button>
+}
+else
+{
+    <span class="@StatusClass">
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span">@StatusLabel</Typography>
+    </span>
+}
+
+@code {
+    /// <summary>This section has been completed at least once.</summary>
+    [Parameter] public bool Done { get; set; }
+
+    /// <summary>This is the section the flow is waiting on.</summary>
+    [Parameter] public bool IsCurrent { get; set; }
+
+    /// <summary>This section is the one currently expanded.</summary>
+    [Parameter] public bool IsOpen { get; set; }
+
+    [Parameter] public EventCallback OnReopen { get; set; }
+
+    private string StatusLabel => Done ? "Complete" : IsCurrent ? "Current" : "Next";
+
+    private string StatusClass =>
+        Done ? "aside__status is-complete"
+        : IsCurrent ? "aside__status is-current"
+        : "aside__status";
+}

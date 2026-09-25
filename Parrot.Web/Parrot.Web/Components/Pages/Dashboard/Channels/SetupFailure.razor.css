@@ -1,0 +1,76 @@
+/* Failure gets a page, not a toast. It is the common case, and the person
+   reading it needs somewhere to stand while they work out what to do. */
+
+.setup-failed {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-failed-width), 100%);
+  margin-inline: auto;
+  padding: var(--spacing-3xl) var(--spacing-2xl);
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-failed-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+}
+
+.setup-failed {
+  /* Gaps in the token set: no page-width, control-size or border-width scale. */
+  --ds-failed-width: 560px;
+  --ds-failed-mark: 56px;
+  --ds-failed-hairline: 1px;
+  --ds-failed-measure: 46ch;
+}
+
+.setup-failed__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-failed-mark);
+  height: var(--ds-failed-mark);
+  margin-bottom: var(--spacing-sm);
+  color: var(--colors-feedback-destructive-text);
+  background: var(--colors-feedback-destructive-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+::deep .setup-failed__reason {
+  max-width: var(--ds-failed-measure);
+  color: var(--colors-text-muted);
+}
+
+/* What to check, in the words of the route they chose — generic advice at this
+   point is worse than none. */
+/* Warning-toned, not neutral: this is what to check on a screen that just
+   said setup did not finish, and reads as caution rather than as a completed
+   checklist. */
+.setup-failed__recovery {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: 100%;
+  margin: var(--spacing-lg) var(--spacing-none);
+  padding: var(--spacing-lg);
+  text-align: left;
+  list-style: none;
+  background: var(--colors-feedback-warning-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+
+.setup-failed__recovery li {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  color: var(--colors-feedback-warning-text);
+}
+
+.setup-failed__recovery li > ::deep svg {
+  flex: 0 0 auto;
+  margin-top: var(--spacing-2xs);
+  color: var(--colors-feedback-warning-text);
+}
+
+.setup-failed__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  justify-content: center;
+}

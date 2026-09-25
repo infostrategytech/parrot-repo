@@ -1,0 +1,81 @@
+.connected {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-connected-width), 100%);
+  margin-inline: auto;
+  padding: var(--ds-connected-pad);
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-connected-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  box-shadow: 0 var(--spacing-lg) var(--ds-connected-shadow) var(--colors-surface-shadow);
+}
+
+.connected {
+  /* Gaps in the token set: no page-width or control-size scale. */
+  --ds-connected-width: var(--ds-setup-card-width);
+  --ds-connected-hairline: var(--ds-setup-card-hairline);
+  --ds-connected-pad: var(--ds-setup-card-pad);
+  --ds-connected-shadow: var(--ds-setup-card-shadow);
+  --ds-connected-mark: 72px;
+  --ds-connected-measure: 46ch;
+  --ds-connected-glow: 28px;
+}
+
+.connected__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-connected-mark);
+  height: var(--ds-connected-mark);
+  margin-bottom: var(--spacing-md);
+  color: var(--colors-feedback-success-text);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.channel-whatsapp.connected .connected__mark {
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #22a968 20%, transparent);
+}
+
+.channel-instagram.connected .connected__mark {
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #c63886 20%, transparent);
+}
+
+.channel-facebook.connected .connected__mark {
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #1877f2 20%, transparent);
+}
+
+/* X's mark is black in every theme — a brand literal like the three above. */
+.channel-x.connected .connected__mark {
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #000000 20%, transparent);
+}
+
+::deep .connected__lede {
+  max-width: var(--ds-connected-measure);
+  color: var(--colors-text-muted);
+}
+
+.connected__lede strong { color: var(--colors-text-primary); }
+
+/* Connected, with a caveat — a temporary token that will expire, usually.
+   Worth saying now rather than when it breaks. */
+.connected__note {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  margin-top: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  text-align: left;
+  color: var(--colors-feedback-warning-text);
+  background: var(--colors-feedback-warning-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+
+.connected__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  justify-content: center;
+  margin-top: var(--spacing-lg);
+}

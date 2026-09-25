@@ -1,0 +1,520 @@
+/* The Meta app dashboard and the Customize screen, drawn.
+   ──────────────────────────────────────────────────────────────────────────
+   Everything inside the window frame is a picture of another company's
+   interface, so its colours are deliberately NOT design tokens. Tokenising
+   them would mean Meta's console changes appearance whenever our brand does,
+   which is exactly backwards: this has to keep looking like Meta so it is
+   recognisable when the person switches tabs.
+
+   The palette is repeated here rather than shared with MetaBrowserDemo on
+   purpose. Each drawing owns the shades it needs, so retouching one screen
+   cannot silently repaint another. */
+
+.meta-api {
+  /* Meta console chrome, allowlisted in brand-literals.json. Not tokens: this
+     is a drawing of another product and has to keep looking like theirs. */
+  --ds-meta-chrome: #f2f3f5;
+  --ds-meta-chrome-edge: #dfe2e7;
+  --ds-meta-frame: #d9dee7;
+  --ds-meta-surface: #ffffff;
+  --ds-meta-canvas: #f5f6f8;
+  --ds-meta-rail: #fafbfc;
+  --ds-meta-rail-edge: #dfe3e8;
+  --ds-meta-line: #e5e8ec;
+  --ds-meta-ink: #242b34;
+  --ds-meta-ink-soft: #5f6772;
+  --ds-meta-ink-mute: #858c96;
+  --ds-meta-dot: #bdc3cc;
+  --ds-meta-field: #f2f3f5;
+  --ds-meta-field-edge: #dce1e8;
+  --ds-meta-panel: #fafbfc;
+  --ds-meta-panel-edge: #e0e3e7;
+  --ds-meta-highlight: #eaf0f8;
+  --ds-meta-highlight-edge: #b3c9e4;
+  --ds-meta-blue: #4C77B9;
+  --ds-meta-whatsapp: #22a968;
+
+  /* Geometry and timing. No token scale describes a drawing of someone else's
+     product, and ten seconds is what two screens need: long enough to read the
+     WhatsApp row before the scenery changes under it. */
+  --ds-meta-hairline: 1px;
+  --ds-meta-loop: 10s;
+
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.meta-api__window {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ds-meta-canvas);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-frame);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow-diffuse);
+}
+
+/* ── Browser chrome ─────────────────────────────────────────────────────── */
+
+.meta-api__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: var(--ds-meta-toolbar);
+  padding: var(--spacing-none) var(--spacing-md);
+  background: var(--ds-meta-chrome);
+  border-bottom: var(--ds-meta-hairline) solid var(--ds-meta-chrome-edge);
+}
+
+.meta-api {
+  /* Toolbar metrics. No token describes a drawing of a browser window. */
+  --ds-meta-toolbar: 30px;
+  --ds-meta-dot-size: 6px;
+  --ds-meta-url-inset: 34px;
+}
+
+.meta-api__toolbar > i {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-api__toolbar > ::deep span {
+  min-width: 0;
+  margin-left: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--ds-meta-url-inset);
+  overflow: hidden;
+  color: var(--ds-meta-ink-mute);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-full);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: a drawing of another product's chrome, not our type scale */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── Both scenes ────────────────────────────────────────────────────────── */
+
+.meta-api__scene {
+  min-height: var(--ds-meta-scene-min);
+  color: var(--ds-meta-ink);
+  background: var(--ds-meta-canvas);
+}
+
+.meta-api {
+  /* The dashboard sets the window's height; the Customize screen is stacked on
+     top of it absolutely, so it needs the same floor or the frame would
+     collapse the moment the first scene fades out. */
+  --ds-meta-scene-min: 300px;
+}
+
+/* ── Scene one: the app dashboard ───────────────────────────────────────── */
+
+.meta-api__scene--dashboard {
+  display: grid;
+  grid-template-columns: var(--ds-meta-rail-width) minmax(0, 1fr);
+  animation: meta-api-dashboard var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-api {
+  /* Rail and row metrics, measured off Meta's console. */
+  --ds-meta-rail-width: 132px;
+  --ds-meta-row: 27px;
+}
+
+.meta-api__scene--dashboard > aside {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-sm);
+  background: var(--ds-meta-rail);
+  border-right: var(--ds-meta-hairline) solid var(--ds-meta-rail-edge);
+}
+
+.meta-api__scene--dashboard > aside > * {
+  min-height: var(--ds-meta-row);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--ds-meta-ink-soft);
+  border: var(--ds-meta-hairline) solid transparent;
+  border-radius: var(--radius-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--dashboard > aside strong {
+  overflow: hidden;
+  color: var(--ds-meta-ink);
+  background: var(--ds-meta-surface);
+  border-color: var(--ds-meta-panel-edge);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meta-api__scene--dashboard > aside b {
+  color: var(--ds-meta-blue);
+  background: var(--ds-meta-highlight);
+  border-color: var(--ds-meta-highlight-edge);
+}
+
+.meta-api__scene--dashboard > section { padding: var(--spacing-lg); }
+
+.meta-api__scene--dashboard h2 {
+  margin: var(--spacing-none) var(--spacing-none) var(--spacing-md);
+  font-size: var(--typography-size-text-base); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--dashboard section > div {
+  padding: var(--spacing-md);
+  background: var(--ds-meta-surface);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-rail-edge);
+  border-radius: var(--radius-radius-md);
+}
+
+.meta-api__scene--dashboard h3 {
+  margin: var(--spacing-none) var(--spacing-none) var(--spacing-xs);
+  font-size: var(--typography-size-text-xs); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--dashboard section p {
+  display: grid;
+  grid-template-columns: var(--ds-meta-marker) minmax(0, 1fr) var(--ds-meta-chevron);
+  align-items: center;
+  min-height: var(--ds-meta-list-row);
+  margin: var(--spacing-none);
+  color: var(--ds-meta-ink-soft);
+  border-top: var(--ds-meta-hairline) solid var(--ds-meta-line);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-api {
+  /* The checklist's three columns: status marker, label, chevron. The marker
+     column is sized for the tick badge, the wider of the two markers, so the
+     labels stay on one left edge whether a row is done or not. */
+  --ds-meta-marker: 20px;
+  --ds-meta-chevron: 10px;
+  --ds-meta-list-row: 42px;
+  --ds-meta-bullet: 10px;
+}
+
+.meta-api__scene--dashboard section p:first-of-type { border-top: 0; }
+
+/* An unfinished task is an empty ring. Only the WhatsApp row is drawn as done,
+   because that is the one row the reader is being sent to. */
+.meta-api__scene--dashboard section p:not(.meta-api__whatsapp-row)::before {
+  width: var(--ds-meta-bullet);
+  height: var(--ds-meta-bullet);
+  content: "";
+  border: var(--ds-meta-hairline) solid var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-api__scene--dashboard section p i {
+  justify-self: end;
+  font-style: normal;
+  font-size: var(--typography-size-text-base); /* text-style-exempt: as above */
+}
+
+/* Declared after the generic row so it simply wins on order. The React source
+   needed !important here; nothing about the colour was ever that urgent. */
+.meta-api__whatsapp-row {
+  color: var(--ds-meta-ink);
+  animation: meta-api-whatsapp-row var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-api__whatsapp-row > ::deep svg {
+  padding: var(--spacing-2xs);
+  color: var(--ds-meta-surface);
+  background: var(--ds-meta-whatsapp);
+  border-radius: var(--radius-radius-full);
+}
+
+/* ── Scene two: Customize use case ──────────────────────────────────────── */
+
+.meta-api__scene--customize {
+  position: absolute;
+  z-index: 2;
+  inset: var(--ds-meta-scene-top) 0 0;
+  min-height: var(--ds-meta-scene-min);
+  padding: var(--spacing-lg);
+  opacity: 0;
+  animation: meta-api-customize var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-api {
+  /* It starts below the browser chrome, which is never covered: the reader has
+     to keep seeing this is the same browser window, not a second one. */
+  --ds-meta-scene-top: 29px;
+  /* How far it drifts in from — small enough to read as a page settling rather
+     than as a slide transition between two unrelated things. */
+  --ds-meta-slide: 8px;
+}
+
+.meta-api__scene--customize > header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--ds-meta-ink-soft);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--customize > header i { font-style: normal; }
+
+.meta-api__scene--customize > h2 {
+  margin: var(--spacing-md) var(--spacing-none) var(--spacing-2xs);
+  font-size: var(--typography-size-text-base); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--customize > p {
+  margin: var(--spacing-none) var(--spacing-none) var(--spacing-md);
+  color: var(--ds-meta-ink-mute);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--customize > div {
+  display: grid;
+  grid-template-columns: var(--ds-meta-menu-width) minmax(0, 1fr);
+  min-height: var(--ds-meta-panel-min);
+  overflow: hidden;
+  background: var(--ds-meta-surface);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-rail-edge);
+  border-radius: var(--radius-radius-md);
+}
+
+.meta-api {
+  /* Wide enough to hold "Tech Provider onboarding" unwrapped. The neighbours
+     are what make API Setup findable, so none of them may be clipped. */
+  --ds-meta-menu-width: 162px;
+  --ds-meta-panel-min: 205px;
+}
+
+.meta-api__scene--customize aside {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+  border-right: var(--ds-meta-hairline) solid var(--ds-meta-rail-edge);
+}
+
+.meta-api__scene--customize aside > * {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-height: var(--ds-meta-row);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--ds-meta-ink-soft);
+  border: var(--ds-meta-hairline) solid transparent;
+  border-radius: var(--radius-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--customize aside strong {
+  margin-bottom: var(--spacing-xs);
+  padding-bottom: var(--spacing-sm);
+  color: var(--ds-meta-ink);
+  border-bottom: var(--ds-meta-hairline) solid var(--ds-meta-line);
+  border-radius: 0;
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+  white-space: nowrap;
+}
+
+.meta-api__menu {
+  color: var(--ds-meta-blue);
+  animation: meta-api-menu var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-api__scene--customize section { padding: var(--spacing-lg); }
+
+.meta-api__scene--customize section h3 {
+  margin: var(--spacing-none) var(--spacing-none) var(--spacing-sm);
+  font-size: var(--typography-size-text-xs); /* text-style-exempt: as above */
+}
+
+/* Field and button share a row rather than overlapping. In the React original
+   the button sat absolutely positioned over the field, which read as a single
+   control and hid the box the token actually lands in. */
+.meta-api__token {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.meta-api {
+  /* Meta's own control height. Nothing on our scale is 34px. */
+  --ds-meta-control: 34px;
+}
+
+.meta-api__token > ::deep span {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: var(--ds-meta-control);
+  background: var(--ds-meta-field);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-field-edge);
+  border-radius: var(--radius-radius-sm);
+}
+
+.meta-api__token > button {
+  flex: 0 0 auto;
+  height: var(--ds-meta-control);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--ds-meta-surface);
+  background: var(--ds-meta-blue);
+  border: 0;
+  border-radius: var(--radius-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-semibold); /* text-style-exempt: as above */
+  white-space: nowrap;
+}
+
+.meta-api__scene--customize article {
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-md);
+  background: var(--ds-meta-panel);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-panel-edge);
+  border-radius: var(--radius-radius-sm);
+}
+
+.meta-api__scene--customize article strong {
+  font-size: var(--typography-size-text-xs); /* text-style-exempt: as above */
+}
+
+.meta-api__scene--customize article p {
+  margin: var(--spacing-xs) var(--spacing-none) var(--spacing-none);
+  color: var(--ds-meta-ink-mute);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+/* ── The walk ───────────────────────────────────────────────────────────────
+   The tip is parked on the WhatsApp row, so every other position below is a
+   measured gap from there rather than an absolute coordinate.
+
+   It hides across the scene change instead of sliding, because the page
+   underneath it has been replaced and a pointer gliding over a cross-fade
+   belongs to neither screen. On the Customize screen it re-enters at the top
+   of the menu and walks down to API Setup, so the reader watches the choice
+   being made instead of finding it already made. */
+
+.meta-api__cursor {
+  position: absolute;
+  z-index: 4;
+  top: var(--ds-meta-cursor-top);
+  right: var(--ds-meta-cursor-right);
+  width: var(--ds-meta-cursor-w);
+  height: var(--ds-meta-cursor-h);
+  background: var(--ds-meta-ink);
+  clip-path: polygon(0 0, 100% 67%, 56% 72%, 42% 100%);
+  animation: meta-api-cursor var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-api {
+  /* Where the pointer rests, measured against the drawing. */
+  --ds-meta-cursor-top: 221px;
+  --ds-meta-cursor-right: 203px;
+  --ds-meta-cursor-w: 13px;
+  --ds-meta-cursor-h: 18px;
+  /* Off-target, where it waits at either end of the loop. */
+  --ds-meta-park-x: 26px;
+  --ds-meta-park-y: -16px;
+  /* Top of the Customize menu, then down its length to API Setup. */
+  --ds-meta-menu-x: -146.7px;
+  --ds-meta-menu-y: -129.9px;
+  --ds-meta-walk-x: -237.1px;
+  --ds-meta-walk-y: -76.4px;
+  --ds-meta-target-y: 20.6px;
+}
+
+/* ── Our caption ────────────────────────────────────────────────────────── */
+
+.meta-api__caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  color: var(--colors-text-muted);
+}
+
+.meta-api__dot {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: var(--ds-meta-blue);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-api__replay {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.meta-api__replay:hover { background: var(--colors-interaction-hover); }
+
+/* Every track returns to its starting state before 100%, so the loop restarts
+   without a visible cut. */
+
+@keyframes meta-api-whatsapp-row {
+  0%, 7% { background: transparent; }
+  13%, 38% { background: var(--ds-meta-highlight); }
+  44%, 100% { background: transparent; }
+}
+
+@keyframes meta-api-dashboard {
+  0%, 38% { opacity: 1; }
+  45%, 90% { opacity: 0; }
+  96%, 100% { opacity: 1; }
+}
+
+@keyframes meta-api-customize {
+  0%, 42% { opacity: 0; transform: translateX(var(--ds-meta-slide)); }
+  50%, 90% { opacity: 1; transform: translateX(0); }
+  96%, 100% { opacity: 0; transform: translateX(var(--ds-meta-slide)); }
+}
+
+@keyframes meta-api-menu {
+  0%, 58% { background: transparent; border-color: transparent; }
+  65%, 90% { background: var(--ds-meta-highlight); border-color: var(--ds-meta-highlight-edge); }
+  96%, 100% { background: transparent; border-color: transparent; }
+}
+
+@keyframes meta-api-cursor {
+  0% { opacity: 1; transform: translate(var(--ds-meta-park-x), var(--ds-meta-park-y)); }
+  8%, 38% { opacity: 1; transform: translate(0, 0); }
+  44% { opacity: 0; transform: translate(0, 0); }
+  48% { opacity: 0; transform: translate(var(--ds-meta-menu-x), var(--ds-meta-menu-y)); }
+  52% { opacity: 1; transform: translate(var(--ds-meta-menu-x), var(--ds-meta-menu-y)); }
+  58% { opacity: 1; transform: translate(var(--ds-meta-walk-x), var(--ds-meta-walk-y)); }
+  64%, 90% { opacity: 1; transform: translate(var(--ds-meta-walk-x), var(--ds-meta-target-y)); }
+  96%, 100% { opacity: 0; transform: translate(var(--ds-meta-park-x), var(--ds-meta-park-y)); }
+}
+
+/* Stopped, the drawing still has to teach — and with two scenes there is a
+   choice to make, because a cross-fade held still is only two screens printed
+   on top of each other. It settles on the second: the pointer goes, the
+   dashboard drops out, and the Customize screen stands alone with API Setup
+   highlighted. That is the end state of the walk, and the answer the reader
+   came for. The dashboard keeps its space in the layout rather than being
+   removed, because the Customize screen is stacked on it and would otherwise
+   have no window left to sit in. */
+@media (prefers-reduced-motion: reduce) {
+  .meta-api__scene--dashboard,
+  .meta-api__scene--customize,
+  .meta-api__whatsapp-row,
+  .meta-api__menu,
+  .meta-api__cursor { animation: none; }
+
+  .meta-api__scene--dashboard { opacity: 0; }
+
+  .meta-api__scene--customize { opacity: 1; transform: none; }
+
+  .meta-api__menu {
+    background: var(--ds-meta-highlight);
+    border-color: var(--ds-meta-highlight-edge);
+  }
+
+  .meta-api__cursor { display: none; }
+}

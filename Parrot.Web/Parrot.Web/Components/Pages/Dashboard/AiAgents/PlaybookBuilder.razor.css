@@ -1,0 +1,60 @@
+/* Playbook builder — a page header in Aurora's list-page idiom over a
+   workspace that fills the rest of the shell: the canvas on the left, a
+   configuration panel and the test panel docked to the right. */
+
+.playbook {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--spacing-lg);
+  min-width: 0;
+  height: 100%;
+  padding: var(--spacing-2xl) var(--ds-pb-gutter) var(--spacing-2xl);
+}
+
+.playbook {
+  /* Gaps in the token set: no page-gutter, control-height, field-width or
+     border-width scale. */
+  --ds-pb-gutter: clamp(28px, 4vw, 66px);
+  --ds-pb-hairline: 1px;
+  --ds-pb-back-height: 34px;
+  --ds-pb-name-width: 360px;
+}
+
+.playbook__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-2xl);
+}
+
+.playbook__heading { display: grid; gap: var(--spacing-md); min-width: 0; }
+
+.playbook__back {
+  display: inline-flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-self: start;
+  height: var(--ds-pb-back-height);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.playbook__back:hover { color: var(--colors-text-primary); background: var(--colors-interaction-hover); }
+
+.playbook__title-row { display: flex; gap: var(--spacing-md); align-items: center; }
+.playbook__title-row ::deep .field { width: var(--ds-pb-name-width); }
+
+.playbook__actions { display: flex; flex: 0 0 auto; gap: var(--spacing-sm); align-items: center; }
+
+.playbook__workspace {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: stretch;
+  min-height: 0;
+}
+
+.playbook__workspace ::deep .playbook-canvas { flex: 1; min-width: 0; }

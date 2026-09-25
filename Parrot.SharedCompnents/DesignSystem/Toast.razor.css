@@ -1,0 +1,97 @@
+/* Toast — geometry from the Figma spec (380px card, 16px padding, 16px radius,
+   8px gap, 20px status icon). Re-authored against tokens: the React version
+   hardcoded #fff, #eceded and four raw shadow colours.
+
+   Positioning lives here rather than in the page, unlike React, where five
+   different page shells each nudged .toast sideways to stay centred over the
+   workspace. ToastHost owns that now. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-toast-width), 100%);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-elevated);
+  border: var(--ds-toast-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  /* The Figma shadow alone is very soft; on the warm canvas the hairline
+     border is what actually separates the card from the page. */
+  box-shadow:
+    0 var(--spacing-xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse),
+    0 var(--spacing-2xs) var(--spacing-xs) var(--colors-surface-shadow);
+  animation: toast-in var(--ds-toast-enter) ease;
+}
+
+.toast {
+  /* Gaps in the token set, kept together so they are easy to find and replace
+     once Figma defines them:
+       - no component width scale exists (the spec's 380px card)
+       - no border-width scale exists
+       - no motion scale exists */
+  --ds-toast-width: 380px;
+  --ds-toast-border-width: 1px;
+  --ds-toast-enter: 180ms;
+}
+
+.toast__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+}
+
+/* Status is carried by the icon alone, as in Figma — the card itself does not
+   change colour, so a toast never competes with the page behind it. */
+.toast--info .toast__icon { color: var(--colors-feedback-info); }
+.toast--success .toast__icon { color: var(--colors-feedback-success); }
+.toast--warning .toast__icon { color: var(--colors-feedback-warning-text); }
+.toast--error .toast__icon { color: var(--colors-feedback-destructive); }
+
+.toast__content {
+  display: grid;
+  flex: 1;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.toast__content ::deep strong { color: var(--colors-text-primary); }
+.toast__content ::deep small { color: var(--colors-text-secondary); }
+
+.toast__action {
+  flex: 0 0 auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.toast__action:hover { color: var(--colors-text-link-hover); }
+
+.toast__dismiss {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-xs);
+  cursor: pointer;
+}
+
+.toast__dismiss:hover { color: var(--colors-text-primary); }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(calc(var(--spacing-sm) * -1));
+  }
+}

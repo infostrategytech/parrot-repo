@@ -1,0 +1,90 @@
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.filter-popover {
+  position: relative;
+  display: block;
+  min-width: 0;
+}
+
+/* A full-width pill: on a toolbar it sizes to its content, and in a grid cell
+   it fills the cell instead of floating small in the corner of one. */
+.filter-popover__trigger {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: 100%;
+  height: var(--ds-popover-control);
+  padding: var(--spacing-none) var(--spacing-md);
+  white-space: nowrap;
+  background: var(--colors-surface-card);
+  border: var(--ds-popover-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  color: var(--colors-text-primary);
+  cursor: pointer;
+}
+
+.filter-popover__trigger:has(.filter-popover__leading) {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.filter-popover__leading {
+  display: grid;
+  place-items: center;
+  color: var(--colors-text-subtle);
+}
+
+.filter-popover__trigger:hover { background: var(--colors-interaction-hover); }
+.filter-popover__trigger[aria-expanded="true"] { border-color: var(--colors-brand-primary); }
+
+.filter-popover {
+  /* Gaps in the token set: no border-width scale, no z-index scale, no
+     component width scale. */
+  --ds-popover-border-width: 1px;
+  --ds-popover-layer: 60;
+  --ds-popover-width: 268px;
+  --ds-popover-control: 38px;
+}
+
+/* The dismiss surface. Transparent and full-screen, so a click anywhere else
+   closes the menu without a document listener that could outlive the
+   component. It is a real button, so it costs nothing to a keyboard user —
+   tabindex -1 keeps it out of the tab order, and Escape is handled on the
+   menu itself. */
+.filter-popover__dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-popover-layer);
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+.filter-popover__menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-xs));
+  left: 0;
+  z-index: calc(var(--ds-popover-layer) + 1);
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: var(--ds-popover-width);
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-popover);
+  color: var(--colors-surface-popover-foreground);
+  border: var(--ds-popover-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.filter-popover__menu > header {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-xs);
+}
+
+.filter-popover__menu > header ::deep strong { color: var(--colors-text-primary); }
+.filter-popover__menu > header ::deep small { color: var(--colors-text-muted); }

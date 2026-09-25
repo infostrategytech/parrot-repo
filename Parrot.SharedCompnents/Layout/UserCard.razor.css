@@ -1,0 +1,70 @@
+/* The card keeps Aurora's geometry; the menu borrows the workspace menu's,
+   flipped to open upward from the foot of the rail. No type here — sizes and
+   weights come from the text styles the markup asks for. */
+
+.user-card-wrap { position: relative; }
+
+.user-card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-lg);
+  cursor: pointer;
+}
+
+.user-card:hover,
+.user-card[aria-expanded="true"] { background: var(--colors-interaction-hover); }
+
+.user-card__identity {
+  display: grid;
+  gap: var(--spacing-2xs);
+  flex: 1;
+  min-width: 0;
+}
+
+::deep .user-card__name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--colors-text-primary);
+}
+
+::deep .user-card__role { color: var(--colors-text-muted); }
+
+.user-card-wrap {
+  /* Gaps in the token set: no border-width scale and no z-index scale. */
+  --ds-user-hairline: 1px;
+  --ds-user-layer: 40;
+}
+
+.user-card__dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-user-layer);
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+.user-card__menu {
+  position: absolute;
+  bottom: calc(100% + var(--spacing-xs));
+  right: 0;
+  left: 0;
+  z-index: calc(var(--ds-user-layer) + 1);
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-popover);
+  border: var(--ds-user-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}

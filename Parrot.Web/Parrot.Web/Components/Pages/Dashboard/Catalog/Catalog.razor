@@ -1,148 +1,233 @@
 @page "/dashboard/catalog"
 @layout DashboardLayout
 @using Parrot.Web.Components.Pages.Dashboard.Catalog
-@using Parrot.Web.Components.Shared
+@implements IDisposable
+@inject ToastService Toasts
+@inject NavigationManager Nav
 
-@if (!_items.Any())
-{
-    <div class="cat-empty-page">
-        <div class="cat-empty-card">
-            <div class="cat-empty-checker"></div>
-            <img src="assets/images/gifs/welcome-owl.gif" alt="Owl" class="cat-empty-owl" />
-            <h2 class="cat-empty-title">Add items to your catalog</h2>
-            <p class="cat-empty-sub">Your catalog helps your AI answer price-related questions and process customer requests accurately.</p>
-            <div class="cat-empty-actions">
-                <button class="cat-btn cat-btn--ghost" @onclick="OpenCategoryModal">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                    Manage categories
-                </button>
-                <button class="cat-btn cat-btn--primary" @onclick="OpenAddItem">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                    Add item
-                </button>
-            </div>
+<PageTitle>Products &amp; Services · OmniAI</PageTitle>
+
+@* Aurora's Products page, bound to Parrot's catalog.
+
+   The data is the page's own in-memory list of CatalogItem and
+   CatalogCategory, exactly as before: there is no API behind it yet, so
+   every operation — add, edit, toggle, delete, create a category — changes the
+   list in place and the table re-renders. *@
+
+<div class="products">
+    <header class="products__header">
+        <div class="products__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Products &amp; Services</Typography>
+            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="products__lede">
+                Keep prices, availability and details accurate so every customer gets the same answer.
+            </Typography>
         </div>
-    </div>
-}
-else
-{
-    <div class="cat-toolbar">
-        <div class="cat-search-wrap">
-            <svg class="cat-search-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-            <input class="cat-search" placeholder="search by name..." @bind="_search" @bind:event="oninput" />
+
+        <div class="products__actions">
+            @* Parrot has no import endpoint yet, so the control keeps its place
+               in the header but stays unavailable rather than pretending. *@
+            <Button Variant="ButtonVariant.Secondary" disabled="true" aria-disabled="true">
+                <IconLeft><Icon Name="IconName.RiUploadCloud2Fill" /></IconLeft>
+                <ChildContent>Import CSV</ChildContent>
+            </Button>
+            <Button @onclick="() => OpenEditor(null)">
+                <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                <ChildContent>Add product or service</ChildContent>
+            </Button>
         </div>
-        <div class="cat-toolbar-right">
-            <div class="cat-dropdown-wrap" @onclick:stopPropagation>
-                <button class="cat-filter-btn" @onclick="OpenStatusDropdown">
-                    <span class="cat-filter-label">Status:</span>
-                    <span class="cat-filter-value">@(_statusFilter == "" ? "All status" : _statusFilter == "active" ? "Active" : "Disabled")</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round"
-                         class="cat-chevron @(_openDropdown == "status" ? "cat-chevron--open" : "")">
-                        <path d="M6 9l6 6 6-6" />
-                    </svg>
+    </header>
+
+    @if (_error is not null && !_editorOpen)
+    {
+        <InlineError Message="@_error" OnDismiss="() => _error = null" />
+    }
+
+    <section class="products__summary" aria-label="Products and services summary">
+        <ProductStatTile Glyph="IconName.RiShoppingBag3Fill"
+                         Value="@(_loading ? (int?)null : LiveCount)"
+                         Label="Live offers"
+                         Note="Available to customers" />
+        @* Parrot does not derive a knowledge status for catalog items, so the
+           two tiles that count it show the same em dash they show while loading. *@
+        <ProductStatTile Glyph="IconName.RiCheckboxCircleFill"
+                         Value="null"
+                         Label="Fully detailed"
+                         Note="Live with every detail filled in" />
+        <ProductStatTile Glyph="IconName.RiErrorWarningFill"
+                         Value="null"
+                         Label="Need attention"
+                         Note="Missing useful details"
+                         Attention="false" />
+
+        <button type="button" class="products__knowledge" @onclick="@(() => Nav.NavigateTo("/dashboard/knowledge"))">
+            <span class="products__knowledge-icon"><Icon Name="IconName.RiBookOpenFill" Size="IconSize.Md" /></span>
+            <span class="products__knowledge-text">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Shared with Knowledge</Typography>
+                <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>
+                    — live items synced
+                </Typography>
+            </span>
+            <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
+        </button>
+    </section>
+
+    <section class="products__controls">
+        <div class="products__tabs" role="tablist" aria-label="Product status filters">
+            @foreach (var tab in Tabs)
+            {
+                <button type="button"
+                        role="tab"
+                        aria-selected="@((_filter == tab.Id).ToString().ToLowerInvariant())"
+                        class="@(_filter == tab.Id ? "products__tab is-active" : "products__tab")"
+                        @onclick="() => SelectFilter(tab.Id)">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@tab.Label</Typography>
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="products__tab-count">
+                        @tab.Count
+                    </Typography>
                 </button>
-                @if (_openDropdown == "status")
-                {
-                    <div class="cat-dropdown-menu">
-                        @foreach (var opt in _statusOptions)
-                        {
-                            var val = opt.Value;
-                            <button class="cat-dropdown-item @(_statusFilter == val ? "cat-dropdown-item--active" : "")"
-                                    @onclick="() => SelectStatus(val)">
-                                @opt.Label
-                            </button>
-                        }
-                    </div>
-                }
-            </div>
-            <div class="cat-dropdown-wrap" @onclick:stopPropagation>
-                <button class="cat-filter-btn" @onclick="OpenCategoryDropdown">
-                    <span class="cat-filter-label">Category:</span>
-                    <span class="cat-filter-value">@(_categoryFilter == "" ? "All categories" : _categoryFilter)</span>
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round"
-                         class="cat-chevron @(_openDropdown == "category" ? "cat-chevron--open" : "")">
-                        <path d="M6 9l6 6 6-6" />
-                    </svg>
-                </button>
-                @if (_openDropdown == "category")
-                {
-                    <div class="cat-dropdown-menu">
-                        <button class="cat-dropdown-item @(_categoryFilter == "" ? "cat-dropdown-item--active" : "")"
-                                @onclick='() => SelectCategory("")'>
-                            All categories
-                        </button>
-                        @foreach (var cat in _categories)
-                        {
-                            var catName = cat.Name;
-                            <button class="cat-dropdown-item @(_categoryFilter == catName ? "cat-dropdown-item--active" : "")"
-                                    @onclick="() => SelectCategory(catName)">
-                                @cat.Name
-                            </button>
-                        }
-                    </div>
-                }
-            </div>
-            <div class="cat-btn--ghost-wrapper">
-                <button class="cat-btn cat-btn--ghost" @onclick="OpenCategoryModal">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
-                    Manage categories
-                </button>
-            </div>
-            <button class="cat-btn cat-btn--primary" @onclick="OpenAddItem">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
-                Add item
-            </button>
+            }
         </div>
-    </div>
 
-    <DataTable TItem="CatalogItem" Items="FilteredItems" Columns="_columns" PageSize="10" ShowPagination="true">
-        <RowActions Context="item">
-            <div class="dt-action-wrap">
-                <button class="dt-action-btn" @onclick="() => ToggleMenu(item.Id)">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
-                </button>
-                @if (_openMenuId == item.Id)
-                {
-                    <div class="dt-action-menu">
-                        <button class="dt-action-item" @onclick="() => EditItem(item)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                            Edit details
-                        </button>
-                        <button class="dt-action-item dt-action-item--danger" @onclick="() => PromptDelete(item)">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-                            Delete
-                        </button>
-                    </div>
-                }
+        <div class="products__controls-right">
+            <div class="products__search">
+                <Icon Name="IconName.RiSearch2Fill" Size="IconSize.Sm" />
+                <input class="@TextStyle.BodySmallRegular.ToClassName()"
+                       type="search"
+                       placeholder="Search products or services"
+                       aria-label="Search products and services"
+                       value="@_search"
+                       @oninput="OnSearchInput" />
             </div>
-        </RowActions>
-        <EmptyContent>
-            <div class="cat-no-results">No items match your filters.</div>
-        </EmptyContent>
-    </DataTable>
-}
 
-<AddItemModal Visible="_showAddItem"
-              Categories="_categories"
-              OnCancel="CloseModals"
-              OnSave="HandleSaveItem"
-              OnCreateCategory="SwitchToCategoryModal" />
+            <FilterPopover Label="@(_category ?? "All categories")"
+                           Title="Categories"
+                           Subtitle="Narrow the list by group"
+                           Open='@(_openMenu == "category")'
+                           OpenChanged="@(open => _openMenu = open ? "category" : null)">
+                <PopoverOption Label="All categories"
+                               Description="Every product and service"
+                               Active="_category is null"
+                               OnSelect="() => SelectCategory(null)" />
+                @foreach (var category in CategoryNames)
+                {
+                    <PopoverOption Label="@category"
+                                   Description="@($"{CountIn(category)} offers")"
+                                   Active="@(_category == category)"
+                                   OnSelect="() => SelectCategory(category)" />
+                }
+            </FilterPopover>
+        </div>
+    </section>
 
-<CategoryModal Visible="_showCategoryModal"
-               Categories="_categories"
-               OnCancel="CloseModals"
-               OnSave="HandleSaveCategories" />
+    @if (_loading)
+    {
+        <LoadingState Glyph="IconName.RiShoppingBag3Fill"
+                      Title="Preparing your offers"
+                      Description="Loading your products and services." />
+    }
+    else if (_items.Count == 0)
+    {
+        @* The catalog itself is empty, not just the current view: the old page
+           had its own screen for this, and its words are kept. *@
+        <EmptyState Glyph="IconName.RiShoppingBag3Fill"
+                    Title="Add items to your catalog"
+                    Description="Your catalog helps your AI answer price-related questions and process customer requests accurately.">
+            <Action>
+                <Button @onclick="() => OpenEditor(null)">
+                    <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                    <ChildContent>Add product or service</ChildContent>
+                </Button>
+            </Action>
+        </EmptyState>
+    }
+    else if (VisibleItems.Count == 0)
+    {
+        <EmptyState Glyph="IconName.RiSearch2Fill"
+                    Title="No matching offers"
+                    Description="Try a different search or clear one of the filters.">
+            <Action>
+                <Button Variant="ButtonVariant.Secondary" @onclick="ClearFilters">Clear filters</Button>
+            </Action>
+        </EmptyState>
+    }
+    else
+    {
+        <section class="products__table-wrap">
+            <div class="products__table" role="table" aria-label="Products and services">
+                <div class="products__table-head" role="row">
+                    @foreach (var column in Columns)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Semibold"
+                                    As="span"
+                                    Class="ds-overline"
+                                    role="columnheader">@column</Typography>
+                    }
+                    <span role="columnheader" aria-label="Actions"></span>
+                </div>
 
-<DeleteConfirmModal Visible="_showDeleteConfirm"
-                    Title="Delete item?"
-                    Description="This item will be removed from your catalog and won't be used by your AI agents."
-                    ConfirmLabel="Delete"
-                    OnCancel="CloseModals"
-                    OnConfirm="HandleDeleteConfirmed" />
+                <div class="products__table-body">
+                    @foreach (var item in PagedItems)
+                    {
+                        <ProductRow @key="item.Id"
+                                    Item="item"
+                                    OnEdit="() => OpenEditor(item)"
+                                    OnStatusToggled="() => ToggleStatus(item)" />
+                    }
+                </div>
+            </div>
+
+            <footer class="products__pagination">
+                <Typography TextStyle="TextStyle.Small12Regular" As="span">
+                    Showing @FirstShown–@LastShown of @VisibleItems.Count
+                </Typography>
+                <div class="products__pagination-controls">
+                    <Button Variant="ButtonVariant.Secondary"
+                            Size="ButtonSize.Small"
+                            disabled="@(CurrentPage == 1)"
+                            @onclick="() => _page = Math.Max(1, CurrentPage - 1)">Previous</Button>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="span">
+                        Page @CurrentPage of @TotalPages
+                    </Typography>
+                    <Button Variant="ButtonVariant.Secondary"
+                            Size="ButtonSize.Small"
+                            disabled="@(CurrentPage == TotalPages)"
+                            @onclick="() => _page = Math.Min(TotalPages, CurrentPage + 1)">Next</Button>
+                </div>
+            </footer>
+        </section>
+    }
+</div>
+
+<ProductEditor Open="_editorOpen"
+               Editing="_editing"
+               Categories="CategoryNames"
+               Error="@(_editorOpen ? _error : null)"
+               OnSave="Save"
+               OnDelete="PromptDelete"
+               OnCreateCategory="CreateCategoryAsync"
+               OnClose="CloseEditor" />
+
+@* The editor sits above the dialog layer, so it steps aside while the
+   question is asked and comes back if the answer is no. *@
+<Dialog Open="_deleteOpen"
+        Type="DialogType.Destructive"
+        Title="Delete item?"
+        ConfirmLabel="Delete"
+        OnConfirm="ConfirmDelete"
+        OnCancel="CancelDelete">
+    <Body>
+        This item will be removed from your catalog and won't be used by your AI agents.
+    </Body>
+</Dialog>
 
 @code {
+    private const int PageSize = 25;
+
+    private static readonly string[] Columns = ["Offer", "Type", "Price", "Availability", "Status"];
+
+    private readonly Debouncer _searchDebounce = new();
+
+    // Parrot's catalog, as it was: the page's own in-memory lists.
     private List<CatalogCategory> _categories = new()
     {
         new() { Name = "Main dish" },
@@ -167,93 +252,200 @@ else
         new() { Name = "Extra Chicken",      Category = "Add-on",     Currency = "NGN", Price = 1500, IsAvailable = false },
     };
 
-    private string _search = string.Empty;
-    private string _statusFilter = string.Empty;
-    private string _categoryFilter = string.Empty;
-    private string? _openDropdown;
+    // Nothing is fetched, so the list is ready on first render. The loading
+    // state stays wired for the day the catalog comes from an API.
+    private readonly bool _loading = false;
+    private string? _error;
 
-    private record FilterOption(string Value, string Label);
-    private List<FilterOption> _statusOptions = new() { new("","All status"), new("active","Active"), new("disabled","Disabled") };
+    private string _search = "";
+    private string _appliedSearch = "";
+    private ProductFilter _filter = ProductFilter.All;
+    private string? _category;
+    private int _page = 1;
+    private string? _openMenu;
 
-    private void OpenStatusDropdown()   => ToggleDropdown("status");
-    private void OpenCategoryDropdown() => ToggleDropdown("category");
-    private void ToggleDropdown(string name) => _openDropdown = _openDropdown == name ? null : name;
-    private void SelectStatus(string val)   { _statusFilter   = val; _openDropdown = null; }
-    private void SelectCategory(string val) { _categoryFilter = val; _openDropdown = null; }
+    private bool _editorOpen;
+    private CatalogItem? _editing;
 
-    private bool _showAddItem;
-    private bool _showCategoryModal;
-    private bool _showDeleteConfirm;
-
+    private bool _deleteOpen;
     private CatalogItem? _pendingDelete;
-    private Guid? _openMenuId;
 
-    private List<DataTableColumn<CatalogItem>> _columns => new()
+    private enum ProductFilter { All, Published, Draft, Inactive, NeedsAttention }
+
+    private sealed record Tab(ProductFilter Id, string Label, int Count);
+
+    // Parrot's items are either active or inactive. Drafts and "needs
+    // attention" are states its catalog does not have, so those tabs count
+    // zero rather than something made up.
+    private IReadOnlyList<Tab> Tabs =>
+    [
+        new(ProductFilter.All, "All", _items.Count),
+        new(ProductFilter.Published, "Live", LiveCount),
+        new(ProductFilter.Draft, "Drafts", 0),
+        new(ProductFilter.Inactive, "Inactive", _items.Count(item => !item.IsAvailable)),
+        new(ProductFilter.NeedsAttention, "Needs attention", 0)
+    ];
+
+    private int LiveCount => _items.Count(item => item.IsAvailable);
+
+    private IReadOnlyList<string> CategoryNames => _categories.Select(category => category.Name).ToList();
+
+    private int CountIn(string category) =>
+        _items.Count(item => item.Category == category);
+
+    // Filtering is done in the browser, exactly as the old page did it.
+    private IReadOnlyList<CatalogItem> VisibleItems
     {
-        new() { Header = "Item Name",  Template = item => @<span class="cat-item-name">@item.Name</span> },
-        new() { Header = "Category",   Template = item => @<span>@item.Category</span> },
-        new() { Header = "Price",      Template = item => @<span>@(item.Currency == "NGN" ? "\u20A6" : item.Currency)@item.Price.ToString("N0")</span> },
-        new() { Header = "Toggle",     Template = item => @<label class="dt-toggle"><input type="checkbox" checked="@item.IsAvailable" @onchange="() => ToggleItem(item)" /><span class="dt-toggle-track"></span><span class="dt-toggle-thumb"></span></label> },
-        new() { Header = "Status",     Template = item => @<span class="dt-badge @(item.IsAvailable ? "dt-badge--active" : "dt-badge--disabled")"><svg width="8" height="8" viewBox="0 0 8 8"><circle cx="4" cy="4" r="4" fill="currentColor"/></svg>@(item.IsAvailable ? "Active" : "Disabled")</span> },
+        get
+        {
+            var query = _appliedSearch.Trim();
+
+            return _items.Where(item =>
+                MatchesFilter(item) &&
+                (_category is null || item.Category == _category) &&
+                (query.Length == 0 || Searchable(item).Contains(query, StringComparison.CurrentCultureIgnoreCase))
+            ).ToList();
+        }
+    }
+
+    private static string Searchable(CatalogItem item) =>
+        $"{item.Name} {item.Description} {item.Category}";
+
+    private bool MatchesFilter(CatalogItem item) => _filter switch
+    {
+        ProductFilter.All => true,
+        ProductFilter.Published => item.IsAvailable,
+        ProductFilter.Inactive => !item.IsAvailable,
+        // No item is ever a draft or in need of attention: Parrot does not
+        // track either yet.
+        ProductFilter.Draft => false,
+        ProductFilter.NeedsAttention => false,
+        _ => true
     };
 
-    private List<CatalogItem> FilteredItems => _items
-        .Where(i => string.IsNullOrEmpty(_search) || i.Name.Contains(_search, StringComparison.OrdinalIgnoreCase))
-        .Where(i => string.IsNullOrEmpty(_statusFilter) ||
-                    (_statusFilter == "active" && i.IsAvailable) ||
-                    (_statusFilter == "disabled" && !i.IsAvailable))
-        .Where(i => string.IsNullOrEmpty(_categoryFilter) || i.Category == _categoryFilter)
-        .ToList();
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(VisibleItems.Count / (double)PageSize));
+    private int CurrentPage => Math.Min(_page, TotalPages);
+    private IEnumerable<CatalogItem> PagedItems => VisibleItems.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
+    private int FirstShown => VisibleItems.Count == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
+    private int LastShown => Math.Min(CurrentPage * PageSize, VisibleItems.Count);
 
-    private void OpenAddItem() { CloseModals(); _showAddItem = true; }
-    private void OpenCategoryModal() { CloseModals(); _showCategoryModal = true; }
-
-    private void SwitchToCategoryModal()
+    private async Task OnSearchInput(ChangeEventArgs args)
     {
-        _showAddItem = false;
-        _showCategoryModal = true;
+        _search = args.Value?.ToString() ?? "";
+        // Filtering happens locally, so the debounce is only to stop the list
+        // re-rendering on every keystroke over a long catalogue.
+        await _searchDebounce.RunAsync(() =>
+        {
+            _appliedSearch = _search;
+            _page = 1;
+            return InvokeAsync(StateHasChanged);
+        });
     }
 
-    private void CloseModals()
+    private void SelectFilter(ProductFilter filter)
     {
-        _showAddItem = false;
-        _showCategoryModal = false;
-        _showDeleteConfirm = false;
-        _openMenuId = null;
+        _filter = filter;
+        _page = 1;
     }
 
-    private void HandleSaveItem(CatalogItem item)
+    private void SelectCategory(string? category)
     {
-        _items.Add(item);
-        CloseModals();
+        _category = category;
+        _page = 1;
+        _openMenu = null;
     }
 
-    private void HandleSaveCategories(List<CatalogCategory> updated)
+    private void ClearFilters()
     {
-        _categories = updated;
-        CloseModals();
+        _search = "";
+        _appliedSearch = "";
+        _filter = ProductFilter.All;
+        _category = null;
+        _page = 1;
     }
 
-    private void ToggleItem(CatalogItem item) => item.IsAvailable = !item.IsAvailable;
-
-    private void ToggleMenu(Guid id) => _openMenuId = _openMenuId == id ? null : id;
-
-    private void EditItem(CatalogItem item)
+    private void OpenEditor(CatalogItem? item)
     {
-        _openMenuId = null;
+        _editing = item;
+        _editorOpen = true;
+        _error = null;
     }
 
-    private void PromptDelete(CatalogItem item)
+    private void CloseEditor()
     {
-        _pendingDelete = item;
-        _openMenuId = null;
-        _showDeleteConfirm = true;
+        _editorOpen = false;
+        _editing = null;
+        _error = null;
     }
 
-    private void HandleDeleteConfirmed()
+    private void Save(CatalogDraft draft)
     {
-        if (_pendingDelete != null) _items.Remove(_pendingDelete);
+        var wasEditing = _editing is not null;
+
+        if (_editing is null)
+        {
+            _items.Add(draft.ToItem());
+        }
+        else
+        {
+            draft.ApplyTo(_editing);
+        }
+
+        var name = draft.Name.Trim();
+        CloseEditor();
+        Toasts.Show(wasEditing
+            ? $"{name} was updated."
+            : $"{name} was added to Products & Services.");
+    }
+
+    private void PromptDelete()
+    {
+        if (_editing is null) return;
+        _pendingDelete = _editing;
+        _editorOpen = false;
+        _deleteOpen = true;
+    }
+
+    private void CancelDelete()
+    {
+        _deleteOpen = false;
         _pendingDelete = null;
-        CloseModals();
+        // Back to the offer that was being edited.
+        _editorOpen = _editing is not null;
     }
+
+    private void ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+        var name = _pendingDelete.Name;
+
+        _items.Remove(_pendingDelete);
+        _pendingDelete = null;
+        _deleteOpen = false;
+        CloseEditor();
+        Toasts.Show($"{name} was deleted.");
+    }
+
+    private Task<string?> CreateCategoryAsync(string name)
+    {
+        // Refused if the name already exists, ignoring case — the same rule
+        // the old category form applied, said out loud this time. Returned
+        // rather than thrown: the editor shows it next to the field.
+        if (_categories.Any(category => category.Name.Equals(name, StringComparison.OrdinalIgnoreCase)))
+        {
+            return Task.FromResult<string?>($"A category called {name} already exists.");
+        }
+
+        _categories.Add(new CatalogCategory { Name = name });
+        Toasts.Show($"{name} category was created.");
+        return Task.FromResult<string?>(null);
+    }
+
+    private void ToggleStatus(CatalogItem item)
+    {
+        item.IsAvailable = !item.IsAvailable;
+        Toasts.Show($"{item.Name} is now {(item.IsAvailable ? "active" : "inactive")}.");
+    }
+
+    public void Dispose() => _searchDebounce.Dispose();
 }

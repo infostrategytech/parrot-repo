@@ -1,0 +1,24 @@
+/* Centred, held to a reading width, like Aurora's NotFound page. */
+
+.error-page {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-xl);
+  width: min(var(--ds-error-measure), 100%);
+  min-height: 100%;
+  margin-inline: auto;
+  padding: var(--spacing-4xl);
+}
+
+.error-page {
+  /* Gap in the token set: no measure scale. */
+  --ds-error-measure: 640px;
+}
+
+::deep .error-page__note {
+  color: var(--colors-text-muted);
+  text-align: center;
+}
+
+::deep .error-page__note strong { color: var(--colors-text-secondary); }
+::deep .error-page__note code { color: var(--colors-text-secondary); }

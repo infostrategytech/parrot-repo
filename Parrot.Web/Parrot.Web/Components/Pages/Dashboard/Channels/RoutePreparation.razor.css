@@ -1,0 +1,248 @@
+/* A reading page, not a form. It is capped at a comfortable measure and the
+   acknowledgement sits at the end of the reading, because ticking it means
+   having read the thing above it.
+
+   ::deep appears throughout. Typography renders its own element, so that
+   element never carries this component's scope attribute and a plain
+   descendant selector silently matches nothing. */
+
+/* No uniform gap: the four bands are spaced differently on purpose — 32 under
+   the header, 22 before the agreement, 24 before the footer — so each carries
+   its own margin rather than being flattened to one rhythm. */
+.prep {
+  display: grid;
+  width: min(var(--ds-prep-width), 100%);
+  margin-inline: auto;
+  padding: var(--ds-prep-pad);
+  background: var(--colors-surface-card);
+  border: var(--ds-prep-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  box-shadow: 0 var(--spacing-2xl) var(--spacing-6xl) var(--colors-surface-shadow);
+}
+
+.prep {
+  /* Geometry the token set has no scale for: React draws this reading page at
+     920px, with an asymmetric 30/36/28px padding and its own shadow. */
+  --ds-prep-width: 920px;
+  --ds-prep-pad: 30px 36px 28px;
+  --ds-prep-hairline: 1px;
+  --ds-prep-icon: 36px;
+  --ds-prep-row-icon: 40px;
+  --ds-prep-rule: 2px;
+  --ds-prep-section-gap: 28px;
+  /* Off-scale vertical rhythm from the design: the bands between header,
+     reading, agreement and footer are 32 / 22 / 24, and the heading sits 7px
+     above its own list rather than a section apart from it. */
+  --ds-prep-header-gap: 32px;
+  --ds-prep-agreement-gap: 22px;
+  --ds-prep-footer-gap: 24px;
+  --ds-prep-heading-gap: 7px;
+  /* Measures. Each block is capped so a line stays readable rather than
+     running the full width of a 920px card. */
+  --ds-prep-intro-measure: 720px;
+  --ds-prep-lede-measure: 650px;
+  --ds-prep-details-measure: 520px;
+}
+
+.prep__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xl);
+  margin-bottom: var(--ds-prep-header-gap);
+}
+
+/* Pulled left by its own padding so the label sits flush with the heading
+   below it, while the hover pill still extends into the card's gutter. */
+::deep .prep__back {
+  margin-left: calc(var(--spacing-lg) * -1);
+  color: var(--colors-text-muted);
+}
+
+/* The route, restated and tinted to the channel it belongs to — the same
+   green/pink/blue association the landing card's mark and the route-choice
+   header already carry. */
+.prep__route {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--ds-prep-chip-pad);
+  border-radius: var(--radius-radius-full);
+}
+
+.channel-whatsapp.prep__route { color: var(--colors-accent-emerald-text); background: var(--colors-accent-emerald-subtle); }
+.channel-instagram.prep__route { color: var(--colors-accent-pink-text); background: var(--colors-accent-pink-subtle); }
+.channel-facebook.prep__route { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
+
+.prep { --ds-prep-chip-pad: 9px 13px; }
+
+.prep__reading { display: grid; gap: var(--ds-prep-section-gap); }
+
+/* 4px, not a paragraph gap: the intro is a subtitle hanging off the heading. */
+.prep__intro { display: grid; gap: var(--spacing-xs); max-width: var(--ds-prep-intro-measure); }
+
+::deep .prep__lede {
+  max-width: var(--ds-prep-lede-measure);
+  color: var(--colors-text-muted);
+}
+
+/* The priority note is a section apart; the heading belongs to the list
+   directly beneath it, so it sits close enough to read as its label. */
+.prep__expectations { display: grid; }
+.prep__priority { margin-bottom: var(--ds-prep-section-gap); }
+::deep .prep__heading { margin-bottom: var(--ds-prep-heading-gap); }
+
+/* The irreversible one. Info-toned rather than brand-toned, because it is
+   telling you something you cannot take back, not selling you a feature. */
+.prep__priority {
+  display: grid;
+  grid-template-columns: var(--ds-prep-icon) minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-lg);
+  color: var(--colors-feedback-info-text);
+  background: var(--colors-feedback-info-subtle);
+  border: var(--ds-prep-hairline) solid var(--colors-feedback-info-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.prep__priority-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-prep-icon);
+  height: var(--ds-prep-icon);
+  color: var(--colors-feedback-info-text);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-lg);
+}
+
+.prep__priority div { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.prep__priority ::deep strong { display: block; color: var(--colors-feedback-info-text); }
+.prep__priority ::deep p { color: var(--colors-text-secondary); }
+
+/* A hairline between rows rather than whitespace, so a list of five reads as a
+   list and not as a wall. */
+.prep__list { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--spacing-xs); }
+
+.prep__item {
+  display: grid;
+  grid-template-columns: var(--ds-prep-row-icon) minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-lg) 0;
+  border-bottom: var(--ds-prep-hairline) solid var(--colors-surface-border);
+}
+
+.prep__item:last-child { border-bottom: 0; }
+
+.prep__item-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-prep-row-icon);
+  height: var(--ds-prep-row-icon);
+  color: var(--colors-text-secondary);
+  background: var(--colors-interaction-hover);
+  border-radius: var(--radius-radius-full);
+}
+
+.prep__item-copy { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.prep__item-copy ::deep strong { display: block; color: var(--colors-text-secondary); }
+.prep__item-copy ::deep p { color: var(--colors-text-muted); }
+
+.prep__details { margin-top: var(--spacing-xs); }
+
+.prep__details ::deep summary {
+  width: max-content;
+  color: var(--colors-brand-primary);
+  cursor: pointer;
+  list-style: none;
+}
+
+.prep__details ::deep summary::-webkit-details-marker { display: none; }
+
+.prep__details ::deep p {
+  max-width: var(--ds-prep-details-measure);
+  margin-top: var(--spacing-xs);
+  padding-left: var(--spacing-sm);
+  color: var(--colors-text-muted);
+  border-left: var(--ds-prep-rule) solid var(--colors-accent-brand-muted);
+}
+
+.prep__agreement {
+  margin-top: var(--ds-prep-agreement-gap);
+  padding: var(--spacing-lg);
+  background: var(--colors-sidebar-background);
+  border: var(--ds-prep-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+/* Centred, not top-aligned: this consent line is a single row, so the box sits
+   on the text centre. The component keeps flex-start for labels that wrap. */
+.prep__agreement ::deep .checkbox { align-items: center; }
+
+/* The consent line sits with the list it confirms, so it takes the same
+   secondary weight of colour as the row titles rather than the Checkbox
+   component default of primary. */
+.prep__agreement ::deep .checkbox__text strong { color: var(--colors-text-secondary); }
+
+.prep__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ds-prep-footer-gap);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--ds-prep-footer-gap);
+  padding-top: var(--ds-prep-agreement-gap);
+  border-top: var(--ds-prep-hairline) solid var(--colors-surface-border);
+}
+
+.prep__assurance {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  max-width: var(--ds-prep-assurance);
+  color: var(--colors-text-muted);
+}
+
+/* The shield is the one coloured mark in the footer — it is reassurance, and
+   grey reads as disabled. Icon renders its own svg, so this needs ::deep. */
+.prep__assurance ::deep svg { color: var(--colors-accent-emerald-solid); }
+
+.prep { --ds-prep-assurance: 380px; }
+
+/* A bespoke primary control rather than the design-system Button: React holds
+   a disabled state at full opacity — only the grey fill should read — while
+   the shared Button also dims disabled states by half, which double-fades
+   the exact control this page opens on (locked until the tick above it). */
+.prep__continue {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  min-width: var(--ds-prep-cta-width);
+  height: var(--ds-prep-cta-height);
+  padding: var(--spacing-none) var(--spacing-xl);
+  color: var(--colors-text-on-primary);
+  background: var(--colors-brand-primary);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.prep { --ds-prep-cta-width: 220px; --ds-prep-cta-height: 46px; }
+
+.prep__continue:hover:not(:disabled) { background: var(--colors-brand-primary-hover); }
+
+.prep__continue:disabled {
+  color: var(--colors-interaction-disabled-foreground);
+  background: var(--colors-interaction-disabled-background);
+  cursor: not-allowed;
+}
+
+/* Waiting is not the same as locked: while the provider window opens the
+   control keeps its colour, as the design-system Button does when Busy. */
+.prep__continue.is-busy:disabled {
+  color: var(--colors-text-on-primary);
+  background: var(--colors-brand-primary);
+  cursor: progress;
+}

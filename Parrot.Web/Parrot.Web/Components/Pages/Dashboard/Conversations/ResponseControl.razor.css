@@ -1,0 +1,57 @@
+.response-control {
+  overflow: hidden;
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-xl) var(--colors-surface-shadow-diffuse);
+}
+
+.response-control.ai-has-control { background: var(--colors-accent-brand-subtle); border-color: var(--colors-accent-brand-muted); }
+.response-control.human-has-control { background: var(--colors-accent-teal-subtle); border-color: var(--colors-accent-teal-muted); }
+
+.response-control__row { display: flex; gap: var(--spacing-lg); align-items: center; justify-content: space-between; min-height: var(--ds-control-row-min); padding: var(--spacing-sm) var(--spacing-md); }
+.response-control__copy { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; color: var(--colors-brand-primary); }
+.human-has-control .response-control__copy { color: var(--colors-accent-teal-text); }
+.response-control__copy > span { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.response-control__copy ::deep strong { color: var(--colors-text-primary); }
+.response-control__copy ::deep small { color: var(--colors-text-muted); }
+
+.response-control__action {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--spacing-xs);
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ds-control-action-height);
+  padding-inline: var(--spacing-md);
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.response-control__action:hover { background: var(--colors-brand-primary-hover); }
+.response-control__action.is-return { color: var(--colors-accent-teal-text); background: var(--colors-surface-card); }
+.response-control__action.is-return:hover { background: var(--colors-interaction-hover); }
+.response-control__action:disabled,
+.response-control__options button:disabled { cursor: not-allowed; opacity: var(--ds-control-disabled-opacity); }
+
+.response-control__disclosure { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--ds-control-motion) ease, opacity var(--ds-control-motion) ease; }
+.response-control__disclosure > div { min-height: 0; overflow: hidden; }
+.response-control.is-expanded .response-control__disclosure { grid-template-rows: 1fr; opacity: 1; }
+.response-control__disclosure > div { display: grid; gap: var(--spacing-sm); padding-inline: var(--spacing-md); }
+.response-control.is-expanded .response-control__disclosure > div { padding-bottom: var(--spacing-md); }
+.response-control__disclosure ::deep > div > span { color: var(--colors-text-muted); }
+.response-control__options { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+.response-control__options button { min-height: var(--spacing-3xl); padding-inline: var(--spacing-md); color: var(--colors-text-secondary); background: var(--colors-surface-card); border: 0; border-radius: var(--radius-radius-full); cursor: pointer; }
+.response-control__options button:hover { color: var(--colors-brand-primary); background: var(--colors-interaction-hover); }
+
+.response-control {
+  /* Missing from the token set: no compact control-height, opacity or motion scale. */
+  --ds-control-row-min: 54px;
+  --ds-control-action-height: 34px;
+  --ds-control-disabled-opacity: 0.5;
+  --ds-control-motion: 180ms;
+}

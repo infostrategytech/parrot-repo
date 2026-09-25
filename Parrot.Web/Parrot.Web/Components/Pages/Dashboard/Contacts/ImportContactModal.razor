@@ -1,66 +1,72 @@
-@using Parrot.Web.Components.Pages.Dashboard.Contacts
+@namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@inject AuroraInterop Interop
 
-<ModalShell Visible="Visible" Title="Import contact" Subtitle="Upload a CSV file to add multiple customers to your CRM."
-            Size="contact" OnClose="OnCancel">
-    <BodyContent>
-        <button class="ic-download-btn">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="7 10 12 15 17 10" />
-                <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Download Template
-        </button>
-        <p class="ic-template-hint">Template columns: Name, Phone, Email, Stage</p>
-        <label class="ic-dropzone">
-            <input type="file" accept=".csv" style="display:none" @onchange="HandleFile" />
+@* Import, in Aurora's Dialog. The file input is hidden because no styling
+   makes a native one match the product; the dropzone forwards a click to it
+   the way Aurora's Products page does for its CSV import. Only the file's
+   name travels — nothing is uploaded anywhere yet. *@
+
+<Dialog Open="Visible"
+        Title="Import contacts"
+        ConfirmLabel="Import contacts"
+        OnConfirm="OnCancel"
+        OnCancel="OnCancel">
+    <GlyphContent><Icon Name="IconName.RiUploadCloud2Fill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="import__lede">
+            Upload a CSV file to add multiple customers to your CRM.
+        </Typography>
+
+        <div class="import__template">
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">
+                <IconLeft><Icon Name="IconName.RiFileTextFill" /></IconLeft>
+                <ChildContent>Download template</ChildContent>
+            </Button>
+            <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="import__hint">
+                Template columns: Name, Phone, Email, Stage
+            </Typography>
+        </div>
+
+        <InputFile @ref="_fileInput" OnChange="HandleFile" accept=".csv" class="sr-only" />
+        <button type="button" class="@(string.IsNullOrEmpty(_fileName) ? "import__dropzone" : "import__dropzone is-ready")" @onclick="PickFile">
+            <span class="import__dropzone-icon">
+                <Icon Name="@(string.IsNullOrEmpty(_fileName) ? IconName.RiUploadCloud2Fill : IconName.RiCheckFill)" Size="IconSize.Md" />
+            </span>
             @if (string.IsNullOrEmpty(_fileName))
             {
-                <div class="ic-drop-icon-wrap">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#6B7280" stroke-width="1.75"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                        <polyline points="7 10 12 15 17 10" />
-                        <line x1="12" y1="15" x2="12" y2="3" />
-                    </svg>
-                </div>
-                <span class="ic-drop-label">Click to upload CSV file</span>
-                <span class="ic-drop-sub">or drag and drop</span>
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Click to upload a CSV file</Typography>
+                <Typography TextStyle="TextStyle.Small12Regular" As="small">or drag and drop</Typography>
             }
             else
             {
-                <div class="ic-drop-icon-wrap ic-drop-icon-wrap--done">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#53279E" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                </div>
-                <span class="ic-drop-label">@_fileName</span>
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@_fileName</Typography>
+                <Typography TextStyle="TextStyle.Small12Regular" As="small">Click to choose a different file</Typography>
             }
-        </label>
-    </BodyContent>
-    <FooterContent>
-        <button class="modal-btn modal-btn--cancel" @onclick="OnCancel">Cancel</button>
-        <button class="modal-btn modal-btn--save" @onclick="OnCancel">Import contact</button>
-    </FooterContent>
-</ModalShell>
+        </button>
+    </Body>
+</Dialog>
 
 @code {
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
 
+    private InputFile? _fileInput;
     private string _fileName = string.Empty;
+    private bool _wasVisible;
 
     protected override void OnParametersSet()
     {
-        if (Visible) _fileName = string.Empty;
+        if (Visible && !_wasVisible) _fileName = string.Empty;
+        _wasVisible = Visible;
     }
 
-    private void HandleFile(ChangeEventArgs e)
+    private async Task PickFile()
     {
-        _fileName = e.Value?.ToString() ?? string.Empty;
-        if (!string.IsNullOrEmpty(_fileName))
-            _fileName = System.IO.Path.GetFileName(_fileName);
+        if (_fileInput?.Element is { } element) await Interop.ClickAsync(element);
+    }
+
+    private void HandleFile(InputFileChangeEventArgs e)
+    {
+        _fileName = e.File?.Name ?? string.Empty;
     }
 }

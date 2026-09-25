@@ -1,0 +1,33 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* Parrot has no AI ownership: every conversation is answered by hand, which
+   is Aurora's human-has-control state. There is no agent to return to, so the
+   return action is drawn disabled and the take-over disclosure never opens. *@
+<div class="response-control human-has-control">
+    <div class="response-control__row">
+        <span class="response-control__copy">
+            <span>
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">You control customer replies</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Manual replies. No AI agent sends on this conversation.</Typography>
+            </span>
+        </span>
+
+        <button type="button" class="response-control__action is-return" disabled
+                title="No AI agent is available for this conversation">
+            <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Return to AI</Typography>
+        </button>
+    </div>
+
+    <div class="response-control__disclosure" id="takeover-options" aria-hidden="true">
+        <div>
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Take over for how long?</Typography>
+            <div class="response-control__options">
+                <button type="button" disabled tabindex="-1">15 min</button>
+                <button type="button" disabled tabindex="-1">30 min</button>
+                <button type="button" disabled tabindex="-1">1 hour</button>
+                <button type="button" disabled tabindex="-1">Until I return</button>
+            </div>
+        </div>
+    </div>
+</div>

@@ -1,0 +1,415 @@
+/* Meta Business Settings, drawn.
+   ──────────────────────────────────────────────────────────────────────────
+   Everything inside the window frame is a picture of another company's
+   interface, so its colours are deliberately NOT design tokens. Tokenising
+   them would mean Meta's console changes appearance whenever our brand does,
+   which is exactly backwards: this has to keep looking like Meta so it is
+   recognisable when the person switches tabs.
+
+   They are collected here as one palette rather than scattered through the
+   file, so the boundary between "our product" and "a drawing of theirs" is a
+   single block you can read. */
+
+.meta-demo {
+  /* Meta console chrome, allowlisted in brand-literals.json. Not tokens: this
+     is a drawing of another product and has to keep looking like theirs. */
+  --ds-meta-chrome: #f2f3f5;
+  --ds-meta-chrome-edge: #dfe2e7;
+  --ds-meta-frame: #d9dee7;
+  --ds-meta-surface: #ffffff;
+  --ds-meta-rail: #f5f6f8;
+  --ds-meta-rail-edge: #dfe3e8;
+  --ds-meta-line: #e5e8ec;
+  --ds-meta-ink: #242b34;
+  --ds-meta-ink-soft: #5f6772;
+  --ds-meta-ink-mute: #858c96;
+  --ds-meta-dot: #bdc3cc;
+  --ds-meta-placeholder: #e2e5e9;
+  --ds-meta-field: #fafbfc;
+  --ds-meta-field-edge: #dce1e8;
+  --ds-meta-empty: #eef0f2;
+  --ds-meta-empty-edge: #e0e3e7;
+  --ds-meta-bar: #dfe3e7;
+  --ds-meta-bar-accent: #b8ddd5;
+  --ds-meta-highlight: #eaf0f8;
+  --ds-meta-highlight-edge: #b3c9e4;
+
+  /* Geometry and timing. No token scale describes a drawing of someone
+     else's product. */
+  --ds-meta-radius: 16px;
+  --ds-meta-radius-sm: 6px;
+  --ds-meta-hairline: 1px;
+  --ds-meta-loop: 6s;
+  --ds-meta-rail-width: 150px;
+
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.meta-demo__window {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ds-meta-surface);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-frame);
+  border-radius: var(--ds-meta-radius);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow-diffuse);
+}
+
+.meta-demo__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-art-toolbar-gap);
+  height: var(--ds-meta-toolbar);
+  padding: var(--ds-art-toolbar-pad);
+  background: var(--ds-meta-chrome);
+  border-bottom: var(--ds-meta-hairline) solid var(--ds-meta-chrome-edge);
+}
+
+.meta-demo { --ds-meta-toolbar: 30px; --ds-meta-dot-size: 6px; }
+
+.meta-demo__toolbar > i {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-demo__toolbar > ::deep span {
+  min-width: 0;
+  margin-left: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-3xl);
+  overflow: hidden;
+  color: var(--ds-meta-ink-mute);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-full);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: this is a drawing of another product's chrome, not our type scale */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.meta-demo__productbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-sm);
+  height: var(--ds-meta-productbar);
+  padding: var(--ds-art-productbar-pad);
+  border-bottom: var(--ds-meta-hairline) solid var(--ds-meta-line);
+}
+
+.meta-demo { --ds-meta-productbar: 45px; --ds-meta-avatar: 21px; }
+
+.meta-demo__productbar > ::deep span {
+  color: var(--ds-meta-ink-soft);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  text-align: right;
+}
+
+.meta-demo__productbar > i {
+  width: var(--ds-meta-avatar);
+  height: var(--ds-meta-avatar);
+  background: var(--ds-meta-placeholder);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-demo__workspace {
+  display: grid;
+  grid-template-columns: var(--ds-meta-rail-width) minmax(0, 1fr);
+  min-height: var(--ds-meta-workspace);
+}
+
+.meta-demo { --ds-meta-workspace: 280px; }
+
+.meta-demo__workspace nav {
+  display: grid;
+  align-content: start;
+  gap: var(--ds-art-nav-gap);
+  padding: var(--ds-art-nav-pad);
+  background: var(--ds-meta-rail);
+  border-right: var(--ds-meta-hairline) solid var(--ds-meta-rail-edge);
+}
+
+.meta-demo__workspace nav small {
+  margin: var(--ds-art-nav-label);
+  color: var(--ds-meta-ink-soft);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+}
+
+.meta-demo__workspace nav > ::deep span {
+  display: flex;
+  align-items: center;
+  min-height: var(--ds-meta-row);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--ds-meta-ink-soft);
+  border-radius: var(--ds-meta-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-semibold); /* text-style-exempt: as above */
+}
+
+.meta-demo { --ds-meta-row: 27px; --ds-meta-row-sub: 24px; }
+
+.meta-demo__group { display: grid; gap: var(--spacing-2xs); }
+
+.meta-demo__group > strong {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-height: var(--ds-meta-row);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--ds-meta-ink);
+  border: var(--ds-meta-hairline) solid transparent;
+  border-radius: var(--ds-meta-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-demo__group > strong > i {
+  color: var(--ds-meta-ink-soft);
+  font-style: normal;
+}
+
+.meta-demo__group > div {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding-left: var(--spacing-xl);
+}
+
+.meta-demo__group > div > ::deep span {
+  display: flex;
+  align-items: center;
+  min-height: var(--ds-meta-row-sub);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--ds-meta-ink-soft);
+  border: var(--ds-meta-hairline) solid transparent;
+  border-radius: var(--ds-meta-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-demo__workspace section {
+  min-width: 0;
+  padding: var(--ds-art-section-pad);
+  background: var(--ds-meta-surface);
+}
+
+.meta-demo__workspace section header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-art-section-gap);
+}
+
+.meta-demo__workspace section header > strong {
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-base); /* text-style-exempt: as above */
+}
+
+.meta-demo__workspace section header > div {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.meta-demo__workspace section header > div > i {
+  width: var(--ds-meta-search);
+  height: var(--ds-meta-control);
+  background: var(--ds-meta-field);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-field-edge);
+  border-radius: var(--radius-radius-xs);
+}
+
+.meta-demo { --ds-meta-search: 104px; --ds-meta-control: 26px; --ds-meta-button: 28px; }
+
+/* Meta's own blue, allowlisted in brand-literals.json. */
+.meta-demo__workspace section button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: var(--ds-meta-button);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--ds-meta-surface);
+  background: #4C77B9;
+  border: 0;
+  border-radius: var(--radius-radius-xs);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+  animation: meta-highlight-create var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-demo__empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  min-height: var(--ds-meta-empty-height);
+  text-align: center;
+}
+
+.meta-demo { --ds-meta-empty-height: 220px; --ds-meta-thumb-w: 84px; --ds-meta-thumb-h: 58px; }
+
+.meta-demo__empty > div {
+  position: relative;
+  width: var(--ds-meta-thumb-w);
+  height: var(--ds-meta-thumb-h);
+  margin-bottom: var(--spacing-md);
+  background: var(--ds-meta-empty);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-empty-edge);
+  border-radius: var(--radius-radius-xs);
+}
+
+.meta-demo__empty > div i {
+  position: absolute;
+  bottom: var(--spacing-sm);
+  width: var(--ds-meta-bar-width);
+  background: var(--ds-meta-bar);
+  border-radius: var(--radius-radius-xs) var(--radius-radius-xs) 0 0;
+}
+
+.meta-demo { --ds-meta-bar-width: 18px; }
+
+.meta-demo__empty > div i:nth-child(1) { left: var(--spacing-md); height: var(--icon-size-icon-lg); }
+.meta-demo__empty > div i:nth-child(2) { left: var(--spacing-3xl); height: var(--spacing-3xl); background: var(--ds-meta-bar-accent); }
+.meta-demo__empty > div i:nth-child(3) { right: var(--spacing-md); height: var(--spacing-xl); }
+
+.meta-demo__empty > strong {
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-demo__empty > ::deep span {
+  max-width: var(--ds-meta-empty-measure);
+  margin-top: var(--spacing-xs);
+  color: var(--ds-meta-ink-mute);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-demo { --ds-meta-empty-measure: 190px; }
+
+/* ── The walk ─────────────────────────────────────────────────────────────
+   Accounts opens, Apps highlights, Add pulses. One six-second loop, so the
+   three beats keep time with the cursor crossing the window. */
+
+.meta-demo__accounts { animation: meta-highlight-accounts var(--ds-meta-loop) ease-in-out infinite; }
+.meta-demo__apps { animation: meta-highlight-apps var(--ds-meta-loop) ease-in-out infinite; }
+
+.meta-demo__cursor {
+  position: absolute;
+  z-index: 3;
+  top: var(--ds-meta-cursor-top);
+  left: var(--ds-meta-cursor-left);
+  width: var(--ds-meta-cursor-w);
+  height: var(--ds-meta-cursor-h);
+  background: var(--ds-meta-ink);
+  clip-path: polygon(0 0, 100% 67%, 56% 72%, 42% 100%);
+  animation: meta-demo-cursor var(--ds-meta-loop) ease-in-out infinite;
+}
+
+.meta-demo {
+  /* Where the pointer starts, measured against the drawing. */
+  --ds-meta-cursor-top: 184px;
+  --ds-meta-cursor-left: 62px;
+  --ds-meta-cursor-w: 13px;
+  --ds-meta-cursor-h: 18px;
+  /* Where the cursor travels: down into the Accounts submenu, then across to
+     the Add button. Measured against the drawing, not a spacing scale. */
+  --ds-meta-walk-x1: 24px;
+  --ds-meta-walk-y1: 86px;
+  --ds-meta-walk-x2: 444px;
+  --ds-meta-walk-y2: -76px;
+}
+
+.meta-demo__caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  color: var(--colors-text-muted);
+}
+
+.meta-demo__dot {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: #4C77B9;
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-demo__replay {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.meta-demo__replay:hover { background: var(--colors-interaction-hover); }
+
+@keyframes meta-highlight-accounts {
+  0%, 24% {
+    color: #4C77B9;
+    background: var(--ds-meta-highlight);
+    border-color: var(--ds-meta-highlight-edge);
+  }
+  32%, 100% {
+    color: var(--ds-meta-ink);
+    background: transparent;
+    border-color: transparent;
+  }
+}
+
+@keyframes meta-highlight-apps {
+  0%, 28% {
+    color: var(--ds-meta-ink-soft);
+    background: transparent;
+    border-color: transparent;
+  }
+  34%, 100% {
+    color: #4C77B9;
+    background: var(--ds-meta-highlight);
+    border-color: var(--ds-meta-highlight-edge);
+  }
+}
+
+@keyframes meta-highlight-create {
+  0%, 64%, 92%, 100% { transform: scale(1); }
+  70%, 88% { transform: scale(1.04); }
+}
+
+@keyframes meta-demo-cursor {
+  0%, 22% { opacity: 1; transform: translate(0, 0); }
+  34%, 56% { opacity: 1; transform: translate(var(--ds-meta-walk-x1), var(--ds-meta-walk-y1)); }
+  68%, 88% { opacity: 1; transform: translate(var(--ds-meta-walk-x2), var(--ds-meta-walk-y2)); }
+  95%, 100% { opacity: 0; transform: translate(var(--ds-meta-walk-x2), var(--ds-meta-walk-y2)); }
+}
+
+/* Stopped, the drawing still has to teach. The cursor goes, and Apps stays
+   highlighted — the end state of the walk, which is the answer. */
+@media (prefers-reduced-motion: reduce) {
+  .meta-demo__cursor { display: none; }
+
+  .meta-demo__apps {
+    color: #4C77B9;
+    background: var(--ds-meta-highlight);
+    border-color: var(--ds-meta-highlight-edge);
+  }
+}
+
+.meta-demo__window {
+  /* Artwork coordinates, not layout. Every measurement here is calibrated
+     against the cursor animation's absolute travel distances, so none can come
+     from the spacing scale: moved to the nearest rung, the target shifts out
+     from under the pointer. These are the source geometry, to the pixel. */
+  --ds-art-toolbar-pad: 0 11px;
+  --ds-art-toolbar-gap: 6px;
+  --ds-art-productbar-pad: 0 13px;
+  --ds-art-nav-pad: 14px 10px;
+  --ds-art-nav-gap: 5px;
+  --ds-art-nav-label: 0 7px 5px;
+  --ds-art-section-pad: 18px;
+  --ds-art-section-gap: 10px;
+}

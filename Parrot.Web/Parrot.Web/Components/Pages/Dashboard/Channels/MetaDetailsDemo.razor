@@ -1,0 +1,74 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+
+@* A picture of Meta's "Create an app" form, filling itself in.
+
+   Step two of the guided path asks for two fields and then a button, which
+   sounds too simple to need a drawing. It isn't: the Next button sits dormant
+   until both fields have content, and people who type only a name sit looking
+   at a button that appears broken. So the drawing types — name, then email,
+   then Next wakes up — because the order is the lesson, and a still screenshot
+   cannot show a button changing state.
+
+   Everything inside the window frame is Meta's interface, not ours. *@
+
+<div class="meta-details">
+    <div class="meta-details__window" role="img" aria-label="@Description" @key="ReplayKey">
+        <div class="meta-details__toolbar">
+            <i></i><i></i><i></i>
+            <span>developers.facebook.com</span>
+        </div>
+
+        <div class="meta-details__page">
+            <h2>Create an app</h2>
+
+            <div class="meta-details__progress">
+                <strong><i></i>App details</strong>
+                <span><i></i>Use cases</span>
+                <span><i></i>Business</span>
+                <span><i></i>Requirements</span>
+                <span><i></i>Overview</span>
+            </div>
+
+            <div class="meta-details__form">
+                <label>
+                    <strong>App name</strong>
+                    <small>This name will appear on your My Apps page.</small>
+                    <span class="meta-details__name"><b>Parrot WhatsApp</b><i></i></span>
+                </label>
+
+                <label>
+                    <strong>App contact email</strong>
+                    <small>Meta will use this email to contact you about your app.</small>
+                    <span class="meta-details__email"><b>hello@@yourbusiness.com</b><i></i></span>
+                </label>
+
+                <footer>
+                    <span>Cancel</span>
+                    <button type="button" tabindex="-1">Next</button>
+                </footer>
+            </div>
+        </div>
+
+        <span class="meta-details__cursor" aria-hidden="true"></span>
+    </div>
+
+    <p class="meta-details__caption">
+        <span class="meta-details__dot" aria-hidden="true"></span>
+        <Typography TextStyle="TextStyle.Small10Medium" As="span">Follow the moving highlight</Typography>
+        <button type="button" class="meta-details__replay" @onclick="Replay">
+            <Icon Name="IconName.RiRefreshLine" />
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span">Replay</Typography>
+        </button>
+    </p>
+</div>
+
+@code {
+    private const string Description =
+        "Animated guide showing how to complete Meta app details: an app name, a contact email, then Next";
+
+    // Changing the key throws the window away and builds a new one, which is
+    // the only reliable way to restart a CSS animation from the beginning.
+    private int ReplayKey;
+
+    private void Replay() => ReplayKey++;
+}

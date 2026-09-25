@@ -1,0 +1,58 @@
+.copy-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--ds-copy-gap);
+  align-items: center;
+  padding: var(--ds-copy-pad);
+  background: var(--colors-surface-muted);
+  border: var(--ds-copy-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+
+.copy-value {
+  /* Gaps in the token set: no border-width or control-size scale. */
+  --ds-copy-hairline: 1px;
+  --ds-copy-button: 32px;
+  /* Gaps in the token set: no fine spacing or control-height scale. The box is
+     inset a little more on the left than the right so the value clears the
+     edge by the same amount the copy button does. */
+  --ds-copy-gap: 5px;
+  --ds-copy-pad: 11px 11px 11px 13px;
+  --ds-copy-button-h: 28px;
+  --ds-copy-button-lift: -6px;
+}
+
+::deep .copy-value__label {
+  grid-column: 1 / -1;
+  color: var(--colors-text-subtle);
+  text-transform: uppercase;
+}
+
+/* Wrapped, never truncated. A webhook URL cut off with an ellipsis is one
+   somebody retypes by hand and gets wrong. */
+::deep .copy-value__text {
+  min-width: 0;
+  color: var(--colors-text-primary);
+  overflow-wrap: anywhere;
+}
+
+.copy-value__button {
+  grid-column: 2;
+  grid-row: 2;
+  display: grid;
+  place-items: center;
+  width: var(--ds-copy-button);
+  height: var(--ds-copy-button-h);
+  margin-top: var(--ds-copy-button-lift);
+  padding: var(--spacing-none);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  cursor: pointer;
+}
+
+.copy-value__button:hover {
+  color: var(--colors-brand-primary);
+  border-color: var(--colors-brand-primary);
+}

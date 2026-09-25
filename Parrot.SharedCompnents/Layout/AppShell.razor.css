@@ -1,0 +1,36 @@
+/* Two columns: the rail, then everything else.
+
+   --app-nav-width is published here deliberately. Under scoped CSS a parent's
+   selectors cannot reach a child component, but custom properties still
+   inherit — so this is the sanctioned way for the shell to tell ToastHost how
+   wide the rail is, and the only reason a toast can sit centred over the
+   workspace rather than over the window. */
+
+.app-shell {
+  --app-nav-width: var(--ds-shell-nav-width);
+
+  display: grid;
+  grid-template-columns: var(--app-nav-width) minmax(0, 1fr);
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--colors-surface-muted);
+  transition: grid-template-columns var(--ds-shell-motion) ease;
+}
+
+.app-shell.is-collapsed {
+  --app-nav-width: var(--ds-shell-nav-width-collapsed);
+}
+
+.app-shell {
+  /* Gaps in the token set: no layout-width scale and no motion scale. Both
+     widths come from the Figma frames. */
+  --ds-shell-nav-width: 232px;
+  --ds-shell-nav-width-collapsed: 76px;
+  --ds-shell-motion: 160ms;
+}
+
+.app-main {
+  min-width: 0;
+  overflow-y: auto;
+}

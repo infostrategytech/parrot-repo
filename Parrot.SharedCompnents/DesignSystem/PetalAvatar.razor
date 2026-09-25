@@ -1,0 +1,26 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Initials on a tint derived from the seed, so one person reads as the same
+   person across the inbox, the customer panel and a task request. *@
+
+<span class="petal-avatar petal-avatar--@Size.ToString().ToLowerInvariant() @Petal.ClassFor(Seed) @InitialsStyle.ToClassName()"
+      aria-hidden="true">@Initials</span>
+
+@code {
+    /// <summary>
+    /// A stable identifier — a customer id, a teammate id, a workspace id.
+    /// Never a display name: two people called Ada would collide, and one
+    /// person renamed would change colour.
+    /// </summary>
+    [Parameter, EditorRequired] public string Seed { get; set; } = "";
+
+    [Parameter, EditorRequired] public string Initials { get; set; } = "";
+
+    [Parameter] public AvatarSize Size { get; set; } = AvatarSize.Md;
+
+    // Initials are the smallest readable type in the product, so they take the
+    // smallest semibold style rather than a size set by hand.
+    private TextStyle InitialsStyle => Size == AvatarSize.Lg
+        ? TextStyle.Small12Semibold
+        : TextStyle.Small10Semibold;
+}

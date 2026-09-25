@@ -1,0 +1,48 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One <use> into the generated sprite. The glyph paints with currentColor, so
+   an icon takes its colour from whatever it sits in and never needs styling.
+
+   Accessibility is decided here rather than left to each call site, because
+   React left it to each call site and the results were inconsistent: an icon
+   with no Label is decorative and hidden from screen readers, an icon with a
+   Label is announced. There is no third state to get wrong. *@
+
+@if (Label is null)
+{
+    <svg class="@ClassName" aria-hidden="true" focusable="false">
+        <use href="@Href" />
+    </svg>
+}
+else
+{
+    <svg class="@ClassName" role="img" aria-label="@Label" focusable="false">
+        <use href="@Href" />
+    </svg>
+}
+
+@code {
+    [Parameter, EditorRequired] public IconName Name { get; set; }
+
+    /// <summary>
+    /// What a screen reader should say. Leave it null when the icon only
+    /// repeats adjacent text, which is most of the time.
+    /// </summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>Defaults to <see cref="IconSize.Inherit"/>, which scales with the surrounding text.</summary>
+    [Parameter] public IconSize Size { get; set; } = IconSize.Inherit;
+
+    [Parameter] public string? Class { get; set; }
+
+    private string Href => "_content/Parrot.SharedComponents/icons/aurora-icons.svg#" + Name.ToSymbolId();
+
+    private string ClassName
+    {
+        get
+        {
+            var name = "ds-icon ds-icon--" + Size.ToString().ToLowerInvariant();
+            return string.IsNullOrWhiteSpace(Class) ? name : name + " " + Class;
+        }
+    }
+}

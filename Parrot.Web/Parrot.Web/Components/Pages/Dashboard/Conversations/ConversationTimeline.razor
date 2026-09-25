@@ -1,0 +1,200 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+@using System.Globalization
+@using Parrot.Application.Conversations
+@inject Parrot.Web.Services.ConversationClient Client
+@inject AuroraInterop Interop
+
+@* The page owns the conversation data (it polls the list and reads the
+   selected thread every 5 seconds); this component draws Aurora's timeline
+   over that data and owns the composer: the draft, the send with its
+   request id, and the per-conversation send error. *@
+<div class="conversation-timeline">
+    @if (!Conversation.HistoryLoaded)
+    {
+        <div class="conversation-timeline__loading">
+            @for (var index = 0; index < 5; index++)
+            {
+                <div class="conversation-timeline__skeleton @(index % 2 == 0 ? null : "is-outbound")">
+                    <Skeleton Shape="SkeletonShape.Circle" Width="32px" Order="@index" />
+                    <Skeleton Shape="SkeletonShape.Block" Width="@($"{52 + index * 5}%")" Height="72px" Order="@index" />
+                </div>
+            }
+        </div>
+    }
+    else
+    {
+        <section class="conversation-timeline__scroll" aria-live="polite" @ref="_scrollElement">
+            <div class="conversation-timeline__tabs">
+                <div role="tablist" aria-label="Conversation content">
+                    <button type="button" role="tab" class="@(_view == ThreadView.Messages ? "is-active" : null)"
+                            aria-selected="@(_view == ThreadView.Messages)" @onclick="() => SetView(ThreadView.Messages)">
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Messages</Typography>
+                    </button>
+                    <button type="button" role="tab" class="@(_view == ThreadView.Notes ? "is-active" : null)"
+                            aria-selected="@(_view == ThreadView.Notes)" @onclick="() => SetView(ThreadView.Notes)">
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Internal notes</Typography>
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span">0</Typography>
+                    </button>
+                </div>
+            </div>
+
+            <div class="conversation-timeline__messages">
+                @if (_view == ThreadView.Notes)
+                {
+                    <div class="conversation-timeline__notes-heading">
+                        <Icon Name="IconName.RiLock2Fill" Size="IconSize.Sm" />
+                        <span>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Internal notes</Typography>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="small">Private workspace for your team</Typography>
+                        </span>
+                    </div>
+
+                    <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiLock2Fill"
+                                Title="No internal notes yet"
+                                Description="Add private context for teammates from the composer." />
+                }
+                else
+                {
+                    @if (Conversation.NextBefore is not null)
+                    {
+                        <div class="conversation-timeline__older">
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="OnLoadOlder">
+                                Load older messages
+                            </Button>
+                        </div>
+                    }
+
+                    DateOnly? renderedDate = null;
+                    @foreach (var message in Conversation.Messages)
+                    {
+                        var messageDate = DateOnly.FromDateTime(message.ReceivedAt.ToLocalTime());
+                        if (messageDate != renderedDate)
+                        {
+                            <div class="conversation-timeline__date">
+                                <Typography TextStyle="TextStyle.Small10Semibold" As="span">@DateLabel(messageDate)</Typography>
+                            </div>
+                            renderedDate = messageDate;
+                        }
+
+                        <ConversationMessageItem @key="message.Id" Message="message"
+                                                 CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
+                                                 AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" />
+                    }
+                }
+            </div>
+        </section>
+
+        <footer class="conversation-timeline__composer">
+            @if (Conversation.SendError is not null)
+            {
+                <InlineError Message="@Conversation.SendError" OnDismiss="() => Conversation.SendError = null" />
+            }
+
+            <ResponseControl />
+
+            <ConversationComposer Conversation="@Conversation"
+                                  Mode="@_composerMode" ModeChanged="ChangeComposerMode"
+                                  Text="@Conversation.Draft" TextChanged="OnComposerTextChanged"
+                                  Sending="@Conversation.Sending" Retry="@Conversation.DraftRequestId.HasValue"
+                                  OnSend="SendAsync" />
+        </footer>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
+    /// <summary>Who outbound replies are shown as: the business whose WhatsApp number sent them.</summary>
+    [Parameter, EditorRequired] public string AuthorName { get; set; } = "";
+    [Parameter, EditorRequired] public string AuthorSeed { get; set; } = "";
+    /// <summary>The page is already talking to the API; older-history paging waits for it.</summary>
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public EventCallback OnLoadOlder { get; set; }
+    [Parameter] public EventCallback OnSent { get; set; }
+
+    private ElementReference _scrollElement;
+    private string? _tailId;
+    private bool _scrollPending;
+    private ComposerMode _composerMode = ComposerMode.Reply;
+    private ThreadView _view = ThreadView.Messages;
+
+    protected override void OnParametersSet()
+    {
+        // Polling merges new messages in place; only a new tail (or the first
+        // load) pulls the view to the bottom, so paging older history keeps
+        // the reader's place.
+        var tail = Conversation.HistoryLoaded ? Conversation.Messages.LastOrDefault()?.Id ?? "" : null;
+        if (tail != _tailId)
+        {
+            _tailId = tail;
+            if (tail is not null) _scrollPending = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scrollPending) return;
+        _scrollPending = false;
+        await Interop.ScrollToBottomAsync(_scrollElement);
+    }
+
+    private void SetView(ThreadView view)
+    {
+        _view = view;
+        _scrollPending = true;
+    }
+
+    private void ChangeComposerMode(ComposerMode mode)
+    {
+        _composerMode = mode;
+        _view = mode == ComposerMode.Note ? ThreadView.Notes : ThreadView.Messages;
+        _scrollPending = true;
+    }
+
+    private void OnComposerTextChanged(string value) => Conversation.Draft = value;
+
+    private async Task SendAsync()
+    {
+        var item = Conversation;
+        if (item.Sending || string.IsNullOrWhiteSpace(item.Draft)) return;
+        item.Sending = true;
+        item.SendError = null;
+        item.DraftRequestId ??= Guid.NewGuid();
+        try
+        {
+            var result = await Client.SendAsync(item.ConnectionId, item.Sender,
+                new SendReplyRequest(item.DraftRequestId.Value, item.Draft), CancellationToken.None);
+            Parrot.Web.Components.Pages.Dashboard.Conversations.ConversationsState.Merge(item, new[] { result });
+            item.SendError = result.Status switch
+            {
+                "failed" => "WhatsApp rejected this reply. Check the recipient and server credentials before sending a new message.",
+                "unknown" or "pending" => "Delivery is uncertain or still processing. Check the recipient’s phone before composing the same reply again; it will not be resent automatically.",
+                _ => null,
+            };
+            item.Draft = "";
+            item.DraftRequestId = null;
+            _scrollPending = true;
+            await OnSent.InvokeAsync();
+        }
+        catch (HttpRequestException ex)
+        {
+            item.SendError = ex.Message;
+            if (ex.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict
+                or System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Unauthorized)
+                item.DraftRequestId = null;
+            // Transport errors retain the same text and request ID for a safe retry.
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or System.Text.Json.JsonException or InvalidOperationException)
+        { item.SendError = "Could not confirm this send. Check / retry uses the same request and will not send it twice."; }
+        finally { item.Sending = false; }
+    }
+
+    private static string DateLabel(DateOnly date)
+    {
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        if (date == today) return "Today";
+        if (date == today.AddDays(-1)) return "Yesterday";
+        return date.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+    }
+
+    private enum ThreadView { Messages, Notes }
+}

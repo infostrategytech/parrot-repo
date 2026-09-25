@@ -1,0 +1,42 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+
+@* One settings card: a title and a line about it, the fields, and a footer
+   with the one action. Shaped like Aurora's editor sections and its channel
+   cards, so every tab is made of the same thing. *@
+
+<section class="@(Danger ? "settings-card settings-card--danger" : "settings-card")">
+    <header class="settings-card__header">
+        <div class="settings-card__titles">
+            <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2" Prose>@Title</Typography>
+            @if (!string.IsNullOrWhiteSpace(Description))
+            {
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="settings-card__description">
+                    @Description
+                </Typography>
+            }
+        </div>
+        @if (HeaderAction is not null)
+        {
+            <div class="settings-card__header-action">@HeaderAction</div>
+        }
+    </header>
+
+    <div class="settings-card__body">
+        @ChildContent
+    </div>
+
+    @if (Footer is not null)
+    {
+        <footer class="settings-card__footer">@Footer</footer>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? HeaderAction { get; set; }
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    /// <summary>Colours the edge for irreversible actions.</summary>
+    [Parameter] public bool Danger { get; set; }
+}

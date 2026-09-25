@@ -1,0 +1,45 @@
+/* Bottom-right, out of the way of the rail and of any page content. This is a
+   demo affordance: when the product ships, this moves into the user menu and
+   gains a third option that follows the operating system. */
+
+.theme-toggle {
+  position: fixed;
+  right: var(--spacing-xl);
+  bottom: var(--spacing-xl);
+  z-index: var(--ds-theme-toggle-layer);
+  display: flex;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs);
+  background: var(--colors-surface-popover);
+  border: var(--ds-theme-toggle-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) var(--colors-surface-shadow-diffuse);
+}
+
+.theme-toggle {
+  /* Gaps in the token set: no z-index scale, no border-width scale, and no
+     control-size scale for a compact icon button. */
+  --ds-theme-toggle-layer: 90;
+  --ds-theme-toggle-hairline: 1px;
+  --ds-theme-toggle-control: 32px;
+}
+
+.theme-toggle__option {
+  display: grid;
+  place-items: center;
+  width: var(--ds-theme-toggle-control);
+  height: var(--ds-theme-toggle-control);
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.theme-toggle__option:hover { color: var(--colors-text-primary); }
+
+.theme-toggle__option.is-active {
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+}

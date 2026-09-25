@@ -1,155 +1,371 @@
 @page "/dashboard/ai-agents"
 @layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject AiAgentsState AiAgentsState
 @inject NavigationManager Nav
-@using Parrot.Web.Components.Pages.Dashboard.AiAgents
+@inject ToastService Toasts
+@inject AuthState AuthState
 
-<div class="aia-page">
-    @if (!AiAgentsState.Agents.Any())
-    {
-        <div class="aia-empty">
-            <div class="aia-empty-bg-img"></div>
-            <div class="aia-empty-content">
-                <img src="/assets/images/gifs/owl-animation.gif" alt="Owl mascot" class="aia-empty-owl-img" />
-                <h2 class="aia-empty-title">Meet your AI workforce</h2>
-                <p class="aia-empty-sub">Start by creating an AI agent to handle conversations<br />and routine requests for
-                    you.</p>
-                    <button class="aia-btn-primary" @onclick="() => _showCreate = true">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                             stroke-linecap="round" stroke-linejoin="round">
-                            <circle cx="12" cy="12" r="10" />
-                            <line x1="12" y1="8" x2="12" y2="16" />
-                            <line x1="8" y1="12" x2="16" y2="12" />
-                        </svg>
-                        Create Ai Agent
-                    </button>
+@* Aurora's AI Operations page, bound to Parrot's in-memory agents.
+
+   Aurora's summary and lower panels come from an operations feed Parrot does
+   not have: "Handled today" is the sum of each agent's message count, the
+   rest show the em dash Aurora shows before data arrives, and the attention
+   and activity panels carry their empty state. *@
+
+<PageTitle>AI Operations · OmniAI</PageTitle>
+
+@if (_builderOpen)
+{
+    <AgentBuilder Agent="_builderAgent"
+                  Knowledge="_knowledge"
+                  OnCancel="CloseBuilder"
+                  OnIdentitySaved="HandleIdentitySaved"
+                  OnOrientationSaved="HandleOrientationSaved"
+                  OnBoundariesSaved="HandleBoundariesSaved"
+                  OnVoiceSaved="HandleVoiceSaved"
+                  OnTestUpdated="HandleTestUpdated"
+                  OnActivated="HandleActivated" />
+}
+else
+{
+    <main class="operations-main">
+        <header class="operations-header">
+            <div class="operations-heading">
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">AI Operations</Typography>
+                <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="operations-lede">
+                    See how every agent is performing, step in where needed and shape how they work.
+                </Typography>
+            </div>
+            <Button Class="ds-no-shrink" @onclick="() => OpenBuilder(null)">
+                <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                <ChildContent>Create agent</ChildContent>
+            </Button>
+        </header>
+
+        <section class="operations-summary" aria-label="AI team summary">
+            <article>
+                <span class="summary-icon icon-handled"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
+                <div>
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">@(AiAgentsState.IsLoading ? "—" : HandledToday.ToString())</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Handled today</Typography>
                 </div>
+                <Typography TextStyle="TextStyle.Small10Regular" As="small">Across social channels</Typography>
+            </article>
+            <article>
+                <span class="summary-icon icon-automated"><Icon Name="IconName.RiBarChartBoxFill" Size="IconSize.Md" /></span>
+                <div>
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">—</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Automated safely</Typography>
+                </div>
+                <Typography TextStyle="TextStyle.Small10Regular" As="small">Human help excluded</Typography>
+            </article>
+            <article>
+                <span class="summary-icon icon-attention"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
+                <div>
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">—</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Needs your attention</Typography>
+                </div>
+                <Typography TextStyle="TextStyle.Small10Regular" As="small">Knowledge question</Typography>
+            </article>
+        </section>
+
+        <section class="agent-overview-section">
+            <header class="section-heading-row">
+                <div>
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Agents</Typography>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p">Monitor workload and performance at a glance.</Typography>
+                </div>
+            </header>
+
+            <div class="agent-controls-row">
+                <div class="agent-filter-tabs" role="tablist" aria-label="Filter AI agents">
+                    @foreach (var tab in Filters)
+                    {
+                        <button type="button"
+                                role="tab"
+                                aria-selected="@((_filter == tab.Id).ToString().ToLowerInvariant())"
+                                class="@(_filter == tab.Id ? "is-active" : null)"
+                                @onclick="() => _filter = tab.Id">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@tab.Label</Typography>
+                            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="agent-filter-count">@tab.Count</Typography>
+                        </button>
+                    }
+                </div>
+                <label class="agent-search">
+                    <Icon Name="IconName.RiSearch2Fill" Size="IconSize.Sm" />
+                    <input class="@TextStyle.BodySmallRegular.ToClassName()"
+                           type="search"
+                           aria-label="Search agents"
+                           placeholder="Search agents"
+                           value="@_search"
+                           @oninput="e => _search = e.Value?.ToString() ?? string.Empty" />
+                </label>
             </div>
-        }
-    else
-        {
-            <div class="aia-list-header">
-                <button class="aia-btn-primary" @onclick="() => _showCreate = true">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="16" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
-                    </svg>
-                    Create AI agent
-                </button>
-            </div>
-            <div class="aia-grid">
-                @foreach (var agent in AiAgentsState.Agents)
+
+            <div class="agent-grid" aria-busy="@AiAgentsState.IsLoading.ToString().ToLowerInvariant()">
+                @if (AiAgentsState.IsLoading)
                 {
-                    var agentId = agent.Id;
-                    <div class="aia-card @(_hoveredId == agentId ? "aia-card--hover" : "")"
-                         @onmouseenter="() => _hoveredId = agentId" @onmouseleave="() => _hoveredId = string.Empty"
-                         @onclick="() => GoToAgent(agentId)">
-                        <div class="aia-card-top">
-                            <img src="@GetMascotGif(agent.Mascot)" alt="@agent.Mascot" class="aia-mascot-sm-img" />
-                            <div class="aia-card-info">
-                                <span class="aia-card-name">@agent.Name</span>
-                                <div class="aia-card-status">
-                                    <span class="aia-status-dot"></span>
-                                    <span>Active</span>
-                                </div>
-                            </div>
-                            @if (_hoveredId == agentId)
+                    @for (var index = 0; index < 3; index++)
+                    {
+                        <div class="agent-card-skeleton">
+                            <Skeleton Shape="SkeletonShape.Block" Width="var(--ds-skeleton-avatar)" Height="var(--ds-skeleton-avatar)" Order="@(index * 3)" />
+                            <Skeleton Shape="SkeletonShape.Block" Height="var(--ds-skeleton-copy)" Order="@(index * 3 + 1)" />
+                            <Skeleton Shape="SkeletonShape.Block" Height="var(--ds-skeleton-body)" Order="@(index * 3 + 2)" />
+                        </div>
+                    }
+                }
+                else
+                {
+                    @foreach (var agent in FilteredAgents)
+                    {
+                        var current = agent;
+                        <AgentCard Agent="current"
+                                   Busy="@(_busyAgentId == current.Id)"
+                                   OnOpen="() => OpenAgent(current)"
+                                   OnConfigure="() => OpenBuilder(current)"
+                                   OnDelete="() => _pendingDelete = current"
+                                   OnStatusChange="() => ChangeStatus(current)" />
+                    }
+
+                    @if (FilteredAgents.Count == 0)
+                    {
+                        <div class="agents-empty">
+                            @if (AiAgentsState.Agents.Count == 0)
                             {
-                                <div class="aia-card-actions" @onclick:stopPropagation>
-                                    <button class="aia-action-btn" title="Edit"
-                                            @onclick="() => { _editAgent = agent; _showCreate = true; }">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
-                                        </svg>
-                                    </button>
-                                    <button class="aia-action-btn" title="View" @onclick="() => GoToAgent(agentId)">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <circle cx="12" cy="12" r="3" />
-                                            <path
-                                            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                                        </svg>
-                                    </button>
-                                    <button class="aia-action-btn aia-action-btn--del" title="Delete"
-                                            @onclick="() => AiAgentsState.RemoveAgent(agentId)">
-                                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            <polyline points="3 6 5 6 21 6" />
-                                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                                            <path d="M10 11v6" />
-                                            <path d="M14 11v6" />
-                                            <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-                                        </svg>
-                                    </button>
-                                </div>
+                                <EmptyState Glyph="IconName.RiRobot3Fill"
+                                            Size="EmptyStateSize.Panel"
+                                            Title="No agents yet"
+                                            Description="Create an agent to handle conversations and routine requests for you.">
+                                    <Action>
+                                        <Button Variant="ButtonVariant.Secondary" @onclick="() => OpenBuilder(null)">
+                                            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                                            <ChildContent>Create agent</ChildContent>
+                                        </Button>
+                                    </Action>
+                                </EmptyState>
+                            }
+                            else
+                            {
+                                <EmptyState Glyph="IconName.RiRobot3Fill"
+                                            Size="EmptyStateSize.Panel"
+                                            Title="No agents found"
+                                            Description="Try a different search or status." />
                             }
                         </div>
-                        <p class="aia-card-desc">@agent.Description</p>
-                        <div class="aia-card-stats">
-                            <div class="aia-stat">
-                                <span class="aia-stat-label">Playbook</span>
-                                <span class="aia-stat-val">@agent.PlaybookCount</span>
-                            </div>
-                            <div class="aia-stat">
-                                <span class="aia-stat-label">Channels</span>
-                                <span class="aia-stat-val">@agent.ChannelCount</span>
-                            </div>
-                            <div class="aia-stat">
-                                <span class="aia-stat-label">Messages Today</span>
-                                <span class="aia-stat-val">@agent.MessagesToday</span>
-                            </div>
-                        </div>
-                        <div class="aia-card-divider"></div>
-                        <button type="button" class="aia-orientation-btn" @onclick:stopPropagation
-                                @onclick="() => GoToOrientation(agentId)">
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <polygon points="3 11 22 2 13 21 11 13 3 11" />
-                            </svg>
-                            Give Orientation
-                        </button>
-                    </div>
+                    }
                 }
             </div>
-        }
-    </div>
+        </section>
 
-    @if (_showCreate)
-    {
-        <CreateAgentModal OnCancel="CloseModal" OnCreate="HandleCreate" />
-    }
+        <div class="operations-lower-grid">
+            <section class="attention-panel">
+                <header>
+                    <div>
+                        <span><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Sm" /></span>
+                        <div>
+                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Needs attention</Typography>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="p">Questions and decisions waiting for a teammate.</Typography>
+                        </div>
+                    </div>
+                    <Typography TextStyle="TextStyle.Small12Bold" As="em">0</Typography>
+                </header>
+                <div class="attention-list">
+                    <EmptyState Glyph="IconName.RiCheckboxCircleFill"
+                                Size="EmptyStateSize.Panel"
+                                Title="Nothing waiting on you"
+                                Description="Questions your agents cannot answer will appear here." />
+                </div>
+            </section>
+
+            <section class="activity-panel">
+                <header>
+                    <div>
+                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Recent activity</Typography>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="p">Latest decisions from your team.</Typography>
+                    </div>
+                </header>
+                <div class="activity-list">
+                    <EmptyState Glyph="IconName.RiFlashlightFill"
+                                Size="EmptyStateSize.Panel"
+                                Title="No activity yet"
+                                Description="Resolutions, handoffs and status changes will show here." />
+                </div>
+            </section>
+        </div>
+    </main>
+}
+
+<Dialog Open="@(_pendingDelete is not null)"
+        Type="DialogType.Destructive"
+        Title="@($"Delete {_pendingDelete?.Name ?? ""}?")"
+        ConfirmLabel="Delete agent"
+        CancelLabel="Keep agent"
+        BusyLabel="Deleting…"
+        Busy="@(_pendingDelete is not null && _busyAgentId == _pendingDelete.Id)"
+        OnConfirm="ConfirmDelete"
+        OnCancel="() => _pendingDelete = null">
+    <GlyphContent><Icon Name="IconName.RiDeleteBin6Fill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>This agent has never replied to a customer, so it can be safely removed.</p>
+        <p>This cannot be undone.</p>
+    </Body>
+</Dialog>
 
 @code {
-    private bool _showCreate;
-    private string _hoveredId = string.Empty;
-    private AiAgent? _editAgent;
+    private enum AgentFilter { All, Active, Inactive, Draft }
 
-    private void CloseModal()
+    private sealed record FilterTab(AgentFilter Id, string Label, int Count);
+
+    private AgentFilter _filter = AgentFilter.All;
+    private string _search = string.Empty;
+    private string? _busyAgentId;
+    private AiAgent? _pendingDelete;
+
+    private bool _builderOpen;
+    private AiAgent? _builderAgent;
+    private AgentKnowledgeWorkspace _knowledge = new();
+
+    private int HandledToday => AiAgentsState.Agents.Sum(agent => agent.MessagesToday);
+
+    // Parrot has no draft state: an agent only reaches the list once it has
+    // been activated, so the Drafts tab counts nothing.
+    private IReadOnlyList<FilterTab> Filters =>
+    [
+        new(AgentFilter.All, "All agents", AiAgentsState.Agents.Count),
+        new(AgentFilter.Active, "Active", AiAgentsState.Agents.Count(agent => agent.IsActive)),
+        new(AgentFilter.Inactive, "Deactivated", AiAgentsState.Agents.Count(agent => !agent.IsActive)),
+        new(AgentFilter.Draft, "Drafts", 0)
+    ];
+
+    private List<AiAgent> FilteredAgents
     {
-        _showCreate = false;
-        _editAgent = null;
+        get
+        {
+            var query = _search.Trim();
+            return AiAgentsState.Agents.Where(agent =>
+                _filter switch
+                {
+                    AgentFilter.Active => agent.IsActive,
+                    AgentFilter.Inactive => !agent.IsActive,
+                    AgentFilter.Draft => false,
+                    _ => true
+                }
+                && (query.Length == 0
+                    || $"{agent.Name} {agent.Description} {string.Join(" ", agent.Playbooks.Select(p => p.Title))}"
+                        .Contains(query, StringComparison.CurrentCultureIgnoreCase))
+            ).ToList();
+        }
     }
 
-    private void HandleCreate(AiAgent agent)
+    protected override void OnInitialized()
     {
-        AiAgentsState.AddAgent(agent);
-        _showCreate = false;
-        _editAgent = null;
+        _knowledge.BusinessName = AuthState.CurrentUser?.BusinessName ?? string.Empty;
     }
 
-    private void GoToAgent(string id) => Nav.NavigateTo($"/dashboard/ai-agents/{id}");
-    private void GoToOrientation(string id) => Nav.NavigateTo($"/dashboard/ai-agents/{id}/orientation");
+    private void OpenAgent(AiAgent agent) => Nav.NavigateTo($"/dashboard/ai-agents/{agent.Id}");
 
-    private static string GetMascotGif(string mascot) => mascot switch
+    private void OpenBuilder(AiAgent? agent)
     {
-        "Atlas" => "/assets/images/avatars/avatar-2.png",
-        "Bolt" => "/assets/images/avatars/avatar-3.png",
-        "Aegis" => "/assets/images/avatars/avatar-4.png",
-        "Buzz" => "/assets/images/avatars/avatar-5.png",
-        "Luna" => "/assets/images/avatars/avatar-6.png",
-        _ => "/assets/images/avatars/avatar-1.png"
-    };
+        _builderAgent = agent;
+        _builderOpen = true;
+    }
+
+    private void CloseBuilder()
+    {
+        _builderOpen = false;
+        _builderAgent = null;
+    }
+
+    private void ChangeStatus(AiAgent agent)
+    {
+        _busyAgentId = agent.Id;
+        agent.IsActive = !agent.IsActive;
+        AiAgentsState.UpdateAgent(agent);
+        _busyAgentId = null;
+        Toasts.Show($"{agent.Name} is now {(agent.IsActive ? "active" : "deactivated")}.");
+    }
+
+    private void ConfirmDelete()
+    {
+        if (_pendingDelete is null) return;
+        var name = _pendingDelete.Name;
+        AiAgentsState.RemoveAgent(_pendingDelete.Id);
+        _pendingDelete = null;
+        Toasts.Show($"{name} was deleted.");
+    }
+
+    // ── Builder callbacks ────────────────────────────────────────────────
+    // Aurora persists every step. Parrot stores only the identity fields and
+    // the channels, so an existing agent's identity is written straight away
+    // and a new agent is written once, at activation.
+
+    private void HandleIdentitySaved(AgentSetupDraft draft)
+    {
+        if (draft.AgentId is not null)
+        {
+            var agent = AiAgentsState.GetAgent(draft.AgentId);
+            if (agent is not null)
+            {
+                agent.Name = draft.Name;
+                agent.Description = draft.Description;
+                agent.Mascot = draft.Mascot;
+                AiAgentsState.UpdateAgent(agent);
+            }
+            Toasts.Show($"{draft.Name}'s identity was updated.");
+        }
+        else
+        {
+            Toasts.Show($"{draft.Name} was saved as a draft. Now add business knowledge.");
+        }
+    }
+
+    private void HandleOrientationSaved(AgentSetupDraft draft) =>
+        Toasts.Show("Business knowledge was shared. Now set safe boundaries.");
+
+    private void HandleBoundariesSaved(AgentSetupDraft draft) =>
+        Toasts.Show("Agent boundaries were saved. Now choose its voice and tone.");
+
+    private void HandleVoiceSaved(AgentSetupDraft draft) =>
+        Toasts.Show("Voice and tone saved. Now test realistic customer scenarios.");
+
+    private void HandleTestUpdated(AgentSetupDraft draft)
+    {
+        if (draft.TestStatus == AgentTestStatus.Passed)
+            Toasts.Show("Required tests passed. This agent is ready for final review.");
+    }
+
+    private void HandleActivated(AgentSetupDraft draft)
+    {
+        var existing = draft.AgentId is null ? null : AiAgentsState.GetAgent(draft.AgentId);
+        if (existing is null)
+        {
+            AiAgentsState.AddAgent(new AiAgent
+            {
+                Name = draft.Name,
+                Description = draft.Description,
+                Mascot = draft.Mascot,
+                // Aurora's builder always keeps a human takeover available —
+                // "customer asks for a person" is a required handoff rule.
+                HumanTakeover = true,
+                IsActive = true,
+                Channels = AgentBuilderCopy.DefaultChannels(draft.Channels)
+            });
+        }
+        else
+        {
+            existing.Name = draft.Name;
+            existing.Description = draft.Description;
+            existing.Mascot = draft.Mascot;
+            existing.HumanTakeover = true;
+            existing.IsActive = true;
+            foreach (var channel in existing.Channels)
+                channel.IsEnabled = draft.Channels.Contains(channel.Key, StringComparer.OrdinalIgnoreCase);
+            AiAgentsState.UpdateAgent(existing);
+        }
+
+        CloseBuilder();
+        _filter = AgentFilter.Active;
+        Toasts.Show($"{draft.Name} is active and ready for new social conversations.");
+    }
 }

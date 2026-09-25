@@ -1,151 +1,144 @@
 @page "/dashboard/qa-insights"
 @layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.QaInsights
 @using Parrot.Web.Components.Pages.Dashboard.QaInsights
 
-<div class="qi-page">
-    <div class="qi-topbar">
-        <button class="qi-date-btn">
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" />
-                <line x1="8" y1="2" x2="8" y2="6" />
-                <line x1="3" y1="10" x2="21" y2="10" />
-            </svg>
-            Date range
-        </button>
-    </div>
+<PageTitle>Insights · OmniAI</PageTitle>
 
-    <div class="qi-stat-grid">
+@* QA and conversation insight. The summary is Aurora's stat strip; the two
+   panels beneath are its cards. Every colour on the donut is a status token,
+   because sentiment is a state, not a series. *@
+
+<div class="insights">
+    <header class="insights__header">
+        <div class="insights__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Insights</Typography>
+            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="insights__lede">
+                How your AI agents and your team are handling conversations, and how customers feel about it.
+            </Typography>
+        </div>
+
+        <div class="insights__actions">
+            <Button Variant="ButtonVariant.Secondary">
+                <IconLeft><Icon Name="IconName.RiCalendarCheckFill" /></IconLeft>
+                <ChildContent>Date range</ChildContent>
+            </Button>
+        </div>
+    </header>
+
+    <section class="insights__summary" aria-label="Conversation summary">
         @foreach (var card in _statCards)
         {
-            <div class="qi-stat-card">
-                <div class="qi-stat-header">
-                    <span class="qi-stat-title">@card.Title</span>
-                    <span class="qi-stat-change @(card.ChangePositive ? "qi-change--up" : "qi-change--down")">
-                        @if (card.ChangePositive)
-                        {
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="18 15 12 9 6 15" />
-                            </svg>
-                        }
-                        else
-                        {
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="6 9 12 15 18 9" />
-                            </svg>
-                        }
-                        @card.Change
-                    </span>
+            <article class="stat-tile">
+                <div class="stat-tile__body">
+                    <div class="stat-tile__top">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@card.Title</Typography>
+                        <StatusBadge Tone="@(card.ChangePositive ? StatusTone.Success : StatusTone.Danger)">@card.Change</StatusBadge>
+                    </div>
+                    <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong" Prose>@card.Value</Typography>
+                    <Typography TextStyle="TextStyle.Small10Regular" As="p" Prose Class="stat-tile__note">@card.Sub</Typography>
                 </div>
-                <div class="qi-stat-value">@card.Value</div>
-                <div class="qi-stat-sub">@card.Sub</div>
-            </div>
+            </article>
         }
-    </div>
+    </section>
 
-    <div class="qi-bottom">
-        <div class="qi-performance-panel">
-            <h3 class="qi-panel-title">AI vs Human Performance</h3>
-            <p class="qi-panel-sub">Key metrics at a glance</p>
-            <hr class="qi-panel-divider" />
-            <div class="qi-perf-cards">
-                <div class="qi-perf-card">
-                    <div class="qi-perf-card-header">
-                        <div class="qi-perf-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="3" />
-                                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-                                <path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
-                            </svg>
-                        </div>
-                        <span class="qi-perf-card-title">AI Agent Performance</span>
-                    </div>
-                    @foreach (var row in _aiRows)
-                    {
-                        <div class="qi-perf-row">
-                            <span class="qi-perf-label">@row.Label</span>
-                            <span class="qi-perf-value">@row.Value</span>
-                        </div>
-                    }
-                </div>
-                <div class="qi-perf-card">
-                    <div class="qi-perf-card-header">
-                        <div class="qi-perf-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                                <circle cx="12" cy="7" r="4" />
-                            </svg>
-                        </div>
-                        <span class="qi-perf-card-title">Human Performance</span>
-                    </div>
-                    @foreach (var row in _humanRows)
-                    {
-                        <div class="qi-perf-row">
-                            <span class="qi-perf-label">@row.Label</span>
-                            <span class="qi-perf-value">@row.Value</span>
-                        </div>
-                    }
-                </div>
-            </div>
-            <div class="qi-insight-box">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#D97706" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-                <p class="qi-insight-text">Human intervention improves resolution rates by 12.3% for complex custom
-                    requests, while AI maintains high efficiency for standardized flows.</p>
-                </div>
-            </div>
+    <div class="insights__panels">
+        <section class="insights__card">
+            <header class="insights__card-header">
+                <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2">AI vs human performance</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Key metrics at a glance</Typography>
+            </header>
 
-            <div class="qi-sentiment-panel">
-                <div class="qi-sentiment-header">
-                    <span class="qi-sentiment-title">Customer Sentiment</span>
-                    <div class="qi-sentiment-pct-wrap">
-                        <span class="qi-sentiment-pct">78%</span>
-                        <span class="qi-sentiment-pct-label">Positive</span>
-                    </div>
-                </div>
-                <hr class="qi-sentiment-divider" />
-                <div class="qi-donut-wrap">
-                    <svg viewBox="0 0 120 120" class="qi-donut">
-                        <circle cx="60" cy="60" r="46" fill="none" stroke="#E5E7EB" stroke-width="20" />
-                        @{
-                            double circumference = 2 * Math.PI * 46;
-                            double neutralOffset = circumference * (1 - 0.16);
-                            double negOffset = circumference * (1 - 0.06);
-                            double posOffset = circumference * (1 - 0.78);
+            <div class="insights__performance">
+                <article class="insights__performer">
+                    <header>
+                        <span class="insights__performer-icon"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></span>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">AI agent performance</Typography>
+                    </header>
+                    <dl>
+                        @foreach (var row in _aiRows)
+                        {
+                            <div>
+                                <Typography TextStyle="TextStyle.Small12Regular" As="dt">@row.Label</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="dd">@row.Value</Typography>
+                            </div>
                         }
-                        <circle cx="60" cy="60" r="46" fill="none" stroke="#22C55E" stroke-width="20"
-                                stroke-dasharray="@circumference" stroke-dashoffset="@posOffset"
-                                transform="rotate(-90 60 60)" />
-                        <circle cx="60" cy="60" r="46" fill="none" stroke="#D1D5DB" stroke-width="20"
-                                stroke-dasharray="@(circumference * 0.16) @circumference"
-                                stroke-dashoffset="@(-(circumference * 0.78))" transform="rotate(-90 60 60)" />
-                        <circle cx="60" cy="60" r="46" fill="none" stroke="#EF4444" stroke-width="20"
-                                stroke-dasharray="@(circumference * 0.06) @circumference"
-                                stroke-dashoffset="@(-(circumference * 0.94))" transform="rotate(-90 60 60)" />
-                    </svg>
-                </div>
-                <div class="qi-legend">
-                    @foreach (var s in _sentimentSlices)
-                    {
-                        <div class="qi-legend-row">
-                            <span class="qi-legend-dot" style="background:@s.Color"></span>
-                            <span class="qi-legend-label">@s.Label</span>
-                            <span class="qi-legend-val">@s.Percent%</span>
-                        </div>
-                    }
-                </div>
+                    </dl>
+                </article>
+
+                <article class="insights__performer">
+                    <header>
+                        <span class="insights__performer-icon"><Icon Name="IconName.RiUser3Fill" Size="IconSize.Sm" /></span>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Human performance</Typography>
+                    </header>
+                    <dl>
+                        @foreach (var row in _humanRows)
+                        {
+                            <div>
+                                <Typography TextStyle="TextStyle.Small12Regular" As="dt">@row.Label</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="dd">@row.Value</Typography>
+                            </div>
+                        }
+                    </dl>
+                </article>
             </div>
-        </div>
+
+            <aside class="insights__aside">
+                <Icon Name="IconName.RiFlashlightFill" Size="IconSize.Sm" />
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>
+                    Human intervention improves resolution rates by 12.3% for complex custom requests,
+                    while AI maintains high efficiency for standardized flows.
+                </Typography>
+            </aside>
+        </section>
+
+        <section class="insights__card">
+            <header class="insights__card-header insights__card-header--split">
+                <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2">Customer sentiment</Typography>
+                <div class="insights__sentiment-headline">
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">@PositivePercent%</Typography>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="span">Positive</Typography>
+                </div>
+            </header>
+
+            <div class="insights__donut-wrap">
+                <svg viewBox="0 0 120 120" class="insights__donut" role="img" aria-label="Customer sentiment breakdown">
+                    <circle class="insights__ring" cx="60" cy="60" r="46" />
+                    @{
+                        double offset = 0;
+                    }
+                    @for (var i = 0; i < _sentimentSlices.Count; i++)
+                    {
+                        var slice = _sentimentSlices[i];
+                        var length = Circumference * slice.Percent / 100;
+                        <circle class="@SliceClass(i)"
+                                cx="60" cy="60" r="46"
+                                stroke-dasharray="@Fmt(length) @Fmt(Circumference)"
+                                stroke-dashoffset="@Fmt(-offset)"
+                                transform="rotate(-90 60 60)" />
+                        offset += length;
+                    }
+                </svg>
+            </div>
+
+            <ul class="insights__legend">
+                @for (var i = 0; i < _sentimentSlices.Count; i++)
+                {
+                    var slice = _sentimentSlices[i];
+                    <li>
+                        <span class="insights__legend-dot @SliceClass(i)" aria-hidden="true"></span>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose>@slice.Label</Typography>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@slice.Percent%</Typography>
+                    </li>
+                }
+            </ul>
+        </section>
     </div>
+</div>
 
 @code {
+    private const double Circumference = 2 * Math.PI * 46;
+
     private readonly List<StatCard> _statCards =
     [
         new("Total Conversations", "4,281", "All handled across channels.", "+12.5%", true),
@@ -176,4 +169,17 @@
         new("Neutral Sentiment", "#D1D5DB", 16),
         new("Negativee Sentiment", "#EF4444", 6),
     ];
+
+    private double PositivePercent => _sentimentSlices.Count > 0 ? _sentimentSlices[0].Percent : 0;
+
+    // The slice colours come from the status tokens by position — positive,
+    // neutral, negative — never from the hex the data carries.
+    private static string SliceClass(int index) => index switch
+    {
+        0 => "insights__slice insights__slice--positive",
+        1 => "insights__slice insights__slice--neutral",
+        _ => "insights__slice insights__slice--negative"
+    };
+
+    private static string Fmt(double value) => value.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
 }

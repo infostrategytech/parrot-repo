@@ -1,0 +1,72 @@
+.conversation-timeline { position: absolute; inset: 0; min-width: 0; min-height: 0; overflow: hidden; }
+.conversation-timeline__scroll { position: relative; height: 100%; overflow-y: auto; scrollbar-color: var(--colors-accent-neutral-border) transparent; }
+
+.conversation-timeline__tabs {
+  position: sticky;
+  top: 0;
+  z-index: var(--ds-timeline-tabs-layer);
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-xl);
+  background: linear-gradient(to bottom, var(--colors-surface-muted) 58%, transparent);
+  backdrop-filter: blur(var(--ds-timeline-blur));
+}
+
+.conversation-timeline__tabs > div { display: flex; gap: var(--spacing-2xs); padding: var(--spacing-xs); background: var(--colors-surface-card); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-full); box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow-diffuse); }
+.conversation-timeline__tabs button { display: inline-flex; gap: var(--spacing-xs); align-items: center; min-height: var(--spacing-3xl); padding: 0 var(--spacing-md); color: var(--colors-text-muted); background: transparent; border: 0; border-radius: var(--radius-radius-full); cursor: pointer; }
+.conversation-timeline__tabs button.is-active { color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); }
+.conversation-timeline__tabs button ::deep span + span { display: grid; place-items: center; min-width: var(--spacing-lg); height: var(--spacing-lg); padding-inline: var(--spacing-2xs); background: var(--colors-surface-card); border-radius: var(--radius-radius-full); }
+
+.conversation-timeline__messages { display: flex; flex-direction: column; gap: var(--spacing-xl); min-height: 100%; padding: 0 var(--spacing-2xl) var(--ds-timeline-composer-reserve); }
+/* Parrot pages message history; Aurora has no equivalent control. */
+.conversation-timeline__older { display: flex; justify-content: center; }
+.conversation-timeline__date { display: flex; align-items: center; gap: var(--spacing-md); align-self: stretch; color: var(--colors-text-subtle); }
+.conversation-timeline__date::before,
+.conversation-timeline__date::after { content: ""; flex: 1; height: var(--ds-hairline); background: var(--colors-surface-border); }
+
+.conversation-timeline__notes-heading { display: flex; gap: var(--spacing-sm); align-items: center; align-self: center; color: var(--colors-feedback-warning-text); }
+.conversation-timeline__notes-heading > span { display: grid; gap: var(--spacing-2xs); }
+.conversation-timeline__notes-heading ::deep strong { color: var(--colors-text-secondary); }
+.conversation-timeline__notes-heading ::deep small { color: var(--colors-text-muted); }
+
+.conversation-timeline__loading { display: flex; flex-direction: column; gap: var(--spacing-2xl); padding: var(--spacing-5xl) var(--spacing-2xl); }
+.conversation-timeline__skeleton { display: flex; gap: var(--spacing-sm); align-items: flex-start; }
+.conversation-timeline__skeleton.is-outbound { flex-direction: row-reverse; }
+.conversation-timeline__state { display: grid; place-items: center; align-content: center; gap: var(--spacing-lg); height: 100%; padding: var(--spacing-2xl); }
+
+.conversation-timeline__composer {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: var(--ds-timeline-composer-layer);
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-4xl) var(--spacing-2xl) var(--spacing-xl);
+  background: linear-gradient(to bottom, transparent, var(--colors-surface-muted) var(--ds-timeline-gradient-stop));
+  pointer-events: none;
+}
+
+.conversation-timeline__composer > * { pointer-events: auto; }
+.conversation-timeline__resolved { display: flex; gap: var(--spacing-xs); align-items: center; justify-content: center; color: var(--colors-text-muted); }
+
+.learning-dialog { display: grid; gap: var(--spacing-lg); }
+.learning-dialog__source { display: grid; gap: var(--spacing-xs); padding: var(--spacing-md); background: var(--colors-surface-muted); border-radius: var(--radius-radius-lg); }
+.learning-dialog__source ::deep > span { color: var(--colors-text-muted); }
+.learning-dialog__source ::deep p { color: var(--colors-text-secondary); white-space: pre-wrap; }
+.learning-dialog > label { display: grid; gap: var(--spacing-xs); }
+.learning-dialog > label textarea { width: 100%; padding: var(--spacing-md); color: var(--colors-text-primary); line-height: var(--typography-leading-leading-lg); resize: vertical; background: var(--colors-surface-input); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-lg); outline: 0; }
+.learning-dialog > label textarea:focus { border-color: var(--colors-brand-primary); }
+.learning-dialog__commitment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-sm); align-items: start; padding: var(--spacing-md); color: var(--colors-accent-teal-text); background: var(--colors-accent-teal-subtle); border-radius: var(--radius-radius-lg); }
+.learning-dialog__commitment > span { display: grid; gap: var(--spacing-2xs); }
+.learning-dialog__commitment ::deep strong { color: var(--colors-text-secondary); }
+.learning-dialog__commitment ::deep small { color: var(--colors-text-muted); }
+
+.conversation-timeline {
+  /* Missing from the token set: no z-index or backdrop-blur scale. */
+  --ds-timeline-tabs-layer: 4;
+  --ds-timeline-blur: 12px;
+  --ds-timeline-composer-layer: 5;
+  --ds-timeline-composer-reserve: 330px;
+  --ds-timeline-gradient-stop: 34%;
+}

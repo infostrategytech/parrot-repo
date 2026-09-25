@@ -1,268 +1,249 @@
 @page "/dashboard/ai-agents/{AgentId}/orientation"
 @layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject NavigationManager Nav
 @inject AiAgentsState AiAgentsState
-@inject IJSRuntime JS
-@using Parrot.Web.Components.Pages.Dashboard.AiAgents
-@using Microsoft.JSInterop
+@inject AuroraInterop Interop
 @implements IDisposable
+
+@* Parrot's first-day orientation chat: a scripted conversation that fills an
+   agent profile as it goes. No Aurora screen exists for it, so it wears
+   Aurora's setup-card and conversation dress — the composer, bubbles and
+   profile checklist follow the builder's sandbox and step rail. *@
 
 @{
     var agent = AiAgentsState.GetAgent(AgentId);
 }
 
+<PageTitle>Orientation · @(agent?.Name ?? "Agent") · OmniAI</PageTitle>
+
 @if (agent is null)
 {
-    <div style="padding:2rem"><h2>Agent not found</h2></div>
+    <main class="orientation">
+        <EmptyState Glyph="IconName.RiRobot3Fill"
+                    Title="Agent not found"
+                    Description="This agent does not exist or has been deleted.">
+            <Action>
+                <Button Variant="ButtonVariant.Secondary" @onclick='() => Nav.NavigateTo("/dashboard/ai-agents")'>Back to agents</Button>
+            </Action>
+        </EmptyState>
+    </main>
 }
 else
 {
-    <div class="ori-page">
-
-        <!-- action bar -->
-        <div class="ori-action-bar">
-            <button class="ori-save-btn" @onclick="Exit">Save &amp; exit</button>
-            <button class="ori-close-btn" @onclick="Exit">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
+    <main class="orientation">
+        <header class="orientation__bar">
+            <button type="button" class="orientation__back" @onclick="Exit">
+                <Icon Name="IconName.RiArrowLeftLine" Size="IconSize.Md" />
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Back to @agent.Name</Typography>
             </button>
-        </div>
+            <div class="orientation__bar-actions">
+                <Button Variant="ButtonVariant.Secondary" @onclick="Exit">Save &amp; exit</Button>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Close orientation" @onclick="Exit">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </div>
+        </header>
 
-        <div class="ori-body">
-
-            <!-- ───────── CHAT COLUMN ───────── -->
-            <section class="ori-chat">
-
-                <!-- agent strip -->
-                <div class="ori-chat-strip">
-                    <div class="ori-agent-avatar-lg">
-                        <svg viewBox="0 0 24 24" width="22" height="22" fill="#fff">
-                            <path d="M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9z" />
-                        </svg>
-                    </div>
-                    <div class="ori-chat-strip-info">
-                        <div class="ori-chat-strip-name-row">
-                            <span class="ori-chat-agent-name">@agent.Name</span>
-                            <span class="ori-phase-badge @(_phase == "activated" ? "ori-phase-badge--active" : "")">
+        <div class="orientation__body">
+            <section class="orientation__chat">
+                <header class="orientation__strip">
+                    <span class="orientation__avatar agent-tone-slate">
+                        <img src="@AgentBuilderCopy.MascotImage(agent.Mascot)" alt="" />
+                    </span>
+                    <div class="orientation__strip-text">
+                        <div class="orientation__strip-row">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@agent.Name</Typography>
+                            <StatusBadge Tone="@(_phase == "activated" ? StatusTone.Success : StatusTone.Brand)">
                                 @(_phase == "activated" ? "Active" : "First day · in orientation")
-                            </span>
+                            </StatusBadge>
                         </div>
-                        <span class="ori-chat-agent-sub">Getting to know the part of work it will own</span>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="small">Getting to know the part of work it will own</Typography>
                     </div>
-                </div>
+                </header>
 
-                <!-- messages -->
-                <div class="ori-messages" id="ori-scroll">
+                <div class="orientation__messages" @ref="_messagesElement">
                     @foreach (var msg in _messages)
                     {
                         @if (msg.Role == "divider")
                         {
-                            <div class="ori-msg-divider">
-                                <span class="ori-msg-divider-line"></span>
-                                <span class="ori-msg-divider-text">@msg.Text</span>
-                                <span class="ori-msg-divider-line"></span>
+                            <div class="orientation__divider">
+                                <span></span>
+                                <Typography TextStyle="TextStyle.Small10Semibold" As="em" Class="ds-overline">@msg.Text</Typography>
+                                <span></span>
                             </div>
                         }
                         else if (msg.Role == "agent")
                         {
-                            <div class="ori-msg-row ori-msg-row--agent">
-                                <div class="ori-bubble-avatar">
-                                    <svg viewBox="0 0 24 24" width="17" height="17" fill="#fff">
-                                        <path d="M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9z" />
-                                    </svg>
+                            <div class="orientation__row orientation__row--agent">
+                                <span class="orientation__bubble-avatar agent-tone-slate">
+                                    <img src="@AgentBuilderCopy.MascotImage(agent.Mascot)" alt="" />
+                                </span>
+                                <div class="orientation__bubble orientation__bubble--agent">
+                                    <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose>@msg.Text</Typography>
                                 </div>
-                                <div class="ori-bubble ori-bubble--agent">@msg.Text</div>
                             </div>
                         }
                         else
                         {
-                            <div class="ori-msg-row ori-msg-row--user">
-                                <div class="ori-bubble ori-bubble--user">@msg.Text</div>
+                            <div class="orientation__row orientation__row--user">
+                                <div class="orientation__bubble orientation__bubble--user">
+                                    <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose>@msg.Text</Typography>
+                                </div>
                             </div>
                         }
                     }
 
                     @if (_typing)
                     {
-                        <div class="ori-msg-row ori-msg-row--agent">
-                            <div class="ori-bubble-avatar">
-                                <svg viewBox="0 0 24 24" width="17" height="17" fill="#fff">
-                                    <path d="M12 2.5l1.9 5.1 5.1 1.9-5.1 1.9L12 16.5l-1.9-5.1L5 9.5l5.1-1.9z" />
-                                </svg>
-                            </div>
-                            <div class="ori-typing">
-                                <span class="ori-typing-dot"></span>
-                                <span class="ori-typing-dot ori-typing-dot--2"></span>
-                                <span class="ori-typing-dot ori-typing-dot--3"></span>
+                        <div class="orientation__row orientation__row--agent" aria-live="polite" aria-label="@($"{agent.Name} is typing")">
+                            <span class="orientation__bubble-avatar agent-tone-slate">
+                                <img src="@AgentBuilderCopy.MascotImage(agent.Mascot)" alt="" />
+                            </span>
+                            <div class="orientation__typing">
+                                @* The brand's Typing loader: the agent is composing a reply. *@
+                                <CadenceLoader Kind="CadenceLoaderKind.Typing" Size="24" />
                             </div>
                         </div>
                     }
                 </div>
 
-                <!-- dock: choices + actions + input -->
-                <div class="ori-dock">
-
+                <div class="orientation__dock">
                     @if (_showChoices && CurrentStep is { } cur)
                     {
-                        <div class="ori-choices">
+                        <div class="orientation__choices">
                             @if (!_isMulti && cur.Defaults.Length > 0)
                             {
-                                <button class="ori-suggested" @onclick="() => ChooseSingle(cur.Defaults[0])">
-                                    <span class="ori-suggested-tag">Suggested</span>
-                                    <span class="ori-suggested-label">@cur.Defaults[0]</span>
+                                <button type="button" class="orientation__suggested" @onclick="() => ChooseSingle(cur.Defaults[0])">
+                                    <Typography TextStyle="TextStyle.Small10Semibold" As="em" Class="ds-overline">Suggested</Typography>
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@cur.Defaults[0]</Typography>
                                 </button>
                             }
                             @if (!string.IsNullOrEmpty(cur.Helper))
                             {
-                                <div class="ori-helper-text">@cur.Helper</div>
+                                <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="orientation__helper">@cur.Helper</Typography>
                             }
-                            <div class="ori-chips-wrap">
-                                @foreach (var chip in _isMulti
-                                    ? cur.Defaults.Concat(cur.Chips)
-                                    : cur.Chips)
+                            <div class="orientation__chips">
+                                @foreach (var chip in _isMulti ? cur.Defaults.Concat(cur.Chips) : cur.Chips)
                                 {
                                     var label = chip;
                                     var sel = _selected.Contains(label);
-                                    <button class="ori-chip @(sel ? "ori-chip--on" : "")"
+                                    <button type="button"
+                                            class="@(sel ? "orientation__chip is-selected" : "orientation__chip")"
+                                            aria-pressed="@sel.ToString().ToLowerInvariant()"
                                             @onclick="() => { if (_isMulti) ToggleChip(label); else _ = ChooseSingle(label); }">
                                         @if (sel)
                                         {
-                                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                                 stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                                <polyline points="20 6 9 17 4 12" />
-                                            </svg>
+                                            <Icon Name="IconName.RiCheckFill" Size="IconSize.Inherit" />
                                         }
-                                        @label
+                                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">@label</Typography>
                                     </button>
                                 }
                             </div>
                             @if (_isMulti)
                             {
                                 var canConfirm = _selected.Count > 0;
-                                <button class="ori-confirm-btn @(canConfirm ? "" : "ori-confirm-btn--disabled")"
-                                        disabled="@(!canConfirm)"
-                                        @onclick="ConfirmMulti">
-                                    @(canConfirm
-                                        ? $"Looks good — continue with {_selected.Count}"
-                                        : "Select at least one")
-                                </button>
+                                <Button Class="orientation__confirm" disabled="@(!canConfirm)" @onclick="ConfirmMulti">
+                                    @(canConfirm ? $"Looks good — continue with {_selected.Count}" : "Select at least one")
+                                </Button>
                             }
                         </div>
                     }
 
                     @if (_phase == "review")
                     {
-                        <div class="ori-review-btns">
-                            <button class="ori-activate-btn" @onclick="Activate">
-                                <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="#fff"
-                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M5 12l5 5L20 6" />
-                                </svg>
-                                Activate agent
-                            </button>
-                            <button class="ori-test-btn" @onclick="() => _ = TestAgent()">
-                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                     stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M8 5v14l11-7z" />
-                                </svg>
-                                Test agent
-                            </button>
+                        <div class="orientation__review">
+                            <Button @onclick="Activate">
+                                <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
+                                <ChildContent>Activate agent</ChildContent>
+                            </Button>
+                            <Button Variant="ButtonVariant.Secondary" @onclick="() => _ = TestAgent()">
+                                <IconLeft><Icon Name="IconName.RiPlayFill" /></IconLeft>
+                                <ChildContent>Test agent</ChildContent>
+                            </Button>
                         </div>
                     }
 
                     @if (_phase == "activated")
                     {
-                        <div class="ori-activated-banner">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1F8A5B"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M12 21a9 9 0 100-18 9 9 0 000 18zM8 12l3 3 5-6" />
-                            </svg>
-                            <span class="ori-activated-text">@agent.Name is live and ready to help your customers.</span>
-                            <button class="ori-quicktest-btn" @onclick="() => _ = TestAgent()">Run a quick test</button>
+                        <div class="orientation__activated">
+                            <span><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="p" Prose>@agent.Name is live and ready to help your customers.</Typography>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _ = TestAgent()">Run a quick test</Button>
                         </div>
                     }
 
-                    <div class="ori-input-bar @(_inputDisabled ? "ori-input-bar--disabled" : "")">
-                        <input class="ori-input" placeholder="@_inputPlaceholder" disabled="@_inputDisabled"
+                    <div class="@(_inputDisabled ? "orientation__composer is-disabled" : "orientation__composer")">
+                        <input class="@TextStyle.BodySmallRegular.ToClassName()"
+                               placeholder="@_inputPlaceholder"
+                               aria-label="Your answer"
+                               disabled="@_inputDisabled"
                                value="@_inputValue"
                                @oninput="e => _inputValue = e.Value?.ToString() ?? string.Empty"
                                @onkeydown="OnKeyDown" />
-                        <button class="ori-send-btn @(_inputDisabled ? "ori-send-btn--disabled" : "")"
-                                @onclick="() => _ = Send()">
-                            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M5 12l15-7-6 15-3-6-6-2z" />
-                            </svg>
-                        </button>
+                        <Button Size="ButtonSize.Small" aria-label="Send" disabled="@_inputDisabled" @onclick="() => _ = Send()">
+                            <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                        </Button>
                     </div>
                 </div>
             </section>
 
-            <!-- ───────── PROFILE PANEL ───────── -->
-            <aside class="ori-profile-panel">
-                <div class="ori-profile-header">
-                    <div class="ori-profile-header-top">
-                        <span class="ori-profile-title">Agent profile</span>
-                        <span class="ori-profile-status-pill @(_phase == "activated" ? "ori-status-pill--active" : "ori-status-pill--orienting")">
+            <aside class="orientation__profile" aria-label="Agent profile">
+                <header class="orientation__profile-head">
+                    <div class="orientation__profile-row">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Agent profile</Typography>
+                        <StatusBadge Tone="@(_phase == "activated" ? StatusTone.Success : StatusTone.Brand)">
                             @(_phase == "activated" ? "Active" : "In orientation")
-                        </span>
+                        </StatusBadge>
                     </div>
-                    <div class="ori-profile-caption">Filling in as you talk — @DoneCount of 6 captured</div>
-                    <div class="ori-progress-track">
-                        <div class="ori-progress-bar" style="width:@(ProgressPct.ToString("F0"))%"></div>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p">Filling in as you talk — @DoneCount of 6 captured</Typography>
+                    <div class="orientation__progress" role="progressbar" aria-valuenow="@DoneCount" aria-valuemin="0" aria-valuemax="6">
+                        <i style="width: @(ProgressPct.ToString("F0"))%"></i>
                     </div>
-                </div>
+                </header>
 
+                @{ var pendingOrder = 0; }
                 @foreach (var sec in ProfileSections)
                 {
-                    <div class="ori-profile-card @(sec.Done ? "ori-profile-card--done" : "")">
-                        <div class="ori-profile-card-head">
-                            <div class="ori-profile-icon @(sec.Done ? "ori-profile-icon--done" : "")">
-                                <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
-                                     stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="@sec.IconPath" />
-                                </svg>
-                            </div>
-                            <span class="ori-profile-card-label">@sec.Label</span>
+                    <section class="@(sec.Done ? "orientation__section is-done" : "orientation__section")">
+                        <header>
+                            <span class="orientation__section-icon"><Icon Name="@sec.Glyph" Size="IconSize.Sm" /></span>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@sec.Label</Typography>
                             @if (sec.Done)
                             {
-                                <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#1F8A5B"
-                                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 21a9 9 0 100-18 9 9 0 000 18zM8 12l3 3 5-6" />
-                                </svg>
+                                <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" Class="orientation__section-check" />
                             }
-                        </div>
+                        </header>
 
                         @if (sec.Done && !string.IsNullOrEmpty(sec.TextValue))
                         {
-                            <div class="ori-profile-text-value">@sec.TextValue</div>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="orientation__section-text">@sec.TextValue</Typography>
                         }
                         @if (sec.Done && sec.ListValues is { Count: > 0 })
                         {
-                            <div class="ori-profile-list-values">
+                            <ul class="orientation__section-list">
                                 @foreach (var item in sec.ListValues)
                                 {
-                                    <div class="ori-profile-list-item">
-                                        <span class="ori-profile-bullet"></span>
-                                        <span>@item</span>
-                                    </div>
+                                    <li><i></i><Typography TextStyle="TextStyle.Small12Regular" As="span" Prose>@item</Typography></li>
                                 }
-                            </div>
+                            </ul>
                         }
                         @if (!sec.Done)
                         {
-                            <div class="ori-profile-skeleton">
-                                <div class="ori-skeleton-line ori-skeleton-line--90"></div>
-                                <div class="ori-skeleton-line ori-skeleton-line--60"></div>
+                            @* Placeholders pulse in sequence down the whole rail,
+                               not just within one section. *@
+                            var order = pendingOrder;
+                            pendingOrder += 2;
+                            <div class="orientation__section-pending">
+                                <Skeleton Width="90%" Order="@order" />
+                                <Skeleton Width="60%" Order="@(order + 1)" />
                             </div>
                         }
-                    </div>
+                    </section>
                 }
             </aside>
         </div>
-    </div>
+    </main>
 }
 
 @code {
@@ -276,7 +257,7 @@ else
         string[] Defaults, string[] Chips, string Helper = "");
 
     record ProfileSection(
-        string Label, string IconPath, bool Done,
+        string Label, IconName Glyph, bool Done,
         string? TextValue = null, List<string>? ListValues = null);
 
     static readonly OrientationStep[] Script =
@@ -325,6 +306,7 @@ else
     string _inputValue = string.Empty;
     bool _isTesting;
     readonly CancellationTokenSource _cts = new();
+    ElementReference _messagesElement;
 
     // Profile fields
     string? _profOrg, _profRole;
@@ -358,28 +340,22 @@ else
 
     IEnumerable<ProfileSection> ProfileSections => new[]
     {
-        new ProfileSection("About the organization",
-            "M3 21h18M5 21V7l7-4 7 4v14M9 21v-4h6v4M9 10h.01M15 10h.01M9 13h.01M15 13h.01",
+        new ProfileSection("About the organization", IconName.RiBuilding2Fill,
             !string.IsNullOrEmpty(_profOrg), TextValue: _profOrg),
 
-        new ProfileSection("Role & scope",
-            "M12 12a4 4 0 100-8 4 4 0 000 8zM4 20c0-3.4 3.6-6 8-6s8 2.6 8 6",
+        new ProfileSection("Role & scope", IconName.RiUser3Fill,
             !string.IsNullOrEmpty(_profRole), TextValue: _profRole),
 
-        new ProfileSection("Key tasks & playbook",
-            "M9 6h11M9 12h11M9 18h11M4 5.5l1 1 2-2M4 11.5l1 1 2-2M4 17.5l1 1 2-2",
+        new ProfileSection("Key tasks & playbook", IconName.RiTaskFill,
             _profTasks is { Count: > 0 }, ListValues: _profTasks),
 
-        new ProfileSection("Knowledge sources",
-            "M5 4h9a3 3 0 013 3v13H8a3 3 0 00-3 3V4z",
+        new ProfileSection("Knowledge sources", IconName.RiBookOpenFill,
             _profKnowledge is { Count: > 0 }, ListValues: _profKnowledge),
 
-        new ProfileSection("Escalation rules",
-            "M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6l7-3zM12 9v4M12 16v.5",
+        new ProfileSection("Escalation rules", IconName.RiShieldCheckFill,
             _profEscalation is { Count: > 0 }, ListValues: _profEscalation),
 
-        new ProfileSection("Success criteria",
-            "M4 19V5M4 19h16M8 15l3-3 3 2 4-5",
+        new ProfileSection("Success criteria", IconName.RiBarChartBoxFill,
             _profSuccess is { Count: > 0 }, ListValues: _profSuccess)
     };
 
@@ -530,10 +506,13 @@ else
         await ScrollToBottom();
     }
 
+    // The same scroll the inbox timeline uses, through AuroraInterop, in
+    // place of the page-specific hook in app.js.
     async Task ScrollToBottom()
     {
-        try { await JS.InvokeVoidAsync("oriScrollToBottom"); }
-        catch { /* ignore if JS not ready */ }
+        try { await Interop.ScrollToBottomAsync(_messagesElement); }
+        catch (JSException) { /* the page is being torn down */ }
+        catch (InvalidOperationException) { /* not rendered yet */ }
     }
 
     void Exit() => Nav.NavigateTo($"/dashboard/ai-agents/{AgentId}");

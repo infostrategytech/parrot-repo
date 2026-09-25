@@ -1,0 +1,236 @@
+/* The global layer: reset, the page frame, and the boot splash.
+
+   Deliberately small. Anything that names a component belongs in that
+   component's .razor.css; anything the whole product shares is a token in
+   variables/. There is no third place.
+
+   The React build had no such rule, which is how styles.css reached 3,702
+   lines carrying 1,106 distinct hex colours the linter never saw. */
+
+:root {
+  /* Missing from the token set: a hairline width. Everything else on this
+     page is a token. Figma has no border-width scale yet. */
+  --ds-hairline: 1px;
+  /* Missing from the token set: motion. Figma has no duration or easing
+     scale yet, so the two values the shell needs live here. */
+  --ds-motion-fast: 120ms;
+  --ds-motion-ease: cubic-bezier(0.2, 0, 0, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+}
+
+body {
+  min-height: 100%;
+  font-family: var(--typography-font-family-base), system-ui, sans-serif;
+  font-size: var(--typography-size-text-sm);
+  /* Medium is the base weight in this design system, not Regular. Text styles
+     set their own weight; this is what everything else inherits. */
+  font-weight: var(--typography-font-weight-medium);
+  line-height: var(--typography-leading-leading-sm);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Aurora is a desktop application. The React build set the same floor, then
+   paired it with overflow:hidden, which meant a 1024px laptop silently clipped
+   UI with no way to reach it. Scrolling horizontally is the lesser evil. */
+html,
+body {
+  min-width: var(--ds-viewport-floor);
+}
+
+:root {
+  /* Missing from the token set: layout breakpoints. Added to variables/ in a
+     later phase; until then the floor lives here rather than in eight files. */
+  --ds-viewport-floor: 1080px;
+}
+
+body {
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* The browser puts a 1em margin on every heading and paragraph. Those are not
+   design decisions, and left in place they add a gap to every stack in the
+   product that no spacing token accounts for. */
+h1, h2, h3, h4, h5, h6, p, figure, blockquote {
+  margin: var(--spacing-none);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+/* A focus ring is a feature, not decoration. Never remove it without
+   replacing it — every control in this product is reachable by keyboard.
+
+   It is drawn quietly on purpose. :focus-visible fires only for keyboard
+   navigation, never on a mouse click, so this is seen exclusively by someone
+   who is tabbing and needs to know where they are. It hugs the control at a
+   1px offset and sits at partial strength, which reads as the control being
+   picked out rather than as a box drawn around it. */
+:focus-visible {
+  outline: var(--ds-focus-ring-width) solid
+    color-mix(in srgb, var(--colors-interaction-focus) var(--ds-focus-ring-strength), transparent);
+  outline-offset: var(--ds-focus-ring-offset);
+}
+
+:root {
+  /* Missing from the token set: focus ring geometry. Figma specifies the
+     colour but not the width, offset or strength. */
+  --ds-focus-ring-width: 2px;
+  --ds-focus-ring-offset: 1px;
+  --ds-focus-ring-strength: 45%;
+}
+
+/* The one place a ring is wrong. App.razor runs <FocusOnNavigate Selector="h1">
+   so that arriving on a page announces its title rather than stranding a screen
+   reader at the top of the DOM. Blazor does that by making the heading focusable
+   just long enough to focus it, then removing the attribute again — so the
+   heading ends up focused but unreachable by Tab, and the ring marks a target
+   nobody can land on. It reads as a stray box drawn around the page title on
+   every load. Keep the behaviour, drop the ring. */
+h1:focus,
+h1:focus-visible {
+  outline: none;
+}
+
+/* Links carry the design system's link colour. Without this the browser's own
+   #0000EE wins, which is not a colour this product owns — and because a link
+   inside prose is rare here, it goes unnoticed until it appears next to
+   something branded. Set once globally so a new link cannot get it wrong. */
+a {
+  color: var(--colors-text-link);
+  text-underline-offset: var(--ds-link-underline-offset);
+}
+
+a:hover { color: var(--colors-text-link-hover); }
+
+:root {
+  /* Missing from the token set: underline offset. */
+  --ds-link-underline-offset: 2px;
+}
+
+/* The setup card. Four screens in the channel flow are each the whole page in
+   turn — the guided shell, connecting, the message test and the success
+   screen — and a card that changes size between them reads as changing
+   product halfway through. */
+:root {
+  /* Missing from the token set: no layout-width, border-width, shadow or
+     page-inset scale describes a full-page card. Declared here rather than in
+     each component because scoped stylesheets cannot share a custom property,
+     and four separate copies is how the four drifted apart in the first
+     place. */
+  --ds-setup-card-width: 790px;
+  --ds-setup-card-hairline: 1px;
+  --ds-setup-card-shadow: 45px;
+  --ds-setup-card-pad: 43px 62px 36px;
+}
+
+/* Visually hidden, still announced. */
+.sr-only {
+  position: absolute;
+  width: var(--ds-sr-only-size);
+  height: var(--ds-sr-only-size);
+  padding: var(--spacing-none);
+  margin: calc(var(--ds-hairline) * -1);
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+:root {
+  /* Missing from the token set: the 1px box a screen-reader-only element is
+     clipped to. Not a design value — it is the standard technique. */
+  --ds-sr-only-size: 1px;
+}
+
+/* ── Boot ───────────────────────────────────────────────────────────────
+   WebAssembly downloads the runtime before anything renders. React booted
+   into a blank page; this is a deliberate holding state instead. */
+.app-boot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  color: var(--colors-text-muted);
+}
+
+.app-boot__mark {
+  width: var(--icon-size-icon-lg);
+  height: var(--icon-size-icon-lg);
+  border: var(--ds-boot-ring-width) solid var(--colors-surface-border);
+  border-top-color: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+  animation: app-boot-spin var(--ds-boot-spin-duration) linear infinite;
+}
+
+:root {
+  /* Missing from the token set: the spinner's ring width and revolution time.
+     Figma has no motion scale. */
+  --ds-boot-ring-width: 2px;
+  --ds-boot-spin-duration: 900ms;
+}
+
+.app-boot__label {
+  font-size: var(--typography-size-text-xs);
+}
+
+@keyframes app-boot-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+/* One block, not nineteen. The React build repeated this query 19 times. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Blazor's own error bar. Tokenised so it cannot look foreign. */
+#blazor-error-ui {
+  position: fixed;
+  right: var(--spacing-none);
+  bottom: var(--spacing-none);
+  left: var(--spacing-none);
+  z-index: 1000;
+  display: none;
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-elevated);
+  box-shadow: 0 calc(var(--ds-hairline) * -1) 0 var(--colors-surface-border);
+}
+
+#blazor-error-ui .dismiss {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-md);
+  cursor: pointer;
+}

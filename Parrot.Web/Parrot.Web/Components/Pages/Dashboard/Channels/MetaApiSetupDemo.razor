@@ -1,0 +1,101 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+
+@* A picture of the Meta app dashboard, walking to API Setup.
+
+   Drawn rather than screenshotted, for the reason that matters most here:
+   Meta renames this area constantly — Quickstart, Connect on WhatsApp,
+   Production setup — so a screenshot captioned with today's label is wrong by
+   the next quarter. The path does not move nearly as fast as the wording, and
+   a drawing can show the path.
+
+   Two screens, because the journey crosses one: the dashboard, where the
+   WhatsApp use case is chosen, cross-fades to the Customize screen, where the
+   left menu is. People lose the thread exactly at that change of scenery, so
+   the pointer hides through the fade and re-enters at the top of the new menu
+   rather than appearing already parked on the answer.
+
+   Everything inside the window frame is Meta's interface, not ours. *@
+
+<div class="meta-api">
+    <div class="meta-api__window" role="img" aria-label="@Description" @key="ReplayKey">
+        <div class="meta-api__toolbar">
+            <i></i><i></i><i></i>
+            <span>developers.facebook.com</span>
+        </div>
+
+        <div class="meta-api__scene meta-api__scene--dashboard">
+            <aside>
+                <strong>Parrot WhatsApp</strong>
+                <b>Dashboard</b>
+                <span>Required actions</span>
+                <span>Use cases</span>
+                <span>Testing</span>
+                <span>App settings</span>
+            </aside>
+
+            <section>
+                <h2>Dashboard</h2>
+                <div>
+                    <h3>App customization and requirements</h3>
+                    <p>Customize the Create &amp; manage ads with Marketing API use case <i>›</i></p>
+                    <p>Customize the Create &amp; manage app ads with Meta Ads Manager use case <i>›</i></p>
+                    <p class="meta-api__whatsapp-row">
+                        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />Customize the Connect with customers through WhatsApp use case <i>›</i>
+                    </p>
+                    <p>Test use cases <i>›</i></p>
+                </div>
+            </section>
+        </div>
+
+        <div class="meta-api__scene meta-api__scene--customize">
+            <header><span>Use cases</span><i>›</i><strong>Customize</strong></header>
+            <h2>Customize use case</h2>
+            <p>Customize use case settings and permissions to make your app work the way you want it to.</p>
+
+            <div>
+                <aside>
+                    <strong><Icon Name="IconName.RiWhatsappFill" Size="IconSize.Sm" />Connect on WhatsApp</strong>
+                    <span>Permissions and features</span>
+                    <span>Quickstart</span>
+                    <b class="meta-api__menu">API Setup</b>
+                    <span>Configuration</span>
+                    <span>Tech Provider onboarding</span>
+                </aside>
+
+                <section>
+                    <h3>Access Token</h3>
+                    <div class="meta-api__token">
+                        <span></span>
+                        <button type="button" tabindex="-1">Generate access token</button>
+                    </div>
+                    <article>
+                        <strong>Send and receive messages</strong>
+                        <p>Configure how you will send and receive messages.</p>
+                    </article>
+                </section>
+            </div>
+        </div>
+
+        <span class="meta-api__cursor" aria-hidden="true"></span>
+    </div>
+
+    <p class="meta-api__caption">
+        <span class="meta-api__dot" aria-hidden="true"></span>
+        <Typography TextStyle="TextStyle.Small10Medium" As="span">Follow the moving highlight</Typography>
+        <button type="button" class="meta-api__replay" @onclick="Replay">
+            <Icon Name="IconName.RiRefreshLine" />
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span">Replay</Typography>
+        </button>
+    </p>
+</div>
+
+@code {
+    private const string Description =
+        "Animated guide showing how to customize WhatsApp and open API Setup";
+
+    // Changing the key throws the window away and builds a new one, which is
+    // the only reliable way to restart a CSS animation from the beginning.
+    private int ReplayKey;
+
+    private void Replay() => ReplayKey++;
+}

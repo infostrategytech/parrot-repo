@@ -1,65 +1,68 @@
-@{
-    var fixedSrc = "Fixed";
-    var collectedSrc = "FromCollected";
-}
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 
-<div class="pb-field">
-    <label class="pb-field-label">Amount source</label>
-    <div class="pb-source-toggle">
-        <button class="pb-source-btn @(Step.AmountSource == fixedSrc ? "pb-source-btn--active" : "")"
-                @onclick="() => Step.AmountSource = fixedSrc">
-            Fixed amount
+<div class="step-field">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Amount source</Typography>
+    <div class="step-segments" role="radiogroup" aria-label="Amount source">
+        <button type="button"
+                role="radio"
+                aria-checked="@((Step.AmountSource == "Fixed").ToString().ToLowerInvariant())"
+                class="@(Step.AmountSource == "Fixed" ? "step-segment is-active" : "step-segment")"
+                @onclick='() => Step.AmountSource = "Fixed"'>
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Fixed amount</Typography>
         </button>
-        <button class="pb-source-btn @(Step.AmountSource == collectedSrc ? "pb-source-btn--active" : "")"
-                @onclick="() => Step.AmountSource = collectedSrc">
-            From collected data
+        <button type="button"
+                role="radio"
+                aria-checked="@((Step.AmountSource == "FromCollected").ToString().ToLowerInvariant())"
+                class="@(Step.AmountSource == "FromCollected" ? "step-segment is-active" : "step-segment")"
+                @onclick='() => Step.AmountSource = "FromCollected"'>
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">From collected data</Typography>
         </button>
     </div>
 </div>
 
 @if (Step.AmountSource != "FromCollected")
 {
-    <div class="pb-field">
-        <label class="pb-field-label">Amount</label>
-        <div class="pb-amount-wrap">
-            <span class="pb-amount-prefix">₦</span>
-            <input class="pb-input pb-input--amount" type="number" placeholder="0.00" value="@Step.PaymentAmount"
-                   @oninput="e => Step.PaymentAmount = decimal.TryParse(e.Value?.ToString(), out var v) ? v : 0" />
-        </div>
-    </div>
+    <Input FloatingLabel="Amount"
+           PrefixText="₦"
+           type="number"
+           min="0"
+           Value="@Step.PaymentAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+           ValueChanged="value => Step.PaymentAmount = decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0" />
 }
 
-<div class="pb-field">
-    <label class="pb-field-label">Payment provider</label>
-    <div class="pb-select-wrap">
-        <select class="pb-select" value="@Step.PaymentProvider"
-                @onchange="async e => { Step.PaymentProvider = e.Value?.ToString() ?? string.Empty; await OnChanged.InvokeAsync(); }">
-            <option value="">-- Select --</option>
-            <option value="Paystack">Paystack</option>
-            <option value="Flutterwave">Flutterwave</option>
-            <option value="Stripe">Stripe</option>
-        </select>
-        <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 9l6 6 6-6" />
-        </svg>
-    </div>
-</div>
+<SelectField FloatingLabel="Payment provider"
+             Value="@Step.PaymentProvider"
+             Open="_providerOpen"
+             OpenChanged="open => _providerOpen = open">
+    @foreach (var provider in new[] { "Paystack", "Flutterwave", "Stripe" })
+    {
+        var current = provider;
+        <PopoverOption Label="@current" Active="@(Step.PaymentProvider == current)"
+                       OnSelect="async () => { Step.PaymentProvider = current; _providerOpen = false; await OnChanged.InvokeAsync(); }" />
+    }
+</SelectField>
 
-<div class="pb-field">
-    <label class="pb-field-label">Success message</label>
-    <textarea class="pb-textarea" rows="3" placeholder="Message shown after successful payment"
+<label class="step-field">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Success message</Typography>
+    <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
+              rows="3"
+              placeholder="Message shown after successful payment"
               value="@Step.SuccessMessage"
               @oninput="e => Step.SuccessMessage = e.Value?.ToString() ?? string.Empty"></textarea>
-</div>
+</label>
 
-<div class="pb-field">
-    <label class="pb-field-label">Failure message</label>
-    <textarea class="pb-textarea" rows="3" placeholder="Message shown after failed payment" value="@Step.FailureMessage"
+<label class="step-field">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Failure message</Typography>
+    <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
+              rows="3"
+              placeholder="Message shown after failed payment"
+              value="@Step.FailureMessage"
               @oninput="e => Step.FailureMessage = e.Value?.ToString() ?? string.Empty"></textarea>
-</div>
+</label>
 
 @code {
     [Parameter] public PlaybookStep Step { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }
+
+    private bool _providerOpen;
 }

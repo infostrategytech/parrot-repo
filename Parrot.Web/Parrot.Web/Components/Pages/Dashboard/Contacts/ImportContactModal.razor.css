@@ -1,76 +1,62 @@
-.ic-download-btn {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.625rem 1.25rem;
-    border: 1.5px solid #53279E;
-    border-radius: 0.5rem;
-    background: #fff;
-    font-size: 0.875rem;
-    font-weight: 400;
-    width: fit-content;
-    color: #1d1d1d;
-    cursor: pointer;
-    transition: background 0.15s;
+/* The dropzone is a control with a dashed edge, drawn in the same tints as
+   Aurora's editor kind cards: muted at rest, brand when a file is chosen. */
+
+::deep .import__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.import__template {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+  margin-top: var(--spacing-lg);
 }
 
-.ic-download-btn:hover {
-    background: #FAF7FF;
+::deep .import__hint { color: var(--colors-text-subtle); }
+
+.import__dropzone {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-xs);
+  width: 100%;
+  min-height: var(--ds-import-dropzone-min);
+  margin-top: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  color: var(--colors-text-primary);
+  text-align: center;
+  background: var(--colors-surface-muted);
+  border: var(--ds-import-hairline) dashed var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  cursor: pointer;
 }
 
-.ic-template-hint {
-    font-size: 0.75rem;
-    color: #9CA3AF;
-    font-style: italic;
-    margin: 0;
+.import__dropzone {
+  /* Gaps in the token set: no border-width or control-size scale. */
+  --ds-import-hairline: 1px;
+  --ds-import-dropzone-min: 140px;
+  --ds-import-icon: 40px;
 }
 
-.ic-dropzone {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.375rem;
-    width: 100%;
-    min-height: 8rem;
-    border: 1.5px dashed #D1D5DB;
-    border-radius: 0.625rem;
-    background: #fff;
-    cursor: pointer;
-    padding: 1.5rem 1rem;
-    box-sizing: border-box;
-    transition: border-color 0.15s, background 0.15s;
+.import__dropzone:hover { background: var(--colors-interaction-hover); }
+
+.import__dropzone.is-ready {
+  border-color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
 }
 
-.ic-dropzone:hover {
-    border-color: #53279E;
-    background: #FAF7FF;
+.import__dropzone-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-import-icon);
+  height: var(--ds-import-icon);
+  margin-bottom: var(--spacing-xs);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
 }
 
-.ic-drop-icon-wrap {
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 50%;
-    background: #F3F4F6;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 0.25rem;
+.import__dropzone.is-ready .import__dropzone-icon {
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
 }
 
-.ic-drop-icon-wrap--done {
-    background: #F1E9FF;
-}
-
-.ic-drop-label {
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: #1F2937;
-    text-align: center;
-}
-
-.ic-drop-sub {
-    font-size: 0.8125rem;
-    color: #6B7280;
-    text-align: center;
-}
+.import__dropzone ::deep small { color: var(--colors-text-muted); }

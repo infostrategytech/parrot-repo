@@ -1,0 +1,41 @@
+/* The sprite's symbols all paint with currentColor, so there is deliberately
+   no colour here. An icon belongs to the text or control around it. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.ds-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+
+/* Scales with the text it sits beside. The right default: an icon in a label
+   should move when the label's type style does. */
+.ds-icon--inherit {
+  width: var(--ds-icon-inherit-size);
+  height: var(--ds-icon-inherit-size);
+}
+
+.ds-icon {
+  /* Not a token: 1em is a relationship to the current font size rather than a
+     design value, so there is nothing for Figma to define. */
+  --ds-icon-inherit-size: 1em;
+}
+
+.ds-icon--sm {
+  width: var(--icon-size-icon-sm);
+  height: var(--icon-size-icon-sm);
+}
+
+.ds-icon--md {
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+}
+
+.ds-icon--lg {
+  width: var(--icon-size-icon-lg);
+  height: var(--icon-size-icon-lg);
+}

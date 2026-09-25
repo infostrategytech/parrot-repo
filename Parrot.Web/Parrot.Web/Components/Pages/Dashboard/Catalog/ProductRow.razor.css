@@ -1,0 +1,154 @@
+/* The row's columns are set by the table that contains it, because only the
+   table can keep every row aligned with the header. This file styles what sits
+   inside each cell. */
+
+.product-row {
+  min-height: var(--ds-row-min);
+  background: var(--colors-surface-card);
+  transition: background var(--ds-row-motion) ease;
+}
+
+/* An inactive offer sits back on the page ground rather than on the card. */
+.product-row.is-inactive { background: var(--colors-surface-background); }
+
+.product-row {
+  /* Gaps in the token set: no row-height, control-height, motion or opacity
+     scale. The row height is the React table's, measured against a two-line
+     offer cell. */
+  --ds-row-min: 78px;
+  --ds-row-motion: 130ms;
+  --ds-row-inactive: 0.62;
+  --ds-row-dot: 6px;
+  --ds-row-pill: 33px;
+  --ds-row-pill-min: 128px;
+  --ds-row-edit: 32px;
+  --ds-row-toggle-ring: 1px;
+}
+
+.product-row:hover { background: var(--colors-interaction-hover); }
+
+/* An inactive offer is still worth reading — it is coming back — so it is
+   dimmed rather than greyed out. The status and the edit button keep full
+   contrast, because they are how you bring it back. */
+.product-row.is-inactive > *:not(.product-row__status):not(.product-row__actions) {
+  opacity: var(--ds-row-inactive);
+}
+
+.product-row__offer { display: grid; gap: var(--spacing-xs); min-width: 0; }
+
+.product-row__offer ::deep strong,
+::deep .product-row__description {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.product-row__offer ::deep strong { color: var(--colors-text-secondary); }
+::deep .product-row__description { color: var(--colors-text-subtle); }
+
+.product-row__type { display: grid; gap: var(--spacing-2xs); justify-items: start; min-width: 0; }
+
+/* The kind is said in colour, not in a container: a filled pill here would
+   compete with the availability pill two columns over, and the design gives
+   product and service each their own hue instead. */
+.product-row__kind {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  color: var(--colors-brand-primary);
+}
+
+.product-row__kind.is-service { color: var(--colors-accent-violet-base); }
+
+::deep .product-row__category { color: var(--colors-text-subtle); }
+
+::deep .product-row__price { color: var(--colors-accent-brand-text); }
+
+/* A draft has never been live, so it reads as held rather than as off. */
+.product-row__draft {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  height: var(--ds-row-pill);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-accent-yellow-text);
+  background: var(--colors-accent-amber-muted);
+  border-radius: var(--radius-radius-full);
+}
+
+/* Availability is a pill, not a bare control: in a dense table the colour is
+   what the eye scans for, and the words confirm it. Colour is never the only
+   signal — the selected option says it too. */
+.product-row__availability {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-xs);
+  align-items: center;
+  width: fit-content;
+  min-width: var(--ds-row-pill-min);
+  height: var(--ds-row-pill);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-accent-emerald-text);
+  background: var(--colors-accent-emerald-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.product-row__availability.is-unavailable {
+  color: var(--colors-accent-red-text);
+  background: var(--colors-accent-red-subtle);
+}
+
+.product-row__dot {
+  width: var(--ds-row-dot);
+  height: var(--ds-row-dot);
+  background: currentColor;
+  border-radius: var(--radius-radius-full);
+}
+
+.product-row__availability select {
+  min-width: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  cursor: pointer;
+}
+
+.product-row__availability select:disabled { cursor: wait; }
+
+.product-row__status { display: flex; justify-content: flex-start; }
+
+/* Green, not brand. In a dense table the colour is what the eye scans down,
+   and everything else blue on this row is a price or a link. Reaching into
+   Toggle needs ::deep because it is a component of its own. */
+.product-row__status ::deep .toggle.is-on .toggle__track {
+  background: var(--colors-feedback-success);
+  box-shadow: inset 0 0 0 var(--ds-row-toggle-ring) var(--colors-feedback-success);
+}
+
+.product-row__actions { display: flex; justify-content: flex-end; }
+
+.product-row__edit {
+  display: grid;
+  place-items: center;
+  width: var(--ds-row-edit);
+  height: var(--ds-row-edit);
+  padding: var(--spacing-none);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.product-row__edit:hover {
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+}
+
+/* Parrot has no kind and no stock availability on a catalog item. The cell
+   keeps its column so every row still lines up with the header, and shows an
+   em dash — the same treatment the stat tiles use for a number they do not
+   have — rather than an invented value. */
+.product-row__empty { color: var(--colors-text-subtle); }
+.product-row__kind.product-row__empty { color: var(--colors-text-subtle); }

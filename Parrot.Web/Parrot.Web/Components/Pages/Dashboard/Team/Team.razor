@@ -1,26 +1,79 @@
 @page "/dashboard/team"
 @layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Team
 @using Parrot.Web.Components.Pages.Dashboard.Team
 
-<div class="tm-page">
+<PageTitle>Team · OmniAI</PageTitle>
+
+@* The people in the workspace. Same page frame as Aurora's Products page:
+   a heading with its action, then an empty state or a table. *@
+
+<div class="team">
+    <header class="team__header">
+        <div class="team__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Team</Typography>
+            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="team__lede">
+                Invite your team to help manage conversations and monitor activity.
+            </Typography>
+        </div>
+
+        <div class="team__actions">
+            <Button @onclick="OpenInvite">
+                <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
+                <ChildContent>Invite team member</ChildContent>
+            </Button>
+        </div>
+    </header>
+
     @if (_members.Count == 0)
     {
-        <div class="aia-empty">
-            <div class="aia-empty-bg-img"></div>
-            <div class="aia-empty-content">
-                <img src="/assets/images/gifs/owl-animation.gif" alt="Owl mascot" class="aia-empty-owl-img" />
-                <h2 class="aia-empty-title">No team members yet</h2>
-                <p class="aia-empty-sub">Invite your team to help manage conversations<br />and monitor activity.</p>
-                <button class="aia-btn-primary" @onclick="OpenInvite">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                        <circle cx="12" cy="12" r="10" />
-                        <line x1="12" y1="8" x2="12" y2="16" />
-                        <line x1="8" y1="12" x2="16" y2="12" />
-                    </svg>
-                    Add team member
-                </button>
+        <EmptyState Glyph="IconName.RiTeamFill"
+                    Title="No team members yet"
+                    Description="Invite your team to help manage conversations and monitor activity.">
+            <Action>
+                <Button @onclick="OpenInvite">
+                    <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
+                    <ChildContent>Add team member</ChildContent>
+                </Button>
+            </Action>
+        </EmptyState>
+    }
+    else
+    {
+        <section class="team__table-wrap">
+            <div class="team__table" role="table" aria-label="Team members">
+                <div class="team__table-head" role="row">
+                    @foreach (var column in Columns)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Semibold"
+                                    As="span"
+                                    Class="ds-overline"
+                                    role="columnheader">@column</Typography>
+                    }
+                </div>
+
+                <div class="team__table-body">
+                    @foreach (var member in _members)
+                    {
+                        <article class="team-row" role="row">
+                            <div class="team-row__name" role="cell">
+                                <PetalAvatar Seed="@member.Id" Initials="@Initials.From(member.FullName)" Size="AvatarSize.Sm" />
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@member.FullName</Typography>
+                            </div>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__email" role="cell">
+                                @member.Email
+                            </Typography>
+                            <div class="team-row__role" role="cell">
+                                <StatusBadge Tone="StatusTone.Brand">@member.Role</StatusBadge>
+                            </div>
+                            <div class="team-row__status" role="cell">
+                                <StatusBadge Tone="StatusTone.Warning" Glyph="IconName.RiMailFill">Invited</StatusBadge>
+                            </div>
+                        </article>
+                    }
+                </div>
             </div>
-        </div>
+        </section>
     }
 </div>
 
@@ -30,6 +83,8 @@
 }
 
 @code {
+    private static readonly string[] Columns = ["Name", "Email", "Workspace role", "Status"];
+
     List<TeamMember> _members = [];
     bool _showInvite;
 

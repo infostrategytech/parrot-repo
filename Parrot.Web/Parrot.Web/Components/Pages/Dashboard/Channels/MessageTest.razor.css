@@ -1,0 +1,144 @@
+/* The same shape as the connecting screen, because it is the same moment
+   continued: one thing to do, nothing else on the page. */
+
+.live-test {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-test-width), 100%);
+  margin-inline: auto;
+  padding: var(--ds-test-pad);
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-test-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  box-shadow: 0 var(--spacing-lg) var(--ds-test-shadow) var(--colors-surface-shadow);
+}
+
+.live-test {
+  /* Gaps in the token set: no column-width, control-size, border-width or
+     motion scale. */
+  --ds-test-width: var(--ds-setup-card-width);
+  --ds-test-hairline: var(--ds-setup-card-hairline);
+  --ds-test-pad: var(--ds-setup-card-pad);
+  --ds-test-shadow: var(--ds-setup-card-shadow);
+  --ds-test-mark: 54px;
+  --ds-test-mark-radius: 17px;
+  --ds-test-glow: 28px;
+  --ds-test-measure: 46ch;
+  --ds-test-dot: 10px;
+  --ds-test-listen: 1400ms;
+  --ds-test-ring: 9px;
+}
+
+.live-test__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-test-mark);
+  height: var(--ds-test-mark);
+  margin-bottom: var(--spacing-md);
+  color: var(--colors-text-inverse);
+  border-radius: var(--ds-test-mark-radius);
+}
+
+.channel-whatsapp.live-test .live-test__mark {
+  background: #22a968;
+  box-shadow: 0 var(--spacing-sm) var(--ds-test-glow) color-mix(in srgb, #22a968 23%, transparent);
+}
+
+.channel-instagram.live-test .live-test__mark {
+  background: #c63886;
+  box-shadow: 0 var(--spacing-sm) var(--ds-test-glow) color-mix(in srgb, #c63886 23%, transparent);
+}
+
+.channel-facebook.live-test .live-test__mark {
+  background: #1877f2;
+  box-shadow: 0 var(--spacing-sm) var(--ds-test-glow) color-mix(in srgb, #1877f2 23%, transparent);
+}
+
+::deep .live-test__eyebrow { color: var(--colors-text-subtle); }
+
+::deep .live-test__instruction {
+  max-width: var(--ds-test-measure);
+  color: var(--colors-text-muted);
+}
+
+.live-test__instruction ::deep strong { color: var(--colors-text-primary); }
+
+/* The waiting state. An amber dot breathes while the page waits for the
+   person's message; once the check is running it turns green and holds still,
+   because the button below carries the brand's loader and a view shows one
+   animated loader at a time. */
+.live-test__status {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+  width: 100%;
+  margin: var(--spacing-lg) var(--spacing-none);
+  padding: var(--spacing-lg);
+  text-align: left;
+  background: var(--colors-surface-muted);
+  border: var(--ds-test-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.live-test__status i {
+  flex: 0 0 auto;
+  width: var(--ds-test-dot);
+  height: var(--ds-test-dot);
+  margin-top: var(--spacing-xs);
+  background: var(--colors-accent-amber-solid);
+  border-radius: var(--radius-radius-full);
+  animation: live-test-waiting var(--ds-test-listen) ease-in-out infinite;
+}
+
+.live-test__status i.is-listening {
+  background: var(--colors-feedback-success);
+  animation: none;
+}
+
+.live-test__status-copy { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.live-test__status-copy ::deep small { color: var(--colors-text-muted); }
+
+@keyframes live-test-waiting {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--colors-accent-amber-solid) 30%, transparent); }
+  50% { box-shadow: 0 0 0 var(--ds-test-ring) color-mix(in srgb, var(--colors-accent-amber-solid) 0%, transparent); }
+}
+
+/* With motion switched off the states have to stay distinguishable by colour
+   alone — they are. */
+@media (prefers-reduced-motion: reduce) {
+  .live-test__status i { animation: none; }
+}
+
+/* The only thing to do on this screen, so it takes the full width rather than
+   sitting as a small target under a centred column. */
+::deep .live-test__action { width: 100%; }
+
+/* The tick that lands when it comes back. It scales in once and stops — a
+   confirmation is a moment, not a state to sit in. */
+.live-test__tick {
+  display: grid;
+  place-items: center;
+  animation: live-test-confirm var(--ds-test-confirm) var(--ds-test-confirm-ease) both;
+}
+
+::deep .live-test__action.is-verified {
+  background: var(--colors-feedback-success);
+  color: var(--colors-text-on-primary);
+}
+
+.live-test__status i.is-verified {
+  background: var(--colors-feedback-success);
+  animation: none;
+}
+
+.live-test {
+  /* Gap in the token set: no motion scale. */
+  --ds-test-confirm: 260ms;
+  --ds-test-confirm-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes live-test-confirm {
+  from { opacity: 0; transform: scale(0.4); }
+}

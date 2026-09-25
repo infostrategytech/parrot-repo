@@ -1,0 +1,147 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using Parrot.SharedComponents.Services
+@implements IAsyncDisposable
+@inject AuroraInterop Interop
+
+@* Mounted and unmounted rather than hidden, so the enter animation runs every
+   time and nothing focusable lingers in the tree while the dialog is closed.
+
+   Two things the React version did not do: focus is trapped inside the card,
+   and it is returned to whatever opened the dialog when it closes. Without the
+   trap, Tab walks into the page behind — invisible with a mouse, completely
+   disorienting without one. *@
+
+@if (Open)
+{
+    <div class="dialog-backdrop" @onmousedown="OnBackdropMouseDown">
+        @* stopPropagation, rather than comparing target to currentTarget as
+           React did, so a drag that starts inside the card and ends on the
+           backdrop cannot dismiss it. *@
+        <div class="dialog dialog--@Type.ToString().ToLowerInvariant()"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="@_titleId"
+             tabindex="-1"
+             @ref="_card"
+             @onkeydown="OnKeyDown"
+             @onmousedown:stopPropagation="true">
+
+            <header>
+                @if (GlyphContent is not null)
+                {
+                    <span class="dialog__icon">@GlyphContent</span>
+                }
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
+            </header>
+
+            <div class="dialog__body @TextStyle.BodySmallRegular.ToClassName(prose: true)">
+                @Body
+            </div>
+
+            <footer>
+                @if (OnCancel.HasDelegate)
+                {
+                    <Button Variant="ButtonVariant.Secondary"
+                            disabled="@Busy"
+                            @onclick="OnCancel">@CancelLabel</Button>
+                }
+                @* While the confirm action is in flight the button waits the
+                   brand's way — relay dots beside a label that does not change. *@
+                <Button Variant="@ConfirmVariant"
+                        Busy="@Busy"
+                        disabled="@ConfirmDisabled"
+                        @onclick="OnConfirm">@ConfirmLabelOrDefault</Button>
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private readonly string _titleId = "dialog-" + Guid.NewGuid().ToString("N");
+
+    private ElementReference _card;
+    private IAsyncDisposable? _trap;
+    private bool _wasOpen;
+
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter, EditorRequired] public RenderFragment? Body { get; set; }
+
+    [Parameter, EditorRequired] public EventCallback OnConfirm { get; set; }
+
+    /// <summary>Omit it and no secondary button renders — that is how a dialog with no way out is expressed.</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    [Parameter] public DialogType Type { get; set; } = DialogType.Default;
+
+    [Parameter] public RenderFragment? GlyphContent { get; set; }
+
+    [Parameter] public string? ConfirmLabel { get; set; }
+
+    [Parameter] public string CancelLabel { get; set; } = "Cancel";
+
+    /// <summary>Disables both buttons while the confirm action is in flight.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Keeps the primary action visible but unavailable until the body is valid.</summary>
+    [Parameter] public bool ConfirmDisabled { get; set; }
+
+    /// <summary>Kept for callers: the busy state is drawn with the brand's relay dots now, so the label no longer changes.</summary>
+    [Parameter] public string? BusyLabel { get; set; }
+
+    private string ConfirmLabelOrDefault => ConfirmLabel ?? Type switch
+    {
+        DialogType.Destructive => "Delete",
+        DialogType.Informational => "Got it",
+        _ => "Confirm"
+    };
+
+    private ButtonVariant ConfirmVariant =>
+        Type == DialogType.Destructive ? ButtonVariant.Destructive : ButtonVariant.Primary;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            await _card.FocusAsync();
+            _trap = await Interop.TrapFocusAsync(_card);
+        }
+        else if (!Open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseTrapAsync();
+        }
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        // Escape only closes a dialog that has a way out. A dialog with no
+        // cancel is asking for a decision, and dismissing it silently would be
+        // the same as choosing for the person.
+        if (args.Key == "Escape" && OnCancel.HasDelegate && !Busy)
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+
+    private async Task OnBackdropMouseDown()
+    {
+        if (OnCancel.HasDelegate && !Busy)
+        {
+            await OnCancel.InvokeAsync();
+        }
+    }
+
+    private async Task ReleaseTrapAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap;
+        _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseTrapAsync();
+}

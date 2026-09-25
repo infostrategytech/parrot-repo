@@ -1,0 +1,248 @@
+/* An accordion where every finished section stays reopenable. Everything in
+   here is typed into Meta by hand, so a wrong digit is likely and the fix has
+   to be reachable without restarting the setup. */
+::deep .manual__intro {
+  max-width: var(--ds-manual-intro-measure);
+  margin-bottom: var(--spacing-lg);
+  color: var(--colors-text-muted);
+}
+
+.manual {
+  display: grid;
+  gap: var(--ds-manual-gap);
+  /* Gaps in the token set: no measure or fine spacing scale. */
+  --ds-manual-intro-measure: 660px;
+  --ds-manual-gap: 10px;
+}
+
+.manual__section {
+  /* Keeps the section clear of the top edge when it is scrolled into view, so
+     it reads as part of a card rather than jammed against the chrome. */
+  scroll-margin-top: var(--ds-manual-scroll-margin);
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-manual-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.manual__section {
+  /* Gaps in the token set: no border-width, control-size or opacity scale. */
+  --ds-manual-hairline: 1px;
+  --ds-manual-scroll-margin: 24px;
+  --ds-manual-marker: 32px;
+  --ds-manual-header-min: 74px;
+  --ds-manual-header-pad: 13px 15px;
+  --ds-manual-body-pad: 18px 20px 20px;
+  --ds-manual-upcoming: 0.68;
+  --ds-manual-title-gap: 3px;
+  --ds-manual-token-gap: 9px;
+  --ds-manual-token-inner: 10px;
+  --ds-manual-token-icon: 28px;
+  --ds-manual-token-tick: 18px;
+  --ds-manual-token-min: 66px;
+  --ds-manual-token-pad: 10px 13px;
+  --ds-manual-token-radius: 13px;
+  --ds-manual-token-motion: 140ms;
+}
+
+/* Current is where the flow is waiting — stated softly, as a tint of the
+   brand mixed into the ordinary border. Open is where you are looking right
+   now, and takes the full-strength border plus a ring. A section is usually
+   both, and when it is, open wins. */
+.manual__section.is-current {
+  border-color: color-mix(in srgb, var(--colors-brand-primary) 35%, var(--colors-surface-border));
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) color-mix(in srgb, var(--colors-brand-primary) 7%, transparent);
+}
+
+.manual__section.is-open {
+  border-color: var(--colors-brand-primary);
+  box-shadow: 0 0 0 var(--ds-manual-hairline) var(--colors-brand-primary);
+}
+
+/* Not yet reachable, so it is dimmed rather than hidden — seeing what is
+   coming is what makes three sections feel finite. */
+.manual__section.is-upcoming > .manual__header { opacity: var(--ds-manual-upcoming); }
+
+.manual__header {
+  display: grid;
+  grid-template-columns: var(--ds-manual-marker) minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  min-height: var(--ds-manual-header-min);
+  padding: var(--ds-manual-header-pad);
+}
+
+.manual__marker {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--ds-manual-marker);
+  height: var(--ds-manual-marker);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+}
+
+.manual__section.is-current .manual__marker {
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+}
+
+.manual__section.is-complete .manual__marker {
+  color: var(--colors-feedback-success-text);
+  background: var(--colors-feedback-success-subtle);
+}
+
+.manual__titles { display: grid; gap: var(--ds-manual-title-gap); min-width: 0; }
+.manual__titles ::deep p { color: var(--colors-text-muted); }
+
+.manual__status {
+  flex: 0 0 auto;
+  color: var(--colors-text-subtle);
+}
+
+.manual__reopen {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  flex: 0 0 auto;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.manual__reopen:hover { background: var(--colors-interaction-hover); }
+
+.manual__body {
+  display: grid;
+  gap: var(--spacing-lg);
+  padding: var(--ds-manual-body-pad);
+  border-top: var(--ds-manual-hairline) solid var(--colors-surface-border);
+}
+
+.manual__body > * { width: 100%; min-width: 0; }
+
+.manual__body ::deep p { color: var(--colors-text-secondary); }
+.manual__body ::deep strong { color: var(--colors-text-primary); }
+
+.manual__checklist,
+.manual__ordered {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: 100%;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+.manual__checklist li,
+.manual__ordered li {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  color: var(--colors-text-secondary);
+}
+
+.manual__checklist li > ::deep svg {
+  flex: 0 0 auto;
+  margin-top: var(--spacing-2xs);
+  color: var(--colors-feedback-success-text);
+}
+
+::deep .manual__order-marker {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--spacing-xl);
+  height: var(--spacing-xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+/* Permanent or temporary, as two cards rather than a dropdown: picking the
+   temporary one is the single most expensive mistake available here, and it
+   should not be one line in a list. */
+/* Two columns, fixed. These are a pair of alternatives and they are read
+   against each other, so they stay side by side; auto-fit let them collapse
+   into one full-width row that read as two separate banners. */
+.manual__token-type {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ds-manual-token-gap);
+  width: 100%;
+}
+
+.manual__token {
+  display: grid;
+  grid-template-columns: var(--ds-manual-token-icon) minmax(0, 1fr) var(--ds-manual-token-tick);
+  gap: var(--ds-manual-token-inner);
+  align-items: center;
+  min-height: var(--ds-manual-token-min);
+  padding: var(--ds-manual-token-pad);
+  text-align: left;
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+  border: var(--ds-manual-hairline) solid var(--colors-surface-border);
+  border-radius: var(--ds-manual-token-radius);
+  cursor: pointer;
+  transition:
+    background var(--ds-manual-token-motion) ease,
+    border-color var(--ds-manual-token-motion) ease;
+}
+
+.manual__token:hover { background: var(--colors-interaction-hover); }
+
+.manual__token.is-selected {
+  color: var(--colors-brand-primary);
+  background: color-mix(in srgb, var(--colors-brand-primary) 5%, var(--colors-surface-card));
+  border-color: color-mix(in srgb, var(--colors-brand-primary) 30%, var(--colors-surface-border));
+}
+
+.manual__token-copy { display: grid; gap: var(--spacing-2xs); flex: 1; min-width: 0; }
+.manual__token-copy ::deep small { color: var(--colors-text-muted); }
+
+.manual__fields {
+  display: grid;
+  gap: var(--spacing-lg);
+  width: 100%;
+}
+
+.manual__copy-values {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: 100%;
+}
+
+.manual__help {
+  margin-top: var(--spacing-lg);
+  text-align: center;
+}
+
+.manual__help a { color: var(--colors-text-link); }
+
+/* The tick sits in the layout whether or not it is showing, so choosing a
+   token does not resize the pair beneath the cursor. */
+.manual__token-tick {
+  display: grid;
+  place-items: center;
+  visibility: hidden;
+  padding: var(--ds-manual-tick-pad);
+  color: var(--colors-text-on-primary);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+}
+
+.manual__token-tick.is-shown { visibility: visible; }
+
+.manual__token-copy { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.manual__token ::deep strong { color: var(--colors-text-primary); }
+.manual__token.is-selected ::deep strong { color: var(--colors-brand-primary); }
+
+.manual__section {
+  /* Gap in the token set: no sub-4px spacing rung. */
+  --ds-manual-tick-pad: 2px;
+}

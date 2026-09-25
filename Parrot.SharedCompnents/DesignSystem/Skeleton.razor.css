@@ -1,0 +1,62 @@
+/* One placeholder, drawn by the brand's rule: it follows the square-corner
+   rule of the mark — a bar with the bubble's corner at its foot — and pulses
+   in sequence, top to bottom, each a beat after the one above. The colours
+   are surface tokens, so a placeholder reads in either theme; the timing and
+   the ease are the brand's. Silenced by the reduced-motion block in app.css. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.skeleton {
+  position: relative;
+  display: block;
+  background-color: var(--colors-surface-muted);
+  animation: skeleton-pulse var(--ds-skeleton-duration) var(--cadence-ease, ease-in-out) infinite;
+  animation-delay: calc(var(--skeleton-order, 0) * var(--ds-skeleton-step));
+}
+
+.skeleton {
+  /* The brand document's pulse: 1.6s, one beat between neighbours. */
+  --ds-skeleton-duration: 1600ms;
+  --ds-skeleton-step: 120ms;
+}
+
+/* The square corner. A bar keeps the bubble's corner at its foot, so the
+   layout reads as the brand before anything has loaded. */
+.skeleton--line::after,
+.skeleton--block::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: var(--ds-skeleton-corner);
+  height: var(--ds-skeleton-corner);
+  background-color: inherit;
+}
+
+.skeleton--line {
+  width: 100%;
+  height: var(--typography-leading-leading-xs);
+  border-radius: var(--radius-radius-full);
+  --ds-skeleton-corner: calc(var(--typography-leading-leading-xs) / 2);
+}
+
+.skeleton--block {
+  width: 100%;
+  height: var(--spacing-5xl);
+  border-radius: var(--radius-radius-md);
+  --ds-skeleton-corner: var(--radius-radius-md);
+}
+
+.skeleton--circle {
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  border-radius: var(--radius-radius-full);
+}
+
+@keyframes skeleton-pulse {
+  0%, 100% { background-color: var(--colors-surface-muted); }
+  50% { background-color: var(--colors-surface-border); }
+}

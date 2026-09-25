@@ -6,14 +6,30 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
-    <link rel="stylesheet" href="@Assets["lib/bootstrap/dist/css/bootstrap.min.css"]" />
+
+    <script>
+      // Set the theme before first paint so the app never flashes the wrong
+      // colours on the way in. ThemeToggle owns the value from then on.
+      try {
+        var saved = localStorage.getItem("aurora-theme-preview");
+        var theme = saved === null ? "aurora-light" : saved;
+        if (theme) document.documentElement.dataset.theme = theme;
+      } catch (error) {
+        document.documentElement.dataset.theme = "aurora-light";
+      }
+    </script>
+
+    @* Tokens first: they define the variables everything else resolves against. *@
+    <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/fonts.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/tokens.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/typography.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/app.css"]" />
+    <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/cadence.css"]" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
     <link rel="stylesheet" href="@Assets["Parrot.Web.styles.css"]" />
     <ImportMap />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
-    <link rel="icon" type="image/png" href="favicon.png" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <link rel="alternate icon" type="image/png" href="favicon.png" />
     <HeadOutlet />
 </head>
 
@@ -21,7 +37,6 @@
     <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
-    <script src="app.js"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 

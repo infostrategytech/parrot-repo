@@ -1,0 +1,45 @@
+/* A pill is a small amount of text that has to stay legible against a tinted
+   fill, so every tone pairs a *-subtle surface with its matching *-text. Those
+   pairs are contrast-checked in Figma; mixing a surface from one family with
+   text from another is how a badge ends up unreadable in dark mode. */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  border-radius: var(--radius-radius-full);
+  background: var(--status-badge-surface);
+  color: var(--status-badge-text);
+  white-space: nowrap;
+}
+
+.status-badge--neutral {
+  --status-badge-surface: var(--colors-surface-muted);
+  --status-badge-text: var(--colors-surface-muted-foreground);
+}
+
+.status-badge--brand {
+  --status-badge-surface: var(--colors-accent-brand-subtle);
+  --status-badge-text: var(--colors-brand-primary);
+}
+
+.status-badge--success {
+  --status-badge-surface: var(--colors-feedback-success-subtle);
+  --status-badge-text: var(--colors-feedback-success-text);
+}
+
+.status-badge--warning {
+  --status-badge-surface: var(--colors-feedback-warning-subtle);
+  --status-badge-text: var(--colors-feedback-warning-text);
+}
+
+.status-badge--danger {
+  --status-badge-surface: var(--colors-feedback-destructive-subtle);
+  --status-badge-text: var(--colors-feedback-destructive-text);
+}
+
+.status-badge--info {
+  --status-badge-surface: var(--colors-feedback-info-subtle);
+  --status-badge-text: var(--colors-feedback-info-text);
+}

@@ -1,0 +1,49 @@
+/* Ten tints, one per accent family, each pairing that family's own text with
+   its own muted fill. Those pairs are the ones Figma contrast-checked.
+
+   The React app took these from aurora-theme.css, whose generator picked the
+   nearest token to each hand-written hex. It got three of them wrong —
+   petal-2 was orange text on a green fill, petal-8 pink on violet, petal-9 red
+   on pink — and petal-4 and petal-5 came out byte-identical, so two people in
+   ten shared a colour. That is a defect in a component whose only job is to
+   tell people apart, so it is not reproduced here. */
+
+.petal-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: var(--radius-radius-md);
+  text-transform: uppercase;
+}
+
+.petal-avatar {
+  /* Gap in the token set: no tracking scale. Initials need a little air or
+     two capitals read as one glyph. */
+  --ds-avatar-tracking: 0.04em;
+}
+
+.petal-avatar--sm {
+  width: var(--icon-size-icon-lg);
+  height: var(--icon-size-icon-lg);
+}
+
+.petal-avatar--md {
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+}
+
+.petal-avatar--lg {
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+}
+
+.petal-0 { color: var(--colors-accent-red-text);     background: var(--colors-accent-red-muted); }
+.petal-1 { color: var(--colors-accent-orange-text);  background: var(--colors-accent-orange-muted); }
+.petal-2 { color: var(--colors-accent-amber-text);   background: var(--colors-accent-amber-muted); }
+.petal-3 { color: var(--colors-accent-green-text);   background: var(--colors-accent-green-muted); }
+.petal-4 { color: var(--colors-accent-teal-text);    background: var(--colors-accent-teal-muted); }
+.petal-5 { color: var(--colors-accent-cyan-text);    background: var(--colors-accent-cyan-muted); }
+.petal-6 { color: var(--colors-accent-sky-text);     background: var(--colors-accent-sky-muted); }
+.petal-7 { color: var(--colors-accent-violet-text);  background: var(--colors-accent-violet-muted); }
+.petal-8 { color: var(--colors-accent-fuchsia-text); background: var(--colors-accent-fuchsia-muted); }
+.petal-9 { color: var(--colors-accent-pink-text);    background: var(--colors-accent-pink-muted); }

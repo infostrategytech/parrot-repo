@@ -1,0 +1,58 @@
+/* Both controls are elements this component renders itself, so they carry its
+   scope attribute and need no ::deep. Only the label inside them comes from
+   Typography, and nothing here has to reach it. */
+
+.aside__status {
+  display: inline-flex;
+  align-items: center;
+  height: var(--ds-aside-height);
+  padding: var(--spacing-none) var(--ds-aside-pad);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+  white-space: nowrap;
+}
+
+.aside__status.is-current {
+  color: var(--colors-brand-primary);
+  background: var(--colors-interaction-selected);
+}
+
+.aside__status.is-complete {
+  color: var(--colors-feedback-success-text);
+  background: var(--colors-feedback-success-subtle);
+}
+
+/* A finished section offers a way back in. Outlined rather than filled, so it
+   reads as secondary to whatever the open section is asking for. */
+.aside__reopen {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: var(--ds-aside-height);
+  padding: var(--spacing-none) var(--ds-aside-reopen-pad);
+  color: var(--colors-text-secondary);
+  background: transparent;
+  border: var(--ds-aside-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.aside__reopen:hover {
+  color: var(--colors-text-primary);
+  background: var(--colors-interaction-hover);
+  border-color: var(--colors-text-muted);
+}
+
+.aside__reopen ::deep svg { flex: 0 0 auto; }
+
+.aside__status,
+.aside__reopen {
+  /* Gaps in the token set: no control-height or border-width scale. 25px is
+     the pill height the design draws for both. */
+  --ds-aside-height: 25px;
+  --ds-aside-pad: 10px;
+  --ds-aside-reopen-pad: 11px;
+  --ds-aside-hairline: 1px;
+}

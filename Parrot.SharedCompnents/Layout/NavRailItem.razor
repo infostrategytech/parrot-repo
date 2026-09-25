@@ -1,0 +1,64 @@
+@namespace Parrot.SharedComponents.Layout
+@inject NavigationManager Nav
+
+@* One row of the rail. Was a RenderFragment built by hand inside NavSidebar,
+   which is a component written the hard way — so it is a component. *@
+
+<button type="button"
+        class="@ClassName"
+        data-tooltip="@Tooltip"
+        disabled="@IsPlaceholder"
+        aria-disabled="@(IsPlaceholder ? "true" : null)"
+        aria-current="@(IsActive ? "page" : null)"
+        @onclick="Navigate">
+    <Icon Name="Entry.Glyph" Size="IconSize.Sm" />
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="nav-item__label">
+        @Entry.Label
+    </Typography>
+    @if (Badge is > 0)
+    {
+        <Typography TextStyle="TextStyle.Small10Semibold"
+                    As="em"
+                    Class="nav-item__count"
+                    aria-label="@($"{Badge} unread conversations")">
+            @(Badge > 99 ? "99+" : Badge.ToString())
+        </Typography>
+    }
+</button>
+
+@code {
+    [Parameter, EditorRequired] public NavEntry Entry { get; set; } = default!;
+
+    [Parameter] public bool IsActive { get; set; }
+
+    /// <summary>Only the inbox carries one today. Null hides it entirely.</summary>
+    [Parameter] public int? Badge { get; set; }
+
+    /// <summary>Compact rows for the footer group.</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    private bool IsPlaceholder => Entry.Path is null;
+
+    // Collapsed, the label is hidden, so the tooltip is the only name this item
+    // has. The badge rides along so a count still means something when narrow.
+    private string Tooltip => IsPlaceholder
+        ? Entry.Label + " — not in this demo"
+        : Badge is > 0 ? $"{Entry.Label} · {Badge} unread" : Entry.Label;
+
+    private string ClassName
+    {
+        get
+        {
+            var name = "nav-item";
+            if (IsActive) name += " is-active";
+            if (IsPlaceholder) name += " is-placeholder";
+            if (Compact) name += " is-compact";
+            return name;
+        }
+    }
+
+    private void Navigate()
+    {
+        if (Entry.Path is not null) Nav.NavigateTo(Entry.Path);
+    }
+}

@@ -1,0 +1,21 @@
+/* The avatar and its actions on one line; the fields in Aurora's two-column
+   editor grid beneath. */
+
+.profile__avatar-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.profile__avatar-actions { display: flex; gap: var(--spacing-sm); }
+::deep .profile__hint { color: var(--colors-text-subtle); }
+
+.profile__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.profile__full { grid-column: 1 / -1; }

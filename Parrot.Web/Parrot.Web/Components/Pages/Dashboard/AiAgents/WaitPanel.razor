@@ -1,37 +1,36 @@
-<div class="pb-field">
-    <label class="pb-field-label">Wait duration</label>
-    <div class="pb-wait-row">
-        <div class="pb-select-wrap pb-wait-num">
-            <select class="pb-select" value="@Step.WaitDuration"
-                    @onchange="async e => { Step.WaitDuration = e.Value?.ToString() ?? string.Empty; await OnChanged.InvokeAsync(); }">
-                <option value="">-- Select --</option>
-                @foreach (var n in new[] { "1", "2", "3", "5", "10", "15", "30", "60" })
-                {
-                    <option value="@n">@n</option>
-                }
-            </select>
-            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
-        <div class="pb-select-wrap pb-wait-unit">
-            <select class="pb-select" value="@Step.WaitUnit"
-                    @onchange="e => Step.WaitUnit = e.Value?.ToString() ?? string.Empty">
-                <option value="Minutes">Minutes</option>
-                <option value="Hours">Hours</option>
-                <option value="Days">Days</option>
-            </select>
-            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+<div class="step-field">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Wait duration</Typography>
+    <div class="step-two-col">
+        <SelectField FloatingLabel="Duration"
+                     Value="@Step.WaitDuration"
+                     Open='@(_open == "duration")'
+                     OpenChanged='@(open => _open = open ? "duration" : null)'>
+            @foreach (var n in new[] { "1", "2", "3", "5", "10", "15", "30", "60" })
+            {
+                var current = n;
+                <PopoverOption Label="@current" Active="@(Step.WaitDuration == current)"
+                               OnSelect="async () => { Step.WaitDuration = current; _open = null; await OnChanged.InvokeAsync(); }" />
+            }
+        </SelectField>
+        <SelectField FloatingLabel="Unit"
+                     Value="@Step.WaitUnit"
+                     Open='@(_open == "unit")'
+                     OpenChanged='@(open => _open = open ? "unit" : null)'>
+            @foreach (var unit in new[] { "Minutes", "Hours", "Days" })
+            {
+                var current = unit;
+                <PopoverOption Label="@current" Active="@(Step.WaitUnit == current)" OnSelect="() => { Step.WaitUnit = current; _open = null; }" />
+            }
+        </SelectField>
     </div>
-    <span class="pb-field-hint">The process will pause for this duration before continuing</span>
+    <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="step-hint">The process will pause for this duration before continuing</Typography>
 </div>
 
 @code {
     [Parameter] public PlaybookStep Step { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string? _open;
 }

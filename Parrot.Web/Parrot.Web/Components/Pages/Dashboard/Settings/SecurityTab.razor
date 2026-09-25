@@ -1,151 +1,97 @@
-<div class="st-security">
-    <div class="st-card">
-        <h2 class="st-card-title">Change Password</h2>
-        <p class="st-card-sub">Ensure your account is using a strong, unique password.</p>
-        <div class="st-field" style="margin-top:20px">
-            <label class="st-label">Current password</label>
-            <div class="st-pw-wrap">
-                <input class="st-input" type="@(_showCurrent ? "text" : "password")"
-                       placeholder="Create a secure password" />
-                <button class="st-pw-toggle" @onclick="() => _showCurrent = !_showCurrent">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        @if (_showCurrent)
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+
+@* Password, two-factor, sessions and the danger zone. Each password field
+   carries a reveal control in Aurora's Input icon slot. *@
+
+<SettingsCard Title="Change password" Description="Ensure your account is using a strong, unique password.">
+    <ChildContent>
+        @* Input is self-closing in Razor (it shares its name with the HTML
+           void element), so the reveal control travels as a fragment. *@
+        <div class="security__fields">
+            <Input FloatingLabel="Current password"
+                   Type="@(_showCurrent ? "text" : "password")"
+                   IconRight="@Reveal(_showCurrent, () => _showCurrent = !_showCurrent)"
+                   @bind-Value="_current" />
+            <Input FloatingLabel="New password"
+                   Type="@(_showNew ? "text" : "password")"
+                   HelperText="Create a secure password"
+                   IconRight="@Reveal(_showNew, () => _showNew = !_showNew)"
+                   @bind-Value="_new" />
+            <Input FloatingLabel="Confirm new password"
+                   Type="@(_showConfirm ? "text" : "password")"
+                   IconRight="@Reveal(_showConfirm, () => _showConfirm = !_showConfirm)"
+                   @bind-Value="_confirm" />
+        </div>
+    </ChildContent>
+    <Footer>
+        <Button>Update password</Button>
+    </Footer>
+</SettingsCard>
+
+<SettingsCard Title="Two-factor authentication" Description="Add an extra layer of security.">
+    <Toggle @bind-Checked="_twoFa"
+            Label="Two-factor authentication"
+            Description="Add an extra layer of security to your account by requiring a verification code from your mobile device." />
+</SettingsCard>
+
+<SettingsCard Title="Active sessions" Description="Logged-in devices and current locations.">
+    <HeaderAction>
+        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">Log out of all sessions</Button>
+    </HeaderAction>
+    <ChildContent>
+        <div class="security__sessions">
+            @foreach (var s in _sessions)
+            {
+                <article class="security__session">
+                    <span class="security__session-icon"><Icon Name="IconName.RiComputerFill" Size="IconSize.Md" /></span>
+                    <div class="security__session-info">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@s.Device · @s.Browser</Typography>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@s.Location</Typography>
+                        @if (s.IsCurrent)
                         {
-                            <path
-                            d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
+                            <StatusBadge Tone="StatusTone.Success" Glyph="IconName.RiCheckFill">@s.Time</StatusBadge>
                         }
                         else
                         {
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
+                            <Typography TextStyle="TextStyle.Small10Regular" As="time">@s.Time</Typography>
                         }
-                    </svg>
-                </button>
-            </div>
-        </div>
-        <div class="st-field">
-            <label class="st-label">New password</label>
-            <div class="st-pw-wrap">
-                <input class="st-input" type="@(_showNew ? "text" : "password")"
-                       placeholder="Create a secure password" />
-                <button class="st-pw-toggle" @onclick="() => _showNew = !_showNew">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        @if (_showNew)
-                        {
-                            <path
-                            d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                        }
-                        else
-                        {
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                        }
-                    </svg>
-                </button>
-            </div>
-        </div>
-        <div class="st-field">
-            <label class="st-label">Confirm new password</label>
-            <div class="st-pw-wrap">
-                <input class="st-input" type="@(_showConfirm ? "text" : "password")"
-                       placeholder="Create a secure password" />
-                <button class="st-pw-toggle" @onclick="() => _showConfirm = !_showConfirm">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        @if (_showConfirm)
-                        {
-                            <path
-                            d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                        }
-                        else
-                        {
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                        }
-                    </svg>
-                </button>
-            </div>
-        </div>
-        <div class="st-card-footer">
-            <button class="st-save-btn">Update password</button>
-        </div>
-    </div>
-
-    <div class="st-card">
-        <h2 class="st-card-title">Two-Factor Authentication</h2>
-        <p class="st-card-sub">Add an extra layer of security</p>
-        <div class="st-toggle-row">
-            <div>
-                <div class="st-toggle-label">Two-Factor Authentication</div>
-                <div class="st-toggle-sub">Add an extra layer of security to your account by requiring a verification
-                    code from your mobile device.</div>
-                </div>
-                <button class="st-toggle @(_twoFa ? "st-toggle--on" : "")" @onclick="() => _twoFa = !_twoFa"></button>
-            </div>
-        </div>
-
-        <div class="st-card">
-            <div class="st-sessions-header">
-                <div>
-                    <h2 class="st-card-title">Active Sessions</h2>
-                    <p class="st-card-sub">Logged-in devices and current locations.</p>
-                </div>
-                <button class="st-logout-all-btn">Log out of all sessions</button>
-            </div>
-            <div class="st-sessions-grid">
-                @foreach (var s in _sessions)
-                {
-                    <div class="st-session-card">
-                        <div class="st-session-icon">
-                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
-                                <line x1="8" y1="21" x2="16" y2="21" />
-                                <line x1="12" y1="17" x2="12" y2="21" />
-                            </svg>
-                        </div>
-                        <div class="st-session-info">
-                            <span class="st-session-device">@s.Device &bull; @s.Browser</span>
-                            <span class="st-session-loc">@s.Location &bull; <span
-                                class="@(s.IsCurrent ? "st-session-current" : "st-session-time")">@s.Time</span></span>
-                            </div>
-                            @if (!s.IsCurrent)
-                            {
-                                <button class="st-session-del">
-                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"
-                                         stroke-linecap="round" stroke-linejoin="round">
-                                        <polyline points="3 6 5 6 21 6" />
-                                        <path d="M19 6l-1 14H6L5 6" />
-                                        <path d="M10 11v6M14 11v6" />
-                                        <path d="M9 6V4h6v2" />
-                                    </svg>
-                                </button>
-                            }
-                        </div>
-                    }
-                </div>
-            </div>
-
-            <div class="st-card st-card--danger">
-                <h2 class="st-card-title">Danger Zone</h2>
-                <p class="st-card-sub">Irreversible actions that affect your entire workspace.</p>
-                <div class="st-danger-row">
-                    <div>
-                        <div class="st-danger-action-title">Delete Workspace</div>
-                        <div class="st-danger-action-sub">Permanently delete this workspace and all its data.</div>
                     </div>
-                    <button class="st-delete-btn">Delete account</button>
-                </div>
-            </div>
+                    @if (!s.IsCurrent)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="End this session">
+                            <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                        </Button>
+                    }
+                </article>
+            }
         </div>
+    </ChildContent>
+</SettingsCard>
+
+<SettingsCard Title="Danger zone" Description="Irreversible actions that affect your entire workspace." Danger>
+    <div class="security__danger">
+        <div class="security__danger-text">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Delete workspace</Typography>
+            <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>Permanently delete this workspace and all its data.</Typography>
+        </div>
+        <Button Variant="ButtonVariant.Destructive">
+            <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+            <ChildContent>Delete account</ChildContent>
+        </Button>
+    </div>
+</SettingsCard>
 
 @code {
     bool _showCurrent, _showNew, _showConfirm, _twoFa;
+    string _current = string.Empty, _new = string.Empty, _confirm = string.Empty;
+
+    // The sprite has no eye-off glyph, so a revealed field shows a lock instead.
+    private RenderFragment Reveal(bool shown, Action toggle) =>
+        @<button type="button" class="security__reveal"
+                 aria-label="@(shown ? "Hide password" : "Show password")"
+                 @onclick="toggle">
+            <Icon Name="@(shown ? IconName.RiLock2Fill : IconName.RiEyeFill)" Size="IconSize.Sm" />
+        </button>;
 
     record SessionItem(string Device, string Browser, string Location, string Time, bool IsCurrent);
 

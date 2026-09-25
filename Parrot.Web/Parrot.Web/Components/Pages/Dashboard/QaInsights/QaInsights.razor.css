@@ -1,0 +1,195 @@
+/* Insights. Aurora's Products frame (1440, centred, fluid gutter), its stat
+   strip for the six numbers, and two cards beneath. */
+
+.insights {
+  padding: var(--spacing-4xl) var(--ds-insights-gutter) var(--spacing-5xl);
+}
+
+.insights > * {
+  width: min(var(--ds-insights-max), 100%);
+  margin-inline: auto;
+}
+
+.insights {
+  /* Gaps in the token set: no page-gutter, content-width, border-width,
+     cell-height, ring-width or chart-size scale. */
+  --ds-insights-gutter: clamp(28px, 4vw, 66px);
+  --ds-insights-max: 1440px;
+  --ds-insights-measure: 650px;
+  --ds-insights-hairline: 1px;
+  --ds-insights-tile-min: 112px;
+  --ds-insights-donut: 180px;
+  --ds-insights-ring: 20;
+  --ds-insights-dot: 10px;
+  --ds-insights-performer-icon: 32px;
+}
+
+.insights__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-4xl);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.insights__heading { display: grid; gap: var(--spacing-sm); }
+::deep .insights__lede { max-width: var(--ds-insights-measure); color: var(--colors-text-muted); }
+.insights__actions { display: flex; flex: 0 0 auto; gap: var(--spacing-sm); }
+
+/* ── Summary ─────────────────────────────────────────────────────────────── */
+/* One card divided into cells, not six cards. Copied from Aurora's
+   products__summary and stat-tile. */
+
+.insights__summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: hidden;
+  margin-bottom: var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-insights-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.stat-tile {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: var(--ds-insights-tile-min);
+  padding: var(--spacing-lg);
+}
+
+.stat-tile__body { display: grid; gap: var(--spacing-2xs); flex: 1; min-width: 0; }
+.stat-tile__top { display: flex; gap: var(--spacing-sm); align-items: center; justify-content: space-between; }
+.stat-tile__top ::deep small { color: var(--colors-text-muted); }
+.stat-tile__body ::deep strong { color: var(--colors-text-primary); }
+::deep .stat-tile__note { margin: var(--spacing-none); color: var(--colors-text-subtle); }
+
+/* A hairline between cells, inset so it stops short of the card's edges; a
+   rule between the two rows. */
+.stat-tile:not(:nth-child(3n + 1))::before {
+  content: "";
+  position: absolute;
+  top: var(--spacing-xl);
+  bottom: var(--spacing-xl);
+  left: 0;
+  width: var(--ds-insights-hairline);
+  background: var(--colors-surface-border);
+}
+
+.stat-tile:nth-child(n + 4) { border-top: var(--ds-insights-hairline) solid var(--colors-surface-border); }
+
+/* ── Panels ──────────────────────────────────────────────────────────────── */
+
+.insights__panels {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: var(--spacing-lg);
+  align-items: start;
+}
+
+.insights__card {
+  display: grid;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-insights-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.insights__card-header { display: grid; gap: var(--spacing-xs); padding-bottom: var(--spacing-lg); border-bottom: var(--ds-insights-hairline) solid var(--colors-surface-border); }
+.insights__card-header ::deep h2 { color: var(--colors-text-primary); }
+.insights__card-header ::deep p { color: var(--colors-text-muted); }
+.insights__card-header--split { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); }
+
+.insights__sentiment-headline { display: flex; gap: var(--spacing-xs); align-items: baseline; }
+.insights__sentiment-headline ::deep strong { color: var(--colors-feedback-success-text); }
+.insights__sentiment-headline ::deep span { color: var(--colors-text-muted); }
+
+.insights__performance {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-md);
+}
+
+.insights__performer {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.insights__performer > header { display: flex; gap: var(--spacing-sm); align-items: center; color: var(--colors-text-primary); }
+
+.insights__performer-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-insights-performer-icon);
+  height: var(--ds-insights-performer-icon);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-md);
+}
+
+.insights__performer dl { display: grid; gap: var(--spacing-sm); margin: var(--spacing-none); }
+.insights__performer dl > div { display: flex; gap: var(--spacing-sm); align-items: center; justify-content: space-between; }
+.insights__performer ::deep dt { color: var(--colors-text-muted); }
+.insights__performer ::deep dd { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+/* An observation, drawn as Aurora's guided aside in the warning tint. */
+.insights__aside {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  padding: var(--spacing-md);
+  color: var(--colors-feedback-warning-text);
+  background: var(--colors-feedback-warning-subtle);
+  border: var(--ds-insights-hairline) solid var(--colors-feedback-warning-border);
+  border-radius: var(--radius-radius-lg);
+}
+
+.insights__aside > ::deep svg { flex: 0 0 auto; margin-top: var(--spacing-2xs); }
+.insights__aside ::deep p { color: var(--colors-text-secondary); }
+
+/* ── Donut ───────────────────────────────────────────────────────────────── */
+/* A ring with three arcs, each a status colour: sentiment is a state. The
+   track is the chart's no-data tone. */
+
+.insights__donut-wrap { display: grid; place-items: center; }
+.insights__donut { width: var(--ds-insights-donut); height: var(--ds-insights-donut); }
+
+.insights__ring,
+.insights__slice {
+  fill: none;
+  stroke-width: var(--ds-insights-ring);
+}
+
+.insights__ring { stroke: var(--colors-chart-no-data); }
+.insights__slice--positive { stroke: var(--colors-feedback-success); }
+.insights__slice--neutral { stroke: var(--colors-text-subtle); }
+.insights__slice--negative { stroke: var(--colors-feedback-destructive); }
+
+.insights__legend {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+.insights__legend li { display: flex; gap: var(--spacing-sm); align-items: center; color: var(--colors-text-secondary); }
+.insights__legend li > ::deep span:not(.insights__legend-dot) { flex: 1; }
+.insights__legend ::deep strong { color: var(--colors-text-primary); }
+
+.insights__legend-dot {
+  flex: 0 0 auto;
+  width: var(--ds-insights-dot);
+  height: var(--ds-insights-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.insights__legend-dot.insights__slice--positive { background: var(--colors-feedback-success); }
+.insights__legend-dot.insights__slice--neutral { background: var(--colors-text-subtle); }
+.insights__legend-dot.insights__slice--negative { background: var(--colors-feedback-destructive); }

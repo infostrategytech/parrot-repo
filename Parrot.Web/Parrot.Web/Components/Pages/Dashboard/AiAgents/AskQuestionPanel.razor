@@ -1,218 +1,164 @@
-<div class="pb-field">
-    <label class="pb-field-label">Question text</label>
-    <textarea class="pb-textarea" rows="4" placeholder="e.g what would you like to order" value="@Step.QuestionText"
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+<label class="step-field">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Question text</Typography>
+    <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
+              rows="4"
+              placeholder="e.g. what would you like to order"
+              value="@Step.QuestionText"
               @oninput="async e => { Step.QuestionText = e.Value?.ToString() ?? string.Empty; await OnChanged.InvokeAsync(); }"></textarea>
-</div>
+</label>
 
-<div class="pb-field">
-    <label class="pb-field-label">Response type</label>
-    <div class="pb-select-wrap">
-        <select class="pb-select" value="@Step.ResponseType"
-                @onchange="async e => { Step.ResponseType = e.Value?.ToString() ?? string.Empty; await OnChanged.InvokeAsync(); }">
-            <option value="">-- Select a response type --</option>
-            <option value="Text">Text — Free-form text response</option>
-            <option value="Quantity">Quantity — Numeric value</option>
-            <option value="Amount">Amount — Currency amount</option>
-            <option value="Date">Date — Date picker</option>
-            <option value="Time">Time — Time picker</option>
-            <option value="SingleChoice">Single Choice — Pick one option</option>
-            <option value="MultipleChoice">Multiple Choice — Pick multiple options</option>
-        </select>
-        <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 9l6 6 6-6" />
-        </svg>
+<SelectField FloatingLabel="Response type"
+             Value="@ResponseTypeLabel(Step.ResponseType)"
+             Open='@(_open == "response")'
+             OpenChanged='@(open => _open = open ? "response" : null)'>
+    @foreach (var option in ResponseTypes)
+    {
+        var current = option;
+        <PopoverOption Label="@current.Label"
+                       Description="@current.Description"
+                       Active="@(Step.ResponseType == current.Id)"
+                       OnSelect="async () => { Step.ResponseType = current.Id; _open = null; await OnChanged.InvokeAsync(); }" />
+    }
+</SelectField>
+
+<Input FloatingLabel="Save as"
+       HelperText="This name is used to reference this data in later steps"
+       Value="@Step.SaveAs"
+       ValueChanged="value => Step.SaveAs = value ?? string.Empty" />
+
+<div class="step-row">
+    <div class="step-row-text">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Required</Typography>
+        <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>Customer must answer before moving forward</Typography>
     </div>
+    <Toggle AriaLabel="Required" Checked="Step.Required" CheckedChanged="value => Step.Required = value" />
 </div>
 
-<div class="pb-field">
-    <label class="pb-field-label">Save as</label>
-    <input class="pb-input" placeholder="eg customer_order" value="@Step.SaveAs"
-           @oninput="e => Step.SaveAs = e.Value?.ToString() ?? string.Empty" />
-    <span class="pb-field-hint">This name is used to reference this data in later steps</span>
-</div>
-
-<div class="pb-toggle-row">
-    <div class="pb-toggle-info">
-        <span class="pb-toggle-label">Required</span>
-        <span class="pb-toggle-sub">Customer must answer before moving forward</span>
-    </div>
-    <button type="button" class="cam-toggle @(Step.Required ? "cam-toggle--on" : "")"
-            @onclick="() => Step.Required = !Step.Required">
-        <span class="cam-toggle-thumb"></span>
-    </button>
-</div>
-
-<div class="pb-panel-divider"></div>
+<div class="step-divider"></div>
 
 @if (Step.ResponseType == "Text")
 {
-    <div class="pb-field">
-        <label class="pb-field-label">Placeholder</label>
-        <input class="pb-input" placeholder="Hint text shown to customer" value="@Step.Placeholder"
-               @oninput="e => Step.Placeholder = e.Value?.ToString() ?? string.Empty" />
-    </div>
-    <div class="pb-field">
-        <label class="pb-field-label">Character limit</label>
-        <div class="pb-select-wrap">
-            <select class="pb-select" value="@Step.CharacterLimit"
-                    @onchange="e => Step.CharacterLimit = int.TryParse(e.Value?.ToString(), out var v) ? v : 1">
-                @foreach (var limit in new[] { 1, 50, 100, 200, 500 })
-                {
-                    <option value="@limit">@limit</option>
-                }
-            </select>
-            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
-    </div>
+    <Input FloatingLabel="Placeholder"
+           HelperText="Hint text shown to customer"
+           Value="@Step.Placeholder"
+           ValueChanged="value => Step.Placeholder = value ?? string.Empty" />
+    <SelectField FloatingLabel="Character limit"
+                 Value="@Step.CharacterLimit.ToString()"
+                 Open='@(_open == "limit")'
+                 OpenChanged='@(open => _open = open ? "limit" : null)'>
+        @foreach (var limit in new[] { 1, 50, 100, 200, 500 })
+        {
+            var current = limit;
+            <PopoverOption Label="@current.ToString()" Active="@(Step.CharacterLimit == current)" OnSelect="() => { Step.CharacterLimit = current; _open = null; }" />
+        }
+    </SelectField>
 }
 
 @if (Step.ResponseType == "Quantity")
 {
-    <div class="pb-two-col">
-        <div class="pb-field">
-            <label class="pb-field-label">Minimum value</label>
-            <div class="pb-select-wrap">
-                <select class="pb-select" value="@Step.MinValue"
-                        @onchange="e => Step.MinValue = int.TryParse(e.Value?.ToString(), out var v) ? v : 1">
-                    @foreach (var v in new[] { 1, 2, 5, 10 })
-                    {
-                        <option value="@v">@v</option>
-                    }
-                </select>
-                <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 9l6 6 6-6" />
-                </svg>
-            </div>
-        </div>
-        <div class="pb-field">
-            <label class="pb-field-label">Maximum value</label>
-            <div class="pb-select-wrap">
-                <select class="pb-select" value="@Step.MaxValue"
-                        @onchange="e => Step.MaxValue = int.TryParse(e.Value?.ToString(), out var v) ? v : 1000">
-                    @foreach (var v in new[] { 100, 500, 1000, 5000 })
-                    {
-                        <option value="@v">@v</option>
-                    }
-                </select>
-                <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 9l6 6 6-6" />
-                </svg>
-            </div>
-        </div>
+    <div class="step-two-col">
+        <SelectField FloatingLabel="Minimum value"
+                     Value="@Step.MinValue.ToString()"
+                     Open='@(_open == "min")'
+                     OpenChanged='@(open => _open = open ? "min" : null)'>
+            @foreach (var v in new[] { 1, 2, 5, 10 })
+            {
+                var current = v;
+                <PopoverOption Label="@current.ToString()" Active="@(Step.MinValue == current)" OnSelect="() => { Step.MinValue = current; _open = null; }" />
+            }
+        </SelectField>
+        <SelectField FloatingLabel="Maximum value"
+                     Value="@Step.MaxValue.ToString()"
+                     Open='@(_open == "max")'
+                     OpenChanged='@(open => _open = open ? "max" : null)'>
+            @foreach (var v in new[] { 100, 500, 1000, 5000 })
+            {
+                var current = v;
+                <PopoverOption Label="@current.ToString()" Active="@(Step.MaxValue == current)" OnSelect="() => { Step.MaxValue = current; _open = null; }" />
+            }
+        </SelectField>
     </div>
 }
 
 @if (Step.ResponseType == "Amount")
 {
-    <div class="pb-two-col">
-        <div class="pb-field">
-            <label class="pb-field-label">Currency</label>
-            <div class="pb-select-wrap">
-                <select class="pb-select" value="@Step.Currency"
-                        @onchange="e => Step.Currency = e.Value?.ToString() ?? string.Empty">
-                    <option value="">-- Select --</option>
-                    <option value="USD">USD</option>
-                    <option value="EUR">EUR</option>
-                    <option value="GBP">GBP</option>
-                    <option value="NGN">NGN</option>
-                </select>
-                <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M6 9l6 6 6-6" />
-                </svg>
-            </div>
-        </div>
-        <div class="pb-field">
-            <label class="pb-field-label">Minimum amount</label>
-            <input class="pb-input" type="number" placeholder="0.00" value="@Step.MinAmount"
-                   @oninput="e => Step.MinAmount = decimal.TryParse(e.Value?.ToString(), out var v) ? v : 0" />
-        </div>
+    <div class="step-two-col">
+        <SelectField FloatingLabel="Currency"
+                     Value="@Step.Currency"
+                     Open='@(_open == "currency")'
+                     OpenChanged='@(open => _open = open ? "currency" : null)'>
+            @foreach (var code in new[] { "USD", "EUR", "GBP", "NGN" })
+            {
+                var current = code;
+                <PopoverOption Label="@current" Active="@(Step.Currency == current)" OnSelect="() => { Step.Currency = current; _open = null; }" />
+            }
+        </SelectField>
+        <Input FloatingLabel="Minimum amount"
+               type="number"
+               min="0"
+               Value="@Step.MinAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+               ValueChanged="value => Step.MinAmount = decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0" />
     </div>
 }
 
 @if (Step.ResponseType is "SingleChoice" or "MultipleChoice")
 {
-    <div class="pb-field">
-        <label class="pb-field-label">
-            Options <span class="pb-field-label--sub">(Min 2)</span>
-        </label>
-        <p class="pb-field-hint">
+    <div class="step-field">
+        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Options <em>(Min 2)</em></Typography>
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="step-hint">
             @(Step.ResponseType == "SingleChoice"
                 ? "Add the options customers can choose from. Each option can lead to a different next step in the flow."
                 : "Add the options customers can select. Customers can choose more than one option.")
-        </p>
+        </Typography>
         @foreach (var opt in Step.Options)
         {
             var option = opt;
             var optIdx = Step.Options.IndexOf(opt) + 1;
-            <div class="pb-option-block">
-                <div class="pb-option-header">
-                    <span class="pb-option-num">Option @optIdx</span>
-                    <button class="pb-option-del" @onclick="() => Step.Options.Remove(option)">
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2"
-                             stroke-linecap="round" stroke-linejoin="round">
-                            <polyline points="3 6 5 6 21 6" />
-                            <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-                            <path d="M10 11v6" />
-                            <path d="M14 11v6" />
-                        </svg>
-                    </button>
+            <div class="step-block">
+                <div class="step-block-head">
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline">Option @optIdx</Typography>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="step-block-remove" aria-label="@($"Remove option {optIdx}")" @onclick="() => Step.Options.Remove(option)">
+                        <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                    </Button>
                 </div>
-                <div class="pb-field">
-                    <label class="pb-field-label">Name</label>
-                    <input class="pb-input" placeholder="e.g Jollofrice" value="@option.Name"
-                           @oninput="e => option.Name = e.Value?.ToString() ?? string.Empty" />
-                </div>
+                <Input FloatingLabel="Name"
+                       Value="@option.Name"
+                       ValueChanged="value => option.Name = value ?? string.Empty" />
                 @if (Step.ResponseType == "SingleChoice")
                 {
-                    <div class="pb-field">
-                        <label class="pb-field-label">Next action</label>
-                        <div class="pb-select-wrap">
-                            <select class="pb-select" value="@option.NextAction"
-                                    @onchange="e => option.NextAction = e.Value?.ToString() ?? string.Empty">
-                                <option value="">-- Select --</option>
-                                <option value="continue">Continue to next step</option>
-                                <option value="goto">Go to another step</option>
-                                <option value="end">End flow</option>
-                            </select>
-                            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                 stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M6 9l6 6 6-6" />
-                            </svg>
-                        </div>
-                    </div>
+                    <SelectField FloatingLabel="Next action"
+                                 Value="@NextActionLabel(option.NextAction)"
+                                 Open='@(_open == $"next-{option.Id}")'
+                                 OpenChanged='@(open => _open = open ? $"next-{option.Id}" : null)'>
+                        <PopoverOption Label="Continue to next step" Active='@(option.NextAction == "continue")' OnSelect='() => { option.NextAction = "continue"; _open = null; }' />
+                        <PopoverOption Label="Go to another step" Active='@(option.NextAction == "goto")' OnSelect='() => { option.NextAction = "goto"; _open = null; }' />
+                        <PopoverOption Label="End flow" Active='@(option.NextAction == "end")' OnSelect='() => { option.NextAction = "end"; _open = null; }' />
+                    </SelectField>
                     @if (option.NextAction == "goto")
                     {
-                        <div class="pb-field">
-                            <label class="pb-field-label">Target step</label>
-                            <div class="pb-select-wrap">
-                                <select class="pb-select" value="@option.TargetStep"
-                                        @onchange="e => option.TargetStep = e.Value?.ToString() ?? string.Empty">
-                                    <option value="">--Select --</option>
-                                    @foreach (var s in Playbook.Steps.Where(s => s.Id != SelectedStepId))
-                                    {
-                                        <option value="@s.Id">@s.QuestionText</option>
-                                    }
-                                </select>
-                                <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                                     stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M6 9l6 6 6-6" />
-                                </svg>
-                            </div>
-                        </div>
+                        <SelectField FloatingLabel="Target step"
+                                     Value="@TargetStepLabel(option.TargetStep)"
+                                     Open='@(_open == $"target-{option.Id}")'
+                                     OpenChanged='@(open => _open = open ? $"target-{option.Id}" : null)'>
+                            @foreach (var s in Playbook.Steps.Where(s => s.Id != SelectedStepId))
+                            {
+                                var target = s;
+                                <PopoverOption Label="@(string.IsNullOrWhiteSpace(target.QuestionText) ? PlaybookCanvas.Kind(target.Type).Label : target.QuestionText)"
+                                               Description="@PlaybookCanvas.Kind(target.Type).Subtype"
+                                               Active="@(option.TargetStep == target.Id)"
+                                               OnSelect="() => { option.TargetStep = target.Id; _open = null; }" />
+                            }
+                        </SelectField>
                     }
                 }
             </div>
         }
-        <button class="pb-add-option-btn" @onclick="() => Step.Options.Add(new StepOption())">
-            Add option
-        </button>
+        <Button Variant="ButtonVariant.Secondary" @onclick="() => Step.Options.Add(new StepOption())">
+            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+            <ChildContent>Add option</ChildContent>
+        </Button>
     </div>
 }
 
@@ -221,4 +167,36 @@
     [Parameter] public Playbook Playbook { get; set; } = default!;
     [Parameter] public string SelectedStepId { get; set; } = string.Empty;
     [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string? _open;
+
+    private sealed record ResponseType(string Id, string Label, string Description);
+
+    private static readonly ResponseType[] ResponseTypes =
+    [
+        new("Text", "Text", "Free-form text response"),
+        new("Quantity", "Quantity", "Numeric value"),
+        new("Amount", "Amount", "Currency amount"),
+        new("Date", "Date", "Date picker"),
+        new("Time", "Time", "Time picker"),
+        new("SingleChoice", "Single choice", "Pick one option"),
+        new("MultipleChoice", "Multiple choice", "Pick multiple options")
+    ];
+
+    private static string ResponseTypeLabel(string id) => ResponseTypes.FirstOrDefault(t => t.Id == id)?.Label ?? string.Empty;
+
+    private static string NextActionLabel(string id) => id switch
+    {
+        "continue" => "Continue to next step",
+        "goto" => "Go to another step",
+        "end" => "End flow",
+        _ => string.Empty
+    };
+
+    private string TargetStepLabel(string id)
+    {
+        var target = Playbook.Steps.FirstOrDefault(s => s.Id == id);
+        if (target is null) return string.Empty;
+        return string.IsNullOrWhiteSpace(target.QuestionText) ? PlaybookCanvas.Kind(target.Type).Label : target.QuestionText;
+    }
 }

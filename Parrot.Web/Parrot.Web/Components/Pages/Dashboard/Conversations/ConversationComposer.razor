@@ -1,0 +1,88 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* Parrot sends plain-text WhatsApp replies (SendReplyRequest: RequestId +
+   Text). Internal notes, attachments and AI drafting have no backend, so
+   those controls are drawn in Aurora's disabled state. *@
+<div class="conversation-composer @ModeClass">
+    <header>
+        <div class="conversation-composer__tabs" role="tablist" aria-label="Message type">
+            <button type="button" role="tab" class="@(Mode == ComposerMode.Reply ? "is-active" : null)"
+                    aria-selected="@(Mode == ComposerMode.Reply)" @onclick="() => ChangeModeAsync(ComposerMode.Reply)">Reply</button>
+            <button type="button" role="tab" class="@(Mode == ComposerMode.Note ? "is-active" : null)"
+                    aria-selected="@(Mode == ComposerMode.Note)" disabled title="Internal notes are not available yet">Internal note</button>
+        </div>
+    </header>
+
+    <textarea value="@Text"
+              @oninput="OnTextInput"
+              @onkeydown="OnKeyDown"
+              aria-label="Reply"
+              disabled="@InputDisabled"
+              placeholder="@Placeholder"
+              maxlength="4096"
+              rows="3"></textarea>
+
+    <footer>
+        <div class="conversation-composer__tools">
+            <span class="conversation-composer__tool is-disabled" aria-disabled="true"
+                  aria-label="Attach a file" title="Attachments are not available yet">
+                <Icon Name="IconName.RiAttachment2" Size="IconSize.Sm" />
+            </span>
+            <SavedRepliesMenu Disabled="@InputDisabled" OnSelect="SelectSavedReplyAsync" />
+            <button type="button" class="conversation-composer__tool" aria-label="Add emoji" title="Add emoji"
+                    disabled="@InputDisabled" @onclick="AddEmojiAsync">
+                <Icon Name="IconName.RiEmotionHappyFill" Size="IconSize.Sm" />
+            </button>
+        </div>
+
+        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled title="No AI agent is available for this conversation">
+            <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
+            <ChildContent>Draft with AI</ChildContent>
+        </Button>
+
+        <Typography TextStyle="TextStyle.Small10Regular" As="span" Class="conversation-composer__count">
+            @(Text.Length > 0 ? $"{Text.Length} characters" : "")
+        </Typography>
+
+        <Button Size="ButtonSize.Small" Busy="@Sending" disabled="@(!CanSend)" @onclick="OnSend">
+            <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+            <ChildContent>@SendLabel</ChildContent>
+        </Button>
+    </footer>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
+    [Parameter] public ComposerMode Mode { get; set; }
+    [Parameter] public EventCallback<ComposerMode> ModeChanged { get; set; }
+    [Parameter] public string Text { get; set; } = "";
+    [Parameter] public EventCallback<string> TextChanged { get; set; }
+    [Parameter] public bool Sending { get; set; }
+    /// <summary>A previous send did not confirm: the same text and request id are kept for a safe retry.</summary>
+    [Parameter] public bool Retry { get; set; }
+    [Parameter] public EventCallback OnSend { get; set; }
+
+    private bool InputDisabled => Sending || Retry;
+    private bool CanSend => !Sending && !string.IsNullOrWhiteSpace(Text);
+    private string ModeClass => Mode == ComposerMode.Note ? "is-note" : "is-reply";
+    private string Placeholder => $"Reply to {Conversation.CustomerName}...";
+    // "Send" holds while a send is in flight: the button's Busy state draws the
+    // brand's relay dots in the icon slot rather than swapping the label.
+    private string SendLabel => Retry ? "Check / retry" : "Send";
+
+    private Task OnTextInput(ChangeEventArgs args) => TextChanged.InvokeAsync(args.Value?.ToString() ?? "");
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if ((args.CtrlKey || args.MetaKey) && args.Key == "Enter" && CanSend) await OnSend.InvokeAsync();
+    }
+
+    private async Task ChangeModeAsync(ComposerMode mode)
+    {
+        await ModeChanged.InvokeAsync(mode);
+    }
+
+    private Task AddEmojiAsync() => TextChanged.InvokeAsync($"{Text}{(Text.Length > 0 ? " " : "")}😊");
+
+    private Task SelectSavedReplyAsync(string body) => TextChanged.InvokeAsync(body);
+}

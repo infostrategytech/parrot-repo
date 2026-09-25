@@ -1,0 +1,67 @@
+/* The trigger panel wears the step panel's shell. */
+
+.trigger-panel {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  flex: 0 0 var(--ds-trigger-panel-width);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-trigger-panel-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.trigger-panel {
+  /* Gaps in the token set: no panel-width or border-width scale. */
+  --ds-trigger-panel-width: 400px;
+  --ds-trigger-panel-hairline: 1px;
+}
+
+.trigger-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: var(--ds-trigger-panel-hairline) solid var(--colors-surface-border);
+}
+
+.trigger-panel__title { display: flex; gap: var(--spacing-sm); align-items: center; }
+.trigger-panel__title ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+.trigger-panel__body {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  overflow-y: auto;
+}
+
+.trigger-panel__field { display: grid; gap: var(--spacing-sm); }
+::deep .trigger-panel__label { color: var(--colors-text-secondary); }
+::deep .trigger-panel__hint { margin: var(--spacing-none); color: var(--colors-text-muted); }
+::deep .trigger-panel__hint--warn { color: var(--colors-feedback-warning-text); }
+
+.trigger-panel__input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.trigger-panel__chips { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+
+.trigger-panel__chip {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-brand-primary);
+  background: var(--colors-interaction-selected);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.trigger-panel__chip:hover { background: var(--colors-accent-brand-muted); }

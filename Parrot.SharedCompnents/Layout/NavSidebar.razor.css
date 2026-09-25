@@ -1,0 +1,188 @@
+/* The rail's own frame. Rows, the workspace switcher and the account card
+   bring their own styles; nothing here reaches into them.
+
+   No font-size, font-weight or letter-spacing in this file. Type is a design
+   decision that lives in Figma and arrives through a text style — which is
+   exactly what the React rail did not do, drawing itself with 13px/510,
+   17px/650 and 10px/650, none of which are on the scale. */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--spacing-2xl) var(--spacing-md) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-sidebar-background);
+  border-right: var(--ds-rail-hairline) solid var(--colors-surface-border);
+}
+
+.sidebar {
+  /* Gaps in the token set: no border-width scale, no motion scale, and no
+     control-size scale for the rail's own furniture. */
+  --ds-rail-hairline: 1px;
+  --ds-rail-motion: 140ms;
+  --ds-rail-control: 30px;
+  --ds-rail-mark: 24px;
+  --ds-rail-mark-bar: 3px;
+  --ds-rail-tooltip-offset: 12px;
+  --ds-rail-layer: 40;
+  --ds-rail-collapsed-gutter: 12px;
+  --ds-rail-collapsed-brand-gap: 14px;
+  --ds-rail-dot: 7px;
+  --ds-rail-dot-top: 7px;
+  --ds-rail-dot-right: 10px;
+}
+
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-none) var(--spacing-sm) var(--spacing-2xl);
+  color: var(--colors-text-primary);
+}
+
+/* The Cadence mark — the brand's three message bars — sits bare, as the
+   sign-in screen sets it: no tile behind it. */
+.sidebar__mark {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ds-rail-mark);
+  height: var(--ds-rail-mark);
+}
+
+::deep .sidebar__wordmark {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.sidebar__collapse,
+.sidebar__expand {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--ds-rail-control);
+  height: var(--ds-rail-control);
+  margin-left: auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+  transition:
+    background var(--ds-rail-motion) ease,
+    color var(--ds-rail-motion) ease;
+}
+
+.sidebar__collapse:hover {
+  color: var(--colors-text-primary);
+  background: var(--colors-interaction-hover);
+}
+
+/* Collapsed, the mark itself becomes the expand control: the icon takes its
+   place on hover, so the rail keeps its identity at rest. */
+.sidebar__expand { width: auto; margin: var(--spacing-none); }
+.sidebar__expand .sidebar__expand-icon { display: none; }
+.sidebar__expand:hover .sidebar__mark { display: none; }
+.sidebar__expand:hover .sidebar__expand-icon { display: grid; place-items: center; }
+
+.sidebar__nav { margin-top: var(--spacing-2xl); }
+
+::deep .sidebar__group-label {
+  margin: var(--spacing-none) var(--spacing-sm) var(--spacing-sm);
+  color: var(--colors-text-subtle);
+}
+
+.sidebar__footer { margin-top: auto; }
+
+/* ── Collapsed ──────────────────────────────────────────────────────────── */
+/* Labels live inside child components, so reaching them needs ::deep. This is
+   the sanctioned use: the rail owns the collapsed layout, the row owns how a
+   row looks. */
+
+.sidebar.is-collapsed ::deep .sidebar__wordmark,
+.sidebar.is-collapsed ::deep .sidebar__group-label {
+  display: none;
+}
+
+.sidebar.is-collapsed ::deep .nav-item__label,
+.sidebar.is-collapsed ::deep .workspace__identity,
+.sidebar.is-collapsed ::deep .user-card__identity {
+  display: none;
+}
+
+.sidebar.is-collapsed ::deep .nav-item,
+.sidebar.is-collapsed ::deep .workspace__trigger,
+.sidebar.is-collapsed ::deep .user-card {
+  justify-content: center;
+  padding: var(--spacing-none);
+}
+
+.sidebar.is-collapsed ::deep .workspace__trigger { grid-template-columns: auto; }
+
+/* Narrower gutter: with no labels to clear, the icons want to sit closer to
+   the edges than the expanded rail allows. */
+.sidebar.is-collapsed { padding-inline: var(--ds-rail-collapsed-gutter); }
+
+/* The lockup stacks, because side by side there is no room for the mark and
+   the expand control on a rail this narrow. */
+.sidebar.is-collapsed .sidebar__brand {
+  flex-direction: column;
+  gap: var(--ds-rail-collapsed-brand-gap);
+  padding: var(--spacing-none) var(--spacing-none) var(--spacing-xl);
+}
+
+/* The count becomes a dot. A row with no label has nowhere to put a number —
+   margin-left:auto in a centred row either shoves the icon off centre or runs
+   the pill off the edge — but "there is something unread" is still worth
+   saying, so it is said with a mark rather than a figure. The full count stays
+   in the tooltip and in the row's accessible name. */
+.sidebar.is-collapsed ::deep .nav-item__count {
+  position: absolute;
+  top: var(--ds-rail-dot-top);
+  right: var(--ds-rail-dot-right);
+  width: var(--ds-rail-dot);
+  min-width: var(--ds-rail-dot);
+  height: var(--ds-rail-dot);
+  padding: var(--spacing-none);
+  margin: var(--spacing-none);
+  overflow: hidden;
+  /* The figure itself is pushed out of the dot rather than hidden, so the
+     element keeps the accessible name it carries. */
+  text-indent: -100%;
+}
+
+/* A collapsed rail hides every label, so the tooltip is the only name an item
+   has. Built from data-tooltip rather than title, which appears far too slowly
+   to help someone scanning the rail. */
+.sidebar.is-collapsed [data-tooltip],
+.sidebar.is-collapsed ::deep [data-tooltip] {
+  position: relative;
+}
+
+.sidebar.is-collapsed [data-tooltip]::after,
+.sidebar.is-collapsed ::deep [data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: 50%;
+  left: calc(100% + var(--ds-rail-tooltip-offset));
+  z-index: calc(var(--ds-rail-layer) + 2);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-inverse);
+  background: var(--colors-surface-foreground);
+  border-radius: var(--radius-radius-sm);
+  white-space: nowrap;
+  transform: translateY(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--ds-rail-motion) ease;
+}
+
+.sidebar.is-collapsed [data-tooltip]:hover::after,
+.sidebar.is-collapsed [data-tooltip]:focus-visible::after,
+.sidebar.is-collapsed ::deep [data-tooltip]:hover::after,
+.sidebar.is-collapsed ::deep [data-tooltip]:focus-visible::after {
+  opacity: 1;
+}

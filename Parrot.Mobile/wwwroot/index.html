@@ -3,9 +3,27 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    <title>Parrot.Mobile</title>
+    <title>Parrot</title>
     <base href="/" />
-    <link rel="stylesheet" href="lib/bootstrap/dist/css/bootstrap.min.css" />
+
+    <script>
+      // Set the theme before first paint so the app never flashes the wrong
+      // colours on the way in. ThemeToggle owns the value from then on.
+      try {
+        var saved = localStorage.getItem("aurora-theme-preview");
+        var theme = saved === null ? "aurora-light" : saved;
+        if (theme) document.documentElement.dataset.theme = theme;
+      } catch (error) {
+        document.documentElement.dataset.theme = "aurora-light";
+      }
+    </script>
+
+    <!-- Tokens first: they define the variables everything else resolves against. -->
+    <link rel="stylesheet" href="_content/Parrot.SharedComponents/css/fonts.css" />
+    <link rel="stylesheet" href="_content/Parrot.SharedComponents/css/tokens.css" />
+    <link rel="stylesheet" href="_content/Parrot.SharedComponents/css/typography.css" />
+    <link rel="stylesheet" href="_content/Parrot.SharedComponents/css/app.css" />
+    <link rel="stylesheet" href="_content/Parrot.SharedComponents/css/cadence.css" />
     <link rel="stylesheet" href="app.css" />
     <link rel="stylesheet" href="Parrot.Mobile.styles.css" />
     <link rel="icon" href="data:,">
@@ -15,7 +33,19 @@
 
     <div class="status-bar-safe-area"></div>
 
-    <div id="app">Loading...</div>
+    <div id="app">
+        <!-- The launch moment: the mark assembles in conversation order and
+             ends on the static logo (the brand's "Assemble" loader). Inline
+             because nothing else has loaded yet. -->
+        <div class="app-boot" role="status" aria-live="polite">
+            <svg class="app-boot__mark" width="72" height="72" viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <g opacity="0"><animate attributeName="opacity" values="0;1" dur="0.36s" begin="0s" calcMode="spline" keySplines=".45 0 .25 1" keyTimes="0;1" fill="freeze"></animate><rect x="14" y="22" width="52" height="14" rx="7" fill="#23364A"></rect><rect x="14" y="29" width="7" height="7" fill="#23364A"></rect></g>
+                <g opacity="0"><animate attributeName="opacity" values="0;1" dur="0.36s" begin="0.6s" calcMode="spline" keySplines=".45 0 .25 1" keyTimes="0;1" fill="freeze"></animate><animateTransform attributeName="transform" type="translate" values="8 0;0 0" dur="0.36s" begin="0.6s" calcMode="spline" keySplines=".45 0 .25 1" keyTimes="0;1" fill="freeze"></animateTransform><rect x="34" y="43" width="52" height="14" rx="7" fill="#C8553D"></rect><rect x="79" y="50" width="7" height="7" fill="#C8553D"></rect></g>
+                <g opacity="0"><animate attributeName="opacity" values="0;1" dur="0.36s" begin="1.2s" calcMode="spline" keySplines=".45 0 .25 1" keyTimes="0;1" fill="freeze"></animate><rect x="14" y="64" width="36" height="14" rx="7" fill="#23364A"></rect><rect x="14" y="71" width="7" height="7" fill="#23364A"></rect></g>
+            </svg>
+            <span class="app-boot__label cadence-wordmark">OmniAI</span>
+        </div>
+    </div>
 
     <div id="blazor-error-ui" data-nosnippet>
         An unhandled error has occurred.

@@ -1,0 +1,183 @@
+/* The 41 text styles defined in Figma, one class each.
+   Captured from the Typography specimen at node 138:2; names mirror the Figma
+   style names, so "Body/Small · 14/SemiBold" in a design review is
+   .ds-body-small-semibold in the code.
+
+   Every value is a token. Nothing here sets colour — a text style says how
+   text is SHAPED, not what it means, so colour stays with the component and
+   comes from text/primary, text/secondary or text/muted.
+
+   TRACKING: Figma reports letterSpacing as a PERCENTAGE, not pixels. Display
+   and H1 are -2 (i.e. -2%, which Figma renders as -0.72px at 36px and -0.6px
+   at 30px) and H2 is -1. em units express that directly and keep scaling if a
+   size token changes, so -2% is written here as -0.02em. Everything else is 0.
+
+   LINE HEIGHT: every Figma text style specifies 100%, i.e. leading equal to
+   the font size. That is right for the single-line labels these were drawn
+   for and too tight for anything that wraps. The design system also defines a
+   full typography/leading/* scale that no text style currently references.
+   Until that is resolved in Figma these classes stay faithful to the design,
+   and .ds-prose at the bottom opts a wrapping block into the leading scale. */
+
+:root {
+  /* Figma stores tracking as a percentage. The token set contains the source
+     numbers but no semantic tracking aliases yet, so these locals perform the
+     unit conversion without introducing another design value. */
+  --ds-tracking-tight: calc(var(--p-numbers-2) / -100 * 1em);
+  --ds-tracking-overline: calc(var(--p-numbers-6) / 100 * 1em);
+}
+
+/* ── Display · 36px · display family ──────────────────────────────────────
+   Starts at Medium: Regular is too light at this scale. */
+.ds-display-medium,
+.ds-display-semibold,
+.ds-display-bold,
+.ds-display-extrabold {
+  font-family: var(--typography-font-family-display), system-ui, sans-serif;
+  font-size: var(--typography-size-text-4xl);
+  font-weight: var(--ds-font-weight);
+  line-height: 1;
+  letter-spacing: var(--ds-tracking-tight);
+}
+
+.ds-display-medium { --ds-font-weight: var(--typography-font-weight-medium); }        /* Subtle hero text */
+.ds-display-semibold { --ds-font-weight: var(--typography-font-weight-semibold); }    /* Section headers */
+.ds-display-bold { --ds-font-weight: var(--typography-font-weight-bold); }            /* Hero headlines */
+.ds-display-extrabold { --ds-font-weight: var(--typography-font-weight-extrabold); }  /* Maximum impact */
+
+/* ── Headings · base family ───────────────────────────────────────────────
+   Four levels, each with Regular through Bold. */
+.ds-heading-h1-regular, .ds-heading-h1-medium, .ds-heading-h1-semibold, .ds-heading-h1-bold,
+.ds-heading-h2-regular, .ds-heading-h2-medium, .ds-heading-h2-semibold, .ds-heading-h2-bold,
+.ds-heading-h3-regular, .ds-heading-h3-medium, .ds-heading-h3-semibold, .ds-heading-h3-bold,
+.ds-heading-h4-regular, .ds-heading-h4-medium, .ds-heading-h4-semibold, .ds-heading-h4-bold {
+  font-family: var(--typography-font-family-base), system-ui, sans-serif;
+  font-size: var(--ds-font-size);
+  font-weight: var(--ds-font-weight);
+  line-height: 1;
+  letter-spacing: var(--ds-tracking, 0);
+}
+
+/* H1 · 30px — page titles (Bold) */
+.ds-heading-h1-regular, .ds-heading-h1-medium, .ds-heading-h1-semibold, .ds-heading-h1-bold {
+  --ds-font-size: var(--typography-size-text-3xl);
+  --ds-tracking: var(--ds-tracking-tight);
+}
+
+/* H2 · 24px — section titles (SemiBold) */
+.ds-heading-h2-regular, .ds-heading-h2-medium, .ds-heading-h2-semibold, .ds-heading-h2-bold {
+  --ds-font-size: var(--typography-size-text-2xl);
+  --ds-tracking: calc(var(--ds-tracking-tight) / 2);
+}
+
+/* H3 · 20px — card titles (SemiBold) */
+.ds-heading-h3-regular, .ds-heading-h3-medium, .ds-heading-h3-semibold, .ds-heading-h3-bold {
+  --ds-font-size: var(--typography-size-text-xl);
+}
+
+/* H4 · 18px — subsections (Medium) */
+.ds-heading-h4-regular, .ds-heading-h4-medium, .ds-heading-h4-semibold, .ds-heading-h4-bold {
+  --ds-font-size: var(--typography-size-text-lg);
+}
+
+/* ── Body · base family ───────────────────────────────────────────────────
+   Large shares 18px with H4, but its body intent remains distinct. Callers
+   choose a complete named style; no weight is silently selected here. */
+.ds-body-large-regular, .ds-body-large-medium, .ds-body-large-semibold, .ds-body-large-bold,
+.ds-body-default-regular, .ds-body-default-medium, .ds-body-default-semibold, .ds-body-default-bold,
+.ds-body-small-regular, .ds-body-small-medium, .ds-body-small-semibold, .ds-body-small-bold {
+  font-family: var(--typography-font-family-base), system-ui, sans-serif;
+  font-size: var(--ds-font-size);
+  font-weight: var(--ds-font-weight);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+/* Large · 18px — intros, leads */
+.ds-body-large-regular, .ds-body-large-medium, .ds-body-large-semibold, .ds-body-large-bold {
+  --ds-font-size: var(--typography-size-text-lg);
+}
+
+/* Default · 16px — paragraphs */
+.ds-body-default-regular, .ds-body-default-medium, .ds-body-default-semibold, .ds-body-default-bold {
+  --ds-font-size: var(--typography-size-text-base);
+}
+
+/* Small · 14px — secondary text */
+.ds-body-small-regular, .ds-body-small-medium, .ds-body-small-semibold, .ds-body-small-bold {
+  --ds-font-size: var(--typography-size-text-sm);
+}
+
+/* ── Small · base family ──────────────────────────────────────────────────
+   12px replaces the old Caption and Overline — same size, differentiated by
+   weight and letter-spacing. 10px is for minimal annotations. */
+.ds-small-12-regular, .ds-small-12-medium, .ds-small-12-semibold, .ds-small-12-bold,
+.ds-small-10-regular, .ds-small-10-medium, .ds-small-10-semibold {
+  font-family: var(--typography-font-family-base), system-ui, sans-serif;
+  font-size: var(--ds-font-size);
+  font-weight: var(--ds-font-weight);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.ds-small-12-regular, .ds-small-12-medium, .ds-small-12-semibold, .ds-small-12-bold {
+  --ds-font-size: var(--typography-size-text-xs);
+}
+
+.ds-small-10-regular, .ds-small-10-medium, .ds-small-10-semibold {
+  --ds-font-size: var(--typography-size-text-xxs);
+}
+
+/* ── Code · 14px · mono family ────────────────────────────────────────────
+   Code, data values, API keys and technical identifiers only. */
+.ds-code-14-regular,
+.ds-code-14-bold {
+  font-family: var(--typography-font-family-mono), ui-monospace, monospace;
+  font-size: var(--typography-size-text-sm);
+  font-weight: var(--ds-font-weight);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+/* ── Weights ──────────────────────────────────────────────────────────────
+   One place per weight, shared by every family above. */
+.ds-heading-h1-regular, .ds-heading-h2-regular, .ds-heading-h3-regular, .ds-heading-h4-regular,
+.ds-body-large-regular, .ds-body-default-regular, .ds-body-small-regular,
+.ds-small-12-regular, .ds-small-10-regular,
+.ds-code-14-regular { --ds-font-weight: var(--typography-font-weight-regular); }
+
+.ds-heading-h1-medium, .ds-heading-h2-medium, .ds-heading-h3-medium, .ds-heading-h4-medium,
+.ds-body-large-medium, .ds-body-default-medium, .ds-body-small-medium,
+.ds-small-12-medium, .ds-small-10-medium { --ds-font-weight: var(--typography-font-weight-medium); }
+
+.ds-heading-h1-semibold, .ds-heading-h2-semibold, .ds-heading-h3-semibold, .ds-heading-h4-semibold,
+.ds-body-large-semibold, .ds-body-default-semibold, .ds-body-small-semibold,
+.ds-small-12-semibold, .ds-small-10-semibold { --ds-font-weight: var(--typography-font-weight-semibold); }
+
+.ds-heading-h1-bold, .ds-heading-h2-bold, .ds-heading-h3-bold, .ds-heading-h4-bold,
+.ds-body-large-bold, .ds-body-default-bold, .ds-body-small-bold,
+.ds-small-12-bold,
+.ds-code-14-bold { --ds-font-weight: var(--typography-font-weight-bold); }
+
+/* ── Helpers ──────────────────────────────────────────────────────────────
+
+   Overline is not a style. The guideline is Small/12/SemiBold with manual
+   letter-spacing and uppercase, which is what this pairs onto it:
+   <p class="ds-small-12-semibold ds-overline">. */
+.ds-overline { letter-spacing: var(--ds-tracking-overline); text-transform: uppercase; }
+
+/* Readable leading for text that wraps, using the leading scale the design
+   system defines but no Figma text style references yet. Pair it with a size
+   class: <p class="ds-body-small-medium ds-prose">. */
+.ds-prose { line-height: var(--typography-leading-leading-base); }
+.ds-display-medium.ds-prose, .ds-display-semibold.ds-prose, .ds-display-bold.ds-prose, .ds-display-extrabold.ds-prose { line-height: var(--typography-leading-leading-4xl); }
+.ds-heading-h1-regular.ds-prose, .ds-heading-h1-medium.ds-prose, .ds-heading-h1-semibold.ds-prose, .ds-heading-h1-bold.ds-prose { line-height: var(--typography-leading-leading-3xl); }
+.ds-heading-h2-regular.ds-prose, .ds-heading-h2-medium.ds-prose, .ds-heading-h2-semibold.ds-prose, .ds-heading-h2-bold.ds-prose { line-height: var(--typography-leading-leading-2xl); }
+.ds-heading-h3-regular.ds-prose, .ds-heading-h3-medium.ds-prose, .ds-heading-h3-semibold.ds-prose, .ds-heading-h3-bold.ds-prose { line-height: var(--typography-leading-leading-xl); }
+.ds-heading-h4-regular.ds-prose, .ds-heading-h4-medium.ds-prose, .ds-heading-h4-semibold.ds-prose, .ds-heading-h4-bold.ds-prose,
+.ds-body-large-regular.ds-prose, .ds-body-large-medium.ds-prose, .ds-body-large-semibold.ds-prose, .ds-body-large-bold.ds-prose { line-height: var(--typography-leading-leading-lg); }
+.ds-body-default-regular.ds-prose, .ds-body-default-medium.ds-prose, .ds-body-default-semibold.ds-prose, .ds-body-default-bold.ds-prose { line-height: var(--typography-leading-leading-base); }
+.ds-body-small-regular.ds-prose, .ds-body-small-medium.ds-prose, .ds-body-small-semibold.ds-prose, .ds-body-small-bold.ds-prose,
+.ds-code-14-regular.ds-prose, .ds-code-14-bold.ds-prose { line-height: var(--typography-leading-leading-sm); }
+.ds-small-12-regular.ds-prose, .ds-small-12-medium.ds-prose, .ds-small-12-semibold.ds-prose, .ds-small-12-bold.ds-prose { line-height: var(--typography-leading-leading-xs); }
+.ds-small-10-regular.ds-prose, .ds-small-10-medium.ds-prose, .ds-small-10-semibold.ds-prose { line-height: var(--typography-leading-leading-xxs); }

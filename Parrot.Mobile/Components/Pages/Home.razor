@@ -1,5 +1,11 @@
 ﻿@page "/"
+@layout BareLayout
+@inject NavigationManager Nav
 
-<h1>Hello, world!</h1>
+@* The inbox is where the day starts, so "/" goes there. Replacing the history
+   entry rather than pushing one, so Back does not bounce off this redirect. *@
 
-Welcome to your new app.
+@code {
+    protected override void OnInitialized() =>
+        Nav.NavigateTo("/dashboard/conversations", replace: true);
+}

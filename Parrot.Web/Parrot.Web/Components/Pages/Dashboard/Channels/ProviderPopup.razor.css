@@ -1,0 +1,96 @@
+/* Deliberately unlike the rest of the product: square chrome, a title bar, a
+   plain body. It is standing in for someone else's window, and making it look
+   like ours would teach people to trust a window that is not. */
+
+.provider-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-provider-layer);
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-2xl);
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-provider-blur));
+}
+
+.provider {
+  display: grid;
+  width: min(var(--ds-provider-width), 100%);
+  overflow: hidden;
+  background: var(--colors-surface-elevated);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-2xl) var(--spacing-6xl) var(--colors-surface-shadow-diffuse);
+  animation: provider-in var(--ds-provider-enter) ease;
+}
+
+.provider-backdrop {
+  /* Gaps in the token set: no z-index, window-width, blur or motion scale. */
+  --ds-provider-layer: 140;
+  --ds-provider-width: 460px;
+  --ds-provider-blur: 4px;
+  --ds-provider-enter: 160ms;
+  --ds-provider-hairline: 1px;
+}
+
+/* Neutral chrome, like any browser or OS title bar — only the icon carries
+   Meta's colour. Painting the whole bar in brand colour would make this look
+   like one of ours, and the point of this screen is that it is not: everything
+   inside it is Meta's, everything outside it is ours. */
+.provider__chrome {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border-bottom: var(--ds-provider-hairline) solid var(--colors-surface-border);
+}
+
+::deep .provider__chrome-icon { color: #1877f2; }
+.channel-instagram ::deep .provider__chrome-icon { color: #c63886; }
+/* X is Parrot's fourth channel. Its mark is black in every theme — a brand
+   literal, like Meta's two above. */
+.channel-x ::deep .provider__chrome-icon { color: #000000; }
+
+/* The CTA hands off into Meta's own flow, so it takes Meta's colour rather
+   than ours — the same reasoning as the chrome bar above. */
+::deep .provider__cta.ds-button--primary { background: #1877f2; }
+.channel-instagram ::deep .provider__cta.ds-button--primary { background: #c63886; }
+.channel-x ::deep .provider__cta.ds-button--primary { background: #000000; }
+::deep .provider__cta.ds-button--primary:hover:not(:disabled) { background: color-mix(in srgb, #1877f2 88%, black); }
+.channel-instagram ::deep .provider__cta.ds-button--primary:hover:not(:disabled) { background: color-mix(in srgb, #c63886 88%, black); }
+.channel-x ::deep .provider__cta.ds-button--primary:hover:not(:disabled) { background: color-mix(in srgb, #000000 80%, white); }
+
+.provider__body {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl) var(--spacing-lg);
+  color: var(--colors-text-muted);
+}
+
+.provider__consent {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  padding: var(--spacing-md);
+  color: var(--colors-feedback-warning-text);
+  background: var(--colors-feedback-warning-subtle);
+  border-radius: var(--radius-radius-md);
+}
+
+.provider__footer {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-top: var(--ds-provider-hairline) solid var(--colors-surface-border);
+}
+
+@keyframes provider-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}

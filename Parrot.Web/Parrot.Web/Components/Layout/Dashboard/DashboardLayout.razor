@@ -1,60 +1,37 @@
 ﻿@inherits LayoutComponentBase
+@inject AuthState AuthState
+@inject TokenStorageService TokenStorage
 @inject NavigationManager Nav
-@inject AiAgentsState AiAgentsState
 @implements IDisposable
-@using Parrot.Web.Components.Pages.Dashboard.Notification
 
-<div class="dashboard-layout">
-    <aside class="dashboard-sidebar">
-        <NavMenu />
-    </aside>
+@* Aurora's shell, fed by Parrot's session. The rail, the workspace switcher
+   and the account card come from the shared component library; this layout
+   only says who is signed in and what the account menu does. *@
 
-    <div class="dashboard-main">
-        <header class="dashboard-topbar">
-            @if (IsBreadcrumb())
-            {
-                @if (IsAiAgentRoute())
-                {
-                    <span class="dashboard-topbar-title">
-                        AI Agents <span class="topbar-breadcrumb-sep">/</span> @GetAiAgentBreadcrumb()
-                    </span>
-                }
-                else
-                {
-                    <span class="dashboard-topbar-title">
-                        @if (GetPathSegments().LastOrDefault() is "connect-facebook" or "connect-facebook-marketplace")
-                        {
-                            @:Channels <span class="topbar-breadcrumb-sep">/</span> Connect Facebook Messenger
-                        }
-                        else if (GetPathSegments().LastOrDefault() == "connect-instagram")
-                        {
-                            @:Channels <span class="topbar-breadcrumb-sep">/</span> Connect instagram
-                        }
-                        else if (GetPathSegments().LastOrDefault() == "connect-x")
-                        {
-                            @:Channels <span class="topbar-breadcrumb-sep">/</span> Connect X (formerly Twitter)
-                        }
-                        else
-                        {
-                            @:Channels <span class="topbar-breadcrumb-sep">/</span> Connect whatsapp business
-                        }
-                    </span>
-                }
-            }
-            else
-            {
-                <span class="dashboard-topbar-title">@GetPageTitle()</span>
-            }
-            <NotificationDropdown />
-        </header>
-
-        <article class="dashboard-content">
-            @Body
-        </article>
-    </div>
-</div>
-
-<MascotWidget />
+<AppShell BrandName="OmniAI"
+          WorkspaceId="@WorkspaceSeed"
+          WorkspaceName="@(AuthState.CurrentUser?.BusinessName ?? "")"
+          UserName="@(AuthState.CurrentUser?.Email ?? "")"
+          UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
+          UserSeed="@UserSeed">
+    <UserMenu>
+        <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
+        <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
+        <UserMenuItem Label="Business setup" Glyph="IconName.RiStore2Fill" Href="/dashboard/business-setup" />
+        <UserMenuItem Label="@(_loggingOut ? "Signing out…" : "Sign out")"
+                      Glyph="IconName.RiUserSharedFill"
+                      Danger
+                      Disabled="@_loggingOut"
+                      OnClick="LogoutAsync" />
+        @if (_logoutError is not null)
+        {
+            <InlineError Message="@_logoutError" />
+        }
+    </UserMenu>
+    <ChildContent>
+        @Body
+    </ChildContent>
+</AppShell>
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.
@@ -63,86 +40,41 @@
 </div>
 
 @code {
-    protected override void OnInitialized()
-    {
-        Nav.LocationChanged += OnLocationChanged;
-    }
+    private bool _loggingOut;
+    private string? _logoutError;
 
-    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
-    {
-        InvokeAsync(StateHasChanged);
-    }
+    // Stable seeds, so the business and the person keep one avatar tint
+    // everywhere they appear. The user id is the seed for the person; the
+    // business has no id of its own in the session, so its name stands in.
+    private string UserSeed => AuthState.CurrentUser?.UserId ?? "user";
+    private string WorkspaceSeed => "workspace-" + (AuthState.CurrentUser?.BusinessName ?? "");
 
-    public void Dispose()
-    {
-        Nav.LocationChanged -= OnLocationChanged;
-    }
+    protected override void OnInitialized() => AuthState.OnChange += AuthChanged;
 
-    private bool IsBreadcrumb()
-    {
-        var segs = GetPathSegments();
-        return (segs.Length == 1 && segs[0] == "connect-whatsapp") ||
-               (segs.Length == 1 && segs[0] == "connect-facebook-marketplace") ||
-               (segs.Length == 1 && segs[0] == "connect-facebook") ||
-               (segs.Length == 1 && segs[0] == "connect-instagram") ||
-               (segs.Length == 1 && segs[0] == "connect-x") ||
-               (segs.Length >= 3 && segs[1] == "ai-agents");
-    }
+    private void AuthChanged() => _ = InvokeAsync(StateHasChanged);
 
-    private bool IsAiAgentRoute()
+    private async Task LogoutAsync()
     {
-        var segs = GetPathSegments();
-        return segs.Length >= 3 && segs[1] == "ai-agents";
-    }
-
-    private string GetAiAgentBreadcrumb()
-    {
-        var segs = GetPathSegments();
-        var agentName = "Agent";
-        if (segs.Length >= 3)
+        if (_loggingOut) return;
+        _loggingOut = true;
+        _logoutError = null;
+        try
         {
-            var agent = AiAgentsState.GetAgent(segs[2]);
-            agentName = agent?.Name ?? "Agent";
+            // Remove persisted credentials before navigating so refresh cannot restore the session.
+            await TokenStorage.ClearAsync();
+            AuthState.ClearUser();
+            // A fresh circuit also clears user-specific scoped dashboard state.
+            Nav.NavigateTo("/login", forceLoad: true, replace: true);
         }
-        if (segs.Length >= 4 && segs[3] == "orientation")
-            return $"{agentName} / Orientation";
-        if (segs.Length >= 5 && segs[3] == "playbooks")
+        catch (JSException)
         {
-            var agent = AiAgentsState.GetAgent(segs[2]);
-            var pb = agent?.Playbooks.FirstOrDefault(p => p.Id == segs[4]);
-            var pbName = pb?.Title ?? "New Playbook";
-            return $"{agentName} / {pbName}";
+            _logoutError = "Could not clear your saved session. Please try signing out again.";
         }
-        return agentName;
-    }
-
-    private string[] GetPathSegments()
-    {
-        var uri = new Uri(Nav.Uri);
-        return uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-    }
-
-    private string GetPageTitle()
-    {
-        var uri = new Uri(Nav.Uri);
-        var segs = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
-        var segment = segs.LastOrDefault() ?? string.Empty;
-
-        return segment switch
+        finally
         {
-            "" or "dashboard" => "Dashboard",
-            "ai-agents" => "AI Agents",
-            "catalog" => "Catalog",
-            "contacts" => "Contacts",
-            "task-requests" => "Task Requests",
-            "channels" => "Channels",
-            "connect-whatsapp" => "Channels",
-            "conversations" => "Conversations",
-            "team" => "Team",
-            "qa-insights" => "QA & Conversation Insight",
-            "settings" => "Settings",
-            _ => System.Globalization.CultureInfo.CurrentCulture.TextInfo
-                    .ToTitleCase(segment.Replace("-", " "))
-        };
+            _loggingOut = false;
+        }
     }
+
+    public void Dispose() => AuthState.OnChange -= AuthChanged;
 }

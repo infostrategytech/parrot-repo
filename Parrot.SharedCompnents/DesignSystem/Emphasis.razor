@@ -1,0 +1,39 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Renders **double asterisks** as bold.
+
+   Instructional copy is data here, not markup, so that one set of screens can
+   render every channel's wording. But the words that appear on Meta's own
+   screen have to stand out from the words describing what to do with them —
+   "select **Apps**" is much easier to follow than "select Apps". This is the
+   smallest thing that gives data that one capability without turning the copy
+   into HTML a translator cannot read. *@
+
+@foreach (var (text, strong) in Segments)
+{
+    if (strong)
+    {
+        <strong>@text</strong>
+    }
+    else
+    {
+        @text
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public string Text { get; set; } = "";
+
+    private IEnumerable<(string Text, bool Strong)> Segments
+    {
+        get
+        {
+            // Split on the marker; odd-numbered pieces are the emphasised ones.
+            var parts = Text.Split("**");
+            for (var index = 0; index < parts.Length; index++)
+            {
+                if (parts[index].Length > 0) yield return (parts[index], index % 2 == 1);
+            }
+        }
+    }
+}

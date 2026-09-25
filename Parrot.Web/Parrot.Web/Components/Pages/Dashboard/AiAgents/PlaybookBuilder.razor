@@ -1,48 +1,61 @@
-﻿@page "/dashboard/ai-agents/{AgentId}/playbooks/{PlaybookId}"
+@page "/dashboard/ai-agents/{AgentId}/playbooks/{PlaybookId}"
 @layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject AiAgentsState AiAgentsState
 @inject NavigationManager Nav
-@using Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+@* Parrot's playbook builder: a vertical flow of steps on a canvas, with a
+   configuration panel for the selected step and a test panel. No Aurora
+   screen exists for it; the header, badges, panels and dialog follow
+   Aurora's setup-card and list-page idioms. *@
 
 @{
     var agent = AiAgentsState.GetAgent(AgentId);
     var playbook = agent?.Playbooks.FirstOrDefault(p => p.Id == PlaybookId);
 }
+
+<PageTitle>@(playbook?.Title ?? "Playbook") · OmniAI</PageTitle>
+
 @if (agent is null || playbook is null)
 {
-    <div class="dashboard-placeholder-page">
-        <h2>Playbook not found</h2>
-        <p>This playbook does not exist.</p>
-    </div>
+    <main class="playbook">
+        <EmptyState Glyph="IconName.RiBookOpenFill"
+                    Title="Playbook not found"
+                    Description="This playbook does not exist.">
+            <Action>
+                <Button Variant="ButtonVariant.Secondary" @onclick='() => Nav.NavigateTo("/dashboard/ai-agents")'>Back to agents</Button>
+            </Action>
+        </EmptyState>
+    </main>
 }
 else
 {
-    <div class="pb-page" @onclick="CloseAll">
-        <div class="pb-subheader">
-            <div class="pb-subheader-left">
-                <input class="pb-name-input" value="@playbook.Title"
-                       @onchange="e => playbook.Title = e.Value?.ToString() ?? playbook.Title" @onclick:stopPropagation />
-                <span class="pb-badge pb-badge--draft">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <circle cx="12" cy="12" r="10" />
-                    </svg>
-                    Draft
-                </span>
-            </div>
-            <div class="pb-subheader-right">
-                <button class="pb-btn pb-btn--ghost" @onclick:stopPropagation @onclick="ToggleTestPanel">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    Test
+    <main class="playbook" @onclick="CloseAll">
+        <header class="playbook__header">
+            <div class="playbook__heading">
+                <button type="button" class="playbook__back" @onclick="BackToAgent" @onclick:stopPropagation="true">
+                    <Icon Name="IconName.RiArrowLeftLine" Size="IconSize.Md" />
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">Back to @agent.Name</Typography>
                 </button>
-                <button class="pb-btn pb-btn--primary" @onclick:stopPropagation @onclick="OpenSaveModal">Save</button>
+                <div class="playbook__title-row" @onclick:stopPropagation="true">
+                    <Input FloatingLabel="Playbook name"
+                           Value="@playbook.Title"
+                           ValueChanged="value => playbook.Title = string.IsNullOrWhiteSpace(value) ? playbook.Title : value"
+                           maxlength="80"
+                           aria-label="Playbook name" />
+                    <StatusBadge Tone="@(playbook.Status == "Active" ? StatusTone.Success : StatusTone.Neutral)">@playbook.Status</StatusBadge>
+                </div>
             </div>
-        </div>
+            <div class="playbook__actions" @onclick:stopPropagation="true">
+                <Button Variant="ButtonVariant.Secondary" @onclick="ToggleTestPanel">
+                    <IconLeft><Icon Name="IconName.RiPlayFill" /></IconLeft>
+                    <ChildContent>Test</ChildContent>
+                </Button>
+                <Button @onclick="OpenSaveModal">Save</Button>
+            </div>
+        </header>
 
-        <div class="pb-workspace">
+        <div class="playbook__workspace">
             <PlaybookCanvas Playbook="playbook" SelectedStepId="@_selectedStepId"
                             ShowStepPicker="@(_showStepPicker && _stepPickerPlaybook?.Id == playbook.Id)"
                             TriggerPhrases="@playbook.TriggerPhrases.Count" IsTriggerSelected="@_showTriggerPanel"
@@ -72,13 +85,12 @@ else
                 <TestPanel OnClose="() => _showTestPanel = false" />
             }
         </div>
-    </div>
+    </main>
 
-    @if (_showSaveModal)
-    {
-        <SavePlaybookModal InitialName="@playbook.Title" OnCancel="CloseSaveModal"
-                           OnSave="args => ConfirmSave(playbook, args)" />
-    }
+    <SavePlaybookModal Open="_showSaveModal"
+                       InitialName="@playbook.Title"
+                       OnCancel="CloseSaveModal"
+                       OnSave="args => ConfirmSave(playbook, args)" />
 }
 
 @code {
@@ -142,6 +154,8 @@ else
         _showTestPanel = !_showTestPanel;
         if (_showTestPanel) _selectedStepId = string.Empty;
     }
+
+    private void BackToAgent() => Nav.NavigateTo($"/dashboard/ai-agents/{AgentId}");
 
     private void OpenSaveModal() => _showSaveModal = true;
     private void CloseSaveModal() => _showSaveModal = false;

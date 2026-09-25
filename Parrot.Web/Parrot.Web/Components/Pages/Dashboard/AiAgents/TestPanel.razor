@@ -1,48 +1,52 @@
-<div class="pb-panel pb-panel--test" @onclick:stopPropagation>
-    <div class="pb-panel-header">
-        <div class="pb-panel-title-row">
-            <span class="pb-panel-title">Test</span>
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+@* A sandbox conversation for the playbook, drawn like the builder's test
+   sandbox: customer bubbles in brand on the right, bot bubbles on card. *@
+
+<aside class="test-panel" aria-label="Test conversation" @onclick:stopPropagation="true">
+    <header class="test-panel__head">
+        <div class="test-panel__title">
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2">Test</Typography>
+            <Typography TextStyle="TextStyle.Small12Regular" As="span">Private simulation · nothing is sent</Typography>
         </div>
-        <button class="pb-panel-close" @onclick="() => OnClose.InvokeAsync()">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-        </button>
-    </div>
-    <div class="pb-panel-divider"></div>
-    <div class="pb-test-messages">
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Close test panel" @onclick="() => OnClose.InvokeAsync()">
+            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+        </Button>
+    </header>
+    <div class="test-panel__messages">
         @foreach (var msg in _testMessages)
         {
             @if (msg.IsUser)
             {
-                <div class="pb-test-msg pb-test-msg--user">
-                    <div class="pb-test-avatar pb-test-avatar--user">👤</div>
-                    <div class="pb-test-bubble pb-test-bubble--user">@msg.Text</div>
+                <div class="test-panel__row test-panel__row--user">
+                    <div class="test-panel__bubble test-panel__bubble--user">
+                        <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose>@msg.Text</Typography>
+                    </div>
                 </div>
             }
             else
             {
-                <div class="pb-test-msg pb-test-msg--bot">
-                    <div class="pb-test-bubble pb-test-bubble--bot">@msg.Text</div>
-                    <div class="pb-test-avatar pb-test-avatar--bot">🤖</div>
+                <div class="test-panel__row test-panel__row--bot">
+                    <span class="test-panel__avatar"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></span>
+                    <div class="test-panel__bubble test-panel__bubble--bot">
+                        <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose>@msg.Text</Typography>
+                    </div>
                 </div>
             }
         }
     </div>
-    <div class="pb-test-input-row">
-        <input class="pb-test-input" placeholder="Type a message..." value="@_testInput"
-               @oninput="e => _testInput = e.Value?.ToString() ?? string.Empty" @onkeydown="OnKeyDown" />
-        <button class="pb-test-send" @onclick="SendMessage">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-            </svg>
-        </button>
+    <div class="test-panel__composer">
+        <input class="@TextStyle.BodySmallRegular.ToClassName()"
+               placeholder="Type a message..."
+               aria-label="Test message"
+               value="@_testInput"
+               @oninput="e => _testInput = e.Value?.ToString() ?? string.Empty"
+               @onkeydown="OnKeyDown" />
+        <Button Size="ButtonSize.Small" aria-label="Send test message" disabled="@string.IsNullOrWhiteSpace(_testInput)" @onclick="SendMessage">
+            <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+        </Button>
     </div>
-</div>
+</aside>
 
 @code {
     [Parameter] public EventCallback OnClose { get; set; }

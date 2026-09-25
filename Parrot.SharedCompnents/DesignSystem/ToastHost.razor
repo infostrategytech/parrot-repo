@@ -1,0 +1,31 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using Parrot.SharedComponents.Services
+@implements IDisposable
+@inject ToastService Toasts
+
+@* Rendered once, by the layout. Owns where a toast sits so no page has to —
+   React had five page shells each nudging .toast sideways to keep it centred
+   over the workspace, which is the same decision written five times. *@
+
+@if (Toasts.Current is { } message)
+{
+    <div class="toast-host">
+        <Toast Title="@message.Title"
+               Description="@message.Description"
+               Status="message.Status"
+               ActionLabel="@message.ActionLabel"
+               OnAction="@(() => message.OnAction?.Invoke())"
+               OnDismiss="Toasts.Dismiss" />
+    </div>
+}
+
+@code {
+    protected override void OnInitialized() => Toasts.Changed += OnChanged;
+
+    // The dismiss timer fires on a thread pool thread, so the re-render has to
+    // be marshalled onto the renderer. A bare StateHasChanged() here is the
+    // single most common source of "worked in dev, blank in the demo".
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Toasts.Changed -= OnChanged;
+}

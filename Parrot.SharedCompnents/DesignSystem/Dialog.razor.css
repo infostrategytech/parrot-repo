@@ -1,0 +1,108 @@
+/* Dialog — geometry from the Figma spec (480px card, 32px padding, 24px
+   radius, 20px section gap). Re-authored against tokens: the React version
+   hardcoded the backdrop, the card, three shadow layers, the secondary
+   button's fill and edge, and a one-off destructive hover red.
+
+   The footer buttons are the real Button component now. React drew its own
+   inside the dialog, which is why they were the one pair of buttons in the
+   product that did not pick up a Button change. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-dialog-layer);
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-3xl);
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-dialog-blur));
+  animation: dialog-backdrop-in var(--ds-dialog-backdrop-enter) ease;
+}
+
+.dialog {
+  display: grid;
+  gap: var(--spacing-xl);
+  width: min(var(--ds-dialog-width), 100%);
+  padding: var(--spacing-3xl);
+  background: var(--colors-surface-elevated);
+  border-radius: var(--radius-radius-3xl);
+  outline: 0;
+  box-shadow:
+    0 var(--spacing-2xs) var(--spacing-md) var(--colors-surface-shadow),
+    0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow-diffuse);
+  animation: dialog-in var(--ds-dialog-enter) var(--ds-dialog-ease);
+}
+
+.dialog-backdrop {
+  /* Gaps in the token set: no component width scale, no z-index scale, no
+     blur scale and no motion scale. */
+  --ds-dialog-width: 480px;
+  --ds-dialog-layer: 120;
+  --ds-dialog-blur: 6px;
+  --ds-dialog-backdrop-enter: 150ms;
+  --ds-dialog-enter: 190ms;
+  --ds-dialog-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dialog > header {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.dialog > header ::deep h2 {
+  min-width: 0;
+  margin: var(--spacing-none);
+  color: var(--colors-text-primary);
+}
+
+.dialog__icon {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--ds-dialog-icon-box);
+  height: var(--ds-dialog-icon-box);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.dialog-backdrop {
+  /* Gap in the token set: no icon-container scale, only icon sizes. */
+  --ds-dialog-icon-box: 40px;
+}
+
+.dialog--destructive .dialog__icon {
+  color: var(--colors-feedback-destructive-text);
+  background: var(--colors-feedback-destructive-subtle);
+}
+
+.dialog__body {
+  color: var(--colors-text-secondary);
+}
+
+.dialog__body p { margin: var(--spacing-none); }
+.dialog__body p + p { margin-top: var(--spacing-sm); }
+
+.dialog > footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+}
+
+@keyframes dialog-backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing-sm)) scale(0.985);
+  }
+}

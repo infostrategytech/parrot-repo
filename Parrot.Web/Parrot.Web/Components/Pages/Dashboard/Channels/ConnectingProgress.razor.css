@@ -1,0 +1,114 @@
+/* A centred, narrow column. There is nothing to do on this screen, so there is
+   nothing else on it. */
+
+.connecting {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-connecting-width), 100%);
+  margin-inline: auto;
+  padding: var(--ds-connecting-pad);
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-connecting-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  box-shadow: 0 var(--spacing-lg) var(--ds-connecting-shadow) var(--colors-surface-shadow);
+}
+
+.connecting {
+  /* Gaps in the token set: no column-width, control-size or motion scale. */
+  --ds-connecting-width: var(--ds-setup-card-width);
+  --ds-connecting-hairline: var(--ds-setup-card-hairline);
+  --ds-connecting-pad: var(--ds-setup-card-pad);
+  --ds-connecting-shadow: var(--ds-setup-card-shadow);
+  --ds-connecting-mark: 72px;
+  --ds-connecting-ring: 2px;
+  --ds-connecting-pulse: 2400ms;
+  --ds-connecting-pulse-2: 800ms;
+  --ds-connecting-pulse-3: 1600ms;
+}
+
+/* Three rings leaving the mark. Slow enough to read as "working", not as
+   "stuck"; silenced by the global reduced-motion block. */
+.connecting__pulse {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ds-connecting-mark);
+  height: var(--ds-connecting-mark);
+  margin-bottom: var(--spacing-md);
+}
+
+.connecting__mark {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: var(--colors-text-inverse);
+  border-radius: var(--radius-radius-full);
+}
+
+.channel-whatsapp .connecting__mark { background: #22a968; }
+.channel-instagram .connecting__mark { background: #c63886; }
+.channel-facebook .connecting__mark { background: #1877f2; }
+
+.connecting__pulse i {
+  position: absolute;
+  inset: 0;
+  border: var(--ds-connecting-ring) solid var(--colors-accent-brand-border);
+  border-radius: var(--radius-radius-full);
+  opacity: 0;
+  animation: connecting-pulse var(--ds-connecting-pulse) ease-out infinite;
+}
+
+.connecting__pulse i:nth-child(3) { animation-delay: var(--ds-connecting-pulse-2); }
+.connecting__pulse i:nth-child(4) { animation-delay: var(--ds-connecting-pulse-3); }
+
+::deep .connecting__eyebrow { color: var(--colors-text-subtle); }
+::deep .connecting__lede { max-width: var(--ds-connecting-measure); color: var(--colors-text-muted); }
+
+.connecting { --ds-connecting-measure: 44ch; }
+
+.connecting__steps {
+  display: grid;
+  gap: var(--spacing-sm);
+  justify-items: start;
+  margin: var(--spacing-xl) var(--spacing-none) var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+.connecting__step {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  color: var(--colors-text-subtle);
+}
+
+.connecting__step.is-active { color: var(--colors-text-primary); }
+.connecting__step.is-done { color: var(--colors-feedback-success-text); }
+
+.connecting__tick {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+  border: var(--ds-connecting-ring) solid currentColor;
+  border-radius: var(--radius-radius-full);
+  opacity: var(--ds-connecting-pending);
+}
+
+.connecting { --ds-connecting-pending: 0.35; }
+
+.connecting__step.is-active .connecting__tick,
+.connecting__step.is-done .connecting__tick { opacity: 1; }
+
+.connecting__step.is-done .connecting__tick {
+  background: var(--colors-feedback-success-subtle);
+}
+
+@keyframes connecting-pulse {
+  0% { opacity: 0.6; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.9); }
+}

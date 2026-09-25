@@ -1,39 +1,52 @@
-<div class="pb-field">
-    <label class="pb-field-label">Stage</label>
-    <div class="pb-select-wrap">
-        <select class="pb-select" value="@Step.ContactStage"
-                @onchange="async e => { Step.ContactStage = e.Value?.ToString() ?? string.Empty; await OnChanged.InvokeAsync(); }">
-            <option value="">-- Select --</option>
-            <option value="NewLead">New Lead</option>
-            <option value="Interested">Interested</option>
-            <option value="Customer">Customer</option>
-            <option value="VIP">VIP</option>
-        </select>
-        <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 9l6 6 6-6" />
-        </svg>
-    </div>
-</div>
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 
-<div class="pb-field">
-    <label class="pb-field-label">Tags</label>
-    <div class="pb-select-wrap">
-        <select class="pb-select" value="@Step.ContactTags"
-                @onchange="e => Step.ContactTags = e.Value?.ToString() ?? string.Empty">
-            <option value="">-- Select --</option>
-            <option value="VIP">VIP</option>
-            <option value="Returning">Returning</option>
-            <option value="FrequentBuyer">Frequent buyer</option>
-        </select>
-        <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M6 9l6 6 6-6" />
-        </svg>
-    </div>
-</div>
+<SelectField FloatingLabel="Stage"
+             Value="@StageLabel(Step.ContactStage)"
+             Open='@(_open == "stage")'
+             OpenChanged='@(open => _open = open ? "stage" : null)'>
+    @foreach (var stage in Stages)
+    {
+        var current = stage;
+        <PopoverOption Label="@current.Label" Active="@(Step.ContactStage == current.Id)"
+                       OnSelect="async () => { Step.ContactStage = current.Id; _open = null; await OnChanged.InvokeAsync(); }" />
+    }
+</SelectField>
+
+<SelectField FloatingLabel="Tags"
+             Value="@TagLabel(Step.ContactTags)"
+             Open='@(_open == "tags")'
+             OpenChanged='@(open => _open = open ? "tags" : null)'>
+    @foreach (var tag in Tags)
+    {
+        var current = tag;
+        <PopoverOption Label="@current.Label" Active="@(Step.ContactTags == current.Id)"
+                       OnSelect="() => { Step.ContactTags = current.Id; _open = null; }" />
+    }
+</SelectField>
 
 @code {
     [Parameter] public PlaybookStep Step { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string? _open;
+
+    private sealed record Choice(string Id, string Label);
+
+    private static readonly Choice[] Stages =
+    [
+        new("NewLead", "New lead"),
+        new("Interested", "Interested"),
+        new("Customer", "Customer"),
+        new("VIP", "VIP")
+    ];
+
+    private static readonly Choice[] Tags =
+    [
+        new("VIP", "VIP"),
+        new("Returning", "Returning"),
+        new("FrequentBuyer", "Frequent buyer")
+    ];
+
+    private static string StageLabel(string id) => Stages.FirstOrDefault(s => s.Id == id)?.Label ?? string.Empty;
+    private static string TagLabel(string id) => Tags.FirstOrDefault(t => t.Id == id)?.Label ?? string.Empty;
 }

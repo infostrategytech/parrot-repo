@@ -1,0 +1,71 @@
+@namespace Parrot.SharedComponents.Layout
+@using Parrot.SharedComponents.Services
+@implements IAsyncDisposable
+@inject AppShellState Shell
+@inject AuroraInterop Interop
+
+@* The shell every product page renders inside: the rail, then everything
+   else. It is Aurora's MainLayout with the host's session passed in, so the
+   web app and the mobile app render one shell and each supplies who is signed
+   in. The rail is rendered once here, and a page receives nothing. *@
+
+<div class="app-shell @(Shell.Collapsed ? "is-collapsed" : null)">
+    <NavSidebar BrandName="@BrandName"
+                WorkspaceId="@WorkspaceId"
+                WorkspaceName="@WorkspaceName"
+                WorkspacePlan="@WorkspacePlan"
+                UserName="@UserName"
+                UserRole="@UserRole"
+                UserInitials="@UserInitials"
+                UserSeed="@UserSeed"
+                InboxUnread="@InboxUnread"
+                UserMenu="@UserMenu" />
+
+    <main class="app-main">
+        @ChildContent
+    </main>
+
+    <ToastHost />
+    <ThemeToggle />
+</div>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string BrandName { get; set; } = "OmniAI";
+    [Parameter] public string WorkspaceId { get; set; } = "";
+    [Parameter] public string WorkspaceName { get; set; } = "";
+    [Parameter] public string? WorkspacePlan { get; set; }
+    [Parameter] public string UserName { get; set; } = "";
+    [Parameter] public string? UserRole { get; set; }
+    [Parameter] public string UserInitials { get; set; } = "";
+    [Parameter] public string UserSeed { get; set; } = "";
+    [Parameter] public RenderFragment? UserMenu { get; set; }
+    [Parameter] public int? InboxUnread { get; set; }
+
+    private DotNetObjectReference<AppShellState>? _shellRef;
+    private IAsyncDisposable? _mediaSubscription;
+
+    protected override void OnInitialized() => Shell.Changed += OnShellChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // The rail collapses itself on a narrow window. A media query fires
+        // twice in the life of the app; a resize listener would fire on every
+        // pixel, which is what makes resize handlers feel expensive.
+        _shellRef = DotNetObjectReference.Create(Shell);
+        _mediaSubscription = await Interop.ObserveMediaAsync(
+            AppShellState.NarrowQuery, _shellRef, nameof(AppShellState.SetViewportNarrow));
+    }
+
+    private void OnShellChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public async ValueTask DisposeAsync()
+    {
+        Shell.Changed -= OnShellChanged;
+        if (_mediaSubscription is not null) await _mediaSubscription.DisposeAsync();
+        _shellRef?.Dispose();
+    }
+}

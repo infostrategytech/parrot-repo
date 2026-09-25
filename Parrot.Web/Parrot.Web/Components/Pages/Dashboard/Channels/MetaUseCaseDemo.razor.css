@@ -1,0 +1,530 @@
+/* Meta's "Add use cases" screen, drawn.
+   ──────────────────────────────────────────────────────────────────────────
+   Everything inside the window frame is a picture of another company's
+   interface, so its colours are deliberately NOT design tokens. Tokenising
+   them would mean Meta's console changes appearance whenever our brand does,
+   which is exactly backwards: this has to keep looking like Meta so it is
+   recognisable when the person switches tabs.
+
+   The palette is collected in one block rather than scattered through the
+   file, so the boundary between "our product" and "a drawing of theirs" is a
+   single thing you can read. The names match MetaBrowserDemo's wherever the
+   colour is the same — each component declares its own copy, because a
+   scoped stylesheet cannot share locals with a sibling, but a reader moving
+   between the two drawings should not have to relearn them. */
+
+.meta-usecase {
+  /* Meta console chrome, allowlisted in brand-literals.json. Not tokens: this
+     is a drawing of another product and has to keep looking like theirs. A few
+     of Meta's shades are rounded onto a neighbour already on the allowlist
+     rather than widening it — at this size they are indistinguishable, and the
+     allowlist is meant to stay short enough to audit. */
+  --ds-meta-chrome: #f2f3f5;
+  --ds-meta-chrome-edge: #dfe2e7;
+  --ds-meta-frame: #d9dee7;
+  --ds-meta-surface: #ffffff;
+  --ds-meta-rail: #f5f6f8;
+  --ds-meta-rail-edge: #dfe3e8;
+  --ds-meta-line: #e5e8ec;
+  --ds-meta-ink: #242b34;
+  --ds-meta-ink-soft: #5f6772;
+  --ds-meta-ink-mute: #858c96;
+  --ds-meta-dot: #bdc3cc;
+  --ds-meta-empty: #eef0f2;
+  --ds-meta-highlight: #eaf0f8;
+  --ds-meta-highlight-edge: #b3c9e4;
+  --ds-meta-blue: #4C77B9;
+
+  /* Geometry and timing. No token scale describes a drawing of someone
+     else's product. Nine seconds because three ticks have to be watched
+     happen one after another; faster and they read as one event. */
+  --ds-meta-radius: 16px;
+  --ds-meta-hairline: 1px;
+  --ds-meta-ring: 1.5px;
+  --ds-meta-ring-thick: 2px;
+  --ds-meta-loop: 9s;
+
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.meta-usecase__window {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--ds-meta-rail);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-frame);
+  border-radius: var(--ds-meta-radius);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow-diffuse);
+}
+
+.meta-usecase__toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  height: var(--ds-meta-toolbar);
+  padding: var(--spacing-none) var(--spacing-md);
+  background: var(--ds-meta-chrome);
+  border-bottom: var(--ds-meta-hairline) solid var(--ds-meta-chrome-edge);
+}
+
+.meta-usecase {
+  /* Browser chrome heights — nothing in the spacing scale is a window
+     toolbar, and rounding them would stop it reading as a browser. */
+  --ds-meta-toolbar: 30px;
+  --ds-meta-dot-size: 6px;
+}
+
+.meta-usecase__toolbar > i {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-usecase__toolbar > ::deep span {
+  min-width: 0;
+  margin-left: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-3xl);
+  overflow: hidden;
+  color: var(--ds-meta-ink-mute);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-full);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: a drawing of another product's chrome, not our type scale */
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* ── The wizard page ─────────────────────────────────────────────────────── */
+
+.meta-usecase__page { padding: var(--spacing-lg); }
+
+.meta-usecase__page > h2 {
+  margin: var(--spacing-none) var(--spacing-none) var(--spacing-lg);
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-base); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+}
+
+/* The stepper earns its place: it is the only thing on screen saying this is
+   step two of five, which is what stops someone closing the tab believing the
+   app is finished. */
+.meta-usecase__progress {
+  display: grid;
+  grid-template-columns: 1.1fr repeat(4, 1fr);
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-md);
+}
+
+.meta-usecase__progress > * {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  color: var(--ds-meta-ink-mute);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-semibold); /* text-style-exempt: as above */
+  white-space: nowrap;
+}
+
+.meta-usecase__progress > *:not(:last-child)::after {
+  content: "";
+  flex: 1;
+  min-width: var(--spacing-sm);
+  height: var(--ds-meta-ring-thick);
+  background: var(--ds-meta-line);
+}
+
+.meta-usecase__progress i {
+  flex: 0 0 auto;
+  width: var(--ds-meta-step);
+  height: var(--ds-meta-step);
+  border: var(--ds-meta-ring-thick) solid var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-usecase {
+  /* Stepper dot, and the half-fill that marks the step you are on. No radius
+     or size token lands on a 13px circle. */
+  --ds-meta-step: 13px;
+  --ds-meta-step-half: 6px;
+}
+
+.meta-usecase__progress strong { color: var(--ds-meta-blue); }
+
+.meta-usecase__progress strong i {
+  border-color: var(--ds-meta-blue);
+  box-shadow: inset var(--ds-meta-step-half) 0 var(--ds-meta-blue);
+}
+
+/* Step one is behind us — filled solid, so the stepper reads as progress made
+   rather than as five equal choices. */
+.meta-usecase__done { color: var(--ds-meta-blue); }
+
+.meta-usecase__done i {
+  background: var(--ds-meta-blue);
+  border-color: var(--ds-meta-blue);
+}
+
+/* ── The use-case panel ──────────────────────────────────────────────────── */
+
+.meta-usecase__panel {
+  margin-top: var(--spacing-md);
+  padding: var(--ds-art-panel-pad);
+  background: var(--ds-meta-surface);
+  border-radius: var(--radius-radius-md);
+}
+
+.meta-usecase__panel > h3 {
+  margin: var(--ds-art-heading-gap);
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-xs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+}
+
+.meta-usecase__layout {
+  display: grid;
+  grid-template-columns: var(--ds-meta-filter) minmax(0, 1fr);
+  gap: var(--ds-art-layout-gap);
+  align-items: start;
+}
+
+.meta-usecase {
+  /* The filter rail's width, measured off the real screen. It is drawn at all
+     because the instruction is "leave Featured selected" — with the rail
+     cropped out there is nothing for that sentence to refer to. */
+  --ds-meta-filter: 116px;
+}
+
+.meta-usecase__layout nav { display: grid; gap: var(--ds-art-nav-gap); }
+
+.meta-usecase__layout nav small {
+  margin-bottom: var(--spacing-2xs);
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+}
+
+.meta-usecase__layout nav ::deep span {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-art-nav-item-gap);
+  padding: var(--ds-art-nav-item-pad);
+  color: var(--ds-meta-ink-soft);
+  border-radius: var(--radius-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-usecase__layout nav span i {
+  flex: 0 0 auto;
+  width: var(--ds-meta-radio);
+  height: var(--ds-meta-radio);
+  border: var(--ds-meta-ring) solid var(--ds-meta-dot);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-usecase {
+  /* The filter radio, and the two inset rings that draw its selected dot. */
+  --ds-meta-radio: 10px;
+  --ds-meta-radio-gap: 2px;
+  --ds-meta-radio-dot: 5px;
+}
+
+/* Featured stays selected for the whole sequence. It is the one control here
+   that should NOT be touched, so it never animates. */
+.meta-usecase__filter-on {
+  color: var(--ds-meta-ink);
+  background: var(--ds-meta-highlight);
+}
+
+.meta-usecase__filter-on i {
+  border-color: var(--ds-meta-blue);
+  box-shadow:
+    inset 0 0 0 var(--ds-meta-radio-gap) var(--ds-meta-surface),
+    inset 0 0 0 var(--ds-meta-radio-dot) var(--ds-meta-blue);
+}
+
+.meta-usecase__layout ul {
+  display: grid;
+  gap: var(--ds-art-list-gap);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+.meta-usecase__row {
+  display: grid;
+  grid-template-columns: var(--ds-meta-tile) minmax(0, 1fr) var(--ds-meta-box);
+  align-items: start;
+  gap: var(--ds-art-row-gap);
+  padding: var(--ds-art-row-pad);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-rail-edge);
+  border-radius: var(--radius-radius-sm);
+}
+
+.meta-usecase {
+  /* The row's own furniture: product tile, checkbox, and the checkmark inside
+     it. Meta's sizes, not ours. */
+  --ds-meta-tile: 22px;
+  --ds-meta-box: 14px;
+  --ds-meta-check: 9px;
+}
+
+.meta-usecase__row em {
+  width: var(--ds-meta-tile);
+  height: var(--ds-meta-tile);
+  background: var(--ds-meta-empty);
+  border-radius: var(--radius-radius-sm);
+}
+
+.meta-usecase__row strong {
+  display: block;
+  color: var(--ds-meta-ink);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-usecase__row small {
+  display: block;
+  margin-top: var(--spacing-2xs);
+  color: var(--ds-meta-ink-soft);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  line-height: 1.35;
+}
+
+/* The tick: an empty box that fills. Drawn with a border and Meta's own
+   checkmark path rather than a glyph, so it needs no asset and recolours
+   with the mock's blue. */
+.meta-usecase__row b {
+  display: grid;
+  place-items: center;
+  width: var(--ds-meta-box);
+  height: var(--ds-meta-box);
+  margin-top: var(--ds-art-check-gap);
+  color: var(--ds-meta-surface);
+  border: var(--ds-meta-ring) solid var(--ds-meta-dot);
+  border-radius: var(--radius-radius-xs);
+}
+
+.meta-usecase__row b svg {
+  display: block;
+  width: var(--ds-meta-check);
+  height: var(--ds-meta-check);
+  opacity: 0;
+}
+
+/* ── The three ticks ─────────────────────────────────────────────────────
+   Each row ticks at its own point in the run rather than on a shared delay:
+   the whole value of the animation is watching the ORDER happen, because the
+   instructions beside it are numbered one, two, three.
+
+   It runs once and holds ("forwards") instead of looping. A loop that keeps
+   unticking the boxes would keep undoing the answer; Replay exists for the
+   person who looked away. */
+
+.meta-usecase__row--marketing { animation: meta-usecase-row-1 var(--ds-meta-loop) ease-in-out forwards; }
+.meta-usecase__row--ads { animation: meta-usecase-row-2 var(--ds-meta-loop) ease-in-out forwards; }
+.meta-usecase__row--whatsapp { animation: meta-usecase-row-3 var(--ds-meta-loop) ease-in-out forwards; }
+
+.meta-usecase__row--marketing b { animation: meta-usecase-tick-1 var(--ds-meta-loop) ease-in-out forwards; }
+.meta-usecase__row--ads b { animation: meta-usecase-tick-2 var(--ds-meta-loop) ease-in-out forwards; }
+.meta-usecase__row--whatsapp b { animation: meta-usecase-tick-3 var(--ds-meta-loop) ease-in-out forwards; }
+
+.meta-usecase__row--marketing b svg { animation: meta-usecase-check-1 var(--ds-meta-loop) ease-in-out forwards; }
+.meta-usecase__row--ads b svg { animation: meta-usecase-check-2 var(--ds-meta-loop) ease-in-out forwards; }
+.meta-usecase__row--whatsapp b svg { animation: meta-usecase-check-3 var(--ds-meta-loop) ease-in-out forwards; }
+
+/* ── The panel footer ────────────────────────────────────────────────────── */
+
+.meta-usecase__panel footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--spacing-md);
+}
+
+.meta-usecase__panel footer > div {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-art-footer-gap);
+}
+
+.meta-usecase__panel footer ::deep span {
+  display: grid;
+  place-items: center;
+  height: var(--ds-meta-button);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--ds-meta-ink-soft);
+  border: var(--ds-meta-hairline) solid var(--ds-meta-dot);
+  border-radius: var(--radius-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+}
+
+.meta-usecase { --ds-meta-button: 28px; /* Meta's control height; our button tokens are taller. */ }
+
+/* Next starts muted and turns Meta's blue only once all three boxes are
+   ticked — the same signal Meta gives, and the reason the drawing ends on
+   the button rather than on the last row. */
+.meta-usecase__panel footer button {
+  height: var(--ds-meta-button);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--ds-meta-surface);
+  background: var(--ds-meta-highlight-edge);
+  border: 0;
+  border-radius: var(--radius-radius-sm);
+  font-size: var(--typography-size-text-xxs); /* text-style-exempt: as above */
+  font-weight: var(--typography-font-weight-bold); /* text-style-exempt: as above */
+  animation: meta-usecase-next var(--ds-meta-loop) ease-in-out forwards;
+}
+
+/* ── The pointer ─────────────────────────────────────────────────────────
+   Anchored to the RIGHT edge of the window rather than the left, because the
+   checkboxes are the last column of the row: pinned left, the pointer would
+   drift off them the moment the card is a different width than the one this
+   was measured against. */
+.meta-usecase__cursor {
+  position: absolute;
+  z-index: 4;
+  top: var(--ds-meta-cursor-top);
+  right: var(--ds-meta-cursor-right);
+  width: var(--ds-meta-cursor-w);
+  height: var(--ds-meta-cursor-h);
+  background: var(--ds-meta-ink);
+  clip-path: polygon(0 0, 100% 67%, 56% 72%, 42% 100%);
+  animation: meta-usecase-cursor var(--ds-meta-loop) ease-in-out forwards;
+}
+
+.meta-usecase {
+  /* Measured against the drawing, not a spacing scale: the tip rests on the
+     first checkbox, and each offset is the gap down to the next one, so the
+     pointer actually touches what it is about to tick. */
+  --ds-meta-cursor-top: 190px;
+  --ds-meta-cursor-right: 42px;
+  --ds-meta-cursor-w: 13px;
+  --ds-meta-cursor-h: 18px;
+  --ds-meta-enter-x: -34px;
+  --ds-meta-enter-y: -22px;
+  --ds-meta-box-2-y: 67px;
+  --ds-meta-box-3-y: 120.5px;
+  --ds-meta-next-x: -7.6px;
+  --ds-meta-next-y: 187.5px;
+  --ds-meta-exit-y: 193px;
+}
+
+/* ── Our caption, below the frame ────────────────────────────────────────── */
+
+.meta-usecase__caption {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  color: var(--colors-text-muted);
+}
+
+.meta-usecase__dot {
+  width: var(--ds-meta-dot-size);
+  height: var(--ds-meta-dot-size);
+  background: var(--ds-meta-blue);
+  border-radius: var(--radius-radius-full);
+}
+
+.meta-usecase__replay {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.meta-usecase__replay:hover { background: var(--colors-interaction-hover); }
+
+/* ── Keyframes ───────────────────────────────────────────────────────────
+   Each row's border warms a beat after the pointer arrives on it, so cause
+   reads before effect. The box fills first and the checkmark fades in just
+   behind it, which is what a real click looks like. */
+
+@keyframes meta-usecase-row-1 { 0%, 14% { border-color: var(--ds-meta-rail-edge); } 18%, 100% { border-color: var(--ds-meta-highlight-edge); } }
+@keyframes meta-usecase-row-2 { 0%, 36% { border-color: var(--ds-meta-rail-edge); } 40%, 100% { border-color: var(--ds-meta-highlight-edge); } }
+@keyframes meta-usecase-row-3 { 0%, 58% { border-color: var(--ds-meta-rail-edge); } 62%, 100% { border-color: var(--ds-meta-highlight-edge); } }
+
+@keyframes meta-usecase-tick-1 { 0%, 14% { background: transparent; border-color: var(--ds-meta-dot); } 18%, 100% { background: var(--ds-meta-blue); border-color: var(--ds-meta-blue); } }
+@keyframes meta-usecase-tick-2 { 0%, 36% { background: transparent; border-color: var(--ds-meta-dot); } 40%, 100% { background: var(--ds-meta-blue); border-color: var(--ds-meta-blue); } }
+@keyframes meta-usecase-tick-3 { 0%, 58% { background: transparent; border-color: var(--ds-meta-dot); } 62%, 100% { background: var(--ds-meta-blue); border-color: var(--ds-meta-blue); } }
+
+@keyframes meta-usecase-check-1 { 0%, 15% { opacity: 0; } 19%, 100% { opacity: 1; } }
+@keyframes meta-usecase-check-2 { 0%, 37% { opacity: 0; } 41%, 100% { opacity: 1; } }
+@keyframes meta-usecase-check-3 { 0%, 59% { opacity: 0; } 63%, 100% { opacity: 1; } }
+
+@keyframes meta-usecase-next { 0%, 74% { background: var(--ds-meta-highlight-edge); } 78%, 100% { background: var(--ds-meta-blue); } }
+
+/* The pointer enters from off the panel so the first tick is seen being
+   caused, pauses on each box long enough to read the row it is about to
+   tick, then leaves once Next is live — the drawing has said everything it
+   has to say by then, and a pointer parked on screen reads as unfinished. */
+@keyframes meta-usecase-cursor {
+  0% { opacity: 1; transform: translate(var(--ds-meta-enter-x), var(--ds-meta-enter-y)); }
+  10%, 20% { opacity: 1; transform: translate(0, 0); }
+  30%, 42% { opacity: 1; transform: translate(0, var(--ds-meta-box-2-y)); }
+  52%, 64% { opacity: 1; transform: translate(0, var(--ds-meta-box-3-y)); }
+  74%, 94% { opacity: 1; transform: translate(var(--ds-meta-next-x), var(--ds-meta-next-y)); }
+  100% { opacity: 0; transform: translate(var(--ds-meta-next-x), var(--ds-meta-exit-y)); }
+}
+
+/* Stopped, the drawing still has to teach. The pointer goes and the sequence
+   is replaced by its end state: all three boxes ticked and Next live, which
+   is the answer the sequence was spelling out.
+
+   The WhatsApp row keeps the highlight fill on top of that. Still, the three
+   rows would look interchangeable, and they are not — the WhatsApp use case
+   is the one that adds WhatsApp to the app. Miss it and the WhatsApp menu
+   never appears in Meta, and every later step of this guide points at
+   nothing. */
+@media (prefers-reduced-motion: reduce) {
+  .meta-usecase__cursor { display: none; }
+
+  .meta-usecase__row,
+  .meta-usecase__row b,
+  .meta-usecase__row b svg,
+  .meta-usecase__panel footer button { animation: none; }
+
+  .meta-usecase__row { border-color: var(--ds-meta-highlight-edge); }
+
+  .meta-usecase__row b {
+    color: var(--ds-meta-surface);
+    background: var(--ds-meta-blue);
+    border-color: var(--ds-meta-blue);
+  }
+
+  .meta-usecase__row b svg { opacity: 1; }
+
+  .meta-usecase__row--whatsapp { background: var(--ds-meta-highlight); }
+
+  .meta-usecase__panel footer button { background: var(--ds-meta-blue); }
+}
+
+.meta-usecase__window {
+  /* Artwork coordinates, not layout. Every measurement here is calibrated
+     against the cursor animation's absolute travel distances, so none can come
+     from the spacing scale: moved to the nearest rung, the target shifts out
+     from under the pointer. These are the source geometry, to the pixel. */
+  --ds-art-layout-gap: 13px;
+  --ds-art-nav-gap: 5px;
+  --ds-art-panel-pad: 14px;
+  --ds-art-nav-item-gap: 6px;
+  --ds-art-nav-item-pad: 4px 6px;
+  --ds-art-row-gap: 9px;
+  --ds-art-row-pad: 8px 9px;
+  --ds-art-check-gap: 3px;
+  --ds-art-footer-gap: 7px;
+  --ds-art-heading-gap: 0 0 11px;
+  --ds-art-list-gap: 7px;
+}

@@ -1,3 +1,10 @@
+/* The reconnect dialog as a brand moment: the Thread loader on an elevated
+   card, the brand's serif for the one line that matters, its sans for the
+   rest, and its square-cornered button. Surfaces come from the Aurora tokens
+   so the card reads in both themes; the motion and the accents are Cadence.
+
+   The state classes are the framework's and must keep their names. */
+
 .components-reconnect-first-attempt-visible,
 .components-reconnect-repeated-attempt-visible,
 .components-reconnect-failed-visible,
@@ -19,139 +26,123 @@
     display: block;
 }
 
+/* The loader runs while an attempt is in progress; otherwise the mark rests. */
+.reconnect__rest { display: block; }
+#components-reconnect-modal.components-reconnect-show .reconnect__rest,
+#components-reconnect-modal.components-reconnect-retrying .reconnect__rest { display: none; }
 
 #components-reconnect-modal {
-    background-color: white;
-    width: 20rem;
-    margin: 20vh auto;
-    padding: 2rem;
-    border: 0;
-    border-radius: 0.5rem;
-    box-shadow: 0 3px 6px 2px rgba(0, 0, 0, 0.3);
+    /* Gaps in the token set: no component width scale, no motion scale, and
+       the dialog's own geometry is a brand decision. */
+    --ds-reconnect-width: 420px;
+    --ds-reconnect-offset: 18vh;
+    --ds-reconnect-enter: 500ms;
+    --ds-reconnect-lift: 24px;
+    --ds-reconnect-hairline: 1px;
+    --ds-reconnect-button-height: 48px;
+
+    width: min(var(--ds-reconnect-width), calc(100vw - var(--spacing-3xl)));
+    margin: var(--ds-reconnect-offset) auto;
+    padding: var(--spacing-4xl) var(--spacing-3xl) var(--spacing-3xl);
+    color: var(--colors-text-primary);
+    background-color: var(--colors-surface-elevated);
+    border: var(--ds-reconnect-hairline) solid var(--colors-surface-border);
+    border-radius: var(--radius-radius-3xl);
+    box-shadow:
+        0 var(--spacing-2xs) var(--spacing-md) var(--colors-surface-shadow),
+        0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow-diffuse);
     opacity: 0;
-    transition: display 0.5s allow-discrete, overlay 0.5s allow-discrete;
-    animation: components-reconnect-modal-fadeOutOpacity 0.5s both;
-    &[open]
+    transition: display var(--ds-reconnect-enter) allow-discrete, overlay var(--ds-reconnect-enter) allow-discrete;
+    animation: reconnect-fade-out var(--ds-reconnect-enter) both;
 
-{
-    animation: components-reconnect-modal-slideUp 1.5s cubic-bezier(.05, .89, .25, 1.02) 0.3s, components-reconnect-modal-fadeInOpacity 0.5s ease-in-out 0.3s;
-    animation-fill-mode: both;
-}
-
+    &[open] {
+        animation:
+            reconnect-rise 900ms var(--cadence-ease) 0.2s,
+            reconnect-fade-in var(--ds-reconnect-enter) ease-in-out 0.2s;
+        animation-fill-mode: both;
+    }
 }
 
 #components-reconnect-modal::backdrop {
-    background-color: rgba(0, 0, 0, 0.4);
-    animation: components-reconnect-modal-fadeInOpacity 0.5s ease-in-out;
+    background-color: var(--colors-surface-overlay);
+    backdrop-filter: blur(6px);
+    animation: reconnect-fade-in var(--ds-reconnect-enter) ease-in-out;
     opacity: 1;
 }
 
-@keyframes components-reconnect-modal-slideUp {
-    0% {
-        transform: translateY(30px) scale(0.95);
-    }
-
-    100% {
-        transform: translateY(0);
-    }
+@keyframes reconnect-rise {
+    0% { transform: translateY(var(--ds-reconnect-lift)) scale(0.98); }
+    100% { transform: translateY(0); }
 }
 
-@keyframes components-reconnect-modal-fadeInOpacity {
-    0% {
-        opacity: 0;
-    }
-
-    100% {
-        opacity: 1;
-    }
+@keyframes reconnect-fade-in {
+    0% { opacity: 0; }
+    100% { opacity: 1; }
 }
 
-@keyframes components-reconnect-modal-fadeOutOpacity {
-    0% {
-        opacity: 1;
-    }
-
-    100% {
-        opacity: 0;
-    }
+@keyframes reconnect-fade-out {
+    0% { opacity: 1; }
+    100% { opacity: 0; }
 }
 
-.components-reconnect-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1rem;
-}
-
-#components-reconnect-modal p {
-    margin: 0;
+.reconnect {
+    display: grid;
+    justify-items: center;
+    gap: var(--spacing-xl);
     text-align: center;
 }
 
-#components-reconnect-modal button {
+.reconnect__figure {
+    display: grid;
+    place-items: center;
+}
+
+.reconnect__copy {
+    display: grid;
+    gap: var(--spacing-sm);
+}
+
+/* Brand type on a brand surface. */
+.reconnect__title {
+    margin: 0;
+    font-family: var(--cadence-font-serif);
+    font-size: var(--typography-size-text-3xl); /* text-style-exempt: brand serif */
+    font-weight: 400; /* text-style-exempt: Instrument Serif has one weight */
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+    color: var(--colors-text-primary);
+}
+
+.reconnect__body {
+    margin: 0;
+    font-family: var(--cadence-font-sans);
+    font-size: var(--typography-size-text-sm); /* text-style-exempt: brand sans */
+    line-height: var(--typography-leading-leading-base);
+    color: var(--colors-text-secondary);
+    text-wrap: pretty;
+}
+
+.reconnect__count {
+    font-variant-numeric: tabular-nums;
+    color: var(--cadence-terracotta);
+}
+
+.reconnect__actions { display: contents; }
+
+/* The brand's button: slate, square corner at the foot, relay-dot ready. */
+.reconnect__button {
+    min-height: var(--ds-reconnect-button-height);
+    padding: 0 var(--spacing-xl);
+    font-family: var(--cadence-font-sans);
+    font-size: var(--typography-size-text-base); /* text-style-exempt: brand sans */
+    font-weight: 600; /* text-style-exempt: brand button weight */
+    color: var(--cadence-linen);
+    background-color: var(--cadence-slate);
     border: 0;
-    background-color: #6b9ed2;
-    color: white;
-    padding: 4px 24px;
-    border-radius: 4px;
+    border-radius: var(--radius-radius-3xl) var(--radius-radius-3xl) 0 var(--radius-radius-3xl);
+    cursor: pointer;
+    transition: background-color var(--cadence-action) var(--cadence-ease), transform var(--cadence-action) var(--cadence-ease);
 }
 
-    #components-reconnect-modal button:hover {
-        background-color: #3b6ea2;
-    }
-
-    #components-reconnect-modal button:active {
-        background-color: #6b9ed2;
-    }
-
-.components-rejoining-animation {
-    position: relative;
-    width: 80px;
-    height: 80px;
-}
-
-    .components-rejoining-animation div {
-        position: absolute;
-        border: 3px solid #0087ff;
-        opacity: 1;
-        border-radius: 50%;
-        animation: components-rejoining-animation 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite;
-    }
-
-        .components-rejoining-animation div:nth-child(2) {
-            animation-delay: -0.5s;
-        }
-
-@keyframes components-rejoining-animation {
-    0% {
-        top: 40px;
-        left: 40px;
-        width: 0;
-        height: 0;
-        opacity: 0;
-    }
-
-    4.9% {
-        top: 40px;
-        left: 40px;
-        width: 0;
-        height: 0;
-        opacity: 0;
-    }
-
-    5% {
-        top: 40px;
-        left: 40px;
-        width: 0;
-        height: 0;
-        opacity: 1;
-    }
-
-    100% {
-        top: 0px;
-        left: 0px;
-        width: 80px;
-        height: 80px;
-        opacity: 0;
-    }
-}
+.reconnect__button:hover { background-color: var(--cadence-night); }
+.reconnect__button:active { transform: translateY(1px); }

@@ -1,0 +1,44 @@
+.conversation-composer {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-lg) var(--ds-composer-shadow) var(--colors-surface-shadow);
+}
+
+.conversation-composer.is-note { border-color: var(--colors-feedback-warning-border); }
+.conversation-composer.is-reply-locked { background: var(--colors-surface-muted); }
+.conversation-composer.is-disabled { opacity: var(--ds-composer-disabled-opacity); }
+
+.conversation-composer__tabs { display: flex; gap: var(--spacing-2xs); width: fit-content; padding: var(--spacing-xs); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
+.conversation-composer__tabs button { min-height: var(--spacing-3xl); padding-inline: var(--spacing-md); color: var(--colors-text-muted); background: transparent; border: 0; border-radius: var(--radius-radius-full); cursor: pointer; }
+.conversation-composer__tabs button:disabled { cursor: not-allowed; opacity: var(--ds-composer-disabled-opacity); }
+.conversation-composer__tabs button.is-active { color: var(--colors-text-primary); background: var(--colors-surface-card); box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse); }
+
+.conversation-composer__disclosure { display: flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-brand-primary); }
+.conversation-composer__disclosure.is-note { color: var(--colors-feedback-warning-text); }
+.conversation-composer__attachment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-xs); align-items: center; width: fit-content; max-width: 100%; padding: var(--spacing-xs) var(--spacing-sm); color: var(--colors-text-muted); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
+.conversation-composer__attachment button { display: grid; place-items: center; padding: 0; color: inherit; background: transparent; border: 0; cursor: pointer; }
+
+.conversation-composer textarea { width: 100%; min-height: var(--ds-composer-input-min); max-height: var(--ds-composer-input-max); padding: var(--spacing-xs); color: var(--colors-text-primary); line-height: var(--typography-leading-leading-lg); resize: none; background: transparent; border: 0; outline: 0; }
+.conversation-composer textarea::placeholder { color: var(--colors-text-muted); }
+.conversation-composer textarea:disabled { cursor: not-allowed; }
+
+.conversation-composer > footer { display: flex; gap: var(--spacing-sm); align-items: center; }
+.conversation-composer__tools { display: flex; gap: var(--spacing-xs); align-items: center; }
+.conversation-composer__tool { display: grid; place-items: center; width: var(--spacing-3xl); height: var(--spacing-3xl); padding: 0; color: var(--colors-text-muted); background: transparent; border: 0; border-radius: var(--radius-radius-full); cursor: pointer; }
+.conversation-composer__tool:hover { color: var(--colors-brand-primary); background: var(--colors-interaction-hover); }
+.conversation-composer__tool:disabled,
+.conversation-composer__tool.is-disabled { cursor: not-allowed; opacity: var(--ds-composer-disabled-opacity); pointer-events: none; }
+::deep .conversation-composer__count { flex: 1; min-width: 0; color: var(--colors-text-subtle); text-align: right; }
+
+.conversation-composer {
+  /* Missing from the token set: no composer height, shadow or disabled-opacity scale. */
+  --ds-composer-input-min: 54px;
+  --ds-composer-input-max: 150px;
+  --ds-composer-shadow: 36px;
+  --ds-composer-disabled-opacity: 0.58;
+}

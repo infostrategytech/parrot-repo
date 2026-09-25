@@ -23,6 +23,7 @@ using Parrot.Web.Features.Auth.VerifyEmail.Services;
 using Parrot.Web.Features.Auth.VerifyEmail.State;
 using Parrot.Web.Services;
 using Parrot.Web.State;
+using Parrot.SharedComponents.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,6 +62,11 @@ builder.Services.AddScoped<ForgotPasswordState>();
 builder.Services.AddScoped<ResetPasswordState>();
 builder.Services.AddScoped<VerifyEmailState>();
 builder.Services.AddScoped<AppState>();
+
+// The Aurora shell: rail state, the typed face of aurora-interop.js, and the single toast slot.
+builder.Services.AddScoped<AppShellState>();
+builder.Services.AddScoped<AuroraInterop>();
+builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddScoped<ConversationClient>();
 builder.Services.AddScoped<AiAgentsState>();

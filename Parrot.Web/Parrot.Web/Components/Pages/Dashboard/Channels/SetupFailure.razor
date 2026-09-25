@@ -1,0 +1,47 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+
+@* Failure is the common case here, so it gets a real screen rather than a
+   toast. It says what went wrong, what to check — in the route's own terms —
+   and offers the three things worth doing next, including the manual path. *@
+
+<section class="setup-failed">
+    <span class="setup-failed__mark"><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Lg" /></span>
+
+    <Typography TextStyle="TextStyle.HeadingH3Bold" As="h1">Setup did not finish</Typography>
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="setup-failed__reason">
+        @Channel.Setup.Failure
+    </Typography>
+
+    @if (Route is { Recovery.Count: > 0 } route)
+    {
+        <ul class="setup-failed__recovery">
+            @foreach (var item in route.Recovery)
+            {
+                <li>
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@item</Typography>
+                </li>
+            }
+        </ul>
+    }
+
+    <div class="setup-failed__actions">
+        <Button @onclick="OnRetry">Try again</Button>
+        <Button Variant="ButtonVariant.Secondary" @onclick="OnUseManual">Set it up manually</Button>
+        <Button Variant="ButtonVariant.Ghost" @onclick="OnBack">Back to channels</Button>
+    </div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    /// <summary>The route that broke, so the advice is about what they chose.</summary>
+    [Parameter] public ChannelRoute? Route { get; set; }
+
+    [Parameter] public EventCallback OnRetry { get; set; }
+
+    [Parameter] public EventCallback OnUseManual { get; set; }
+
+    [Parameter] public EventCallback OnBack { get; set; }
+}

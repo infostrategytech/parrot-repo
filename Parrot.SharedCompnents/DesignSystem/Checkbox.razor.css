@@ -1,0 +1,114 @@
+/* Checkbox — the Figma geometry, sized to sit beside Toggle in the same form
+   without either looking borrowed.
+
+   The React version had already started tokenising this one, but every token
+   carried a raw hex fallback (#fff, #d4d4d8, #a1a5ad, #e7e8ea, #a6aab2). A
+   fallback that fires is a value nobody reviewed, so they are gone. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.checkbox {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.checkbox__box {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+  color: var(--colors-text-on-primary);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-sm);
+  box-shadow: inset 0 0 0 var(--ds-checkbox-ring) var(--colors-surface-input);
+  transition:
+    background var(--ds-checkbox-motion) ease,
+    box-shadow var(--ds-checkbox-motion) ease;
+}
+
+.checkbox {
+  /* Gaps in the token set: no border-width scale, no motion scale, no
+     focus-ring width scale. */
+  --ds-checkbox-ring: 1px;
+  --ds-checkbox-motion: 120ms;
+  --ds-checkbox-focus-ring: 3px;
+}
+
+.checkbox.is-marked .checkbox__box {
+  background: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-checkbox-ring) var(--colors-brand-primary);
+}
+
+/* Darkened by an overlay rather than a second colour, so it tracks the brand
+   wherever the brand goes. */
+.checkbox:not(:disabled):hover .checkbox__box {
+  background-image: linear-gradient(
+    var(--colors-interaction-hover-overlay),
+    var(--colors-interaction-hover-overlay)
+  );
+}
+
+/* An empty box has nothing to darken, so hover strengthens its edge instead. */
+.checkbox:not(:disabled):not(.is-marked):hover .checkbox__box {
+  background-image: none;
+  box-shadow: inset 0 0 0 var(--ds-checkbox-ring) var(--colors-text-muted);
+}
+
+.checkbox:focus-visible {
+  outline: 0;
+}
+
+.checkbox:focus-visible .checkbox__box {
+  box-shadow:
+    inset 0 0 0 var(--ds-checkbox-ring) var(--colors-brand-primary),
+    0 0 0 var(--ds-checkbox-focus-ring) var(--colors-interaction-focus);
+}
+
+.checkbox__box svg { display: block; }
+
+.checkbox__text {
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.checkbox__text ::deep strong {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--colors-text-primary);
+}
+
+/* The optional glyph comes from the caller, so it carries the caller's scope
+   attribute and can only be reached through ::deep. */
+.checkbox__text strong > ::deep svg { flex: 0 0 auto; }
+
+.checkbox__text ::deep small { color: var(--colors-text-muted); }
+
+.checkbox:disabled { cursor: not-allowed; }
+
+.checkbox:disabled .checkbox__box {
+  background: var(--colors-interaction-disabled-background);
+  box-shadow: inset 0 0 0 var(--ds-checkbox-ring) var(--colors-interaction-disabled-border);
+}
+
+/* A ticked box that is disabled has to stay dark enough to carry the mark. */
+.checkbox:disabled.is-marked .checkbox__box {
+  background: var(--colors-interaction-disabled-foreground);
+  box-shadow: inset 0 0 0 var(--ds-checkbox-ring) var(--colors-interaction-disabled-foreground);
+}
+
+.checkbox:disabled .checkbox__text ::deep strong,
+.checkbox:disabled .checkbox__text ::deep small {
+  color: var(--colors-interaction-disabled-foreground);
+}

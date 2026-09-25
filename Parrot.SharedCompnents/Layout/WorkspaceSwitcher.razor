@@ -1,0 +1,86 @@
+@namespace Parrot.SharedComponents.Layout
+
+@* Which business you are working in. Its own component rather than forty lines
+   inside the rail, because it owns state — an open menu — and the rail does
+   not need to know about it.
+
+   Parrot signs a person into one business, so the menu lists that one and the
+   trigger can never change it; the control keeps its shape so the day a second
+   business exists nothing moves. *@
+
+<div class="workspace">
+    <button type="button"
+            class="workspace__trigger"
+            aria-expanded="@_open.ToString().ToLowerInvariant()"
+            aria-haspopup="menu"
+            data-tooltip="@Name"
+            @onclick="() => _open = !_open">
+        <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" />
+        <span class="workspace__identity">
+            <Typography TextStyle="TextStyle.Small10Medium" As="small" Class="workspace__eyebrow">Workspace</Typography>
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span" Prose Class="workspace__name">@Name</Typography>
+        </span>
+        <Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Sm" />
+    </button>
+
+    @if (_open)
+    {
+        @* Same dismissal as FilterPopover: a transparent full-screen button,
+           not a document listener that can outlive the component. *@
+        <button type="button"
+                class="workspace__dismiss"
+                tabindex="-1"
+                aria-hidden="true"
+                @onclick="() => _open = false"></button>
+
+        <div class="workspace__menu" role="menu" @onkeydown="OnKeyDown">
+            <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="workspace__menu-label ds-overline">
+                Signed in
+            </Typography>
+
+            <button type="button"
+                    role="menuitemradio"
+                    aria-checked="true"
+                    class="workspace__option is-active"
+                    @onclick="() => _open = false">
+                <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" />
+                <span class="workspace__identity">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="strong">@Name</Typography>
+                    @if (!string.IsNullOrWhiteSpace(Plan))
+                    {
+                        <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="workspace__eyebrow">@Plan</Typography>
+                    }
+                </span>
+                <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+            </button>
+
+            <button type="button" class="workspace__add" role="menuitem">
+                <Icon Name="IconName.RiAddFill" Size="IconSize.Sm" />
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">Add another business</Typography>
+            </button>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>A stable id for the business — never its display name.</summary>
+    [Parameter] public string Id { get; set; } = "";
+
+    [Parameter] public string Name { get; set; } = "";
+
+    /// <summary>Optional. Omitted when the host has nothing true to say here.</summary>
+    [Parameter] public string? Plan { get; set; }
+
+    [Parameter] public string? Initials { get; set; }
+
+    private bool _open;
+
+    private string Seed => string.IsNullOrWhiteSpace(Id) ? "workspace" : Id;
+
+    private string InitialsOrDefault => Initials ?? DesignSystem.Initials.From(Name);
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") _open = false;
+    }
+}

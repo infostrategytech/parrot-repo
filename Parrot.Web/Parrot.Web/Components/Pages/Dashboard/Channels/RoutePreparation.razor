@@ -1,0 +1,143 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+
+@* One preparation page between the choice and Meta.
+
+   It exists to name the decisions that are irreversible or easy to miss — the
+   chat-history question that is asked once, the provider data that does not
+   move — without trying to recreate Meta's own sequence of screens, which
+   changes without warning. *@
+
+<section class="prep">
+    <header class="prep__header">
+        @* The design-system Ghost button rather than React's bare text link:
+           the pill that appears on hover tells you the label is a target
+           before you click it, which a plain run of text does not. *@
+        <Button Variant="ButtonVariant.Ghost" Class="prep__back" @onclick="OnBack">
+            <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+            <ChildContent>@BackLabel</ChildContent>
+        </Button>
+
+        <span class="prep__route channel-@Channel.Id.ToString().ToLowerInvariant()">
+            <Icon Name="@Mark" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Bold" As="span">@Route.Label</Typography>
+        </span>
+    </header>
+
+    <div class="prep__reading">
+        <div class="prep__intro">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@Route.PageTitle</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="prep__lede">@Route.PageIntro</Typography>
+        </div>
+
+        <div class="prep__expectations">
+            @if (Route.Priority is { } priority)
+            {
+                @* The one thing on this page that cannot be undone, given its
+                   own treatment so it is not read as another bullet. *@
+                <aside class="prep__priority">
+                    <span class="prep__priority-icon">
+                        <Icon Name="@(priority.Glyph ?? IconName.RiTimeFill)" Size="IconSize.Md" />
+                    </span>
+                    <div>
+                        <Typography TextStyle="TextStyle.BodyDefaultBold" As="strong" Prose>@priority.Title</Typography>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@priority.Body</Typography>
+                    </div>
+                </aside>
+            }
+
+            <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2" Class="prep__heading">Before you Continue</Typography>
+
+            <div class="prep__list">
+                @foreach (var item in Route.Expectations)
+                {
+                    <article class="prep__item">
+                        <span class="prep__item-icon" aria-hidden="true">
+                            <Icon Name="item.Glyph" Size="IconSize.Md" />
+                        </span>
+                        <div class="prep__item-copy">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@item.Title</Typography>
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@item.Body</Typography>
+
+                            @if (item.Details is not null)
+                            {
+                                @* Behind a disclosure: the step-by-step nobody
+                                   needs unless they are already stuck. *@
+                                <details class="prep__details">
+                                    <Typography TextStyle="TextStyle.Small12Semibold" As="summary">
+                                        @(item.DetailsLabel ?? "View details")
+                                    </Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@item.Details</Typography>
+                                </details>
+                            }
+                        </div>
+                    </article>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="prep__agreement">
+        <Checkbox State="@(Accepted ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                  StateChanged="@(state => AcceptedChanged.InvokeAsync(state == CheckboxState.Checked))"
+                  Label="@Route.Acknowledgement" />
+    </div>
+
+    <footer class="prep__footer">
+        <div class="prep__assurance">
+            <Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@Route.Assurance</Typography>
+        </div>
+
+        @* Locked until the acknowledgement is ticked. The things it confirms
+           are the ones that cannot be undone afterwards. React keeps a
+           disabled button at full opacity — only the grey fill should read,
+           not a doubled-up dim — so this is a bespoke control rather than the
+           design-system Button, whose disabled state also dims by half. *@
+        @* While it waits the label holds and the brand's relay dots take the
+           arrow's place, as the design-system Button does when Busy. *@
+        <button type="button"
+                class="@(Busy ? "prep__continue is-busy" : "prep__continue")"
+                disabled="@(Busy || !Accepted)"
+                aria-busy="@(Busy ? "true" : null)"
+                @onclick="OnContinue">
+            <Typography TextStyle="TextStyle.BodySmallBold" As="span">@Route.Cta</Typography>
+            @if (Busy)
+            {
+                <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
+            }
+            else
+            {
+                <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
+            }
+        </button>
+    </footer>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    [Parameter, EditorRequired] public ChannelRoute Route { get; set; } = default!;
+
+    /// <summary>True when the channel offers more than one route to go back to.</summary>
+    [Parameter] public bool CanChangeRoute { get; set; }
+
+    [Parameter] public bool Accepted { get; set; }
+
+    [Parameter] public EventCallback<bool> AcceptedChanged { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    [Parameter] public EventCallback OnContinue { get; set; }
+
+    private string BackLabel => CanChangeRoute ? "Change option" : "Back to channels";
+
+    private IconName Mark => Channel.Id switch
+    {
+        ChannelId.Whatsapp => IconName.RiWhatsappFill,
+        ChannelId.Instagram => IconName.RiInstagramFill,
+        _ => IconName.RiFacebookCircleFill
+    };
+}

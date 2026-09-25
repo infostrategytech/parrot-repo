@@ -1,17 +1,9 @@
 ﻿@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu />
-    </div>
+@* Aurora's shell, from the shared component library. The mobile app has no
+   session of its own yet, so the rail is rendered without a workspace or an
+   account card rather than with invented ones. *@
 
-    <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
-        </div>
-
-        <article class="content px-4">
-            @Body
-        </article>
-    </main>
-</div>
+<AppShell BrandName="OmniAI">
+    @Body
+</AppShell>

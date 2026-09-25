@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Parrot.SharedComponents.Services;
 
 namespace Parrot.Mobile
 {
@@ -15,6 +16,11 @@ namespace Parrot.Mobile
                 });
 
             builder.Services.AddMauiBlazorWebView();
+
+            // The Aurora shell: rail state, the typed face of aurora-interop.js, and the single toast slot.
+            builder.Services.AddScoped<AppShellState>();
+            builder.Services.AddScoped<AuroraInterop>();
+            builder.Services.AddScoped<ToastService>();
 
 #if DEBUG
     		builder.Services.AddBlazorWebViewDeveloperTools();

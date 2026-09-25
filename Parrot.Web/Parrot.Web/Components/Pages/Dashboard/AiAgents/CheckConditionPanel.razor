@@ -1,99 +1,103 @@
-<div class="pb-two-col">
-    <div class="pb-field">
-        <label class="pb-field-label">Field to check</label>
-        <div class="pb-select-wrap">
-            <select class="pb-select" value="@Step.ConditionField"
-                    @onchange="async e => { Step.ConditionField = e.Value?.ToString() ?? string.Empty; await OnChanged.InvokeAsync(); }">
-                <option value="">-- Select --</option>
-                <option value="CustomerName">Customer Name</option>
-                <option value="CustomerOrder">Customer Order</option>
-                <option value="SelectedItems">Selected Items</option>
-                <option value="OrderTotal">Order total</option>
-            </select>
-            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
-    </div>
-    <div class="pb-field">
-        <label class="pb-field-label">Operator</label>
-        <div class="pb-select-wrap">
-            <select class="pb-select" value="@Step.ConditionOperator"
-                    @onchange="async e => { Step.ConditionOperator = e.Value?.ToString() ?? string.Empty; await OnChanged.InvokeAsync(); }">
-                <option value="">-- Select operator --</option>
-                <option value="equals">Equals</option>
-                <option value="notequals">Does not equals</option>
-                <option value="contains">Contains</option>
-                <option value="gt">Greater than</option>
-                <option value="lt">Less than</option>
-                <option value="isempty">Is empty</option>
-                <option value="isnotempty">Is not empty</option>
-            </select>
-            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
-    </div>
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+<div class="step-two-col">
+    <SelectField FloatingLabel="Field to check"
+                 Value="@FieldLabel(Step.ConditionField)"
+                 Open='@(_open == "field")'
+                 OpenChanged='@(open => _open = open ? "field" : null)'>
+        @foreach (var field in Fields)
+        {
+            var current = field;
+            <PopoverOption Label="@current.Label" Active="@(Step.ConditionField == current.Id)"
+                           OnSelect="async () => { Step.ConditionField = current.Id; _open = null; await OnChanged.InvokeAsync(); }" />
+        }
+    </SelectField>
+    <SelectField FloatingLabel="Operator"
+                 Value="@OperatorLabel(Step.ConditionOperator)"
+                 Open='@(_open == "operator")'
+                 OpenChanged='@(open => _open = open ? "operator" : null)'>
+        @foreach (var op in Operators)
+        {
+            var current = op;
+            <PopoverOption Label="@current.Label" Active="@(Step.ConditionOperator == current.Id)"
+                           OnSelect="async () => { Step.ConditionOperator = current.Id; _open = null; await OnChanged.InvokeAsync(); }" />
+        }
+    </SelectField>
 </div>
 
-<div class="pb-field">
-    <label class="pb-field-label">Value</label>
-    <input class="pb-input" placeholder="Comparison value" value="@Step.ConditionValue"
-           @oninput="e => Step.ConditionValue = e.Value?.ToString() ?? string.Empty" />
-</div>
+<Input FloatingLabel="Value"
+       HelperText="Comparison value"
+       Value="@Step.ConditionValue"
+       ValueChanged="value => Step.ConditionValue = value ?? string.Empty" />
 
-<div class="pb-field">
-    <label class="pb-field-label">Path</label>
-    <div class="pb-condition-path pb-condition-path--yes">
-        <div class="pb-condition-path-header">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2.5"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-            </svg>
-            <span class="pb-condition-path-label pb-condition-path-label--yes">Yes Path</span>
+<div class="step-field">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="step-label">Path</Typography>
+
+    <div class="step-path step-path--yes">
+        <div class="step-path-head">
+            <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Yes path</Typography>
         </div>
-        <p class="pb-condition-path-sub">When condition is true</p>
-        <div class="pb-select-wrap">
-            <select class="pb-select" value="@Step.YesAction"
-                    @onchange="e => Step.YesAction = e.Value?.ToString() ?? string.Empty">
-                <option value="">-- Select action --</option>
-                <option value="continue">Continue to next step</option>
-                <option value="end">End flow</option>
-            </select>
-            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="step-hint">When condition is true</Typography>
+        <SelectField FloatingLabel="Action"
+                     Value="@ActionLabel(Step.YesAction)"
+                     Open='@(_open == "yes")'
+                     OpenChanged='@(open => _open = open ? "yes" : null)'>
+            <PopoverOption Label="Continue to next step" Active='@(Step.YesAction == "continue")' OnSelect='() => { Step.YesAction = "continue"; _open = null; }' />
+            <PopoverOption Label="End flow" Active='@(Step.YesAction == "end")' OnSelect='() => { Step.YesAction = "end"; _open = null; }' />
+        </SelectField>
     </div>
-    <div class="pb-condition-path pb-condition-path--no">
-        <div class="pb-condition-path-header">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2.5"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-            <span class="pb-condition-path-label pb-condition-path-label--no">No Path</span>
+
+    <div class="step-path step-path--no">
+        <div class="step-path-head">
+            <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">No path</Typography>
         </div>
-        <p class="pb-condition-path-sub">When condition is false</p>
-        <div class="pb-select-wrap">
-            <select class="pb-select" value="@Step.NoAction"
-                    @onchange="e => Step.NoAction = e.Value?.ToString() ?? string.Empty">
-                <option value="">-- Select action --</option>
-                <option value="continue">Continue to next step</option>
-                <option value="end">End flow</option>
-            </select>
-            <svg class="pb-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M6 9l6 6 6-6" />
-            </svg>
-        </div>
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="step-hint">When condition is false</Typography>
+        <SelectField FloatingLabel="Action"
+                     Value="@ActionLabel(Step.NoAction)"
+                     Open='@(_open == "no")'
+                     OpenChanged='@(open => _open = open ? "no" : null)'>
+            <PopoverOption Label="Continue to next step" Active='@(Step.NoAction == "continue")' OnSelect='() => { Step.NoAction = "continue"; _open = null; }' />
+            <PopoverOption Label="End flow" Active='@(Step.NoAction == "end")' OnSelect='() => { Step.NoAction = "end"; _open = null; }' />
+        </SelectField>
     </div>
 </div>
 
 @code {
     [Parameter] public PlaybookStep Step { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string? _open;
+
+    private sealed record Choice(string Id, string Label);
+
+    private static readonly Choice[] Fields =
+    [
+        new("CustomerName", "Customer name"),
+        new("CustomerOrder", "Customer order"),
+        new("SelectedItems", "Selected items"),
+        new("OrderTotal", "Order total")
+    ];
+
+    private static readonly Choice[] Operators =
+    [
+        new("equals", "Equals"),
+        new("notequals", "Does not equal"),
+        new("contains", "Contains"),
+        new("gt", "Greater than"),
+        new("lt", "Less than"),
+        new("isempty", "Is empty"),
+        new("isnotempty", "Is not empty")
+    ];
+
+    private static string FieldLabel(string id) => Fields.FirstOrDefault(f => f.Id == id)?.Label ?? string.Empty;
+    private static string OperatorLabel(string id) => Operators.FirstOrDefault(o => o.Id == id)?.Label ?? string.Empty;
+
+    private static string ActionLabel(string id) => id switch
+    {
+        "continue" => "Continue to next step",
+        "end" => "End flow",
+        _ => string.Empty
+    };
 }

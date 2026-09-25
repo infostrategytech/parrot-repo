@@ -1,0 +1,11 @@
+@namespace Parrot.Web.Components.Shared
+
+@* The first thing a returning person sees: the mark assembles in
+   conversation order — message, reply, message — and rests on the logo while
+   the stored session is read back. The brand's launch loader, playing once. *@
+
+<div class="splash" role="status" aria-live="polite">
+    <CadenceLoader Kind="CadenceLoaderKind.Assemble" Size="88" />
+    <span class="splash__wordmark cadence-wordmark">OmniAI</span>
+    <span class="splash__note">Checking your session…</span>
+</div>

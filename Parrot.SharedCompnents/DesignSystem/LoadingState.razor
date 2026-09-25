@@ -1,0 +1,34 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* products-loading, task-request-loading and knowledge-loading were the same
+   three elements with different copy. This is them.
+
+   Use it when a whole view is waiting. When you know the shape of what is
+   coming, prefer a Skeleton — it holds the layout still, so the page does not
+   jump when the data lands. *@
+
+<div class="loading-state" role="status" aria-live="polite">
+    @* The brand's Thread loader: the mark writes itself bar by bar, then
+       clears — the default page and panel loader. With reduced motion it
+       rests as the static mark. *@
+    <span class="loading-state__icon">
+        <CadenceLoader Kind="CadenceLoaderKind.Thread" Size="48" />
+    </span>
+
+    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Title</Typography>
+
+    @if (!string.IsNullOrWhiteSpace(Description))
+    {
+        <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose>@Description</Typography>
+    }
+</div>
+
+@code {
+    /// <summary>What is being prepared. "Preparing your offers", not "Loading".</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public string? Description { get; set; }
+
+    /// <summary>Kept for callers: the wait is drawn with the brand's loader now, so the glyph is not rendered.</summary>
+    [Parameter] public IconName Glyph { get; set; }
+}

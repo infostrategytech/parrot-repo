@@ -1,0 +1,6 @@
+.coming-soon {
+  display: grid;
+  place-items: center;
+  min-height: 100%;
+  padding: var(--spacing-4xl);
+}

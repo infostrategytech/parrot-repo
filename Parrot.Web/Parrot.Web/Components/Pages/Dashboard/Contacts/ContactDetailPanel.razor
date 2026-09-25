@@ -1,156 +1,175 @@
-@using Parrot.Web.Components.Pages.Dashboard.Contacts
+@namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@implements IAsyncDisposable
+@inject AuroraInterop Interop
 
-@if (Contact != null)
+@* A customer, in a panel over the list. The frame is Aurora's editor drawer
+   (a card lifted off the right edge, focus trapped and returned) and the
+   contents are Aurora's Customer 360 panel bound to what Parrot knows about
+   a contact. *@
+
+@if (Contact is not null)
 {
-    <div class="cdp-overlay" @onclick="OnClose"></div>
-    <div class="cdp-panel" @onclick:stopPropagation>
-        <button class="cdp-close" @onclick="OnClose" aria-label="Close">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                 stroke-linecap="round" stroke-linejoin="round">
-                <line x1="18" y1="6" x2="6" y2="18" />
-                <line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-        </button>
-
-        <div class="cdp-profile">
-            <div class="cdp-avatar-wrap">
-                @if (!string.IsNullOrEmpty(Contact.AvatarUrl))
-                {
-                    <img class="cdp-avatar" src="@Contact.AvatarUrl" alt="@Contact.Name" />
-                }
-                else
-                {
-                    <div class="cdp-avatar cdp-avatar--placeholder">@Contact.Name[0]</div>
-                }
-            </div>
-            <div class="cdp-name-row">
-                <h2 class="cdp-name">@Contact.Name</h2>
-                @if (!string.IsNullOrEmpty(Contact.Stage))
-                {
-                    <span class="cdp-stage-chip cdp-stage-chip--@Contact.Stage.ToLower().Replace(" ", "")">@Contact.Stage</span>
-                }
-            </div>
-            <div class="cdp-tags">
-                @foreach (var tag in Contact.Tags)
-                {
-                    <span class="cdp-tag">@tag</span>
-                }
-            </div>
-            <p class="cdp-last">
-                Last interaction: <strong>@Contact.LastInteraction</strong> via @Contact.LastInteractionChannel
-            </p>
-        </div>
-
-        <div class="cdp-section">
-            <h3 class="cdp-section-title">CHANNELS</h3>
-            <div class="cdp-channels">
-                @if (Contact.HasWhatsApp)
-                {
-                    <div class="cdp-channel-card">
-                        <img src="assets/images/icons/whatsapp.png" alt="WhatsApp" width="22" height="22" />
-                        <div>
-                            <span class="cdp-channel-name">WhatsApp Business</span>
-                            <span class="cdp-channel-handle">@Contact.WhatsAppNumber</span>
-                        </div>
-                    </div>
-                }
-                @if (Contact.HasInstagram)
-                {
-                    <div class="cdp-channel-card">
-                        <img src="assets/images/icons/instagram.png" alt="Instagram" width="22" height="22" />
-                        <div>
-                            <span class="cdp-channel-name">Instagram</span>
-                            <span class="cdp-channel-handle">@Contact.InstagramHandle</span>
-                        </div>
-                    </div>
-                }
-            </div>
-            <div class="cdp-link-btn-wrapper">
-                <button class="cdp-link-btn">
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
-                        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
-                    </svg>
-                    Link another account
+    <div class="panel-backdrop" @onmousedown="OnClose">
+        <aside class="customer-panel"
+               aria-label="Customer 360"
+               tabindex="-1"
+               @ref="_card"
+               @onkeydown="OnKeyDown"
+               @onmousedown:stopPropagation="true">
+            <header class="customer-panel__header">
+                <div>
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer 360</Typography>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p">Everything you know about this customer</Typography>
+                </div>
+                <button type="button" aria-label="Close Customer 360" title="Close Customer 360" @onclick="OnClose">
+                    <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
                 </button>
-            </div>
-        </div>
+            </header>
 
-        <div class="cdp-section">
-            <h3 class="cdp-section-title">ORDERS</h3>
-            <div class="cdp-orders-wrap">
-                <table class="cdp-orders-table">
-                    <thead>
-                        <tr>
-                            <th>Order ID</th>
-                            <th>Item</th>
-                            <th>Amount</th>
-                            <th>Status</th>
-                            <th>Date Created</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var order in PagedOrders)
+            <section class="customer-profile">
+                <PetalAvatar Seed="@Contact.Id.ToString()" Initials="@Initials.From(Contact.Name)" Size="AvatarSize.Lg" />
+                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Contact.Name</Typography>
+                <div>
+                    @if (!string.IsNullOrEmpty(Contact.Stage))
+                    {
+                        <StatusBadge Tone="@ContactCopy.StageTone(Contact.Stage)">@ContactCopy.Stage(Contact.Stage)</StatusBadge>
+                    }
+                    @foreach (var tag in Contact.Tags)
+                    {
+                        <StatusBadge Tone="StatusTone.Neutral">@tag</StatusBadge>
+                    }
+                </div>
+            </section>
+
+            <div class="customer-panel__scroll">
+                <section class="customer-metrics" aria-label="Customer value">
+                    @* Parrot holds the request count only; the other two slots keep
+                       Aurora's em dash until there is a value behind them. *@
+                    <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">—</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Lifetime value</Typography></div>
+                    <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.OrderCount</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Requests</Typography></div>
+                    <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">—</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Conversations</Typography></div>
+                </section>
+
+                @if (!string.IsNullOrWhiteSpace(Contact.Email) || !string.IsNullOrWhiteSpace(Contact.Phone))
+                {
+                    <ContactSection Title="Contact">
+                        <div class="customer-contact-list">
+                            @if (!string.IsNullOrWhiteSpace(Contact.Email))
+                            {
+                                <button type="button" @onclick='() => CopyAsync("email", Contact.Email)'>
+                                    <Icon Name="IconName.RiMailFill" Size="IconSize.Sm" />
+                                    <span><small>Email</small><strong>@Contact.Email</strong></span>
+                                    <Icon Name="@(_copied == "email" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
+                                </button>
+                            }
+                            @if (!string.IsNullOrWhiteSpace(Contact.Phone))
+                            {
+                                <button type="button" @onclick='() => CopyAsync("phone", Contact.Phone)'>
+                                    <Icon Name="IconName.RiPhoneFill" Size="IconSize.Sm" />
+                                    <span><small>Phone</small><strong>@Contact.Phone</strong></span>
+                                    <Icon Name="@(_copied == "phone" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
+                                </button>
+                            }
+                        </div>
+                    </ContactSection>
+                }
+
+                <ContactSection Title="Connected identities" Count="@IdentityCount">
+                    <div class="customer-identities">
+                        @if (Contact.HasWhatsApp)
                         {
-                            <tr>
-                                <td class="cdp-order-id">@order.OrderId</td>
-                                <td>@order.Item</td>
-                                <td class="cdp-order-amount">@order.Amount</td>
-                                <td>
-                                    <span class="cdp-order-status cdp-order-status--@order.Status.ToLower()">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                            @if (order.Status == "Pending")
-                                            {
-                                                <circle cx="12" cy="12" r="10" />
-                                                <polyline points="12 6 12 12 16 14" />
-                                            }
-                                            else if (order.Status == "Completed")
-                                            {
-                                                <polyline points="20 6 9 17 4 12" />
-                                            }
-                                            else
-                                            {
-                                                <circle cx="12" cy="12" r="10" />
-                                                <line x1="15" y1="9" x2="9" y2="15" />
-                                                <line x1="9" y1="9" x2="15" y2="15" />
-                                            }
-                                        </svg>
-                                        @order.Status
-                                    </span>
-                                </td>
-                                <td class="cdp-order-date">@order.DateCreated</td>
-                            </tr>
+                            <div>
+                                <span class="customer-identities__mark customer-identities__mark--whatsapp">
+                                    <Icon Name="IconName.RiWhatsappFill" Size="IconSize.Sm" Label="WhatsApp" />
+                                </span>
+                                <span>
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.WhatsAppNumber</Typography>
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">WhatsApp Business</Typography>
+                                </span>
+                            </div>
                         }
-                    </tbody>
-                </table>
-                <div class="cdp-orders-footer">
-                    <span class="cdp-orders-count">Showing @OrderStart–@OrderEnd of @TotalOrders items</span>
-                    <div class="cdp-order-pages">
-                        <button class="cdp-page-btn" disabled="@(_orderPage == 1)" @onclick="() => _orderPage--">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M15 18l-6-6 6-6" />
-                            </svg>
-                        </button>
-                        @for (int i = 1; i <= TotalOrderPages; i++)
+                        @if (Contact.HasInstagram)
                         {
-                            var pg = i;
-                            <button class="cdp-page-btn @(pg == _orderPage ? "cdp-page-btn--active" : "")"
-                                    @onclick="() => _orderPage = pg">@pg</button>
+                            <div>
+                                <span class="customer-identities__mark customer-identities__mark--instagram">
+                                    <Icon Name="IconName.RiInstagramFill" Size="IconSize.Sm" Label="Instagram" />
+                                </span>
+                                <span>
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.InstagramHandle</Typography>
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">Instagram</Typography>
+                                </span>
+                            </div>
                         }
-                        <button class="cdp-page-btn" disabled="@(_orderPage == TotalOrderPages)"
-                                @onclick="() => _orderPage++">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 18l6-6-6-6" />
-                            </svg>
-                        </button>
+                        @if (!string.IsNullOrWhiteSpace(Contact.ChannelIdentifier))
+                        {
+                            <div>
+                                <span class="customer-identities__mark">
+                                    <Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" />
+                                </span>
+                                <span>
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">Channel identifier</Typography>
+                                </span>
+                            </div>
+                        }
                     </div>
+                    <div class="customer-identities__link">
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">
+                            <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
+                            <ChildContent>Link another account</ChildContent>
+                        </Button>
+                    </div>
+                </ContactSection>
+
+                <ContactSection Title="Recent task requests" Count="@(Contact.Orders.Count == 0 ? null : Contact.Orders.Count)">
+                    @if (Contact.Orders.Count == 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No task requests yet.</Typography>
+                    }
+                    else
+                    {
+                        <div class="customer-orders">
+                            @foreach (var order in PagedOrders)
+                            {
+                                <div class="customer-orders__row">
+                                    <span><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span>
+                                    <span>
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@order.OrderId</Typography>
+                                        <Typography TextStyle="TextStyle.Small10Regular" As="small">@order.Item · @order.DateCreated</Typography>
+                                    </span>
+                                    <span>
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@order.Amount</Typography>
+                                        <StatusBadge Tone="@ContactCopy.OrderTone(order.Status)" Glyph="@ContactCopy.OrderGlyph(order.Status)">@order.Status</StatusBadge>
+                                    </span>
+                                </div>
+                            }
+                        </div>
+
+                        @if (TotalOrderPages > 1)
+                        {
+                            <footer class="customer-orders__pagination">
+                                <Typography TextStyle="TextStyle.Small10Regular" As="span">
+                                    Showing @OrderStart–@OrderEnd of @TotalOrders
+                                </Typography>
+                                <div>
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                                            disabled="@(_orderPage == 1)" @onclick="() => _orderPage--">Previous</Button>
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                                            disabled="@(_orderPage == TotalOrderPages)" @onclick="() => _orderPage++">Next</Button>
+                                </div>
+                            </footer>
+                        }
+                    }
+                </ContactSection>
+
+                <div class="customer-since">
+                    <Icon Name="IconName.RiTimeFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small10Regular" As="span">
+                        Last interaction @Contact.LastInteraction via @ContactCopy.Channel(Contact.LastInteractionChannel)
+                    </Typography>
                 </div>
             </div>
-        </div>
+        </aside>
     </div>
 }
 
@@ -158,8 +177,18 @@
     [Parameter] public Contact? Contact { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
 
+    private ElementReference _card;
+    private IAsyncDisposable? _trap;
+    private bool _wasOpen;
+    private string? _copied;
+
     private int _orderPage = 1;
     private int _orderPageSize = 3;
+
+    private int IdentityCount =>
+        (Contact?.HasWhatsApp == true ? 1 : 0) +
+        (Contact?.HasInstagram == true ? 1 : 0) +
+        (string.IsNullOrWhiteSpace(Contact?.ChannelIdentifier) ? 0 : 1);
 
     private int TotalOrders => Contact?.Orders.Count ?? 0;
     private int TotalOrderPages => Math.Max(1, (int)Math.Ceiling(TotalOrders / (double)_orderPageSize));
@@ -169,5 +198,46 @@
         .Skip((_orderPage - 1) * _orderPageSize)
         .Take(_orderPageSize) ?? Enumerable.Empty<ContactOrder>();
 
-    protected override void OnParametersSet() => _orderPage = 1;
+    protected override void OnParametersSet()
+    {
+        _orderPage = 1;
+        _copied = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var open = Contact is not null;
+        if (open && !_wasOpen)
+        {
+            _wasOpen = true;
+            await _card.FocusAsync();
+            _trap = await Interop.TrapFocusAsync(_card);
+        }
+        else if (!open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseTrapAsync();
+        }
+    }
+
+    private async Task CopyAsync(string which, string value)
+    {
+        await Interop.CopyAsync(value);
+        _copied = which;
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") await OnClose.InvokeAsync();
+    }
+
+    private async Task ReleaseTrapAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap;
+        _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseTrapAsync();
 }

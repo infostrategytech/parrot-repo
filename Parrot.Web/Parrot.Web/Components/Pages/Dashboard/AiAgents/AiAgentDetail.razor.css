@@ -1,0 +1,442 @@
+/* Agent detail — Aurora's list-page idiom (centred measure, fluid gutter,
+   one card per section, the summary strip, the tab tray and the products
+   table) applied to Parrot's four-tab agent page. */
+
+.agent-detail {
+  min-width: 0;
+  padding: var(--ds-detail-top) var(--ds-detail-gutter) var(--spacing-5xl);
+}
+
+.agent-detail > * {
+  width: min(var(--ds-detail-max), 100%);
+  margin-inline: auto;
+}
+
+.agent-detail {
+  /* Gaps in the token set: no page-gutter, content-width, control-height,
+     border-width or chart scale. Shared with the operations page. */
+  --ds-detail-top: 42px;
+  --ds-detail-gutter: clamp(28px, 4vw, 66px);
+  --ds-detail-max: 1440px;
+  --ds-detail-hairline: 1px;
+  --ds-detail-measure: 650px;
+  --ds-detail-avatar: 64px;
+  --ds-detail-avatar-radius: 18px;
+  --ds-detail-back-height: 34px;
+  --ds-detail-tab: 34px;
+  --ds-detail-stat-icon: 42px;
+  --ds-detail-stat-min: 108px;
+  --ds-detail-row-min: 64px;
+  --ds-detail-menu-width: 240px;
+  --ds-detail-menu-layer: 20;
+  --ds-detail-hbar: 10px;
+  --ds-detail-hbar-label: 40px;
+  --ds-detail-hbar-value: 36px;
+  --ds-detail-vbar-height: 240px;
+  --ds-detail-vbar-axis: 36px;
+  --ds-detail-vbar-max: 48px;
+  --ds-detail-donut: 120px;
+  --ds-detail-donut-ring: 14px;
+  --ds-detail-col-title: 200px;
+  --ds-detail-col-steps: 70px;
+  --ds-detail-col-execution: 90px;
+  --ds-detail-col-status: 118px;
+  --ds-detail-col-date: 190px;
+  --ds-detail-col-actions: 44px;
+  --ds-detail-head-min: 45px;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+.agent-detail__header {
+  display: grid;
+  gap: var(--spacing-lg);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.agent-detail__back {
+  display: inline-flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-self: start;
+  height: var(--ds-detail-back-height);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.agent-detail__back:hover { color: var(--colors-text-primary); background: var(--colors-interaction-hover); }
+
+.agent-detail__identity {
+  display: grid;
+  grid-template-columns: var(--ds-detail-avatar) minmax(0, 1fr) auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+}
+
+.agent-tone-slate {
+  --agent-color: var(--colors-text-secondary);
+  --agent-soft: var(--colors-surface-muted);
+}
+
+.agent-detail__avatar {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  width: var(--ds-detail-avatar);
+  height: var(--ds-detail-avatar);
+  color: var(--agent-color);
+  background: var(--agent-soft);
+  border-radius: var(--ds-detail-avatar-radius);
+}
+
+.agent-detail__avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+.agent-detail__titles { display: grid; gap: var(--spacing-sm); min-width: 0; }
+.agent-detail__name-row { display: flex; gap: var(--spacing-md); align-items: center; }
+.agent-detail__name-row ::deep h1 { overflow: hidden; margin: var(--spacing-none); color: var(--colors-text-primary); white-space: nowrap; text-overflow: ellipsis; }
+::deep .agent-detail__lede { max-width: var(--ds-detail-measure); margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.agent-detail__actions { display: flex; flex: 0 0 auto; gap: var(--spacing-sm); align-items: center; }
+
+/* ── Tabs ────────────────────────────────────────────────────────────────── */
+
+.agent-detail__tabs {
+  display: flex;
+  width: fit-content;
+  gap: var(--spacing-2xs);
+  margin-bottom: var(--spacing-2xl);
+  padding: var(--spacing-xs);
+  background: var(--colors-accent-neutral-border);
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-detail__tabs button {
+  display: inline-flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-height: var(--ds-detail-tab);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.agent-detail__tabs button:hover { background: var(--colors-interaction-hover); }
+
+.agent-detail__tabs button.is-active {
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
+}
+
+/* ── Summary strip ───────────────────────────────────────────────────────── */
+
+.agent-detail__stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  overflow: hidden;
+  margin-bottom: var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.agent-detail__stats article {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--ds-detail-stat-icon) minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: center;
+  min-height: var(--ds-detail-stat-min);
+  padding: var(--spacing-xl);
+}
+
+.agent-detail__stats article + article::before {
+  content: "";
+  position: absolute;
+  top: var(--spacing-xl);
+  bottom: var(--spacing-xl);
+  left: 0;
+  width: var(--ds-detail-hairline);
+  background: var(--colors-accent-neutral-border);
+}
+
+.agent-detail__stat-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-detail-stat-icon);
+  height: var(--ds-detail-stat-icon);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+
+.agent-detail__stats article > div { display: grid; gap: var(--spacing-xs); }
+.agent-detail__stats ::deep strong { color: var(--colors-text-primary); }
+.agent-detail__stats ::deep span { color: var(--colors-text-muted); }
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+
+.agent-detail__card {
+  margin-bottom: var(--spacing-lg);
+  overflow: visible;
+  background: var(--colors-surface-card);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.agent-detail__card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: var(--ds-detail-hairline) solid var(--colors-surface-border);
+}
+
+.agent-detail__card-head ::deep h2,
+.agent-detail__card-head ::deep h3,
+.agent-detail__section-head ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+.agent-detail__card-head ::deep p,
+.agent-detail__section-head ::deep p { margin: var(--spacing-xs) var(--spacing-none) var(--spacing-none); color: var(--colors-text-subtle); }
+
+.agent-detail__section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-2xl);
+  margin-bottom: var(--spacing-lg);
+}
+
+.agent-detail__row {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  min-height: var(--ds-detail-row-min);
+  padding: var(--spacing-md) var(--spacing-xl);
+}
+
+.agent-detail__row + .agent-detail__row { border-top: var(--ds-detail-hairline) solid var(--colors-surface-border); }
+.agent-detail__row-text { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.agent-detail__row-text ::deep strong { color: var(--colors-text-primary); }
+.agent-detail__row-text ::deep small { color: var(--colors-text-muted); }
+
+/* Empty playbooks: Aurora's page-sized empty state, followed by the list of
+   what a playbook can do. */
+.agent-detail__empty { padding: var(--spacing-2xl) var(--spacing-xl) var(--spacing-3xl); }
+
+.agent-detail__capabilities {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-detail-measure), 100%);
+  margin: var(--spacing-lg) auto var(--spacing-none);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+
+.agent-detail__capabilities ::deep p { margin: var(--spacing-none); color: var(--colors-text-secondary); }
+.agent-detail__capabilities ul { display: grid; gap: var(--spacing-sm); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.agent-detail__capabilities li { display: grid; grid-template-columns: var(--spacing-lg) minmax(0, 1fr); gap: var(--spacing-sm); align-items: start; color: var(--colors-text-muted); }
+.agent-detail__capabilities li ::deep .ds-icon { color: var(--colors-feedback-success-text); }
+
+/* ── Playbook table ──────────────────────────────────────────────────────── */
+
+.agent-detail__table-wrap {
+  overflow: visible;
+  background: var(--colors-surface-card);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.agent-detail__table-head,
+.agent-detail__table-row {
+  display: grid;
+  grid-template-columns:
+    minmax(var(--ds-detail-col-title), 1.4fr)
+    minmax(0, 2fr)
+    var(--ds-detail-col-steps)
+    var(--ds-detail-col-execution)
+    var(--ds-detail-col-status)
+    var(--ds-detail-col-date)
+    var(--ds-detail-col-actions);
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.agent-detail__table-head {
+  min-height: var(--ds-detail-head-min);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border-bottom: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl) var(--radius-radius-2xl) 0 0;
+}
+
+.agent-detail__table-row { min-height: var(--ds-detail-row-min); cursor: pointer; }
+.agent-detail__table-row:hover { background: var(--colors-interaction-hover); }
+.agent-detail__table-row + .agent-detail__table-row { border-top: var(--ds-detail-hairline) solid var(--colors-surface-border); }
+.agent-detail__table-row > * { min-width: 0; }
+::deep .agent-detail__cell-title { overflow: hidden; color: var(--colors-text-primary); white-space: nowrap; text-overflow: ellipsis; }
+::deep .agent-detail__cell-muted { overflow: hidden; color: var(--colors-text-muted); white-space: nowrap; text-overflow: ellipsis; }
+
+.agent-detail__row-menu { position: relative; }
+
+/* A row action menu, drawn the way FilterPopover draws its menu so a menu row
+   looks the same wherever it appears. */
+.agent-detail__menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: var(--ds-detail-menu-layer);
+  display: grid;
+  gap: var(--spacing-2xs);
+  width: var(--ds-detail-menu-width);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-popover);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow);
+}
+
+.agent-detail__pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border-top: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: 0 0 var(--radius-radius-2xl) var(--radius-radius-2xl);
+}
+
+/* ── Charts ──────────────────────────────────────────────────────────────── */
+/* Drawn with the chart tokens: series 1 for every single-series bar, one
+   chart colour per channel for the donuts. */
+
+.agent-detail__charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.agent-detail__hbars { display: grid; gap: var(--spacing-md); padding: var(--spacing-xl); }
+
+.agent-detail__hbar {
+  display: grid;
+  grid-template-columns: var(--ds-detail-hbar-label) minmax(0, 1fr) var(--ds-detail-hbar-value);
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+::deep .agent-detail__hbar-label { color: var(--colors-text-muted); }
+::deep .agent-detail__hbar-value { color: var(--colors-text-secondary); text-align: right; }
+
+.agent-detail__hbar-track {
+  height: var(--ds-detail-hbar);
+  overflow: hidden;
+  background: var(--colors-chart-no-data);
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-detail__hbar-fill {
+  height: 100%;
+  background: var(--colors-chart-chart-1);
+  border-radius: inherit;
+}
+
+.agent-detail__vbars {
+  display: grid;
+  grid-template-columns: var(--ds-detail-vbar-axis) minmax(0, 1fr);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+}
+
+.agent-detail__vbar-axis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: var(--ds-detail-vbar-height);
+  color: var(--colors-text-subtle);
+  text-align: right;
+}
+
+.agent-detail__vbar-area { display: grid; gap: var(--spacing-sm); min-width: 0; }
+.agent-detail__vbar-plot { position: relative; height: var(--ds-detail-vbar-height); }
+
+.agent-detail__vbar-grid {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.agent-detail__vbar-gridline { height: var(--ds-detail-hairline); background: var(--colors-surface-border); }
+
+.agent-detail__vbar-columns {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+}
+
+.agent-detail__vbar-column { display: flex; align-items: flex-end; width: var(--ds-detail-vbar-max); height: 100%; }
+.agent-detail__vbar-fill { width: 100%; background: var(--colors-chart-chart-1); border-radius: var(--radius-radius-sm) var(--radius-radius-sm) 0 0; }
+.agent-detail__vbar-labels { display: flex; justify-content: space-around; color: var(--colors-text-muted); text-align: center; }
+.agent-detail__vbar-labels ::deep span { width: var(--ds-detail-vbar-max); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+.agent-detail__donuts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+}
+
+.agent-detail__donut-card { display: grid; justify-items: center; gap: var(--spacing-md); padding: var(--spacing-xl); }
+
+.agent-detail__donut {
+  display: grid;
+  place-items: center;
+  width: var(--ds-detail-donut);
+  height: var(--ds-detail-donut);
+  background: conic-gradient(var(--ds-donut-colour) 0% calc(var(--ds-donut-value) * 1%), var(--colors-chart-no-data) calc(var(--ds-donut-value) * 1%) 100%);
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-detail__donut-hole {
+  display: grid;
+  place-items: center;
+  width: calc(var(--ds-detail-donut) - var(--ds-detail-donut-ring) * 2);
+  height: calc(var(--ds-detail-donut) - var(--ds-detail-donut-ring) * 2);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-detail__donut-card > ::deep span { color: var(--colors-text-muted); }
+
+@media (max-width: 1280px) {
+  .agent-detail__stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .agent-detail__charts,
+  .agent-detail__donuts { grid-template-columns: 1fr; }
+  .agent-detail__identity { grid-template-columns: var(--ds-detail-avatar) minmax(0, 1fr); }
+  .agent-detail__actions { grid-column: 2; justify-self: start; }
+}
+
+@media (max-width: 1180px) {
+  .agent-detail { padding-inline: var(--spacing-2xl); }
+}

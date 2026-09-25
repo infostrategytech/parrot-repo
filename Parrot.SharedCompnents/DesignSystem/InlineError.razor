@@ -1,0 +1,43 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Replaces six class names for one pattern: knowledge-orientation-error (used
+   five times inside AgentBuilder alone), products-error, task-request-panel-
+   error, inline-error, customer-panel-error and popover-create-error.
+
+   An inline error belongs next to the thing that failed. A toast is for
+   something that happened elsewhere; this is for something that happened here,
+   and it does not disappear on a timer. *@
+
+<div class="inline-error inline-error--@Tone.ToString().ToLowerInvariant()" role="alert">
+    <span class="inline-error__icon">
+        <Icon Name="@ToneIcon" Size="IconSize.Sm" />
+    </span>
+
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="inline-error__message">
+        @Message
+    </Typography>
+
+    @if (OnDismiss.HasDelegate)
+    {
+        <button type="button" class="inline-error__dismiss" @onclick="OnDismiss" aria-label="Dismiss error">
+            <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>What went wrong, in the person's terms. Never a status code.</summary>
+    [Parameter, EditorRequired] public string Message { get; set; } = "";
+
+    [Parameter] public InlineErrorTone Tone { get; set; } = InlineErrorTone.Error;
+
+    /// <summary>Omit it and the error stays until the underlying problem is fixed, which is usually right.</summary>
+    [Parameter] public EventCallback OnDismiss { get; set; }
+
+    private IconName ToneIcon => Tone switch
+    {
+        InlineErrorTone.Warning => IconName.RiAlertFill,
+        InlineErrorTone.Info => IconName.RiInformationFill,
+        _ => IconName.RiErrorWarningFill
+    };
+}

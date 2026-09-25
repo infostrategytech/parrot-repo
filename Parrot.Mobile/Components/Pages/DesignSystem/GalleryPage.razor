@@ -1,0 +1,345 @@
+@page "/design-system"
+@namespace Parrot.Mobile.Components.Pages.DesignSystem
+@layout Parrot.Mobile.Components.Layout.BareLayout
+@using Parrot.SharedComponents.Services
+@inject ToastService Toasts
+
+@* Reference page for the design system. Not product surface — it exists so a
+   component can be checked against the Figma frames side by side, and so the
+   React gallery at #design-system and this one can be compared during the
+   migration. *@
+
+<div class="ds-gallery">
+    <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h1" Class="ds-gallery__title">Design system</Typography>
+    <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="ds-gallery__lede">
+        Components built from the Aurora variables. Compare against the Figma frames, and use the
+        theme switch in the corner to check both modes. Hover and press the controls — those states
+        are real here, not separate variants.
+    </Typography>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Button</Typography>
+        <div class="ds-gallery__grid">
+            <div></div>
+            @foreach (var size in Sizes)
+            {
+                <Typography TextStyle="TextStyle.Small10Semibold" As="div" Class="ds-gallery__label ds-overline">@size.ToString().ToLowerInvariant()</Typography>
+            }
+
+            @foreach (var variant in Variants)
+            {
+                <Typography TextStyle="TextStyle.Small10Semibold" As="div" Class="ds-gallery__label ds-overline">@variant.ToString().ToLowerInvariant()</Typography>
+                @foreach (var size in Sizes)
+                {
+                    <div class="ds-gallery__cell">
+                        <Button Variant="variant" Size="size">Button</Button>
+                        <Button Variant="variant" Size="size">
+                            <IconLeft><Icon Name="IconName.LucidePlus" /></IconLeft>
+                            <ChildContent>Button</ChildContent>
+                        </Button>
+                        <Button Variant="variant" Size="size">
+                            <IconLeft><Icon Name="IconName.LucidePlus" /></IconLeft>
+                            <IconRight><Icon Name="IconName.LucidePlus" /></IconRight>
+                            <ChildContent>Button</ChildContent>
+                        </Button>
+                    </div>
+                }
+            }
+
+            <Typography TextStyle="TextStyle.Small10Semibold" As="div" Class="ds-gallery__label ds-overline">disabled</Typography>
+            @foreach (var size in Sizes)
+            {
+                <div class="ds-gallery__cell">
+                    <Button Variant="ButtonVariant.Primary" Size="size" disabled>Button</Button>
+                </div>
+            }
+
+            <Typography TextStyle="TextStyle.Small10Semibold" As="div" Class="ds-gallery__label ds-overline">icon only</Typography>
+            @foreach (var size in Sizes)
+            {
+                <div class="ds-gallery__cell">
+                    <Button Variant="ButtonVariant.Secondary" Size="size" aria-label="Add">
+                        <IconLeft><Icon Name="IconName.LucidePlus" /></IconLeft>
+                    </Button>
+                </div>
+            }
+        </div>
+
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            4 variants x 3 sizes x 4 states = the 48 Figma variants at node 158:10. Disabled renders
+            identically for every variant, which is how the design defines it.
+        </Typography>
+    </section>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Form controls</Typography>
+        <div class="ds-gallery__stack">
+            <Input FloatingLabel="Business name" @bind-Value="_name" />
+            <Input FloatingLabel="Business name" @bind-Value="_name" Label="With a label above" HelperText="Helper text sits under the field." />
+            <Input FloatingLabel="Phone number" @bind-Value="_phone" PrefixText="+234" />
+            <Input FloatingLabel="Email" @bind-Value="_email" Error HelperText="That address does not look right." />
+            <Input FloatingLabel="Cannot be edited" Value="Locked" Disabled="true" />
+        </div>
+
+        <div class="ds-gallery__stack">
+            <Toggle @bind-Checked="_toggleOn" Label="Send a receipt" Description="Every completed order gets one." />
+            <Toggle @bind-Checked="_toggleOn" Label="Compact row size" Size="ToggleSize.Sm" />
+            <Toggle Checked="true" Label="Locked on" Disabled="true" />
+
+            <Checkbox @bind-State="_checkbox" Label="I have access to the business portfolio" Description="Meta asks for this before the number can be verified." />
+            <Checkbox State="CheckboxState.Indeterminate" Label="Some channels selected" AriaLabel="Some channels selected" />
+            <Checkbox State="CheckboxState.Checked" Label="Locked on" Disabled="true" />
+        </div>
+
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            The floating label is pure CSS — the input carries a placeholder of one space so
+            <code>:placeholder-shown</code> does the work. There is no "is filled" state in code.
+        </Typography>
+    </section>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Status and feedback</Typography>
+
+        <div class="ds-gallery__cell">
+            @foreach (var tone in Tones)
+            {
+                <StatusBadge Tone="tone">@tone.ToString()</StatusBadge>
+            }
+            <StatusBadge Tone="StatusTone.Success" Glyph="IconName.RiCheckFill">Connected</StatusBadge>
+        </div>
+
+        <div class="ds-gallery__stack">
+            <InlineError Message="We could not reach the WhatsApp Business API. Your details are saved." />
+            <InlineError Tone="InlineErrorTone.Warning" Message="This token expires in 24 hours." />
+            <InlineError Tone="InlineErrorTone.Info" Message="Progress saves after each section." />
+        </div>
+
+        <div class="ds-gallery__cell">
+            <Button Variant="ButtonVariant.Secondary" @onclick="@(() => Toasts.Show("Product saved"))">Success toast</Button>
+            <Button Variant="ButtonVariant.Secondary" @onclick="@(() => Toasts.ShowError("Products and services are unavailable."))">Error toast</Button>
+            <Button Variant="ButtonVariant.Secondary" @onclick="ShowToastWithAction">Toast with an action</Button>
+        </div>
+
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            One toast slot, one 3200ms timer, owned by ToastService. React ran five separate timers
+            and one of them was 3000ms — nobody chose that.
+        </Typography>
+    </section>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Empty, loading and skeleton</Typography>
+
+        <div class="ds-gallery__panels">
+            <div class="ds-gallery__panel">
+                <EmptyState Glyph="IconName.RiRobot3Fill"
+                            Title="No agents found"
+                            Description="Try a different search or status."
+                            Size="EmptyStateSize.Panel" />
+            </div>
+
+            <div class="ds-gallery__panel">
+                <EmptyState Glyph="IconName.RiSearch2Fill"
+                            Title="No matching offers"
+                            Description="Try a different search or clear one of the filters."
+                            Size="EmptyStateSize.Panel">
+                    <Action>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">Clear filters</Button>
+                    </Action>
+                </EmptyState>
+            </div>
+
+            <div class="ds-gallery__panel">
+                <LoadingState Glyph="IconName.RiShoppingBag3Fill"
+                              Title="Preparing your offers"
+                              Description="Loading your products and services." />
+            </div>
+
+            <div class="ds-gallery__panel">
+                <div class="ds-gallery__skeleton-row">
+                    <Skeleton Shape="SkeletonShape.Circle" />
+                    <div class="ds-gallery__skeleton-lines">
+                        <Skeleton Width="60%" />
+                        <Skeleton Width="90%" />
+                    </div>
+                </div>
+                <Skeleton Shape="SkeletonShape.Block" />
+            </div>
+        </div>
+
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            Eleven empty states, six inline errors, three loading states and four bespoke skeletons
+            in React — reconciled here into four components. Loading and empty share a silhouette on
+            purpose: a screen that is waiting and a screen that is empty should not look like two
+            different products.
+        </Typography>
+    </section>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Filter popover</Typography>
+
+        <div class="ds-gallery__cell">
+            <FilterPopover Label="@($"Status: {_status}")"
+                           Title="Filter by status"
+                           Subtitle="Applies to the list below"
+                           Open='@(_openMenu == "status")'
+                           OpenChanged="@(open => _openMenu = open ? "status" : null)">
+                @foreach (var option in StatusOptions)
+                {
+                    <PopoverOption Label="@option"
+                                   Active="_status == option"
+                                   OnSelect="@(() => { _status = option; _openMenu = null; })" />
+                }
+            </FilterPopover>
+
+            <FilterPopover Label="@($"Sort: {_sort}")"
+                           Title="Sort"
+                           Open='@(_openMenu == "sort")'
+                           OpenChanged="@(open => _openMenu = open ? "sort" : null)">
+                @foreach (var option in SortOptions)
+                {
+                    <PopoverOption Label="@option"
+                                   Active="_sort == option"
+                                   OnSelect="@(() => { _sort = option; _openMenu = null; })" />
+                }
+            </FilterPopover>
+        </div>
+
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            Defined byte for byte twice in React, at ProductsPage.tsx:81 and
+            TaskRequestsPage.tsx:140. Opening one closes the other because the caller owns which menu
+            is open. Clicking away or pressing Escape closes it — with no document listener that can
+            outlive the component.
+        </Typography>
+    </section>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Dialog</Typography>
+
+        <div class="ds-gallery__cell">
+            <Button Variant="ButtonVariant.Secondary" @onclick="@(() => _dialog = DialogType.Default)">Default</Button>
+            <Button Variant="ButtonVariant.Destructive" @onclick="@(() => _dialog = DialogType.Destructive)">Destructive</Button>
+            <Button Variant="ButtonVariant.Ghost" @onclick="@(() => _dialog = DialogType.Informational)">Informational</Button>
+        </div>
+
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            Open one and press Tab repeatedly: focus stays inside the card and wraps. Close it and
+            focus returns to the button that opened it. React's dialog did neither, so Tab walked
+            into the page behind — invisible with a mouse, disorienting without one.
+        </Typography>
+    </section>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Typography</Typography>
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            The @TextStyleExtensions.Count text styles from node 138:2. One universal scale — no
+            desktop/mobile split. Size, family and weight are all tokens; colour is not part of a
+            text style, so pair these with text/primary, text/secondary or text/muted.
+        </Typography>
+
+        @foreach (var group in TypeSpecimen.Groups)
+        {
+            <div class="ds-gallery__type-group">
+                <Typography TextStyle="TextStyle.Small10Semibold" As="h3" Class="ds-gallery__label ds-overline">@group.Name</Typography>
+                @foreach (var row in group.Rows)
+                {
+                    <div class="ds-gallery__type-row">
+                        <div class="ds-gallery__type-meta">
+                            <code>.@row.Style.ToClassName()</code>
+                            <span>@row.Spec</span>
+                            @if (row.Use is not null)
+                            {
+                                <em>@row.Use</em>
+                            }
+                        </div>
+                        <Typography TextStyle="row.Style" As="p">@row.Sample</Typography>
+                    </div>
+                }
+            </div>
+        }
+
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            Leading is 1 throughout, exactly as the Figma styles specify. That is tight for anything
+            that wraps, so pass <code>Prose</code> to pick up the typography/leading scale. Overline
+            is not a style either: it is <code>ds-small-12-semibold ds-overline</code>.
+        </Typography>
+    </section>
+
+    <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Icons</Typography>
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="ds-gallery__note">
+            All @IconNameExtensions.Count glyphs, read out of the React source so this is exactly the
+            set the app uses. Every one paints with currentColor and takes its size from the text
+            around it. Review the whole sheet here rather than discovering a wrong glyph on a screen.
+        </Typography>
+        <div class="ds-gallery__icon-grid">
+            @foreach (var icon in AllIcons)
+            {
+                <div class="ds-gallery__icon-cell">
+                    <Icon Name="icon" Size="IconSize.Lg" />
+                    <code>@icon.ToSymbolId()</code>
+                </div>
+            }
+        </div>
+    </section>
+</div>
+
+<Dialog Open="_dialog is not null"
+        Type="_dialog ?? DialogType.Default"
+        Title="@DialogTitle"
+        OnCancel="@(() => _dialog = null)"
+        OnConfirm="@(() => _dialog = null)">
+    <GlyphContent><Icon Name="@DialogIcon" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>
+            This is the dialog body. It takes markup rather than a string, so a confirmation can
+            explain a consequence properly instead of squeezing it into one line.
+        </p>
+        <p>Press Escape, click the backdrop, or use either button.</p>
+    </Body>
+</Dialog>
+
+<ToastHost />
+
+@code {
+    private static readonly ButtonVariant[] Variants = Enum.GetValues<ButtonVariant>();
+    private static readonly ButtonSize[] Sizes = Enum.GetValues<ButtonSize>();
+    private static readonly IconName[] AllIcons = Enum.GetValues<IconName>();
+    private static readonly StatusTone[] Tones = Enum.GetValues<StatusTone>();
+
+    private static readonly string[] StatusOptions = ["All", "Published", "Draft", "Inactive"];
+    private static readonly string[] SortOptions = ["Newest", "Oldest", "A–Z"];
+
+    private string? _name;
+    private string? _phone;
+    private string? _email = "not-an-address";
+    private bool _toggleOn = true;
+    private CheckboxState _checkbox = CheckboxState.Unchecked;
+
+    private string? _openMenu;
+    private string _status = "All";
+    private string _sort = "Newest";
+
+    private DialogType? _dialog;
+
+    private string DialogTitle => _dialog switch
+    {
+        DialogType.Destructive => "Delete this product?",
+        DialogType.Informational => "How verification works",
+        _ => "Save these changes?"
+    };
+
+    private IconName DialogIcon => _dialog switch
+    {
+        DialogType.Destructive => IconName.RiDeleteBin6Fill,
+        DialogType.Informational => IconName.RiInformationFill,
+        _ => IconName.RiCheckboxCircleFill
+    };
+
+    private void ShowToastWithAction() =>
+        Toasts.Show(new ToastMessage(
+            "Draft saved",
+            "It will not be visible to customers yet.",
+            ToastStatus.Info,
+            "Publish",
+            () => Toasts.Show("Published")));
+}

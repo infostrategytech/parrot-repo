@@ -1,0 +1,208 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+
+@* The manual path: seven steps, with Meta's own screens described rather than
+   recreated.
+
+   The preflight comes first and is not counted as a step, because "have a
+   Facebook account ready" is not something you do in Meta — it is the thing
+   that stops people starting a thirty-minute job they cannot finish. *@
+
+@if (!Started)
+{
+    <section class="guided guided--preflight">
+        <header class="guided__header">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnExit">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Back</ChildContent>
+            </Button>
+        </header>
+
+        <div class="guided__body">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Before you start</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="guided__lede">
+                Have this ready before you begin.
+            </Typography>
+
+            <Typography TextStyle="TextStyle.BodyDefaultBold" As="h3" Class="guided__requirements-title">
+                What you need
+            </Typography>
+
+            <ul class="guided__requirements">
+                <li>
+                    <Icon Name="IconName.RiFacebookCircleFill" Size="IconSize.Md" Class="guided__facebook" />
+                    <span class="guided__requirement-copy">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>A Facebook account</Typography>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>
+                            You’ll use it to sign in securely at developers.facebook.com. Don’t have one?
+                            <a class="@TextStyle.BodySmallSemibold.ToClassName()"
+                               href="https://www.facebook.com/r.php" target="_blank" rel="noreferrer">Create an account</a>.
+                        </Typography>
+                    </span>
+                </li>
+            </ul>
+        </div>
+
+        <footer class="guided__footer">
+            <Button Variant="ButtonVariant.Secondary" @onclick="OnExit">Save and exit</Button>
+            <Button @onclick="OnStart">
+                <ChildContent>Start setup</ChildContent>
+                <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+            </Button>
+        </footer>
+    </section>
+}
+else
+{
+    <section class="guided @(GuidedSteps.HasDrawing(Step) ? "guided--split" : null)">
+        <header class="guided__header">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnBack">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Back</ChildContent>
+            </Button>
+            <div class="guided__counter">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChannelName setup</Typography>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">
+                    Step @(Step + 1) of @GuidedSteps.Count
+                </Typography>
+            </div>
+        </header>
+
+        <div class="guided__progress" role="progressbar"
+             aria-valuenow="@(Step + 1)" aria-valuemin="1" aria-valuemax="@GuidedSteps.Count">
+            <i style="width: @Percent%"></i>
+        </div>
+
+        <div class="guided__body">
+            @* Copy and drawing are siblings so they can sit side by side when
+               the window is wide enough, and stack in source order when it is
+               not — no layout to unwind at the narrow end. *@
+            <div class="@(GuidedSteps.HasDrawing(Step) ? "guided__split" : null)">
+                <div class="guided__copy">
+            @if (Current.Eyebrow is { } eyebrow && Step != GuidedSteps.TestStep && Step != GuidedSteps.ConnectionStep)
+            {
+                <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="guided__eyebrow ds-overline">
+                    @eyebrow
+                </Typography>
+            }
+
+            @* The message test brings its own heading, so printing the shell's
+               would say the same thing twice. *@
+            @if (Step != GuidedSteps.TestStep)
+            {
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@Current.Title</Typography>
+            }
+
+            @if (Current.Intro is { } intro)
+            {
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="guided__lede">@intro</Typography>
+            }
+
+            @if (Current.Instructions.Count > 0)
+            {
+                <ol class="guided__instructions">
+                    @for (var index = 0; index < Current.Instructions.Count; index++)
+                    {
+                        @* Both captured per iteration. Rendering @(index + 1)
+                           straight from the loop variable closes over the one
+                           variable a for loop has, so every marker printed the
+                           value it held after the loop finished. *@
+                        var number = index + 1;
+                        var instruction = Current.Instructions[index];
+                        <li>
+                            <Typography TextStyle="TextStyle.Small12Bold" As="span" Class="guided__marker">
+                                @number
+                            </Typography>
+                            <div class="guided__instruction">
+                                @if (instruction.Label is { } label)
+                                {
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@label</Typography>
+                                }
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    <Emphasis Text="@instruction.Text" />
+                                </Typography>
+
+                                @* Directly under the instruction that sends you
+                                   there — "the link below" has to be below. *@
+                                @if (instruction.Link is { } link)
+                                {
+                                    <a class="guided__link @TextStyle.BodySmallSemibold.ToClassName()"
+                                       href="@link.Url" target="_blank" rel="noreferrer">
+                                        @link.Label
+                                        <Icon Name="IconName.RiExternalLinkLine" />
+                                    </a>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ol>
+            }
+
+            @if (Current.Aside is { } aside)
+            {
+                <div class="guided__aside">
+                    <Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@aside</Typography>
+                </div>
+            }
+
+                </div>
+
+                @if (GuidedSteps.HasDrawing(Step))
+                {
+                    <div class="guided__demo">@Demo</div>
+                }
+            </div>
+
+            @* The two steps that are screens of their own rather than
+               instructions about Meta. *@
+            @if (Step == GuidedSteps.ConnectionStep)
+            {
+                @ConnectionContent
+            }
+            else if (Step == GuidedSteps.TestStep)
+            {
+                @TestContent
+            }
+        </div>
+
+        @* The last two steps carry their own actions, so the shell's footer
+           would be a second, competing "next". *@
+        @if (Step < GuidedSteps.ConnectionStep)
+        {
+            <footer class="guided__footer">
+                <Button Variant="ButtonVariant.Secondary" @onclick="OnExit">Save and exit</Button>
+                <Button disabled="@Busy" @onclick="OnNext">
+                    <ChildContent>Continue</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            </footer>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public string ChannelName { get; set; } = "";
+
+    /// <summary>False shows the preflight, which is not counted as a step.</summary>
+    [Parameter] public bool Started { get; set; }
+
+    [Parameter] public int Step { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The drawing of the provider screen this step describes, if it has one.</summary>
+    [Parameter] public RenderFragment? Demo { get; set; }
+
+    [Parameter] public RenderFragment? ConnectionContent { get; set; }
+    [Parameter] public RenderFragment? TestContent { get; set; }
+
+    [Parameter] public EventCallback OnStart { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+    [Parameter] public EventCallback OnNext { get; set; }
+    [Parameter] public EventCallback OnExit { get; set; }
+
+    private GuidedStep Current => GuidedSteps.All[Math.Clamp(Step, 0, GuidedSteps.Count - 1)];
+
+    private int Percent => (int)Math.Round((Step + 1) / (double)GuidedSteps.Count * 100);
+}

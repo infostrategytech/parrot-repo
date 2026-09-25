@@ -1,0 +1,142 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IDisposable
+
+@* Hover, pressed, disabled and focus are real CSS states rather than
+   parameters — Figma models them as variants only because it has no
+   interaction engine. Do not add them here.
+
+   There is deliberately no OnClick parameter: @onclick, disabled, aria-label,
+   title and every other DOM attribute pass straight through the splat below,
+   the same way React spread ...rest. One path, no duplicate.
+
+   Busy is the one state that is a parameter, because it is not a CSS state:
+   the brand's relay dots sit in the icon slot at 22px and the button keeps
+   its width and label so nothing shifts while it waits. Per the brand rules
+   the dots appear only after 300ms — anything faster shows no loader — and
+   once shown stay at least 600ms so they never flicker. *@
+
+<button type="@TypeAttribute"
+        @attributes="RestAttributes"
+        disabled="@IsDisabled"
+        aria-busy="@(Busy ? "true" : null)"
+        class="@ClassName">
+    @if (_showDots)
+    {
+        <span class="ds-button__icon ds-button__busy" aria-hidden="true">
+            <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
+        </span>
+    }
+    else if (IconLeft is not null)
+    {
+        <span class="ds-button__icon" aria-hidden="true">@IconLeft</span>
+    }
+    @* An omitted label is how an icon-only button is built. The caller supplies
+       aria-label; the label span is not rendered at all, so it cannot take up
+       padding. *@
+    @if (ChildContent is not null)
+    {
+        <span class="ds-button__label @LabelTextStyle.ToClassName()">@ChildContent</span>
+    }
+    @if (IconRight is not null)
+    {
+        <span class="ds-button__icon" aria-hidden="true">@IconRight</span>
+    }
+</button>
+
+@code {
+    [Parameter] public ButtonVariant Variant { get; set; } = ButtonVariant.Primary;
+
+    [Parameter] public ButtonSize Size { get; set; } = ButtonSize.Medium;
+
+    [Parameter] public ButtonType Type { get; set; } = ButtonType.Button;
+
+    [Parameter] public RenderFragment? IconLeft { get; set; }
+
+    [Parameter] public RenderFragment? IconRight { get; set; }
+
+    /// <summary>The label. Omit it, and pass an aria-label, for an icon-only button.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The action is in flight: the button waits, keeps its colour and label, and cannot be pressed again.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    // Brand rules: show after 300ms, hold for at least 600ms.
+    private const int ShowAfterMs = 300;
+    private const int HoldForMs = 600;
+
+    private bool _showDots;
+    private DateTime _shownAt;
+    private int _generation;
+    private bool _disposed;
+
+    private string TypeAttribute => Type.ToString().ToLowerInvariant();
+
+    // The splat may carry its own disabled; merge rather than let two
+    // attributes with one name fight over the element.
+    private bool IsDisabled => Busy || (AdditionalAttributes is not null
+        && AdditionalAttributes.TryGetValue("disabled", out var value)
+        && value is true or "true" or "disabled" or "");
+
+    private IReadOnlyDictionary<string, object>? RestAttributes =>
+        AdditionalAttributes is null || !AdditionalAttributes.ContainsKey("disabled")
+            ? AdditionalAttributes
+            : AdditionalAttributes.Where(pair => pair.Key != "disabled").ToDictionary(pair => pair.Key, pair => pair.Value);
+
+    // Figma draws the three sizes at 12, 14 and 16 in Medium, which are three
+    // styles that already exist. Naming them here rather than setting a size in
+    // Button.razor.css means a change to the scale reaches the button.
+    private TextStyle LabelTextStyle => Size switch
+    {
+        ButtonSize.Small => TextStyle.Small12Medium,
+        ButtonSize.Large => TextStyle.BodyDefaultMedium,
+        _ => TextStyle.BodySmallMedium
+    };
+
+    private string ClassName
+    {
+        get
+        {
+            var name = $"ds-button ds-button--{Variant.ToString().ToLowerInvariant()} ds-button--{Size.ToString().ToLowerInvariant()}";
+            if (Busy) name += " is-busy";
+            return string.IsNullOrWhiteSpace(Class) ? name : $"{name} {Class}";
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        var generation = ++_generation;
+        if (Busy && !_showDots)
+        {
+            _ = ShowAfterDelayAsync(generation);
+        }
+        else if (!Busy && _showDots)
+        {
+            _ = HideAfterHoldAsync(generation);
+        }
+    }
+
+    private async Task ShowAfterDelayAsync(int generation)
+    {
+        await Task.Delay(ShowAfterMs);
+        if (_disposed || generation != _generation || !Busy) return;
+        _showDots = true;
+        _shownAt = DateTime.UtcNow;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HideAfterHoldAsync(int generation)
+    {
+        var remaining = HoldForMs - (int)(DateTime.UtcNow - _shownAt).TotalMilliseconds;
+        if (remaining > 0) await Task.Delay(remaining);
+        if (_disposed || generation != _generation || Busy) return;
+        _showDots = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => _disposed = true;
+}

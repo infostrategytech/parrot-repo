@@ -1,0 +1,36 @@
+/* Deliberately the same silhouette as EmptyState: icon, heading, one line of
+   explanation, centred. A screen that is loading and a screen that is empty
+   should not look like two different products. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.loading-state {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-4xl) var(--spacing-2xl);
+  text-align: center;
+  color: var(--colors-text-muted);
+}
+
+.loading-state__icon {
+  display: grid;
+  place-items: center;
+  color: var(--colors-text-subtle);
+}
+
+.loading-state {
+  /* Gap in the token set: no motion scale. */
+  --ds-loading-breathe: 1800ms;
+}
+
+.loading-state ::deep strong { color: var(--colors-text-primary); }
+
+/* Slow enough to read as "working", not as "broken". Silenced by the global
+   reduced-motion block in app.css. */
+@keyframes loading-state-breathe {
+  50% { opacity: 0.45; }
+}

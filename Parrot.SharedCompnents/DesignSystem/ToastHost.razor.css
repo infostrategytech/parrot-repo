@@ -1,0 +1,34 @@
+/* Centred over the workspace, not the window. The navigation rail occupies the
+   left edge, so a toast centred on the viewport reads as slightly off. The
+   rail's width is published by the layout as --app-nav-width, which is the
+   sanctioned way for a parent to influence a child under scoped CSS: custom
+   properties still inherit, ordinary selectors do not. */
+
+/* These locals sit on the component's own root element, never on :root.
+   Blazor rewrites a scoped selector by appending the component's scope
+   attribute, so ":root" compiles to ":root[b-hash]" — and <html> carries no
+   component's attribute, so the whole block would match nothing and every
+   local below would silently be undefined. */
+.toast-host {
+  position: fixed;
+  top: var(--spacing-xl);
+  left: calc(var(--app-nav-width, 0px) + (100vw - var(--app-nav-width, 0px)) / 2);
+  z-index: var(--ds-toast-layer);
+  display: grid;
+  justify-items: center;
+  width: max-content;
+  max-width: calc(100vw - var(--spacing-5xl));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.toast-host > * {
+  pointer-events: auto;
+}
+
+.toast-host {
+  /* Gaps in the token set: no z-index scale and no component width scale.
+     The layer sits below the dialog's, which is the only thing that should
+     ever cover a toast. */
+  --ds-toast-layer: 110;
+}

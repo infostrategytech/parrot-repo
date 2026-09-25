@@ -1,167 +1,175 @@
 @page "/dashboard"
 @layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Dashboard
 @using Parrot.Web.Components.Pages.Dashboard.Dashboard
 @inject IJSRuntime JS
 @inject NavigationManager Nav
+@inject AuthState AuthState
 @implements IAsyncDisposable
+
+<PageTitle>Overview · OmniAI</PageTitle>
 
 <OnboardingModal />
 
-<div class="db-page">
+@* The overview. Aurora's Products frame; the welcome, the upgrade aside and
+   the checklist are cards; the six numbers are Aurora's stat strip; the chart
+   sits in a card of its own, drawn by chart.js in the chart tokens. *@
 
-    <!-- Page title -->
-    <div class="db-page-header rise">
-        <h1 class="db-h1">Dashboard</h1>
-        <p class="db-h1-sub">@_greeting, Jon — here's a snapshot of how your AI is performing today.</p>
-    </div>
-
-    <!-- Greeting hero -->
-    <div class="db-hero rise">
-        <div class="db-hero-orb" aria-hidden="true"></div>
-        <svg viewBox="0 0 600 300" preserveAspectRatio="none" class="db-hero-lines" aria-hidden="true">
-            <g fill="none" stroke="#C4B5FD" stroke-width="1.1">
-                <path d="M620 40 C 380 90 380 210 620 260"/>
-                <path d="M620 80 C 400 115 400 185 620 220"/>
-                <path d="M620 120 C 420 138 420 162 620 180"/>
-            </g>
-        </svg>
-        <div class="db-hero-content">
-            <p class="db-hero-meta">@_dateStr &nbsp;·&nbsp; @_clockStr</p>
-            <h2 class="db-hero-title">Welcome back, Jon</h2>
-            <p class="db-hero-sub">Your agents handled 412 conversations this week.</p>
+<div class="overview">
+    <header class="overview__header">
+        <div class="overview__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Overview</Typography>
+            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="overview__lede">
+                @_greeting — here's a snapshot of how your AI is performing today.
+            </Typography>
         </div>
-        <div class="db-hero-pulse-cards">
-            <div class="db-hero-pulse-card">
-                <p class="db-pulse-label">Live chats</p>
-                <p class="db-pulse-value">23</p>
+    </header>
+
+    <section class="overview__welcome" aria-label="Today">
+        <div class="overview__welcome-text">
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="overview__welcome-meta">
+                @_dateStr · @_clockStr
+            </Typography>
+            <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h2" Prose>
+                Welcome back@(string.IsNullOrWhiteSpace(WorkspaceName) ? "" : $", {WorkspaceName}")
+            </Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                Your agents handled 412 conversations this week.
+            </Typography>
+        </div>
+        <div class="overview__pulse">
+            <div class="overview__pulse-card">
+                <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="ds-overline">Live chats</Typography>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">23</Typography>
             </div>
-            <div class="db-hero-pulse-card">
-                <p class="db-pulse-label">Avg. response</p>
-                <p class="db-pulse-value">1.2m</p>
+            <div class="overview__pulse-card">
+                <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="ds-overline">Avg. response</Typography>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">1.2m</Typography>
             </div>
         </div>
-    </div>
+    </section>
 
-    <!-- Upgrade banner -->
-    <div class="db-upgrade-banner">
-        <svg viewBox="0 0 600 300" preserveAspectRatio="none" class="db-upgrade-lines" aria-hidden="true">
-            <g fill="none" stroke="#C4B5FD" stroke-width="1.1">
-                <path d="M620 30 C 360 80 360 220 620 270"/>
-                <path d="M620 60 C 380 100 380 200 620 240"/>
-                <path d="M620 90 C 400 120 400 180 620 210"/>
-            </g>
-        </svg>
-        <div class="db-upgrade-icon" aria-hidden="true">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="#fff">
-                <path d="M5 19h14l1.5-9-4.5 3-3.5-6-3.5 6L4.5 10 6 19z"/>
-            </svg>
+    <aside class="overview__upgrade">
+        <span class="overview__upgrade-icon"><Icon Name="IconName.RiSparklingFill" Size="IconSize.Md" /></span>
+        <div class="overview__upgrade-text">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Get more from your AI agent</Typography>
+            <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>
+                Unlock advanced flows, QA insights, and higher conversation limits.
+            </Typography>
         </div>
-        <div class="db-upgrade-body">
-            <p class="db-upgrade-title">Get more from your AI agent</p>
-            <p class="db-upgrade-sub">Unlock advanced flows, QA insights, and higher conversation limits.</p>
-        </div>
-        <a href="/dashboard/pricing" class="db-upgrade-btn">
-            See pricing
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
-                <path d="M9 6l6 6-6 6" stroke="#53279E" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-        </a>
-    </div>
+        <Button Variant="ButtonVariant.Secondary" @onclick="@(() => Nav.NavigateTo("/dashboard/pricing"))">
+            <ChildContent>See pricing</ChildContent>
+            <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+        </Button>
+    </aside>
 
-    <!-- Setup checklist -->
-    <section class="db-setup-card">
-        <div class="db-setup-header">
-            <div>
-                <h2 class="db-setup-title">Finish setting up your workspace</h2>
-                <p class="db-setup-sub">Tap each step as you complete it — your progress saves automatically.</p>
+    <section class="overview__setup" aria-label="Workspace setup">
+        <header class="overview__setup-header">
+            <div class="overview__setup-titles">
+                <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2">Finish setting up your workspace</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                    Tap each step as you complete it — your progress saves automatically.
+                </Typography>
             </div>
-            <span class="db-setup-badge">@_doneCount of 4 completed</span>
+            <StatusBadge Tone="@(_doneCount == _checklistLabels.Length ? StatusTone.Success : StatusTone.Brand)">
+                @_doneCount of @_checklistLabels.Length completed
+            </StatusBadge>
+        </header>
+
+        <div class="overview__progress" role="progressbar"
+             aria-valuenow="@_doneCount" aria-valuemin="0" aria-valuemax="@_checklistLabels.Length">
+            <i style="width: @(_doneCount * 100 / _checklistLabels.Length)%"></i>
         </div>
-        <div class="db-setup-progress-track">
-            <div class="db-setup-progress-bar" style="width: @(_doneCount * 25)%"></div>
-        </div>
-        <div class="db-setup-items">
+
+        <ol class="overview__checklist">
             @for (int i = 0; i < _checklistLabels.Length; i++)
             {
                 var idx = i;
                 var done = _done[idx];
-                <div class="db-setup-item @(done ? "db-setup-item--done" : "")" @onclick="() => HandleChecklistClick(idx)">
-                    <span class="db-setup-check @(done ? "db-setup-check--filled" : "")">
-                        @if (done)
-                        {
-                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.6"
-                                 stroke-linecap="round" stroke-linejoin="round">
-                                <polyline points="20 6 9 17 4 12" />
-                            </svg>
-                        }
-                    </span>
-                    <span class="db-setup-label">@_checklistLabels[idx]</span>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="margin-left:auto; flex-shrink:0;">
-                        <path d="M9 6l6 6-6 6" stroke="#C2BDD0" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </div>
+                <li>
+                    <button type="button"
+                            class="@(done ? "overview__step is-done" : "overview__step")"
+                            aria-pressed="@done.ToString().ToLowerInvariant()"
+                            @onclick="() => HandleChecklistClick(idx)">
+                        <span class="overview__step-marker">
+                            @if (done)
+                            {
+                                <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                            }
+                            else
+                            {
+                                <Typography TextStyle="TextStyle.Small12Bold" As="span">@(idx + 1)</Typography>
+                            }
+                        </span>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@_checklistLabels[idx]</Typography>
+                        <Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" />
+                    </button>
+                </li>
             }
-        </div>
+        </ol>
     </section>
 
-    <!-- Stats grid -->
-    <div class="db-stats-grid">
+    <section class="overview__summary" aria-label="Workspace summary">
         @foreach (var s in _stats)
         {
-            <div class="db-stat-card">
-                <div class="db-stat-top">
-                    <span class="db-stat-icon">
-                        @((MarkupString)s.IconSvg)
-                    </span>
-                    <span class="db-stat-trend @(s.TrendUp ? "db-stat-trend--up" : "")">@s.Trend</span>
+            <article class="stat-tile">
+                <span class="stat-tile__icon"><Icon Name="@s.Glyph" Size="IconSize.Md" /></span>
+                <div class="stat-tile__body">
+                    <div class="stat-tile__top">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@s.Title</Typography>
+                        <StatusBadge Tone="@(s.TrendUp ? StatusTone.Success : StatusTone.Neutral)">@s.Trend</StatusBadge>
+                    </div>
+                    <div class="stat-tile__figure">
+                        <Typography TextStyle="@(s.SmallValue ? TextStyle.HeadingH4Semibold : TextStyle.HeadingH3Semibold)" As="strong" Prose>
+                            @s.Value
+                        </Typography>
+                        <svg class="stat-tile__spark" viewBox="0 0 60 24" aria-hidden="true">
+                            <path d="@s.SparkPath" />
+                        </svg>
+                    </div>
+                    <Typography TextStyle="TextStyle.Small10Regular" As="p" Prose Class="stat-tile__note">@s.Desc</Typography>
                 </div>
-                <p class="db-stat-title">@s.Title</p>
-                <div class="db-stat-row">
-                    <p class="db-stat-value @(s.SmallValue ? "db-stat-value--sm" : "")">@s.Value</p>
-                    <svg width="60" height="24" viewBox="0 0 60 24" fill="none">
-                        <path d="@s.SparkPath" stroke="#53279E" stroke-width="2"
-                              stroke-linecap="round" stroke-linejoin="round" opacity=".7"/>
-                    </svg>
-                </div>
-                <p class="db-stat-desc">@s.Desc</p>
-            </div>
+            </article>
         }
-    </div>
+    </section>
 
-    <!-- Chart -->
-    <section class="db-chart-card">
-        <div class="db-chart-header">
-            <h3 class="db-chart-title">AI-Handled Conversations Over Time</h3>
-            <div class="db-chart-controls">
-                <div class="db-period-tabs">
-                    @foreach (var p in new[] { "7d", "30d", "90d" })
+    <section class="overview__chart" aria-label="AI-handled conversations over time">
+        <header class="overview__chart-header">
+            <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2">AI-handled conversations over time</Typography>
+            <div class="overview__chart-controls">
+                <div class="overview__periods" role="tablist" aria-label="Period">
+                    @foreach (var p in Periods)
                     {
-                        <button class="db-period-tab @(_selectedPeriod == p ? "db-period-tab--active" : "")"
-                                @onclick="() => SelectPeriod(p)">@p</button>
+                        var period = p;
+                        <button type="button"
+                                role="tab"
+                                aria-selected="@((_selectedPeriod == period).ToString().ToLowerInvariant())"
+                                class="@(_selectedPeriod == period ? "overview__period is-active" : "overview__period")"
+                                @onclick="() => SelectPeriod(period)">
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@period</Typography>
+                        </button>
                     }
                 </div>
-                <div class="db-chart-agent-wrap">
-                    <span class="db-chart-agent-label">Agent: @_selectedAgent</span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                        <path d="M6 9l6 6 6-6" stroke="#6B7280" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </div>
+                <StatusBadge Tone="StatusTone.Neutral" Glyph="IconName.RiRobot3Fill">Agent: @_selectedAgent</StatusBadge>
             </div>
-        </div>
-        <div class="db-chart-wrap">
+        </header>
+        <div class="overview__chart-wrap">
             <canvas id="convChart"></canvas>
         </div>
     </section>
-
 </div>
 
 @code {
+    private static readonly string[] Periods = ["7d", "30d", "90d"];
+
     private System.Threading.Timer? _clockTimer;
     private DateTime _now = DateTime.Now;
 
     private string _greeting = "";
     private string _dateStr = "";
     private string _clockStr = "";
+
+    private string? WorkspaceName => AuthState.CurrentUser?.BusinessName;
 
     private bool[] _done = [true, false, false, false];
     private int _doneCount => _done.Count(d => d);
@@ -178,7 +186,7 @@
     private string _selectedAgent = "Bakerbot";
 
     private record StatCard(string Title, string Value, string Trend, bool TrendUp, string Desc,
-        string IconSvg, string SparkPath, bool SmallValue = false);
+        IconName Glyph, string SparkPath, bool SmallValue = false);
 
     private List<StatCard> _stats = [];
 
@@ -232,29 +240,20 @@
         return string.Join(" ", pts.Select((p, i) => $"{(i == 0 ? "M" : "L")}{p.x:F1},{p.y:F1}"));
     }
 
-    private static string Icon(string d) =>
-        $"""<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="{d}" stroke="#53279E" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg>""";
-
     private static List<StatCard> BuildStats() =>
     [
         new("Contacts", "2,847", "+12%", true, "Total customers across all channels",
-            Icon("M16 19v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7M21 19v-1a4 4 0 00-3-3.8"),
-            Spark([30, 38, 34, 46, 50, 58])),
+            IconName.RiContactsBook3Fill, Spark([30, 38, 34, 46, 50, 58])),
         new("AI Agents", "8", "+2", true, "Agents handling conversations",
-            Icon("M12 3a9 9 0 100 18 9 9 0 000-18zM9 9h.01M15 9h.01M9 14c.8.8 2 1.2 3 1.2s2.2-.4 3-1.2"),
-            Spark([4, 5, 5, 6, 7, 8])),
+            IconName.RiRobot3Fill, Spark([4, 5, 5, 6, 7, 8])),
         new("Connected Channels", "2", "+1", true, "Messaging platforms linked",
-            Icon("M18 8a3 3 0 100-6 3 3 0 000 6zM6 15a3 3 0 100-6 3 3 0 000 6zM18 22a3 3 0 100-6 3 3 0 000 6zM8.6 13.5l6.8 4M15.4 6.5l-6.8 4"),
-            Spark([1, 1, 1, 2, 2, 2])),
+            IconName.RiLinksFill, Spark([1, 1, 1, 2, 2, 2])),
         new("Team", "7", "Stable", false, "People in your workspace",
-            Icon("M16 19v-1a4 4 0 00-4-4H7a4 4 0 00-4 4v1M9.5 10a3.5 3.5 0 100-7 3.5 3.5 0 000 7M21 19v-1a4 4 0 00-3-3.8"),
-            Spark([5, 5, 6, 6, 7, 7])),
+            IconName.RiTeamFill, Spark([5, 5, 6, 6, 7, 7])),
         new("Pending Task Request", "12", "+5", true, "Tasks waiting for your review",
-            Icon("M8 4h8v3H8zM7 7h10v13H7zM10 12h4M10 16h4"),
-            Spark([8, 10, 9, 14, 11, 12])),
+            IconName.RiClipboardFill, Spark([8, 10, 9, 14, 11, 12])),
         new("Collection Balance", "₦ 847,200", "+18%", true, "Total payments collected",
-            Icon("M4 4h7v7H4zM13 4h7v4h-7zM13 11h7v9h-7zM4 14h7v6H4z"),
-            Spark([40, 52, 60, 58, 70, 84]), SmallValue: true),
+            IconName.RiRefund2Fill, Spark([40, 52, 60, 58, 70, 84]), SmallValue: true),
     ];
 
     private static readonly Dictionary<string, (string[] labels, double[] data)> _chartData = new()
@@ -284,23 +283,32 @@
         if (firstRender)
         {
             var (labels, data) = _chartData[_selectedPeriod];
+            // Every colour the chart draws is read from the design tokens at
+            // the moment it is built, so it follows the theme rather than
+            // carrying its own palette.
             await JS.InvokeVoidAsync("eval", $$"""
                 (function() {
                     var ctx = document.getElementById('convChart');
-                    if (!ctx) return;
+                    if (!ctx || typeof Chart === 'undefined') return;
                     if (ctx._chartInstance) { ctx._chartInstance.destroy(); }
+                    var css = getComputedStyle(document.documentElement);
+                    var token = function(name) { return css.getPropertyValue(name).trim(); };
+                    var line = token('--colors-chart-chart-1');
+                    var fill = 'color-mix(in srgb, ' + line + ' 12%, transparent)';
                     ctx._chartInstance = new Chart(ctx, {
                         type: 'line',
                         data: {
                             labels: {{System.Text.Json.JsonSerializer.Serialize(labels)}},
                             datasets: [{
                                 data: {{System.Text.Json.JsonSerializer.Serialize(data)}},
-                                borderColor: '#53279E',
-                                backgroundColor: 'rgba(83,39,158,0.10)',
-                                borderWidth: 3,
+                                borderColor: line,
+                                backgroundColor: fill,
+                                borderWidth: 2,
                                 pointRadius: 0,
-                                pointHoverRadius: 6,
-                                pointHoverBackgroundColor: '#53279E',
+                                pointHoverRadius: 5,
+                                pointHoverBackgroundColor: line,
+                                pointHoverBorderColor: token('--colors-surface-card'),
+                                pointHoverBorderWidth: 2,
                                 fill: true,
                                 tension: 0.45
                             }]
@@ -308,24 +316,31 @@
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
+                            interaction: { mode: 'index', intersect: false },
                             plugins: {
                                 legend: { display: false },
                                 tooltip: {
                                     mode: 'index', intersect: false,
-                                    backgroundColor: '#1F2937', titleColor: '#fff', bodyColor: '#D3BDF9',
-                                    padding: 12, cornerRadius: 8, titleFont: { weight: 700 }
+                                    backgroundColor: token('--colors-surface-popover'),
+                                    titleColor: token('--colors-text-primary'),
+                                    bodyColor: token('--colors-text-secondary'),
+                                    borderColor: token('--colors-surface-border'),
+                                    borderWidth: 1,
+                                    padding: 12, cornerRadius: 8,
+                                    titleFont: { family: token('--typography-font-family-base'), weight: 600 },
+                                    bodyFont: { family: token('--typography-font-family-base') }
                                 }
                             },
                             scales: {
                                 x: {
                                     grid: { display: false },
                                     border: { display: false },
-                                    ticks: { color: '#B0B0B8', font: { size: 12 } }
+                                    ticks: { color: token('--colors-text-subtle'), font: { family: token('--typography-font-family-base'), size: 12 } }
                                 },
                                 y: {
                                     beginAtZero: false,
-                                    ticks: { color: '#B0B0B8', font: { size: 12 }, stepSize: 10 },
-                                    grid: { color: '#F0F0F2' },
+                                    ticks: { color: token('--colors-text-subtle'), font: { family: token('--typography-font-family-base'), size: 12 }, stepSize: 10 },
+                                    grid: { color: token('--colors-surface-border') },
                                     border: { display: false }
                                 }
                             }
@@ -339,7 +354,14 @@
     public async ValueTask DisposeAsync()
     {
         _clockTimer?.Dispose();
-        await JS.InvokeVoidAsync("eval",
-            "var c=document.getElementById('convChart'); if(c&&c._chartInstance){c._chartInstance.destroy();}");
+        try
+        {
+            await JS.InvokeVoidAsync("eval",
+                "var c=document.getElementById('convChart'); if(c&&c._chartInstance){c._chartInstance.destroy();}");
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page is going away; there is no chart left to release.
+        }
     }
 }

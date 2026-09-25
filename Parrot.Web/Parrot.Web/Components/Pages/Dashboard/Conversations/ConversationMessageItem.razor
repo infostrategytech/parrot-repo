@@ -1,0 +1,54 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+@using System.Globalization
+
+@* Parrot's messages are either the customer's (inbound) or a human reply sent
+   from the business's WhatsApp number (outbound). There are no AI, note,
+   system or AI-question messages, so only Aurora's message-bubble branch is
+   reachable; its is-customer / is-human variants are kept as drawn. *@
+<article class="message-bubble @DirectionClass @KindClass">
+    <PetalAvatar Seed="@AvatarSeed" Initials="@AvatarInitials" Size="AvatarSize.Md" />
+
+    <div class="message-bubble__content">
+        <header>
+            <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@AuthorLabel</Typography>
+        </header>
+
+        <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="message-bubble__body">@Message.Text</Typography>
+
+        <footer>
+            <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
+            @if (Message.IsOutgoing)
+            {
+                <span class="message-delivery @(IsFailed ? "is-failed" : null)">
+                    <Icon Name="@DeliveryGlyph" />
+                    <Typography TextStyle="TextStyle.Small10Regular" As="span">@Message.Status.ToLowerInvariant()</Typography>
+                </span>
+            }
+        </footer>
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public ConvMessage Message { get; set; } = default!;
+    [Parameter, EditorRequired] public string CustomerName { get; set; } = "";
+    [Parameter, EditorRequired] public string CustomerSeed { get; set; } = "";
+    [Parameter, EditorRequired] public string AuthorName { get; set; } = "";
+    [Parameter, EditorRequired] public string AuthorSeed { get; set; } = "";
+
+    private bool Outbound => Message.IsOutgoing;
+    private string DirectionClass => Outbound ? "is-outbound" : "is-inbound";
+    private string KindClass => Outbound ? "is-human" : "is-customer";
+    private string AuthorLabel => Outbound ? AuthorName : CustomerName;
+    private string AvatarSeed => Outbound ? AuthorSeed : CustomerSeed;
+    private string AvatarInitials => Initials.From(AuthorLabel);
+    private string TimeLabel => Message.ReceivedAt.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture);
+
+    private bool IsFailed => string.Equals(Message.Status, "failed", StringComparison.OrdinalIgnoreCase);
+
+    private IconName DeliveryGlyph => Message.Status.ToLowerInvariant() switch
+    {
+        "failed" => IconName.RiErrorWarningFill,
+        "pending" or "unknown" => IconName.RiTimeFill,
+        _ => IconName.RiCheckDoubleFill
+    };
+}

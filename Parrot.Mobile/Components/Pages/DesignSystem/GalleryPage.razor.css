@@ -1,0 +1,187 @@
+/* Reference page for the design system. Not shipped to end users — reachable
+   at /design-system so design and engineering can check a component against
+   the Figma frames side by side.
+
+   The React version ended with a max-width:860px query. It never matched:
+   the app sets a 1080px viewport floor, so that breakpoint was unreachable
+   code. Dropped rather than ported. */
+
+.ds-gallery {
+  /* Layout-only values with no token behind them: the design system defines
+     no border-width, label-column or tracking scale. */
+  --ds-gallery-border-width: 1px;
+  --ds-gallery-label-column: 7rem;
+  --ds-gallery-label-tracking: 0.06em;
+  --ds-gallery-icon-cell: 9rem;
+  --ds-gallery-stack-width: 26rem;
+  --ds-gallery-panel-width: 17rem;
+  --ds-gallery-panel-height: 12rem;
+
+  min-height: 100vh;
+  padding: var(--spacing-2xl);
+  background: var(--colors-surface-background);
+  color: var(--colors-text-primary);
+}
+
+::deep .ds-gallery__title {
+  margin: 0 0 var(--spacing-xs);
+}
+
+::deep .ds-gallery__lede {
+  margin: 0 0 var(--spacing-2xl);
+  max-width: 60ch;
+  color: var(--colors-text-secondary);
+  line-height: var(--typography-leading-leading-base);
+}
+
+.ds-gallery__section {
+  margin-bottom: var(--spacing-2xl);
+  padding: var(--spacing-xl);
+  border: var(--ds-gallery-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  background: var(--colors-surface-card);
+}
+
+::deep .ds-gallery__section-title {
+  margin: 0 0 var(--spacing-lg);
+}
+
+.ds-gallery__grid {
+  display: grid;
+  grid-template-columns: var(--ds-gallery-label-column) repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+  align-items: center;
+}
+
+::deep .ds-gallery__label {
+  color: var(--colors-text-muted);
+  text-transform: uppercase;
+}
+
+.ds-gallery__cell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+::deep .ds-gallery__note {
+  margin-top: var(--spacing-lg);
+  color: var(--colors-text-muted);
+  line-height: var(--typography-leading-leading-sm);
+}
+
+/* Typography specimen. Laid out like the Figma frame — metadata on the left,
+   the live sample on the right — so the two can be read side by side. */
+.ds-gallery__type-group {
+  margin-top: var(--spacing-xl);
+}
+
+.ds-gallery__type-group > ::deep .ds-gallery__label {
+  margin: 0 0 var(--spacing-sm);
+}
+
+.ds-gallery__type-row {
+  display: grid;
+  grid-template-columns: calc(var(--spacing-7xl) + var(--spacing-6xl)) minmax(0, 1fr);
+  gap: var(--spacing-lg);
+  align-items: center;
+  padding: var(--spacing-md) 0;
+  border-top: var(--ds-gallery-border-width) solid var(--colors-surface-border);
+}
+
+.ds-gallery__type-meta {
+  display: grid;
+  gap: var(--spacing-2xs);
+}
+
+.ds-gallery__type-meta code {
+  color: var(--colors-text-secondary);
+  font-family: var(--typography-font-family-mono), ui-monospace, monospace; /* text-style-exempt: the scale has no small mono style — code is defined at 14 only */
+}
+
+.ds-gallery__type-meta span,
+.ds-gallery__type-meta em {
+  color: var(--colors-text-muted);
+  font-style: normal;
+}
+
+/* The samples set their own type, so this only handles flow and overflow. */
+.ds-gallery__type-row > ::deep p {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ds-gallery__note code {
+  font-family: var(--typography-font-family-mono), ui-monospace, monospace; /* text-style-exempt: the scale has no small mono style — code is defined at 14 only */
+}
+
+/* Icons. The whole sheet on one page, because a wrong glyph is far cheaper to
+   catch here than on the screen that uses it. */
+.ds-gallery__icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--ds-gallery-icon-cell), 1fr));
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+}
+
+.ds-gallery__icon-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-md);
+  border: var(--ds-gallery-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-md);
+  color: var(--colors-text-primary);
+  text-align: center;
+}
+
+.ds-gallery__icon-cell code {
+  color: var(--colors-text-muted);
+  font-family: var(--typography-font-family-mono), ui-monospace, monospace; /* text-style-exempt: the scale has no small mono style — code is defined at 14 only */
+  overflow-wrap: anywhere;
+}
+
+/* Layout helpers for the specimen sections. These only arrange the components
+   being shown — no component is restyled from here, which is the rule scoped
+   CSS enforces anyway: a parent's selectors cannot reach a child component's
+   elements without ::deep. */
+
+.ds-gallery__stack {
+  display: grid;
+  gap: var(--spacing-lg);
+  justify-items: start;
+  max-width: var(--ds-gallery-stack-width);
+  margin-bottom: var(--spacing-xl);
+}
+
+.ds-gallery__panels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--ds-gallery-panel-width), 1fr));
+  gap: var(--spacing-lg);
+}
+
+.ds-gallery__panel {
+  display: grid;
+  align-content: center;
+  gap: var(--spacing-md);
+  min-height: var(--ds-gallery-panel-height);
+  padding: var(--spacing-lg);
+  border: var(--ds-gallery-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-md);
+  background: var(--colors-surface-background);
+}
+
+.ds-gallery__skeleton-row {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}
+
+.ds-gallery__skeleton-lines {
+  display: grid;
+  gap: var(--spacing-sm);
+  flex: 1;
+}

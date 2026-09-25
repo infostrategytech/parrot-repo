@@ -1,0 +1,86 @@
+/* Measured from the design: 448×60 box, 1px #E0E0E0 edge, 10px corners,
+   glyph 16px inset 22px, 13px between glyph and text, 13.5px placeholder in
+   #787880, the eye inset 18px on the right. */
+.field {
+  --field-h: 60px;
+  --field-radius: 10px;
+  --field-pad-x: 22px;
+  --field-gap: 13px;
+  --field-text: 13.5px;
+  --field-eye-inset: 18px;
+  --field-ring: 4px;
+
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  font-family: var(--cadence-font-sans);
+}
+
+.field__box {
+  display: flex;
+  align-items: center;
+  gap: var(--field-gap);
+  height: var(--field-h);
+  padding: 0 var(--field-pad-x);
+  background: #FFFFFF;
+  border: 1px solid var(--cadence-field-line);
+  border-radius: var(--field-radius);
+  cursor: text;
+  transition: border-color var(--cadence-action) var(--cadence-ease), box-shadow var(--cadence-action) var(--cadence-ease);
+}
+
+.field__box:hover { border-color: #CFCFD4; }
+
+.field__box:focus-within {
+  border-color: var(--cadence-teal);
+  box-shadow: 0 0 0 var(--field-ring) color-mix(in srgb, var(--cadence-teal) 12%, transparent);
+}
+
+.field__glyph {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--cadence-field-icon);
+}
+
+.field__box input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+  font-family: inherit;
+  font-size: var(--field-text);
+  font-weight: 400;
+  color: var(--cadence-field-text);
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.field__box input::placeholder { color: var(--cadence-field-placeholder); opacity: 1; }
+
+.field__eye {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  margin-right: calc(var(--field-eye-inset) - var(--field-pad-x));
+  padding: 4px;
+  color: #707078;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color var(--cadence-action) var(--cadence-ease);
+}
+
+.field__eye:hover,
+.field__eye.is-on { color: var(--cadence-teal); }
+
+.field.is-error .field__box { border-color: var(--cadence-terracotta); }
+
+.field__error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--cadence-terracotta);
+}

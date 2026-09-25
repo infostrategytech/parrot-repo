@@ -1,0 +1,28 @@
+/* The two fields inside the save dialog. The dialog itself is Aurora's. */
+
+.save-playbook__fields {
+  display: grid;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+}
+
+.save-playbook__description { display: grid; gap: var(--spacing-sm); }
+.save-playbook__description ::deep span { color: var(--colors-text-secondary); }
+.save-playbook__description ::deep em { color: var(--colors-text-subtle); font-style: normal; }
+
+.save-playbook__description textarea {
+  width: 100%;
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-save-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-md);
+  resize: vertical;
+}
+
+.save-playbook__description textarea:focus { border-color: var(--colors-brand-primary); outline: 0; }
+
+.save-playbook__fields {
+  /* Gap in the token set: no border-width scale. */
+  --ds-save-hairline: 1px;
+}

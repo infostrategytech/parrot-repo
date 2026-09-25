@@ -1,0 +1,16 @@
+/* Three wells, each a titled group around one field — Aurora's editor
+   publish well, repeated. */
+
+.automation__sections { display: grid; gap: var(--spacing-md); }
+
+.automation__section {
+  display: grid;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.automation__titles { display: grid; gap: var(--spacing-2xs); }
+.automation__titles ::deep h3 { color: var(--colors-text-primary); }
+.automation__titles ::deep p { color: var(--colors-text-muted); }

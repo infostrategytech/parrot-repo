@@ -1,0 +1,198 @@
+/* Button — mirrors the Figma component set at node 158:10
+   (Variant: Primary | Secondary | Ghost | Destructive
+    Size:    Small | Medium | Large
+    State:   Default | Hover | Pressed | Disabled)
+
+   Every value here resolves to a design token. Nothing is a raw colour or
+   size. If something needs changing, change it in Figma, re-export, and run
+   npm run tokens — never edit this file to change a value.
+
+   The three exceptions are declared as locals at the top of the block, each
+   because the design system has no token for that kind of value yet.
+   tools/design-tokens/lint-design-system.mjs fails the build if a raw value
+   appears anywhere else. */
+
+.ds-button {
+  /* Gaps in the token set, kept in one place so they are easy to find and
+     replace once Figma defines them:
+       - no border-width scale exists
+       - no motion/duration scale exists
+       - no opacity/disabled token exists. Several primitives happen to be
+         50, but borrowing one named glass-light or overlay would misstate
+         why the value is 50 and break the day either changes.
+       - Button's small and large icons are 14 and 18 in Figma, which sit
+         between icon size/icon-sm (16) and nothing below it, so they are
+         built from the raw number primitives instead. An icon size/icon-xs
+         and an 18 rung would remove this. */
+  --ds-button-border-width: 1px;
+  --ds-button-transition: 120ms;
+  --ds-button-disabled-opacity: 50;
+  --ds-button-icon-sm: calc(var(--p-numbers-14) * 1px);
+  --ds-button-icon-md: var(--icon-size-icon-sm);
+  --ds-button-icon-lg: calc(var(--p-numbers-18) * 1px);
+  /* - no line-height scale exists. The measurement sheet at 606:2892 gives the
+       label's text box as 16 / 18 / 21 for a 12 / 14 / 16px label — Figma's
+       normal leading. That box, not the icon, is what sets the button's
+       height, and the icon is centred inside it. Our type scale renders at
+       line-height 1 (every Figma text style says 100%), so the button has to
+       restore the leading locally or it comes out short. */
+  --ds-button-leading-sm: 16px;
+  --ds-button-leading-md: 18px;
+  --ds-button-leading-lg: 21px;
+  /* - no control-height scale exists. Padding + the text box above already
+       produce 32 / 42 / 53; these pin it so a failed webfont cannot change a
+       control's height, only its glyphs. */
+  --ds-button-height-sm: 32px;
+  --ds-button-height-md: 42px;
+  --ds-button-height-lg: 53px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-radius-full);
+  white-space: nowrap;
+  cursor: pointer;
+  /* Secondary is the only variant Figma draws with a border, and there it
+     measures 2px taller than its siblings (34/44/55 against 32/42/53). Drawing
+     that edge as an inset shadow instead of a border keeps every variant on
+     the one height the spec sheet documents, and costs no layout space. */
+  border: 0;
+  transition:
+    background-color var(--ds-button-transition) ease,
+    box-shadow var(--ds-button-transition) ease,
+    color var(--ds-button-transition) ease;
+}
+
+/* Sizes — padding, icon box, type scale and leading all move together.
+
+   Measured against the spec sheet at 606:2892, every value below is exact:
+   padding matches its "top -> text" and "edge -> icon", the label padding
+   matches "icon -> text", and the leading reproduces the text box. Together
+   they put the icon at 9 / 13 / 17.5 from the top, which is what the sheet
+   measures, and give 32 / 42 / 53 overall.
+
+   The leading matters: without it the label is shorter than the icon, so
+   height comes from whichever child happens to be tallest and a text-only
+   button sits 2px below an icon one beside it. */
+
+.ds-button--small {
+  min-height: var(--ds-button-height-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.ds-button--medium {
+  min-height: var(--ds-button-height-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+
+.ds-button--large {
+  min-height: var(--ds-button-height-lg);
+  padding: var(--spacing-lg);
+}
+
+/* The label carries the gap as horizontal padding, matching how the Figma
+   frame spaces its icon/label/icon children. */
+.ds-button__label {
+  display: inline-flex;
+  align-items: center;
+  overflow: clip;
+}
+
+.ds-button--small .ds-button__label { padding-inline: var(--spacing-xs); line-height: var(--ds-button-leading-sm); }
+.ds-button--medium .ds-button__label { padding-inline: var(--spacing-sm); line-height: var(--ds-button-leading-md); }
+.ds-button--large .ds-button__label { padding-inline: var(--spacing-sm); line-height: var(--ds-button-leading-lg); }
+
+.ds-button__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* The icon arrives as a RenderFragment from the caller, so it carries the
+   CALLING component’s scope attribute, not this one’s. Without ::deep the
+   compiled selector would look for an svg tagged as part of Button and match
+   nothing — silently, which is the worst way for a style to fail. */
+.ds-button__icon > ::deep svg { display: block; width: 100%; height: 100%; }
+
+.ds-button--small .ds-button__icon { width: var(--ds-button-icon-sm); height: var(--ds-button-icon-sm); }
+.ds-button--medium .ds-button__icon { width: var(--ds-button-icon-md); height: var(--ds-button-icon-md); }
+.ds-button--large .ds-button__icon { width: var(--ds-button-icon-lg); height: var(--ds-button-icon-lg); }
+
+/* Variants */
+
+.ds-button--primary {
+  background: var(--colors-brand-primary);
+  color: var(--colors-brand-primary-foreground);
+}
+
+.ds-button--primary:hover:not(:disabled) { background: var(--colors-brand-primary-hover); }
+.ds-button--primary:active:not(:disabled) { background: var(--colors-brand-primary-active); }
+
+.ds-button--secondary {
+  background: var(--colors-surface-card);
+  box-shadow: inset 0 0 0 var(--ds-button-border-width) var(--colors-surface-border);
+  color: var(--colors-text-primary);
+}
+
+.ds-button--secondary:hover:not(:disabled) { background: var(--colors-interaction-hover); }
+.ds-button--secondary:active:not(:disabled) { background: var(--colors-interaction-pressed); }
+
+.ds-button--ghost {
+  background: transparent;
+  color: var(--colors-text-primary);
+}
+
+.ds-button--ghost:hover:not(:disabled) { background: var(--colors-interaction-hover); }
+.ds-button--ghost:active:not(:disabled) { background: var(--colors-interaction-pressed); }
+
+.ds-button--destructive {
+  background: var(--colors-feedback-destructive);
+  color: var(--colors-text-inverse);
+}
+
+/* Aurora has no destructive-hover colour; Figma darkens the red with a flat
+   overlay. interaction/hover-overlay and pressed-overlay are exactly that,
+   and they invert in dark mode (black over light, white over dark), which a
+   hardcoded black could not do. */
+.ds-button--destructive:hover:not(:disabled) {
+  background:
+    linear-gradient(var(--colors-interaction-hover-overlay), var(--colors-interaction-hover-overlay)),
+    linear-gradient(var(--colors-feedback-destructive), var(--colors-feedback-destructive));
+}
+
+.ds-button--destructive:active:not(:disabled) {
+  background:
+    linear-gradient(var(--colors-interaction-pressed-overlay), var(--colors-interaction-pressed-overlay)),
+    linear-gradient(var(--colors-feedback-destructive), var(--colors-feedback-destructive));
+}
+
+/* Disabled is one appearance for every variant, as in Figma. */
+.ds-button:disabled {
+  background: var(--colors-interaction-disabled-background);
+  box-shadow: none;
+  color: var(--colors-interaction-disabled-foreground);
+  opacity: calc(var(--ds-button-disabled-opacity) / 100);
+  cursor: not-allowed;
+}
+
+/* No focus rule here on purpose: the app-wide :focus-visible ring in app.css
+   already covers every control in the product, and repeating it here only made
+   the button's ring louder than everything around it. Noted so nobody adds it
+   back thinking it was forgotten. */
+
+/* ── Busy ────────────────────────────────────────────────────────────────
+   The brand's relay dots sit in the icon slot at 22px; the button keeps its
+   variant colour and its label, so nothing shifts while it waits. The
+   disabled look above is for a control that cannot be used; a busy control
+   is in use, so it keeps its colour. */
+.ds-button.is-busy:disabled { opacity: 1; cursor: progress; }
+.ds-button--primary.is-busy:disabled { background: var(--colors-brand-primary); color: var(--colors-brand-primary-foreground); }
+.ds-button--secondary.is-busy:disabled { background: var(--colors-surface-card); box-shadow: inset 0 0 0 var(--ds-button-border-width) var(--colors-surface-border); color: var(--colors-text-primary); }
+.ds-button--ghost.is-busy:disabled { background: transparent; color: var(--colors-text-primary); }
+.ds-button--destructive.is-busy:disabled { background: var(--colors-feedback-destructive); color: var(--colors-text-inverse); }
+
+.ds-button__busy { --ds-button-busy: 22px; }
+.ds-button--small .ds-button__busy,
+.ds-button--medium .ds-button__busy,
+.ds-button--large .ds-button__busy { width: var(--ds-button-busy); height: var(--ds-button-busy); }

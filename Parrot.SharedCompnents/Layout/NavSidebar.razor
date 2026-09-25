@@ -1,0 +1,130 @@
+@namespace Parrot.SharedComponents.Layout
+@using Parrot.SharedComponents.Services
+@implements IDisposable
+@inject NavigationManager Nav
+@inject AppShellState Shell
+
+@* Composition only. Every row, the workspace switcher and the account card are
+   components of their own; this decides what goes where and nothing else.
+
+   Who is signed in and which business they are in arrive as parameters: the
+   rail is shared by the web app and the mobile app, and only the host knows
+   where its session lives. *@
+
+<aside class="@(Shell.Collapsed ? "sidebar is-collapsed" : "sidebar")">
+    <div class="sidebar__brand">
+        @if (Shell.Collapsed)
+        {
+            <button type="button"
+                    class="sidebar__expand"
+                    aria-label="Expand sidebar"
+                    data-tooltip="Expand sidebar"
+                    @onclick="Shell.Toggle">
+                <span class="sidebar__mark" aria-hidden="true"><CadenceMark Size="26" Tight /></span>
+                <span class="sidebar__expand-icon" aria-hidden="true">
+                    <Icon Name="IconName.RiMenuUnfoldFill" Size="IconSize.Sm" />
+                </span>
+            </button>
+        }
+        else
+        {
+            <span class="sidebar__mark" aria-hidden="true"><CadenceMark Size="26" Tight /></span>
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span" Class="sidebar__wordmark cadence-wordmark">
+                @BrandName
+            </Typography>
+            <button type="button"
+                    class="sidebar__collapse"
+                    aria-label="Collapse sidebar"
+                    data-tooltip="Collapse sidebar"
+                    @onclick="Shell.Toggle">
+                <Icon Name="IconName.RiMenuFoldFill" Size="IconSize.Sm" />
+            </button>
+        }
+    </div>
+
+    @* A host with no session (the mobile app today) renders the rail without
+       a workspace or an account card rather than with invented ones. *@
+    @if (!string.IsNullOrWhiteSpace(WorkspaceName))
+    {
+        <WorkspaceSwitcher Id="@WorkspaceId" Name="@WorkspaceName" Plan="@WorkspacePlan" />
+    }
+
+    <nav class="sidebar__nav" aria-label="Primary navigation">
+        <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="sidebar__group-label ds-overline">
+            Workspace
+        </Typography>
+
+        @foreach (var entry in NavMap.Primary)
+        {
+            <NavRailItem Entry="entry"
+                         IsActive="@(Current?.Label == entry.Label)"
+                         Badge="@(entry.Label == "Inbox" ? InboxUnread : null)" />
+        }
+    </nav>
+
+    <div class="sidebar__footer">
+        @foreach (var entry in NavMap.Footer)
+        {
+            <NavRailItem Entry="entry" IsActive="@(Current?.Label == entry.Label)" Compact />
+        }
+
+        @if (!string.IsNullOrWhiteSpace(UserName))
+        {
+            <UserCard Name="@UserName" Role="@UserRole" Initials="@UserInitials" Seed="@UserSeed">
+                @UserMenu
+            </UserCard>
+        }
+    </div>
+</aside>
+
+@code {
+    /// <summary>The wordmark beside the mark.</summary>
+    [Parameter] public string BrandName { get; set; } = "OmniAI";
+
+    /// <summary>A stable id for the business, so its avatar keeps one tint.</summary>
+    [Parameter] public string WorkspaceId { get; set; } = "";
+
+    [Parameter] public string WorkspaceName { get; set; } = "";
+
+    /// <summary>Optional second line under the workspace name. Null hides it.</summary>
+    [Parameter] public string? WorkspacePlan { get; set; }
+
+    [Parameter] public string UserName { get; set; } = "";
+
+    /// <summary>Optional second line under the person's name. Null hides it.</summary>
+    [Parameter] public string? UserRole { get; set; }
+
+    [Parameter] public string UserInitials { get; set; } = "";
+
+    /// <summary>A stable id for the person, so their avatar keeps one tint.</summary>
+    [Parameter] public string UserSeed { get; set; } = "";
+
+    /// <summary>Rows for the account card's menu. Null means the card has no menu.</summary>
+    [Parameter] public RenderFragment? UserMenu { get; set; }
+
+    /// <summary>
+    /// The inbox count. Null means no badge — which is also what "there is no
+    /// count to show" means: a count is useful context but not worth
+    /// interrupting navigation over.
+    /// </summary>
+    [Parameter] public int? InboxUnread { get; set; }
+
+    private NavEntry? Current => NavMap.Match(new Uri(Nav.Uri).AbsolutePath);
+
+    protected override void OnInitialized()
+    {
+        Shell.Changed += OnChanged;
+        Nav.LocationChanged += OnLocationChanged;
+    }
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
+        _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Shell.Changed -= OnChanged;
+        Nav.LocationChanged -= OnLocationChanged;
+    }
+}

@@ -1,0 +1,80 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* This component is the whole argument for the rebuild in one file.
+
+   React defined it twice — ProductsPage.tsx:81 and TaskRequestsPage.tsx:140 —
+   byte for byte identical, because there was nowhere shared to put it. Each
+   copy then needed its own document-level pointerdown and Escape listeners, so
+   the dismissal logic existed five separate times across the app.
+
+   Dismissal here is a full-screen transparent button behind the menu. No JS
+   interop, no document listener to leak, and it works with a keyboard because
+   it is a real button. The open state is owned by the caller so that a row of
+   filters can close one another. *@
+
+<div class="filter-popover">
+    <button type="button"
+            class="filter-popover__trigger"
+            aria-expanded="@Open.ToString().ToLowerInvariant()"
+            aria-haspopup="menu"
+            @onclick="ToggleAsync">
+        @if (Leading is not null)
+        {
+            <span class="filter-popover__leading" aria-hidden="true">@Leading</span>
+        }
+        <Typography TextStyle="TextStyle.Small12Medium" As="span">@Label</Typography>
+        <Icon Name="IconName.RiArrowDownSLine" />
+    </button>
+
+    @if (Open)
+    {
+        @* Rendered before the menu so the menu stacks above it. *@
+        <button type="button"
+                class="filter-popover__dismiss"
+                tabindex="-1"
+                aria-hidden="true"
+                @onclick="CloseAsync"></button>
+
+        <div class="filter-popover__menu" role="menu" aria-label="@Title" @onkeydown="OnKeyDown">
+            <header>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
+                @if (!string.IsNullOrWhiteSpace(Subtitle))
+                {
+                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
+                }
+            </header>
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>What the trigger reads — usually the current selection, not the filter's name.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    /// <summary>The menu's heading, and its accessible name.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public string? Subtitle { get; set; }
+
+    [Parameter] public RenderFragment? Leading { get; set; }
+
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    /// <summary>
+    /// The caller owns Open so a row of filters can close one another. Bind it
+    /// to one "which menu is open" field per page rather than one bool each.
+    /// </summary>
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    private Task ToggleAsync() => OpenChanged.InvokeAsync(!Open);
+
+    private Task CloseAsync() => OpenChanged.InvokeAsync(false);
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") await CloseAsync();
+    }
+}

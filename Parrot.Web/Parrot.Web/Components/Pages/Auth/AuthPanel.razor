@@ -1,0 +1,63 @@
+@namespace Parrot.Web.Components.Pages.Auth
+
+@* The form column of a signed-out screen: title, one line under it, the
+   controls, and the footer line. Every signed-out screen is this one shape,
+   so moving between them never reads as changing product.
+
+   The primary action and the Google button are drawn here too, so the six
+   screens share one pair of buttons rather than six near-copies. *@
+
+<div class="panel">
+    @if (Glyph is { } glyph)
+    {
+        <span class="panel__mark panel__mark--@GlyphTone.ToString().ToLowerInvariant()" aria-hidden="true">
+            <Icon Name="@glyph" Size="IconSize.Lg" />
+        </span>
+    }
+
+    <h2 class="panel__title">@Title</h2>
+
+    @if (Lede is not null)
+    {
+        <p class="panel__lede">@Lede</p>
+    }
+
+    @if (Notice is not null)
+    {
+        <div class="panel__notice">@Notice</div>
+    }
+
+    @if (ChildContent is not null)
+    {
+        <div class="panel__body">
+            @ChildContent
+        </div>
+    }
+
+    @if (Footer is not null)
+    {
+        <p class="panel__footer">@Footer</p>
+    }
+</div>
+
+@code {
+    public enum MarkTone { Brand, Success, Destructive }
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>One line under the title. A fragment so it can carry a link.</summary>
+    [Parameter] public RenderFragment? Lede { get; set; }
+
+    /// <summary>Inline errors and status lines, above the controls.</summary>
+    [Parameter] public RenderFragment? Notice { get; set; }
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>"Already have an account? Sign In" — under everything.</summary>
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    /// <summary>A status disc above the title, for screens that report a result.</summary>
+    [Parameter] public IconName? Glyph { get; set; }
+
+    [Parameter] public MarkTone GlyphTone { get; set; } = MarkTone.Brand;
+}

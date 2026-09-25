@@ -1,81 +1,95 @@
-@using Parrot.Web.Components.Pages.Dashboard.Contacts
+@namespace Parrot.Web.Components.Pages.Dashboard.Contacts
 
-<ModalShell Visible="Visible" Title="Add contact"
-            Subtitle="Create a new contact for a customer you want to track or message." Size="contact" OnClose="OnCancel">
-    <BodyContent>
-        <div class="modal-field">
-            <label class="modal-label">Full name</label>
-            <input class="modal-input" placeholder="Jon doe" @bind="_contact.Name" />
-        </div>
-        <div class="modal-row">
-            <div class="modal-field modal-field--half">
-                <label class="modal-label">Email address <span class="modal-optional">(Optional)</span></label>
-                <input class="modal-input" type="email" placeholder="jondoe@gmail.com" @bind="_contact.Email" />
+@* A new contact, in Aurora's Dialog. The form keeps its own draft and hands it
+   back on save, so a half-typed name cannot leak into the list behind it. *@
+
+<Dialog Open="Visible"
+        Title="Add contact"
+        ConfirmLabel="Save contact"
+        ConfirmDisabled="@string.IsNullOrWhiteSpace(_contact.Name)"
+        OnConfirm="HandleSave"
+        OnCancel="OnCancel">
+    <GlyphContent><Icon Name="IconName.RiUserAddFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="contact-form__lede">
+            Create a new contact for a customer you want to track or message.
+        </Typography>
+
+        <div class="contact-form">
+            <div class="contact-form__full">
+                <Input FloatingLabel="Full name" @bind-Value="_contact.Name" maxlength="80" required />
             </div>
-            <div class="modal-field modal-field--half">
-                <label class="modal-label">Phone number <span class="modal-optional">(Optional)</span></label>
-                <input class="modal-input" type="tel" placeholder="08108023456" @bind="_contact.Phone" />
+            <Input FloatingLabel="Email address" Type="email" HelperText="Optional" @bind-Value="_contact.Email" />
+            <Input FloatingLabel="Phone number" Type="tel" HelperText="Optional" @bind-Value="_contact.Phone" />
+            <div class="contact-form__full">
+                <Input FloatingLabel="Channel identifier"
+                       HelperText="@("A phone number or an @handle")"
+                       @bind-Value="_contact.ChannelIdentifier" />
             </div>
+
+            <SelectField FloatingLabel="Stage"
+                         Value="@(string.IsNullOrEmpty(_contact.Stage) ? null : ContactCopy.Stage(_contact.Stage))"
+                         Open="@(_openMenu == "stage")"
+                         OpenChanged="@(open => _openMenu = open ? "stage" : null)">
+                @foreach (var stage in Stages)
+                {
+                    <PopoverOption Label="@ContactCopy.Stage(stage)"
+                                   Active="@(_contact.Stage == stage)"
+                                   OnSelect="() => SelectStage(stage)" />
+                }
+            </SelectField>
+
+            <SelectField FloatingLabel="Tag"
+                         Value="@(string.IsNullOrEmpty(_tag) ? null : _tag)"
+                         Open="@(_openMenu == "tag")"
+                         OpenChanged="@(open => _openMenu = open ? "tag" : null)">
+                @foreach (var tag in Tags)
+                {
+                    <PopoverOption Label="@tag"
+                                   Active="@(_tag == tag)"
+                                   OnSelect="() => SelectTag(tag)" />
+                }
+            </SelectField>
         </div>
-        <div class="modal-field">
-            <label class="modal-label">Channel identifier</label>
-            <input class="modal-input" placeholder="e.g 081000333456 or @@jon_doe" @bind="_contact.ChannelIdentifier" />
-        </div>
-        <div class="modal-row">
-            <div class="modal-field modal-field--half">
-                <label class="modal-label">Stage</label>
-                <div class="modal-select-wrap">
-                    <select class="modal-select" @bind="_contact.Stage">
-                        <option value="">-- Select --</option>
-                        <option value="New Lead">New Lead</option>
-                        <option value="Interested">Interested</option>
-                        <option value="Customer">Customer</option>
-                        <option value="Vip">VIP</option>
-                    </select>
-                    <svg class="modal-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6 9l6 6 6-6" />
-                    </svg>
-                </div>
-            </div>
-            <div class="modal-field modal-field--half">
-                <label class="modal-label">Tag</label>
-                <div class="modal-select-wrap">
-                    <select class="modal-select" @bind="_tag">
-                        <option value="">-- Select --</option>
-                        <option value="VIP">VIP</option>
-                        <option value="Frequent buyer">Frequent buyer</option>
-                    </select>
-                    <svg class="modal-select-arrow" width="16" height="16" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M6 9l6 6 6-6" />
-                    </svg>
-                </div>
-            </div>
-        </div>
-    </BodyContent>
-    <FooterContent>
-        <button class="modal-btn modal-btn--cancel" @onclick="OnCancel">Cancel</button>
-        <button class="modal-btn modal-btn--save" @onclick="HandleSave"
-                disabled="@string.IsNullOrWhiteSpace(_contact.Name)">Save contact</button>
-    </FooterContent>
-</ModalShell>
+    </Body>
+</Dialog>
 
 @code {
+    private static readonly string[] Stages = ["New Lead", "Interested", "Customer", "Vip"];
+    private static readonly string[] Tags = ["VIP", "Frequent buyer"];
+
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
     [Parameter] public EventCallback<Contact> OnSave { get; set; }
 
     private Contact _contact = new();
     private string _tag = string.Empty;
+    private string? _openMenu;
+    private bool _wasVisible;
 
     protected override void OnParametersSet()
     {
-        if (Visible)
+        // Fill the form once, when it opens. Doing it on every parameter change
+        // would discard what someone had typed the moment the page re-rendered.
+        if (Visible && !_wasVisible)
         {
             _contact = new Contact { HasWhatsApp = true, HasInstagram = true };
             _tag = string.Empty;
+            _openMenu = null;
         }
+        _wasVisible = Visible;
+    }
+
+    private void SelectStage(string stage)
+    {
+        _contact.Stage = stage;
+        _openMenu = null;
+    }
+
+    private void SelectTag(string tag)
+    {
+        _tag = tag;
+        _openMenu = null;
     }
 
     private async Task HandleSave()

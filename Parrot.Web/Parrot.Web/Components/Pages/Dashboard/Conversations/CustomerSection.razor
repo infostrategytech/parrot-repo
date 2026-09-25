@@ -1,0 +1,18 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+<section class="customer-section">
+    <header>
+        <Typography TextStyle="TextStyle.Small12Semibold" As="h3">@Title</Typography>
+        @if (Count is not null)
+        {
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span">@Count</Typography>
+        }
+    </header>
+    @ChildContent
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public int? Count { get; set; }
+    [Parameter, EditorRequired] public RenderFragment ChildContent { get; set; } = default!;
+}

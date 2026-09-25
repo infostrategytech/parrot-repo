@@ -1,0 +1,131 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+@* One agent on the AI Operations grid — Aurora's AgentCard, bound to Parrot's
+   AiAgent. Parrot stores no role, avatar tone, automation rate or confidence,
+   so those slots show Aurora's unavailable treatment (hidden line, em dash)
+   rather than a number nobody measured.
+
+   The card itself opens the agent, as Parrot's did; every control inside it
+   stops the click so a press on "Delete" is never also a press on the card. *@
+
+<article class="agent-card agent-tone-slate"
+         role="link"
+         tabindex="0"
+         aria-label="@($"Open {Agent.Name}")"
+         @onclick="OnOpen"
+         @onkeydown="OnKeyDown">
+    <header>
+        <span class="agent-card-avatar">
+            <img src="@AgentBuilderCopy.MascotImage(Agent.Mascot)" alt="" />
+        </span>
+        <div>
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2">@Agent.Name</Typography>
+        </div>
+        <span class="@(Agent.IsActive ? "agent-status" : "agent-status status-inactive")">
+            <i></i>
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span">@(Agent.IsActive ? "Active" : "Deactivated")</Typography>
+        </span>
+        <button type="button"
+                class="agent-more"
+                aria-label="@($"Edit {Agent.Name}")"
+                title="Edit identity"
+                @onclick="OnConfigure"
+                @onclick:stopPropagation="true">
+            <Icon Name="IconName.RiMore2Fill" Size="IconSize.Md" />
+        </button>
+    </header>
+
+    <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="agent-description">@Agent.Description</Typography>
+
+    <div class="agent-metrics">
+        <div>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@Agent.MessagesToday</Typography>
+            <Typography TextStyle="TextStyle.Small10Regular" As="span">Handled today</Typography>
+        </div>
+        <div>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">—</Typography>
+            <Typography TextStyle="TextStyle.Small10Regular" As="span">Automated</Typography>
+        </div>
+        <div>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">—</Typography>
+            <Typography TextStyle="TextStyle.Small10Regular" As="span">Confidence</Typography>
+        </div>
+    </div>
+
+    @* Aurora lists the agent's skills here. Parrot's nearest thing is the
+       playbooks the agent runs. *@
+    <div class="agent-skill-row">
+        @foreach (var skill in Agent.Playbooks.Take(2))
+        {
+            <Typography TextStyle="TextStyle.Small10Regular" As="span">@skill.Title</Typography>
+        }
+        @if (Agent.Playbooks.Count > 2)
+        {
+            <Typography TextStyle="TextStyle.Small10Regular" As="span">+@(Agent.Playbooks.Count - 2)</Typography>
+        }
+    </div>
+
+    <footer>
+        <div class="agent-channels" aria-label="@($"{Agent.Name} channels")">
+            @foreach (var channel in EnabledChannels)
+            {
+                <AgentChannelGlyph Key="@channel.Key" />
+            }
+            @if (EnabledChannels.Count == 0)
+            {
+                <Typography TextStyle="TextStyle.Small10Regular" As="span">Channels not assigned</Typography>
+            }
+        </div>
+
+        @if (!HasReplied)
+        {
+            <button type="button"
+                    class="agent-delete-action with-label"
+                    disabled="@Busy"
+                    @onclick="OnDelete"
+                    @onclick:stopPropagation="true">
+                <Icon Name="IconName.RiDeleteBin6Fill" Size="IconSize.Sm" />
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Delete agent</Typography>
+            </button>
+        }
+        else
+        {
+            <button type="button"
+                    class="@(Agent.IsActive ? "agent-secondary-action to-deactivate" : "agent-secondary-action to-reactivate")"
+                    disabled="@Busy"
+                    @onclick="OnStatusChange"
+                    @onclick:stopPropagation="true">
+                @if (!Agent.IsActive)
+                {
+                    <Icon Name="IconName.RiPlayFill" Size="IconSize.Sm" />
+                }
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(Agent.IsActive ? "Deactivate" : "Reactivate")</Typography>
+            </button>
+        }
+    </footer>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public AiAgent Agent { get; set; } = default!;
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public EventCallback OnOpen { get; set; }
+
+    [Parameter] public EventCallback OnConfigure { get; set; }
+
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    [Parameter] public EventCallback OnStatusChange { get; set; }
+
+    // Aurora only offers delete to an agent that has never replied to a
+    // customer. Parrot's only record of replies is today's message count.
+    private bool HasReplied => Agent.MessagesToday > 0;
+
+    private List<AgentChannel> EnabledChannels => Agent.Channels.Where(c => c.IsEnabled).ToList();
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key is "Enter" or " ") await OnOpen.InvokeAsync();
+    }
+}

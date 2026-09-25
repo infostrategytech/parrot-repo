@@ -1,0 +1,71 @@
+/* Type comes from the text styles, never from this file. The size and weight
+   of a rail label is a design decision that lives in Figma and reaches the
+   component through Typography. */
+
+.nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  min-height: var(--ds-rail-item-height);
+  margin: var(--spacing-2xs) var(--spacing-none);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  text-align: left;
+  cursor: pointer;
+  transition:
+    background var(--ds-rail-motion) ease,
+    color var(--ds-rail-motion) ease;
+}
+
+.nav-item {
+  /* Gaps in the token set: no control-height scale and no motion scale. */
+  --ds-rail-item-height: 42px;
+  --ds-rail-item-height-compact: 36px;
+  --ds-rail-motion: 140ms;
+  --ds-rail-badge-min: 20px;
+}
+
+.nav-item.is-compact { min-height: var(--ds-rail-item-height-compact); }
+
+.nav-item:hover:not(:disabled) {
+  color: var(--colors-text-secondary);
+  background: var(--colors-interaction-hover);
+}
+
+.nav-item.is-active {
+  color: var(--colors-interaction-selected-foreground);
+  background: var(--colors-interaction-selected);
+}
+
+/* Drawn in the demo, with nothing behind it. React rendered these identically
+   to the real ones and swallowed the click, so the rail felt broken rather
+   than incomplete. */
+.nav-item.is-placeholder {
+  cursor: not-allowed;
+}
+
+::deep .nav-item__label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+::deep .nav-item__count {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  min-width: var(--ds-rail-badge-min);
+  height: var(--ds-rail-badge-min);
+  margin-left: auto;
+  padding: var(--spacing-none) var(--spacing-xs);
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+}

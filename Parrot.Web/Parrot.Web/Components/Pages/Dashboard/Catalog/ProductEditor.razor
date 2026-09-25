@@ -1,0 +1,512 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog
+@implements IAsyncDisposable
+@inject AuroraInterop Interop
+
+@* Create and edit, in a drawer over the list.
+
+   It keeps its own copy of the draft and hands it back on save, so a half-
+   finished edit cannot leak into the table behind it. Focus is trapped and
+   returned, the same as Dialog — React's editor did neither.
+
+   The form is Aurora's, section for section. Parrot's catalog item holds a
+   name, description, category, currency, price and one Active/Inactive
+   switch, so everything Aurora asks for beyond that — stock availability,
+   quantity, how a service is delivered, selling notes — keeps its place but
+   is disabled and says so; nothing here invents a value to fill it. *@
+
+@if (Open)
+{
+    <div class="editor-backdrop" @onmousedown="TryClose">
+        <form class="editor"
+              @ref="_card"
+              @onsubmit="SubmitAsync"
+              @onmousedown:stopPropagation="true"
+              @onkeydown="OnKeyDown">
+
+            <header class="editor__header">
+                <span class="editor__badge">
+                    <Icon Name="@(IsEditing ? IconName.RiPencilFill : IconName.RiAddFill)" Size="IconSize.Md" />
+                </span>
+                <div class="editor__titles">
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="editor__eyebrow ds-overline">
+                        @(IsEditing ? "Edit offer" : "New offer")
+                    </Typography>
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">
+                        @(Editing?.Name ?? "Add a product or service")
+                    </Typography>
+                </div>
+                <Button Variant="ButtonVariant.Ghost"
+                        Size="ButtonSize.Small"
+                        aria-label="Close editor"
+                        disabled="@Busy"
+                        @onclick="OnClose">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </header>
+
+            <div class="editor__body">
+                <section class="editor__section">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">What are you offering?</Typography>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="editor__hint">
+                        Use the same words customers use when asking about it.
+                    </Typography>
+
+                    @* The choice shapes the rest of the form's wording, as in
+                       Aurora. Parrot's CatalogItem has no kind, so it lives
+                       only for this session of the drawer: it starts as
+                       Product every time and is not saved with the item. *@
+                    <div class="editor__kinds">
+                        @foreach (var kind in Kinds)
+                        {
+                            <button type="button"
+                                    aria-pressed="@((_kind == kind).ToString().ToLowerInvariant())"
+                                    class="@(_kind == kind ? "editor__kind is-selected" : "editor__kind")"
+                                    @onclick="() => SelectKind(kind)">
+                                <span class="editor__kind-icon">
+                                    <Icon Name="@(kind == ProductKind.Service ? IconName.RiCustomerService2Fill : IconName.RiShoppingBag3Fill)" Size="IconSize.Md" />
+                                </span>
+                                <span class="editor__kind-text">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@KindLabel(kind)</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Regular" As="small">
+                                        @(kind == ProductKind.Service
+                                            ? "An appointment or work you provide"
+                                            : "A physical item customers can buy")
+                                    </Typography>
+                                </span>
+                                @if (_kind == kind)
+                                {
+                                    <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
+                                }
+                            </button>
+                        }
+                    </div>
+
+                    <div class="editor__grid">
+                        <Input FloatingLabel="Name"
+                               @bind-Value="_draft.Name"
+                               maxlength="80"
+                               required />
+
+                        <SelectField FloatingLabel="Category"
+                                     Value="@_draft.Category"
+                                     Open="_categoryOpen"
+                                     OpenChanged="OnCategoryOpenChanged">
+                                @if (_creatingCategory)
+                                {
+                                    <div class="editor__new-category">
+                                        <Input FloatingLabel="New category name"
+                                               @bind-Value="_categoryName"
+                                               maxlength="40"
+                                               Error="@(_categoryError is not null)"
+                                               HelperText="@_categoryError" />
+                                        <div class="editor__new-category-actions">
+                                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                                                    @onclick="CancelCategory">Cancel</Button>
+                                            <Button Size="ButtonSize.Small"
+                                                    Busy="@Busy"
+                                                    disabled="@(_categoryName.Trim().Length < 2)"
+                                                    @onclick="CreateCategoryAsync">
+                                                Create
+                                            </Button>
+                                        </div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <button type="button" class="editor__create-category" @onclick="StartCategory">
+                                        <Icon Name="IconName.RiFolderAddFill" Size="IconSize.Sm" />
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Create a new category</Typography>
+                                    </button>
+                                    @foreach (var category in Categories)
+                                    {
+                                        <PopoverOption Label="@category"
+                                                       Active="@(_draft.Category == category)"
+                                                       OnSelect="() => SelectCategory(category)" />
+                                    }
+                                }
+                        </SelectField>
+
+                        <label class="editor__full">
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">Customer-facing description</Typography>
+                            <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
+                                      maxlength="400"
+                                      rows="3"
+                                      placeholder="@(_kind == ProductKind.Service
+                                          ? "Explain what the service includes and who it is for."
+                                          : "Explain what it is and who it is for.")"
+                                      value="@_draft.Description"
+                                      @oninput="e => _draft.Description = e.Value?.ToString() ?? string.Empty" />
+                            <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="editor__count">
+                                @_draft.Description.Length/400
+                            </Typography>
+                        </label>
+                    </div>
+                </section>
+
+                <section class="editor__section">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Price and availability</Typography>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="editor__hint">
+                        The figures your team quotes to customers.
+                    </Typography>
+
+                    <div class="editor__grid editor__grid--three">
+                        <Input FloatingLabel="Price"
+                               PrefixText="@CatalogPrice.Symbol(_draft.Currency)"
+                               type="number"
+                               min="0"
+                               step="0.01"
+                               required
+                               Value="@_draft.Price.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                               ValueChanged="OnPriceChanged" />
+
+                        @* Parrot does not store stock availability, so the
+                           field is here but cannot be answered. *@
+                        <SelectField FloatingLabel="Availability"
+                                     Value=""
+                                     Open="_availabilityOpen"
+                                     OpenChanged="@(open => _availabilityOpen = open)"
+                                     Disabled
+                                     HelperText="@NotTracked">
+                            @foreach (var value in AvailabilityValues)
+                            {
+                                <PopoverOption Label="@AvailabilityLabel(_kind, value)"
+                                               Description="@AvailabilityDescription(_kind, value)"
+                                               Active="false" />
+                            }
+                        </SelectField>
+
+                        @if (_kind == ProductKind.Product)
+                        {
+                            <Input FloatingLabel="Quantity"
+                                   type="number"
+                                   min="0"
+                                   Disabled
+                                   HelperText="@NotTracked"
+                                   Value="" />
+                        }
+                    </div>
+
+                    @if (_kind == ProductKind.Service)
+                    {
+                        <div class="editor__grid editor__grid--three">
+                            <SelectField FloatingLabel="How is it delivered?"
+                                         Value=""
+                                         Open="_deliveryOpen"
+                                         OpenChanged="@(open => _deliveryOpen = open)"
+                                         Disabled
+                                         HelperText="@NotTracked">
+                                @foreach (var mode in DeliveryModes)
+                                {
+                                    <PopoverOption Label="@DeliveryModeLabel(mode)" Active="false" />
+                                }
+                            </SelectField>
+
+                            <Input FloatingLabel="Duration" HelperText="@NotTracked" maxlength="60"
+                                   Disabled Value="" />
+                            <Input FloatingLabel="Booking notice" HelperText="@NotTracked" maxlength="100"
+                                   Disabled Value="" />
+                        </div>
+                    }
+
+                    @* Parrot's own field — the currencies the old form offered. Its own
+                       row, so Aurora's Price / Availability / Quantity row stays intact. *@
+                    <div class="editor__grid editor__grid--three">
+                        <SelectField FloatingLabel="Currency"
+                                     Value="@_draft.Currency"
+                                     Open="_currencyOpen"
+                                     OpenChanged="@(open => _currencyOpen = open)">
+                            @foreach (var currency in Currencies)
+                            {
+                                <PopoverOption Label="@currency"
+                                               Active="@(_draft.Currency == currency)"
+                                               OnSelect="() => SelectCurrency(currency)" />
+                            }
+                        </SelectField>
+                    </div>
+                </section>
+
+                <section class="editor__section">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Selling notes</Typography>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="editor__hint">
+                        Short facts anyone answering a customer can rely on — your team, and any AI agent you turn on.
+                    </Typography>
+                    @* Parrot keeps no notes on a catalog item yet. Said once
+                       under the intro, in the same hint voice, rather than on
+                       each of the two fields. *@
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="editor__hint">
+                        @NotTracked
+                    </Typography>
+
+                    <label class="editor__full">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Key selling points</Typography>
+                        <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
+                                  rows="4"
+                                  placeholder="One point per line"
+                                  disabled
+                                  value="" />
+                        <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="editor__count">
+                            Two or more clear, factual points make this offer easier to answer about.
+                        </Typography>
+                    </label>
+
+                    <label class="editor__full">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Claims to avoid</Typography>
+                        <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
+                                  rows="3"
+                                  placeholder="One claim per line"
+                                  disabled
+                                  value="" />
+                    </label>
+                </section>
+
+                <section class="editor__publish">
+                    <div class="editor__publish-text">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@PublishTitle</Typography>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>@PublishNote</Typography>
+                    </div>
+                    <Toggle Checked="@_draft.IsAvailable"
+                            CheckedChanged="@(value => _draft.IsAvailable = value)"
+                            AriaLabel="Toggle active status" />
+                </section>
+
+                @if (Error is not null)
+                {
+                    <InlineError Message="@Error" />
+                }
+            </div>
+
+            <footer class="editor__footer">
+                @if (IsEditing)
+                {
+                    @* Parrot lets any catalog item be deleted; the page asks
+                       for confirmation before it goes. *@
+                    <Button Variant="ButtonVariant.Destructive"
+                            disabled="@Busy"
+                            @onclick="OnDelete">
+                        <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                        <ChildContent>Delete</ChildContent>
+                    </Button>
+                }
+                else
+                {
+                    <span></span>
+                }
+
+                <div class="editor__footer-actions">
+                    <Button Variant="ButtonVariant.Secondary" disabled="@Busy" @onclick="OnClose">Cancel</Button>
+                    <Button Type="ButtonType.Submit" Busy="@Busy" disabled="@(!IsValid)">
+                        @SaveLabel
+                    </Button>
+                </div>
+            </footer>
+        </form>
+    </div>
+}
+
+@code {
+    // Aurora's product vocabulary, kept local to the drawer: none of it is
+    // stored on a CatalogItem, it only shapes what the form says.
+    private enum ProductKind { Product, Service }
+    private enum ProductAvailability { Available, Unavailable }
+    private enum ServiceDeliveryMode { Online, InPerson, CustomerLocation, Flexible }
+
+    private const string NotTracked = "Not tracked in this catalog yet";
+
+    private static readonly ProductKind[] Kinds = [ProductKind.Product, ProductKind.Service];
+    private static readonly ProductAvailability[] AvailabilityValues =
+        [ProductAvailability.Available, ProductAvailability.Unavailable];
+    private static readonly ServiceDeliveryMode[] DeliveryModes = Enum.GetValues<ServiceDeliveryMode>();
+
+    // The currencies the old Add item form offered, unchanged.
+    private static readonly string[] Currencies = ["NGN", "USD", "GBP"];
+
+    private ElementReference _card;
+    private IAsyncDisposable? _trap;
+    private bool _wasOpen;
+
+    private CatalogDraft _draft = new();
+    private ProductKind _kind = ProductKind.Product;
+
+    private bool _categoryOpen;
+    private bool _currencyOpen;
+    private bool _availabilityOpen;
+    private bool _deliveryOpen;
+    private bool _creatingCategory;
+    private string _categoryName = "";
+    private string? _categoryError;
+
+    [Parameter] public bool Open { get; set; }
+
+    /// <summary>Null means "new". The page owns which.</summary>
+    [Parameter] public CatalogItem? Editing { get; set; }
+
+    [Parameter] public IReadOnlyList<string> Categories { get; set; } = [];
+
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public EventCallback<CatalogDraft> OnSave { get; set; }
+
+    [Parameter] public EventCallback OnDelete { get; set; }
+
+    /// <summary>Returns an error message to show inline, or null on success.</summary>
+    [Parameter] public Func<string, Task<string?>>? OnCreateCategory { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private bool IsEditing => Editing is not null;
+
+    // Only the name is required, exactly as the old Add item form had it:
+    // description and category were optional there and stay optional here.
+    private bool IsValid => !string.IsNullOrWhiteSpace(_draft.Name);
+
+    // The label holds while a save is in flight: the button's Busy state draws
+    // the brand's relay dots in its icon slot rather than swapping the words.
+    private string SaveLabel => IsEditing ? "Save changes"
+        : _draft.IsAvailable ? "Add and publish" : "Add";
+
+    private string PublishTitle => _draft.IsAvailable ? "Active" : "Inactive";
+
+    private string PublishNote => _draft.IsAvailable
+        ? "Live for your team to sell straight away."
+        : "Hidden from customers until you make it active again.";
+
+    // Aurora's ProductCopy: the same state, said in the customer's terms.
+    private static string KindLabel(ProductKind kind) =>
+        kind == ProductKind.Service ? "Service" : "Product";
+
+    private static string AvailabilityLabel(ProductKind kind, ProductAvailability availability) =>
+        (kind, availability) switch
+        {
+            (ProductKind.Service, ProductAvailability.Available) => "Taking bookings",
+            (ProductKind.Service, ProductAvailability.Unavailable) => "Not booking",
+            (_, ProductAvailability.Available) => "In stock",
+            _ => "Sold out"
+        };
+
+    private static string AvailabilityDescription(ProductKind kind, ProductAvailability availability) =>
+        (kind, availability) switch
+        {
+            (ProductKind.Service, ProductAvailability.Available) => "Customers can book it now",
+            (ProductKind.Service, ProductAvailability.Unavailable) => "Not accepting bookings right now",
+            (_, ProductAvailability.Available) => "Customers can order it now",
+            _ => "Cannot be ordered right now"
+        };
+
+    private static string DeliveryModeLabel(ServiceDeliveryMode mode) => mode switch
+    {
+        ServiceDeliveryMode.Online => "Online",
+        ServiceDeliveryMode.InPerson => "At my business",
+        ServiceDeliveryMode.CustomerLocation => "At the customer’s location",
+        _ => "Flexible / multiple options"
+    };
+
+    protected override void OnParametersSet()
+    {
+        if (!Open || _wasOpen) return;
+
+        // Fill the form once, when it opens. Doing it on every parameter change
+        // would discard what someone had typed the moment the page re-rendered.
+        _draft = Editing is null ? new CatalogDraft() : CatalogDraft.From(Editing);
+        _kind = ProductKind.Product;
+        _categoryOpen = _currencyOpen = _availabilityOpen = _deliveryOpen = _creatingCategory = false;
+        _categoryName = "";
+        _categoryError = null;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            await _card.FocusAsync();
+            _trap = await Interop.TrapFocusAsync(_card);
+        }
+        else if (!Open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseTrapAsync();
+        }
+    }
+
+    // Aurora also moves the category between "Clothing" and "Services" here
+    // and resets the stock availability; Parrot has neither those categories
+    // nor that field, so only the kind itself changes.
+    private void SelectKind(ProductKind kind) => _kind = kind;
+
+    private void SelectCategory(string category)
+    {
+        _draft.Category = category;
+        _categoryOpen = false;
+    }
+
+    private void SelectCurrency(string currency)
+    {
+        _draft.Currency = currency;
+        _currencyOpen = false;
+    }
+
+    private void OnPriceChanged(string? value) =>
+        _draft.Price = decimal.TryParse(value, System.Globalization.NumberStyles.Any,
+            System.Globalization.CultureInfo.InvariantCulture, out var price) ? price : 0;
+
+    private void OnCategoryOpenChanged(bool open)
+    {
+        _categoryOpen = open;
+        if (!open) CancelCategory();
+    }
+
+    private void StartCategory()
+    {
+        _creatingCategory = true;
+        _categoryName = "";
+        _categoryError = null;
+    }
+
+    private void CancelCategory()
+    {
+        _creatingCategory = false;
+        _categoryError = null;
+    }
+
+    private async Task CreateCategoryAsync()
+    {
+        var name = _categoryName.Trim();
+        if (name.Length < 2 || OnCreateCategory is null) return;
+
+        _categoryError = await OnCreateCategory(name);
+        if (_categoryError is not null) return;
+
+        _draft.Category = name;
+        _creatingCategory = false;
+        _categoryName = "";
+        _categoryOpen = false;
+    }
+
+    private Task SubmitAsync()
+    {
+        if (!IsValid || Busy) return Task.CompletedTask;
+        return OnSave.InvokeAsync(_draft);
+    }
+
+    private async Task TryClose()
+    {
+        if (!Busy) await OnClose.InvokeAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape" && !Busy) await OnClose.InvokeAsync();
+    }
+
+    private async Task ReleaseTrapAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap;
+        _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync() => await ReleaseTrapAsync();
+}
