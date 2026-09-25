@@ -149,7 +149,15 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
                     ? evt.Message.Attachments[0].Type
                     : "text";
 
-                batch.Add(ToIncoming(registration, evt, evt.Message.Mid, type, evt.Message.Text));
+                // Without these the payload is lost and an "image" message can never be retrieved.
+                List<string>? attachmentUrls = evt.Message.Attachments?
+                    .Select(a => a.Payload?.Url)
+                    .Where(url => !string.IsNullOrWhiteSpace(url))
+                    .Select(url => url!)
+                    .ToList();
+
+                batch.Add(ToIncoming(registration, evt, evt.Message.Mid, type, evt.Message.Text,
+                    attachmentUrls is { Count: > 0 } ? attachmentUrls : null));
                 continue;
             }
 
@@ -196,7 +204,8 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         FacebookMessagingEvent evt,
         string messageId,
         string type,
-        string? textBody) => new()
+        string? textBody,
+        IReadOnlyList<string>? attachmentUrls = null) => new()
     {
         ConnectionId = registration.ConnectionId,
         OwnerUserId = registration.OwnerUserId,
@@ -205,8 +214,11 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         ExternalAccountId = registration.PageId,
         From = evt.Sender.Id,
         Timestamp = evt.Timestamp.ToString(),
+        // Messenger sends milliseconds; WhatsApp sends whole seconds.
+        SentAt = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp),
         Type = type,
         TextBody = textBody,
+        AttachmentUrls = attachmentUrls,
         ChannelId = registration.PageId,
         ChannelDisplayName = registration.PageName,
         ReceivedAt = DateTime.UtcNow,

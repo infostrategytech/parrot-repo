@@ -62,10 +62,11 @@ public sealed class MongoConversationStore : IConversationStore
         FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(
             x => x.OwnerUserId == owner && x.ConnectionId == connection && x.From == sender)
             & Builders<MessageDocument>.Filter.Ne(x => x.Outgoing, true);
-        MessageDocument? doc = await _messages.Find(filter).SortByDescending(x => x.Timestamp).FirstOrDefaultAsync(ct);
-        return doc is not null && long.TryParse(doc.Timestamp, out long timestamp)
-            && timestamp >= 0 && timestamp <= DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-            ? DateTimeOffset.FromUnixTimeSeconds(timestamp).UtcDateTime : null;
+        // Ordered by ReceivedAt: Timestamp is a provider string whose units differ per platform.
+        MessageDocument? doc = await _messages.Find(filter).SortByDescending(x => x.ReceivedAt).FirstOrDefaultAsync(ct);
+
+        // SentAt is absent on documents written before it existed; ReceivedAt is within seconds of it.
+        return doc is null ? null : doc.SentAt ?? doc.ReceivedAt;
     }
 
     public async Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct) =>

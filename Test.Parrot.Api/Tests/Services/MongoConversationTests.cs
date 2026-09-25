@@ -3,6 +3,7 @@ using MongoDB.Driver;
 using Parrot.Application.Conversations;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Domain.Entities.Messages;
+using Parrot.Application.Integrations;
 using Parrot.Domain.Enums;
 using Parrot.Infrastructure.Conversations;
 using Parrot.Infrastructure.Messaging;
@@ -28,7 +29,9 @@ public class MongoConversationTests
         var settings = Options.Create(new MongoDbSettings { Database = database, Collection = "messages" });
         try
         {
-            var incoming = new MongoMessageRepository(client, settings);
+            var mappers = new MessageDocumentMapperFactory(
+                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]);
+            var incoming = new MongoMessageRepository(client, settings, mappers);
             var store = new MongoConversationStore(client, settings);
             var connection = Guid.NewGuid();
             var message = new IncomingMessage
