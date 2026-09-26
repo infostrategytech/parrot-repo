@@ -59,6 +59,22 @@
 
 .field__box input::placeholder { color: var(--cadence-field-placeholder); opacity: 1; }
 
+/* Browser autofill paints its own pale-blue fill on the input, which here
+   shows as a band inside the white box. Browsers ignore background-color on
+   an autofilled field, so an inset shadow the size of the field paints the
+   box's white over it; the text keeps the field's colour. The long
+   transition stops the fill flashing in before the shadow covers it. */
+.field__box input:-webkit-autofill,
+.field__box input:-webkit-autofill:hover,
+.field__box input:-webkit-autofill:focus,
+.field__box input:autofill {
+  -webkit-box-shadow: 0 0 0 1000px #FFFFFF inset;
+  box-shadow: 0 0 0 1000px #FFFFFF inset;
+  -webkit-text-fill-color: var(--cadence-field-text);
+  caret-color: var(--cadence-field-text);
+  transition: background-color 600000s 0s, color 600000s 0s;
+}
+
 .field__eye {
   display: grid;
   flex: 0 0 auto;
