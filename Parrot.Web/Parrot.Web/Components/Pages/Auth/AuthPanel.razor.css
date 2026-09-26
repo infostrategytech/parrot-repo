@@ -218,3 +218,18 @@
   background: color-mix(in srgb, var(--cadence-sea) 8%, #FFFFFF);
   border-color: color-mix(in srgb, var(--cadence-sea) 28%, transparent);
 }
+
+/* Moving between the signed-out screens, the column settles into place
+   rather than swapping: each screen is a new panel, so the animation plays
+   on arrival. Backwards fill leaves no transform behind once it ends. */
+.panel {
+  animation: panel-enter 340ms var(--cadence-ease) backwards;
+}
+
+@keyframes panel-enter {
+  from { opacity: 0; transform: translateY(10px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .panel { animation: none; }
+}

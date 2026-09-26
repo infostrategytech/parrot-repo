@@ -51,6 +51,17 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("clickElement", element);
     }
 
+    /// <summary>
+    /// Loads a classic script once, on first use, and waits for it. For heavy
+    /// libraries a single screen needs, so they stay off every other page's
+    /// first paint.
+    /// </summary>
+    public async Task EnsureScriptAsync(string url)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("ensureScript", url);
+    }
+
     /// <summary>Copies text to the clipboard. Silently does nothing if the browser refuses.</summary>
     public async Task CopyAsync(string value)
     {

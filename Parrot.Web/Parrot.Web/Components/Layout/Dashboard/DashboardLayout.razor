@@ -8,6 +8,8 @@
    and the account card come from the shared component library; this layout
    only says who is signed in and what the account menu does. *@
 
+<ActivityBar />
+
 <AppShell BrandName="OmniAI"
           WorkspaceId="@WorkspaceSeed"
           WorkspaceName="@(AuthState.CurrentUser?.BusinessName ?? "")"

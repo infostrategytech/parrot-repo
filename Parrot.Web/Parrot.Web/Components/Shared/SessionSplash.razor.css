@@ -11,7 +11,9 @@
   height: 100vh;
   color: var(--colors-text-muted);
   background: var(--colors-surface-background);
-  animation: splash-in var(--cadence-action) var(--cadence-ease);
+  /* Held back a moment so a returning person whose session is read back
+     quickly goes straight to their screen with no flash of the splash. */
+  animation: splash-in 320ms var(--cadence-ease) 200ms backwards;
 }
 
 .splash__wordmark {

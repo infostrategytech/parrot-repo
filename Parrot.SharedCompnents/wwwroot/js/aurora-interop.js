@@ -169,3 +169,28 @@ export async function copyText(value) {
     // The value is on screen and selectable; that is the fallback.
   }
 }
+
+// ── Loading a script on first use ───────────────────────────────────────────
+// A heavy library only one screen needs (Chart.js, for the dashboard) should
+// not sit in front of every page's first paint. The first caller injects the
+// tag; everyone after awaits the same promise.
+
+const scripts = new Map();
+
+export function ensureScript(url) {
+  if (!scripts.has(url)) {
+    scripts.set(url, new Promise((resolve, reject) => {
+      const tag = document.createElement("script");
+      tag.src = url;
+      tag.async = true;
+      tag.onload = () => resolve();
+      tag.onerror = () => {
+        scripts.delete(url);
+        tag.remove();
+        reject(new Error(`Could not load ${url}`));
+      };
+      document.head.appendChild(tag);
+    }));
+  }
+  return scripts.get(url);
+}

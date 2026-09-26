@@ -19,6 +19,15 @@
       }
     </script>
 
+    @* The two faces the first paint needs, requested alongside the CSS rather
+       than after it is parsed: Figtree for the signed-out screens, Geist for
+       the product. Paths must match the url() in the stylesheets exactly or
+       the browser downloads each twice. The interop module is fetched early
+       too, since the shell imports it on first render. *@
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="_content/Parrot.SharedComponents/cadence/fonts/figtree-latin.woff2" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin href="_content/Parrot.SharedComponents/fonts/geist-latin-wght-normal.woff2" />
+    <link rel="modulepreload" href="_content/Parrot.SharedComponents/js/aurora-interop.js" />
+
     @* Tokens first: they define the variables everything else resolves against. *@
     <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/fonts.css"]" />
     <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/tokens.css"]" />
@@ -36,7 +45,6 @@
 <body>
     <Routes @rendermode="InteractiveServer" />
     <ReconnectModal />
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4/dist/chart.umd.min.js"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
 </body>
 

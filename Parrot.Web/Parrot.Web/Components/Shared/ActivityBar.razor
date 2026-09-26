@@ -1,0 +1,54 @@
+@namespace Parrot.Web.Components.Shared
+@using Parrot.Web.Services
+@inject ActivityState Activity
+@implements IDisposable
+
+@* A hairline along the top edge while the API is being asked for something.
+   It waits a beat before appearing, so a quick answer never flickers it, and
+   eases out rather than vanishing. The same sweep the reconnect line uses,
+   in teal instead of terracotta, so "working" and "lost" never look alike. *@
+
+<div class="activity @(_visible ? "is-on" : null)" role="progressbar" aria-hidden="@(!_visible)" aria-label="Loading"></div>
+
+@code {
+    private static readonly TimeSpan Grace = TimeSpan.FromMilliseconds(180);
+
+    private bool _visible;
+    private CancellationTokenSource? _pending;
+
+    protected override void OnInitialized() => Activity.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(async () =>
+    {
+        _pending?.Cancel();
+
+        if (!Activity.IsBusy)
+        {
+            _visible = false;
+            StateHasChanged();
+            return;
+        }
+
+        var pending = _pending = new CancellationTokenSource();
+        try
+        {
+            await Task.Delay(Grace, pending.Token);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        if (Activity.IsBusy)
+        {
+            _visible = true;
+            StateHasChanged();
+        }
+    });
+
+    public void Dispose()
+    {
+        Activity.Changed -= OnChanged;
+        _pending?.Cancel();
+    }
+}

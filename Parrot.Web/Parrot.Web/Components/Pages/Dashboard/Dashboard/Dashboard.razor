@@ -3,6 +3,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Dashboard
 @using Parrot.Web.Components.Pages.Dashboard.Dashboard
 @inject IJSRuntime JS
+@inject AuroraInterop Interop
 @inject NavigationManager Nav
 @inject AuthState AuthState
 @implements IAsyncDisposable
@@ -282,6 +283,17 @@
     {
         if (firstRender)
         {
+            // Chart.js is only needed here, so it is fetched here rather than
+            // on every page; the second visit reads it from cache.
+            try
+            {
+                await Interop.EnsureScriptAsync(Assets["lib/chart/chart.umd.min.js"]);
+            }
+            catch (JSException)
+            {
+                return; // The rest of the dashboard is still useful without the chart.
+            }
+
             var (labels, data) = _chartData[_selectedPeriod];
             // Every colour the chart draws is read from the design tokens at
             // the moment it is built, so it follows the theme rather than

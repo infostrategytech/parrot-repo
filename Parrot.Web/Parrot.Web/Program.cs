@@ -27,6 +27,23 @@ using Parrot.SharedComponents.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Static assets are precompressed by MapStaticAssets; the rendered page HTML
+// was going out raw at ~18 KB, past one TCP window, which costs an extra round
+// trip. Only text/html is compressed here. The pages carry no secrets or
+// tokens (sign-in state lives in the circuit, not the markup), so this does
+// not open a BREACH-style oracle.
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProvider>();
+    options.Providers.Add<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProvider>();
+    options.MimeTypes = ["text/html"];
+});
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.BrotliCompressionProviderOptions>(o =>
+    o.Level = System.IO.Compression.CompressionLevel.Fastest);
+builder.Services.Configure<Microsoft.AspNetCore.ResponseCompression.GzipCompressionProviderOptions>(o =>
+    o.Level = System.IO.Compression.CompressionLevel.Fastest);
+
 // Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
@@ -41,9 +58,14 @@ builder.Services.AddHttpClient<IForgotPasswordService, ForgotPasswordService>(c 
 builder.Services.AddHttpClient<IResetPasswordService, ResetPasswordService>(c => c.BaseAddress = new Uri(apiBaseUrl));
 builder.Services.AddHttpClient<IVerifyEmailService, VerifyEmailService>(c => c.BaseAddress = new Uri(apiBaseUrl));
 // Authenticated clients share the current circuit's AuthState for session-expiry notifications.
-builder.Services.AddScoped<HttpClient>(sp => new HttpClient(new SessionExpiryHandler(sp.GetRequiredService<AuthState>())
+// The activity handler feeds the hairline progress bar in the dashboard shell.
+builder.Services.AddScoped<ActivityState>();
+builder.Services.AddScoped<HttpClient>(sp => new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>())
 {
-    InnerHandler = new HttpClientHandler(),
+    InnerHandler = new SessionExpiryHandler(sp.GetRequiredService<AuthState>())
+    {
+        InnerHandler = new HttpClientHandler(),
+    },
 }) { BaseAddress = new Uri(apiBaseUrl) });
 builder.Services.AddScoped<IIntegrationsService, IntegrationsService>();
 builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
@@ -91,6 +113,7 @@ else
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
     app.UseHsts();
 }
+app.UseResponseCompression();
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
