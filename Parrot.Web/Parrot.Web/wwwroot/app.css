@@ -76,3 +76,55 @@ html.is-navigating .activity {
 @media (prefers-reduced-motion: reduce) {
     .nav-item.nav-item.is-pending { animation: none; }
 }
+
+/* The relay dots over a slow switch, drawn by nav-pending.js: the same three
+   dots as CadenceLoader's RelayDots, each hopping in turn and flashing the
+   brand's terracotta at the top of its hop, on a small frosted pill so they
+   read over any screen. They only appear once a switch has taken 400 ms. */
+.nav-loader {
+    position: fixed;
+    left: var(--nav-loader-x, 50%);
+    top: var(--nav-loader-y, 50%);
+    z-index: 950;
+    display: flex;
+    gap: 6px;
+    padding: 12px 16px;
+    color: var(--colors-text-secondary);
+    background: color-mix(in srgb, var(--colors-surface-elevated) 85%, transparent);
+    backdrop-filter: blur(6px);
+    border: 1px solid var(--colors-surface-border);
+    border-radius: 999px;
+    box-shadow: 0 4px 16px var(--colors-surface-shadow);
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.92);
+    transition: opacity 220ms var(--cadence-ease), transform 220ms var(--cadence-ease);
+}
+
+.nav-loader.is-on {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+}
+
+.nav-loader span {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    animation: nav-loader-hop 1.5s var(--cadence-ease) infinite;
+}
+
+.nav-loader span:nth-child(2) { animation-delay: 0.25s; }
+.nav-loader span:nth-child(3) { animation-delay: 0.5s; }
+
+@keyframes nav-loader-hop {
+    0%, 40%, 100% { transform: translateY(0); background: currentColor; }
+    20%           { transform: translateY(-4px); background: var(--cadence-terracotta); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-loader span { animation: nav-loader-fade 1.5s ease-in-out infinite; }
+    .nav-loader span:nth-child(2) { animation-delay: 0.25s; }
+    .nav-loader span:nth-child(3) { animation-delay: 0.5s; }
+    @keyframes nav-loader-fade { 50% { opacity: 0.35; } }
+}
