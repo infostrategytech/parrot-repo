@@ -37,3 +37,42 @@
 @media (prefers-reduced-motion: reduce) {
     .app-main > * { animation: none; }
 }
+
+/* ── Switching screens from the sidebar ───────────────────────────────────
+   Driven by js/nav-pending.js. The clicked item takes the selected look at
+   once, with a soft pulse while the screen is on its way. If the wait is
+   long enough to notice, the current screen dims slightly and the top
+   hairline (the ActivityBar) runs; a quick switch shows neither. */
+/* Selectors are doubled/qualified to outrank the components' scoped rules,
+   which load after this file. */
+.nav-item.nav-item.is-pending {
+    color: var(--colors-interaction-selected-foreground);
+    background: var(--colors-interaction-selected);
+    animation: nav-pending-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes nav-pending-pulse {
+    50% { opacity: 0.6; }
+}
+
+/* The rail's own active highlight steps back while another item is pending. */
+html.is-navigating .nav-item.is-active:not(.is-pending) {
+    background: transparent;
+    color: inherit;
+}
+
+.app-shell .app-main {
+    transition: opacity 200ms ease;
+}
+
+html.is-navigating .app-shell .app-main {
+    opacity: 0.55;
+}
+
+html.is-navigating .activity {
+    opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .nav-item.nav-item.is-pending { animation: none; }
+}
