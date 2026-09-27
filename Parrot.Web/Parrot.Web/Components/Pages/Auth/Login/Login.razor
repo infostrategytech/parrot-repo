@@ -7,7 +7,6 @@
 @inject LoginState LoginState
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
-@inject FeedbackService Feedback
 @inject IConfiguration Configuration
 @implements IDisposable
 
@@ -122,7 +121,6 @@
             {
                 AuthState.SetUser(response);
                 await TokenStorage.SaveAsync(response);
-                Feedback.Play(FeedbackSound.Success);
                 Navigation.NavigateTo("/dashboard");
             }
         }

@@ -4,16 +4,14 @@ namespace Parrot.Web.Services;
 
 public enum FeedbackSound
 {
-    Success,
     Error,
     Send,
     Incoming,
 }
 
-// The C# face of js/feedback.js, for the moments only the server knows about:
-// a sign-in going through, a reply sent, a customer's message arriving.
-// Clicks, switches, code digits, toasts and inline errors are picked up by the
-// script itself. Fire-and-forget: a sound must never hold up or break a flow.
+// The C# face of js/feedback.js. Sound and haptics are for messages only: a
+// reply sent (Send), a reply that failed (Error), a customer writing in
+// (Incoming). Fire-and-forget: a sound must never hold up or break a flow.
 public sealed class FeedbackService(IJSRuntime js)
 {
     public void Play(FeedbackSound sound) => _ = PlayAsync(sound);
