@@ -50,4 +50,10 @@ jobs:
             git reset --hard FETCH_HEAD
             sudo docker compose build
             sudo docker compose up -d --remove-orphans
+            # nginx resolves upstream container names once, when it starts, and
+            # keeps the addresses. Recreated containers can come back on each
+            # other's old IPs (parrot-api and parrot-grpc swapped once, and every
+            # API request landed on gRPC as a 404), so make it look them up
+            # again; fall back to a restart if a reload is refused.
+            sudo docker compose exec -T nginx nginx -s reload || sudo docker compose restart nginx
             sudo docker system prune -f --volumes=false
