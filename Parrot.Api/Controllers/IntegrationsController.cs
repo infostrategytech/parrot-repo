@@ -2,12 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Middleware;
 using Parrot.Application.Integrations;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Rest.Controllers;
 
 [Route("api/integrations")]
 [ApiController]
 [Authorize]
+[Monitor(Area = "integrations")]
 public class IntegrationsController : ControllerBase
 {
     private readonly IWhatsAppWebhookService _whatsAppWebhookService;

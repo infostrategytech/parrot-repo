@@ -1,12 +1,14 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.Integrations.BusinessEnrichment;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Rest.Controllers;
 
 [Route("api/business-setup")]
 [ApiController]
 [Authorize]
+[Monitor(Area = "business-setup", SlowMs = 15000)] // web scraping + LLM enrichment
 public class BusinessSetupController : ControllerBase
 {
     private readonly IBusinessProfileEnrichmentService _enrichmentService;

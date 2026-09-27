@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Exceptions;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Controllers;
 
@@ -11,6 +12,7 @@ namespace Parrot.Api.Controllers;
 [Authorize]
 [Route("api/conversations")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+[Monitor(Area = "conversations")]
 public sealed class ConversationsController(IConversationStore store, ConversationService service,
     IWhatsAppConnectionRepository connections) : ControllerBase
 {
@@ -30,6 +32,7 @@ public sealed class ConversationsController(IConversationStore store, Conversati
         return Ok(await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken));
     }
 
+    [Monitor("conversations.send", SlowMs = 3000)] // waits on the WhatsApp Cloud API
     [HttpPost("{connectionId:guid}/messages")]
     public async Task<IActionResult> Send(Guid connectionId, [FromQuery] string sender,
         [FromBody] SendReplyRequest request, CancellationToken cancellationToken) =>

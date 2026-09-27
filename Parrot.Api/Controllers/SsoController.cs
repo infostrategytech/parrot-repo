@@ -6,11 +6,13 @@ using Microsoft.Extensions.Options;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Api.Middleware;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Controllers;
 
 [ApiController]
 [Route("api/auth/sso")]
+[Monitor(Area = "auth.sso", SlowMs = 3000)] // round trips to Google
 public class SsoController : ControllerBase
 {
     private const string ExternalCookieScheme = "ExternalCookies";

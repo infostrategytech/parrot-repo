@@ -29,6 +29,7 @@ using Parrot.Infrastructure.Email;
 using Parrot.Infrastructure.FeatureFlags;
 using Parrot.Infrastructure.SocialMediaIntegrations;
 using Parrot.Api.Middleware;
+using Parrot.Api.Monitoring;
 using Parrot.Api.Utils;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -226,6 +227,14 @@ builder.Services.AddRateLimiter(options =>
             }));
 });
 
+// Monitoring: every request is timed and counted by MonitoringMiddleware;
+// [Monitor] on a controller or action names it and sets its slow threshold.
+builder.Services.Configure<MonitoringOptions>(builder.Configuration.GetSection(MonitoringOptions.SectionName));
+builder.Services.AddMetrics();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<RequestMetrics>();
+builder.Services.AddSingleton<MonitoringStore>();
+
 // Services
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
@@ -320,6 +329,10 @@ if (!builder.Configuration.GetValue("FeatureFlags:" + FeatureFlagKeys.RequireEma
 
 // Restores the client address and scheme before anything downstream reads them.
 app.UseForwardedHeaders();
+
+// Outermost after that, so it records the status the client actually got:
+// handled exceptions as 500s, rate-limited calls as 429s.
+app.UseMiddleware<MonitoringMiddleware>();
 
 // Global Exception Handler (must be first in pipeline)
 app.UseGlobalExceptionHandler();

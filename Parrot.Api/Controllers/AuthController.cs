@@ -6,11 +6,13 @@ using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Api.Middleware;
 using Parrot.Api.Utils;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Monitor(Area = "auth")]
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
@@ -20,6 +22,7 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
+    [Monitor("auth.register", SlowMs = 3000)] // password hashing + breached-password lookup
     [HttpPost("register")]
     [EnableRateLimiting(RateLimitPolicies.Register)]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
@@ -36,6 +39,7 @@ public class AuthController : ControllerBase
         return response is null ? StatusCode(StatusCodes.Status201Created) : Ok(response);
     }
 
+    [Monitor("auth.login", SlowMs = 1500)] // password hashing by design
     [HttpPost("login")]
     [EnableRateLimiting(RateLimitPolicies.Login)]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]

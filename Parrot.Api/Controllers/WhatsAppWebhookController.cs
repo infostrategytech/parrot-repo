@@ -3,11 +3,13 @@ using Microsoft.AspNetCore.RateLimiting;
 using Parrot.Api.Utils;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Rest.Controllers;
 
 [Route("api/webhooks/whatsapp")]
 [ApiController]
+[Monitor(Area = "webhooks.whatsapp", SlowMs = 500)] // Meta expects a quick acknowledgement
 public class WhatsAppWebhookController : ControllerBase
 {
     private readonly IWhatsAppWebhookService _whatsAppWebhookService;

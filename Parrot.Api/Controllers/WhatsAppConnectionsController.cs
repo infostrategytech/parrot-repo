@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Controllers;
 
@@ -10,6 +11,7 @@ namespace Parrot.Api.Controllers;
 [Authorize]
 [Route("api/whatsapp/connections")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+[Monitor(Area = "whatsapp.connections")]
 public class WhatsAppConnectionsController : ControllerBase
 {
     private readonly IWhatsAppConnectionService _service;

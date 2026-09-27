@@ -3,12 +3,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.Agents;
 using Parrot.Application.DTOs.Agents;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
+[Monitor(Area = "agents")]
 public class AgentController : ControllerBase
 {
     private readonly IAgentService _agentService;

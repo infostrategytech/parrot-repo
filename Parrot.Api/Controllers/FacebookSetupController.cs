@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
+using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -11,6 +12,7 @@ namespace Parrot.Api.Rest.Controllers;
 [Route("api/facebook/setup")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 // Authenticated setup endpoints for Messenger; the public webhook lives in FacebookWebhookController.
+[Monitor(Area = "facebook.setup")]
 public sealed class FacebookSetupController(IFacebookConnectionService connections) : ControllerBase
 {
     // GET /api/facebook/setup - returns webhook URL and verify token, creating the connection if needed.
