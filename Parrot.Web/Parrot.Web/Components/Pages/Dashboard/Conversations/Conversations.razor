@@ -7,6 +7,7 @@
 @inject Parrot.Web.Services.ConversationClient Client
 @inject AuthState AuthState
 @inject NavigationManager Nav
+@inject Parrot.Web.Services.FeedbackService Feedback
 
 <PageTitle>Inbox · OmniAI</PageTitle>
 
@@ -344,7 +345,12 @@
             if (!_more) break;
         }
         if (token != AuthState.CurrentUser?.Token || _disposed) return;
+        // A conversation the list has never shown is a new customer writing in.
+        // The first load is excluded, or opening the inbox would chime.
+        var known = ConversationsState.Conversations.Select(c => c.Id).ToHashSet();
         ConversationsState.Apply(summaries);
+        if (!_initialLoad && ConversationsState.Conversations.Any(c => !known.Contains(c.Id)))
+            Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
         _selected ??= (ConversationId is null ? null : ConversationsState.GetConversation(ConversationId))
                       ?? ConversationsState.Conversations.FirstOrDefault();
         if (_selected is not null) await ReadSelectedAsync(false);
@@ -383,7 +389,13 @@
                 cursor = previous.NextBefore;
             }
         }
+        // New incoming messages in the open thread get the bubble; the agent's
+        // own replies and a first load of the history do not.
+        var seen = item.Messages.Select(m => m.Id).ToHashSet();
+        var wasLoaded = item.HistoryLoaded;
         ConversationsState.Merge(item, messages);
+        if (!older && wasLoaded && item.Messages.Any(m => !m.IsOutgoing && !seen.Contains(m.Id)))
+            Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
         if (older || !item.HistoryLoaded) item.NextBefore = page.NextBefore;
         item.HistoryLoaded = true;
     }

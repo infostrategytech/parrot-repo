@@ -3,6 +3,7 @@
 @using Parrot.Application.Conversations
 @inject Parrot.Web.Services.ConversationClient Client
 @inject AuroraInterop Interop
+@inject Parrot.Web.Services.FeedbackService Feedback
 
 @* The page owns the conversation data (it polls the list and reads the
    selected thread every 5 seconds); this component draws Aurora's timeline
@@ -170,6 +171,7 @@
                 "unknown" or "pending" => "Delivery is uncertain or still processing. Check the recipient’s phone before composing the same reply again; it will not be resent automatically.",
                 _ => null,
             };
+            Feedback.Play(item.SendError is null ? Parrot.Web.Services.FeedbackSound.Send : Parrot.Web.Services.FeedbackSound.Error);
             item.Draft = "";
             item.DraftRequestId = null;
             _scrollPending = true;
@@ -177,6 +179,7 @@
         }
         catch (HttpRequestException ex)
         {
+            Feedback.Play(Parrot.Web.Services.FeedbackSound.Error);
             item.SendError = ex.Message;
             if (ex.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict
                 or System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Unauthorized)

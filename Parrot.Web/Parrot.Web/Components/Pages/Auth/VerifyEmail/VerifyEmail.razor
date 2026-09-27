@@ -7,6 +7,7 @@
 @inject VerifyEmailState VerifyEmailState
 @inject AuthState AuthState
 @inject TokenStorageService TokenStorage
+@inject FeedbackService Feedback
 @implements IDisposable
 
 <PageTitle>Verify email · OmniAI</PageTitle>
@@ -156,6 +157,7 @@
                 await TokenStorage.SaveAsync(response);
             }
 
+            Feedback.Play(FeedbackSound.Success);
             Navigation.NavigateTo("/dashboard");
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)

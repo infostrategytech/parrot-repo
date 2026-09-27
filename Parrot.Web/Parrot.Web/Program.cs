@@ -60,6 +60,7 @@ builder.Services.AddHttpClient<IVerifyEmailService, VerifyEmailService>(c => c.B
 // Authenticated clients share the current circuit's AuthState for session-expiry notifications.
 // The activity handler feeds the hairline progress bar in the dashboard shell.
 builder.Services.AddScoped<ActivityState>();
+builder.Services.AddScoped<FeedbackService>();
 builder.Services.AddScoped<HttpClient>(sp => new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>())
 {
     InnerHandler = new SessionExpiryHandler(sp.GetRequiredService<AuthState>())

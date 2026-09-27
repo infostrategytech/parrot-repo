@@ -2,6 +2,7 @@
 
 @* Which updates reach the inbox and which appear in the product. Each row
    is Aurora's Toggle with its label and description. *@
+@inject Parrot.Web.Services.FeedbackService Feedback
 
 <SettingsCard Title="Email notifications" Description="Choose which updates should be sent to your email.">
     <ChildContent>
@@ -25,6 +26,14 @@
 <SettingsCard Title="In-app alerts" Description="Control alerts that appear inside your dashboard.">
     <ChildContent>
         <div class="notifications__list">
+            <div class="notifications__row">
+                @* Kept in this browser (localStorage) and applied at once, so it
+                   needs no Save. *@
+                <Toggle Checked="@_sounds"
+                        CheckedChanged="SetSoundsAsync"
+                        Label="Sounds &amp; haptics"
+                        Description="Soft sounds for actions, new messages and results, with vibration on supported phones." />
+            </div>
             @foreach (var item in _inAppNotifs)
             {
                 <div class="notifications__row">
@@ -42,6 +51,21 @@
 </SettingsCard>
 
 @code {
+    private bool _sounds = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _sounds = await Feedback.IsEnabledAsync();
+        StateHasChanged();
+    }
+
+    private async Task SetSoundsAsync(bool value)
+    {
+        _sounds = value;
+        await Feedback.SetEnabledAsync(value);
+    }
+
     class NotifItem
     {
         public string Label { get; set; } = ""; public string Sub { get; set; } = ""; public bool Enabled

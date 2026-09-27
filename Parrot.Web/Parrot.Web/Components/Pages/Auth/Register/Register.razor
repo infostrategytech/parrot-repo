@@ -7,6 +7,7 @@
 @inject AuthState AuthState
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
+@inject FeedbackService Feedback
 @implements IDisposable
 
 <PageTitle>Create your account · OmniAI</PageTitle>
@@ -125,6 +126,7 @@
                 // Verification is switched off on this deployment: the account is live already.
                 AuthState.SetUser(response);
                 await TokenStorage.SaveAsync(response);
+                Feedback.Play(FeedbackSound.Success);
                 Navigation.NavigateTo("/dashboard");
                 return;
             }
