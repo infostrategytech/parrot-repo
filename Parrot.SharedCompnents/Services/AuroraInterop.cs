@@ -69,6 +69,17 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("copyText", value);
     }
 
+    /// <summary>
+    /// Keeps Enter from adding a newline to <paramref name="textarea"/> until
+    /// disposed, so the component's keydown handler can send instead.
+    /// </summary>
+    public async Task<IAsyncDisposable> SubmitOnEnterAsync(ElementReference textarea)
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("submitOnEnter", textarea);
+        return new Handle(handle);
+    }
+
     public async Task ScrollToBottomAsync(ElementReference element)
     {
         var module = await _module.Value;

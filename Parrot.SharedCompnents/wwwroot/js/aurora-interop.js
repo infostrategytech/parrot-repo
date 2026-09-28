@@ -88,6 +88,25 @@ export function observeMedia(query, dotNetRef, method) {
   };
 }
 
+// ── Composer ────────────────────────────────────────────────────────────────
+
+/* Stop Enter from adding a newline to a textarea, so the component's own
+   keydown handler can send instead. Blazor cannot cancel a key conditionally
+   from C#, so this lives here. Shift+Enter still breaks the line, and Enter
+   that confirms an IME composition is left alone. */
+export function submitOnEnter(element) {
+  const onKeyDown = event => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) event.preventDefault();
+  };
+  element?.addEventListener("keydown", onKeyDown);
+
+  return {
+    release() {
+      element?.removeEventListener("keydown", onKeyDown);
+    }
+  };
+}
+
 // ── Scrolling ───────────────────────────────────────────────────────────────
 
 export function scrollToBottom(element) {
