@@ -1,4 +1,6 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+@implements IAsyncDisposable
+@inject AuroraInterop Interop
 
 @* Parrot sends plain-text WhatsApp replies (SendReplyRequest: RequestId +
    Text). Internal notes, attachments and AI drafting have no backend, so
@@ -13,7 +15,7 @@
         </div>
     </header>
 
-    <textarea value="@Text"
+    <textarea @ref="_input" value="@Text"
               @oninput="OnTextInput"
               @onkeydown="OnKeyDown"
               aria-label="Reply"
@@ -62,6 +64,9 @@
     [Parameter] public bool Retry { get; set; }
     [Parameter] public EventCallback OnSend { get; set; }
 
+    private ElementReference _input;
+    private IAsyncDisposable? _submitOnEnter;
+
     private bool InputDisabled => Sending || Retry;
     private bool CanSend => !Sending && !string.IsNullOrWhiteSpace(Text);
     private string ModeClass => Mode == ComposerMode.Note ? "is-note" : "is-reply";
@@ -72,9 +77,21 @@
 
     private Task OnTextInput(ChangeEventArgs args) => TextChanged.InvokeAsync(args.Value?.ToString() ?? "");
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) _submitOnEnter = await Interop.SubmitOnEnterAsync(_input);
+    }
+
+    // Enter sends and Shift+Enter breaks the line; the JS hook keeps Enter from
+    // adding a newline first. Enter that confirms an IME composition is ignored.
     private async Task OnKeyDown(KeyboardEventArgs args)
     {
-        if ((args.CtrlKey || args.MetaKey) && args.Key == "Enter" && CanSend) await OnSend.InvokeAsync();
+        if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing && CanSend) await OnSend.InvokeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_submitOnEnter is not null) await _submitOnEnter.DisposeAsync();
     }
 
     private async Task ChangeModeAsync(ComposerMode mode)

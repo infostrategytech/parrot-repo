@@ -47,7 +47,9 @@
   pointer-events: none;
 }
 
-.conversation-timeline__composer > * { pointer-events: auto; }
+/* ::deep: the children are components (InlineError, ResponseControl, ConversationComposer)
+   whose roots carry their own CSS scope, so a scoped `> *` would never match them. */
+.conversation-timeline__composer ::deep > * { pointer-events: auto; }
 .conversation-timeline__resolved { display: flex; gap: var(--spacing-xs); align-items: center; justify-content: center; color: var(--colors-text-muted); }
 
 .learning-dialog { display: grid; gap: var(--spacing-lg); }
