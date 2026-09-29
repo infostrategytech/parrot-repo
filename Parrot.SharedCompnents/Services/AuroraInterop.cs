@@ -80,6 +80,13 @@ public sealed class AuroraInterop : IAsyncDisposable
         return new Handle(handle);
     }
 
+    /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
+    public async Task SetValueAsync(ElementReference element, string value)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("setValue", element, value);
+    }
+
     public async Task ScrollToBottomAsync(ElementReference element)
     {
         var module = await _module.Value;

@@ -107,6 +107,14 @@ export function submitOnEnter(element) {
   };
 }
 
+/* Replace a field's text from the server without re-rendering its value.
+   A server-rendered value attribute races the keyboard: a render that lands
+   mid-keystroke writes back an older copy of the text. The composer leaves
+   the field uncontrolled and only pushes text that did not come from typing. */
+export function setValue(element, value) {
+  if (element && element.value !== value) element.value = value;
+}
+
 // ── Scrolling ───────────────────────────────────────────────────────────────
 
 export function scrollToBottom(element) {
