@@ -1,0 +1,400 @@
+/* The workspace welcome card, ported from Aurora (the Original design).
+   Everything below renders inside Dialog but comes from this component's own
+   markup, so it carries this component's scope; ::deep is only needed to
+   reach into child components such as Icon. The dark-mode overrides for the
+   colour wash and the logo tile live in app.css, where the theme is visible. */
+
+.workspace-dialog {
+  display: grid;
+  gap: var(--spacing-xl);
+  /* Not a token: the same hairline the dashboard defines. The dialog renders
+     outside the dashboard, so without its own copy every border in here
+     that uses it (the logo tile, the channel marks) was silently dropped. */
+  --ds-workspace-card-border: var(--ds-hairline);
+}
+
+/* Business name, then the optional phone number. */
+.workspace-name-form {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.workspace-dialog__intro {
+  display: grid;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.workspace-dialog__intro ::deep h2,
+.workspace-dialog__intro ::deep p {
+  margin: var(--spacing-none);
+}
+
+.workspace-dialog__intro ::deep .workspace-dialog__title { color: var(--colors-text-primary); }
+.workspace-dialog__intro ::deep p { color: var(--colors-text-secondary); }
+
+.workspace-ai-visual {
+  /* Gaps in the token set: no compact visual-stage, token-size or ambient
+     motion scale. The 24-second loop gives each channel eight quiet seconds. */
+  --ds-workspace-visual-height: 164px;
+  --ds-workspace-channel-token: 52px;
+  --ds-workspace-brand-hub: 64px;
+  --ds-workspace-visual-cycle: 24s;
+  --ds-workspace-visual-step: 8s;
+
+  position: relative;
+  isolation: isolate;
+  height: var(--ds-workspace-visual-height);
+  overflow: hidden;
+  background: transparent;
+}
+
+.workspace-dialog-gradient {
+  --ds-workspace-gradient-brand: var(--colors-accent-brand-subtle);
+  --ds-workspace-gradient-cyan: var(--colors-accent-cyan-subtle);
+  --ds-workspace-gradient-cyan-wash: var(--colors-accent-cyan-muted);
+  --ds-workspace-gradient-violet-wash: var(--colors-accent-violet-muted);
+  --ds-workspace-gradient-pink-wash: var(--colors-accent-pink-muted);
+  --ds-workspace-gradient-wash-peak: 0.78;
+
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: linear-gradient(
+    180deg,
+    var(--ds-workspace-gradient-brand) 0%,
+    var(--ds-workspace-gradient-cyan) 22%,
+    transparent 58%
+  );
+}
+
+.workspace-dialog-gradient__wash {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: workspace-visual-wash var(--ds-workspace-visual-cycle) var(--ds-motion-ease) infinite;
+}
+
+.wash-cyan {
+  background: linear-gradient(180deg, var(--ds-workspace-gradient-cyan-wash), transparent 58%);
+}
+
+.wash-violet {
+  background: linear-gradient(180deg, var(--ds-workspace-gradient-violet-wash), transparent 58%);
+  animation-delay: calc(var(--ds-workspace-visual-step) * -1);
+}
+
+.wash-pink {
+  background: linear-gradient(180deg, var(--ds-workspace-gradient-pink-wash), transparent 58%);
+  animation-delay: calc(var(--ds-workspace-visual-step) * -2);
+}
+
+.workspace-ai-visual__orbits {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+}
+
+.workspace-orbit,
+.workspace-orbit-signal {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+
+.workspace-orbit {
+  stroke: var(--colors-surface-input);
+  stroke-width: var(--ds-workspace-orbit-stroke);
+  stroke-linecap: round;
+}
+
+.workspace-orbit-signal {
+  stroke: var(--colors-brand-primary);
+  stroke-width: var(--ds-workspace-orbit-signal-stroke);
+  stroke-linecap: round;
+  stroke-dasharray: var(--ds-workspace-orbit-dash) var(--ds-workspace-orbit-gap);
+  opacity: 0;
+  animation: workspace-orbit-signal var(--ds-workspace-visual-cycle) linear infinite;
+}
+
+.workspace-ai-visual {
+  /* SVG stroke geometry is local to this illustration and has no system token. */
+  --ds-workspace-orbit-stroke: 1.5px;
+  --ds-workspace-orbit-signal-stroke: 2px;
+  --ds-workspace-orbit-dash: 18px;
+  --ds-workspace-orbit-gap: 180px;
+}
+
+.signal-facebook { animation-delay: calc(var(--ds-workspace-visual-step) * -1); }
+.signal-instagram { animation-delay: calc(var(--ds-workspace-visual-step) * -2); }
+
+.workspace-channel-token,
+.workspace-omniai-hub {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  background: var(--colors-surface-elevated);
+  border: var(--ds-workspace-card-border) solid var(--colors-surface-border);
+  box-shadow:
+    0 var(--spacing-2xs) var(--spacing-md) var(--colors-surface-shadow),
+    0 var(--spacing-sm) var(--spacing-xl) var(--colors-surface-shadow-diffuse);
+}
+
+.workspace-channel-token {
+  width: var(--ds-workspace-channel-token);
+  height: var(--ds-workspace-channel-token);
+  border-radius: var(--radius-radius-full);
+  animation: workspace-channel-emphasis var(--ds-workspace-visual-cycle) var(--ds-motion-ease) infinite;
+}
+
+/* Only the icon dims between highlights. Dimming the whole mark made the
+   circle see-through, and the line behind it showed through. */
+.workspace-channel-token > ::deep svg {
+  opacity: 0.72;
+  animation: workspace-channel-icon var(--ds-workspace-visual-cycle) var(--ds-motion-ease) infinite;
+  animation-delay: inherit;
+}
+
+/* Each mark sits on its line's end point, placed from its centre. The
+   percentages are the SVG's coordinates over its 416 × 164 viewBox, so lines
+   and marks stay joined when the dialog narrows. */
+.workspace-channel-token,
+.workspace-omniai-hub {
+  translate: -50% -50%;
+}
+
+.channel-whatsapp {
+  top: calc(84 / 164 * 100%);
+  left: calc(64 / 416 * 100%);
+  color: #22a968;
+}
+.channel-facebook {
+  top: calc(40 / 164 * 100%);
+  left: 50%;
+  color: #1877f2;
+  animation-delay: calc(var(--ds-workspace-visual-step) * -1);
+}
+.channel-instagram {
+  top: calc(84 / 164 * 100%);
+  left: calc(352 / 416 * 100%);
+  color: #c63886;
+  animation-delay: calc(var(--ds-workspace-visual-step) * -2);
+}
+
+.workspace-omniai-hub {
+  top: calc(124 / 164 * 100%);
+  left: 50%;
+  width: var(--ds-workspace-brand-hub);
+  height: var(--ds-workspace-brand-hub);
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border-color: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+}
+
+/* The real Cadence mark on the brand fill: its slate bars take the
+   foreground colour so they read on the hub; the reply stays terracotta. */
+.workspace-omniai-hub { --cadence-bar: var(--colors-brand-primary-foreground); }
+
+/* The illustration rests once the person is in a field or has typed a name,
+   so nothing moves beside what they are doing. */
+.workspace-dialog.has-business-name .workspace-channel-token,
+.workspace-dialog.has-business-name .workspace-channel-token > ::deep svg,
+.workspace-dialog.has-business-name .workspace-orbit-signal,
+.workspace-dialog:focus-within .workspace-channel-token,
+.workspace-dialog:focus-within .workspace-channel-token > ::deep svg,
+.workspace-dialog:focus-within .workspace-orbit-signal {
+  animation-play-state: paused;
+}
+
+/* Animated on the compositor, not repainted every frame. */
+.workspace-dialog-gradient__wash { will-change: opacity; }
+.workspace-channel-token { will-change: transform; }
+
+.workspace-dialog-gradient.has-business-name .workspace-dialog-gradient__wash {
+  animation-play-state: paused;
+}
+
+@keyframes workspace-visual-wash {
+  0%, 4% { opacity: 0.16; }
+  8%, 28% { opacity: var(--ds-workspace-gradient-wash-peak); }
+  33.333%, 100% { opacity: 0; }
+}
+
+@keyframes workspace-channel-emphasis {
+  0%, 4% { transform: translateY(var(--spacing-none)) scale(1); }
+  8%, 28% { transform: translateY(calc(var(--spacing-2xs) * -1)) scale(1.04); }
+  33.333%, 100% { transform: translateY(var(--spacing-none)) scale(1); }
+}
+
+@keyframes workspace-channel-icon {
+  0%, 4% { opacity: 0.72; }
+  8%, 28% { opacity: 1; }
+  33.333%, 100% { opacity: 0.72; }
+}
+
+@keyframes workspace-orbit-signal {
+  0%, 5% { opacity: 0; stroke-dashoffset: var(--spacing-none); }
+  9%, 27% { opacity: 0.6; }
+  32%, 100% { opacity: 0; stroke-dashoffset: calc(var(--ds-workspace-orbit-gap) * -1); }
+}
+
+.workspace-dialog > ::deep p {
+  margin: var(--spacing-none);
+  color: var(--colors-text-secondary);
+}
+
+.workspace-logo-field { display: grid; gap: var(--spacing-sm); }
+
+.workspace-logo-field__heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.workspace-logo-field__heading > ::deep span:last-child { color: var(--colors-text-muted); }
+
+.workspace-logo-upload,
+.workspace-logo-preview {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: var(--spacing-md);
+  min-height: var(--ds-workspace-logo-row);
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
+  /* A fill that differs from the dialog in both themes. surface-muted and
+     the dialog are the same colour in dark mode, which made this tile vanish,
+     so dark swaps in the text field fill (app.css). */
+  background: var(--ds-workspace-upload-fill);
+  border: var(--ds-workspace-card-border) dashed var(--ds-workspace-upload-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+.workspace-logo-field {
+  /* Gap in the token set: no upload-row or image-preview size. */
+  --ds-workspace-logo-row: 72px;
+  --ds-workspace-logo-preview: 44px;
+}
+
+.workspace-logo-upload { cursor: pointer; }
+
+/* Neutral, not blue: the fill moves a small step toward the text colour,
+   so it darkens slightly in light mode and lightens slightly in dark, and the
+   dashed edge firms up to a neutral grey. interaction-hover is not used
+   because in dark mode it is the dialog colour and the tile would vanish. */
+.workspace-logo-upload:hover {
+  background: color-mix(in srgb, var(--colors-text-primary) var(--ds-workspace-upload-tint), var(--ds-workspace-upload-fill));
+  border-color: var(--colors-icon-muted);
+}
+
+.workspace-logo-field {
+  /* Not a token: how far the hover moves toward the text colour. */
+  --ds-workspace-upload-tint: 5%;
+  --ds-workspace-upload-fill: var(--colors-surface-muted);
+  --ds-workspace-upload-border: var(--colors-surface-input);
+}
+
+/* While the image uploads the tile stays put and says so, with the icon
+   breathing, rather than being swapped for a spinner. */
+.workspace-logo-upload.is-uploading {
+  cursor: progress;
+  border-color: var(--colors-brand-primary);
+}
+
+.workspace-logo-upload.is-uploading:hover { background: var(--ds-workspace-upload-fill); }
+
+.workspace-logo-upload.is-uploading > span:first-child {
+  animation: workspace-logo-uploading var(--ds-workspace-upload-pulse) var(--ds-motion-ease) infinite;
+}
+
+.workspace-logo-field { --ds-workspace-upload-pulse: 1200ms; }
+
+@keyframes workspace-logo-uploading {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-logo-upload.is-uploading > span:first-child { animation: none; }
+}
+
+.workspace-logo-field:focus-within .workspace-logo-upload {
+  border-color: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-workspace-card-border) var(--colors-brand-primary);
+}
+
+.workspace-logo-upload > span:first-child {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+
+.workspace-logo-upload > span:last-child,
+.workspace-logo-preview > div { display: grid; gap: var(--spacing-2xs); }
+
+.workspace-logo-upload ::deep small,
+.workspace-logo-preview ::deep small { color: var(--colors-text-muted); }
+
+.workspace-logo-field > ::deep .workspace-logo-input {
+  position: absolute;
+  width: var(--ds-workspace-hidden-input);
+  height: var(--ds-workspace-hidden-input);
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.workspace-logo-field {
+  /* Standard visually-hidden input geometry; it remains keyboard reachable. */
+  --ds-workspace-hidden-input: 1px;
+}
+
+.workspace-logo-preview { border-style: solid; }
+
+.workspace-logo-preview > img {
+  width: var(--ds-workspace-logo-preview);
+  height: var(--ds-workspace-logo-preview);
+  object-fit: cover;
+  border-radius: var(--radius-radius-lg);
+}
+
+.workspace-logo-preview > button {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.workspace-logo-preview > button:hover {
+  color: var(--colors-feedback-destructive-text);
+  background: var(--colors-feedback-destructive-subtle);
+}
+
+::deep .workspace-logo-field__error {
+  margin: var(--spacing-none);
+  color: var(--colors-feedback-destructive-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-dialog-gradient__wash,
+  .workspace-channel-token,
+  .workspace-orbit-signal { animation: none; }
+
+  .workspace-dialog-gradient__wash:first-child { opacity: 0.72; }
+  .workspace-channel-token > ::deep svg { animation: none; opacity: 1; }
+  .workspace-orbit-signal { display: none; }
+}

@@ -1,0 +1,15 @@
+@namespace Parrot.Web.Components.Layout.Auth
+
+@* The ambient glow behind Sign In and Sign Up only: four edges, one per story
+   colour, cross-fading on the story's beat. Kept very subtle in both themes.
+   The other signed-out pages (reset, verify, the Google landing) have no
+   gradient at all.
+
+   Render it as the first child of the page's <main>, which must be
+   position: relative. Dark mode swaps the strength in app.css, where the
+   theme on :root can be seen. *@
+
+<span class="auth-glow edge-cyan" aria-hidden="true"></span>
+<span class="auth-glow edge-violet" aria-hidden="true"></span>
+<span class="auth-glow edge-amber" aria-hidden="true"></span>
+<span class="auth-glow edge-pink" aria-hidden="true"></span>

@@ -13,9 +13,16 @@
         <Icon Name="@ToneIcon" Size="IconSize.Sm" />
     </span>
 
-    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="inline-error__message">
-        @Message
-    </Typography>
+    <span class="inline-error__body">
+        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="inline-error__message">
+            @Message
+        </Typography>
+
+        @if (Action is not null)
+        {
+            <span class="inline-error__action @TextStyle.Small12Semibold.ToClassName()">@Action</span>
+        }
+    </span>
 
     @if (OnDismiss.HasDelegate)
     {
@@ -30,6 +37,14 @@
     [Parameter, EditorRequired] public string Message { get; set; } = "";
 
     [Parameter] public InlineErrorTone Tone { get; set; } = InlineErrorTone.Error;
+
+    /// <summary>
+    /// The one thing to do about it, when there is one: "Try again", "Sign in
+    /// instead". A button or a link. It sits on its own line under the
+    /// message, so it reads as something to press rather than as the end of
+    /// the sentence. Pass null, not an empty fragment, when there is none.
+    /// </summary>
+    [Parameter] public RenderFragment? Action { get; set; }
 
     /// <summary>Omit it and the error stays until the underlying problem is fixed, which is usually right.</summary>
     [Parameter] public EventCallback OnDismiss { get; set; }

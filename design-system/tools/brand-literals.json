@@ -1,0 +1,172 @@
+[
+  {
+    "value": "#25d366",
+    "owner": "WhatsApp",
+    "note": "WhatsApp's published brand green."
+  },
+  {
+    "value": "#22a968",
+    "owner": "WhatsApp",
+    "note": "The slightly deeper green the channel mark is drawn in, so the white glyph on it passes contrast."
+  },
+  {
+    "value": "#1877f2",
+    "owner": "Facebook",
+    "note": "Meta's brand blue. Not ours to tokenise and it does not change in dark mode."
+  },
+  {
+    "value": "#4c77b9",
+    "owner": "Facebook",
+    "note": "The muted mark used in the Meta setup mock-ups."
+  },
+  {
+    "value": "#c63886",
+    "owner": "Instagram",
+    "note": "Mid-point of the Instagram gradient."
+  },
+  {
+    "value": "#cf3975",
+    "owner": "Instagram",
+    "note": "The tint used behind the Instagram mark."
+  },
+  {
+    "value": "#ffc107",
+    "owner": "Google",
+    "note": "The yellow segment of Google's published multicolour G mark."
+  },
+  {
+    "value": "#ff3d00",
+    "owner": "Google",
+    "note": "The red segment of Google's published multicolour G mark."
+  },
+  {
+    "value": "#4caf50",
+    "owner": "Google",
+    "note": "The green segment of Google's published multicolour G mark."
+  },
+  {
+    "value": "#1976d2",
+    "owner": "Google",
+    "note": "The blue segment of Google's published multicolour G mark."
+  },
+  {
+    "value": "#f2f3f5",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — browser chrome. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#dfe2e7",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — chrome edge. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#d9dee7",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — window frame. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#f5f6f8",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — settings rail. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#dfe3e8",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — rail edge. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#e5e8ec",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — divider. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#242b34",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — console ink. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#5f6772",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — console ink, soft. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#858c96",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — console ink, muted. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#bdc3cc",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — traffic-light dot. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#e2e5e9",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — avatar placeholder. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#fafbfc",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — search field. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#dce1e8",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — search field edge. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#eef0f2",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — empty-state thumbnail. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#e0e3e7",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — thumbnail edge. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#dfe3e7",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — thumbnail bar. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#b8ddd5",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — thumbnail bar, accent. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#eaf0f8",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — menu highlight. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#b3c9e4",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — menu highlight edge. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#ffffff",
+    "owner": "Meta Business Settings",
+    "note": "Console chrome — console surface. Part of a drawing of Meta interface, so it must keep looking like Meta rather than like us."
+  },
+  {
+    "value": "#1f1f1f",
+    "owner": "Google",
+    "note": "The label colour of Google’s light sign-in button."
+  },
+  {
+    "value": "#131314",
+    "owner": "Google",
+    "note": "The fill of Google’s dark sign-in button."
+  },
+  {
+    "value": "#e3e3e3",
+    "owner": "Google",
+    "note": "The label colour of Google’s dark sign-in button."
+  },
+  {
+    "value": "#008751",
+    "owner": "Nigeria",
+    "note": "The green of the Nigerian flag, drawn by CountryFlag for the +234 phone prefix. A national mark: not ours to tokenise, and it does not change in dark mode."
+  }
+]

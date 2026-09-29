@@ -19,7 +19,16 @@ const FOCUSABLE = [
 // focused the card and closed on Escape but never trapped or restored focus,
 // so tabbing walked into the page underneath and closing left focus nowhere.
 
-export function trapFocus(container) {
+// escapeTarget/escapeMethod: an optional .NET callback for Escape. It is
+// called only for Escape, never for other keys, so typing in a dialog's
+// fields does not cost a server round trip per keystroke (on Blazor Server a
+// per-key handler redraws the dialog and can overwrite the field mid-typing).
+export function trapFocus(container, escapeTarget, escapeMethod) {
+  // The dialog can be gone by the time this runs (its page was left, or the
+  // session ended, between render and this call). Nothing to trap then; an
+  // error here would end the whole circuit.
+  if (!container) return { release() {} };
+
   const previouslyFocused = document.activeElement;
 
   function focusable() {
@@ -29,6 +38,10 @@ export function trapFocus(container) {
   }
 
   function onKeyDown(event) {
+    if (event.key === "Escape") {
+      if (escapeTarget && escapeMethod) escapeTarget.invokeMethodAsync(escapeMethod);
+      return;
+    }
     if (event.key !== "Tab") return;
 
     const items = focusable();
@@ -157,6 +170,14 @@ export function writeStorage(key, value) {
     localStorage.setItem(key, value);
   } catch {
     // Nothing to do and nothing worth telling anyone.
+  }
+}
+
+export function removeStorage(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // As above.
   }
 }
 

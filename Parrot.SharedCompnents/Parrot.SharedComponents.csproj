@@ -15,4 +15,61 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.Web" Version="10.0.3" />
   </ItemGroup>
 
+  <!-- ===================================================================
+       Design system. See design-system/README.md.
+
+       tokens.css and TextStyle.g.cs are generated from the Figma export in
+       design-system/variables and from typography.css. Both are COMMITTED,
+       which makes Node a soft dependency: a machine without it (the Docker
+       build, for one) still builds against the committed files; it just
+       cannot change a token.
+       =================================================================== -->
+  <PropertyGroup>
+    <RepoRoot>$(MSBuildProjectDirectory)/../</RepoRoot>
+    <DesignSystemTools>$(RepoRoot)design-system/tools/</DesignSystemTools>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <DesignTokenInputs Include="$(RepoRoot)design-system/variables/**/*.tokens.json" />
+    <DesignTokenInputs Include="$(DesignSystemTools)build-design-tokens.mjs" />
+    <DesignTokenInputs Include="$(DesignSystemTools)build-text-styles.mjs" />
+    <DesignTokenInputs Include="$(DesignSystemTools)paths.mjs" />
+    <DesignTokenInputs Include="$(MSBuildProjectDirectory)/wwwroot/css/typography.css" />
+  </ItemGroup>
+
+  <Target Name="CheckNode">
+    <Exec Command="node --version" ContinueOnError="true" StandardOutputImportance="low" StandardErrorImportance="low">
+      <Output TaskParameter="ExitCode" PropertyName="NodeExitCode" />
+    </Exec>
+  </Target>
+
+  <Target Name="BuildDesignTokens"
+          BeforeTargets="BeforeBuild"
+          DependsOnTargets="CheckNode"
+          Inputs="@(DesignTokenInputs)"
+          Outputs="$(MSBuildProjectDirectory)/wwwroot/css/tokens.css;$(MSBuildProjectDirectory)/DesignSystem/TextStyle.g.cs">
+    <Warning Condition="'$(NodeExitCode)' != '0'"
+             Text="Node not found. Building against the committed tokens.css and TextStyle.g.cs; edits to design-system/variables will not take effect until Node is installed." />
+    <Exec Condition="'$(NodeExitCode)' == '0'" Command="node design-system/tools/build-design-tokens.mjs" WorkingDirectory="$(RepoRoot)" />
+    <Exec Condition="'$(NodeExitCode)' == '0'" Command="node design-system/tools/build-text-styles.mjs" WorkingDirectory="$(RepoRoot)" />
+  </Target>
+
+  <!-- The guardrails. They run on every build, so the pull-request build
+       enforces them with no extra CI step. They only read stylesheets and
+       markup, so they are fast.
+
+       check-tokens        a var() that resolves to nothing
+       lint-design-system  a colour, size or type value typed in by hand
+                           (only NEW ones fail; known debt is in
+                           design-system/tools/lint-baseline.json)
+       verify-figma-tokens tokens.css drifting from Figma (report only) -->
+  <Target Name="CheckDesignSystem"
+          AfterTargets="BuildDesignTokens"
+          DependsOnTargets="CheckNode"
+          Condition="'$(NodeExitCode)' == '0'">
+    <Exec Command="node design-system/tools/check-tokens.mjs" WorkingDirectory="$(RepoRoot)" />
+    <Exec Command="node design-system/tools/lint-design-system.mjs" WorkingDirectory="$(RepoRoot)" />
+    <Exec Command="node design-system/tools/verify-figma-tokens.mjs" WorkingDirectory="$(RepoRoot)" />
+  </Target>
+
 </Project>

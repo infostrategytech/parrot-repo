@@ -10,6 +10,7 @@ using Parrot.Web.Components.Pages.Dashboard.BusinessSetup.Services;
 using Parrot.Web.Components.Pages.Dashboard.Conversations;
 using Parrot.Web.Features.Dashboard.QaInsights.State;
 using Parrot.Web.Features.Dashboard.TaskRequests.State;
+using Parrot.Web.Features.Dashboard.Workspace;
 using Parrot.Web.Features.Dashboard.Team.State;
 using Parrot.Web.Features.Auth.ForgotPassword.State;
 using Parrot.Web.Features.Auth.Login.Services;
@@ -52,6 +53,7 @@ builder.Services.AddRazorComponents()
 string apiBaseUrl = builder.Configuration["ApiSettings:BaseUrl"]!;
 string grpcBaseUrl = builder.Configuration["GrpcSettings:BaseUrl"]!;
 
+builder.Services.AddScoped<AuthFormState>();
 builder.Services.AddHttpClient<ILoginService, LoginService>(c => c.BaseAddress = new Uri(apiBaseUrl));
 builder.Services.AddHttpClient<IRegisterService, RegisterService>(c => c.BaseAddress = new Uri(apiBaseUrl));
 builder.Services.AddHttpClient<IForgotPasswordService, ForgotPasswordService>(c => c.BaseAddress = new Uri(apiBaseUrl));
@@ -69,7 +71,11 @@ builder.Services.AddScoped<HttpClient>(sp => new HttpClient(new ActivityHandler(
     },
 }) { BaseAddress = new Uri(apiBaseUrl) });
 builder.Services.AddScoped<IIntegrationsService, IntegrationsService>();
+// Whether any channel is connected, for pages that only need that (the dashboard).
+builder.Services.AddScoped<ChannelStatusLoader>();
 builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
+// The welcome card. Keeps the name on the session until the API can store it.
+builder.Services.AddScoped<IWorkspaceSetupService, SessionWorkspaceSetupService>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {

@@ -48,7 +48,32 @@
   height: var(--typography-leading-leading-xs);
 }
 
-::deep .inline-error__message { flex: 1; min-width: 0; }
+.inline-error__body {
+  display: grid;
+  flex: 1;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+/* Its own line under the message: side by side, the two read as one
+   sentence ("...not right. Reset Password"). Same colour as the message,
+   underlined, left-aligned with the text rather than the icon. */
+.inline-error__action {
+  justify-self: start;
+  line-height: var(--typography-leading-leading-xs);
+}
+
+.inline-error__action ::deep :is(a, button) {
+  padding: var(--spacing-none);
+  color: inherit;
+  background: transparent;
+  border: 0;
+  text-decoration: underline;
+  font: inherit;
+  text-underline-offset: var(--spacing-2xs);
+  white-space: nowrap;
+  cursor: pointer;
+}
 
 .inline-error__dismiss {
   display: grid;

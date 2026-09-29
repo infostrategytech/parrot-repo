@@ -1,0 +1,249 @@
+/* The dashboard before any channel is connected, ported from Aurora's
+   activation overview (CreateWorkspacePage). The page sits inside the
+   dashboard shell, so it fills the main area rather than the window. */
+
+.workspace-onboarding {
+  /* Gaps in the token set: no content-width, illustration-size, border-width
+     or long-form motion scale for this activation dashboard. */
+  --ds-workspace-home-width: 1040px;
+  --ds-workspace-card-border: 1px;
+  --ds-workspace-channel-card-min: 210px;
+  --ds-workspace-flow-token: 48px;
+  --ds-workspace-flow-destination: 64px;
+  --ds-workspace-flow-line: 84px;
+  --ds-workspace-flow-cycle: 2400ms;
+  /* Not tokens: how many times the channel-to-inbox dot plays before it
+     rests, and how long after the page arrives it starts. Three runs shows
+     the idea; forever would be motion nobody asked for on a page people sit
+     on. */
+  --ds-workspace-flow-runs: 3;
+  --ds-workspace-flow-start: 600ms;
+  /* Not a token: the gap between each part of the page arriving. */
+  --ds-workspace-stagger: 60ms;
+  --ds-workspace-copy-measure: 42ch;
+
+  min-height: 100%;
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto auto auto;
+  align-content: center;
+  padding: var(--spacing-4xl);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
+}
+
+.workspace-onboarding__header,
+.workspace-actions,
+.workspace-onboarding__hint {
+  width: min(100%, var(--ds-workspace-home-width));
+  margin-inline: auto;
+}
+
+.workspace-onboarding__header {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-2xl);
+  text-align: center;
+}
+
+.workspace-onboarding__header ::deep h1,
+.workspace-onboarding__header ::deep p { margin: var(--spacing-none); }
+
+.workspace-onboarding__header ::deep p {
+  max-width: var(--ds-workspace-copy-measure);
+  color: var(--colors-text-secondary);
+}
+
+.workspace-actions {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.workspace-action {
+  min-width: 0;
+  background: var(--colors-surface-card);
+  border: var(--ds-workspace-card-border) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+
+.workspace-action--channels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-4xl);
+  min-height: var(--ds-workspace-channel-card-min);
+  padding: var(--spacing-3xl);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at right center, var(--colors-accent-cyan-subtle), transparent 42%),
+    var(--colors-surface-card);
+}
+
+.workspace-action__content {
+  display: grid;
+  justify-items: start;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.workspace-action__content ::deep h2,
+.workspace-action__content ::deep p { margin: var(--spacing-none); }
+
+.workspace-action__content ::deep p {
+  max-width: var(--ds-workspace-copy-measure);
+  color: var(--colors-text-secondary);
+}
+
+.workspace-action--channels .workspace-action__content ::deep .ds-button {
+  margin-top: var(--spacing-md);
+}
+
+.workspace-channel-flow {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding-inline: var(--spacing-xl);
+}
+
+.workspace-channel-flow__socials {
+  display: flex;
+  align-items: center;
+}
+
+.workspace-channel-flow__socials > span,
+.workspace-channel-flow__inbox {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--ds-workspace-flow-token);
+  height: var(--ds-workspace-flow-token);
+  background: var(--colors-surface-elevated);
+  border: var(--ds-workspace-card-border) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow-diffuse);
+}
+
+.workspace-channel-flow__socials > span + span {
+  margin-left: calc(var(--spacing-sm) * -1);
+}
+
+.workspace-channel-flow__socials .flow-whatsapp { color: #22a968; }
+.workspace-channel-flow__socials .flow-instagram { color: #c63886; }
+.workspace-channel-flow__socials .flow-facebook { color: #1877f2; }
+
+.workspace-channel-flow__line {
+  position: relative;
+  width: var(--ds-workspace-flow-line);
+  height: var(--ds-workspace-card-border);
+  overflow: hidden;
+  background: var(--colors-accent-brand-muted);
+}
+
+.workspace-channel-flow__line i {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+  opacity: 0;
+  transform: translate(-100%, -50%);
+}
+
+.workspace-onboarding.is-live .workspace-channel-flow__line i {
+  animation: workspace-flow-signal var(--ds-workspace-flow-cycle) var(--ds-motion-ease)
+    var(--ds-workspace-flow-start) var(--ds-workspace-flow-runs) both;
+}
+
+/* The hand-off from the dialog: as it fades out, the page rises in behind it,
+   one part after another, top to bottom. */
+.workspace-onboarding.is-live :is(.workspace-onboarding__header, .workspace-action, .workspace-onboarding__hint) {
+  animation: workspace-arrive var(--ds-motion-slow) var(--ds-motion-enter) both;
+}
+
+.workspace-onboarding.is-live .workspace-onboarding__header { animation-delay: var(--ds-workspace-stagger); }
+.workspace-onboarding.is-live .workspace-action:nth-child(1) { animation-delay: calc(var(--ds-workspace-stagger) * 2); }
+.workspace-onboarding.is-live .workspace-action:nth-child(2) { animation-delay: calc(var(--ds-workspace-stagger) * 3); }
+.workspace-onboarding.is-live .workspace-onboarding__hint { animation-delay: calc(var(--ds-workspace-stagger) * 4); }
+
+@keyframes workspace-arrive {
+  from {
+    opacity: 0;
+    transform: translateY(var(--spacing-md));
+  }
+}
+
+.workspace-channel-flow__inbox {
+  width: var(--ds-workspace-flow-destination);
+  height: var(--ds-workspace-flow-destination);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+}
+
+.workspace-action--ai {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-2xl);
+}
+
+.workspace-action--ai.is-locked { background: var(--colors-surface-muted); }
+.workspace-action--ai.is-ready { border-color: var(--colors-accent-brand-muted); }
+
+.workspace-action__icon {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+
+.workspace-action--ai.is-locked .workspace-action__icon {
+  color: var(--colors-icon-muted);
+  background: var(--colors-surface-input);
+}
+
+.workspace-action__title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-sm) var(--spacing-md);
+}
+
+.workspace-action__lock {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+}
+
+.workspace-onboarding__hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-xl);
+  color: var(--colors-text-muted);
+}
+
+.workspace-onboarding__hint ::deep p { margin: var(--spacing-none); }
+
+@keyframes workspace-flow-signal {
+  0%, 18% { transform: translate(-100%, -50%); opacity: 0; }
+  28% { opacity: 1; }
+  72% { opacity: 1; }
+  82%, 100% { transform: translate(calc(var(--ds-workspace-flow-line) + 100%), -50%); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-onboarding.is-live .workspace-channel-flow__line i { animation: none; display: none; }
+  .workspace-onboarding.is-live :is(.workspace-onboarding__header, .workspace-action, .workspace-onboarding__hint) { animation: none; }
+}

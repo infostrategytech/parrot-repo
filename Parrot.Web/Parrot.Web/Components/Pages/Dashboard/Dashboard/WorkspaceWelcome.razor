@@ -1,0 +1,291 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Dashboard
+@using Parrot.Web.Features.Dashboard.Workspace
+@inject AuthState AuthState
+@inject IWorkspaceSetupService WorkspaceSetup
+
+@* The workspace welcome card: the first thing a new account sees, over the
+   dashboard. It asks for the business name (required) and, optionally, a
+   logo. Sign-up deliberately does not ask for the name; it is asked for here,
+   once the person is inside.
+
+   It opens only when the signed-in business has no name yet, so anyone who
+   already set one up never sees it. Aurora's Original design: the channels
+   flowing into the OmniAI hub, over a slow colour wash. *@
+
+<Dialog Open="@_open"
+        Title="Welcome to OmniAI"
+        TitleVisuallyHidden="true"
+        ConfirmLabel="Create Workspace"
+        ConfirmFullWidth="true"
+        BusyLabel="Creating Workspace…"
+        Busy="@_creating"
+        ConfirmDisabled="@(!CanCreateWorkspace)"
+        OnConfirm="CreateWorkspaceAsync">
+    <AmbientBackground>
+        <div class="workspace-dialog-gradient @(HasEnteredBusinessName ? "has-business-name" : null)">
+            <span class="workspace-dialog-gradient__wash wash-cyan"></span>
+            <span class="workspace-dialog-gradient__wash wash-violet"></span>
+            <span class="workspace-dialog-gradient__wash wash-pink"></span>
+        </div>
+    </AmbientBackground>
+    <Body>
+        <div class="workspace-dialog @(HasEnteredBusinessName ? "has-business-name" : null)">
+            @* One drawing space for lines and marks alike. Each mark is placed at the
+               same point its line ends, as a percentage of the stage, so the two
+               stay joined at any dialog width. The stage is always the drawing's
+               own height, so nothing stretches vertically. *@
+            <div class="workspace-ai-visual" aria-hidden="true">
+                <svg class="workspace-ai-visual__orbits" viewBox="0 0 416 164" preserveAspectRatio="none">
+                    <path class="workspace-orbit" d="M208 124 C160 124 104 112 64 84" />
+                    <path class="workspace-orbit" d="M208 124 C208 96 208 68 208 40" />
+                    <path class="workspace-orbit" d="M208 124 C256 124 312 112 352 84" />
+                    <path class="workspace-orbit-signal signal-whatsapp" d="M208 124 C160 124 104 112 64 84" />
+                    <path class="workspace-orbit-signal signal-facebook" d="M208 124 C208 96 208 68 208 40" />
+                    <path class="workspace-orbit-signal signal-instagram" d="M208 124 C256 124 312 112 352 84" />
+                </svg>
+
+                <span class="workspace-channel-token channel-whatsapp">
+                    <Icon Name="IconName.RiWhatsappFill" Size="IconSize.Md" />
+                </span>
+                <span class="workspace-channel-token channel-facebook">
+                    <Icon Name="IconName.RiFacebookCircleFill" Size="IconSize.Md" />
+                </span>
+                <span class="workspace-channel-token channel-instagram">
+                    <Icon Name="IconName.RiInstagramFill" Size="IconSize.Md" />
+                </span>
+
+                <span class="workspace-omniai-hub">
+                    <CadenceMark Size="34" Tight />
+                </span>
+            </div>
+
+            <div class="workspace-dialog__intro">
+                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h2" Class="workspace-dialog__title" aria-hidden="true">
+                    Welcome to OmniAI
+                </Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                    Start with your business name. You can add your logo now or later.
+                </Typography>
+            </div>
+
+            @* A form of one text field, so Enter submits it the way the button
+               does. The dialog's own button sits outside it, in the footer. *@
+            <form class="workspace-name-form" novalidate @onsubmit="CreateWorkspaceAsync" @onsubmit:preventDefault="true">
+                <Input FloatingLabel="Business Name"
+                       Id="workspace-business-name"
+                       @bind-Value="_businessName"
+                       @bind-Value:after="() => _businessNameError = null"
+                       Error="@(!string.IsNullOrEmpty(_businessNameError))"
+                       HelperText="@_businessNameError"
+                       autocomplete="organization">
+                    <IconLeft>
+                        <Icon Name="IconName.RiStore2Fill" Size="IconSize.Sm" />
+                    </IconLeft>
+                </Input>
+
+                @* Optional. Nigeria only for now, so the country code is fixed:
+                   the Input prefix slot from the Figma "Phone Number with
+                   Prefix" variant, with the country's flag. *@
+                <Input FloatingLabel="Phone Number (Optional)"
+                       Id="workspace-phone"
+                       Type="tel"
+                       PrefixText="@NigeriaDialCode"
+                       @bind-Value="_phone"
+                       @bind-Value:after="() => _phoneError = null"
+                       Error="@(!string.IsNullOrEmpty(_phoneError))"
+                       HelperText="@_phoneError"
+                       inputmode="tel"
+                       autocomplete="tel-national">
+                    <PrefixIcon>
+                        <CountryFlag Code="NG" />
+                    </PrefixIcon>
+                </Input>
+            </form>
+
+            @if (_createError is not null)
+            {
+                <InlineError Message="@_createError" />
+            }
+
+            <div class="workspace-logo-field">
+                <div class="workspace-logo-field__heading">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Business Logo</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Optional</Typography>
+                </div>
+
+                @if (_logo is null)
+                {
+                    <label class="workspace-logo-upload @(_reading ? "is-uploading" : null)" for="workspace-logo">
+                        <span aria-hidden="true"><Icon Name="IconName.RiUploadCloud2Fill" Size="IconSize.Md" /></span>
+                        <span>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">
+                                @(_reading ? "Adding Your Logo…" : "Add Your Logo")
+                            </Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="small">
+                                @(_reading ? _readingName : "PNG, JPG or WebP up to 2 MB")
+                            </Typography>
+                        </span>
+                    </label>
+                    <InputFile id="workspace-logo"
+                               class="workspace-logo-input"
+                               accept="image/png,image/jpeg,image/webp"
+                               disabled="@_reading"
+                               OnChange="HandleLogoSelectedAsync" />
+                }
+                else
+                {
+                    <div class="workspace-logo-preview">
+                        <img src="@_logo.DataUrl" alt="Selected business logo" />
+                        <div>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Logo Added</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="small">You can change this later.</Typography>
+                        </div>
+                        @* An icon-only action; the design system has no icon button yet. *@
+                        <button type="button" aria-label="Remove business logo" title="Remove business logo" @onclick="RemoveLogo">
+                            <Icon Name="IconName.RiDeleteBin6Fill" Size="IconSize.Sm" />
+                        </button>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(_logoError))
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="workspace-logo-field__error">
+                        @_logoError
+                    </Typography>
+                }
+            </div>
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    private const long MaxLogoBytes = 2 * 1024 * 1024;
+    private const string NigeriaDialCode = "+234";
+    private static readonly HashSet<string> AcceptedLogoTypes = ["image/png", "image/jpeg", "image/webp"];
+
+    // Deliberately no parameters. The dashboard behind redraws every second for
+    // its clock, and a component with parameters is redrawn with it -- here that
+    // meant the fields being redrawn under the person while they typed. With
+    // none, the card only redraws for its own changes. The page learns the
+    // workspace exists from AuthState.OnChange, which SaveAsync raises.
+
+    private bool _open;
+    private string? _businessName;
+    private string? _businessNameError;
+    private string? _phone;
+    private string? _phoneError;
+    private WorkspaceLogo? _logo;
+    private string? _readingName;
+    private bool _reading;
+    private string? _logoError;
+    private string? _createError;
+    private bool _creating;
+
+    private bool HasEnteredBusinessName => !string.IsNullOrWhiteSpace(_businessName);
+    private bool CanCreateWorkspace => !_creating && !_reading && HasEnteredBusinessName;
+
+    protected override void OnInitialized() =>
+        _open = AuthState.IsAuthenticated && string.IsNullOrWhiteSpace(AuthState.CurrentUser?.BusinessName);
+
+    private async Task HandleLogoSelectedAsync(InputFileChangeEventArgs args)
+    {
+        _logoError = null;
+        var file = args.File;
+
+        // Checked here so a wrong file fails at once. The server must check
+        // both again when the upload endpoint exists: the browser's word for
+        // the type is only a hint.
+        if (!AcceptedLogoTypes.Contains(file.ContentType))
+        {
+            _logoError = "Choose a PNG, JPG or WebP image.";
+            return;
+        }
+
+        if (file.Size > MaxLogoBytes)
+        {
+            _logoError = "Choose an image smaller than 2 MB.";
+            return;
+        }
+
+        _reading = true;
+        _readingName = file.Name;
+        try
+        {
+            await using var stream = file.OpenReadStream(MaxLogoBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            _logo = new WorkspaceLogo(file.Name, file.ContentType, buffer.ToArray());
+        }
+        catch (IOException)
+        {
+            // The file was changed or removed after it was chosen.
+            _logoError = "We could not read that image. Choose it again.";
+        }
+        finally
+        {
+            _reading = false;
+            _readingName = null;
+        }
+    }
+
+    /// <summary>
+    /// A Nigerian number as E.164 (+234 and ten digits). Accepts it the ways
+    /// people type it: 0801 234 5678, 801-234-5678, +234 801 234 5678. Empty is
+    /// fine: the field is optional.
+    /// </summary>
+    private static bool TryNormalisePhone(string? input, out string? e164)
+    {
+        e164 = null;
+        var digits = new string((input ?? "").Where(char.IsAsciiDigit).ToArray());
+        if (digits.Length == 0) return true;
+
+        if (digits.StartsWith("234")) digits = digits[3..];
+        if (digits.StartsWith("0")) digits = digits[1..];
+        if (digits.Length != 10) return false;
+
+        e164 = NigeriaDialCode + digits;
+        return true;
+    }
+
+    private void RemoveLogo()
+    {
+        _logo = null;
+        _logoError = null;
+    }
+
+    private async Task CreateWorkspaceAsync()
+    {
+        if (_creating) return;
+
+        var name = _businessName?.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _businessNameError = "Enter your business name.";
+            return;
+        }
+
+        _businessNameError = null;
+        if (!TryNormalisePhone(_phone, out var phone))
+        {
+            _phoneError = "Enter a valid Nigerian phone number, like 0801 234 5678.";
+            return;
+        }
+
+        _phoneError = null;
+        _createError = null;
+        _creating = true;
+        try
+        {
+            await WorkspaceSetup.SaveAsync(name, phone, _logo);
+            _open = false;
+        }
+        catch (Exception)
+        {
+            _createError = "We could not create your workspace. Try again.";
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+}

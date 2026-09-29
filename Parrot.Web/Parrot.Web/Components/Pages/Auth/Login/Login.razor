@@ -4,63 +4,88 @@
 @using Parrot.Web.Components.Pages.Auth
 @inject ILoginService LoginService
 @inject AuthState AuthState
+@inject AuthFormState Forms
 @inject LoginState LoginState
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
 @implements IDisposable
 
-<PageTitle>Sign in · OmniAI</PageTitle>
+<PageTitle>Sign In · OmniAI</PageTitle>
 
-@* The sign-in screen, on the sign-up design's frame: the same fields, the
-   same button, the same way in with Google. *@
+<div class="login-intro">
+    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1" Id="login-title">
+        Welcome Back
+    </Typography>
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="login-intro__copy">
+        Sign in to continue managing your customer conversations.
+    </Typography>
+</div>
 
-<AuthPanel Title="Sign In">
-    <Lede>Welcome back. Pick up your customer conversations where you left off.</Lede>
-    <Notice>
-        @if (SessionExpired)
-        {
-            <p class="panel__alert panel__alert--info" role="status">Your session has expired. Please sign in again.</p>
-        }
-        @if (!string.IsNullOrEmpty(LoginState.ErrorMessage))
-        {
-            <p class="panel__alert" role="alert">@LoginState.ErrorMessage</p>
-        }
-    </Notice>
-    <ChildContent>
-        <form class="login" @onsubmit="HandleLogin" @onsubmit:preventDefault novalidate>
-            <AuthField Id="email" Placeholder="Email or Phone Number" Glyph="IconName.RiUser3Fill"
-                       Type="email" AutoComplete="username" Required
-                       @bind-Value="_email" Error="@_emailError" Disabled="@LoginState.IsLoading" />
+<form class="login-form" novalidate @onsubmit="HandleLogin" @onsubmit:preventDefault="true">
+    @* Why they are here, when it was not their choice. *@
+    @if (_problem is null && SessionExpired)
+    {
+        <InlineError Tone="InlineErrorTone.Info" Message="Your session has expired. Sign in again to pick up where you left off." />
+    }
 
-            <AuthField Id="password" Placeholder="Password" Glyph="IconName.RiLockFill"
-                       Type="password" AutoComplete="current-password" Required
-                       @bind-Value="_password" Error="@_passwordError" Disabled="@LoginState.IsLoading" />
+    <div class="login-form__fields">
+        <Input FloatingLabel="Email Address"
+               Id="login-identifier"
+               Type="email"
+               @bind-Value="_email"
+               Error="@(!string.IsNullOrEmpty(_emailError))"
+               HelperText="@_emailError"
+               autocomplete="username">
+            <IconLeft>
+                <Icon Name="IconName.RiMailFill" Size="IconSize.Sm" />
+            </IconLeft>
+        </Input>
 
-            <p class="panel__aside"><a href="/forgot-password">Forgot password?</a></p>
+        <PasswordInput FloatingLabel="Password"
+                       Id="login-password"
+                       @bind-Value="_password"
+                       ErrorText="@_passwordError" />
+    </div>
 
-            <button type="submit" class="panel__primary" disabled="@LoginState.IsLoading" aria-busy="@(LoginState.IsLoading ? "true" : null)">
-                @if (LoginState.IsLoading)
-                {
-                    <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
-                }
-                <span>Sign In</span>
-            </button>
-        </form>
-
-        <div class="panel__divider" role="separator" aria-label="Or continue with">Or continue with</div>
-
-        <button type="button" class="panel__google" @onclick="ContinueWithGoogle">
-            <GoogleMark />
-            <span>Continue With Google</span>
+    <div class="login-form__recovery">
+        <button type="button"
+                class="login-form__forgot @TextStyle.BodySmallSemibold.ToClassName()"
+                disabled="@Busy"
+                @onclick="ForgotPassword">
+            Forgot Password?
         </button>
-    </ChildContent>
-    <Footer>
-        Don't have an account? <a href="/register">Create Account</a>
-    </Footer>
-</AuthPanel>
+    </div>
+
+    @if (_problem is { } problem)
+    {
+        <InlineError Message="@Message(problem)" Action="ActionFor(problem)" />
+    }
+
+    <Button Type="ButtonType.Submit"
+            Size="ButtonSize.Large"
+            Class="login-form__submit"
+            disabled="@Busy">
+        @(LoginState.IsLoading ? "Signing In…" : "Sign In")
+    </Button>
+
+    <div class="login-form__divider" aria-hidden="true">
+        <span></span>
+        <Typography TextStyle="TextStyle.Small12Medium" As="small">Or continue with</Typography>
+        <span></span>
+    </div>
+
+    <GoogleSignInButton Busy="_googleBusy" Disabled="Busy" OnClick="ContinueWithGoogle" />
+
+    <p class="login-form__signup @TextStyle.BodySmallMedium.ToClassName()">
+        New to OmniAI?
+        <a href="/register" @onclick="() => Forms.Remember(_email)">Create Account</a>
+    </p>
+</form>
 
 @code {
+    private enum Problem { Invalid, TooManyAttempts, GoogleFailed, Unreachable, Unknown }
+
     [SupplyParameterFromQuery(Name = "sessionExpired")]
     public bool SessionExpired { get; set; }
 
@@ -71,32 +96,45 @@
     private string? _password;
     private string? _emailError;
     private string? _passwordError;
+    private Problem? _problem;
+    private bool _googleBusy;
+
+    /// <summary>One request at a time: every control is locked while any of them runs.</summary>
+    private bool Busy => LoginState.IsLoading || _googleBusy;
 
     protected override void OnInitialized()
     {
         LoginState.OnChange += StateHasChanged;
+        _email = Forms.EnteredEmail;
 
-        if (!string.IsNullOrEmpty(error))
-        {
-            LoginState.SetError("Google sign-in failed. Please try again or use email and password.");
-        }
+        // The API sends people back here with ?error= when Google sign-in fails.
+        if (!string.IsNullOrEmpty(error)) _problem = Problem.GoogleFailed;
     }
 
-    // The SSO entry point lives on the API, so this is a full navigation away
-    // from the circuit.
-    private void ContinueWithGoogle()
+    private static string Message(Problem problem) => problem switch
     {
-        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
-        Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);
-    }
+        Problem.Invalid => "That email or password is not right. Check them and try again.",
+        Problem.TooManyAttempts => "Too many attempts. Wait a few minutes, then try again.",
+        Problem.GoogleFailed => "Google sign-in did not finish. Try again, or use your email and password.",
+        Problem.Unreachable => "We could not reach OmniAI. Check your internet connection.",
+        _ => "Something went wrong on our side."
+    };
+
+    /// <summary>The next step for a problem, or null when the message is enough.</summary>
+    private RenderFragment? ActionFor(Problem problem) => problem switch
+    {
+        Problem.Invalid => @<button type="button" @onclick="ForgotPassword">Reset Password</button>,
+        Problem.Unreachable or Problem.Unknown => @<button type="submit">Try Again</button>,
+        _ => null
+    };
 
     private bool Validate()
     {
         var email = _email?.Trim() ?? "";
         _emailError = email.Length == 0
             ? "Enter your email address."
-            : !email.Contains('@')
-                ? "Phone sign-in isn't available yet — use your email address."
+            : !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email)
+                ? "Enter a valid email address."
                 : null;
         _passwordError = string.IsNullOrEmpty(_password) ? "Enter your password." : null;
         return _emailError is null && _passwordError is null;
@@ -104,16 +142,21 @@
 
     private async Task HandleLogin()
     {
+        if (Busy) return;
+
+        _problem = null;
         LoginState.Reset();
         if (!Validate()) return;
 
+        var email = _email!.Trim();
+        Forms.Remember(email);
         LoginState.SetLoading(true);
 
         try
         {
             AuthResponse? response = await LoginService.LoginAsync(new LoginRequest
             {
-                Email = _email!.Trim(),
+                Email = email,
                 Password = _password!,
             });
 
@@ -124,27 +167,57 @@
                 Navigation.NavigateTo("/dashboard");
             }
         }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                                      && ex.UserMessage.Contains("locked", StringComparison.OrdinalIgnoreCase))
+        {
+            // The API sends a lockout as a 401 too. Saying "wrong password"
+            // there would send them round the loop that locked them out.
+            _problem = Problem.TooManyAttempts;
+        }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
-            LoginState.SetError("Invalid email or password.");
+            _problem = Problem.Invalid;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Forbidden)
         {
             // Right password, unverified address: the API has just sent a fresh code.
-            Navigation.NavigateTo($"/verify-email?email={Uri.EscapeDataString(_email!.Trim())}&sent=true");
+            Forms.CodeSentTo(email);
+            Navigation.NavigateTo("/verify-email?sent=true");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
         {
-            LoginState.SetError("Too many attempts. Please wait and try again.");
+            _problem = Problem.TooManyAttempts;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            // No response at all: the connection, not the account.
+            _problem = Problem.Unreachable;
         }
         catch
         {
-            LoginState.SetError("Something went wrong. Please try again.");
+            _problem = Problem.Unknown;
         }
         finally
         {
             LoginState.SetLoading(false);
         }
+    }
+
+    private void ForgotPassword()
+    {
+        Forms.Remember(_email);
+        Navigation.NavigateTo("/forgot-password");
+    }
+
+    // The SSO entry point lives on the API, so this is a full navigation away
+    // from the circuit.
+    private void ContinueWithGoogle()
+    {
+        if (Busy) return;
+        _googleBusy = true;
+
+        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);
     }
 
     public void Dispose() => LoginState.OnChange -= StateHasChanged;

@@ -12,9 +12,19 @@
      page is a token. Figma has no border-width scale yet. */
   --ds-hairline: 1px;
   /* Missing from the token set: motion. Figma has no duration or easing
-     scale yet, so the two values the shell needs live here. */
+     scale yet, so the product's one scale lives here. Every transition and
+     entrance picks from it, so screens move at the same speeds.
+       fast  hover, press, colour changes on a control
+       base  a panel or field changing state, a dialog arriving or leaving
+       slow  a screen-sized change: content arriving after a hand-off
+     Long decorative loops (the sign-in story, illustrations) set their own
+     cycle lengths; those are content timing, not interaction speed. */
   --ds-motion-fast: 120ms;
+  --ds-motion-base: 180ms;
+  --ds-motion-slow: 300ms;
   --ds-motion-ease: cubic-bezier(0.2, 0, 0, 1);
+  --ds-motion-enter: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-motion-exit: cubic-bezier(0.4, 0, 1, 1);
 }
 
 *,
@@ -50,6 +60,14 @@ body {
 html,
 body {
   min-width: var(--ds-viewport-floor);
+}
+
+/* Except the sign-in pages. They are the public way in, often opened on a
+   small laptop or a phone from a shared link, and lay themselves out to any
+   width. The floor protects the app shell, which these pages do not use. */
+html:has(.account-access-page, .account-panel-page, .legal-page),
+html:has(.account-access-page, .account-panel-page, .legal-page) body {
+  min-width: 0;
 }
 
 :root {
@@ -233,4 +251,102 @@ a:hover { color: var(--colors-text-link-hover); }
   top: var(--spacing-sm);
   right: var(--spacing-md);
   cursor: pointer;
+}
+
+/* Google's sign-in button, light and dark. These are Google's published button
+   colours, allowlisted in brand-literals.json, and they follow the theme,
+   which only this document-wide sheet can see. */
+.google-signin-wrap {
+  /* Not a token: Google's light fill and label. The outline is ours. */
+  --ds-google-fill: #ffffff;
+  --ds-google-label: #1f1f1f;
+  /* Not a token: the 8% state layer Google's guidelines use for hover. */
+  --ds-google-hover-mix: 8%;
+}
+
+:root[data-theme="aurora-dark"] .google-signin-wrap {
+  /* Not a token: Google's dark fill and label. */
+  --ds-google-fill: #131314;
+  --ds-google-label: #e3e3e3;
+}
+
+/* Disabled buttons in dark mode. The disabled colours are already muted, and
+   halving their opacity on top of that left a dark-on-dark label that was
+   almost invisible (the Create Workspace dialog showed it worst). In dark the
+   colours carry the disabled look on their own. Here rather than in
+   Button.razor.css because :root is out of reach of a scoped stylesheet. */
+:root[data-theme="aurora-dark"] .ds-button {
+  /* Not a token: full opacity, i.e. no extra dimming. */
+  --ds-button-disabled-opacity: 100;
+}
+
+/* The disabled fill is the same grey as a dialog or popover in dark mode, so
+   a disabled button on one vanished into it. The border step sits one shade
+   lighter than every dark surface the product uses. */
+:root[data-theme="aurora-dark"] .ds-button:disabled {
+  background: var(--colors-surface-border);
+}
+
+/* The signed-out story beat, shared by the Sign In and Sign Up marketing story
+   and their animated glow. The other signed-out pages have no gradient. */
+.account-access-page {
+  /* Missing from the token set: long-form presentation timing. The 8-second
+     hold gives each value statement enough reading time; the four share one cycle. */
+  --ds-account-story-duration: 32s;
+  --ds-account-story-delay: 8s;
+}
+
+/* The Sign In / Sign Up glow in dark mode. Here rather than in the glow's own
+   stylesheet because the theme lives on :root, which a scoped stylesheet
+   cannot reach. Accent colour blooms against near-black, so the subtle token
+   is mixed right down: each hue's strongest point sits 0.012 (OKLab) from the
+   page, the same as in light mode, and the far corner is 40% of that. */
+:root[data-theme="aurora-dark"] .edge-cyan {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-cyan-subtle) 4%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-cyan-subtle) 1.6%, transparent);
+}
+
+:root[data-theme="aurora-dark"] .edge-violet {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-violet-subtle) 3.4%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-violet-subtle) 1.4%, transparent);
+}
+
+:root[data-theme="aurora-dark"] .edge-amber {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-amber-subtle) 3.7%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-amber-subtle) 1.5%, transparent);
+}
+
+:root[data-theme="aurora-dark"] .edge-pink {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-pink-subtle) 3.8%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-pink-subtle) 1.5%, transparent);
+}
+
+/* The welcome card's colour wash sits outside the form (in the dialog's
+   ambient layer), so its component stylesheet cannot see a focused field.
+   Pause it here while the person is in one, as the channel marks do. */
+.dialog:has(.workspace-dialog :focus) .workspace-dialog-gradient__wash {
+  animation-play-state: paused;
+}
+
+/* The logo tile in the workspace dialog. In dark mode surface-muted is the
+   dialog colour itself, so the tile takes the text field fill instead. */
+:root[data-theme="aurora-dark"] .workspace-logo-field {
+  --ds-workspace-upload-fill: var(--colors-surface-card);
+  --ds-workspace-upload-border: color-mix(in srgb, var(--colors-text-muted) 72%, var(--colors-surface-card));
+}
+
+/* Dark accent primitives are intentionally richer than their light-mode
+   counterparts. The onboarding illustration is ambient rather than a status
+   surface, so it uses restrained mixes of those same semantic colours. */
+:root[data-theme="aurora-dark"] .workspace-dialog-gradient {
+  --ds-workspace-gradient-brand: color-mix(in srgb, var(--colors-accent-brand-subtle) 44%, transparent);
+  --ds-workspace-gradient-cyan: color-mix(in srgb, var(--colors-accent-cyan-subtle) 34%, transparent);
+  --ds-workspace-gradient-cyan-wash: color-mix(in srgb, var(--colors-accent-cyan-muted) 28%, transparent);
+  --ds-workspace-gradient-violet-wash: color-mix(in srgb, var(--colors-accent-violet-muted) 24%, transparent);
+  --ds-workspace-gradient-pink-wash: color-mix(in srgb, var(--colors-accent-pink-muted) 22%, transparent);
+  --ds-workspace-gradient-wash-peak: 0.42;
+}
+
+:root[data-theme="aurora-dark"] .workspace-preview-glow {
+  opacity: 0.58;
 }

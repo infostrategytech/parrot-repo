@@ -5,52 +5,65 @@
 
 @* Mounted and unmounted rather than hidden, so the enter animation runs every
    time and nothing focusable lingers in the tree while the dialog is closed.
+   Closing keeps it mounted for one short exit animation first, so it fades
+   away rather than vanishing in a single frame.
 
    Two things the React version did not do: focus is trapped inside the card,
    and it is returned to whatever opened the dialog when it closes. Without the
    trap, Tab walks into the page behind — invisible with a mouse, completely
    disorienting without one. *@
 
-@if (Open)
+@if (_rendered)
 {
-    <div class="dialog-backdrop" @onmousedown="OnBackdropMouseDown">
+    <div class="dialog-backdrop @(_closing ? "is-closing" : null)" @onmousedown="OnBackdropMouseDown">
         @* stopPropagation, rather than comparing target to currentTarget as
            React did, so a drag that starts inside the card and ends on the
            backdrop cannot dismiss it. *@
-        <div class="dialog dialog--@Type.ToString().ToLowerInvariant()"
+        <div class="dialog dialog--@Type.ToString().ToLowerInvariant() @(AmbientBackground is not null ? "dialog--has-ambient" : null) @(_closing ? "is-closing" : null)"
              role="dialog"
              aria-modal="true"
              aria-labelledby="@_titleId"
              tabindex="-1"
              @ref="_card"
-             @onkeydown="OnKeyDown"
              @onmousedown:stopPropagation="true">
 
-            <header>
-                @if (GlyphContent is not null)
-                {
-                    <span class="dialog__icon">@GlyphContent</span>
-                }
-                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
-            </header>
+            @if (AmbientBackground is not null)
+            {
+                <div class="dialog__ambient" aria-hidden="true">@AmbientBackground</div>
+            }
+
+            @if (TitleVisuallyHidden)
+            {
+                <h2 id="@_titleId" class="sr-only">@Title</h2>
+            }
+            else
+            {
+                <header>
+                    @if (GlyphContent is not null)
+                    {
+                        <span class="dialog__icon">@GlyphContent</span>
+                    }
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
+                </header>
+            }
 
             <div class="dialog__body @TextStyle.BodySmallRegular.ToClassName(prose: true)">
                 @Body
             </div>
 
-            <footer>
+            <footer class="@(ConfirmFullWidth ? "dialog__footer--wide" : null)">
                 @if (OnCancel.HasDelegate)
                 {
                     <Button Variant="ButtonVariant.Secondary"
                             disabled="@Busy"
                             @onclick="OnCancel">@CancelLabel</Button>
                 }
-                @* While the confirm action is in flight the button waits the
-                   brand's way — relay dots beside a label that does not change. *@
+                @* While the confirm action is in flight the button is disabled and
+                   says what it is doing (BusyLabel, "Creating Workspace…"). *@
                 <Button Variant="@ConfirmVariant"
-                        Busy="@Busy"
-                        disabled="@ConfirmDisabled"
-                        @onclick="OnConfirm">@ConfirmLabelOrDefault</Button>
+                        FullWidth="@ConfirmFullWidth"
+                        disabled="@(Busy || ConfirmDisabled)"
+                        @onclick="OnConfirm">@(Busy && BusyLabel is not null ? BusyLabel : ConfirmLabelOrDefault)</Button>
             </footer>
         </div>
     </div>
@@ -59,15 +72,31 @@
 @code {
     private readonly string _titleId = "dialog-" + Guid.NewGuid().ToString("N");
 
+    /// <summary>Matches --ds-motion-base, the exit animation's length in Dialog.razor.css.</summary>
+    private static readonly TimeSpan ExitDuration = TimeSpan.FromMilliseconds(180);
+    private static readonly TimeSpan ExitSlack = TimeSpan.FromMilliseconds(80);
+
     private ElementReference _card;
     private IAsyncDisposable? _trap;
+    private DotNetObjectReference<Dialog>? _self;
     private bool _wasOpen;
+    private bool _rendered;
+    private bool _closing;
+
+    /// <summary>Bumped on every open, so an exit timer from a previous close cannot hide a dialog opened since.</summary>
+    private int _generation;
 
     [Parameter, EditorRequired] public bool Open { get; set; }
 
     [Parameter, EditorRequired] public string Title { get; set; } = "";
 
+    /// <summary>Keeps the accessible dialog title while allowing the body to control visual placement.</summary>
+    [Parameter] public bool TitleVisuallyHidden { get; set; }
+
     [Parameter, EditorRequired] public RenderFragment? Body { get; set; }
+
+    /// <summary>Optional decorative layer that fills the dialog beneath its content.</summary>
+    [Parameter] public RenderFragment? AmbientBackground { get; set; }
 
     [Parameter, EditorRequired] public EventCallback OnConfirm { get; set; }
 
@@ -88,8 +117,11 @@
     /// <summary>Keeps the primary action visible but unavailable until the body is valid.</summary>
     [Parameter] public bool ConfirmDisabled { get; set; }
 
-    /// <summary>Kept for callers: the busy state is drawn with the brand's relay dots now, so the label no longer changes.</summary>
+    /// <summary>What the confirm button says while Busy, e.g. "Creating Workspace…". Null keeps the confirm label.</summary>
     [Parameter] public string? BusyLabel { get; set; }
+
+    /// <summary>Lets a single decisive action use the full footer width.</summary>
+    [Parameter] public bool ConfirmFullWidth { get; set; }
 
     private string ConfirmLabelOrDefault => ConfirmLabel ?? Type switch
     {
@@ -101,13 +133,44 @@
     private ButtonVariant ConfirmVariant =>
         Type == DialogType.Destructive ? ButtonVariant.Destructive : ButtonVariant.Primary;
 
+    protected override void OnParametersSet()
+    {
+        if (Open && (!_rendered || _closing))
+        {
+            _generation++;
+            _rendered = true;
+            _closing = false;
+        }
+        else if (!Open && _rendered && !_closing)
+        {
+            _closing = true;
+            _ = FinishClosingAsync(_generation);
+        }
+    }
+
+    private async Task FinishClosingAsync(int generation)
+    {
+        // A little past the animation, which starts on the next paint rather
+        // than now. It holds at fully transparent, so the extra is invisible,
+        // and removing it early would show as a pop.
+        await Task.Delay(ExitDuration + ExitSlack);
+        if (generation != _generation || Open) return;
+
+        _rendered = false;
+        _closing = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (Open && !_wasOpen)
         {
             _wasOpen = true;
             await _card.FocusAsync();
-            _trap = await Interop.TrapFocusAsync(_card);
+            // Escape is caught in the browser: a per-key handler here would
+            // send every keystroke typed in the dialog to the server.
+            _self ??= DotNetObjectReference.Create(this);
+            _trap = await Interop.TrapFocusAsync(_card, _self, nameof(OnEscapeAsync));
         }
         else if (!Open && _wasOpen)
         {
@@ -116,12 +179,13 @@
         }
     }
 
-    private async Task OnKeyDown(KeyboardEventArgs args)
+    [JSInvokable]
+    public async Task OnEscapeAsync()
     {
         // Escape only closes a dialog that has a way out. A dialog with no
         // cancel is asking for a decision, and dismissing it silently would be
         // the same as choosing for the person.
-        if (args.Key == "Escape" && OnCancel.HasDelegate && !Busy)
+        if (OnCancel.HasDelegate && !Busy && !_closing)
         {
             await OnCancel.InvokeAsync();
         }
@@ -129,7 +193,7 @@
 
     private async Task OnBackdropMouseDown()
     {
-        if (OnCancel.HasDelegate && !Busy)
+        if (OnCancel.HasDelegate && !Busy && !_closing)
         {
             await OnCancel.InvokeAsync();
         }
@@ -143,5 +207,9 @@
         await trap.DisposeAsync();
     }
 
-    public async ValueTask DisposeAsync() => await ReleaseTrapAsync();
+    public async ValueTask DisposeAsync()
+    {
+        await ReleaseTrapAsync();
+        _self?.Dispose();
+    }
 }

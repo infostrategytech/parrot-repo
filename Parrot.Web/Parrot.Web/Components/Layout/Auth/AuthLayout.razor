@@ -1,36 +1,76 @@
 @inherits LayoutComponentBase
 
-@* The signed-out stage, as the sign-up design draws it: the brand lockup
-   pinned to the corner, a cool wash in the top-left of a near-white canvas,
-   and two columns centred on the window — the brand's message on the left,
-   the screen's own form on the right.
+@* The signed-out stage for Sign In and Sign Up: the brand in the corner, the
+   theme switch opposite it, and two columns. The left one rotates through what
+   OmniAI does, with a glow that cross-fades in the matching colour; the right
+   one is the page's form. Below 1180px the columns share the width, and on a
+   phone the story moves above the form. *@
 
-   This is a brand surface, so it is set in the brand's face (Figtree) and
-   palette rather than the product's tokens; the toast host stays so a page
-   here can still speak. *@
+<main class="account-access-page">
+    <AuthGlow />
 
-<div class="stage">
-    <a href="/" class="stage__brand" aria-label="OmniAI home">
-        <CadenceMark Size="62" Tight />
-        <span class="stage__wordmark cadence-wordmark">OmniAI</span>
-    </a>
+    <header class="account-access-header">
+        <LogoDownloadMenu>
+            <a class="account-access-brand" href="/login" aria-label="OmniAI home">
+                <CadenceMark Size="26" Tight />
+                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span">OmniAI</Typography>
+            </a>
+        </LogoDownloadMenu>
+        <ThemeToggle Inline />
+    </header>
 
-    <main class="stage__main">
-        <section class="stage__message" aria-label="About OmniAI">
-            <h1 class="stage__headline">Keep Customer Conversations Together</h1>
-            <p class="stage__lede">Manage WhatsApp, Instagram and Facebook messages from one shared inbox.</p>
-            <ol class="stage__ticks" aria-hidden="true">
-                <li></li><li></li><li></li><li class="is-active"></li>
-            </ol>
-        </section>
+    <section class="account-access-content">
+        <div class="account-access-story" aria-label="What OmniAI helps your business do">
+            <div class="account-access-story__rotation">
+                <article class="account-access-story__item story-cyan">
+                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
+                        Turn Messages Into Clear Next Steps
+                    </Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                        Capture orders, bookings and customer requests directly from every conversation.
+                    </Typography>
+                </article>
 
-        <section class="stage__panel">
+                <article class="account-access-story__item story-violet">
+                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
+                        Let AI Handle Repetitive Questions
+                    </Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                        Give customers helpful answers using knowledge approved by your business.
+                    </Typography>
+                </article>
+
+                <article class="account-access-story__item story-amber">
+                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
+                        Know When Your Attention Is Needed
+                    </Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                        Bring payments, unanswered questions and important requests to the right person.
+                    </Typography>
+                </article>
+
+                <article class="account-access-story__item story-pink">
+                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
+                        Keep Customer Conversations Together
+                    </Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                        Manage WhatsApp, Instagram and Facebook messages from one shared inbox.
+                    </Typography>
+                </article>
+            </div>
+
+            <div class="account-access-story__progress" aria-hidden="true">
+                <i></i><i></i><i></i><i></i>
+            </div>
+        </div>
+
+        <div class="account-access-form-panel">
             @Body
-        </section>
-    </main>
+        </div>
+    </section>
+</main>
 
-    <ToastHost />
-</div>
+<ToastHost />
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

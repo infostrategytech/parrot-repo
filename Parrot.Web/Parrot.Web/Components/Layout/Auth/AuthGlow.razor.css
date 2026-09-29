@@ -1,0 +1,56 @@
+.auth-glow {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0;
+  background:
+    radial-gradient(circle at top left, var(--page-edge-glow), transparent 38%),
+    radial-gradient(circle at bottom right, var(--page-edge-far), transparent 34%);
+  /* Linear, not eased: the outgoing and incoming glows cross-fade over the
+     same second, and only a linear pair always adds up to one full glow. An
+     eased pair dips in the middle, which on a dark page is a visible blink. */
+  animation: auth-glow-cycle var(--ds-account-story-duration) linear infinite;
+}
+
+/* Light mode, very subtle. Each hue is mixed down so its strongest point sits
+   the same small distance from the page colour (0.012 in OKLab), so no colour
+   in the cycle looks brighter than the others. Full-strength muted tokens
+   were about four times that, which read as harsh. The far corner is 40% of
+   the near one. Dark mode swaps these in app.css. */
+.edge-cyan {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-cyan-muted) 21%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-cyan-muted) 8%, transparent);
+}
+
+.edge-violet {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-violet-muted) 24%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-violet-muted) 10%, transparent);
+  animation-delay: calc(var(--ds-account-story-delay) * 1);
+}
+
+.edge-amber {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-amber-muted) 18%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-amber-muted) 7%, transparent);
+  animation-delay: calc(var(--ds-account-story-delay) * 2);
+}
+
+.edge-pink {
+  --page-edge-glow: color-mix(in srgb, var(--colors-accent-pink-muted) 26%, transparent);
+  --page-edge-far: color-mix(in srgb, var(--colors-accent-pink-muted) 10%, transparent);
+  animation-delay: calc(var(--ds-account-story-delay) * 3);
+}
+
+/* Each glow comes in over the first 1.2s of its slot and goes out over the
+   first 1.2s of the next, exactly while the next one comes in. */
+@keyframes auth-glow-cycle {
+  0% { opacity: 0; }
+  3.75%, 25% { opacity: 1; }
+  28.75%, 100% { opacity: 0; }
+}
+
+/* No motion: hold the first colour. */
+@media (prefers-reduced-motion: reduce) {
+  .auth-glow { animation: none; }
+  .edge-cyan { opacity: 1; }
+}
