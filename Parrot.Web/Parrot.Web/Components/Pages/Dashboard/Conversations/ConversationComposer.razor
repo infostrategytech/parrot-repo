@@ -15,7 +15,9 @@
         </div>
     </header>
 
-    <textarea @ref="_input" value="@Text"
+    @* No value attribute: the text is pushed only when it changes from outside
+       the keyboard (see OnParametersSet), so a render cannot overwrite typing. *@
+    <textarea @ref="_input"
               @oninput="OnTextInput"
               @onkeydown="OnKeyDown"
               aria-label="Reply"
@@ -66,6 +68,9 @@
 
     private ElementReference _input;
     private IAsyncDisposable? _submitOnEnter;
+    // The text the field already shows (last typed, or last pushed) and text waiting to be pushed.
+    private string? _shown;
+    private string? _pending;
 
     private bool InputDisabled => Sending || Retry;
     private bool CanSend => !Sending && !string.IsNullOrWhiteSpace(Text);
@@ -75,11 +80,31 @@
     // brand's relay dots in the icon slot rather than swapping the label.
     private string SendLabel => Retry ? "Check / retry" : "Send";
 
-    private Task OnTextInput(ChangeEventArgs args) => TextChanged.InvokeAsync(args.Value?.ToString() ?? "");
+    // Text that differs from what the field shows came from outside the
+    // keyboard: a send clearing the draft, an emoji, a saved reply, or the
+    // draft of the conversation just opened.
+    protected override void OnParametersSet()
+    {
+        if (Text == _shown) return;
+        _shown = Text;
+        _pending = Text;
+    }
+
+    private Task OnTextInput(ChangeEventArgs args)
+    {
+        _shown = args.Value?.ToString() ?? "";
+        return TextChanged.InvokeAsync(_shown);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender) _submitOnEnter = await Interop.SubmitOnEnterAsync(_input);
+        if (_pending is not null)
+        {
+            var text = _pending;
+            _pending = null;
+            await Interop.SetValueAsync(_input, text);
+        }
     }
 
     // Enter sends and Shift+Enter breaks the line; the JS hook keeps Enter from
