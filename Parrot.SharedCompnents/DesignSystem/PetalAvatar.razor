@@ -4,7 +4,16 @@
    person across the inbox, the customer panel and a task request. *@
 
 <span class="petal-avatar petal-avatar--@Size.ToString().ToLowerInvariant() @Petal.ClassFor(Seed) @InitialsStyle.ToClassName()"
-      aria-hidden="true">@Initials</span>
+      aria-hidden="true">
+    @if (string.IsNullOrWhiteSpace(ImageUrl))
+    {
+        @Initials
+    }
+    else
+    {
+        <img src="@ImageUrl" alt="" />
+    }
+</span>
 
 @code {
     /// <summary>
@@ -17,6 +26,9 @@
     [Parameter, EditorRequired] public string Initials { get; set; } = "";
 
     [Parameter] public AvatarSize Size { get; set; } = AvatarSize.Md;
+
+    /// <summary>Optional. Shown in place of the initials when there is one.</summary>
+    [Parameter] public string? ImageUrl { get; set; }
 
     // Initials are the smallest readable type in the product, so they take the
     // smallest semibold style rather than a size set by hand.

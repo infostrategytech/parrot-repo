@@ -1,6 +1,4 @@
-using Parrot.Web.Features.Auth.Models;
-using Parrot.Web.Features.Auth.State;
-using Parrot.Web.Services;
+using Parrot.Web.Features.Profile;
 
 namespace Parrot.Web.Features.Dashboard.Workspace;
 
@@ -23,32 +21,27 @@ public sealed record WorkspaceLogo(string FileName, string ContentType, byte[] B
 }
 
 /// <summary>
-/// Keeps the business name on the signed-in session, so the dashboard and the
-/// workspace switcher show it straight away.
-///
-/// Backend follow-up: there is no endpoint to save a business name, phone
-/// number or logo yet (sign-up still asks for the name instead). When one
-/// exists, POST all three here before updating the session; the card already
-/// handles a failure. Until then the phone number and logo are not stored
-/// anywhere and the name lives only in this browser's session.
+/// Saves the card to the account. The logo is uploaded first because the
+/// profile stores only its URL; <see cref="ProfileClient"/> then brings the
+/// session up to date so the dashboard and the workspace switcher show it.
 /// </summary>
-public sealed class SessionWorkspaceSetupService(AuthState authState, TokenStorageService tokenStorage) : IWorkspaceSetupService
+public sealed class WorkspaceSetupService(ProfileClient profile) : IWorkspaceSetupService
 {
+    // The card only offers Nigerian numbers for now.
+    private const string NigeriaDialCode = "234";
+
     public async Task SaveAsync(string businessName, string? phoneNumber, WorkspaceLogo? logo)
     {
-        AuthResponse current = authState.CurrentUser
-            ?? throw new InvalidOperationException("The welcome card only opens for a signed-in person.");
+        string? logoUrl = logo is null
+            ? null
+            : await profile.UploadImageAsync(logo.FileName, logo.ContentType, logo.Bytes);
 
-        AuthResponse updated = new()
+        await profile.UpdateAsync(new UserProfileUpdate
         {
-            Token = current.Token,
-            ExpiresAt = current.ExpiresAt,
-            UserId = current.UserId,
-            Email = current.Email,
             BusinessName = businessName,
-        };
-
-        await tokenStorage.SaveAsync(updated);
-        authState.SetUser(updated);
+            LogoUrl = logoUrl,
+            CountryCode = phoneNumber is null ? null : NigeriaDialCode,
+            Number = phoneNumber,
+        });
     }
 }

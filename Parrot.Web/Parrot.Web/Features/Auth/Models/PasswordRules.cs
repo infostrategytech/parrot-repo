@@ -2,8 +2,8 @@ namespace Parrot.Web.Features.Auth.Models;
 
 /// <summary>
 /// What a new password has to meet. Defined once, because Sign Up and
-/// password reset must agree. The API still enforces its own 12-character
-/// policy; it needs updating to check these same three.
+/// password reset must agree. The API only enforces the length (8 to 128);
+/// the mixed case and number rules are this form's own.
 /// </summary>
 public static class PasswordRules
 {

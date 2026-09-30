@@ -4,9 +4,8 @@ public class AuthSettings
 {
     public const string SectionName = "Auth";
 
-    // NIST SP 800-63B: length is the one composition rule worth having. Twelve
-    // characters with no character-class rules is both stronger and easier to
-    // type than eight with all four classes. The DTOs share the same floor.
+    // NIST SP 800-63B: length is the one composition rule worth having, and no
+    // character-class rules. The DTOs share the same floor.
     public int MinimumPasswordLength { get; init; } = PasswordPolicy.MinimumLength;
 
     public int MaximumPasswordLength { get; init; } = PasswordPolicy.MaximumLength;

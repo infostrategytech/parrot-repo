@@ -14,11 +14,7 @@
 <PageTitle>Create Your Account · OmniAI</PageTitle>
 
 @* Sign-up asks for the least it can: an email and a password. The business
-   name is asked for on the workspace welcome card once they are inside.
-
-   Backend follow-up: the API still requires BusinessName on register and
-   enforces its own 12-character password policy. Both need changing to
-   match this design; until then the real API refuses sign-ups from here. *@
+   name is asked for on the workspace welcome card once they are inside. *@
 
 <div class="signup-intro">
     <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1" Id="signup-title">
@@ -178,8 +174,6 @@
         {
             AuthResponse? response = await RegisterService.RegisterAsync(new RegisterRequest
             {
-                // Asked for on the workspace welcome card instead. See the note at the top.
-                BusinessName = string.Empty,
                 Email = email,
                 Password = _password!,
                 ConfirmPassword = _confirmPassword!,

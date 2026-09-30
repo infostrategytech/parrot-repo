@@ -13,9 +13,11 @@
 <AppShell BrandName="OmniAI"
           WorkspaceId="@WorkspaceSeed"
           WorkspaceName="@(AuthState.CurrentUser?.BusinessName ?? "")"
+          WorkspaceLogoUrl="@AuthState.CurrentUser?.LogoUrl"
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
-          UserSeed="@UserSeed">
+          UserSeed="@UserSeed"
+          UserImageUrl="@AuthState.CurrentUser?.LogoUrl">
     <UserMenu>
         <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
         <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />

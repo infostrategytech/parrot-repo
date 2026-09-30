@@ -99,7 +99,7 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(true);
 
         UnauthorizedException ex = await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "any" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "any" }));
 
         Assert.Contains("locked", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -112,7 +112,7 @@ public class AuthServiceTests
             .ReturnsAsync((ApplicationUser?)null);
 
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = "nobody@test.com", Password = "pass" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = "nobody@test.com", Password = "pass" }));
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class AuthServiceTests
             .ReturnsAsync((ApplicationUser?)null);
 
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = "nobody@test.com", Password = "pass" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = "nobody@test.com", Password = "pass" }));
 
         _userManagerMock.Verify(m => m.AccessFailedAsync(It.IsAny<ApplicationUser>()), Times.Never);
     }
@@ -138,7 +138,7 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.AccessFailedAsync(user)).ReturnsAsync(IdentityResult.Success);
 
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "wrong" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "wrong" }));
 
         _userManagerMock.Verify(m => m.AccessFailedAsync(user), Times.Once);
     }
@@ -153,7 +153,7 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.GenerateEmailConfirmationTokenAsync(user)).ReturnsAsync("123456");
 
         EmailNotVerifiedException ex = await Assert.ThrowsAsync<EmailNotVerifiedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "correct" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "correct" }));
 
         Assert.Equal(System.Net.HttpStatusCode.Forbidden, ex.StatusCode);
         _emailServiceMock.Verify(
@@ -172,7 +172,7 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.AccessFailedAsync(user)).ReturnsAsync(IdentityResult.Success);
 
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "wrong" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "wrong" }));
 
         _emailServiceMock.Verify(
             e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
@@ -188,7 +188,7 @@ public class AuthServiceTests
             .ReturnsAsync((ApplicationUser?)null);
 
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = "nobody@test.com", Password = "pass" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = "nobody@test.com", Password = "pass" }));
 
         _passwordHasherMock.Verify(h => h.HashPassword(It.IsAny<ApplicationUser>(), "pass"), Times.Once);
     }
@@ -203,13 +203,52 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
 
         AuthResponse response = await _sut.LoginAsync(
-            new LoginRequest { Email = user.Email!, Password = "correct" });
+            new LoginRequest { Identifier = user.Email!, Password = "correct" });
 
         Assert.Equal("test-jwt-token", response.Token);
         Assert.Equal(user.Id, response.UserId);
         Assert.Equal(user.Email, response.Email);
         Assert.Equal(user.BusinessName, response.BusinessName);
         _userManagerMock.Verify(m => m.ResetAccessFailedCountAsync(user), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginAsync_CarriesTheProfileFieldsTheSetupStepFills()
+    {
+        // The response is what the frontend decides "still needs setup" from,
+        // so an account that has been through setup must show it, and one that
+        // has not must show nulls rather than empty strings.
+        ApplicationUser unset = CreateUser(emailConfirmed: true);
+        unset.BusinessName = null;
+        unset.LogoUrl = null;
+        unset.PhoneDialCode = null;
+        unset.PhoneNumber = null;
+        _userManagerMock.Setup(m => m.FindByEmailAsync(unset.Email!)).ReturnsAsync(unset);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(unset)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.CheckPasswordAsync(unset, "correct")).ReturnsAsync(true);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(unset)).ReturnsAsync(IdentityResult.Success);
+
+        AuthResponse fresh = await _sut.LoginAsync(
+            new LoginRequest { Identifier = unset.Email!, Password = "correct" });
+
+        Assert.Null(fresh.BusinessName);
+        Assert.Null(fresh.LogoUrl);
+        Assert.Null(fresh.PhoneNumber);
+
+        ApplicationUser set = CreatePhoneUser(emailConfirmed: true);
+        set.BusinessName = "Oma's Kitchen";
+        set.LogoUrl = "https://cdn.example.com/logo.png";
+        _userManagerMock.Setup(m => m.FindByEmailAsync(set.Email!)).ReturnsAsync(set);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(set)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.CheckPasswordAsync(set, "correct")).ReturnsAsync(true);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(set)).ReturnsAsync(IdentityResult.Success);
+
+        AuthResponse done = await _sut.LoginAsync(
+            new LoginRequest { Identifier = set.Email!, Password = "correct" });
+
+        Assert.Equal("Oma's Kitchen", done.BusinessName);
+        Assert.Equal("https://cdn.example.com/logo.png", done.LogoUrl);
+        Assert.Equal("+2348012345678", done.PhoneNumber);
     }
 
     [Fact]
@@ -220,7 +259,7 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(true);
 
         await Assert.ThrowsAsync<UnauthorizedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "any" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "any" }));
 
         _userManagerMock.Verify(m => m.CheckPasswordAsync(It.IsAny<ApplicationUser>(), It.IsAny<string>()), Times.Never);
         _userManagerMock.Verify(m => m.AccessFailedAsync(It.IsAny<ApplicationUser>()), Times.Never);
@@ -235,11 +274,110 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "correct")).ReturnsAsync(true);
 
         await Assert.ThrowsAsync<EmailNotVerifiedException>(() =>
-            _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "correct" }));
+            _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "correct" }));
 
         _userManagerMock.Verify(m => m.AccessFailedAsync(It.IsAny<ApplicationUser>()), Times.Never);
         _userManagerMock.Verify(m => m.ResetAccessFailedCountAsync(It.IsAny<ApplicationUser>()), Times.Never);
     }
+
+    // ---------------------------------------------------------------------------
+    // Login by phone
+    // ---------------------------------------------------------------------------
+
+    // A sign-in form takes one detail, so every way of typing the same number
+    // has to reach the same row the account is stored under.
+    [Theory]
+    [InlineData("08012345678")]
+    [InlineData("2348012345678")]
+    [InlineData("+2348012345678")]
+    public async Task LoginAsync_WhenIdentifierIsAPhone_FindsTheAccountWhateverTheFormat(string typed)
+    {
+        ApplicationUser user = CreatePhoneUser(emailConfirmed: true);
+        UsingPhoneBook(user);
+
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "correct")).ReturnsAsync(true);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        AuthResponse response = await _sut.LoginAsync(
+            new LoginRequest { Identifier = typed, Password = "correct" });
+
+        Assert.Equal(user.Id, response.UserId);
+        Assert.Equal("+2348012345678", response.PhoneNumber);
+        _userManagerMock.Verify(m => m.FindByEmailAsync(It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenPhoneIsUnknown_UsesTheSameGenericMessageAsABadPassword()
+    {
+        // Neither the shape of the identifier nor the wording may say which of
+        // the two it was, or the endpoint becomes a way to find out who exists.
+        UsingPhoneBook();
+
+        UnauthorizedException unknown = await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginRequest { Identifier = "08000000000", Password = "pass" }));
+
+        Assert.Equal(AuthMessages.InvalidCredentials, unknown.Message);
+        _passwordHasherMock.Verify(h => h.HashPassword(It.IsAny<ApplicationUser>(), "pass"), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenPasswordIsWrong_UsesTheSameMessageAsAnUnknownPhone()
+    {
+        ApplicationUser user = CreatePhoneUser(emailConfirmed: true);
+        UsingPhoneBook(user);
+
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "wrong")).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.AccessFailedAsync(user)).ReturnsAsync(IdentityResult.Success);
+
+        UnauthorizedException wrong = await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginRequest { Identifier = "+2348012345678", Password = "wrong" }));
+
+        Assert.Equal(AuthMessages.InvalidCredentials, wrong.Message);
+        _userManagerMock.Verify(m => m.AccessFailedAsync(user), Times.Once);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenIdentifierIsANeitherAddressNorPhone_GetsTheGenericRefusal()
+    {
+        UsingPhoneBook();
+
+        UnauthorizedException ex = await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginRequest { Identifier = "just some words", Password = "pass" }));
+
+        Assert.Equal(AuthMessages.InvalidCredentials, ex.Message);
+    }
+
+    [Fact]
+    public async Task LoginAsync_WhenPhoneAccountIsLockedOut_ShowsTheLockoutMessage()
+    {
+        ApplicationUser user = CreatePhoneUser(emailConfirmed: true);
+        UsingPhoneBook(user);
+
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(true);
+
+        UnauthorizedException ex = await Assert.ThrowsAsync<UnauthorizedException>(() =>
+            _sut.LoginAsync(new LoginRequest { Identifier = "08012345678", Password = "any" }));
+
+        Assert.Contains("locked", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    // Puts a small phone book behind UserManager.Users, the way sign-in reads it.
+    private void UsingPhoneBook(params ApplicationUser[] users) =>
+        _userManagerMock.SetupGet(m => m.Users).Returns(users.AsQueryable());
+
+    private static ApplicationUser CreatePhoneUser(bool emailConfirmed = false) =>
+        new ApplicationUser
+        {
+            Id = Guid.NewGuid().ToString(),
+            Email = "phoneowner@test.com",
+            UserName = "phoneowner@test.com",
+            BusinessName = "Test Business",
+            EmailConfirmed = emailConfirmed,
+            PhoneDialCode = "234",
+            PhoneNumber = "8012345678",
+        };
 
     // ---------------------------------------------------------------------------
     // RegisterAsync
@@ -257,7 +395,6 @@ public class AuthServiceTests
                 Email = existing.Email!,
                 Password = "Pass123!",
                 ConfirmPassword = "Pass123!",
-                BusinessName = "Biz",
             }));
     }
 
@@ -273,7 +410,6 @@ public class AuthServiceTests
                 Email = existing.Email!,
                 Password = "Pass123!",
                 ConfirmPassword = "Pass123!",
-                BusinessName = "Biz",
             }));
 
         _emailServiceMock.Verify(
@@ -295,7 +431,6 @@ public class AuthServiceTests
             Email = existing.Email!,
             Password = "Pass123!",
             ConfirmPassword = "Pass123!",
-            BusinessName = "Biz",
         });
 
         _emailServiceMock.Verify(
@@ -317,7 +452,6 @@ public class AuthServiceTests
             Email = existing.Email!,
             Password = "Different123!",
             ConfirmPassword = "Different123!",
-            BusinessName = "Biz",
         });
 
         _userManagerMock.Verify(
@@ -352,7 +486,6 @@ public class AuthServiceTests
             Email = "new@test.com",
             Password = "Pass123!",
             ConfirmPassword = "Pass123!",
-            BusinessName = "My Biz",
         });
 
         _userManagerMock.Verify(
@@ -400,7 +533,6 @@ public class AuthServiceTests
                 Email = "new@test.com",
                 Password = "password2024!!",
                 ConfirmPassword = "password2024!!",
-                BusinessName = "Biz",
             }));
 
         Assert.Contains("data breach", string.Join(" ", ex.Errors ?? []));
@@ -424,7 +556,6 @@ public class AuthServiceTests
             Email = "new@test.com",
             Password = "Pass123!",
             ConfirmPassword = "Pass123!",
-            BusinessName = "My Biz",
         });
 
         _emailServiceMock.Verify(
@@ -453,7 +584,6 @@ public class AuthServiceTests
             Email = "new@test.com",
             Password = "Pass123!",
             ConfirmPassword = "Pass123!",
-            BusinessName = "My Biz",
         });
 
         _emailServiceMock.Verify(
@@ -480,7 +610,6 @@ public class AuthServiceTests
             Email = "new@test.com",
             Password = "Pass123!",
             ConfirmPassword = "Pass123!",
-            BusinessName = "My Biz",
         });
 
         Assert.Null(response);
@@ -504,7 +633,6 @@ public class AuthServiceTests
             Email = "new@test.com",
             Password = "Pass123!",
             ConfirmPassword = "Pass123!",
-            BusinessName = "My Biz",
         });
 
         Assert.NotNull(response);
@@ -530,7 +658,6 @@ public class AuthServiceTests
                 Email = existing.Email!,
                 Password = "Pass123!",
                 ConfirmPassword = "Pass123!",
-                BusinessName = "Biz",
             }));
 
         _emailServiceMock.Verify(
@@ -549,7 +676,7 @@ public class AuthServiceTests
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
 
-        AuthResponse response = await _sut.LoginAsync(new LoginRequest { Email = user.Email!, Password = "correct" });
+        AuthResponse response = await _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "correct" });
 
         Assert.Equal("test-jwt-token", response.Token);
         Assert.True(user.EmailConfirmed);
@@ -575,7 +702,6 @@ public class AuthServiceTests
                 Email = "new@test.com",
                 Password = "Pass123!",
                 ConfirmPassword = "Pass123!",
-                BusinessName = "Biz",
             }));
 
         _emailServiceMock.Verify(
@@ -604,7 +730,6 @@ public class AuthServiceTests
             Email = "new@test.com",
             Password = "Pass123!",
             ConfirmPassword = "Pass123!",
-            BusinessName = "My Biz",
         });
 
         _emailServiceMock.Verify(

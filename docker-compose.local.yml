@@ -83,6 +83,43 @@ services:
       - "8025:8025"
     networks: [parrot]
 
+  # The object store the image uploads land in. It speaks S3, so the same code
+  # path runs here and against a real bucket — only the endpoint differs. MinIO
+  # archived its community edition and pulled its own images off Docker Hub,
+  # so these are maintained repackages of the same server and client.
+  minio:
+    image: sourcemation/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-parrot-local}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+    networks: [parrot]
+
+  # Creates the bucket and opens it for public reads once the server answers;
+  # the retry loop is what makes that safe when both start together. Doing it
+  # out here keeps bucket lifecycle out of the API entirely.
+  minio-init:
+    image: bitnamilegacy/minio-client:latest
+    restart: on-failure
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "-c"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-parrot-local}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
+    command:
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done;
+        mc mb --ignore-existing local/parrot;
+        mc anonymous set download local/parrot;
+    networks: [parrot]
+
   parrot-api:
     build:
       context: .
@@ -119,6 +156,16 @@ services:
       EmailSettings__FromName: Parrot Local
       EmailSettings__BaseUrl: http://localhost:5255
       FrontendSettings__BaseUrl: http://localhost:5255
+      # The object store for image uploads. The app writes to MinIO over the
+      # compose network; the URLs it hands back are read by the browser
+      # through the published port, so the two bases are not the same host.
+      Storage__Provider: S3
+      Storage__Bucket: parrot
+      Storage__Region: us-east-1
+      Storage__ServiceUrl: http://minio:9000
+      Storage__PublicBaseUrl: http://localhost:9000/parrot
+      Storage__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
       # The verification code every sign-up on this stack accepts, so no
       # mailbox is needed to finish one; the API refuses to start with it set
       # outside Development. The breach lookup is off to keep the stack offline.
@@ -207,3 +254,4 @@ volumes:
   postgres_data:
   mongo_data:
   kafka_data:
+  minio_data:

@@ -45,6 +45,9 @@ else
     [SupplyParameterFromQuery]
     private string? businessName { get; set; }
 
+    [SupplyParameterFromQuery]
+    private string? logoUrl { get; set; }
+
     private string? _error;
     private AuthResponse? _session;
 
@@ -72,7 +75,8 @@ else
             ExpiresAt = parsedExpiry,
             UserId = userId,
             Email = email,
-            BusinessName = businessName ?? string.Empty,
+            BusinessName = businessName,
+            LogoUrl = string.IsNullOrEmpty(logoUrl) ? null : logoUrl,
         };
     }
 
