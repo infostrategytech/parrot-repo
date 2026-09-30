@@ -1,0 +1,37 @@
+.ds-action-menu { position: relative; }
+
+.ds-action-menu {
+  /* Gaps in the token set: no z-index scale and no menu-width scale. The
+     width is React's conversation menu. */
+  --ds-action-menu-layer: 40;
+  --ds-action-menu-width: 214px;
+  --ds-action-menu-hairline: 1px;
+}
+
+::deep .ds-action-menu__trigger.is-open {
+  color: var(--colors-text-primary);
+  background: var(--colors-interaction-hover);
+}
+
+.ds-action-menu__dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-action-menu-layer);
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+.ds-action-menu__menu {
+  position: absolute;
+  top: calc(100% + var(--spacing-xs));
+  right: 0;
+  z-index: calc(var(--ds-action-menu-layer) + 1);
+  display: grid;
+  width: var(--ds-action-menu-width);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-popover);
+  border: var(--ds-action-menu-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow);
+}

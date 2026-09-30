@@ -1,0 +1,75 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IAsyncDisposable
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+
+<label class="@ClassName" for="@InputId">
+    <span class="ds-search-field__icon" aria-hidden="true">
+        <Icon Name="IconName.HiMagnifyingGlass" Size="IconSize.Sm" />
+    </span>
+    <input id="@InputId"
+           @ref="_input"
+           class="@TextStyle.BodySmallMedium.ToClassName()"
+           type="search"
+           @bind:get="Value"
+           @bind:set="OnInput"
+           @bind:event="oninput"
+           placeholder="@Placeholder"
+           disabled="@Disabled"
+           aria-label="@AriaLabel"
+           aria-keyshortcuts="@KeyShortcuts"
+           @attributes="AdditionalAttributes" />
+    @if (ShortcutKey is not null)
+    {
+        @* The hint React draws: Ctrl/⌘ plus the key focuses this field. *@
+        <kbd class="ds-search-field__shortcut @TextStyle.Small10Semibold.ToClassName()" aria-hidden="true">
+            <Icon Name="IconName.HiCommandLine" Size="IconSize.Inherit" />@ShortcutKey.ToUpperInvariant()
+        </kbd>
+    }
+</label>
+
+@code {
+    private readonly string _generatedId = "search-" + Guid.NewGuid().ToString("N");
+    private ElementReference _input;
+    private IAsyncDisposable? _shortcut;
+
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search";
+    [Parameter] public string AriaLabel { get; set; } = "Search";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>A letter that, with Ctrl (⌘ on a Mac), focuses the field from anywhere on the page. Null for none.</summary>
+    [Parameter] public string? ShortcutKey { get; set; }
+
+    /// <summary>Takes the focus when it first appears, as in a popover whose first job is searching.</summary>
+    [Parameter] public bool AutoFocus { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string InputId => Id ?? _generatedId;
+    private string? KeyShortcuts => ShortcutKey is null ? null : $"Control+{ShortcutKey.ToUpperInvariant()} Meta+{ShortcutKey.ToUpperInvariant()}";
+    private string ClassName => string.IsNullOrWhiteSpace(Class)
+        ? $"ds-search-field{(Disabled ? " is-disabled" : "")}{(ShortcutKey is not null ? " has-shortcut" : "")}"
+        : $"ds-search-field{(Disabled ? " is-disabled" : "")}{(ShortcutKey is not null ? " has-shortcut" : "")} {Class}";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (ShortcutKey is not null) _shortcut = await Interop.BindFocusShortcutAsync(_input, ShortcutKey);
+        if (AutoFocus) await _input.FocusAsync();
+    }
+
+    // @bind rather than value + oninput: Blazor then keeps what the person has
+    // typed when a slower update arrives mid-keystroke, instead of rewinding it.
+    private Task OnInput(string? value) => ValueChanged.InvokeAsync(value);
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_shortcut is null) return;
+        try { await _shortcut.DisposeAsync(); }
+        catch (JSDisconnectedException) { }
+    }
+}

@@ -42,3 +42,30 @@
 /* The tick inherits the row's colour, so a selected row keeps it legible
    against the selected fill without a second rule. */
 .popover-option.is-active .popover-option__text ::deep small { color: inherit; }
+
+/* React's menu rows: a mark, a bold name over its description, and a tick.
+   The chosen row is marked by the tick alone, not a fill. */
+.popover-option {
+  display: grid;
+  grid-template-columns: var(--ds-option-mark) minmax(0, 1fr) var(--ds-option-check);
+  min-height: var(--ds-option-min);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-secondary);
+  border-radius: var(--radius-radius-lg);
+}
+.popover-option:not(:has(.popover-option__leading)) { grid-template-columns: minmax(0, 1fr) var(--ds-option-check); }
+.popover-option.is-active { color: var(--colors-text-secondary); background: transparent; }
+.popover-option.is-active:hover { background: var(--colors-interaction-hover); }
+.popover-option__leading { width: var(--ds-option-leading); height: var(--ds-option-leading); }
+.popover-option__text ::deep strong { color: var(--colors-text-secondary); }
+.popover-option__text ::deep small,
+.popover-option.is-active .popover-option__text ::deep small { overflow: hidden; color: var(--colors-text-subtle); white-space: nowrap; text-overflow: ellipsis; }
+::deep .popover-option__check { color: var(--colors-brand-primary); }
+
+.popover-option {
+  /* Gaps in the token set: React's menu-row geometry. */
+  --ds-option-min: 48px;
+  --ds-option-mark: 30px;
+  --ds-option-leading: 24px;
+  --ds-option-check: 18px;
+}

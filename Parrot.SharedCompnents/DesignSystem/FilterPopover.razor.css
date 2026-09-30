@@ -88,3 +88,35 @@
 
 .filter-popover__menu > header ::deep strong { color: var(--colors-text-primary); }
 .filter-popover__menu > header ::deep small { color: var(--colors-text-muted); }
+
+/* ── React's filter controls (Inbox, Products, Task Requests) ─────────────
+   The label reads from the left beside its mark, the edge lights in the
+   brand colour on hover and while open, and the menu's title sits over a
+   hairline. */
+.filter-popover__trigger { text-align: left; }
+.filter-popover__trigger:has(.filter-popover__leading) { padding-left: var(--spacing-sm); }
+.filter-popover__trigger > ::deep svg:last-child { color: var(--colors-text-subtle); }
+.filter-popover__trigger:hover,
+.filter-popover__trigger[aria-expanded="true"] {
+  background: var(--colors-surface-card);
+  border-color: var(--colors-accent-brand-border);
+  box-shadow: 0 0 0 var(--ds-popover-ring) color-mix(in srgb, var(--colors-brand-primary) 6%, transparent);
+}
+.filter-popover__menu {
+  width: var(--ds-popover-width);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow), 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+}
+
+.filter-popover.is-end-aligned .filter-popover__menu {
+  right: 0;
+  left: auto;
+}
+.filter-popover__menu > header {
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-sm);
+  border-bottom: var(--ds-popover-border-width) solid var(--colors-surface-border);
+}
+.filter-popover__menu > header ::deep strong { color: var(--colors-text-secondary); }
+.filter-popover__menu > header ::deep small { color: var(--colors-text-subtle); }
+
+.filter-popover { --ds-popover-ring: 3px; }

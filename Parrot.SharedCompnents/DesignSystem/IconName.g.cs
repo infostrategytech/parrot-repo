@@ -70,6 +70,8 @@ public enum IconName
     RiDatabase2Fill,
     /// <summary>react-icons/ri/RiDeleteBin6Fill</summary>
     RiDeleteBin6Fill,
+    /// <summary>react-icons/ri/RiDownload2Fill</summary>
+    RiDownload2Fill,
     /// <summary>react-icons/ri/RiEditFill</summary>
     RiEditFill,
     /// <summary>react-icons/ri/RiEmotionHappyFill</summary>
@@ -260,6 +262,7 @@ public static class IconNameExtensions
         "ri-customer-service2-fill",
         "ri-database2-fill",
         "ri-delete-bin6-fill",
+        "ri-download2-fill",
         "ri-edit-fill",
         "ri-emotion-happy-fill",
         "ri-error-warning-fill",

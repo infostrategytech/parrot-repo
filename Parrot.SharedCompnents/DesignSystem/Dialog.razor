@@ -43,7 +43,24 @@
                     {
                         <span class="dialog__icon">@GlyphContent</span>
                     }
-                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
+                    @if (Subtitle is null)
+                    {
+                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
+                    }
+                    else
+                    {
+                        <div class="dialog__heading">
+                            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="@_titleId">@Title</Typography>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="p">@Subtitle</Typography>
+                        </div>
+                    }
+                    @if (Dismissible && OnCancel.HasDelegate)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="dialog__close"
+                                aria-label="Close" title="Close" disabled="@Busy" @onclick="OnCancel">
+                            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                        </Button>
+                    }
                 </header>
             }
 
@@ -92,6 +109,12 @@
 
     /// <summary>Keeps the accessible dialog title while allowing the body to control visual placement.</summary>
     [Parameter] public bool TitleVisuallyHidden { get; set; }
+
+    /// <summary>A line under the title saying what the dialog is for. Null for none.</summary>
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>Draws a close button in the header, which cancels like the Cancel button.</summary>
+    [Parameter] public bool Dismissible { get; set; }
 
     [Parameter, EditorRequired] public RenderFragment? Body { get; set; }
 

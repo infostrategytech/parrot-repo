@@ -1,0 +1,33 @@
+.ds-action-menu-item {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: 100%;
+  min-height: var(--ds-action-menu-item-height);
+  padding: 0 var(--spacing-sm);
+  color: var(--colors-text-secondary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  cursor: pointer;
+
+  /* Gap in the token set: no menu-row height. React's conversation menu. */
+  --ds-action-menu-item-height: 36px;
+  --ds-action-menu-focus: 2px;
+}
+
+.ds-action-menu-item:hover:not(:disabled) {
+  color: var(--colors-text-primary);
+  background: var(--colors-interaction-hover);
+}
+
+.ds-action-menu-item:focus-visible {
+  outline: var(--ds-action-menu-focus) solid var(--colors-interaction-focus);
+  outline-offset: calc(var(--ds-action-menu-focus) * -1);
+}
+
+.ds-action-menu-item:disabled {
+  color: var(--colors-interaction-disabled-foreground);
+  cursor: not-allowed;
+}

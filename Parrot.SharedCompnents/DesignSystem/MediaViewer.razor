@@ -1,0 +1,94 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+@inject Parrot.SharedComponents.Services.ToastService Toasts
+
+@* An image viewed the way WhatsApp Web shows one: the whole screen, who sent
+   it and when along the top with Download and Close, and the image as large
+   as fits, a click to zoom. Only the image chosen is shown. Escape, Close or
+   a click on the space around it closes.
+
+   Host it outside anything that scrolls, is masked or is transformed (a chat
+   thread, say), or it is confined to that area instead of covering the screen. *@
+@if (Item is { } item)
+{
+    <div class="ds-media-viewer" role="dialog" aria-modal="true" aria-label="@($"{item.Name}, sent by {item.Sender}")"
+         tabindex="-1" @ref="_root" @onkeydown="OnKeyDown">
+        <header class="ds-media-viewer__bar">
+            <div class="ds-media-viewer__who">
+                <PetalAvatar Seed="@item.SenderSeed" Initials="@item.SenderInitials" Size="AvatarSize.Md" />
+                <div>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@item.Sender</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@item.SentAt</Typography>
+                </div>
+            </div>
+            <div class="ds-media-viewer__actions">
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Download" title="Download"
+                        Busy="@_downloading" @onclick="DownloadAsync">
+                    <IconLeft><Icon Name="IconName.RiDownload2Fill" /></IconLeft>
+                </Button>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Close" title="Close (Esc)"
+                        @onclick="CloseAsync">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </div>
+        </header>
+
+        @* A click on the empty space around the image closes it, as a click
+           away from any overlay does; the image itself zooms instead. *@
+        <div class="ds-media-viewer__stage @(_zoomed ? "is-zoomed" : null)" @onclick="CloseAsync">
+            <img class="ds-media-viewer__image" src="@item.Url" alt="@item.Name"
+                 title="@(_zoomed ? "Zoom out" : "Zoom in")" @onclick="ToggleZoom" @onclick:stopPropagation />
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>The image to show; null keeps the viewer closed.</summary>
+    [Parameter] public MediaViewerItem? Item { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private ElementReference _root;
+    private MediaViewerItem? _shown;
+    private bool _zoomed;
+    private bool _downloading;
+    private bool _focusPending;
+
+    protected override void OnParametersSet()
+    {
+        // A newly opened image takes the keyboard focus, so Escape works at once,
+        // and always opens fitted to the screen.
+        if (Item is not null && Item != _shown)
+        {
+            _focusPending = true;
+            _zoomed = false;
+        }
+        _shown = Item;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focusPending) return;
+        _focusPending = false;
+        await _root.FocusAsync();
+    }
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+    private void ToggleZoom() => _zoomed = !_zoomed;
+
+    private Task OnKeyDown(KeyboardEventArgs args) => args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+
+    private async Task DownloadAsync()
+    {
+        if (Item is not { } item || _downloading) return;
+        _downloading = true;
+        try
+        {
+            if (!await Interop.DownloadAsync(item.Url, item.Name))
+                Toasts.ShowError("The image could not be downloaded. Please try again.");
+        }
+        finally
+        {
+            _downloading = false;
+        }
+    }
+}

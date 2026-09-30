@@ -47,6 +47,10 @@
   display: grid;
   gap: var(--spacing-xl);
   width: min(var(--ds-dialog-width), 100%);
+  /* Never taller than the window: a long dialog scrolls, so its buttons stay
+     reachable on a short laptop screen. */
+  max-height: calc(100dvh - 2 * var(--spacing-3xl));
+  overflow-y: auto;
   padding: var(--spacing-3xl);
   background: var(--colors-surface-elevated);
   border-radius: var(--radius-radius-3xl);
@@ -174,3 +178,8 @@
     transform: translateY(var(--spacing-sm)) scale(0.985);
   }
 }
+
+/* A title with a subtitle stacks the two; the close button sits at the end. */
+.dialog__heading { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.dialog__heading ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.dialog > header ::deep .dialog__close { flex: 0 0 auto; margin-left: auto; color: var(--colors-text-muted); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }

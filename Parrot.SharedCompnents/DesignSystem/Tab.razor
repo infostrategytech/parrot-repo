@@ -1,0 +1,29 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One tab in a <Tabs> set. Its label is the content; Count adds a small
+   number after it (drawn as a chip in the Floating set). *@
+<button type="button"
+        role="tab"
+        class="ds-tab @(Selected ? "is-active" : null) @Class"
+        aria-selected="@(Selected ? "true" : "false")"
+        disabled="@Disabled"
+        title="@Title"
+        @onclick="OnClick">
+    @ChildContent
+    @if (Count is not null)
+    {
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-tab__count">@Count</Typography>
+    }
+</button>
+
+@code {
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    /// <summary>Shown on hover; say why a disabled tab is disabled.</summary>
+    [Parameter] public string? Title { get; set; }
+    /// <summary>A number after the label, such as how many conversations or notes there are.</summary>
+    [Parameter] public string? Count { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

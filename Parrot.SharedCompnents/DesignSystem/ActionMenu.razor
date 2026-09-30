@@ -1,0 +1,42 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* An icon button that opens a short list of actions (a "more" menu), as the
+   inbox's conversation toolbar uses it. Items are ActionMenuItem; choosing
+   one closes the menu. Escape and a click anywhere else close it too. *@
+<div class="ds-action-menu" @onkeydown="OnKeyDown">
+    <Button Variant="ButtonVariant.Secondary" Size="@Size"
+            Class="@(_open ? "ds-action-menu__trigger is-open" : "ds-action-menu__trigger")"
+            aria-label="@Label" title="@Label"
+            aria-haspopup="menu" aria-expanded="@(_open ? "true" : "false")"
+            @onclick="Toggle">
+        <IconLeft><Icon Name="@Glyph" /></IconLeft>
+    </Button>
+
+    @if (_open)
+    {
+        @* The click-away layer: a full-screen transparent button, the documented
+           exception to building from components. *@
+        <button type="button" class="ds-action-menu__dismiss" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
+        <div class="ds-action-menu__menu" role="menu" aria-label="@Label" @onclick="Close">
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>What the trigger is called, for screen readers and its tooltip.</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter] public IconName Glyph { get; set; } = IconName.RiMore2Fill;
+    [Parameter] public ButtonSize Size { get; set; } = ButtonSize.Small;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private bool _open;
+
+    private void Toggle() => _open = !_open;
+    private void Close() => _open = false;
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") _open = false;
+    }
+}
