@@ -9,6 +9,7 @@
     <Project Path="Parrot.Web/Parrot.Web.Client/Parrot.Web.Client.csproj" />
     <Project Path="Parrot.Web/Parrot.Web/Parrot.Web.csproj" />
   </Folder>
+  <Project Path="MessageProcessor/MessageProcessor.csproj" />
   <Project Path="Parrot.APi.Grpc/Parrot.APi.Grpc.csproj" />
   <Project Path="Parrot.Application/Parrot.Application.csproj" />
   <Project Path="Parrot.Domain/Parrot.Domain.csproj" />
