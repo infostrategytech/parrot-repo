@@ -132,6 +132,17 @@ public sealed class AuroraInterop : IAsyncDisposable
         return new Handle(handle);
     }
 
+    /// <summary>
+    /// Mirrors a password manager's late autofill into the field's normal
+    /// input event, so a Blazor form receives the same value the browser shows.
+    /// </summary>
+    public async Task<IAsyncDisposable> BindAutofillAsync(ElementReference input)
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("bindAutofill", input);
+        return new Handle(handle);
+    }
+
     /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
     /// <summary>Inserts text at the field's caret (or over its selection) and returns the field's new text.</summary>
     public async Task<string?> InsertAtCaretAsync(ElementReference element, string text)

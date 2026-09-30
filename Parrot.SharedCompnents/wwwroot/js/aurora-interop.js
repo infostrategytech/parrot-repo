@@ -196,6 +196,34 @@ export function autoGrow(element) {
   };
 }
 
+/* Browser credential managers may fill after Blazor has rendered and without
+   a normal keystroke. CSS raises an animation when the autofill pseudo-class
+   becomes active; replaying the standard input event keeps the bound value in
+   sync without teaching product code about a particular browser. */
+export function bindAutofill(element) {
+  if (!(element instanceof Element)) return { release() {} };
+
+  const isAutofilled = () => {
+    try { if (element.matches(":autofill")) return true; } catch { /* Browser has no standard selector yet. */ }
+    try { return element.matches(":-webkit-autofill"); } catch { return false; }
+  };
+  const sync = () => {
+    if (isAutofilled()) element.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const onAnimationStart = () => queueMicrotask(sync);
+
+  element.addEventListener("animationstart", onAnimationStart);
+  // Catch credentials the browser restored before the interactive component
+  // attached its listener. The animation path handles later fills.
+  requestAnimationFrame(() => requestAnimationFrame(sync));
+
+  return {
+    release() {
+      element.removeEventListener("animationstart", onAnimationStart);
+    }
+  };
+}
+
 
 /* Put text in at the caret (or over a selection), as typing it would, and
    hand back the field's new text. The caret survives the field losing focus

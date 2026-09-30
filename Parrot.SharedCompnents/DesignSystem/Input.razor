@@ -1,4 +1,6 @@
 @namespace Parrot.SharedComponents.DesignSystem
+@inject AuroraInterop Interop
+@implements IAsyncDisposable
 
 @* The floating label is driven entirely by CSS. The input always carries a
    placeholder of one space, so :placeholder-shown is false the moment there is
@@ -47,7 +49,8 @@
         }
 
         <span class="field__control">
-            <input id="@InputId"
+            <input @ref="_input"
+                   id="@InputId"
                    class="@TextStyle.BodySmallMedium.ToClassName()"
                    type="@Type"
                    value="@Value"
@@ -85,6 +88,8 @@
 
 @code {
     private readonly string _generatedId = "field-" + Guid.NewGuid().ToString("N");
+    private ElementReference _input;
+    private IAsyncDisposable? _autofillBinding;
 
     /// <summary>The label that sits in the field until it holds a value. Always required — a field with no name is not usable.</summary>
     [Parameter, EditorRequired] public string FloatingLabel { get; set; } = "";
@@ -142,6 +147,22 @@
 
     private Task OnInput(ChangeEventArgs args) =>
         ValueChanged.InvokeAsync(args.Value?.ToString());
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Password managers can fill after Blazor renders without raising
+            // a normal input event. Mirror that browser value into ValueChanged
+            // so the form and the pixels never disagree.
+            _autofillBinding = await Interop.BindAutofillAsync(_input);
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_autofillBinding is not null) await _autofillBinding.DisposeAsync();
+    }
 
     private string ClassName
     {

@@ -123,6 +123,30 @@
   font: inherit;
 }
 
+/* Chrome and Safari paint saved credentials inside the input itself. Keep
+   their autofill state on the same surface and with the same text colour as
+   the rest of the field, in both themes. The animation has no visual motion;
+   it is the browser signal used to synchronise a late autofill with Blazor. */
+@keyframes field-autofill-detected {
+  from { }
+  to { }
+}
+
+/* :is() tolerates a selector the browser does not know (older Safari has no
+   :autofill), so it can never cost the rest of a rule. */
+.field__control > input:is(:-webkit-autofill, :autofill) {
+  -webkit-text-fill-color: var(--colors-text-primary);
+  caret-color: var(--colors-text-primary);
+  box-shadow: inset 0 0 0 var(--ds-field-autofill-fill) var(--colors-surface-card);
+  animation: field-autofill-detected var(--ds-field-motion);
+}
+
+.field {
+  /* Missing from the token set: a fill large enough to cover the browser's
+     autofill paint without introducing a fixed light-mode colour. */
+  --ds-field-autofill-fill: 100vmax;
+}
+
 /* Resting: the label sits exactly where the value will, acting as the
    placeholder, so nothing moves sideways when it lifts. */
 .field__float {
@@ -148,6 +172,7 @@
    space in the placeholder attribute is what makes :placeholder-shown false. */
 .field__control > input:focus ~ .field__float,
 .field__control > input:not(:placeholder-shown) ~ .field__float,
+.field__control > input:is(:-webkit-autofill, :autofill) ~ .field__float,
 .field__float.is-floated {
   top: var(--spacing-md);
   color: var(--field-float-lifted);
@@ -234,6 +259,7 @@
 
 .field__control > input:focus ~ .field__float,
 .field__control > input:not(:placeholder-shown) ~ .field__float,
+.field__control > input:is(:-webkit-autofill, :autofill) ~ .field__float,
 .field__float.is-floated {
   font-size: var(--typography-size-text-xxs); /* text-style-exempt: animates from text-sm */
   line-height: var(--ds-field-float-leading); /* text-style-exempt: animated */
