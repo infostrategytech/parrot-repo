@@ -6,12 +6,31 @@
 @inject AuroraInterop Interop
 @inject NavigationManager Nav
 @inject AuthState AuthState
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@using Parrot.Web.Features.Dashboard.Channels.State
+@inject ChannelStatusLoader ChannelStatus
+@inject ChannelsState ChannelsState
 @implements IAsyncDisposable
 
 <PageTitle>Overview · OmniAI</PageTitle>
 
-<OnboardingModal />
+@* A new account names its business here first; the overview shows it once created. *@
+<WorkspaceWelcome />
 
+@* Which dashboard: until a channel is connected there is nothing for the
+   overview's numbers to describe, so the page is the activation overview
+   (GettingStarted): connect a channel, then set up an AI agent. Once one is
+   connected it is the full overview below. *@
+@if (_hasChannels is null)
+{
+    <LoadingState Glyph="IconName.RiHome5Fill" Title="Loading your workspace" />
+}
+else if (_hasChannels == false)
+{
+    <GettingStarted />
+}
+else
+{
 @* The overview. Aurora's Products frame; the welcome, the upgrade aside and
    the checklist are cards; the six numbers are Aurora's stat strip; the chart
    sits in a card of its own, drawn by chart.js in the chart tokens. *@
@@ -159,6 +178,7 @@
         </div>
     </section>
 </div>
+}
 
 @code {
     private static readonly string[] Periods = ["7d", "30d", "90d"];
@@ -191,8 +211,16 @@
 
     private List<StatCard> _stats = [];
 
+    /// <summary>Null until channel status is known; then whether any channel is connected.</summary>
+    private bool? _hasChannels;
+    private bool _chartDrawn;
+    private readonly CancellationTokenSource _lifetime = new();
+
     protected override void OnInitialized()
     {
+        // The welcome card names the business through AuthState; redraw the
+        // greeting when it does.
+        AuthState.OnChange += OnAuthChanged;
         UpdateTime();
         _stats = BuildStats();
         _clockTimer = new System.Threading.Timer(_ => InvokeAsync(() =>
@@ -201,6 +229,8 @@
             StateHasChanged();
         }), null, 1000, 1000);
     }
+
+    private void OnAuthChanged() => InvokeAsync(StateHasChanged);
 
     private void UpdateTime()
     {
@@ -283,6 +313,21 @@
     {
         if (firstRender)
         {
+            if (AuthState.CurrentUser?.Token is { Length: > 0 } token)
+            {
+                try { await ChannelStatus.RefreshAsync(token, _lifetime.Token); }
+                catch (OperationCanceledException) { return; }
+            }
+            _hasChannels = ChannelsState.Workspace.ConnectedCount > 0;
+            StateHasChanged();
+            return;
+        }
+
+        // The chart's canvas only exists in the full overview, so it is drawn
+        // the first time that view is on screen, not on the first render.
+        if (_hasChannels == true && !_chartDrawn)
+        {
+            _chartDrawn = true;
             // Chart.js is only needed here, so it is fetched here rather than
             // on every page; the second visit reads it from cache.
             try
@@ -365,7 +410,10 @@
 
     public async ValueTask DisposeAsync()
     {
+        _lifetime.Cancel();
+        _lifetime.Dispose();
         _clockTimer?.Dispose();
+        AuthState.OnChange -= OnAuthChanged;
         try
         {
             await JS.InvokeVoidAsync("eval",

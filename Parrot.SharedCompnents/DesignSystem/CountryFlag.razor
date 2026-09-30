@@ -1,0 +1,31 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A country's flag, for a phone prefix or a country picker. Flags are
+   national marks, not ours to tokenise: their colours are fixed, do not
+   change in dark mode, and are allowlisted in brand-literals.json.
+
+   Only Nigeria for now. Add a case per country; an unknown code renders
+   nothing rather than a wrong flag. *@
+
+@switch (Code.ToUpperInvariant())
+{
+    case "NG":
+        <svg class="country-flag" viewBox="0 0 3 2" width="21" height="14"
+             role="@(Decorative ? null : "img")"
+             aria-label="@(Decorative ? null : "Nigeria")"
+             aria-hidden="@(Decorative ? "true" : null)"
+             focusable="false">
+            <rect width="1" height="2" fill="#008751" />
+            <rect x="1" width="1" height="2" fill="#ffffff" />
+            <rect x="2" width="1" height="2" fill="#008751" />
+        </svg>
+        break;
+}
+
+@code {
+    /// <summary>ISO 3166-1 alpha-2 country code, e.g. "NG".</summary>
+    [Parameter, EditorRequired] public string Code { get; set; } = "";
+
+    /// <summary>Hide it from screen readers when text beside it already names the country.</summary>
+    [Parameter] public bool Decorative { get; set; }
+}

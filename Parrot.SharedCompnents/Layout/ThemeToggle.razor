@@ -13,7 +13,7 @@
    purpose — "so the overlay it is switching can never restyle the switch" —
    and that reasoning dies with aurora-theme.css. Nine raw values went with it. *@
 
-<div class="theme-toggle" role="group" aria-label="Colour theme">
+<div class="theme-toggle @(Inline ? "theme-toggle--inline" : null)" role="group" aria-label="Colour theme">
     @foreach (var option in Options)
     {
         <button type="button"
@@ -33,11 +33,18 @@
 
     private static readonly ThemeOption[] Options =
     [
-        new("aurora-light", "Light", IconName.RiSparklingFill),
-        new("aurora-dark", "Dark", IconName.RiLock2Fill)
+        new("aurora-light", "Light", IconName.RiSunFill),
+        new("aurora-dark", "Dark", IconName.RiMoonFill)
     ];
 
     private string _theme = "aurora-light";
+
+    /// <summary>
+    /// In the page's own header rather than floating in the corner. The
+    /// sign-in pages use it: there is no app chrome to keep clear of, and the
+    /// top right is where people look for it on a public page.
+    /// </summary>
+    [Parameter] public bool Inline { get; set; }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

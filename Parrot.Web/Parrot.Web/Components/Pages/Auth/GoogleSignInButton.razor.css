@@ -1,0 +1,24 @@
+/* Google's published light and dark sign-in buttons. The fills, outlines and
+   label colours are Google's, not ours, which is why they are literals. */
+
+/* The colours themselves are in app.css, because they switch with the theme
+   and :root cannot be reached from a scoped stylesheet. */
+
+.google-signin-wrap ::deep .google-signin {
+  width: 100%;
+  color: var(--ds-google-label);
+  background: var(--ds-google-fill);
+  /* The same border as the text fields above it, so the three controls read
+     as one set. Google's guidelines allow a neutral outline. */
+  border: var(--ds-hairline) solid var(--colors-surface-input);
+}
+
+.google-signin-wrap ::deep .google-signin:hover:not(:disabled) {
+  color: var(--ds-google-label);
+  background: color-mix(in srgb, var(--ds-google-label) var(--ds-google-hover-mix), var(--ds-google-fill));
+}
+
+.google-signin-wrap ::deep .google-signin svg {
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+}

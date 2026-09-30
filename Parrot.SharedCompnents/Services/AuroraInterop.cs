@@ -31,6 +31,18 @@ public sealed class AuroraInterop : IAsyncDisposable
     }
 
     /// <summary>
+    /// Traps focus and calls <paramref name="escapeMethod"/> on
+    /// <paramref name="escapeTarget"/> when Escape is pressed, and for no other key.
+    /// </summary>
+    public async Task<IAsyncDisposable> TrapFocusAsync<T>(ElementReference container, DotNetObjectReference<T> escapeTarget, string escapeMethod)
+        where T : class
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("trapFocus", container, escapeTarget, escapeMethod);
+        return new Handle(handle);
+    }
+
+    /// <summary>
     /// Calls back with whether the query matches, immediately and on change.
     /// </summary>
     public async Task<IAsyncDisposable> ObserveMediaAsync<T>(
@@ -109,6 +121,12 @@ public sealed class AuroraInterop : IAsyncDisposable
     {
         var module = await _module.Value;
         await module.InvokeVoidAsync("writeStorage", key, value);
+    }
+
+    public async Task RemoveStorageAsync(string key)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("removeStorage", key);
     }
 
     public async Task SetThemeAsync(string theme)

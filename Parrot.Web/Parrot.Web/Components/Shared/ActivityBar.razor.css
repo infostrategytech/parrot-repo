@@ -17,6 +17,12 @@
     inset: 0 auto 0 0;
     width: 30%;
     background: linear-gradient(90deg, transparent, var(--cadence-teal), transparent);
+}
+
+/* Only sweep while the bar is showing. A hidden bar that kept sweeping made
+   the browser draw a new frame 60 times a second on every dashboard page,
+   and with a dialog open that meant re-blurring the whole screen each time. */
+.activity.is-on::after {
     animation: activity-sweep 1.1s var(--cadence-ease) infinite;
 }
 

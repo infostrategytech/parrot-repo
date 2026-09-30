@@ -1,0 +1,248 @@
+@namespace Parrot.Web.Components.Pages.Auth
+@implements IAsyncDisposable
+
+@* Six digits in six drawn boxes, over one real input, so paste, SMS and email
+   autofill and the number keypad all work the way the platform does them.
+   It submits itself on the sixth digit.
+
+   A wrong code says so and clears; an expired or exhausted one locks the
+   field and makes a new code available straight away, without the wait. *@
+
+@if (_resent && string.IsNullOrEmpty(_error))
+{
+    @* The address is already in the heading above, so this does not repeat it. *@
+    <InlineError Tone="InlineErrorTone.Info" Message="We have sent you a new code. It replaces the one before." />
+}
+
+<div class="code-entry @(string.IsNullOrEmpty(_error) ? null : "is-error")">
+    <label class="code-entry__control" for="@InputId">
+        <input @ref="_input"
+               id="@InputId"
+               type="text"
+               value="@_code"
+               inputmode="numeric"
+               autocomplete="one-time-code"
+               maxlength="6"
+               aria-label="Six-digit code"
+               aria-invalid="@(string.IsNullOrEmpty(_error) ? null : "true")"
+               disabled="@InputDisabled"
+               @oninput="OnCodeInput" />
+        <span class="code-entry__slots" aria-hidden="true">
+            @for (var index = 0; index < 6; index++)
+            {
+                <i class="@(_code.Length == index && !_locked ? "is-current" : null)">
+                    @if (_code.Length > index)
+                    {
+                        @_code[index]
+                    }
+                </i>
+            }
+        </span>
+    </label>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="code-entry__message code-entry__message--error">
+            @_error
+        </Typography>
+    }
+</div>
+
+<Button Size="ButtonSize.Large"
+        Class="account-panel__primary"
+        disabled="@(_code.Length != 6 || _verifying || _resending || _locked)"
+        @onclick="VerifyAsync">
+    @(_verifying ? "Checking Code…" : SubmitLabel)
+</Button>
+
+<div class="code-entry__actions @TextStyle.BodySmallMedium.ToClassName()">
+    <div class="code-entry__resend">
+        @if (_resending)
+        {
+            <span>Sending a new code…</span>
+        }
+        else if (_secondsRemaining > 0)
+        {
+            <span>Didn't Receive a Code? Resend in @_secondsRemaining s</span>
+        }
+        else
+        {
+            <span>@(_locked ? "Need a new code?" : "Didn't Receive a Code?")</span>
+            <button type="button" disabled="@_verifying" @onclick="ResendAsync">Resend Code</button>
+        }
+    </div>
+    @if (OnChangeDestination.HasDelegate)
+    {
+        <button class="code-entry__change" type="button" disabled="@(_verifying || _resending)" @onclick="OnChangeDestination">
+            Change Email Address
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>What a code check came back with. Null error means it worked.</summary>
+    public sealed record Outcome(string? Error = null, bool Locked = false)
+    {
+        public static readonly Outcome Ok = new();
+    }
+
+    private const int ResendWaitSeconds = 30;
+
+    private readonly CancellationTokenSource _lifetime = new();
+    private string _code = "";
+    private string? _error;
+    private bool _resent;
+    private int _secondsRemaining = ResendWaitSeconds;
+    private bool _verifying;
+    private bool _resending;
+    private bool _locked;
+    private ElementReference _input;
+    private bool _inputWasDisabled;
+
+    private bool InputDisabled => _verifying || _locked;
+
+    /// <summary>Checks the code. On success the page moves on; this component only reports failures.</summary>
+    [Parameter, EditorRequired] public Func<string, CancellationToken, Task<Outcome>> Verify { get; set; } = default!;
+
+    /// <summary>Sends a new code. Returns what went wrong, or null.</summary>
+    [Parameter, EditorRequired] public Func<CancellationToken, Task<string?>> Resend { get; set; } = default!;
+
+    [Parameter] public EventCallback OnChangeDestination { get; set; }
+
+    [Parameter] public string SubmitLabel { get; set; } = "Continue";
+
+    [Parameter] public string InputId { get; set; } = "account-code";
+
+    /// <summary>A code has only just been sent, so the resend wait starts at once.</summary>
+    [Parameter] public bool JustSent { get; set; } = true;
+
+    protected override void OnInitialized()
+    {
+        if (!JustSent) _secondsRemaining = 0;
+        _ = RunCountdownAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The first box is ready to type into as soon as the screen opens, and
+        // again whenever the field comes back after a check, a new code or an
+        // expired one. OnAfterRender never runs during prerender, so this only
+        // happens once the page is interactive.
+        var disabled = InputDisabled;
+        var focus = !disabled && (firstRender || _inputWasDisabled);
+        _inputWasDisabled = disabled;
+        if (!focus) return;
+
+        try
+        {
+            await _input.FocusAsync();
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException
+                                       or InvalidOperationException or OperationCanceledException)
+        {
+            // The field left the page, or the session closed, before focus
+            // got there. Nothing to focus then, and no reason to end the circuit.
+        }
+    }
+
+    private async Task OnCodeInput(ChangeEventArgs args)
+    {
+        _code = new string((args.Value?.ToString() ?? "").Where(char.IsAsciiDigit).Take(6).ToArray());
+        _error = null;
+
+        if (_code.Length == 6) await VerifyAsync();
+    }
+
+    private async Task VerifyAsync()
+    {
+        if (_code.Length != 6 || _verifying || _resending || _locked) return;
+
+        _verifying = true;
+        _error = null;
+        _resent = false;
+
+        try
+        {
+            var outcome = await Verify(_code, _lifetime.Token);
+            if (outcome.Error is null) return;
+
+            _error = outcome.Error;
+            _code = "";
+            if (outcome.Locked)
+            {
+                // Nothing typed here can work now, so offer the one thing that
+                // can: a new code, without the usual wait.
+                _locked = true;
+                _secondsRemaining = 0;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page was left while the check was running.
+        }
+        finally
+        {
+            _verifying = false;
+        }
+    }
+
+    private async Task ResendAsync()
+    {
+        if (_resending || _verifying) return;
+
+        _resending = true;
+        _error = null;
+        _resent = false;
+
+        try
+        {
+            var error = await Resend(_lifetime.Token);
+            if (error is null)
+            {
+                _code = "";
+                _locked = false;
+                _secondsRemaining = ResendWaitSeconds;
+                _resent = true;
+            }
+            else
+            {
+                _error = error;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // As above.
+        }
+        finally
+        {
+            _resending = false;
+        }
+    }
+
+    private async Task RunCountdownAsync()
+    {
+        try
+        {
+            while (!_lifetime.IsCancellationRequested)
+            {
+                await Task.Delay(1000, _lifetime.Token);
+                if (_secondsRemaining > 0)
+                {
+                    _secondsRemaining--;
+                    await InvokeAsync(StateHasChanged);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The page was left while the countdown was running.
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}

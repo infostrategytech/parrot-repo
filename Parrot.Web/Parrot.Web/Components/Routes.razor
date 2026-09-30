@@ -22,6 +22,8 @@
     [
         "/", "/login", "/register", "/forgot-password", "/reset-password",
         "/verify-email", "/sso-callback", "/error", "/not-found",
+        // Sign Up links to these before anyone has an account.
+        "/terms", "/privacy",
     ];
     private readonly CancellationTokenSource _lifetime = new();
     private bool _ready, _endingSession, _disposed;

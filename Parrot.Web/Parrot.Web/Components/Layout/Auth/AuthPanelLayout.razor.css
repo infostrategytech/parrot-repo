@@ -1,0 +1,97 @@
+.account-panel-page {
+  position: relative;
+  isolation: isolate;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow-y: auto;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding: var(--spacing-2xl) var(--ds-account-panel-gutter);
+  color: var(--colors-text-primary);
+  /* No gradient: only Sign In and Sign Up carry the glow. */
+  background: var(--colors-surface-background);
+}
+
+.account-panel-page {
+  /* The same fluid gutter as the Sign In shell: between two steps of the
+     spacing scale; only the rate is not a token. */
+  --ds-account-panel-gutter: clamp(var(--spacing-xl), 3.5vw, var(--spacing-4xl));
+}
+
+.account-panel-header {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.account-panel-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--colors-text-primary);
+  text-decoration: none;
+}
+
+.account-panel-brand:hover { color: var(--colors-text-primary); }
+
+.account-panel {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: center;
+  gap: var(--spacing-2xl);
+  width: 100%;
+  max-width: calc(var(--spacing-4xl) * 9);
+  margin: auto;
+  padding-block: var(--spacing-4xl);
+}
+
+/* The parts every panel page shares: a centred intro, a full-width primary
+   action, and a success state. Pages name them; the look lives here. */
+.account-panel ::deep .account-panel__intro,
+.account-panel ::deep .account-panel__done {
+  display: grid;
+  gap: var(--spacing-sm);
+  text-align: center;
+}
+
+.account-panel ::deep .account-panel__intro > p,
+.account-panel ::deep .account-panel__done > p { color: var(--colors-text-muted); }
+
+.account-panel ::deep .account-panel__primary { width: 100%; }
+
+.account-panel ::deep .account-panel__done { justify-items: center; }
+
+.account-panel ::deep .account-panel__done-icon {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  margin-bottom: var(--spacing-sm);
+  color: var(--colors-feedback-success);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.account-panel ::deep .account-panel__done > .account-panel__primary { margin-top: var(--spacing-lg); }
+
+.account-panel ::deep .account-panel__form {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.account-panel ::deep .account-panel__back {
+  justify-self: center;
+  color: var(--colors-text-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--colors-surface-border);
+  text-underline-offset: var(--spacing-xs);
+}
+
+.account-panel ::deep .account-panel__back:hover {
+  color: var(--colors-text-primary);
+  text-decoration-color: currentColor;
+}

@@ -1,0 +1,17 @@
+.country-flag {
+  display: block;
+  flex: 0 0 auto;
+  width: var(--ds-country-flag-width);
+  height: auto;
+  aspect-ratio: 3 / 2;
+  border-radius: var(--ds-country-flag-radius);
+  /* A hairline edge, so a flag with a white band still reads on a white field. */
+  box-shadow: 0 0 0 var(--ds-hairline) var(--colors-surface-border);
+}
+
+.country-flag {
+  /* Gaps in the token set: no flag size or small-image radius. The width sits
+     a step above the small icon so the bands stay legible. */
+  --ds-country-flag-width: calc(var(--icon-size-icon-sm) * 1.25);
+  --ds-country-flag-radius: 2px;
+}

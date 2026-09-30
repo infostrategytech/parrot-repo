@@ -1,0 +1,12 @@
+{
+  "name": "@parrot/design-system-tools",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Generates the design tokens from the Figma export and guards them. No dependencies, deliberately — keep it that way.",
+  "scripts": {
+    "build": "node build-design-tokens.mjs && node build-text-styles.mjs",
+    "check": "node check-tokens.mjs && node lint-design-system.mjs && node verify-figma-tokens.mjs",
+    "verify": "npm run build && npm run check"
+  }
+}

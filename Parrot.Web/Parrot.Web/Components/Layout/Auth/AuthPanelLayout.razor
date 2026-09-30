@@ -1,0 +1,27 @@
+@inherits LayoutComponentBase
+
+@* The single-column signed-out screens: checking a code, resetting a
+   password, finishing a Google sign-in. One narrow panel with nothing beside
+   it, because each is one task and the rotating story would only compete. *@
+
+<main class="account-panel-page">
+    <header class="account-panel-header">
+        <a class="account-panel-brand" href="/login" aria-label="OmniAI home">
+            <CadenceMark Size="26" Tight />
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span">OmniAI</Typography>
+        </a>
+        <ThemeToggle Inline />
+    </header>
+
+    <section class="account-panel">
+        @Body
+    </section>
+</main>
+
+<ToastHost />
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

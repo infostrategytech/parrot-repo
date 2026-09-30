@@ -1,0 +1,61 @@
+@namespace Parrot.Web.Components.Layout.Auth
+
+@* Right-click the logo on Sign In / Sign Up to grab the brand mark as an SVG
+   or a PNG. Public, no sign-in needed — anyone landing on these two pages can
+   pull the asset without asking design for it.
+
+   Dismissal follows FilterPopover's pattern (Parrot.SharedComponents): a
+   full-screen transparent button behind the menu, no document listener to
+   leak. The menu is positioned at the cursor rather than anchored under a
+   trigger, since it opens from a right-click anywhere on the mark. *@
+
+<span class="logo-download-menu" @oncontextmenu="OnContextMenuAsync" @oncontextmenu:preventDefault="true">
+    @ChildContent
+
+    @if (_open)
+    {
+        <button type="button"
+                class="logo-download-menu__dismiss"
+                tabindex="-1"
+                aria-hidden="true"
+                @onclick="Close"></button>
+
+        <div class="logo-download-menu__menu"
+             role="menu"
+             aria-label="Download the OmniAI logo"
+             style="left:@(_x)px; top:@(_y)px;"
+             @onkeydown="OnKeyDown">
+            <a class="logo-download-menu__option" role="menuitem" href="/brand/omniai-logo.svg" download="omniai-logo.svg" @onclick="Close">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="strong">Download SVG</Typography>
+                <Typography TextStyle="TextStyle.Small10Regular" As="small">Vector, any size</Typography>
+            </a>
+            <a class="logo-download-menu__option" role="menuitem" href="/brand/omniai-logo-512.png" download="omniai-logo-512.png" @onclick="Close">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="strong">Download PNG</Typography>
+                <Typography TextStyle="TextStyle.Small10Regular" As="small">512×512, transparent</Typography>
+            </a>
+        </div>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    private bool _open;
+    private double _x;
+    private double _y;
+
+    private void OnContextMenuAsync(MouseEventArgs args)
+    {
+        // Clamped so the menu never opens off the right edge on a narrow window.
+        _x = Math.Min(args.OffsetX, 1000);
+        _y = args.OffsetY;
+        _open = true;
+    }
+
+    private void Close() => _open = false;
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") Close();
+    }
+}

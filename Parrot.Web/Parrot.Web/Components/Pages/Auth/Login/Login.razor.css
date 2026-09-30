@@ -1,7 +1,61 @@
-/* The form stacks its fields 16px apart; the helper link and the button
-   follow at the design's own spacing. */
-.login {
+.login-intro {
   display: grid;
-  gap: 16px;
-  min-width: 0;
+  gap: var(--spacing-xs);
 }
+
+::deep .login-intro__copy { color: var(--colors-text-muted); }
+
+.login-form {
+  display: grid;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-2xl);
+}
+
+.login-form__fields {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.login-form__recovery {
+  display: grid;
+  justify-items: end;
+  gap: var(--spacing-sm);
+  margin-top: calc(var(--spacing-sm) * -1);
+}
+
+.login-form__forgot {
+  padding: var(--spacing-none);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.login-form__forgot:hover:not(:disabled) { color: var(--colors-text-link-hover); }
+
+.login-form__forgot:disabled { cursor: default; }
+
+::deep .login-form__submit { width: 100%; }
+
+.login-form__divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--spacing-md);
+  color: var(--colors-text-muted);
+}
+
+.login-form__divider > span {
+  height: var(--ds-hairline);
+  background: var(--colors-surface-border);
+}
+
+.login-form__signup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  color: var(--colors-text-muted);
+}
+
+.login-form__signup a { font-weight: var(--typography-font-weight-semibold); }

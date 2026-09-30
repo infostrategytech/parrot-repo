@@ -1,153 +1,74 @@
 @page "/verify-email"
-@layout AuthLayout
+@layout AuthPanelLayout
 @using Parrot.Web.Components.Pages.Auth
 @using Parrot.Web.Services
 @inject NavigationManager Navigation
 @inject IVerifyEmailService VerifyEmailService
-@inject VerifyEmailState VerifyEmailState
 @inject AuthState AuthState
+@inject AuthFormState Forms
 @inject TokenStorageService TokenStorage
-@implements IDisposable
 
-<PageTitle>Verify email · OmniAI</PageTitle>
+<PageTitle>Verify Your Account · OmniAI</PageTitle>
 
-@* Verify email, on the sign-up design's frame. The code from the email goes
-   into one field, and six digits submit on their own. Sign-up and sign-in
-   both arrive here with the address in the query, so it is only asked for
-   when someone lands without it. A right code signs them straight in. *@
+@if (_email is null)
+{
+    @* Arrived without signing up first, or refreshed, which clears the address
+       held in memory. Sign Up is where it is entered. *@
+}
+else if (_verified)
+{
+    <div class="account-panel__done" role="status">
+        <span class="account-panel__done-icon" aria-hidden="true">
+            <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Lg" />
+        </span>
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Account Verified</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            Your account is ready. Next, we will set up the basics of your business.
+        </Typography>
+        <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="Continue">
+            Continue
+        </Button>
+    </div>
+}
+else
+{
+    <div class="account-panel__intro">
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Check Your Email</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            We sent a 6-digit code to <strong>@AuthFormState.Mask(_email)</strong>. Enter it below to verify your account.
+        </Typography>
+    </div>
 
-<AuthPanel Title="Check Your Email">
-    <Lede>
-        @if (HasEmail)
-        {
-            <text>We've sent a 6-digit code to <strong>@_email</strong>. Enter it below to verify your account.</text>
-        }
-        else
-        {
-            <text>Enter your email address and the 6-digit code we sent you.</text>
-        }
-    </Lede>
-    <Notice>
-        @if (_justSent && string.IsNullOrEmpty(VerifyEmailState.ErrorMessage))
-        {
-            <p class="panel__alert panel__alert--info" role="status">A new code is on its way. It expires in 5 minutes.</p>
-        }
-        @if (!string.IsNullOrEmpty(VerifyEmailState.ErrorMessage))
-        {
-            <p class="panel__alert" role="alert">@VerifyEmailState.ErrorMessage</p>
-        }
-    </Notice>
-    <ChildContent>
-        <form class="verify" @onsubmit="HandleVerify" @onsubmit:preventDefault novalidate>
-            @if (!HasEmail)
-            {
-                <AuthField Id="email" Placeholder="Email" Glyph="IconName.RiMailFill"
-                           Type="email" AutoComplete="email" Required
-                           @bind-Value="_email" Error="@_emailError" Disabled="@VerifyEmailState.IsLoading" />
-            }
-
-            <AuthField Id="code" Placeholder="6-digit code" Glyph="IconName.RiShieldCheckFill"
-                       Type="text" AutoComplete="one-time-code" InputMode="numeric" MaxLength="7" Pattern="[0-9 ]*" Required
-                       Value="@_code" ValueChanged="OnCodeChanged" Error="@_codeError" Disabled="@VerifyEmailState.IsLoading" />
-
-            <button type="submit" class="panel__primary" disabled="@VerifyEmailState.IsLoading" aria-busy="@(VerifyEmailState.IsLoading ? "true" : null)">
-                @if (VerifyEmailState.IsLoading)
-                {
-                    <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
-                }
-                <span>Verify Email</span>
-            </button>
-        </form>
-
-        <p class="panel__terms">Didn't get it? Check your spam folder, or send a new code.</p>
-
-        <button type="button" class="panel__secondary verify__resend" disabled="@(!CanResend)" aria-busy="@(_resending ? "true" : null)" @onclick="HandleResend">
-            @if (_resending)
-            {
-                <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
-            }
-            <span>@(_cooldown > 0 ? $"Resend in {_cooldown}s" : "Resend Code")</span>
-        </button>
-    </ChildContent>
-    <Footer>
-        Already verified? <a href="/login">Sign In</a>
-    </Footer>
-</AuthPanel>
+    <CodeEntry Verify="VerifyAsync"
+               Resend="ResendAsync"
+               OnChangeDestination="ChangeEmail"
+               SubmitLabel="Verify Account"
+               InputId="verification-code"
+               JustSent="Sent" />
+}
 
 @code {
-    private const int ResendCooldownSeconds = 30;
-
-    [SupplyParameterFromQuery]
-    private string? Email { get; set; }
-
+    /// <summary>A code has just gone out (sign-up, or sign-in with an unverified address).</summary>
     [SupplyParameterFromQuery]
     private bool Sent { get; set; }
 
     private string? _email;
-    private string? _code;
-    private string? _emailError;
-    private string? _codeError;
-    private bool _justSent;
-    private bool _resending;
-    private int _cooldown;
-    private bool _disposed;
-
-    private bool HasEmail => !string.IsNullOrWhiteSpace(Email);
-
-    private bool CanResend => !_resending && _cooldown == 0 && !VerifyEmailState.IsLoading;
+    private bool _verified;
 
     protected override void OnInitialized()
     {
-        VerifyEmailState.OnChange += StateHasChanged;
-        _email = Email?.Trim();
-        _justSent = Sent;
-
-        if (Sent)
-        {
-            // A code has just gone out; a second one straight away would only confuse.
-            StartCooldown();
-        }
+        _email = Forms.PendingVerificationEmail;
+        if (_email is null) Navigation.NavigateTo("/register", replace: true);
     }
 
-    private Task OnCodeChanged(string? value)
+    private async Task<CodeEntry.Outcome> VerifyAsync(string code, CancellationToken token)
     {
-        _code = value;
-        _codeError = null;
-
-        // Six digits are the whole answer; no need to reach for the button.
-        return Digits(_code).Length == 6 && !VerifyEmailState.IsLoading
-            ? HandleVerify()
-            : Task.CompletedTask;
-    }
-
-    private static string Digits(string? value) =>
-        new string((value ?? string.Empty).Where(char.IsAsciiDigit).ToArray());
-
-    private bool Validate()
-    {
-        string email = _email?.Trim() ?? string.Empty;
-        _emailError = email.Length == 0
-            ? "Enter your email address."
-            : !email.Contains('@')
-                ? "Enter a valid email address."
-                : null;
-        _codeError = Digits(_code).Length == 6 ? null : "Enter the 6-digit code from your email.";
-        return _emailError is null && _codeError is null;
-    }
-
-    private async Task HandleVerify()
-    {
-        VerifyEmailState.SetError(null);
-        if (!Validate()) return;
-
-        VerifyEmailState.SetLoading(true);
-
         try
         {
             AuthResponse? response = await VerifyEmailService.VerifyEmailAsync(new VerifyEmailRequest
             {
-                Email = _email!.Trim(),
-                Code = Digits(_code),
+                Email = _email!,
+                Code = code,
             });
 
             if (response is not null)
@@ -156,88 +77,62 @@
                 await TokenStorage.SaveAsync(response);
             }
 
-            Navigation.NavigateTo("/dashboard");
+            Forms.Verified();
+            _verified = true;
+
+            // Called from inside CodeEntry as a plain delegate, which Blazor
+            // does not treat as an event on this page, so ask for the redraw.
+            StateHasChanged();
+            return CodeEntry.Outcome.Ok;
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
         {
-            // Wrong or expired code, in the API's words.
-            _codeError = ex.UserMessage;
+            // Wrong or expired code, in the API's words. An expired one cannot
+            // be retried, so the boxes lock until a new code is sent -- but only
+            // when the API says so with an error code. Its message covers both
+            // cases ("isn't right or has expired"), so reading the text would
+            // lock the boxes on every typo.
+            var expired = ex.ErrorCode?.Contains("expired", StringComparison.OrdinalIgnoreCase) ?? false;
+            return new CodeEntry.Outcome(ex.UserMessage, Locked: expired);
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             // Too many wrong codes: the account is resting for a while.
-            VerifyEmailState.SetError(ex.UserMessage);
+            return new CodeEntry.Outcome(ex.UserMessage, Locked: true);
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
         {
-            VerifyEmailState.SetError("Too many attempts. Please wait a few minutes and try again.");
+            return new CodeEntry.Outcome("Too many attempts. Wait a few minutes, then try again.", Locked: true);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            return new CodeEntry.Outcome("We could not reach OmniAI. Check your internet connection and try again.");
         }
         catch
         {
-            VerifyEmailState.SetError("Something went wrong. Please try again.");
-        }
-        finally
-        {
-            VerifyEmailState.SetLoading(false);
+            return new CodeEntry.Outcome("Something went wrong on our side. Try again in a moment.");
         }
     }
 
-    private async Task HandleResend()
+    private async Task<string?> ResendAsync(CancellationToken token)
     {
-        string email = _email?.Trim() ?? string.Empty;
-        if (email.Length == 0 || !email.Contains('@'))
-        {
-            _emailError = "Enter your email address first.";
-            return;
-        }
-
-        _resending = true;
-        _justSent = false;
-        VerifyEmailState.SetError(null);
-        StateHasChanged();
-
         try
         {
-            await VerifyEmailService.ResendVerificationEmailAsync(
-                new ResendVerificationEmailRequest { Email = email });
-
-            _justSent = true;
-            _code = null;
-            StartCooldown();
+            await VerifyEmailService.ResendVerificationEmailAsync(new ResendVerificationEmailRequest { Email = _email! });
+            return null;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
         {
-            VerifyEmailState.SetError("Too many codes requested. Please wait a few minutes and try again.");
+            return "Too many codes requested. Wait a few minutes, then try again.";
         }
         catch
         {
-            VerifyEmailState.SetError("Something went wrong. Please try again.");
-        }
-        finally
-        {
-            _resending = false;
+            return "Something went wrong on our side. Try again in a moment.";
         }
     }
 
-    private void StartCooldown()
-    {
-        _cooldown = ResendCooldownSeconds;
-        _ = CountDownAsync();
-    }
+    /// <summary>Sign Up reads the pending address back, so it is corrected rather than retyped.</summary>
+    private void ChangeEmail() => Navigation.NavigateTo("/register");
 
-    private async Task CountDownAsync()
-    {
-        while (_cooldown > 0 && !_disposed)
-        {
-            await Task.Delay(1000);
-            _cooldown--;
-            await InvokeAsync(StateHasChanged);
-        }
-    }
-
-    public void Dispose()
-    {
-        _disposed = true;
-        VerifyEmailState.OnChange -= StateHasChanged;
-    }
+    private void Continue() => Navigation.NavigateTo("/dashboard", replace: true);
 }

@@ -50,6 +50,9 @@
 
     [Parameter] public ButtonType Type { get; set; } = ButtonType.Button;
 
+    /// <summary>Lets the button fill the available inline space.</summary>
+    [Parameter] public bool FullWidth { get; set; }
+
     [Parameter] public RenderFragment? IconLeft { get; set; }
 
     [Parameter] public RenderFragment? IconRight { get; set; }
@@ -103,6 +106,7 @@
         {
             var name = $"ds-button ds-button--{Variant.ToString().ToLowerInvariant()} ds-button--{Size.ToString().ToLowerInvariant()}";
             if (Busy) name += " is-busy";
+            if (FullWidth) name += " ds-button--full-width";
             return string.IsNullOrWhiteSpace(Class) ? name : $"{name} {Class}";
         }
     }

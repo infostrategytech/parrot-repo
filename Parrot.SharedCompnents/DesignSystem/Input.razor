@@ -8,7 +8,7 @@
 <div class="@ClassName">
     @if (!string.IsNullOrWhiteSpace(Label))
     {
-        <label class="field__label @TextStyle.Small12Medium.ToClassName()" for="@InputId">
+        <label class="field__label @TextStyle.Small12Medium.ToClassName()" for="@InputId" id="@LabelId">
             @if (LabelIconLeft is not null)
             {
                 @LabelIconLeft
@@ -21,7 +21,11 @@
         </label>
     }
 
-    <div class="field__box">
+    @* The whole box is the input's label, so a click anywhere inside it --
+       the padding above the value, the icons, the prefix -- focuses the input
+       with no script. Buttons inside it (a password eye) still work: a label
+       does not redirect clicks on its own interactive content. *@
+    <label class="field__box" for="@InputId">
         @if (IconLeft is not null)
         {
             <span class="field__icon">@IconLeft</span>
@@ -29,7 +33,7 @@
 
         @if (PrefixIcon is not null || !string.IsNullOrWhiteSpace(PrefixText))
         {
-            <span class="field__prefix">
+            <span class="field__prefix" id="@PrefixId">
                 @if (PrefixIcon is not null)
                 {
                     @PrefixIcon
@@ -49,18 +53,19 @@
                    value="@Value"
                    placeholder=" "
                    disabled="@Disabled"
+                   aria-labelledby="@LabelledBy"
                    aria-describedby="@(string.IsNullOrWhiteSpace(HelperText) ? null : HelperId)"
                    aria-invalid="@(Error ? "true" : null)"
                    @oninput="OnInput"
                    @attributes="AdditionalAttributes" />
-            <label class="field__float" for="@InputId">@FloatingLabel</label>
+            <span class="field__float" id="@FloatId">@FloatingLabel</span>
         </span>
 
         @if (IconRight is not null)
         {
             <span class="field__icon">@IconRight</span>
         }
-    </div>
+    </label>
 
     @if (!string.IsNullOrWhiteSpace(HelperText))
     {
@@ -121,6 +126,19 @@
     private string InputId => Id ?? _generatedId;
 
     private string HelperId => InputId + "-helper";
+    private string LabelId => InputId + "-label";
+    private string PrefixId => InputId + "-prefix";
+    private string FloatId => InputId + "-float";
+
+    // Named from exactly its label text (and the prefix, so a phone field is
+    // "Nigeria +234 Phone Number"). The box being a <label> would otherwise
+    // fold in anything else inside it, such as a password eye's "Show password".
+    private string LabelledBy => string.Join(" ", new[]
+    {
+        string.IsNullOrWhiteSpace(Label) ? null : LabelId,
+        PrefixIcon is null && string.IsNullOrWhiteSpace(PrefixText) ? null : PrefixId,
+        FloatId,
+    }.Where(id => id is not null));
 
     private Task OnInput(ChangeEventArgs args) =>
         ValueChanged.InvokeAsync(args.Value?.ToString());

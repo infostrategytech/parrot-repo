@@ -43,3 +43,8 @@
   color: var(--colors-brand-primary-foreground);
   background: var(--colors-brand-primary);
 }
+
+.theme-toggle--inline {
+  position: static;
+  box-shadow: none;
+}

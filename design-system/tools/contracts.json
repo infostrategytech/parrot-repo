@@ -1,0 +1,29 @@
+[
+  {
+    "file": "DesignSystem/StatusBadge.razor.css",
+    "selector": ".status-badge--success",
+    "require": {
+      "--status-badge-surface": "--colors-feedback-success-subtle",
+      "--status-badge-text": "--colors-feedback-success-text"
+    },
+    "why": "a *-subtle fill is only contrast-checked against its own family's *-text; mixing families is how a badge becomes unreadable in dark mode"
+  },
+  {
+    "file": "DesignSystem/StatusBadge.razor.css",
+    "selector": ".status-badge--danger",
+    "require": {
+      "--status-badge-surface": "--colors-feedback-destructive-subtle",
+      "--status-badge-text": "--colors-feedback-destructive-text"
+    },
+    "why": "same pairing rule as above"
+  },
+  {
+    "file": "DesignSystem/Button.razor.css",
+    "selector": ".ds-button--primary",
+    "require": {
+      "background": "--colors-brand-primary",
+      "color": "--colors-brand-primary-foreground"
+    },
+    "why": "the foreground token is the one Figma contrast-checked against the brand fill; text/primary happens to pass in light mode and fails in dark"
+  }
+]

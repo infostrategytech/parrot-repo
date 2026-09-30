@@ -19,12 +19,31 @@
   display: grid;
   place-items: center;
   padding: var(--spacing-3xl);
+}
+
+/* The dim and the blur sit on their own layer behind the card. When the blur
+   was on this element, the card was part of the blurred layer, so every
+   repaint inside a dialog (a label lifting, a caret, a keystroke, an ambient
+   animation) made the browser blur the whole screen again, which made typing
+   feel slow on a real GPU. The fade runs here, not on the parent: an element
+   fading its opacity cannot also be blurred through, so a parent fade would
+   make the blur pop in at the end. */
+.dialog-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
   background: var(--colors-surface-overlay);
   backdrop-filter: blur(var(--ds-dialog-blur));
   animation: dialog-backdrop-in var(--ds-dialog-backdrop-enter) ease;
 }
 
 .dialog {
+  position: relative;
+  z-index: 1;
+  /* Its own compositing layer, so its repaints never reach the blur. */
+  will-change: transform;
   display: grid;
   gap: var(--spacing-xl);
   width: min(var(--ds-dialog-width), 100%);
@@ -38,15 +57,35 @@
   animation: dialog-in var(--ds-dialog-enter) var(--ds-dialog-ease);
 }
 
+.dialog--has-ambient {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
+.dialog__ambient {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.dialog--has-ambient > header,
+.dialog--has-ambient > .dialog__body,
+.dialog--has-ambient > footer {
+  position: relative;
+  z-index: 1;
+}
+
 .dialog-backdrop {
-  /* Gaps in the token set: no component width scale, no z-index scale, no
-     blur scale and no motion scale. */
+  /* Gaps in the token set: no component width scale, no z-index scale and
+     no blur scale. Motion comes from the shared scale in app.css. */
   --ds-dialog-width: 480px;
   --ds-dialog-layer: 120;
   --ds-dialog-blur: 6px;
-  --ds-dialog-backdrop-enter: 150ms;
-  --ds-dialog-enter: 190ms;
-  --ds-dialog-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-dialog-backdrop-enter: var(--ds-motion-base);
+  --ds-dialog-enter: var(--ds-motion-base);
+  --ds-dialog-ease: var(--ds-motion-enter);
 }
 
 .dialog > header {
@@ -96,8 +135,37 @@
   gap: var(--spacing-md);
 }
 
+.dialog > .dialog__footer--wide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: stretch;
+  width: 100%;
+}
+
+/* Leaving: faster curve out, and nothing underneath is blocked while it goes. */
+.dialog-backdrop.is-closing { pointer-events: none; }
+
+.dialog-backdrop.is-closing::before {
+  animation: dialog-backdrop-out var(--ds-motion-base) var(--ds-motion-exit) forwards;
+}
+
+.dialog.is-closing {
+  animation: dialog-out var(--ds-motion-base) var(--ds-motion-exit) forwards;
+}
+
 @keyframes dialog-backdrop-in {
   from { opacity: 0; }
+}
+
+@keyframes dialog-backdrop-out {
+  to { opacity: 0; }
+}
+
+@keyframes dialog-out {
+  to {
+    opacity: 0;
+    transform: translateY(var(--spacing-sm)) scale(0.985);
+  }
 }
 
 @keyframes dialog-in {

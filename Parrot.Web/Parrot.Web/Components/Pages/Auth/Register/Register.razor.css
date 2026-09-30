@@ -1,16 +1,65 @@
-/* The form stacks its fields 16px apart; the terms line and the button
-   follow at the design's own spacing. */
-.register {
+.signup-intro {
   display: grid;
-  gap: 16px;
-  min-width: 0;
+  gap: var(--spacing-xs);
 }
 
-/* The password hint tucks under its field in the small type the terms line
-   uses, close enough to read as part of it. */
-.register__hint {
-  margin: -8px 0 0;
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--cadence-field-placeholder);
+::deep .signup-intro__copy { color: var(--colors-text-muted); }
+
+.signup-form {
+  display: grid;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-2xl);
 }
+
+.signup-form__fields {
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+.signup-form__password {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.signup-form__password-match {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  color: var(--colors-feedback-success);
+}
+
+.signup-form__password-match > ::deep svg { flex: 0 0 auto; }
+
+.signup-form__divider {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: var(--spacing-md);
+  color: var(--colors-text-muted);
+}
+
+.signup-form__divider > span {
+  height: var(--ds-hairline);
+  background: var(--colors-surface-border);
+}
+
+::deep .signup-form__submit { width: 100%; }
+
+::deep .signup-form__legal {
+  color: var(--colors-text-muted);
+  text-align: center;
+}
+
+.signup-form ::deep .signup-form__legal a { color: var(--colors-text-link); }
+.signup-form ::deep .signup-form__legal a:hover { color: var(--colors-text-link-hover); }
+
+.signup-form__signin {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-xs);
+  color: var(--colors-text-muted);
+}
+
+.signup-form__signin a { font-weight: var(--typography-font-weight-semibold); }

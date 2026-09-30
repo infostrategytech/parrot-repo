@@ -82,6 +82,8 @@ public enum IconName
     RiExternalLinkLine,
     /// <summary>react-icons/ri/RiEyeFill</summary>
     RiEyeFill,
+    /// <summary>react-icons/ri/RiEyeOffFill</summary>
+    RiEyeOffFill,
     /// <summary>react-icons/ri/RiFacebookCircleFill</summary>
     RiFacebookCircleFill,
     /// <summary>react-icons/ri/RiFeedbackFill</summary>
@@ -118,6 +120,8 @@ public enum IconName
     RiLock2Fill,
     /// <summary>react-icons/ri/RiLockFill</summary>
     RiLockFill,
+    /// <summary>react-icons/ri/RiLogoutBoxRFill</summary>
+    RiLogoutBoxRFill,
     /// <summary>react-icons/ri/RiMailFill</summary>
     RiMailFill,
     /// <summary>react-icons/ri/RiMapPin2Fill</summary>
@@ -130,6 +134,8 @@ public enum IconName
     RiMenuUnfoldFill,
     /// <summary>react-icons/ri/RiMessage2Fill</summary>
     RiMessage2Fill,
+    /// <summary>react-icons/ri/RiMoonFill</summary>
+    RiMoonFill,
     /// <summary>react-icons/ri/RiMore2Fill</summary>
     RiMore2Fill,
     /// <summary>react-icons/ri/RiPauseCircleFill</summary>
@@ -176,6 +182,8 @@ public enum IconName
     RiSparklingFill,
     /// <summary>react-icons/ri/RiStore2Fill</summary>
     RiStore2Fill,
+    /// <summary>react-icons/ri/RiSunFill</summary>
+    RiSunFill,
     /// <summary>react-icons/ri/RiTaskFill</summary>
     RiTaskFill,
     /// <summary>react-icons/ri/RiTeamFill</summary>
@@ -258,6 +266,7 @@ public static class IconNameExtensions
         "ri-exchange-box-fill",
         "ri-external-link-line",
         "ri-eye-fill",
+        "ri-eye-off-fill",
         "ri-facebook-circle-fill",
         "ri-feedback-fill",
         "ri-file-copy-fill",
@@ -276,12 +285,14 @@ public static class IconNameExtensions
         "ri-loader4-fill",
         "ri-lock2-fill",
         "ri-lock-fill",
+        "ri-logout-box-r-fill",
         "ri-mail-fill",
         "ri-map-pin2-fill",
         "ri-megaphone-fill",
         "ri-menu-fold-fill",
         "ri-menu-unfold-fill",
         "ri-message2-fill",
+        "ri-moon-fill",
         "ri-more2-fill",
         "ri-pause-circle-fill",
         "ri-pencil-fill",
@@ -305,6 +316,7 @@ public static class IconNameExtensions
         "ri-sparkling2-fill",
         "ri-sparkling-fill",
         "ri-store2-fill",
+        "ri-sun-fill",
         "ri-task-fill",
         "ri-team-fill",
         "ri-time-fill",

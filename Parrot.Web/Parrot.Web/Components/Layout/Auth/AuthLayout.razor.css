@@ -1,144 +1,260 @@
-/* Measured from the sign-up design at 2416×1372: lockup at 36/35 with a
-   62px-wide mark and a 24px wordmark; the message column 420px wide ending
-   163px left of centre; the form column 448px starting 100px right of it;
-   the wash fading out around 950px from the corner on both axes.
-
-   Locals are on the root element, never on :root — Blazor scopes ":root" to
-   nothing. Every value here is a brand decision from the design, named once. */
-.stage {
-  --stage-canvas: var(--cadence-canvas);
-  --stage-wash: var(--cadence-canvas-wash);
-  --stage-wash-mid: var(--cadence-canvas-mid);
-  --stage-ink: var(--cadence-ink);
-  --stage-brand-x: 36px;
-  --stage-brand-y: 35px;
-  --stage-brand-gap: 9px;
-  --stage-wordmark: 22px;
-  --stage-message: 440px;
-  --stage-panel: 448px;
-  --stage-gap: 243px;
-  --stage-headline: 38px;
-  --stage-lede: 17px;
-  --stage-tick-w: 20px;
-  --stage-tick-h: 3px;
-  --stage-tick-gap: 5px;
+.account-access-page {
+  /* The authentication composition has no layout-width or long-form motion
+     tokens yet. These values come from the approved account-section spec. */
+  --ds-account-section-width: 1092px;
+  --ds-account-section-height: 554px;
+  /* Confirm Password makes registration taller than the original section.
+     Give every account-access page the same stage so moving between Sign Up
+     and Sign In does not move the form while the story stays fixed. */
+  --ds-account-stage-height: calc(var(--ds-account-section-height) + (var(--spacing-3xl) * 2));
+  --ds-account-story-width: 410px;
+  --ds-account-form-width: 432px;
+  /* Missing from the token set: a content-stage size. This is the measured
+     initial height of the registration panel after Confirm Password was added. */
+  --ds-account-form-stage-height: 524px;
+  /* 250px on a wide screen, shrinking with the window so both columns still
+     fit on a small laptop instead of pushing the form off the right edge. */
+  --ds-account-column-gap: clamp(var(--spacing-4xl), 14vw, 250px);
+  /* Fluid between two steps of the spacing scale; only the rate is not a token. */
+  --ds-account-page-gutter: clamp(var(--spacing-xl), 3.5vw, var(--spacing-4xl));
+  /* The story lifts above the form on a tall screen. On a short one there is
+     no room above it, so the lift would push it into the header. */
+  --ds-account-story-lift: calc((var(--spacing-4xl) + var(--spacing-3xl) + var(--spacing-md)) * -1);
 
   position: relative;
-  height: 100vh;
+  isolation: isolate;
+  min-height: 100dvh;
+  max-height: 100dvh;
   overflow-y: auto;
-  font-family: var(--cadence-font-sans);
-  color: var(--stage-ink);
-  background-color: var(--stage-canvas);
-  background-image: radial-gradient(1400px 1400px at 0 0, var(--stage-wash) 0%, var(--stage-wash-mid) 24%, transparent 68%);
-  background-repeat: no-repeat;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  padding: var(--spacing-2xl) var(--ds-account-page-gutter);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
 }
 
-/* Pinned rather than in flow, so a scrolled form never pushes it away. */
-.stage__brand {
-  position: fixed;
-  top: var(--stage-brand-y);
-  left: var(--stage-brand-x);
-  z-index: 10;
+.account-access-header {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.account-access-brand {
   display: inline-flex;
   align-items: center;
-  gap: var(--stage-brand-gap);
-  color: var(--stage-ink);
+  gap: var(--spacing-sm);
+  color: var(--colors-text-primary);
   text-decoration: none;
 }
 
-.stage__wordmark {
-  margin-top: 5px;
-  font-size: var(--stage-wordmark);
-  letter-spacing: -0.025em;
-  line-height: 1;
-  color: var(--stage-ink);
-}
+.account-access-brand:hover { color: var(--colors-text-primary); }
 
-/* Two columns on the window — the message ends 163px before the centre
-   line and the form begins 100px after it, and the pair sits 18px left of
-   true centre, as the design places it (hence the extra right padding). */
-.stage__main {
+.account-access-content {
+  position: relative;
+  z-index: 1;
   display: grid;
-  grid-template-columns: var(--stage-message) var(--stage-panel);
-  column-gap: var(--stage-gap);
+  /* Fluid, not fixed: each column may shrink below its design width, so the
+     pair never needs more room than the window has. */
+  grid-template-columns: minmax(0, var(--ds-account-story-width)) minmax(0, var(--ds-account-form-width));
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  min-height: 100%;
-  padding: 120px 84px 64px 48px;
-  box-sizing: border-box;
-}
-
-/* The message block's centre sits 68px above the form's in the design, so
-   its box carries that much extra room below it. */
-.stage__message {
-  display: grid;
-  gap: 18px;
-  justify-self: end;
+  gap: var(--ds-account-column-gap);
   width: 100%;
-  max-width: var(--stage-message);
-  margin-bottom: 136px;
+  max-width: var(--ds-account-section-width);
+  min-height: min(var(--ds-account-stage-height), 100%);
+  margin: auto;
+  padding-block: var(--spacing-4xl);
+  /* An optical nudge, not a layout change. The box is centred exactly, but
+     the form is a solid block and the story is ragged text, so the pair reads
+     as leaning right. Shifting the whole group left by one step balances the
+     weight without moving the columns relative to each other. */
+  left: calc(var(--ds-account-optical-shift) * -1);
 }
 
-.stage__headline {
-  margin: 0;
-  font-size: var(--stage-headline);
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: -0.01em;
-  color: var(--cadence-terracotta);
+.account-access-page { --ds-account-optical-shift: var(--spacing-3xl); }
+
+.account-access-story {
+  position: relative;
+  display: grid;
+  align-content: center;
+  width: 100%;
+  max-width: var(--ds-account-story-width);
+  min-height: calc(var(--spacing-4xl) * 7);
+  transform: translateY(var(--ds-account-story-lift));
 }
 
-.stage__lede {
-  margin: 0;
-  font-size: var(--stage-lede);
-  font-weight: 400;
-  line-height: 1.3;
-  color: var(--cadence-body);
-  max-width: 360px;
+.account-access-story__rotation {
+  display: grid;
+  min-height: calc(var(--spacing-4xl) * 4);
 }
 
-/* The message indicator: four ticks, the current one in sea green. */
-.stage__ticks {
+.account-access-story__item {
+  grid-area: 1 / 1;
+  display: grid;
+  align-content: center;
+  gap: var(--spacing-md);
+  opacity: 0;
+  transform: translateY(var(--spacing-md));
+  animation: account-access-story-cycle var(--ds-account-story-duration) var(--ds-motion-ease) infinite;
+}
+
+.account-access-story__item:nth-child(2) { animation-delay: calc(var(--ds-account-story-delay) * 1); }
+.account-access-story__item:nth-child(3) { animation-delay: calc(var(--ds-account-story-delay) * 2); }
+.account-access-story__item:nth-child(4) { animation-delay: calc(var(--ds-account-story-delay) * 3); }
+
+.account-access-story__item ::deep h2 {
+  max-width: var(--ds-account-story-width);
+  color: var(--story-title-color);
+}
+
+.story-cyan { --story-title-color: var(--colors-accent-cyan-text); }
+.story-violet { --story-title-color: var(--colors-accent-violet-text); }
+.story-amber { --story-title-color: var(--colors-accent-amber-text); }
+.story-pink { --story-title-color: var(--colors-accent-pink-text); }
+
+.account-access-story__item ::deep p {
+  max-width: var(--ds-account-story-width);
+  color: var(--colors-text-secondary);
+}
+
+.account-access-story__progress {
   display: flex;
-  gap: var(--stage-tick-gap);
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: var(--spacing-xs);
+  margin-top: var(--spacing-lg);
 }
 
-.stage__ticks li {
-  width: var(--stage-tick-w);
-  height: var(--stage-tick-h);
-  border-radius: var(--stage-tick-h);
-  background: var(--cadence-tick);
+.account-access-story__progress i {
+  width: var(--spacing-xl);
+  height: var(--spacing-2xs);
+  overflow: hidden;
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
 }
 
-.stage__ticks li.is-active { background: var(--cadence-sea); }
-
-.stage__panel {
-  justify-self: start;
-  width: var(--stage-panel);
-  max-width: 100%;
-  min-width: 0;
+.account-access-story__progress i::after {
+  display: block;
+  width: 100%;
+  height: 100%;
+  content: "";
+  background: var(--story-progress-color);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: account-access-story-progress var(--ds-account-story-duration) linear infinite;
 }
 
-/* A laptop keeps both columns, closer together. */
-@media (max-width: 1360px) {
-  .stage { --stage-gap: 120px; }
+.account-access-story__progress i:nth-child(1) { --story-progress-color: var(--colors-accent-cyan-base); }
+.account-access-story__progress i:nth-child(2) { --story-progress-color: var(--colors-accent-violet-base); }
+.account-access-story__progress i:nth-child(3) { --story-progress-color: var(--colors-accent-amber-base); }
+.account-access-story__progress i:nth-child(4) { --story-progress-color: var(--colors-accent-pink-base); }
+
+.account-access-story__progress i:nth-child(2)::after { animation-delay: calc(var(--ds-account-story-delay) * 1); }
+.account-access-story__progress i:nth-child(3)::after { animation-delay: calc(var(--ds-account-story-delay) * 2); }
+.account-access-story__progress i:nth-child(4)::after { animation-delay: calc(var(--ds-account-story-delay) * 3); }
+
+.account-access-story:hover .account-access-story__item,
+.account-access-story:hover .account-access-story__progress i::after,
+.account-access-story:focus-within .account-access-story__item,
+.account-access-story:focus-within .account-access-story__progress i::after {
+  animation-play-state: paused;
 }
 
+/* Pausing the story pauses the glow with it, so the colours stay matched. */
+.account-access-page:has(.account-access-story:hover) ::deep .auth-glow,
+.account-access-page:has(.account-access-story:focus-within) ::deep .auth-glow {
+  animation-play-state: paused;
+}
+
+/* Each slot is 25% of the cycle (8s); 1% is 0.32s.
+   Headline: the old one leaves over the first 0.4s of the next slot while the
+   new one arrives from 0.15s to 0.6s. The two overlap only faintly, so there
+   is never an empty moment and never two legible headlines at once. */
+@keyframes account-access-story-cycle {
+  0%, 0.46875% { opacity: 0; transform: translateY(var(--spacing-md)); }
+  1.875%, 25% { opacity: 1; transform: translateY(var(--spacing-none)); }
+  26.25%, 100% { opacity: 0; transform: translateY(calc(var(--spacing-sm) * -1)); }
+}
+
+@keyframes account-access-story-progress {
+  0% { transform: scaleX(0); }
+  25% { transform: scaleX(1); }
+  25.01%, 100% { transform: scaleX(0); }
+}
+
+.account-access-form-panel {
+  align-self: start;
+  width: 100%;
+  max-width: var(--ds-account-form-width);
+  min-height: var(--ds-account-form-stage-height);
+}
+
+/* A short laptop screen: drop the lift and the tall story block, so the form
+   is centred in the space there is rather than pinned under the header. */
+@media (max-height: 760px) {
+  /* Not a token: zero is the absence of the lift, not a design value. */
+  .account-access-page { --ds-account-story-lift: 0px; }
+  .account-access-content { padding-block: var(--spacing-2xl); }
+  .account-access-story { min-height: 0; }
+}
+
+/* A small laptop. The fixed composition no longer fits, so the two columns
+   become flexible and share the width: the story keeps its place beside the
+   form at 1024px, and only drops above it when the window is too narrow for
+   both, which it works out itself rather than at a second breakpoint. The lift
+   goes because it only makes sense against the full-height composition. */
 @media (max-width: 1180px) {
-  .stage { --stage-gap: 72px; --stage-message: 360px; --stage-headline: 34px; }
+  /* Not a token: zero is the absence of the lift, not a design value. */
+  .account-access-page { --ds-account-story-lift: 0px; }
+
+  /* The same nudge, taken from the right instead. The columns already reach
+     both gutters here, so moving the group left would push it into the edge;
+     narrowing it from the right shifts its centre by the same amount while
+     the left edge stays on the gutter. It fades out toward phone width, where
+     the columns stack and a lopsided single column would look like a mistake:
+     full at 1016px and wider, nothing at 760px and narrower. */
+  .account-access-content {
+    left: 0;
+    padding-inline-end: var(--ds-account-optical-shift-narrow);
+  }
+
+  .account-access-page {
+    /* Not tokens: the widths between which the nudge fades out. */
+    --ds-account-optical-shift-narrow: clamp(0px, calc((100vw - 760px) / 8), var(--ds-account-optical-shift));
+  }
+
+  .account-access-content {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    align-content: center;
+    justify-content: space-between;
+    gap: var(--spacing-3xl) var(--ds-account-column-gap);
+  }
+
+  .account-access-story {
+    flex: 1 1 var(--ds-account-story-min);
+    min-height: 0;
+  }
+
+  .account-access-form-panel {
+    flex: 1 1 var(--ds-account-form-min);
+  }
+
+  .account-access-page {
+    /* Not tokens: the narrowest each column can go and still read well. Below
+       their sum plus the gap, the form wraps under the story. */
+    --ds-account-story-min: 320px;
+    --ds-account-form-min: 360px;
+  }
 }
 
-/* Narrower than that, the message stacks above the form. */
-@media (max-width: 960px) {
-  .stage__main {
-    grid-template-columns: minmax(0, var(--stage-panel));
-    row-gap: 40px;
-    padding: 128px 24px 64px;
-  }
-  .stage__message { margin-bottom: 0; }
-  .stage__message,
-  .stage__panel { justify-self: center; }
+@media (prefers-reduced-motion: reduce) {
+  .account-access-story__item,
+  .account-access-story__progress i::after { animation: none; }
+
+  .account-access-story__item { display: none; }
+  .account-access-story__item:first-child { display: grid; opacity: 1; transform: none; }
+  .account-access-story__progress { display: none; }
 }

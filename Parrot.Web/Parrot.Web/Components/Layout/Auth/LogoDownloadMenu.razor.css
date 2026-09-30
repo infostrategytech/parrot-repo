@@ -1,0 +1,56 @@
+/* Component-local, per FilterPopover's convention: these sit on the
+   component's own root, never on :root. */
+.logo-download-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.logo-download-menu__dismiss {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-logo-menu-layer);
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+.logo-download-menu__menu {
+  position: absolute;
+  z-index: calc(var(--ds-logo-menu-layer) + 1);
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: var(--ds-logo-menu-width);
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-popover);
+  color: var(--colors-surface-popover-foreground);
+  border: var(--ds-logo-menu-border-width) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.logo-download-menu__option {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-radius-md);
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.logo-download-menu__option:hover,
+.logo-download-menu__option:focus-visible {
+  background: var(--colors-interaction-hover);
+}
+
+.logo-download-menu__option ::deep strong { color: var(--colors-text-primary); }
+.logo-download-menu__option ::deep small { color: var(--colors-text-muted); }
+
+.logo-download-menu {
+  /* Gaps in the token set, same as FilterPopover: no border-width scale,
+     no z-index scale, no component width scale. */
+  --ds-logo-menu-border-width: 1px;
+  --ds-logo-menu-layer: 60;
+  --ds-logo-menu-width: 176px;
+}

@@ -1,0 +1,113 @@
+.code-entry { display: grid; gap: var(--spacing-sm); }
+
+.code-entry__control {
+  position: relative;
+  display: block;
+}
+
+/* The real input sits over the boxes, invisible, so a tap anywhere on them
+   focuses it and the keyboard and autofill see an ordinary text field. */
+.code-entry__control > input {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: text;
+}
+
+.code-entry__control > input:disabled { cursor: not-allowed; }
+
+.code-entry__slots {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--spacing-sm);
+}
+
+.code-entry__slots i {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+  font-style: normal;
+  transition:
+    border-color var(--ds-motion-fast) var(--ds-motion-ease),
+    box-shadow var(--ds-motion-fast) var(--ds-motion-ease);
+}
+
+/* The box the next digit goes into lights up while the field has focus, with
+   the same border and ring a focused Input uses (Input.razor.css). */
+.code-entry__control:focus-within .code-entry__slots i.is-current {
+  border-color: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-hairline) var(--colors-brand-primary);
+}
+
+.code-entry.is-error .code-entry__slots i {
+  border-color: var(--colors-feedback-destructive-border);
+}
+
+/* After a wrong code the field takes focus again; as on a focused Input in
+   error, the current box stays red rather than turning brand colour. */
+.code-entry.is-error .code-entry__control:focus-within .code-entry__slots i.is-current {
+  border-color: var(--colors-feedback-destructive);
+  box-shadow: inset 0 0 0 var(--ds-hairline) var(--colors-feedback-destructive);
+}
+
+.code-entry__control:has(input:disabled) .code-entry__slots i {
+  background: var(--colors-interaction-disabled-background);
+}
+
+::deep .code-entry__message { text-align: center; }
+::deep .code-entry__message--hint { color: var(--colors-text-muted); }
+::deep .code-entry__message--error { color: var(--colors-feedback-destructive-text); }
+
+.code-entry__actions {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-md);
+  color: var(--colors-text-muted);
+}
+
+.code-entry__resend {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
+
+.code-entry__actions button {
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.code-entry__resend button { color: var(--colors-text-link); }
+.code-entry__resend button:hover:not(:disabled) { color: var(--colors-text-link-hover); }
+
+.code-entry__actions button:disabled {
+  cursor: default;
+  opacity: var(--ds-code-disabled-opacity);
+}
+
+.code-entry__actions {
+  /* Not a token: there is no opacity scale for a de-emphasised control. */
+  --ds-code-disabled-opacity: 0.5;
+}
+
+.code-entry__actions .code-entry__change {
+  color: var(--colors-text-secondary);
+  text-decoration: underline;
+  text-decoration-color: var(--colors-surface-border);
+  text-underline-offset: var(--spacing-xs);
+}
+
+.code-entry__actions .code-entry__change:hover:not(:disabled) {
+  color: var(--colors-text-primary);
+  text-decoration-color: currentColor;
+}

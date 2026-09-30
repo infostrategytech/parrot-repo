@@ -5,119 +5,184 @@
 @inject IRegisterService RegisterService
 @inject RegisterState RegisterState
 @inject AuthState AuthState
+@inject AuthFormState Forms
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
+@inject IConfiguration Configuration
 @implements IDisposable
 
-<PageTitle>Create your account · OmniAI</PageTitle>
+<PageTitle>Create Your Account · OmniAI</PageTitle>
 
-@* The sign-up screen, as designed. Two things the design leaves to the
-   product: the account API needs the business's name at sign-up, so the
-   form asks for it first; and it accepts an email address only, so a phone
-   number is turned away with a plain sentence rather than a server error. *@
+@* Sign-up asks for the least it can: an email and a password. The business
+   name is asked for on the workspace welcome card once they are inside.
 
-<AuthPanel Title="Create Your Account">
-    <Lede>Get started now. You can tell us about your business once you are inside.</Lede>
-    <Notice>
-        @if (!string.IsNullOrEmpty(RegisterState.ErrorMessage))
-        {
-            <p class="panel__alert" role="alert">@RegisterState.ErrorMessage</p>
-        }
-    </Notice>
-    <ChildContent>
-        <form class="register" @onsubmit="HandleRegistration" @onsubmit:preventDefault novalidate>
-            <AuthField Id="businessName" Placeholder="Business Name" Glyph="IconName.RiStore2Fill"
-                       AutoComplete="organization" Required
-                       @bind-Value="_businessName" Error="@_businessNameError" Disabled="@RegisterState.IsLoading" />
+   Backend follow-up: the API still requires BusinessName on register and
+   enforces its own 12-character password policy. Both need changing to
+   match this design; until then the real API refuses sign-ups from here. *@
 
-            <AuthField Id="email" Placeholder="Email or Phone Number" Glyph="IconName.RiUser3Fill"
-                       Type="email" AutoComplete="email" Required
-                       @bind-Value="_email" Error="@_emailError" Disabled="@RegisterState.IsLoading" />
+<div class="signup-intro">
+    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1" Id="signup-title">
+        Create Your Account
+    </Typography>
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="signup-intro__copy">
+        Get started now. You can tell us about your business once you are inside.
+    </Typography>
+</div>
 
-            <AuthField Id="password" Placeholder="Create Password" Glyph="IconName.RiLockFill"
-                       Type="password" AutoComplete="new-password" Required
-                       @bind-Value="_password" Error="@_passwordError" Disabled="@RegisterState.IsLoading" />
-            <p class="register__hint" id="password-hint">12 or more characters. No symbols or capitals required — a few unrelated words works well.</p>
+<form class="signup-form" novalidate @onsubmit="HandleRegistration" @onsubmit:preventDefault="true">
+    <div class="signup-form__fields">
+        <Input FloatingLabel="Email Address"
+               Id="signup-identifier"
+               Type="email"
+               @bind-Value="_email"
+               Error="@(!string.IsNullOrEmpty(_emailError))"
+               HelperText="@_emailError"
+               autocomplete="email">
+            <IconLeft>
+                <Icon Name="IconName.RiMailFill" Size="IconSize.Sm" />
+            </IconLeft>
+        </Input>
 
-            <p class="panel__terms">By creating an account, you agree to OmniAI's <a href="/terms">Terms</a> and <a href="/privacy">Privacy Policy</a>.</p>
+        <div class="signup-form__password">
+            <PasswordInput FloatingLabel="Create Password"
+                           Id="signup-password"
+                           IsNew
+                           @bind-Value="_password"
+                           ErrorText="@_passwordError" />
+        </div>
 
-            <button type="submit" class="panel__primary" disabled="@RegisterState.IsLoading" aria-busy="@(RegisterState.IsLoading ? "true" : null)">
-                @if (RegisterState.IsLoading)
-                {
-                    <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
-                }
-                <span>Create Account</span>
-            </button>
-        </form>
+        <div class="signup-form__password">
+            <PasswordInput FloatingLabel="Confirm Password"
+                           Id="signup-confirm-password"
+                           IsNew
+                           ShowStrength="false"
+                           @bind-Value="_confirmPassword"
+                           ErrorText="@ConfirmPasswordError" />
+            @if (PasswordsMatch)
+            {
+                <p class="signup-form__password-match @TextStyle.Small12Medium.ToClassName()" aria-live="polite">
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                    <span>Passwords match</span>
+                </p>
+            }
+        </div>
+    </div>
 
-        <div class="panel__divider" role="separator" aria-label="Or continue with">Or continue with</div>
+    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="signup-form__legal">
+        @* New tabs, so reading the terms does not throw away the form. *@
+        By creating an account, you agree to OmniAI's
+        <a class="@TextStyle.Small12Semibold.ToClassName()" href="/terms" target="_blank" rel="noopener">Terms</a> and
+        <a class="@TextStyle.Small12Semibold.ToClassName()" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
+    </Typography>
 
-        <button type="button" class="panel__google" @onclick="ContinueWithGoogle">
-            <GoogleMark />
-            <span>Continue With Google</span>
-        </button>
-    </ChildContent>
-    <Footer>
-        Already have an account? <a href="/login">Sign In</a>
-    </Footer>
-</AuthPanel>
+    @if (_problem is { } problem)
+    {
+        <InlineError Message="@Message(problem)" Action="ActionFor(problem)" />
+    }
+
+    <Button Type="ButtonType.Submit" Size="ButtonSize.Large" Class="signup-form__submit" disabled="@Busy">
+        @(RegisterState.IsLoading ? "Creating Account…" : "Create Account")
+    </Button>
+
+    <div class="signup-form__divider" aria-hidden="true">
+        <span></span>
+        <Typography TextStyle="TextStyle.Small12Medium" As="small">Or continue with</Typography>
+        <span></span>
+    </div>
+
+    <GoogleSignInButton Busy="_googleBusy" Disabled="Busy" OnClick="ContinueWithGoogle" />
+
+    <p class="signup-form__signin @TextStyle.BodySmallMedium.ToClassName()">
+        Already have an account?
+        <a href="/login" @onclick="() => Forms.Remember(_email)">Sign In</a>
+    </p>
+</form>
 
 @code {
-    [Inject] private IConfiguration Configuration { get; set; } = default!;
+    private enum Problem { AccountExists, TooManyAttempts, Rejected, Unreachable, Unknown }
 
-    private string? _businessName;
     private string? _email;
     private string? _password;
-    private string? _businessNameError;
+    private string? _confirmPassword;
     private string? _emailError;
     private string? _passwordError;
+    private bool _confirmAttempted;
+    private Problem? _problem;
+    private string? _apiMessage;
+    private bool _googleBusy;
 
-    protected override void OnInitialized() => RegisterState.OnChange += StateHasChanged;
+    private bool Busy => RegisterState.IsLoading || _googleBusy;
 
-    private void ContinueWithGoogle()
+    private bool PasswordsMatch =>
+        !string.IsNullOrEmpty(_confirmPassword) && _confirmPassword == _password;
+
+    private string? ConfirmPasswordError => !_confirmAttempted
+        ? null
+        : string.IsNullOrEmpty(_confirmPassword)
+            ? "Confirm your password."
+            : !PasswordsMatch
+                ? "Passwords do not match."
+                : null;
+
+    /// <summary>Back from Verify or across from Sign In: the address is put back. Never the password.</summary>
+    protected override void OnInitialized()
     {
-        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
-        Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);
+        RegisterState.OnChange += StateHasChanged;
+        _email = Forms.PendingVerificationEmail ?? Forms.EnteredEmail;
     }
+
+    private string Message(Problem problem) => problem switch
+    {
+        Problem.AccountExists => "An account already exists with these details.",
+        Problem.TooManyAttempts => "Too many attempts. Wait a few minutes, then try again.",
+        Problem.Rejected => _apiMessage ?? "We could not create that account.",
+        Problem.Unreachable => "We could not reach OmniAI. Check your internet connection.",
+        _ => "Something went wrong on our side."
+    };
+
+    private RenderFragment? ActionFor(Problem problem) => problem switch
+    {
+        Problem.AccountExists => @<button type="button" @onclick="SignInInstead">Sign In Instead</button>,
+        Problem.Unreachable or Problem.Unknown => @<button type="submit">Try Again</button>,
+        _ => null
+    };
 
     private bool Validate()
     {
-        _businessNameError = string.IsNullOrWhiteSpace(_businessName) || _businessName.Trim().Length < 2
-            ? "Tell us your business's name."
-            : null;
-
         var email = _email?.Trim() ?? "";
         _emailError = email.Length == 0
             ? "Enter your email address."
-            : !email.Contains('@')
-                ? "Phone sign-up isn't available yet — use your email address."
+            : !new System.ComponentModel.DataAnnotations.EmailAddressAttribute().IsValid(email)
+                ? "Enter a valid email address."
                 : null;
-
-        _passwordError = string.IsNullOrEmpty(_password)
-            ? "Create a password."
-            : _password.Length < 12
-                ? "Use at least 12 characters — a few unrelated words is easiest to remember."
-                : null;
-
-        return _businessNameError is null && _emailError is null && _passwordError is null;
+        _passwordError = PasswordRules.MeetsAll(_password)
+            ? null
+            : "Create a password that meets all three requirements.";
+        _confirmAttempted = true;
+        return _emailError is null && _passwordError is null && ConfirmPasswordError is null;
     }
 
     private async Task HandleRegistration()
     {
+        if (Busy) return;
+
+        _problem = null;
         RegisterState.Reset();
         if (!Validate()) return;
 
+        var email = _email!.Trim();
+        Forms.Remember(email);
         RegisterState.SetLoading(true);
 
         try
         {
             AuthResponse? response = await RegisterService.RegisterAsync(new RegisterRequest
             {
-                BusinessName = _businessName!.Trim(),
-                Email = _email!.Trim(),
+                // Asked for on the workspace welcome card instead. See the note at the top.
+                BusinessName = string.Empty,
+                Email = email,
                 Password = _password!,
-                // One password field, as designed; the API wants it confirmed.
-                ConfirmPassword = _password!,
+                ConfirmPassword = _confirmPassword!,
             });
 
             if (response is not null)
@@ -129,37 +194,59 @@
                 return;
             }
 
-            Navigation.NavigateTo($"/verify-email?email={Uri.EscapeDataString(_email!.Trim())}&sent=true");
+            // Held in memory, not in the address, so the email never lands in
+            // browser history or a server log.
+            Forms.CodeSentTo(email);
+            Navigation.NavigateTo("/verify-email?sent=true");
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
-            RegisterState.SetError("An account with this email already exists. Sign in instead, or reset your password.");
+            _problem = Problem.AccountExists;
         }
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
         {
-            RegisterState.SetError("Too many attempts. Please wait and try again.");
+            _problem = Problem.TooManyAttempts;
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
         {
-            // The API's own wording: almost always the password policy, which
-            // has more to say than a length rule.
+            // The API's own wording. A password message belongs under the field.
             if (ex.UserMessage.Contains("password", StringComparison.OrdinalIgnoreCase))
             {
                 _passwordError = ex.UserMessage;
             }
             else
             {
-                RegisterState.SetError(ex.UserMessage);
+                _apiMessage = ex.UserMessage;
+                _problem = Problem.Rejected;
             }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            _problem = Problem.Unreachable;
         }
         catch
         {
-            RegisterState.SetError("Something went wrong. Please try again.");
+            _problem = Problem.Unknown;
         }
         finally
         {
             RegisterState.SetLoading(false);
         }
+    }
+
+    private void SignInInstead()
+    {
+        Forms.Remember(_email);
+        Navigation.NavigateTo("/login");
+    }
+
+    private void ContinueWithGoogle()
+    {
+        if (Busy) return;
+        _googleBusy = true;
+
+        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);
     }
 
     public void Dispose() => RegisterState.OnChange -= StateHasChanged;

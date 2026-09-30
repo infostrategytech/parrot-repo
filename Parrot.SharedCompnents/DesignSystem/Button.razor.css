@@ -25,7 +25,7 @@
          built from the raw number primitives instead. An icon size/icon-xs
          and an 18 rung would remove this. */
   --ds-button-border-width: 1px;
-  --ds-button-transition: 120ms;
+  --ds-button-transition: var(--ds-motion-fast);
   --ds-button-disabled-opacity: 50;
   --ds-button-icon-sm: calc(var(--p-numbers-14) * 1px);
   --ds-button-icon-md: var(--icon-size-icon-sm);
@@ -62,6 +62,8 @@
     box-shadow var(--ds-button-transition) ease,
     color var(--ds-button-transition) ease;
 }
+
+.ds-button--full-width { width: 100%; }
 
 /* Sizes — padding, icon box, type scale and leading all move together.
 
