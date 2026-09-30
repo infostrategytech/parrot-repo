@@ -47,3 +47,14 @@
 .petal-7 { color: var(--colors-accent-violet-text);  background: var(--colors-accent-violet-muted); }
 .petal-8 { color: var(--colors-accent-fuchsia-text); background: var(--colors-accent-fuchsia-muted); }
 .petal-9 { color: var(--colors-accent-pink-text);    background: var(--colors-accent-pink-muted); }
+
+/* An uploaded image fills the tile and takes its corners. */
+.petal-avatar {
+  overflow: hidden;
+}
+
+.petal-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}

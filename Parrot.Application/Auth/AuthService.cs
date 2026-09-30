@@ -16,12 +16,12 @@ namespace Parrot.Application.Auth;
 
 public class AuthService : IAuthService
 {
-    private const string InvalidCodeMessage = "That code isn't right or has expired. Check it and try again.";
-    private const string TooManyCodesMessage = "Too many incorrect codes. Please wait 15 minutes and request a new one.";
+    private const string InvalidCodeMessage = AuthMessages.InvalidCode;
+    private const string TooManyCodesMessage = AuthMessages.TooManyCodes;
 
     // Hashed against when an address is unknown, so a miss costs the same as a
     // wrong password and the response time does not say which it was.
-    private static readonly ApplicationUser TimingPlaceholder = new() { UserName = "-", BusinessName = "-" };
+    private static readonly ApplicationUser TimingPlaceholder = new() { UserName = "-" };
 
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
@@ -57,23 +57,23 @@ public class AuthService : IAuthService
 
     public async Task<AuthResponse> LoginAsync(LoginRequest request)
     {
-        ApplicationUser? user = await _userManager.FindByEmailAsync(request.Email);
+        (ApplicationUser? user, string identifierKind) = await FindByIdentifierAsync(request.Identifier);
 
         if (user is null)
         {
             _passwordHasher.HashPassword(TimingPlaceholder, request.Password);
-            _logger.LogWarning("Login attempt for unrecognised email");
-            throw new UnauthorizedException("Invalid email or password.");
+            _logger.LogWarning("Login attempt for unrecognised {IdentifierKind}", identifierKind);
+            throw new UnauthorizedException(AuthMessages.InvalidCredentials);
         }
 
         if (await _userManager.IsLockedOutAsync(user))
         {
             using (_logger.BeginEntityScope("User", user.Id))
             {
-                _logger.LogWarning("Login blocked — account is locked out. Email: {Email}", request.Email);
+                _logger.LogWarning("Login blocked — account is locked out. Identifier: {Identifier}", request.Identifier);
             }
 
-            throw new UnauthorizedException("Account is temporarily locked due to too many failed login attempts. Please try again later.");
+            throw new UnauthorizedException(AuthMessages.AccountLocked);
         }
 
         if (!await _userManager.CheckPasswordAsync(user, request.Password))
@@ -81,10 +81,10 @@ public class AuthService : IAuthService
             await _userManager.AccessFailedAsync(user);
             using (_logger.BeginEntityScope("User", user.Id))
             {
-                _logger.LogWarning("Failed login attempt for {Email}", request.Email);
+                _logger.LogWarning("Failed login attempt for {Identifier}", request.Identifier);
             }
 
-            throw new UnauthorizedException("Invalid email or password.");
+            throw new UnauthorizedException(AuthMessages.InvalidCredentials);
         }
 
         if (!user.EmailConfirmed)
@@ -96,7 +96,7 @@ public class AuthService : IAuthService
                 // client take them straight to the verification screen.
                 using (_logger.BeginEntityScope("User", user.Id))
                 {
-                    _logger.LogWarning("Login attempt before email verification; sending a new code. Email: {Email}", request.Email);
+                    _logger.LogWarning("Login attempt before email verification; sending a new code. Email: {Email}", user.Email);
                 }
 
                 await TrySendVerificationEmailAsync(user);
@@ -112,7 +112,7 @@ public class AuthService : IAuthService
 
         using (_logger.BeginEntityScope("User", user.Id))
         {
-            _logger.LogInformation("User logged in successfully. Email: {Email}", request.Email);
+            _logger.LogInformation("User logged in successfully. Email: {Email}", user.Email);
         }
 
         return BuildAuthResponse(user);
@@ -139,14 +139,13 @@ public class AuthService : IAuthService
             }
 
             _logger.LogWarning("Registration attempt with already-registered email {Email}", request.Email);
-            throw new ConflictException("A user with this email already exists.");
+            throw new ConflictException(AuthMessages.AccountExists);
         }
 
         ApplicationUser user = new ApplicationUser
         {
             UserName = request.Email,
             Email = request.Email,
-            BusinessName = request.BusinessName,
             EmailConfirmed = !requireVerification,
         };
 
@@ -316,7 +315,7 @@ public class AuthService : IAuthService
         if (user is null)
         {
             _logger.LogWarning("Password reset attempt for unknown UserId: {UserId}", request.UserId);
-            throw new NotFoundException("User not found.");
+            throw new NotFoundException(AuthMessages.ResetAccountNotFound);
         }
 
         IdentityResult result = await _userManager.ResetPasswordAsync(user, request.Token, request.NewPassword);
@@ -329,7 +328,7 @@ public class AuthService : IAuthService
 
             if (result.Errors.Any(e => e.Code == nameof(IdentityErrorDescriber.InvalidToken)))
             {
-                throw new ValidationException("Invalid or expired password reset token.");
+                throw new ValidationException(AuthMessages.ResetLinkExpired);
             }
 
             throw new ValidationException(result.Errors.Select(e => e.Description));
@@ -374,17 +373,18 @@ public class AuthService : IAuthService
         }
     }
 
-    public async Task<AuthResponse> ExternalLoginAsync(string email, string displayName, string provider, string providerKey)
+    public async Task<AuthResponse> ExternalLoginAsync(string email, string provider, string providerKey)
     {
         ApplicationUser? user = await _userManager.FindByEmailAsync(email);
 
         if (user is null)
         {
+            // No business name is carried over: a Google profile name is a
+            // person's, not the company's. The setup step after sign-in asks.
             user = new ApplicationUser
             {
                 UserName = email,
                 Email = email,
-                BusinessName = displayName,
                 EmailConfirmed = true,
             };
 
@@ -404,7 +404,7 @@ public class AuthService : IAuthService
         }
         else if (await _userManager.IsLockedOutAsync(user))
         {
-            throw new UnauthorizedException("Account is temporarily locked due to too many failed login attempts. Please try again later.");
+            throw new UnauthorizedException(AuthMessages.AccountLocked);
         }
 
         using (_logger.BeginEntityScope("User", user.Id))
@@ -470,20 +470,54 @@ public class AuthService : IAuthService
         await _emailService.SendEmailAsync(user.Email!, subject, body);
     }
 
+    // One field on the sign-in form, so a person never has to say which kind of
+    // detail they are typing. An address goes through Identity's own finder; a
+    // phone is one comparison against both of the shapes it can be written in —
+    // the national column on its own, and that column behind its country code.
+    private async Task<(ApplicationUser? User, string IdentifierKind)> FindByIdentifierAsync(string identifier)
+    {
+        if (identifier.Contains('@', StringComparison.Ordinal))
+        {
+            return (await _userManager.FindByEmailAsync(identifier), "email");
+        }
+
+        string? phone = PhoneNormalizer.SearchValue(identifier);
+        if (phone is null)
+        {
+            return (null, "phone");
+        }
+
+        ApplicationUser? user = _userManager.Users.FirstOrDefault(u =>
+            u.PhoneNumber == phone || (u.PhoneDialCode + u.PhoneNumber) == phone);
+
+        return (user, "phone");
+    }
+
     private AuthResponse BuildAuthResponse(ApplicationUser user)
     {
-        Claim[] claims =
+        List<Claim> claims =
         [
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-            new Claim("businessName", user.BusinessName),
         ];
+
+        if (!string.IsNullOrEmpty(user.BusinessName))
+        {
+            claims.Add(new Claim("businessName", user.BusinessName));
+        }
 
         DateTime expiresAt = _jwtHelper.GetDefaultExpiration();
         string token = _jwtHelper.GenerateToken(claims, expiresAt);
 
-        return new AuthResponse(token, expiresAt, user.Id, user.Email!, user.BusinessName);
+        return new AuthResponse(
+            token,
+            expiresAt,
+            user.Id,
+            user.Email!,
+            user.BusinessName,
+            user.LogoUrl,
+            PhoneNormalizer.ToDisplay(user.PhoneDialCode, user.PhoneNumber));
     }
 
     // People type "222 222" as readily as "222222"; only the digits matter.

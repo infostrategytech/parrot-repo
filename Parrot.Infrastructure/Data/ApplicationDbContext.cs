@@ -24,7 +24,24 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
         builder.Entity<ApplicationUser>(entity =>
         {
-            entity.Property(u => u.BusinessName).HasMaxLength(256).IsRequired();
+            entity.Property(u => u.BusinessName).HasMaxLength(256).IsRequired(false);
+            entity.Property(u => u.FirstName).HasMaxLength(80);
+            entity.Property(u => u.LastName).HasMaxLength(80);
+            entity.Property(u => u.LogoUrl).HasMaxLength(2048);
+            entity.Property(u => u.PhoneDialCode).HasMaxLength(8);
+
+            // Sign-in compares against both of the shapes a number is written
+            // in. The national half alone identifies an account on its own — a
+            // local number such as 08012345678 lands here — so it is unique
+            // across the whole table, not merely within a country.
+            //
+            // The other half of the comparison, PhoneDialCode + PhoneNumber, is
+            // an expression rather than a column, so it cannot be declared here.
+            // Its unique index is created as raw SQL in the migration that adds
+            // it; see AddPhoneNumberLoginIndexes.
+            entity.HasIndex(u => u.PhoneNumber).IsUnique()
+                .HasFilter("\"PhoneNumber\" IS NOT NULL");
+
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
 

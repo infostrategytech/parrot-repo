@@ -15,7 +15,7 @@
             aria-haspopup="menu"
             data-tooltip="@Name"
             @onclick="() => _open = !_open">
-        <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" />
+        <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" ImageUrl="@LogoUrl" />
         <span class="workspace__identity">
             <Typography TextStyle="TextStyle.Small10Medium" As="small" Class="workspace__eyebrow">Workspace</Typography>
             <Typography TextStyle="TextStyle.Small12Semibold" As="span" Prose Class="workspace__name">@Name</Typography>
@@ -43,7 +43,7 @@
                     aria-checked="true"
                     class="workspace__option is-active"
                     @onclick="() => _open = false">
-                <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" />
+                <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" ImageUrl="@LogoUrl" />
                 <span class="workspace__identity">
                     <Typography TextStyle="TextStyle.Small12Medium" As="strong">@Name</Typography>
                     @if (!string.IsNullOrWhiteSpace(Plan))
@@ -72,6 +72,9 @@
     [Parameter] public string? Plan { get; set; }
 
     [Parameter] public string? Initials { get; set; }
+
+    /// <summary>Optional. The business logo, shown in place of the initials.</summary>
+    [Parameter] public string? LogoUrl { get; set; }
 
     private bool _open;
 

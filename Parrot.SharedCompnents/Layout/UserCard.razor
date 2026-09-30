@@ -16,7 +16,7 @@
             aria-haspopup="@(ChildContent is null ? null : "menu")"
             aria-expanded="@(ChildContent is null ? null : _open.ToString().ToLowerInvariant())"
             @onclick="Toggle">
-        <PetalAvatar Seed="@Seed" Initials="@Initials" />
+        <PetalAvatar Seed="@Seed" Initials="@Initials" ImageUrl="@ImageUrl" />
         <span class="user-card__identity">
             <Typography TextStyle="TextStyle.Small12Semibold" As="strong" Prose Class="user-card__name">@Name</Typography>
             @if (!string.IsNullOrWhiteSpace(Role))
@@ -51,6 +51,9 @@
 
     /// <summary>The account id, so this person keeps the same tint elsewhere.</summary>
     [Parameter, EditorRequired] public string Seed { get; set; } = "";
+
+    /// <summary>Optional. Shown in place of the initials.</summary>
+    [Parameter] public string? ImageUrl { get; set; }
 
     /// <summary>Menu rows — usually <see cref="UserMenuItem"/>s. Null means no menu.</summary>
     [Parameter] public RenderFragment? ChildContent { get; set; }

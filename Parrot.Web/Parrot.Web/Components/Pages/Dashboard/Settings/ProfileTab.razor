@@ -1,44 +1,208 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Profile
 @inject AuthState AuthState
+@inject ProfileClient Profile
+@inject ToastService Toasts
 
-@* Who is signed in. Parrot's session carries an email and a user id, so the
-   avatar and the email are real; the name fields wait for a value. *@
+@* Who is signed in, read from and saved to the account. The image is the same
+   one the workspace switcher shows, and is saved as soon as it is chosen or
+   removed; Save is for the names. No field is required. The email is the
+   sign-in address, so it is shown but cannot be changed here. *@
 
 <SettingsCard Title="Profile information" Description="Update your personal account details.">
     <ChildContent>
         <div class="profile__avatar-row">
             <PetalAvatar Seed="@(AuthState.CurrentUser?.UserId ?? "user")"
-                         Initials="@Initials.From(AuthState.CurrentUser?.Email)"
+                         Initials="@AvatarInitials"
+                         ImageUrl="@_logoUrl"
                          Size="AvatarSize.Lg" />
             <div class="profile__avatar-actions">
-                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">Upload image</Button>
-                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small">Remove</Button>
+                @* The file input lies over the button, so the button's look is
+                   kept and the picker opens without any script. *@
+                <span class="profile__upload">
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small"
+                            Busy="@_uploading" tabindex="-1" aria-hidden="true">
+                        @(_logoUrl is null ? "Upload image" : "Update image")
+                    </Button>
+                    <InputFile class="profile__upload-input"
+                               accept="image/png,image/jpeg,image/gif"
+                               aria-label="@(_logoUrl is null ? "Upload image" : "Update image")"
+                               disabled="@ImageBusy"
+                               OnChange="UploadImageAsync" />
+                </span>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                        disabled="@(_logoUrl is null || ImageBusy)"
+                        @onclick="RemoveImageAsync">Remove</Button>
             </div>
             <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="profile__hint">
                 JPG, GIF or PNG. 1MB max.
             </Typography>
         </div>
 
+        @if (_imageError is not null)
+        {
+            <InlineError Message="@_imageError" />
+        }
+
         <div class="profile__grid">
-            <Input FloatingLabel="First name" @bind-Value="_firstName" maxlength="80" />
-            <Input FloatingLabel="Last name" @bind-Value="_lastName" maxlength="80" />
+            <Input FloatingLabel="First name" @bind-Value="_firstName" maxlength="80" autocomplete="given-name" />
+            <Input FloatingLabel="Last name" @bind-Value="_lastName" maxlength="80" autocomplete="family-name" />
             <div class="profile__full">
-                <Input FloatingLabel="Email address" Type="email" @bind-Value="_email" />
+                <Input FloatingLabel="Email address" Type="email" @bind-Value="_email" Disabled="true" />
             </div>
         </div>
+
+        @if (_saveError is not null)
+        {
+            <InlineError Message="@_saveError" />
+        }
     </ChildContent>
     <Footer>
-        <Button>Save</Button>
+        <Button Busy="@_saving" disabled="@(_saving || _loading)" @onclick="SaveAsync">Save</Button>
     </Footer>
 </SettingsCard>
 
 @code {
-    private string _firstName = string.Empty;
-    private string _lastName = string.Empty;
-    private string _email = string.Empty;
+    private const long MaxImageBytes = 1024 * 1024;
+    private static readonly HashSet<string> AcceptedImageTypes = ["image/png", "image/jpeg", "image/gif"];
 
-    protected override void OnInitialized()
+    private string? _firstName;
+    private string? _lastName;
+    private string? _email;
+    private string? _logoUrl;
+
+    private bool _loading = true;
+    private bool _saving;
+    private bool _uploading;
+    private bool _removing;
+    private string? _saveError;
+    private string? _imageError;
+
+    private bool ImageBusy => _loading || _uploading || _removing;
+
+    // The person's own initials once there is a name; the email's until then.
+    private string AvatarInitials =>
+        string.IsNullOrWhiteSpace(_firstName) && string.IsNullOrWhiteSpace(_lastName)
+            ? Initials.From(_email)
+            : Initials.From($"{_firstName} {_lastName}".Trim());
+
+    protected override async Task OnInitializedAsync()
     {
-        _email = AuthState.CurrentUser?.Email ?? string.Empty;
+        _email = AuthState.CurrentUser?.Email;
+        _logoUrl = AuthState.CurrentUser?.LogoUrl;
+        try
+        {
+            Show(await Profile.GetAsync());
+        }
+        catch (Exception)
+        {
+            _saveError = "We could not load your profile. Refresh the page to try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Show(UserProfile profile)
+    {
+        _firstName = profile.FirstName;
+        _lastName = profile.LastName;
+        _email = profile.Email;
+        _logoUrl = profile.LogoUrl;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saveError = null;
+        _saving = true;
+        try
+        {
+            // Empty is sent as empty, not left out, so clearing a name saves.
+            Show(await Profile.UpdateAsync(new UserProfileUpdate
+            {
+                FirstName = _firstName?.Trim() ?? string.Empty,
+                LastName = _lastName?.Trim() ?? string.Empty,
+            }));
+            Toasts.Show("Profile saved");
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            _saveError = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _saveError = "We could not save your profile. Try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task UploadImageAsync(InputFileChangeEventArgs args)
+    {
+        _imageError = null;
+        IBrowserFile file = args.File;
+
+        // Checked here so a wrong file fails at once; the server checks again.
+        if (!AcceptedImageTypes.Contains(file.ContentType))
+        {
+            _imageError = "Choose a JPG, GIF or PNG image.";
+            return;
+        }
+
+        if (file.Size > MaxImageBytes)
+        {
+            _imageError = "Choose an image of 1MB or less.";
+            return;
+        }
+
+        _uploading = true;
+        try
+        {
+            await using Stream stream = file.OpenReadStream(MaxImageBytes);
+            using MemoryStream buffer = new();
+            await stream.CopyToAsync(buffer);
+
+            string url = await Profile.UploadImageAsync(file.Name, file.ContentType, buffer.ToArray());
+            Show(await Profile.UpdateAsync(new UserProfileUpdate { LogoUrl = url }));
+            Toasts.Show("Image updated");
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            _imageError = ex.UserMessage;
+        }
+        catch (IOException)
+        {
+            _imageError = "We could not read that image. Choose it again.";
+        }
+        catch (Exception)
+        {
+            _imageError = "We could not upload that image. Try again.";
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private async Task RemoveImageAsync()
+    {
+        _imageError = null;
+        _removing = true;
+        try
+        {
+            Show(await Profile.UpdateAsync(new UserProfileUpdate { LogoUrl = string.Empty }));
+            Toasts.Show("Image removed");
+        }
+        catch (Exception)
+        {
+            _imageError = "We could not remove the image. Try again.";
+        }
+        finally
+        {
+            _removing = false;
+        }
     }
 }
