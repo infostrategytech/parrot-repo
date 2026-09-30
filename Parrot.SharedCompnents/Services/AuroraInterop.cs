@@ -54,6 +54,31 @@ public sealed class AuroraInterop : IAsyncDisposable
     }
 
     /// <summary>
+    /// Calls a component method when Escape is pressed until the returned
+    /// handle is disposed. Intended for non-modal drawers and popovers that do
+    /// not trap focus.
+    /// </summary>
+    public async Task<IAsyncDisposable> BindEscapeAsync<T>(DotNetObjectReference<T> reference, string method)
+        where T : class
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("bindEscape", reference, method);
+        return new Handle(handle);
+    }
+
+    /// <summary>
+    /// Focuses the element on Ctrl+key (⌘+key on a Mac), for as long as the
+    /// returned handle lives. Handled in the browser, so no keystroke reaches
+    /// the server.
+    /// </summary>
+    public async Task<IAsyncDisposable> BindFocusShortcutAsync(ElementReference element, string key)
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("bindFocusShortcut", element, key);
+        return new Handle(handle);
+    }
+
+    /// <summary>
     /// Opens a hidden file input. The browser only raises the picker for a
     /// genuine click on the input, so a styled button has to forward one.
     /// </summary>
@@ -81,6 +106,13 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("copyText", value);
     }
 
+    /// <summary>Downloads a media URL without navigating away. Returns false when the browser cannot fetch it.</summary>
+    public async Task<bool> DownloadAsync(string url, string fileName)
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<bool>("downloadFile", url, fileName);
+    }
+
     /// <summary>
     /// Keeps Enter from adding a newline to <paramref name="textarea"/> until
     /// disposed, so the component's keydown handler can send instead.
@@ -92,11 +124,38 @@ public sealed class AuroraInterop : IAsyncDisposable
         return new Handle(handle);
     }
 
-    /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
-    public async Task SetValueAsync(ElementReference element, string value)
+    /// <summary>Grows a textarea with its text up to its CSS max-height, until disposed.</summary>
+    public async Task<IAsyncDisposable> AutoGrowAsync(ElementReference textarea)
     {
         var module = await _module.Value;
-        await module.InvokeVoidAsync("setValue", element, value);
+        var handle = await module.InvokeAsync<IJSObjectReference>("autoGrow", textarea);
+        return new Handle(handle);
+    }
+
+    /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
+    /// <summary>Inserts text at the field's caret (or over its selection) and returns the field's new text.</summary>
+    public async Task<string?> InsertAtCaretAsync(ElementReference element, string text)
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<string?>("insertAtCaret", element, text);
+    }
+
+    public async Task SetValueAsync(ElementReference element, string value, bool focus = false)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("setValue", element, value, focus);
+    }
+
+    /// <summary>
+    /// Keeps room at the end of <paramref name="scroller"/> for a footer that
+    /// floats over it, growing the CSS length <paramref name="property"/> as the
+    /// footer grows, until the handle is disposed.
+    /// </summary>
+    public async Task<IAsyncDisposable> ReserveUnderAsync(ElementReference scroller, ElementReference footer, string property)
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("reserveUnder", scroller, footer, property);
+        return new Handle(handle);
     }
 
     public async Task ScrollToBottomAsync(ElementReference element)

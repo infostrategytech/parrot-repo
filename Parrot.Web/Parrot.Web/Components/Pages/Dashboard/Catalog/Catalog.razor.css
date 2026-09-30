@@ -275,3 +275,7 @@
   gap: var(--spacing-md);
   align-items: center;
 }
+
+/* The category filter sits at the page's right edge: its menu opens leftwards
+   so it stays on screen. */
+.products__controls-right ::deep .filter-popover__menu { right: 0; left: auto; }

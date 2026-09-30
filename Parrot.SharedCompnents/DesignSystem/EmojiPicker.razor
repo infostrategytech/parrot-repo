@@ -1,0 +1,108 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+
+@* An emoji button that opens a searchable grid of emoji, with the ones used
+   recently first. The emoji are plain text, so each device draws them in its
+   own style (Apple, Microsoft, Google). Opens upwards, for composers at the
+   bottom of the screen; Escape and a click elsewhere close it. *@
+<div class="ds-emoji-picker" @onkeydown="OnKeyDown">
+    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="@TriggerClass"
+            aria-label="Add emoji" title="Add emoji"
+            aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")"
+            disabled="@Disabled" @onclick="ToggleAsync">
+        <IconLeft><Icon Name="IconName.RiEmotionHappyFill" /></IconLeft>
+    </Button>
+
+    @if (_open)
+    {
+        @* The click-away layer, the documented exception to building from components. *@
+        <button type="button" class="ds-emoji-picker__dismiss" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
+        <section class="ds-emoji-picker__panel" role="dialog" aria-label="Emoji">
+            <div class="ds-emoji-picker__search">
+                <SearchField Value="@_query" ValueChanged="value => _query = value ?? string.Empty"
+                             Placeholder="Search emoji" AriaLabel="Search emoji" AutoFocus />
+            </div>
+            <div class="ds-emoji-picker__groups">
+                @foreach (var group in VisibleGroups)
+                {
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="ds-emoji-picker__heading ds-overline">@group.Name</Typography>
+                    <div class="ds-emoji-picker__grid">
+                        @foreach (var emoji in group.Items)
+                        {
+                            @* Each emoji is one tap target; a design-system button would
+                               add a label and padding a glyph grid does not want. *@
+                            <button type="button" class="ds-emoji-picker__emoji @TextStyle.HeadingH4Semibold.ToClassName()" title="@emoji.Words"
+                                    aria-label="@emoji.Words" @onclick="() => PickAsync(emoji.Glyph)">@emoji.Glyph</button>
+                        }
+                    </div>
+                }
+                @if (!VisibleGroups.Any())
+                {
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="ds-emoji-picker__empty">No emoji match “@_query”.</Typography>
+                }
+            </div>
+        </section>
+    }
+</div>
+
+@code {
+    private const string RecentKey = "aurora.emoji.recent";
+    private const int RecentLimit = 16;
+
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<string> OnPick { get; set; }
+    /// <summary>Extra classes for the trigger, so it can match the toolbar it sits in.</summary>
+    [Parameter] public string? Class { get; set; }
+
+    private bool _open;
+    private string _query = "";
+    private List<string> _recent = [];
+
+    private string TriggerClass => string.IsNullOrWhiteSpace(Class) ? "ds-emoji-picker__trigger" : $"ds-emoji-picker__trigger {Class}";
+
+    private IEnumerable<EmojiCatalog.Group> VisibleGroups
+    {
+        get
+        {
+            var query = _query.Trim();
+            if (query.Length > 0)
+            {
+                var found = EmojiCatalog.Groups.SelectMany(g => g.Items)
+                    .Where(e => e.Words.Contains(query, StringComparison.OrdinalIgnoreCase)).ToList();
+                return found.Count == 0 ? [] : [new EmojiCatalog.Group("Results", found)];
+            }
+            var all = EmojiCatalog.Groups.SelectMany(g => g.Items).ToDictionary(e => e.Glyph);
+            var recent = _recent.Where(all.ContainsKey).Select(g => all[g]).ToList();
+            return recent.Count == 0 ? EmojiCatalog.Groups : [new EmojiCatalog.Group("Recently used", recent), .. EmojiCatalog.Groups];
+        }
+    }
+
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        _query = "";
+        if (_open) _recent = await ReadRecentAsync();
+    }
+
+    private async Task PickAsync(string glyph)
+    {
+        _recent = [glyph, .. _recent.Where(g => g != glyph).Take(RecentLimit - 1)];
+        try { await Interop.WriteStorageAsync(RecentKey, string.Join(" ", _recent)); }
+        catch (JSException) { }
+        _open = false;
+        await OnPick.InvokeAsync(glyph);
+    }
+
+    private async Task<List<string>> ReadRecentAsync()
+    {
+        try { return (await Interop.ReadStorageAsync(RecentKey) ?? "").Split(' ', StringSplitOptions.RemoveEmptyEntries).ToList(); }
+        catch (JSException) { return []; }
+    }
+
+    private void Close() => _open = false;
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") _open = false;
+    }
+}

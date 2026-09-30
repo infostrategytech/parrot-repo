@@ -92,6 +92,13 @@
   padding: var(--spacing-lg);
 }
 
+/* An icon-only action is square. It keeps the same documented height and
+   centres the icon without label padding widening the control. */
+.ds-button--icon-only { padding: 0; aspect-ratio: 1; }
+.ds-button--icon-only.ds-button--small { width: var(--ds-button-height-sm); }
+.ds-button--icon-only.ds-button--medium { width: var(--ds-button-height-md); }
+.ds-button--icon-only.ds-button--large { width: var(--ds-button-height-lg); }
+
 /* The label carries the gap as horizontal padding, matching how the Figma
    frame spaces its icon/label/icon children. */
 .ds-button__label {

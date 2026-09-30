@@ -12,7 +12,7 @@
    it is a real button. The open state is owned by the caller so that a row of
    filters can close one another. *@
 
-<div class="filter-popover">
+<div class="@ClassName">
     <button type="button"
             class="filter-popover__trigger"
             aria-expanded="@Open.ToString().ToLowerInvariant()"
@@ -59,6 +59,11 @@
 
     [Parameter] public RenderFragment? Leading { get; set; }
 
+    /// <summary>Opens the menu from the trigger's trailing edge, for controls near a panel boundary.</summary>
+    [Parameter] public bool AlignEnd { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
     [Parameter, EditorRequired] public bool Open { get; set; }
 
     /// <summary>
@@ -68,6 +73,13 @@
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
 
     [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    private string ClassName => string.Join(" ", new[]
+    {
+        "filter-popover",
+        AlignEnd ? "is-end-aligned" : null,
+        Class
+    }.Where(value => !string.IsNullOrWhiteSpace(value)));
 
     private Task ToggleAsync() => OpenChanged.InvokeAsync(!Open);
 

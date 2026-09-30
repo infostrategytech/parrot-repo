@@ -107,6 +107,7 @@
             var name = $"ds-button ds-button--{Variant.ToString().ToLowerInvariant()} ds-button--{Size.ToString().ToLowerInvariant()}";
             if (Busy) name += " is-busy";
             if (FullWidth) name += " ds-button--full-width";
+            if (ChildContent is null) name += " ds-button--icon-only";
             return string.IsNullOrWhiteSpace(Class) ? name : $"{name} {Class}";
         }
     }

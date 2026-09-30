@@ -101,7 +101,46 @@ export function observeMedia(query, dotNetRef, method) {
   };
 }
 
-// ── Composer ────────────────────────────────────────────────────────────────
+
+// ── Keyboard shortcuts ──────────────────────────────────────────────────────
+// Ctrl+K (⌘K on a Mac) focuses the search it is bound to. Handled here so a
+// keystroke anywhere on the page costs no server round trip.
+
+export function bindFocusShortcut(element, key) {
+  if (!element) return { release() {} };
+  const wanted = String(key).toLowerCase();
+  const onKeyDown = (event) => {
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === wanted) {
+      event.preventDefault();
+      element.focus();
+      element.select?.();
+    }
+  };
+  document.addEventListener("keydown", onKeyDown);
+  return {
+    release() {
+      document.removeEventListener("keydown", onKeyDown);
+    }
+  };
+}
+
+// Non-modal drawers do not trap focus, but Escape should still dismiss them
+// regardless of where focus currently sits on the page.
+export function bindEscape(dotNetRef, method) {
+  const onKeyDown = event => {
+    if (event.key !== "Escape") return;
+    dotNetRef.invokeMethodAsync(method);
+  };
+  document.addEventListener("keydown", onKeyDown);
+  return {
+    release() {
+      document.removeEventListener("keydown", onKeyDown);
+    }
+  };
+}
+
+
+// ── Text areas ──────────────────────────────────────────────────────────────
 
 /* Stop Enter from adding a newline to a textarea, so the component's own
    keydown handler can send instead. Blazor cannot cancel a key conditionally
@@ -122,19 +161,95 @@ export function submitOnEnter(element) {
 
 /* Replace a field's text from the server without re-rendering its value.
    A server-rendered value attribute races the keyboard: a render that lands
-   mid-keystroke writes back an older copy of the text. The composer leaves
-   the field uncontrolled and only pushes text that did not come from typing. */
-export function setValue(element, value) {
+   mid-keystroke writes back an older copy of the text. The field is left
+   uncontrolled and only text that did not come from typing is pushed. */
+export function setValue(element, value, focus) {
   if (element && element.value !== value) element.value = value;
+  element?.__auroraGrow?.();
+  // Text put in for the person to carry on with (a draft, a saved reply, an
+  // emoji): hand them the field, caret at the end.
+  if (focus && value && element) {
+    element.focus();
+    element.setSelectionRange(value.length, value.length);
+  }
+}
+
+/* A textarea that grows with its text, upwards when it sits at the bottom of
+   its container, until the stylesheet's max-height; past that it scrolls. */
+export function autoGrow(element) {
+  if (!element) return { release() {} };
+  const grow = () => {
+    element.style.height = "auto";
+    const style = getComputedStyle(element);
+    const edges = parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+    element.style.height = `${element.scrollHeight + edges}px`;
+  };
+  element.__auroraGrow = grow;
+  element.addEventListener("input", grow);
+  grow();
+
+  return {
+    release() {
+      element.removeEventListener("input", grow);
+      delete element.__auroraGrow;
+    }
+  };
+}
+
+
+/* Put text in at the caret (or over a selection), as typing it would, and
+   hand back the field's new text. The caret survives the field losing focus
+   to a toolbar button, so an emoji lands where the person was typing. */
+export function insertAtCaret(element, text) {
+  if (!element) return null;
+  const start = element.selectionStart ?? element.value.length;
+  const end = element.selectionEnd ?? start;
+  element.focus();
+  element.setRangeText(text, start, end, "end");
+  element.__auroraGrow?.();
+  return element.value;
 }
 
 // ── Scrolling ───────────────────────────────────────────────────────────────
 
+// A footer floating over a scrolling area (a chat's reply box over its
+// thread) covers whatever sits under it, so the area keeps room at the end
+// for it: the room the design gives, plus however much taller the footer
+// grows (an error above the reply box, say). The last line stays in view.
+export function reserveUnder(scroller, footer, property) {
+  if (!(scroller instanceof Element) || !(footer instanceof Element)) return { release() {} };
+  const base = parseFloat(getComputedStyle(scroller).getPropertyValue(property)) || 0;
+  let rest = null;
+  const update = () => {
+    const height = footer.getBoundingClientRect().height;
+    // The footer's height the first time it is measured is its resting size.
+    rest ??= height;
+    const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+    scroller.style.setProperty(property, Math.max(base, base + height - rest) + "px");
+    if (pinned) scroller.scrollTop = scroller.scrollHeight;
+  };
+  const observer = new ResizeObserver(update);
+  observer.observe(footer);
+  return {
+    release() {
+      observer.disconnect();
+      scroller.style.removeProperty(property);
+    }
+  };
+}
+
 export function scrollToBottom(element) {
   if (!element) return;
-  // One frame later, so the newly rendered message is measured before we jump.
+  const moveToLatest = () => { element.scrollTop = element.scrollHeight; };
+  // Two frames let Blazor finish the new thread's layout before the jump.
+  // Attachments may increase the thread again after their images load, so
+  // keep the newest message in view when that happens too.
   requestAnimationFrame(() => {
-    element.scrollTop = element.scrollHeight;
+    moveToLatest();
+    requestAnimationFrame(moveToLatest);
+    element.querySelectorAll("img").forEach(image => {
+      if (!image.complete) image.addEventListener("load", moveToLatest, { once: true });
+    });
   });
 }
 
@@ -215,6 +330,27 @@ export async function copyText(value) {
     await navigator.clipboard.writeText(value);
   } catch {
     // The value is on screen and selectable; that is the fallback.
+  }
+}
+
+export async function downloadFile(url, fileName) {
+  try {
+    // Same-origin credentials allow protected OmniAI media without ever
+    // forwarding session cookies to an external channel URL.
+    const response = await fetch(url, { credentials: "same-origin" });
+    if (!response.ok) return false;
+    const blobUrl = URL.createObjectURL(await response.blob());
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = fileName || "image";
+    link.hidden = true;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    requestAnimationFrame(() => URL.revokeObjectURL(blobUrl));
+    return true;
+  } catch {
+    return false;
   }
 }
 

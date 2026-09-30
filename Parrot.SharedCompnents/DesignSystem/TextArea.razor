@@ -1,0 +1,125 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IAsyncDisposable
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+
+@* No value attribute: the field is uncontrolled, and text reaches it only when
+   it changes from outside the keyboard (a send clearing it, an emoji, a saved
+   reply, another conversation's draft). A server-rendered value races the
+   keyboard: a render landing mid-keystroke, from typing itself or a page
+   refresh, writes back an older copy and eats or reorders characters.
+   (Shalom's composer fix, fe79605, made part of the component.) *@
+<textarea id="@InputId"
+          @ref="_element"
+          class="@ClassName"
+          placeholder="@Placeholder"
+          disabled="@Disabled"
+          rows="@Rows"
+          maxlength="@MaxLength"
+          aria-label="@AriaLabel"
+          @oninput="OnInput"
+          @onkeydown="OnKeyDown"
+          @attributes="AdditionalAttributes"></textarea>
+
+@code {
+    private readonly string _generatedId = "textarea-" + Guid.NewGuid().ToString("N");
+    private ElementReference _element;
+    private IAsyncDisposable? _grow;
+    private IAsyncDisposable? _enter;
+
+    // The text the field already shows (last typed or last pushed), and text
+    // waiting to be pushed to it after the next render.
+    private string? _shown;
+    private string? _pending;
+
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Text";
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public int Rows { get; set; } = 3;
+    [Parameter] public int? MaxLength { get; set; }
+    [Parameter] public TextAreaVariant Variant { get; set; } = TextAreaVariant.Field;
+    [Parameter] public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>Grows with its text up to the variant's max height, then scrolls.</summary>
+    [Parameter] public bool AutoGrow { get; set; }
+
+    /// <summary>
+    /// Enter does not add a newline, so OnKeyDown can send; Shift+Enter still
+    /// breaks the line, and Enter that confirms an IME composition is left alone.
+    /// </summary>
+    [Parameter] public bool SubmitOnEnter { get; set; }
+
+    /// <summary>When text is put in from outside the keyboard, focus the field with the caret at the end.</summary>
+    [Parameter] public bool FocusOnPush { get; set; }
+
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string InputId => Id ?? _generatedId;
+    private string ClassName
+    {
+        get
+        {
+            var name = $"ds-text-area ds-text-area--{Variant.ToString().ToLowerInvariant()} {TextStyle.BodySmallMedium.ToClassName()}";
+            if (AutoGrow) name += " is-auto-grow";
+            if (Disabled) name += " is-disabled";
+            return string.IsNullOrWhiteSpace(Class) ? name : $"{name} {Class}";
+        }
+    }
+
+    // Text that differs from what the field shows came from outside the keyboard.
+    protected override void OnParametersSet()
+    {
+        var text = Value ?? "";
+        if (text == _shown) return;
+        _shown = text;
+        _pending = text;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            if (AutoGrow) _grow = await Interop.AutoGrowAsync(_element);
+            if (SubmitOnEnter) _enter = await Interop.SubmitOnEnterAsync(_element);
+        }
+        if (_pending is not null)
+        {
+            var text = _pending;
+            _pending = null;
+            // Not on the first render: arriving on a page does not take the focus.
+            await Interop.SetValueAsync(_element, text, FocusOnPush && !firstRender);
+        }
+    }
+
+    /// <summary>Moves the keyboard focus to the field.</summary>
+    public ValueTask FocusAsync() => _element.FocusAsync();
+
+    /// <summary>Inserts text where the person's caret is, as typing it would (an emoji, say).</summary>
+    public async Task InsertAsync(string text)
+    {
+        var value = await Interop.InsertAtCaretAsync(_element, text);
+        if (value is null) return;
+        _shown = value;
+        await ValueChanged.InvokeAsync(value);
+    }
+
+    private Task OnInput(ChangeEventArgs args)
+    {
+        _shown = args.Value?.ToString() ?? "";
+        return ValueChanged.InvokeAsync(_shown);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            if (_grow is not null) await _grow.DisposeAsync();
+            if (_enter is not null) await _enter.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

@@ -1,0 +1,72 @@
+.ds-media-viewer {
+  /* Missing from the token set: no full-screen media layer, zoom or motion values. */
+  --ds-media-viewer-layer: 130;
+  --ds-media-viewer-zoom: 180%;
+  --ds-media-viewer-motion: 200ms;
+  --ds-media-viewer-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-media-viewer-rise: 0.97;
+
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-media-viewer-layer);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--colors-text-primary);
+  /* Solid, as WhatsApp's viewer is: the page behind is not part of the view. */
+  background: var(--colors-surface-background);
+  outline: none;
+  animation: ds-media-viewer-in var(--ds-media-viewer-motion) ease both;
+}
+
+/* The top bar: who sent it and when, then Download and Close. */
+.ds-media-viewer__bar {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.ds-media-viewer__who { display: flex; gap: var(--spacing-md); align-items: center; min-width: 0; }
+.ds-media-viewer__who > div { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.ds-media-viewer__who ::deep span { color: var(--colors-text-muted); }
+.ds-media-viewer__actions { display: flex; gap: var(--spacing-xs); align-items: center; }
+
+/* The image as large as fits; zoomed, it grows and the stage scrolls. */
+.ds-media-viewer__stage {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  padding: var(--spacing-xl) var(--spacing-5xl);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.ds-media-viewer__image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+  cursor: zoom-in;
+  border-radius: var(--radius-radius-md);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-5xl) var(--colors-surface-shadow);
+  animation: ds-media-viewer-image var(--ds-media-viewer-motion) var(--ds-media-viewer-ease) both;
+}
+.ds-media-viewer__stage.is-zoomed .ds-media-viewer__image {
+  max-width: none;
+  max-height: none;
+  height: var(--ds-media-viewer-zoom);
+  cursor: zoom-out;
+}
+
+@keyframes ds-media-viewer-in {
+  from { opacity: 0; }
+}
+@keyframes ds-media-viewer-image {
+  from { opacity: 0; transform: scale(var(--ds-media-viewer-rise)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-media-viewer,
+  .ds-media-viewer__image { animation: none; }
+}

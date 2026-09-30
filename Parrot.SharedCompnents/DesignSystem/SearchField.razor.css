@@ -1,0 +1,69 @@
+.ds-search-field {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: 100%;
+  height: var(--ds-search-field-height);
+  padding-inline: var(--spacing-md);
+  color: var(--colors-icon-muted);
+  background: var(--colors-surface-muted);
+  border: var(--ds-search-field-border) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  cursor: text;
+  transition:
+    border-color var(--ds-search-field-motion) ease,
+    box-shadow var(--ds-search-field-motion) ease;
+
+  /* Compact search controls are not represented in the Figma height scale. */
+  --ds-search-field-height: 40px;
+  --ds-search-field-border: 1px;
+  --ds-search-field-motion: var(--ds-motion-fast);
+}
+
+.ds-search-field:hover { border-color: var(--colors-surface-border); }
+
+.ds-search-field:focus-within {
+  background: var(--colors-surface-card);
+  border-color: var(--colors-surface-ring);
+  box-shadow: inset 0 0 0 var(--ds-search-field-border) var(--colors-surface-ring);
+}
+
+.ds-search-field__icon { display: grid; place-items: center; }
+
+.ds-search-field input {
+  min-width: 0;
+  padding: 0;
+  color: var(--colors-text-primary);
+  font: inherit;
+  background: transparent;
+  border: 0;
+  outline: 0;
+}
+
+.ds-search-field input::placeholder { color: var(--colors-text-muted); }
+.ds-search-field input::-webkit-search-cancel-button { display: none; }
+
+.ds-search-field.is-disabled {
+  color: var(--colors-interaction-disabled-foreground);
+  background: var(--colors-interaction-disabled-background);
+  border-color: var(--colors-interaction-disabled-border);
+  cursor: not-allowed;
+}
+
+.ds-search-field.is-disabled input { color: var(--colors-interaction-disabled-foreground); }
+
+/* The keyboard hint at the end of the field, as React draws it. */
+.ds-search-field.has-shortcut { grid-template-columns: auto minmax(0, 1fr) auto; }
+
+.ds-search-field__shortcut {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  padding: var(--spacing-2xs) var(--spacing-xs);
+  color: var(--colors-text-subtle);
+  font-family: inherit;
+  background: var(--colors-surface-card);
+  border: var(--ds-search-field-border) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xs);
+}

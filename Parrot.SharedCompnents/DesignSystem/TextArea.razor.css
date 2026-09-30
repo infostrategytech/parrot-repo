@@ -1,0 +1,64 @@
+.ds-text-area {
+  display: block;
+  width: 100%;
+  min-height: var(--ds-text-area-min-height);
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
+  font: inherit;
+  line-height: var(--typography-leading-leading-lg);
+  resize: vertical;
+  background: var(--colors-surface-card);
+  border: var(--ds-text-area-border) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+  outline: 0;
+  transition:
+    border-color var(--ds-text-area-motion) ease,
+    box-shadow var(--ds-text-area-motion) ease;
+
+  /* Multiline controls do not yet have component geometry tokens. */
+  --ds-text-area-min-height: 96px;
+  --ds-text-area-plain-min-height: 54px;
+  --ds-text-area-plain-max-height: 192px;
+  --ds-text-area-border: 1px;
+  --ds-text-area-motion: var(--ds-motion-fast);
+}
+
+.ds-text-area::placeholder { color: var(--colors-text-muted); }
+.ds-text-area:hover { border-color: var(--colors-surface-border); }
+
+.ds-text-area:focus {
+  border-color: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-text-area-border) var(--colors-brand-primary);
+}
+
+.ds-text-area--plain {
+  min-height: var(--ds-text-area-plain-min-height);
+  max-height: var(--ds-text-area-plain-max-height);
+  padding: var(--spacing-xs);
+  resize: none;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.ds-text-area--plain:hover,
+.ds-text-area--plain:focus {
+  border: 0;
+  box-shadow: none;
+}
+
+.ds-text-area.is-disabled {
+  color: var(--colors-interaction-disabled-foreground);
+  background: var(--colors-interaction-disabled-background);
+  border-color: var(--colors-interaction-disabled-border);
+  cursor: not-allowed;
+}
+
+.ds-text-area--plain.is-disabled { background: transparent; }
+
+/* Grows with its text (script sets the height) until its max height, then
+   scrolls. A composer anchored to the bottom therefore grows upwards. */
+.ds-text-area.is-auto-grow { overflow-y: auto; resize: none; }
+.ds-text-area--field.is-auto-grow { max-height: var(--ds-text-area-field-max-height); }
+.ds-text-area { --ds-text-area-field-max-height: 320px; }

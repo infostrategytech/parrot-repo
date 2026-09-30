@@ -1,0 +1,11 @@
+/* Kept at the lowest weight (:where), so a row's own states, such as a
+   selected conversation, win over the plain hover. */
+.ds-row-button {
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.ds-row-button:where(:hover:not(:disabled)) { background: var(--colors-interaction-hover); }
+.ds-row-button:where(:disabled) { cursor: not-allowed; }

@@ -1,0 +1,82 @@
+/* Each tab is a child component, so the set styles it through ::deep. */
+.ds-tabs ::deep .ds-tab { cursor: pointer; }
+
+/* Segmented: a muted tray; tabs share its width, the chosen one a raised card. */
+.ds-tabs--segmented {
+  display: flex;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+}
+.ds-tabs--segmented ::deep .ds-tab {
+  display: inline-flex;
+  flex: 1;
+  gap: var(--spacing-xs);
+  align-items: center;
+  justify-content: center;
+  min-height: var(--spacing-3xl);
+  padding-inline: var(--spacing-sm);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+}
+.ds-tabs--segmented ::deep .ds-tab:disabled { color: var(--colors-interaction-disabled-foreground); cursor: not-allowed; }
+.ds-tabs--segmented ::deep .ds-tab.is-active {
+  color: var(--colors-brand-primary);
+  background: var(--colors-surface-card);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
+}
+
+/* Floating: a card pill over content; the chosen tab tinted, counts as chips. */
+.ds-tabs--floating {
+  display: flex;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow-diffuse);
+}
+.ds-tabs--floating ::deep .ds-tab {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  min-height: var(--spacing-3xl);
+  padding: 0 var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+}
+.ds-tabs--floating ::deep .ds-tab.is-active { color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); }
+.ds-tabs--floating ::deep .ds-tab__count {
+  display: grid;
+  place-items: center;
+  min-width: var(--spacing-lg);
+  height: var(--spacing-lg);
+  padding-inline: var(--spacing-2xs);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+}
+
+/* Flat: no tray; the chosen tab filled. */
+.ds-tabs--flat {
+  /* Missing from the token set: no disabled opacity. */
+  --ds-tabs-disabled-opacity: 0.58;
+
+  display: flex;
+  gap: var(--spacing-2xs);
+  width: fit-content;
+}
+.ds-tabs--flat ::deep .ds-tab {
+  min-height: var(--spacing-3xl);
+  padding-inline: var(--spacing-sm);
+  color: var(--colors-text-subtle);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+}
+.ds-tabs--flat ::deep .ds-tab:disabled { cursor: not-allowed; opacity: var(--ds-tabs-disabled-opacity); }
+.ds-tabs--flat ::deep .ds-tab.is-active { color: var(--colors-text-primary); background: var(--colors-surface-muted); }
