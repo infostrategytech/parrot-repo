@@ -1,49 +1,206 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @using System.Globalization
 
-@* Parrot's messages are either the customer's (inbound) or a human reply sent
-   from the business's WhatsApp number (outbound). There are no AI, note,
-   system or AI-question messages, so only Aurora's message-bubble branch is
-   reachable; its is-customer / is-human variants are kept as drawn. *@
-<article class="message-bubble @DirectionClass @KindClass">
-    <PetalAvatar Seed="@AvatarSeed" Initials="@AvatarInitials" Size="AvatarSize.Md" />
-
-    <div class="message-bubble__content">
-        <header>
-            <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@AuthorLabel</Typography>
-        </header>
-
-        <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="message-bubble__body">@Message.Text</Typography>
-
-        <footer>
-            <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
-            @if (Message.IsOutgoing)
-            {
-                <span class="message-delivery @(IsFailed ? "is-failed" : null)">
-                    <Icon Name="@DeliveryGlyph" />
-                    <Typography TextStyle="TextStyle.Small10Regular" As="span">@Message.Status.ToLowerInvariant()</Typography>
-                </span>
-            }
-        </footer>
+@* The React inbox's message kinds. Today's API sends the customer's messages
+   and replies from the business's number only, so real mode draws the first
+   and last branches; AI replies, notes, system lines and AI questions arrive
+   when the API sends a message kind. *@
+@if (Message.Kind == MessageKind.System)
+{
+    @* A divider across the thread: what kind of event it is, what happened,
+       and when, together between two rules. *@
+    <div class="message-system" role="note">
+        <span class="message-system__event">
+            <span class="message-system__glyph" aria-hidden="true"><Icon Name="@SystemGlyph" Size="IconSize.Sm" /></span>
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@Message.Text</Typography>
+            <Typography TextStyle="TextStyle.Small12Regular" As="time">@TimeLabel</Typography>
+        </span>
     </div>
-</article>
+}
+else if (Message.Kind == MessageKind.AiQuestion)
+{
+    <article class="message-question @(Message.Answered ? "is-answered" : null)">
+        <header>
+            <span class="message-question__icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Sm" /></span>
+            <div>
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@AuthorLabel needs your answer</Typography>
+                <Typography TextStyle="TextStyle.Small12Regular" As="small">The AI could not find an approved answer</Typography>
+            </div>
+        </header>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="message-question__body">@Message.Text</Typography>
+        @if (Message.Answered)
+        {
+            <div class="message-question__answer">
+                <Icon Name="IconName.RiBookAiFill" Size="IconSize.Sm" />
+                <span>
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="small">Team answer</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@Message.Answer</Typography>
+                </span>
+                <Typography TextStyle="TextStyle.Small10Semibold" As="strong">Knowledge updated</Typography>
+            </div>
+        }
+        else
+        {
+            <footer>
+                <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
+                @if (CanTeach)
+                {
+                    <Button Size="ButtonSize.Small" @onclick="() => OnAnswer.InvokeAsync(Message)">Answer @AuthorLabel</Button>
+                }
+            </footer>
+        }
+    </article>
+}
+else if (Message.Kind == MessageKind.Note)
+{
+    <article class="message-note">
+        <PetalAvatar Seed="@AvatarSeed" Initials="@AvatarInitials" Size="AvatarSize.Md" />
+        <div class="message-note__card">
+            <header>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@AuthorLabel</Typography>
+                <span class="message-note__private">
+                    <Icon Name="IconName.RiLock2Fill" />
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline">Private</Typography>
+                </span>
+                <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
+            </header>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="message-note__body">@Message.Text</Typography>
+        </div>
+    </article>
+}
+else
+{
+    <article class="message-bubble @DirectionClass @KindClass">
+        @if (Message.Kind == MessageKind.Ai)
+        {
+            <span class="message-bubble__ai-avatar"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></span>
+        }
+        else if (Message.Kind == MessageKind.Customer)
+        {
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="message-customer-trigger"
+                    aria-label="@($"View {CustomerName}'s details")" title="View customer details"
+                    @onclick="OnCustomerDetails">
+                <IconLeft><PetalAvatar Seed="@AvatarSeed" Initials="@AvatarInitials" Size="AvatarSize.Md" /></IconLeft>
+            </Button>
+        }
+        else
+        {
+            <PetalAvatar Seed="@AvatarSeed" Initials="@AvatarInitials" Size="AvatarSize.Md" />
+        }
+
+        <div class="message-bubble__content">
+            <header>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@AuthorLabel</Typography>
+                @if (Message.Kind == MessageKind.Ai)
+                {
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="span">AI agent</Typography>
+                }
+            </header>
+
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="message-bubble__body">@Message.Text</Typography>
+
+            @if (Message.Attachment is { } attachment)
+            {
+                @if (attachment.Type == "image" && attachment.Url is not null)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="message-image"
+                            aria-label="@($"Preview {attachment.Name}")" @onclick="() => OpenImage(attachment)">
+                        <ChildContent>
+                            <img src="@AssetUrl(attachment.Url)" alt="" />
+                            <span class="message-image__caption"><Icon Name="IconName.RiAttachment2" />@attachment.Name</span>
+                        </ChildContent>
+                    </Button>
+                }
+                else
+                {
+                    <div class="message-attachment">
+                        <Icon Name="IconName.RiAttachment2" />
+                        <Typography TextStyle="TextStyle.Small10Medium" As="span">@attachment.Name</Typography>
+                    </div>
+                }
+            }
+
+            <footer>
+                <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
+                @if (Outbound)
+                {
+                    <span class="message-delivery @(IsFailed ? "is-failed" : null)">
+                        <Icon Name="@DeliveryGlyph" />
+                        <Typography TextStyle="TextStyle.Small10Regular" As="span">@DeliveryLabel</Typography>
+                    </span>
+                }
+                @if (Message.KnowledgeUpdated)
+                {
+                    <span class="message-learning">
+                        <Icon Name="IconName.RiBookAiFill" />
+                        <Typography TextStyle="TextStyle.Small10Medium" As="span">Knowledge updated</Typography>
+                    </span>
+                }
+                else if (Message.Kind == MessageKind.Ai && CanTeach)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="message-correction"
+                            @onclick="() => OnCorrect.InvokeAsync(Message)">
+                        <IconLeft><Icon Name="IconName.RiFeedbackFill" /></IconLeft>
+                        <ChildContent><Typography TextStyle="TextStyle.Small12Semibold" As="span">Correct for next time</Typography></ChildContent>
+                    </Button>
+                }
+            </footer>
+        </div>
+    </article>
+}
 
 @code {
     [Parameter, EditorRequired] public ConvMessage Message { get; set; } = default!;
     [Parameter, EditorRequired] public string CustomerName { get; set; } = "";
     [Parameter, EditorRequired] public string CustomerSeed { get; set; } = "";
+    [Parameter] public string? CustomerInitials { get; set; }
+    /// <summary>Who replies are shown as when the API does not name the teammate: the business.</summary>
     [Parameter, EditorRequired] public string AuthorName { get; set; } = "";
     [Parameter, EditorRequired] public string AuthorSeed { get; set; } = "";
+    /// <summary>The corrections and answers that teach the AI can be saved.</summary>
+    [Parameter] public bool CanTeach { get; set; }
+    [Parameter] public EventCallback<ConvMessage> OnCorrect { get; set; }
+    [Parameter] public EventCallback<ConvMessage> OnAnswer { get; set; }
+    [Parameter] public EventCallback OnCustomerDetails { get; set; }
+    /// <summary>This message's image was chosen: the thread opens it full screen.</summary>
+    [Parameter] public EventCallback<ConvMessage> OnPreviewImage { get; set; }
 
-    private bool Outbound => Message.IsOutgoing;
+
+    private bool Outbound => Message.Kind is MessageKind.Ai or MessageKind.Human;
     private string DirectionClass => Outbound ? "is-outbound" : "is-inbound";
-    private string KindClass => Outbound ? "is-human" : "is-customer";
-    private string AuthorLabel => Outbound ? AuthorName : CustomerName;
-    private string AvatarSeed => Outbound ? AuthorSeed : CustomerSeed;
-    private string AvatarInitials => Initials.From(AuthorLabel);
+    private string KindClass => Message.Kind switch
+    {
+        MessageKind.Ai => "is-ai",
+        MessageKind.Human => "is-human",
+        _ => "is-customer"
+    };
+
+    private string AuthorLabel => Message.Kind == MessageKind.Customer
+        ? CustomerName
+        : Message.Author?.Name ?? AuthorName;
+    private string AvatarSeed => Message.Kind == MessageKind.Customer
+        ? CustomerSeed
+        : Message.Author?.Id ?? AuthorSeed;
+    private string AvatarInitials => Message.Kind == MessageKind.Customer && CustomerInitials is { } initials
+        ? initials
+        : Initials.From(AuthorLabel);
     private string TimeLabel => Message.ReceivedAt.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture);
 
+    // The kind of event, read from what happened: AI hand-offs, a teammate
+    // taking or giving back the conversation, knowledge, or a task request.
+    private IconName SystemGlyph => Message.Text switch
+    {
+        var t when t.Contains("task request", StringComparison.OrdinalIgnoreCase) => IconName.RiClipboardFill,
+        var t when t.Contains("knowledge", StringComparison.OrdinalIgnoreCase) => IconName.RiBookAiFill,
+        var t when t.Contains("resumed", StringComparison.OrdinalIgnoreCase) || t.Contains("returned", StringComparison.OrdinalIgnoreCase) => IconName.RiRobot3Fill,
+        var t when t.Contains("assign", StringComparison.OrdinalIgnoreCase) || t.Contains("took over", StringComparison.OrdinalIgnoreCase)
+            || t.Contains("handed", StringComparison.OrdinalIgnoreCase) || t.Contains("paused", StringComparison.OrdinalIgnoreCase) => IconName.RiUserSharedFill,
+        _ => IconName.RiInformationFill
+    };
+
     private bool IsFailed => string.Equals(Message.Status, "failed", StringComparison.OrdinalIgnoreCase);
+    // "Read", "Sent", "Failed": React capitalises the delivery state.
+    private string DeliveryLabel => Message.Status.Length == 0 ? "" : char.ToUpperInvariant(Message.Status[0]) + Message.Status[1..].ToLowerInvariant();
 
     private IconName DeliveryGlyph => Message.Status.ToLowerInvariant() switch
     {
@@ -51,4 +208,12 @@
         "pending" or "unknown" => IconName.RiTimeFill,
         _ => IconName.RiCheckDoubleFill
     };
+
+    private Task OpenImage(InboxAttachmentDto attachment) => OnPreviewImage.InvokeAsync(Message);
+
+    // Attachment links may be absolute API URLs or app-relative paths.
+    internal static string AssetUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var absolute) && (absolute.Scheme == Uri.UriSchemeHttp || absolute.Scheme == Uri.UriSchemeHttps)
+            ? absolute.ToString()
+            : value.TrimStart('/');
 }

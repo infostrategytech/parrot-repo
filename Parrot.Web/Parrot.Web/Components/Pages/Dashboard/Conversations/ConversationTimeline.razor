@@ -1,14 +1,19 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @using System.Globalization
-@using Parrot.Application.Conversations
+@implements IDisposable
 @inject Parrot.Web.Services.ConversationClient Client
+@inject Parrot.Web.Services.IInboxFeatures Features
 @inject AuroraInterop Interop
 @inject Parrot.Web.Services.FeedbackService Feedback
 
 @* The page owns the conversation data (it polls the list and reads the
-   selected thread every 5 seconds); this component draws Aurora's timeline
+   selected thread every 5 seconds); this component draws React's timeline
    over that data and owns the composer: the draft, the send with its
-   request id, and the per-conversation send error. *@
+   request id, and the per-conversation send error.
+
+   The actions the API has no endpoint for yet (taking over, notes, AI drafts,
+   teaching the AI) go through IInboxFeatures, and after each the page reads
+   the conversation again, so every change arrives the same way. *@
 <div class="conversation-timeline">
     @if (!Conversation.HistoryLoaded)
     {
@@ -24,21 +29,20 @@
     }
     else
     {
-        <section class="conversation-timeline__scroll" aria-live="polite" @ref="_scrollElement">
-            <div class="conversation-timeline__tabs">
-                <div role="tablist" aria-label="Conversation content">
-                    <button type="button" role="tab" class="@(_view == ThreadView.Messages ? "is-active" : null)"
-                            aria-selected="@(_view == ThreadView.Messages)" @onclick="() => SetView(ThreadView.Messages)">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Messages</Typography>
-                    </button>
-                    <button type="button" role="tab" class="@(_view == ThreadView.Notes ? "is-active" : null)"
-                            aria-selected="@(_view == ThreadView.Notes)" @onclick="() => SetView(ThreadView.Notes)">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Internal notes</Typography>
-                        <Typography TextStyle="TextStyle.Small10Semibold" As="span">0</Typography>
-                    </button>
-                </div>
-            </div>
+        @* The tabs float over the thread, which fades out beneath them (a mask on
+           the scroll area), so the messages read as fading into the top. *@
+        <div class="conversation-timeline__tabs">
+            <Tabs Label="Conversation content" Variant="TabsVariant.Floating">
+                <Tab Selected="@(_view == ThreadView.Messages)" OnClick="() => SetView(ThreadView.Messages)">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">Messages</Typography>
+                </Tab>
+                <Tab Selected="@(_view == ThreadView.Notes)" Count="@NoteCount.ToString(CultureInfo.InvariantCulture)" OnClick="() => SetView(ThreadView.Notes)">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">Internal notes</Typography>
+                </Tab>
+            </Tabs>
+        </div>
 
+        <section class="conversation-timeline__scroll" aria-live="polite" @ref="_scrollElement">
             <div class="conversation-timeline__messages">
                 @if (_view == ThreadView.Notes)
                 {
@@ -49,74 +53,172 @@
                             <Typography TextStyle="TextStyle.Small12Regular" As="small">Private workspace for your team</Typography>
                         </span>
                     </div>
+                }
+                else if (Conversation.NextBefore is not null)
+                {
+                    <div class="conversation-timeline__older">
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="OnLoadOlder">
+                            Load older messages
+                        </Button>
+                    </div>
+                }
 
+                @{ DateOnly? renderedDate = null; }
+                @foreach (var message in VisibleMessages)
+                {
+                    var messageDate = DateOnly.FromDateTime(message.ReceivedAt.ToLocalTime());
+                    if (_view == ThreadView.Messages && messageDate != renderedDate)
+                    {
+                        <div class="conversation-timeline__date">
+                            <Typography TextStyle="TextStyle.Small10Semibold" As="span">@DateLabel(messageDate)</Typography>
+                        </div>
+                        renderedDate = messageDate;
+                    }
+
+                    <ConversationMessageItem @key="message.Id" Message="message"
+                                             CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
+                                             CustomerInitials="@Conversation.CustomerInitials"
+                                             AuthorName="@AuthorName" AuthorSeed="@AuthorSeed"
+                                             CanTeach="@Features.Available"
+                                             OnCorrect="OpenCorrection" OnAnswer="OpenAnswer"
+                                             OnCustomerDetails="OnCustomerDetails"
+                                             OnPreviewImage="OpenMedia" />
+                }
+
+                @if (_view == ThreadView.Notes && NoteCount == 0)
+                {
                     <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiLock2Fill"
                                 Title="No internal notes yet"
                                 Description="Add private context for teammates from the composer." />
                 }
-                else
-                {
-                    @if (Conversation.NextBefore is not null)
-                    {
-                        <div class="conversation-timeline__older">
-                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="OnLoadOlder">
-                                Load older messages
-                            </Button>
-                        </div>
-                    }
-
-                    DateOnly? renderedDate = null;
-                    @foreach (var message in Conversation.Messages)
-                    {
-                        var messageDate = DateOnly.FromDateTime(message.ReceivedAt.ToLocalTime());
-                        if (messageDate != renderedDate)
-                        {
-                            <div class="conversation-timeline__date">
-                                <Typography TextStyle="TextStyle.Small10Semibold" As="span">@DateLabel(messageDate)</Typography>
-                            </div>
-                            renderedDate = messageDate;
-                        }
-
-                        <ConversationMessageItem @key="message.Id" Message="message"
-                                                 CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
-                                                 AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" />
-                    }
-                }
             </div>
         </section>
 
-        <footer class="conversation-timeline__composer">
+        <footer class="conversation-timeline__composer" @ref="_composerElement">
             @if (Conversation.SendError is not null)
             {
                 <InlineError Message="@Conversation.SendError" OnDismiss="() => Conversation.SendError = null" />
             }
+            @if (_actionError is not null)
+            {
+                <InlineError Message="@_actionError" OnDismiss="() => _actionError = null" />
+            }
 
-            <ResponseControl />
+            @if (Conversation.Status == ConversationStatus.Resolved)
+            {
+                <div class="conversation-timeline__resolved">
+                    <Icon Name="IconName.RiCheckFill" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">This conversation is resolved. Reopen it to reply.</Typography>
+                </div>
+            }
+            else
+            {
+                <ResponseControl Conversation="@Conversation" CanAct="@Features.Available" Countdown="@CountdownLabel"
+                                 Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" />
+            }
 
             <ConversationComposer Conversation="@Conversation"
                                   Mode="@_composerMode" ModeChanged="ChangeComposerMode"
                                   Text="@Conversation.Draft" TextChanged="OnComposerTextChanged"
                                   Sending="@Conversation.Sending" Retry="@Conversation.DraftRequestId.HasValue"
-                                  OnSend="SendAsync" />
+                                  CanUseFeatures="@Features.Available"
+                                  AttachmentName="@_attachment" OnAttachmentChanged="name => _attachment = name"
+                                  DraftedBy="@_draftedBy" Drafting="@_drafting"
+                                  OnSend="SendAsync" OnDraft="DraftAsync" />
         </footer>
     }
 </div>
 
+@* The host only lets this page shape its own dialog (React's width, the
+   header hairline); the dialog itself is fixed to the window. *@
+@* Outside the thread: its scroll area is masked and its column transformed,
+   and either would confine a full-screen viewer to it. *@
+<MediaViewer Item="_media" OnClose="() => _media = null" />
+
+<div class="learning-dialog-host">
+<Dialog Open="@(_learningMessage is not null)"
+        Title="@LearningTitle"
+        Subtitle="@LearningSubtitle"
+        Dismissible
+        ConfirmLabel="@LearningConfirmLabel"
+        BusyLabel="Saving"
+        Busy="@_savingLearning"
+        ConfirmDisabled="@string.IsNullOrWhiteSpace(_learningText)"
+        OnCancel="CloseLearning"
+        OnConfirm="SaveLearningAsync">
+    <GlyphContent><Icon Name="@(_learningMode == LearningMode.Correction ? IconName.RiFeedbackFill : IconName.RiQuestionAnswerFill)" /></GlyphContent>
+    <Body>
+        @if (_learningMessage is { } learningMessage)
+        {
+            <div class="learning-dialog">
+                <div class="learning-dialog__source">
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline">
+                        @(_learningMode == LearningMode.Correction ? "Customer received" : "AI question")
+                    </Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@learningMessage.Text</Typography>
+                </div>
+                <label class="learning-dialog__field">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">@LearningPrompt</Typography>
+                    <TextArea Value="@_learningText" ValueChanged="value => _learningText = value ?? string.Empty"
+                              AriaLabel="@LearningPrompt" Rows="5" Placeholder="@LearningPlaceholder" />
+                </label>
+                <div class="learning-dialog__commitment">
+                    <Icon Name="IconName.RiBookAiFill" Size="IconSize.Sm" />
+                    <span>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Update the knowledge base</Typography>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@LearningCommitment</Typography>
+                    </span>
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                </div>
+                @if (_learningError is not null)
+                {
+                    <InlineError Message="@_learningError" OnDismiss="() => _learningError = null" />
+                }
+            </div>
+        }
+    </Body>
+</Dialog>
+</div>
+
 @code {
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
-    /// <summary>Who outbound replies are shown as: the business whose WhatsApp number sent them.</summary>
+    /// <summary>Who outbound replies are shown as when the API does not name a teammate: the business.</summary>
     [Parameter, EditorRequired] public string AuthorName { get; set; } = "";
     [Parameter, EditorRequired] public string AuthorSeed { get; set; } = "";
     /// <summary>The page is already talking to the API; older-history paging waits for it.</summary>
     [Parameter] public bool Busy { get; set; }
     [Parameter] public EventCallback OnLoadOlder { get; set; }
     [Parameter] public EventCallback OnSent { get; set; }
+    /// <summary>An inbox action changed the conversation; the page reads it again.</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback OnCustomerDetails { get; set; }
 
+    private readonly CancellationTokenSource _lifetime = new();
     private ElementReference _scrollElement;
+    private ElementReference _composerElement;
+    // Room under the thread for the reply area, which floats over it.
+    private IAsyncDisposable? _reserve;
     private string? _tailId;
     private bool _scrollPending;
     private ComposerMode _composerMode = ComposerMode.Reply;
     private ThreadView _view = ThreadView.Messages;
+    private string? _attachment;
+    private string? _draftedBy;
+    private MediaViewerItem? _media;
+    private bool _drafting;
+    private bool _acting;
+    private string? _actionError;
+    private DateTime? _clockFor;
+
+    private ConvMessage? _learningMessage;
+    private LearningMode _learningMode;
+    private string _learningText = "";
+    private string? _learningError;
+    private bool _savingLearning;
+
+    private IEnumerable<ConvMessage> VisibleMessages => Conversation.Messages.Where(message =>
+        _view == ThreadView.Notes ? message.Kind == MessageKind.Note : message.Kind != MessageKind.Note);
+    private int NoteCount => Conversation.Messages.Count(message => message.Kind == MessageKind.Note);
 
     protected override void OnParametersSet()
     {
@@ -129,13 +231,83 @@
             _tailId = tail;
             if (tail is not null) _scrollPending = true;
         }
+
+        // A timed take-over counts down in the control bar.
+        if (Conversation.ControlUntil != _clockFor)
+        {
+            _clockFor = Conversation.ControlUntil;
+            if (_clockFor is not null) _ = TickAsync(_clockFor.Value);
+        }
+    }
+
+    // Only the image chosen opens, with who sent it and when.
+    private void OpenMedia(ConvMessage message)
+    {
+        if (message.Attachment is not { Type: "image", Url: { } url } image) return;
+        var sender = message.Kind == MessageKind.Customer ? Conversation.CustomerName : message.Author?.Name ?? AuthorName;
+        _media = new MediaViewerItem(
+            ConversationMessageItem.AssetUrl(url),
+            image.Name,
+            sender,
+            message.Kind == MessageKind.Customer ? Conversation.Id : message.Author?.Id ?? AuthorSeed,
+            message.Kind == MessageKind.Customer ? Conversation.CustomerInitials : Initials.From(sender),
+            SentLabel(message.ReceivedAt));
+    }
+
+    // "Today at 3:00 PM", as WhatsApp labels a viewed image.
+    private static string SentLabel(DateTime at)
+    {
+        var local = at.ToLocalTime();
+        var day = DateOnly.FromDateTime(local);
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var date = day == today ? "Today" : day == today.AddDays(-1) ? "Yesterday" : local.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+        return $"{date} at {local.ToString("h:mm tt", CultureInfo.InvariantCulture)}";
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The thread is drawn once its history has loaded; bind when it exists,
+        // so an error above the reply box never covers the last message.
+        if (_reserve is null && !string.IsNullOrEmpty(_scrollElement.Id) && !string.IsNullOrEmpty(_composerElement.Id))
+        {
+            try { _reserve = await Interop.ReserveUnderAsync(_scrollElement, _composerElement, "--ds-timeline-composer-reserve"); }
+            catch (JSException) { _reserve = NoReserve.Instance; }
+        }
         if (!_scrollPending) return;
         _scrollPending = false;
         await Interop.ScrollToBottomAsync(_scrollElement);
+    }
+
+    private async Task TickAsync(DateTime until)
+    {
+        try
+        {
+            while (_clockFor == until && !_lifetime.IsCancellationRequested)
+            {
+                await InvokeAsync(StateHasChanged);
+                if (DateTime.UtcNow >= until.ToUniversalTime())
+                {
+                    // The window is over: the API hands back to the agent; read it.
+                    await InvokeAsync(() => OnChanged.InvokeAsync());
+                    return;
+                }
+                await Task.Delay(TimeSpan.FromSeconds(1), _lifetime.Token);
+            }
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private string? CountdownLabel
+    {
+        get
+        {
+            if (Conversation.ControlUntil is not { } until) return null;
+            var remaining = until.ToUniversalTime() - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero) return "00:00";
+            return remaining.TotalHours >= 1
+                ? $"{(int)remaining.TotalHours}:{remaining.Minutes:00}:{remaining.Seconds:00}"
+                : $"{remaining.Minutes:00}:{remaining.Seconds:00}";
+        }
     }
 
     private void SetView(ThreadView view)
@@ -148,23 +320,31 @@
     {
         _composerMode = mode;
         _view = mode == ComposerMode.Note ? ThreadView.Notes : ThreadView.Messages;
+        _draftedBy = null;
         _scrollPending = true;
     }
 
-    private void OnComposerTextChanged(string value) => Conversation.Draft = value;
+    private void OnComposerTextChanged(string value)
+    {
+        Conversation.Draft = value;
+        _draftedBy = null;
+    }
 
-    private async Task SendAsync()
+    private Task SendAsync() => _composerMode == ComposerMode.Note ? AddNoteAsync() : SendReplyAsync();
+
+    private async Task SendReplyAsync()
     {
         var item = Conversation;
-        if (item.Sending || string.IsNullOrWhiteSpace(item.Draft)) return;
+        if (item.Sending || item.ReplyLocked || string.IsNullOrWhiteSpace(item.Draft)) return;
         item.Sending = true;
         item.SendError = null;
         item.DraftRequestId ??= Guid.NewGuid();
         try
         {
             var result = await Client.SendAsync(item.ConnectionId, item.Sender,
-                new SendReplyRequest(item.DraftRequestId.Value, item.Draft), CancellationToken.None);
-            Parrot.Web.Components.Pages.Dashboard.Conversations.ConversationsState.Merge(item, new[] { result });
+                new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft) { AttachmentName = _attachment },
+                CancellationToken.None);
+            ConversationsState.Merge(item, new[] { result });
             item.SendError = result.Status switch
             {
                 "failed" => "WhatsApp rejected this reply. Check the recipient and server credentials before sending a new message.",
@@ -174,6 +354,8 @@
             Feedback.Play(item.SendError is null ? Parrot.Web.Services.FeedbackSound.Send : Parrot.Web.Services.FeedbackSound.Error);
             item.Draft = "";
             item.DraftRequestId = null;
+            _attachment = null;
+            _draftedBy = null;
             _scrollPending = true;
             await OnSent.InvokeAsync();
         }
@@ -191,6 +373,128 @@
         finally { item.Sending = false; }
     }
 
+    private async Task AddNoteAsync()
+    {
+        var item = Conversation;
+        if (item.Sending || string.IsNullOrWhiteSpace(item.Draft)) return;
+        item.Sending = true;
+        _actionError = null;
+        try
+        {
+            await Features.AddNoteAsync(item.ConnectionId, item.Sender, item.Draft);
+            item.Draft = "";
+            _scrollPending = true;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _actionError = ex.Message; }
+        finally { item.Sending = false; }
+    }
+
+    private async Task DraftAsync()
+    {
+        if (_drafting || Conversation.ReplyLocked) return;
+        _drafting = true;
+        _actionError = null;
+        try
+        {
+            var draft = await Features.DraftReplyAsync(Conversation.ConnectionId, Conversation.Sender);
+            _composerMode = ComposerMode.Reply;
+            _view = ThreadView.Messages;
+            Conversation.Draft = draft.Text;
+            _draftedBy = draft.AgentName;
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _actionError = ex.Message; }
+        finally { _drafting = false; }
+    }
+
+    private Task TakeOverAsync(int? minutes) => ActAsync(() => Features.TakeOverAsync(Conversation.ConnectionId, Conversation.Sender, minutes));
+
+    private async Task ReturnToAiAsync()
+    {
+        await ActAsync(() => Features.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender));
+        _composerMode = ComposerMode.Reply;
+        Conversation.Draft = "";
+        _draftedBy = null;
+        _attachment = null;
+    }
+
+    private async Task ActAsync(Func<Task> action)
+    {
+        if (_acting) return;
+        _acting = true;
+        _actionError = null;
+        try
+        {
+            await action();
+            _scrollPending = true;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _actionError = ex.Message; }
+        finally { _acting = false; }
+    }
+
+    private void OpenCorrection(ConvMessage message) => OpenLearning(LearningMode.Correction, message);
+    private void OpenAnswer(ConvMessage message) => OpenLearning(LearningMode.Answer, message);
+
+    private void OpenLearning(LearningMode mode, ConvMessage message)
+    {
+        _learningMode = mode;
+        _learningMessage = message;
+        _learningText = "";
+        _learningError = null;
+    }
+
+    private void CloseLearning()
+    {
+        if (_savingLearning) return;
+        _learningMessage = null;
+        _learningText = "";
+        _learningError = null;
+    }
+
+    private async Task SaveLearningAsync()
+    {
+        if (_learningMessage is null || string.IsNullOrWhiteSpace(_learningText) || _savingLearning) return;
+        _savingLearning = true;
+        _learningError = null;
+        try
+        {
+            if (_learningMode == LearningMode.Correction)
+            {
+                await Features.CorrectAsync(Conversation.ConnectionId, Conversation.Sender, _learningMessage.Id, _learningText);
+            }
+            else
+            {
+                // The answer goes into the composer for review before it is sent.
+                var reply = await Features.AnswerAsync(Conversation.ConnectionId, Conversation.Sender, _learningMessage.Id, _learningText);
+                _composerMode = ComposerMode.Reply;
+                _view = ThreadView.Messages;
+                Conversation.Draft = reply;
+                _draftedBy = null;
+            }
+            _learningMessage = null;
+            _learningText = "";
+            _scrollPending = true;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _learningError = ex.Message; }
+        finally { _savingLearning = false; }
+    }
+
+    private string LearningAgent => Conversation.AiAgent?.Name ?? "the AI agent";
+    private string LearningTitle => _learningMode == LearningMode.Correction ? "Correct for next time" : $"Answer {LearningAgent}";
+    private string LearningSubtitle => _learningMode == LearningMode.Correction ? "Improve future AI responses" : "Resolve an AI knowledge gap";
+    private string LearningConfirmLabel => _learningMode == LearningMode.Correction ? "Save correction" : "Save answer";
+    private string LearningPrompt => _learningMode == LearningMode.Correction
+        ? $"What should {LearningAgent} use next time?"
+        : "What should the AI know?";
+    private string LearningPlaceholder => _learningMode == LearningMode.Correction
+        ? "Write the accurate response or rule..."
+        : "Give the approved answer...";
+    private string LearningCommitment => _learningMode == LearningMode.Correction
+        ? "The original message stays unchanged. This correction guides future answers."
+        : "Your answer is saved as knowledge and placed in the composer for review before sending.";
+
     private static string DateLabel(DateOnly date)
     {
         var today = DateOnly.FromDateTime(DateTime.Now);
@@ -199,5 +503,21 @@
         return date.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
     }
 
+    public void Dispose()
+    {
+        if (_reserve is not null) _ = _reserve.DisposeAsync().AsTask();
+        _clockFor = null;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
+
+    // Keeping room is a nicety: when it cannot bind, the thread still works.
+    private sealed class NoReserve : IAsyncDisposable
+    {
+        public static readonly NoReserve Instance = new();
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+
     private enum ThreadView { Messages, Notes }
+    private enum LearningMode { Correction, Answer }
 }

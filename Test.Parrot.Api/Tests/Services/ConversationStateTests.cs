@@ -1,4 +1,4 @@
-using Parrot.Application.Conversations;
+using Parrot.Web.Services;
 using Parrot.Web.Components.Pages.Dashboard.Conversations;
 
 namespace Test.Parrot.Api.Tests.Services;
@@ -10,7 +10,7 @@ public class ConversationStateTests
     {
         var item = new ConversationItem();
         var now = DateTime.UtcNow;
-        var initial = new ConversationMessage("one", "Hello", true, "pending", now);
+        var initial = new InboxMessageDto("one", "Hello", true, "pending", now);
         ConversationsState.Merge(item, new[] { initial, initial });
         ConversationsState.Merge(item, new[] { initial with { Status = "accepted" } });
         Assert.Single(item.Messages);
@@ -22,7 +22,7 @@ public class ConversationStateTests
     public void RepeatedConversationPagesDoNotDuplicateRows()
     {
         var state = new ConversationsState();
-        var summary = new ConversationSummary(Guid.NewGuid(), "123", "Name", "Hi", DateTime.UtcNow);
+        var summary = new InboxConversationDto(Guid.NewGuid(), "123", "Name", "Hi", DateTime.UtcNow);
         state.Apply(new[] { summary, summary });
         state.Apply(new[] { summary });
         Assert.Single(state.Conversations);

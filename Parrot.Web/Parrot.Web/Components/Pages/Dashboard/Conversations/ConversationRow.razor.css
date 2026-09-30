@@ -1,4 +1,6 @@
-.conversation-row {
+.conversation-row-host { display: contents; }
+
+.conversation-row-host ::deep .conversation-row {
   position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -14,9 +16,9 @@
   cursor: pointer;
 }
 
-.conversation-row:hover { background: var(--colors-interaction-hover); }
+.conversation-row-host ::deep .conversation-row:hover { background: var(--colors-interaction-hover); }
 
-.conversation-row.is-selected {
+.conversation-row-host ::deep .conversation-row.is-selected {
   background: var(--colors-interaction-selected);
   box-shadow: inset var(--ds-conversation-selected-edge) 0 0 var(--colors-brand-primary);
 }
@@ -33,7 +35,7 @@
   white-space: nowrap;
 }
 
-.conversation-row.has-unread ::deep .conversation-row__preview { color: var(--colors-text-secondary); }
+.conversation-row-host ::deep .conversation-row.has-unread .conversation-row__preview { color: var(--colors-text-secondary); }
 
 .conversation-row__meta {
   display: inline-flex;
@@ -60,7 +62,7 @@
   border-radius: var(--radius-radius-full);
 }
 
-.conversation-row {
+.conversation-row-host ::deep .conversation-row {
   /* Missing from the token set: no conversation-row height token. */
   --ds-conversation-row-min: 108px;
   /* Missing from the token set: no selected-edge width token. */

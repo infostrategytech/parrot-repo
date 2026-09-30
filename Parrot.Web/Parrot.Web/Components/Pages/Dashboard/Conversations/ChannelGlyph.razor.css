@@ -19,7 +19,30 @@
   background: var(--colors-accent-teal-subtle);
 }
 
+.channel-glyph.is-tile {
+  width: var(--ds-channel-tile);
+  height: var(--ds-channel-tile);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+
 .channel-glyph {
   /* No compact avatar-size token exists. */
   --ds-channel-glyph: 32px;
+  --ds-channel-tile: 36px;
 }
+
+.channel-glyph--facebook {
+  color: var(--colors-accent-blue-text);
+  background: var(--colors-accent-blue-subtle);
+}
+
+/* Inline with a line of text: no edge, a smaller square. */
+.channel-glyph.is-compact {
+  width: var(--ds-channel-compact);
+  height: var(--ds-channel-compact);
+  border: 0;
+  border-radius: var(--radius-radius-sm);
+}
+
+.channel-glyph { --ds-channel-compact: 18px; }

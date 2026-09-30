@@ -11,6 +11,19 @@
 }
 
 .message-bubble__content { display: grid; min-width: 0; }
+.message-bubble ::deep .ds-button.message-customer-trigger {
+  flex: 0 0 auto;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  border-radius: var(--radius-radius-lg);
+}
+.message-bubble ::deep .ds-button.message-customer-trigger:hover:not(:disabled),
+.message-bubble ::deep .ds-button.message-customer-trigger:active:not(:disabled) { background: transparent; box-shadow: none; }
+.message-bubble ::deep .ds-button.message-customer-trigger .ds-button__icon { width: auto; height: auto; }
 .message-bubble__content > header { display: flex; gap: var(--spacing-sm); align-items: center; margin-bottom: var(--spacing-xs); }
 .message-bubble.is-outbound .message-bubble__content > header { justify-content: flex-end; }
 .message-bubble__content > header ::deep strong { color: var(--colors-text-secondary); }
@@ -23,7 +36,7 @@
   overflow-wrap: anywhere;
   background: var(--colors-surface-card);
   border: var(--ds-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-lg) var(--radius-radius-lg) var(--radius-radius-lg) var(--radius-radius-sm);
+  border-radius: var(--radius-radius-sm) var(--radius-radius-lg) var(--radius-radius-lg) var(--radius-radius-lg);
   box-shadow: 0 var(--spacing-2xs) var(--spacing-md) var(--colors-surface-shadow-diffuse);
 }
 
@@ -88,34 +101,33 @@
 
 .message-bubble.is-outbound .message-attachment { margin-left: auto; }
 
-.message-image {
+/* The thumbnail is a design-system Button, a child component, so its rules
+   must reach into it (::deep); without that they never apply and the button
+   stretches to the whole bubble. */
+.message-bubble__content ::deep .message-image {
   display: grid;
+  justify-self: start;
   width: var(--ds-message-image);
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
   margin-top: var(--spacing-sm);
+  padding: 0;
   overflow: hidden;
   color: var(--colors-text-muted);
-  text-decoration: none;
+  text-align: left;
   background: var(--colors-surface-card);
   border: var(--ds-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-lg);
 }
 
-.message-bubble.is-outbound .message-image { margin-left: auto; }
+.message-bubble.is-outbound .message-bubble__content ::deep .message-image { justify-self: end; margin-left: auto; }
+.message-bubble__content ::deep .message-image .ds-button__label { display: grid; width: 100%; padding: 0; overflow: visible; line-height: normal; }
+.message-bubble__content ::deep .message-image:hover:not(:disabled) { background: var(--colors-surface-card); border-color: var(--colors-accent-brand-border); }
 .message-image img { display: block; width: 100%; height: var(--ds-message-image-height); object-fit: cover; object-position: top; background: var(--colors-surface-muted); }
-.message-image span { display: flex; gap: var(--spacing-xs); align-items: center; padding: var(--spacing-sm) var(--spacing-md); }
+.message-image__caption { display: flex; gap: var(--spacing-xs); align-items: center; padding: var(--spacing-sm) var(--spacing-md); }
 
-.message-system {
-  display: flex;
-  gap: var(--spacing-sm);
-  align-items: center;
-  align-self: center;
-  max-width: var(--ds-system-measure);
-  color: var(--colors-text-subtle);
-  text-align: center;
-}
 
-.message-system ::deep span { padding: var(--spacing-sm) var(--spacing-md); background: color-mix(in srgb, var(--colors-accent-neutral-border) 75%, transparent); border-radius: var(--radius-radius-full); }
-.message-system ::deep time { white-space: nowrap; }
 
 .message-note {
   display: flex;
@@ -162,10 +174,74 @@
 .message-question {
   /* Missing from the token set: no readable chat-message measures. */
   --ds-message-measure: min(640px, 84%);
-  --ds-system-measure: 620px;
+  --ds-system-measure: 520px;
+  --ds-system-glyph: 24px;
   --ds-note-measure: 640px;
   --ds-question-measure: 620px;
   --ds-message-attachment: 240px;
-  --ds-message-image: 220px;
-  --ds-message-image-height: 154px;
+  --ds-message-image: 184px;
+  --ds-message-image-height: 128px;
 }
+
+/* React's note card: amber, with a PRIVATE pill and the time in amber. */
+.message-note__card { background: var(--colors-accent-amber-subtle); box-shadow: 0 var(--spacing-2xs) var(--spacing-md) color-mix(in srgb, var(--colors-feedback-warning) 6%, transparent); }
+.message-note__card > header { color: var(--colors-feedback-warning-text); }
+.message-note__card > header ::deep time { color: var(--colors-feedback-warning-text); }
+.message-note__private { padding: var(--spacing-2xs) var(--spacing-xs); background: var(--colors-feedback-warning-subtle); border-radius: var(--radius-radius-full); }
+
+/* React's "Correct for next time": a small link-coloured action beside the
+   time, tinting on hover, not a full button. */
+.message-bubble__content > footer ::deep .ds-button.message-correction {
+  min-height: 0;
+  height: auto;
+  margin-left: var(--spacing-2xs);
+  padding: var(--spacing-2xs) var(--spacing-xs);
+  color: var(--colors-text-link);
+  background: transparent;
+  border-radius: var(--radius-radius-full);
+}
+.message-bubble__content > footer ::deep .ds-button.message-correction:hover:not(:disabled) {
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+}
+/* React separates the delivery state from the time with a middle dot. */
+.message-delivery::before { content: "·"; margin-right: var(--spacing-2xs); color: var(--colors-text-subtle); }
+
+/* A timeline event, drawn as a divider across the thread, the way Slack and
+   Intercom mark hand-overs: rules either side so it cannot pass for a
+   message, and no fill, so it stays quieter than the bubbles around it. */
+.message-system {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  align-self: stretch;
+  color: var(--colors-text-secondary);
+}
+.message-system::before,
+.message-system::after {
+  flex: 1 1 var(--spacing-xl);
+  min-width: var(--spacing-xl);
+  height: var(--ds-hairline);
+  content: "";
+  background: var(--colors-surface-border);
+}
+.message-system__event {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  max-width: var(--ds-system-measure);
+  min-width: 0;
+}
+.message-system__glyph {
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--ds-system-glyph);
+  height: var(--ds-system-glyph);
+  color: var(--colors-accent-neutral-text);
+  background: var(--colors-accent-neutral-subtle);
+  border: var(--ds-hairline) solid var(--colors-accent-neutral-border);
+  border-radius: var(--radius-radius-full);
+}
+.message-system__event ::deep time { flex: 0 0 auto; color: var(--colors-text-subtle); white-space: nowrap; }
+.message-system__event ::deep time::before { content: "·"; margin-right: var(--spacing-xs); }

@@ -1,10 +1,10 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 
-<button type="button"
-        class="@ClassName"
-        aria-current="@(Selected ? "true" : null)"
-        @onclick="OnSelect">
-    <ChannelGlyph Channel="whatsapp" />
+@* The whole row is one control that opens the conversation. The wrapper
+   takes no space; it lets this component's styles reach the RowButton. *@
+<div class="conversation-row-host">
+<RowButton Class="@ClassName" aria-current="@(Selected ? "true" : null)" OnClick="OnSelect">
+    <ChannelGlyph Channel="@Conversation.Channel" Tile />
 
     <span class="conversation-row__copy">
         <span class="conversation-row__heading">
@@ -12,25 +12,32 @@
             <Typography TextStyle="TextStyle.Small12Medium" As="time">@RelativeTime</Typography>
         </span>
 
-        <Typography TextStyle="TextStyle.BodySmallRegular" As="span" Class="conversation-row__preview">
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="conversation-row__preview">
             @Conversation.LastMessage
         </Typography>
 
-        @* Parrot has no AI ownership: every conversation is answered by hand,
-           which is Aurora's human-has-control (handoff) state. *@
-        <span class="conversation-row__meta state-handoff">
-            <Icon Name="IconName.RiUserReceived2Fill" Size="IconSize.Inherit" />
-            <Typography TextStyle="TextStyle.Small12Medium" As="span">Manual replies</Typography>
+        <span class="conversation-row__meta @StateClass">
+            <Icon Name="StateGlyph" Size="IconSize.Inherit" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">@StateLabel</Typography>
         </span>
     </span>
-</button>
+
+    @if (Conversation.UnreadCount > 0)
+    {
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="conversation-row__unread"
+                    aria-label="@($"{Conversation.UnreadCount} unread")">
+            @Conversation.UnreadCount
+        </Typography>
+    }
+</RowButton>
+</div>
 
 @code {
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
     [Parameter] public bool Selected { get; set; }
     [Parameter] public EventCallback OnSelect { get; set; }
 
-    private string ClassName => $"conversation-row{(Selected ? " is-selected" : "")}";
+    private string ClassName => $"conversation-row{(Selected ? " is-selected" : "")}{(Conversation.UnreadCount > 0 ? " has-unread" : "")}";
 
     private string RelativeTime
     {
@@ -43,4 +50,29 @@
             return $"{(int)elapsed.TotalDays}d";
         }
     }
+
+    // Without an AI agent (today's API) every conversation is answered by
+    // hand, which is the design's human-has-control state.
+    private IconName StateGlyph => !Conversation.HasAiAgent
+        ? IconName.RiUserReceived2Fill
+        : Conversation.NeedsAnswer
+            ? IconName.RiQuestionAnswerFill
+            : Conversation.AiState switch
+            {
+                AiState.Paused => IconName.RiPauseCircleFill,
+                AiState.Handoff => IconName.RiUserReceived2Fill,
+                _ => IconName.RiRobot3Fill
+            };
+
+    private string StateLabel => !Conversation.HasAiAgent
+        ? "Manual replies"
+        : Conversation.NeedsAnswer
+            ? $"{Conversation.AiAgent!.Name} needs answer"
+            : $"{Conversation.AiAgent!.Name} · {Conversation.AiState}";
+
+    private string StateClass => !Conversation.HasAiAgent
+        ? "state-handoff"
+        : Conversation.NeedsAnswer
+            ? "state-needs-answer"
+            : $"state-{Conversation.AiState.ToString()!.ToLowerInvariant()}";
 }
