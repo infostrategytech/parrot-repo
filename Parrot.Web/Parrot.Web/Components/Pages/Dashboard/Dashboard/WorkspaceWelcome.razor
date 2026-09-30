@@ -192,9 +192,8 @@
         _logoError = null;
         var file = args.File;
 
-        // Checked here so a wrong file fails at once. The server must check
-        // both again when the upload endpoint exists: the browser's word for
-        // the type is only a hint.
+        // Checked here so a wrong file fails at once. The server checks both
+        // again on upload: the browser's word for the type is only a hint.
         if (!AcceptedLogoTypes.Contains(file.ContentType))
         {
             _logoError = "Choose a PNG, JPG or WebP image.";
@@ -278,6 +277,15 @@
         {
             await WorkspaceSetup.SaveAsync(name, phone, _logo);
             _open = false;
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
+        {
+            // The only conflict here: another account already has this number.
+            _phoneError = ex.UserMessage;
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            _createError = ex.UserMessage;
         }
         catch (Exception)
         {

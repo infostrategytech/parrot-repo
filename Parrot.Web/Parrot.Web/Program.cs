@@ -11,6 +11,7 @@ using Parrot.Web.Components.Pages.Dashboard.Conversations;
 using Parrot.Web.Features.Dashboard.QaInsights.State;
 using Parrot.Web.Features.Dashboard.TaskRequests.State;
 using Parrot.Web.Features.Dashboard.Workspace;
+using Parrot.Web.Features.Profile;
 using Parrot.Web.Features.Dashboard.Team.State;
 using Parrot.Web.Features.Auth.ForgotPassword.State;
 using Parrot.Web.Features.Auth.Login.Services;
@@ -74,8 +75,9 @@ builder.Services.AddScoped<IIntegrationsService, IntegrationsService>();
 // Whether any channel is connected, for pages that only need that (the dashboard).
 builder.Services.AddScoped<ChannelStatusLoader>();
 builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
-// The welcome card. Keeps the name on the session until the API can store it.
-builder.Services.AddScoped<IWorkspaceSetupService, SessionWorkspaceSetupService>();
+// The account's profile, for the welcome card and the settings page.
+builder.Services.AddScoped<ProfileClient>();
+builder.Services.AddScoped<IWorkspaceSetupService, WorkspaceSetupService>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {

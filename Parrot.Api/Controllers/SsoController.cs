@@ -27,6 +27,8 @@ public class SsoController : ControllerBase
     }
 
     [HttpGet("google")]
+    [EndpointSummary("Start Google sign-in")]
+    [EndpointDescription("Challenges the browser over to Google's consent screen. Nobody is signed in yet; the session is made at the callback that follows.")]
     public IActionResult InitiateGoogle()
     {
         AuthenticationProperties properties = new AuthenticationProperties
@@ -37,6 +39,8 @@ public class SsoController : ControllerBase
     }
 
     [HttpGet("google/callback")]
+    [EndpointSummary("Finish Google sign-in")]
+    [EndpointDescription("Called by Google. Creates the account on a first sign-in, then redirects to the frontend at /sso-callback with the token and the profile as query parameters — business name and logo are still empty until setup has run. A cancelled exchange or one missing an email address or Google id lands on /login with error=sso_failed or error=sso_missing_claims.")]
     public async Task<IActionResult> GoogleCallback()
     {
         AuthenticateResult result = await HttpContext.AuthenticateAsync(ExternalCookieScheme);
@@ -47,7 +51,6 @@ public class SsoController : ControllerBase
         }
 
         string? email = result.Principal.FindFirstValue(ClaimTypes.Email);
-        string? name = result.Principal.FindFirstValue(ClaimTypes.Name) ?? email;
         string? googleId = result.Principal.FindFirstValue(ClaimTypes.NameIdentifier);
 
         if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(googleId))
@@ -57,16 +60,20 @@ public class SsoController : ControllerBase
 
         await HttpContext.SignOutAsync(ExternalCookieScheme);
 
-        AuthResponse authResponse = await _authService.ExternalLoginAsync(email, name ?? email, "Google", googleId);
+        AuthResponse authResponse = await _authService.ExternalLoginAsync(email, "Google", googleId);
 
+        // Business name and logo are filled in by the setup step after sign-in,
+        // so both are optional here and the callback must not assume them.
         string redirectUrl = string.Format(
-            "{0}/sso-callback?token={1}&expiresAt={2}&userId={3}&email={4}&businessName={5}",
+            "{0}/sso-callback?token={1}&expiresAt={2}&userId={3}&email={4}&businessName={5}&logoUrl={6}&phoneNumber={7}",
             _frontendSettings.BaseUrl,
             Uri.EscapeDataString(authResponse.Token),
             Uri.EscapeDataString(authResponse.ExpiresAt.ToString("O")),
             Uri.EscapeDataString(authResponse.UserId),
             Uri.EscapeDataString(authResponse.Email),
-            Uri.EscapeDataString(authResponse.BusinessName));
+            Uri.EscapeDataString(authResponse.BusinessName ?? string.Empty),
+            Uri.EscapeDataString(authResponse.LogoUrl ?? string.Empty),
+            Uri.EscapeDataString(authResponse.PhoneNumber ?? string.Empty));
 
         return Redirect(redirectUrl);
     }

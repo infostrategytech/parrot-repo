@@ -46,7 +46,7 @@
        a workspace or an account card rather than with invented ones. *@
     @if (!string.IsNullOrWhiteSpace(WorkspaceName))
     {
-        <WorkspaceSwitcher Id="@WorkspaceId" Name="@WorkspaceName" Plan="@WorkspacePlan" />
+        <WorkspaceSwitcher Id="@WorkspaceId" Name="@WorkspaceName" Plan="@WorkspacePlan" LogoUrl="@WorkspaceLogoUrl" />
     }
 
     <nav class="sidebar__nav" aria-label="Primary navigation">
@@ -70,7 +70,7 @@
 
         @if (!string.IsNullOrWhiteSpace(UserName))
         {
-            <UserCard Name="@UserName" Role="@UserRole" Initials="@UserInitials" Seed="@UserSeed">
+            <UserCard Name="@UserName" Role="@UserRole" Initials="@UserInitials" Seed="@UserSeed" ImageUrl="@UserImageUrl">
                 @UserMenu
             </UserCard>
         }
@@ -89,6 +89,8 @@
     /// <summary>Optional second line under the workspace name. Null hides it.</summary>
     [Parameter] public string? WorkspacePlan { get; set; }
 
+    [Parameter] public string? WorkspaceLogoUrl { get; set; }
+
     [Parameter] public string UserName { get; set; } = "";
 
     /// <summary>Optional second line under the person's name. Null hides it.</summary>
@@ -98,6 +100,8 @@
 
     /// <summary>A stable id for the person, so their avatar keeps one tint.</summary>
     [Parameter] public string UserSeed { get; set; } = "";
+
+    [Parameter] public string? UserImageUrl { get; set; }
 
     /// <summary>Rows for the account card's menu. Null means the card has no menu.</summary>
     [Parameter] public RenderFragment? UserMenu { get; set; }

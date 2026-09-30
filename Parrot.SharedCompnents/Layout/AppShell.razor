@@ -14,10 +14,12 @@
                 WorkspaceId="@WorkspaceId"
                 WorkspaceName="@WorkspaceName"
                 WorkspacePlan="@WorkspacePlan"
+                WorkspaceLogoUrl="@WorkspaceLogoUrl"
                 UserName="@UserName"
                 UserRole="@UserRole"
                 UserInitials="@UserInitials"
                 UserSeed="@UserSeed"
+                UserImageUrl="@UserImageUrl"
                 InboxUnread="@InboxUnread"
                 UserMenu="@UserMenu" />
 
@@ -36,10 +38,12 @@
     [Parameter] public string WorkspaceId { get; set; } = "";
     [Parameter] public string WorkspaceName { get; set; } = "";
     [Parameter] public string? WorkspacePlan { get; set; }
+    [Parameter] public string? WorkspaceLogoUrl { get; set; }
     [Parameter] public string UserName { get; set; } = "";
     [Parameter] public string? UserRole { get; set; }
     [Parameter] public string UserInitials { get; set; } = "";
     [Parameter] public string UserSeed { get; set; } = "";
+    [Parameter] public string? UserImageUrl { get; set; }
     [Parameter] public RenderFragment? UserMenu { get; set; }
     [Parameter] public int? InboxUnread { get; set; }
 

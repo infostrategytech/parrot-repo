@@ -4,7 +4,7 @@ namespace Parrot.Application.Auth;
 // same values so the two cannot drift apart silently.
 public static class PasswordPolicy
 {
-    public const int MinimumLength = 12;
+    public const int MinimumLength = 8;
 
     public const int MaximumLength = 128;
 }

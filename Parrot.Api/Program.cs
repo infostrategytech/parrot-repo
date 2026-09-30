@@ -4,6 +4,7 @@ using Parrot.Infrastructure.Messaging;
 using Parrot.Infrastructure.Conversations;
 using Parrot.Application.Conversations;
 using System.Text;
+using System.Text.Json;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -21,6 +22,8 @@ using Parrot.Application.Integrations;
 using Parrot.Application.Integrations.BusinessEnrichment;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
+using Parrot.Application.Profile;
+using Parrot.Application.Storage;
 using Parrot.Application.Utils;
 using Parrot.Infrastructure.Agents;
 using Parrot.Infrastructure.Auth;
@@ -28,8 +31,10 @@ using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.Email;
 using Parrot.Infrastructure.FeatureFlags;
 using Parrot.Infrastructure.SocialMediaIntegrations;
+using Parrot.Infrastructure.Storage;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
+using Parrot.Api.OpenApi;
 using Parrot.Api.Utils;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -60,6 +65,19 @@ if (!builder.Environment.IsDevelopment() && !string.IsNullOrEmpty(authSettings.D
 }
 
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
+
+// Uploads are wired at boot: a bucket that has not been named yet fails here,
+// rather than on the first person to reach the logo step.
+builder.Services.Configure<StorageSettings>(builder.Configuration.GetSection(StorageSettings.SectionName));
+StorageSettings storageSettings = builder.Configuration.GetSection(StorageSettings.SectionName).Get<StorageSettings>()
+    ?? new StorageSettings();
+if (string.IsNullOrWhiteSpace(storageSettings.Bucket) ||
+    string.IsNullOrWhiteSpace(storageSettings.PublicBaseUrl))
+{
+    throw new InvalidOperationException(
+        "Storage:Bucket and Storage:PublicBaseUrl must be set for image uploads to work.");
+}
+
 builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
 builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
@@ -151,6 +169,28 @@ builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
 
+    // A rejected request used to come back as a bare 429 with no body, so the
+    // client had nothing to show. Answer in the same shape every other error
+    // uses, with the wording for the page that was hit.
+    options.OnRejected = async (ctx, cancellationToken) =>
+    {
+        HttpContext http = ctx.HttpContext;
+        bool resend = http.Request.Path.StartsWithSegments("/api/auth/resend-verification", StringComparison.OrdinalIgnoreCase);
+
+        ErrorResponse body = new ErrorResponse
+        {
+            ErrorCode = "RATE_LIMITED",
+            Message = resend
+                ? "Too many codes requested. Wait a few minutes, then try again."
+                : "Too many attempts. Wait a few minutes, then try again.",
+        };
+
+        http.Response.ContentType = "application/json";
+        await http.Response.WriteAsync(
+            JsonSerializer.Serialize(body, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase }),
+            cancellationToken);
+    };
+
     static FixedWindowRateLimiterOptions PerIp(int permitLimit, int windowMinutes) =>
         new FixedWindowRateLimiterOptions
         {
@@ -240,6 +280,22 @@ builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<IProfileService, ProfileService>();
+
+// This is the only line that knows which object store is in play. Swapping S3
+// for another vendor means changing what IObjectStorage resolves to here and
+// adding an implementation under Infrastructure — nothing above it moves.
+if (string.Equals(storageSettings.Provider, "S3", StringComparison.OrdinalIgnoreCase))
+{
+    builder.Services.AddSingleton<IObjectStorage, S3ObjectStorage>();
+}
+else
+{
+    throw new InvalidOperationException(
+        $"Storage:Provider '{storageSettings.Provider}' is not supported. Known providers: S3.");
+}
+
+builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IFeatureFlagService, FeatureFlagService>();
 builder.Services.AddScoped<IEmailService, EmailService>();
@@ -304,7 +360,7 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
         return defaultResponseFactory(context);
     };
 });
-builder.Services.AddOpenApi();
+builder.Services.AddParrotOpenApi();
 
 WebApplication app = builder.Build();
 
