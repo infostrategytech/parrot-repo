@@ -33,3 +33,36 @@
   --ds-saved-layer: 80;
   --ds-saved-disabled-opacity: 0.5;
 }
+
+/* However many replies there are, the menu keeps its height: the header and
+   search stay put and the list scrolls between them. */
+.saved-replies__menu { display: flex; flex-direction: column; }
+.saved-replies__menu > header,
+.saved-replies__search { flex: 0 0 auto; }
+.saved-replies__search { padding: var(--spacing-sm) var(--spacing-sm) 0; }
+.saved-replies__list { flex: 1 1 auto; min-height: 0; overscroll-behavior: contain; }
+.saved-replies__list ::deep .saved-replies__none { padding: var(--spacing-lg) var(--spacing-sm); color: var(--colors-text-muted); text-align: center; }
+
+/* A row: the reply (choosing it inserts it) and its edit and delete actions,
+   which show on hover or keyboard focus so the list stays calm. */
+.saved-replies__item { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; border-radius: var(--radius-radius-md); }
+.saved-replies__item:hover,
+.saved-replies__item:focus-within { background: var(--colors-interaction-hover); }
+.saved-replies__item > ::deep .saved-replies__pick { display: grid; gap: var(--spacing-xs); min-width: 0; padding: var(--spacing-sm) var(--spacing-md); text-align: left; background: transparent; border: 0; border-radius: var(--radius-radius-md); cursor: pointer; }
+.saved-replies__item > ::deep .saved-replies__pick strong { color: var(--colors-text-primary); }
+.saved-replies__item > ::deep .saved-replies__pick span { display: -webkit-box; overflow: hidden; color: var(--colors-text-muted); -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.saved-replies__actions { display: flex; gap: var(--spacing-2xs); padding-right: var(--spacing-xs); opacity: 0; transition: opacity var(--ds-motion-fast) ease; }
+.saved-replies__item:hover .saved-replies__actions,
+.saved-replies__item:focus-within .saved-replies__actions { opacity: 1; }
+.saved-replies__actions ::deep .ds-button { color: var(--colors-text-muted); }
+.saved-replies__actions ::deep .saved-replies__delete:hover:not(:disabled) { color: var(--colors-feedback-destructive-text); background: var(--colors-feedback-destructive-subtle); }
+
+/* Asked in place: the row turns into the question. */
+.saved-replies__item.is-confirming { grid-template-columns: minmax(0, 1fr); background: var(--colors-feedback-destructive-subtle); }
+.saved-replies__confirm { display: grid; gap: var(--spacing-2xs); padding: var(--spacing-sm) var(--spacing-md); }
+.saved-replies__confirm ::deep strong { color: var(--colors-text-primary); }
+.saved-replies__confirm ::deep span { color: var(--colors-text-muted); }
+.saved-replies__confirm > div { display: flex; gap: var(--spacing-xs); justify-content: flex-end; margin-top: var(--spacing-xs); }
+
+/* Touch screens have no hover: keep the actions visible there. */
+@media (hover: none) { .saved-replies__actions { opacity: 1; } }

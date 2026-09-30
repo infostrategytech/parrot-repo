@@ -5,63 +5,75 @@
 @implements IDisposable
 @inject Parrot.Web.Components.Pages.Dashboard.Conversations.ConversationsState ConversationsState
 @inject Parrot.Web.Services.ConversationClient Client
+@inject Parrot.Web.Services.IInboxFeatures Features
 @inject AuthState AuthState
 @inject NavigationManager Nav
+@inject AuroraInterop Interop
+@inject ToastService Toasts
 @inject Parrot.Web.Services.FeedbackService Feedback
 
 <PageTitle>Inbox · OmniAI</PageTitle>
 
-@* Aurora's inbox over Parrot's conversations. Parrot lists WhatsApp
-   conversations in pages of 50, reads the selected thread, polls every five
-   seconds and sends plain-text replies; it has no filter or search endpoint,
-   so the queue is searched and sorted over the loaded list. *@
-<div class="inbox-workspace @(!_customerOpen ? "is-customer-closed" : null)">
+@* The React inbox (project aurora frontend) over Parrot's conversations.
+   Parrot lists conversations in pages of 50, reads the selected thread, polls
+   every five seconds and sends replies; it has no filter or search endpoint,
+   so the queue is searched, filtered and sorted over the loaded list.
+
+   Parts of the design need data the API does not send yet (channels other
+   than WhatsApp, AI agents, assignment, status, unread counts). Each part is
+   drawn only when its data is present, so the real app shows what the API
+   supports. See InboxContracts. *@
+<div class="inbox-workspace">
     <section class="inbox-queue" aria-label="Unified inbox">
         <header class="inbox-queue__header">
             <div>
                 <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h1">Inbox</Typography>
-                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>
                     Customer conversations across your connected channels.
                 </Typography>
             </div>
+            <Button Size="ButtonSize.Medium" Class="inbox-start" aria-label="Start conversation" title="Start conversation"
+                    @onclick="StartConversation">
+                <IconLeft><Icon Name="IconName.HiPlus" /></IconLeft>
+            </Button>
         </header>
 
-        <label class="inbox-search">
-            <Icon Name="IconName.RiSearch2Fill" Size="IconSize.Sm" />
-            <input value="@_filters.Search"
-                   @oninput="OnSearchInput"
-                   aria-label="Search conversations"
-                   placeholder="Search people and messages" />
-        </label>
+        <div class="inbox-search-wrap">
+            <SearchField Value="@_filters.Search"
+                         ValueChanged="OnSearchChanged"
+                         AriaLabel="Search conversations"
+                         Placeholder="Search people and messages"
+                         ShortcutKey="k" />
+        </div>
 
         <div class="inbox-scope-row">
-            <div class="inbox-scopes" role="tablist" aria-label="Inbox scope">
+            <Tabs Label="Inbox scope" Variant="TabsVariant.Segmented" Class="inbox-scopes">
                 @foreach (var scope in ScopeOptions)
                 {
-                    <button type="button"
-                            role="tab"
-                            class="@(_filters.Scope == scope.Value ? "is-active" : null)"
-                            aria-selected="@(_filters.Scope == scope.Value)"
-                            disabled="@(scope.Value != InboxScope.All)"
-                            title="@(scope.Value != InboxScope.All ? "Assignment is not available yet" : null)"
-                            @onclick="() => SetScope(scope.Value)">
+                    <Tab Selected="@(_filters.Scope == scope.Value)"
+                         Disabled="@(scope.Value != InboxScope.All && !HasAssignment)"
+                         Title="@(scope.Value != InboxScope.All && !HasAssignment ? "Assignment is not available yet" : null)"
+                         Count="@ScopeCount(scope.Value)"
+                         OnClick="() => SetScope(scope.Value)">
                         <Typography TextStyle="TextStyle.Small12Semibold" As="span">@scope.Label</Typography>
-                        <Typography TextStyle="TextStyle.Small10Semibold" As="span">@ScopeCount(scope.Value)</Typography>
-                    </button>
+                    </Tab>
                 }
-            </div>
+            </Tabs>
 
-            <button type="button"
-                    class="inbox-filter-toggle @(_filtersOpen || ActiveFilterCount > 0 ? "is-active" : null)"
-                    aria-label="Toggle conversation filters"
-                    aria-expanded="@_filtersOpen"
+            @* The count of filters in use sits on the icon; the label says it too. *@
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Medium"
+                    Class="@($"inbox-filter-toggle {(_filtersOpen || ActiveFilterCount > 0 ? "is-active" : "")}")"
+                    aria-label="@(ActiveFilterCount > 0 ? $"Toggle conversation filters, {ActiveFilterCount} in use" : "Toggle conversation filters")"
+                    aria-expanded="@(_filtersOpen ? "true" : "false")"
                     @onclick="ToggleFilters">
-                <Icon Name="IconName.RiSettings4Fill" Size="IconSize.Sm" />
-                @if (ActiveFilterCount > 0)
-                {
-                    <Typography TextStyle="TextStyle.Small10Semibold" As="span">@ActiveFilterCount</Typography>
-                }
-            </button>
+                <IconLeft>
+                    <Icon Name="IconName.HiAdjustmentsHorizontal" Size="IconSize.Sm" />
+                    @if (ActiveFilterCount > 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="inbox-filter-toggle__count">@ActiveFilterCount</Typography>
+                    }
+                </IconLeft>
+            </Button>
         </div>
 
         @if (_filtersOpen)
@@ -69,55 +81,75 @@
             <div class="inbox-filters">
                 <FilterPopover Label="@ChannelLabel" Title="Social channels" Subtitle="Choose a connected inbox"
                                Open="@(_openFilter == "channel")" OpenChanged="@(open => SetOpenFilter("channel", open))">
-                    <Leading><Icon Name="@ChannelIcon(_filters.Channel)" Size="IconSize.Sm" /></Leading>
+                    <Leading>@ChannelMark(_filters.Channel)</Leading>
                     <ChildContent>
                         @foreach (var option in ChannelOptions)
                         {
                             <PopoverOption Label="@option.Label" Description="@option.Description" Active="@(_filters.Channel == option.Value)"
                                            OnSelect="() => SetChannel(option.Value)">
-                                <Leading><Icon Name="@ChannelIcon(option.Value)" Size="IconSize.Sm" /></Leading>
+                                <Leading>@ChannelMark(option.Value)</Leading>
                             </PopoverOption>
                         }
                     </ChildContent>
                 </FilterPopover>
 
-                <FilterPopover Label="Any status" Title="Conversation status" Subtitle="Choose a workflow stage"
-                               Open="@(_openFilter == "status")" OpenChanged="@(open => SetOpenFilter("status", open))">
-                    <Leading><Icon Name="IconName.RiChat3Fill" Size="IconSize.Sm" /></Leading>
-                    <ChildContent>
-                        <PopoverOption Label="Any status" Description="Open and pending conversations" Active="true"
-                                       OnSelect='() => SetOpenFilter("status", false)' />
-                    </ChildContent>
-                </FilterPopover>
+                @if (HasStatus)
+                {
+                    <FilterPopover Label="@StatusLabel" Title="Conversation status" Subtitle="Choose a workflow stage" AlignEnd
+                                   Open="@(_openFilter == "status")" OpenChanged="@(open => SetOpenFilter("status", open))">
+                        <Leading>@StatusMark(_filters.Status)</Leading>
+                        <ChildContent>
+                            @foreach (var option in StatusOptions)
+                            {
+                                <PopoverOption Label="@option.Label" Description="@option.Description" Active="@(_filters.Status == option.Value)"
+                                               OnSelect="() => SetStatus(option.Value)">
+                                    <Leading>@StatusMark(option.Value)</Leading>
+                                </PopoverOption>
+                            }
+                        </ChildContent>
+                    </FilterPopover>
+                }
 
-                <FilterPopover Label="All AI agents" Title="AI specialists" Subtitle="Filter by who is handling it"
-                               Open="@(_openFilter == "agent")" OpenChanged="@(open => SetOpenFilter("agent", open))">
-                    <Leading><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></Leading>
-                    <ChildContent>
-                        <PopoverOption Label="All AI agents" Description="Every specialist" Active="true"
-                                       OnSelect='() => SetOpenFilter("agent", false)'>
-                            <Leading><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></Leading>
-                        </PopoverOption>
-                    </ChildContent>
-                </FilterPopover>
+                @if (HasAiData)
+                {
+                    <FilterPopover Label="@AgentLabel" Title="AI specialists" Subtitle="Filter by who is handling it"
+                                   Open="@(_openFilter == "agent")" OpenChanged="@(open => SetOpenFilter("agent", open))">
+                        <Leading>@AgentMark(_filters.AgentId)</Leading>
+                        <ChildContent>
+                            <PopoverOption Label="All AI agents" Description="Every specialist" Active="@(_filters.AgentId is null)"
+                                           OnSelect="() => SetAgent(null)">
+                                <Leading>@AgentMark(null)</Leading>
+                            </PopoverOption>
+                            @foreach (var agent in Agents)
+                            {
+                                <PopoverOption Label="@agent.Name" Description="@AgentRole(agent.Id)" Active="@(_filters.AgentId == agent.Id)"
+                                               OnSelect="() => SetAgent(agent.Id)">
+                                    <Leading>@AgentMark(agent.Id)</Leading>
+                                </PopoverOption>
+                            }
+                        </ChildContent>
+                    </FilterPopover>
+                }
 
-                <FilterPopover Label="@SortLabel" Title="Sort conversations" Subtitle="Choose the queue order"
+                <FilterPopover Label="@SortLabel" Title="Sort conversations" Subtitle="Choose the queue order" AlignEnd Class="inbox-filter-sort"
                                Open="@(_openFilter == "sort")" OpenChanged="@(open => SetOpenFilter("sort", open))">
-                    <Leading><Icon Name="IconName.RiArrowUpDownFill" Size="IconSize.Sm" /></Leading>
+                    <Leading>@SortMark(_filters.Sort)</Leading>
                     <ChildContent>
                         @foreach (var option in SortOptions)
                         {
                             <PopoverOption Label="@option.Label" Description="@option.Description" Active="@(_filters.Sort == option.Value)"
-                                           OnSelect="() => SetSort(option.Value)" />
+                                           OnSelect="() => SetSort(option.Value)">
+                                <Leading>@SortMark(option.Value)</Leading>
+                            </PopoverOption>
                         }
                     </ChildContent>
                 </FilterPopover>
 
                 @if (ActiveFilterCount > 0)
                 {
-                    <button type="button" class="inbox-filters__clear" @onclick="ClearFilters">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Clear filters</Typography>
-                    </button>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="inbox-filters__clear" @onclick="ClearFilters">
+                        Clear
+                    </Button>
                 }
             </div>
         }
@@ -149,17 +181,19 @@
                     @if (_error is null)
                     {
                         <EmptyState Size="EmptyStateSize.Panel"
-                                    Glyph="IconName.RiInbox2Fill"
                                     Title="No messages yet"
-                                    Description="Send a WhatsApp message to your connected business number." />
+                                    Description="Send a WhatsApp message to your connected business number.">
+                            <GlyphContent><img class="inbox-mascot" src="assets/images/mascot/empty-inbox.png" alt="" /></GlyphContent>
+                        </EmptyState>
                     }
                 }
                 else if (Items.Count == 0)
                 {
                     <EmptyState Size="EmptyStateSize.Panel"
-                                Glyph="IconName.RiInbox2Fill"
                                 Title="No conversations found"
-                                Description="Try adjusting your search or filters." />
+                                Description="Try adjusting your search or filters.">
+                        <GlyphContent><img class="inbox-mascot" src="assets/images/mascot/empty-inbox.png" alt="" /></GlyphContent>
+                    </EmptyState>
                 }
                 else
                 {
@@ -187,47 +221,110 @@
     <section class="inbox-conversation" aria-label="Conversation">
         @if (_selected is null)
         {
-            <EmptyState Glyph="IconName.RiChat3Fill" Title="Select a conversation"
-                        Description="Choose a customer from the inbox to see their messages." />
+            <div class="inbox-stage">
+                <img class="inbox-stage__mascot" src="assets/images/mascot/empty-inbox.png" alt="" />
+                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h2">Select a conversation</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="inbox-stage__copy">
+                    Choose an item from the inbox to see the complete customer conversation.
+                </Typography>
+            </div>
         }
         else
         {
             <header class="inbox-conversation__header">
-                <ChannelGlyph Channel="whatsapp" />
-                <div>
-                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">@_selected.CustomerName</Typography>
-                    <Typography TextStyle="TextStyle.Small12Medium" As="p">WhatsApp</Typography>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="inbox-customer-trigger"
+                        aria-label="View customer details" title="View customer details"
+                        aria-controls="customer-details-panel" aria-expanded="@_customerOpen"
+                        @onclick="OpenCustomerDetailsAsync">
+                    <ChildContent>
+                        <PetalAvatar Seed="@_selected.Id" Initials="@_selected.CustomerInitials" Size="AvatarSize.Md" />
+                        <span class="inbox-conversation__identity">
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">@_selected.CustomerName</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="inbox-conversation__meta">
+                                <ChannelGlyph Channel="@_selected.Channel" Tile Compact />
+                                @ChannelName(_selected.Channel)
+                                @if (_selected.Status is { } status)
+                                {
+                                    <span aria-hidden="true">·</span>
+                                    <strong class="inbox-status is-@status.ToString().ToLowerInvariant()">@status</strong>
+                                }
+                            </Typography>
+                        </span>
+                    </ChildContent>
+                </Button>
+                <div class="inbox-conversation__actions">
+                    @if (_selected.HasAiAgent)
+                    {
+                        <span class="inbox-agent-presence is-@_selected.AiState.ToString()!.ToLowerInvariant()">
+                            <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.AiAgent!.Name</Typography>
+                            <i aria-hidden="true"></i>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.AiState</Typography>
+                        </span>
+                    }
+                    @if (_selected.Assignee is { } assignee)
+                    {
+                        <span class="inbox-ownership">
+                            <PetalAvatar Seed="@assignee.Id" Initials="@Initials.From(assignee.Name)" Size="AvatarSize.Sm" />
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@assignee.Name</Typography>
+                        </span>
+                    }
+                    else if (Features.Available && _selected.HasAiAgent)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_acting"
+                                @onclick="() => ActAsync(conversation => Features.AssignToMeAsync(conversation.ConnectionId, conversation.Sender))">
+                            <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
+                            <ChildContent>Assign to me</ChildContent>
+                        </Button>
+                    }
+                    <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
+                        @if (Features.Available && _selected.HasAiAgent)
+                        {
+                            @if (_selected.Assignee is not null)
+                            {
+                                <ActionMenuItem Label="Unassign conversation" Glyph="IconName.RiUserUnfollowFill"
+                                                OnClick="() => ActAsync(conversation => Features.UnassignAsync(conversation.ConnectionId, conversation.Sender))" />
+                            }
+                            @if (_selected.AiState != AiState.Active)
+                            {
+                                <ActionMenuItem Label="@($"Return to {_selected.AiAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
+                                                OnClick="() => ActAsync(conversation => Features.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender))" />
+                            }
+                            else
+                            {
+                                <ActionMenuItem Label="Pause AI and assign to me" Glyph="IconName.RiRobot3Fill"
+                                                OnClick="() => ActAsync(conversation => Features.PauseAiAsync(conversation.ConnectionId, conversation.Sender))" />
+                            }
+                        }
+                        @if (Features.Available && _selected.UnreadCount is not null)
+                        {
+                            <ActionMenuItem Label="Mark as unread" Glyph="IconName.RiMailFill" OnClick="MarkUnreadAsync" />
+                        }
+                        <ActionMenuItem Label="Copy conversation ID" Glyph="IconName.RiFileCopyFill" OnClick="CopyConversationIdAsync" />
+                    </ActionMenu>
                 </div>
-                <button type="button" class="inbox-customer-toggle @(_customerOpen ? "is-active" : null)"
-                        aria-pressed="@_customerOpen" @onclick="() => _customerOpen = !_customerOpen">
-                    <Icon Name="IconName.RiUser3Fill" Size="IconSize.Sm" />
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">Customer 360</Typography>
-                </button>
             </header>
-            <div class="inbox-conversation__body">
-                <ConversationTimeline @key="_selected.Id" Conversation="@_selected"
-                                      AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" Busy="@_busy"
-                                      OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" />
+            <div class="inbox-conversation__content">
+                <div class="inbox-conversation__body">
+                    <ConversationTimeline @key="_selected.Id" Conversation="@_selected"
+                                          AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" Busy="@_busy"
+                                          OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" OnChanged="RefreshAsync"
+                                          OnCustomerDetails="OpenCustomerDetailsAsync" />
+                </div>
+
+                @* A raw full-area button is intentional: it is the drawer's
+                   click-away surface, not a reusable application action. *@
+                <button type="button" tabindex="-1" aria-hidden="true"
+                        class="@($"inbox-customer-scrim {(_customerOpen ? "is-open" : "")}")"
+                        @onclick="CloseCustomerDetailsAsync"></button>
+                <div id="customer-details-panel"
+                     class="@($"inbox-customer {(_customerOpen ? "is-open" : "")}")"
+                     aria-hidden="@(!_customerOpen)" inert="@(!_customerOpen)">
+                    <CustomerPanel Conversation="@_selected" OnClose="CloseCustomerDetailsAsync" />
+                </div>
             </div>
         }
     </section>
-
-    @if (_customerOpen)
-    {
-        <div class="inbox-customer">
-            @if (_selected is null)
-            {
-                <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiUser3Fill" Title="Customer details"
-                            Description="Customer context appears after you select a conversation." />
-            }
-            else
-            {
-                <CustomerPanel Conversation="@_selected"
-                               ConversationCount="@ConversationsState.Conversations.Count(item => item.Sender == _selected.Sender)"
-                               OnClose="() => _customerOpen = false" />
-            }
-        </div>
-    }
 </div>
 
 @code {
@@ -239,39 +336,73 @@
     private string? _error;
     private string? _openFilter;
     private bool _filtersOpen;
-    private bool _customerOpen = true;
+    private bool _customerOpen;
     private bool _initialLoad = true;
-    private bool _busy, _more, _disposed;
+    private bool _busy, _more, _disposed, _acting, _holdSelection;
     private int _loaded = 50;
+    private DotNetObjectReference<Conversations>? _self;
+    private IAsyncDisposable? _customerEscape;
 
     private static readonly (InboxScope Value, string Label)[] ScopeOptions =
         [(InboxScope.All, "All"), (InboxScope.Mine, "Mine"), (InboxScope.Unassigned, "Unassigned")];
 
-    // Only the channel Parrot connects; the other social channels have no inbox here.
-    private static readonly (string? Value, string Label, string Description)[] ChannelOptions =
-        [(null, "All social", "Every connected inbox"),
-         ("whatsapp", "WhatsApp", "WhatsApp conversations")];
+    private static readonly (ConversationStatus? Value, string Label, string Description)[] StatusOptions =
+        [(null, "Any status", "Open and pending conversations"),
+         (ConversationStatus.Open, "Open", "Active conversations"),
+         (ConversationStatus.Pending, "Pending", "Waiting for an action")];
 
-    // Priority ordering needs a priority Parrot does not record.
-    private static readonly (ConversationSort Value, string Label, string Description)[] SortOptions =
-        [(ConversationSort.Newest, "Newest first", "Most recent activity"),
-         (ConversationSort.Oldest, "Oldest first", "Longest waiting first")];
+    private IReadOnlyList<ConversationItem> Loaded => ConversationsState.Conversations;
 
-    private int ActiveFilterCount => (_filters.Channel is not null ? 1 : 0) + (_filters.Sort != ConversationSort.Newest ? 1 : 0);
+    // What the loaded conversations carry decides which parts of the design
+    // are drawn; today's API sends none of these optional fields.
+    private bool HasAiData => Loaded.Any(c => c.HasAiAgent);
+    private bool HasAssignment => HasAiData;
+    private bool HasStatus => Loaded.Any(c => c.Status is not null);
+    private bool HasPriority => Loaded.Any(c => c.Priority is not null);
+
+    /// <summary>WhatsApp always; the other social channels once a conversation arrives on one.</summary>
+    private IEnumerable<(string? Value, string Label, string Description)> ChannelOptions
+    {
+        get
+        {
+            var channels = Loaded.Select(c => c.Channel).ToHashSet();
+            var social = new[] { "whatsapp", "instagram", "facebook" }.Where(c => c == "whatsapp" || channels.Contains(c)).ToList();
+            yield return (null, "All social", social.Count > 1 ? "WhatsApp, Instagram & Facebook" : "Every connected inbox");
+            foreach (var channel in social) yield return (channel, ChannelName(channel), $"{ChannelName(channel)} conversations");
+        }
+    }
+
+    private IEnumerable<(ConversationSort Value, string Label, string Description)> SortOptions
+    {
+        get
+        {
+            yield return (ConversationSort.Newest, "Newest first", "Most recent activity");
+            yield return (ConversationSort.Oldest, "Oldest first", "Longest waiting first");
+            if (HasPriority) yield return (ConversationSort.Priority, "Priority first", "Urgent conversations first");
+        }
+    }
+
+    private IEnumerable<Parrot.Web.Services.InboxPersonDto> Agents =>
+        Loaded.Where(c => c.AiAgent is not null).Select(c => c.AiAgent!).DistinctBy(a => a.Id).OrderBy(a => a.Name);
+
+    private int ActiveFilterCount => (_filters.Channel is not null ? 1 : 0) + (_filters.Status is not null ? 1 : 0) +
+                                     (_filters.AgentId is not null ? 1 : 0) + (_filters.Sort != ConversationSort.Newest ? 1 : 0);
     private string ChannelLabel => ChannelOptions.First(option => option.Value == _filters.Channel).Label;
-    private string SortLabel => SortOptions.First(option => option.Value == _filters.Sort).Label;
+    private string StatusLabel => StatusOptions.First(option => option.Value == _filters.Status).Label;
+    private string AgentLabel => Agents.FirstOrDefault(agent => agent.Id == _filters.AgentId)?.Name ?? "All AI agents";
+    private string SortLabel => SortOptions.FirstOrDefault(option => option.Value == _filters.Sort).Label ?? "Newest first";
 
     // Outbound replies are sent from the business's WhatsApp number, so the
-    // business is their author; its seed matches the shell's workspace avatar.
+    // business is their author when the API does not name a teammate.
     private string AuthorName => string.IsNullOrWhiteSpace(AuthState.CurrentUser?.BusinessName) ? "You" : AuthState.CurrentUser!.BusinessName;
     private string AuthorSeed => "workspace-" + (AuthState.CurrentUser?.BusinessName ?? "");
 
-    /// <summary>The loaded list, searched and sorted client-side.</summary>
+    /// <summary>The loaded list, searched, filtered and sorted client-side.</summary>
     private IReadOnlyList<ConversationItem> Items
     {
         get
         {
-            IEnumerable<ConversationItem> list = ConversationsState.Conversations;
+            IEnumerable<ConversationItem> list = Loaded;
             var query = _filters.Search.Trim();
             if (query.Length > 0)
             {
@@ -280,7 +411,21 @@
                     item.LastMessage.Contains(query, StringComparison.OrdinalIgnoreCase) ||
                     item.Sender.Contains(query, StringComparison.OrdinalIgnoreCase));
             }
-            if (_filters.Sort == ConversationSort.Oldest) list = list.OrderBy(item => item.UpdatedAt);
+            list = _filters.Scope switch
+            {
+                InboxScope.Mine => list.Where(item => item.Assignee?.IsMe == true),
+                InboxScope.Unassigned => list.Where(item => item.HasAiAgent && item.Assignee is null),
+                _ => list
+            };
+            if (_filters.Channel is { } channel) list = list.Where(item => item.Channel == channel);
+            if (_filters.Status is { } status) list = list.Where(item => item.Status == status);
+            if (_filters.AgentId is { } agent) list = list.Where(item => item.AiAgent?.Id == agent);
+            list = _filters.Sort switch
+            {
+                ConversationSort.Oldest => list.OrderBy(item => item.UpdatedAt),
+                ConversationSort.Priority => list.OrderByDescending(item => item.Priority ?? ConversationPriority.Normal).ThenByDescending(item => item.UpdatedAt),
+                _ => list
+            };
             return list.ToList();
         }
     }
@@ -298,6 +443,7 @@
         if (string.IsNullOrWhiteSpace(ConversationId) || ConversationId == _selected?.Id) return;
         var item = ConversationsState.GetConversation(ConversationId);
         if (item is null) return;
+        await CloseCustomerDetailsAsync();
         _selected = item;
         await RunAsync(() => ReadSelectedAsync(false));
     }
@@ -305,12 +451,14 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
         await RefreshAsync();
         _ = PollAsync();
     }
 
     private void AuthChanged() => _ = InvokeAsync(async () =>
     {
+        await CloseCustomerDetailsAsync();
         ConversationsState.Clear(); _selected = null; _loaded = 50; _initialLoad = true;
         await RefreshAsync();
         StateHasChanged();
@@ -337,7 +485,7 @@
     private Task RefreshAsync() => RunAsync(async () =>
     {
         var token = AuthState.CurrentUser?.Token;
-        var summaries = new List<Parrot.Application.Conversations.ConversationSummary>();
+        var summaries = new List<Parrot.Web.Services.InboxConversationDto>();
         for (int skip = 0; skip < _loaded; skip += 50)
         {
             var page = await Client.ListAsync(skip, _lifetime.Token);
@@ -351,8 +499,11 @@
         ConversationsState.Apply(summaries);
         if (!_initialLoad && ConversationsState.Conversations.Any(c => !known.Contains(c.Id)))
             Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
-        _selected ??= (ConversationId is null ? null : ConversationsState.GetConversation(ConversationId))
-                      ?? ConversationsState.Conversations.FirstOrDefault();
+        // After "Mark as unread" nothing is opened for the person: opening it
+        // would read it straight away.
+        if (!_holdSelection)
+            _selected ??= (ConversationId is null ? null : ConversationsState.GetConversation(ConversationId))
+                          ?? ConversationsState.Conversations.FirstOrDefault();
         if (_selected is not null) await ReadSelectedAsync(false);
     });
 
@@ -360,6 +511,8 @@
     {
         var item = ConversationsState.GetConversation(id);
         if (item is null) return;
+        await CloseCustomerDetailsAsync();
+        _holdSelection = false;
         _selected = item;
         Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(id)}");
         // If a refresh is in flight the next poll reads the new selection.
@@ -394,23 +547,88 @@
         var seen = item.Messages.Select(m => m.Id).ToHashSet();
         var wasLoaded = item.HistoryLoaded;
         ConversationsState.Merge(item, messages);
-        if (!older && wasLoaded && item.Messages.Any(m => !m.IsOutgoing && !seen.Contains(m.Id)))
+        if (!older && wasLoaded && item.Messages.Any(m => m.Kind == MessageKind.Customer && !seen.Contains(m.Id)))
             Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
         if (older || !item.HistoryLoaded) item.NextBefore = page.NextBefore;
         item.HistoryLoaded = true;
+        // Reading a thread reads its messages.
+        if (item.UnreadCount > 0) item.UnreadCount = 0;
     }
 
     private async Task LoadMoreAsync() { _loaded += 50; await RefreshAsync(); }
 
-    private void OnSearchInput(ChangeEventArgs args) => _filters.Search = args.Value?.ToString() ?? "";
+    /// <summary>An inbox action, then a fresh read so the change arrives the same way every change does.</summary>
+    private async Task ActAsync(Func<ConversationItem, Task> action)
+    {
+        if (_selected is not { } conversation || _acting) return;
+        _acting = true;
+        try { await action(conversation); }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); }
+        finally { _acting = false; }
+        await RefreshAsync();
+    }
+
+    /// <summary>
+    /// Marks it unread and closes it, as mail and WhatsApp do: kept open, the
+    /// next read would mark it read again. The row keeps its unread badge.
+    /// </summary>
+    private async Task MarkUnreadAsync()
+    {
+        if (_selected is not { } conversation) return;
+        try { await Features.MarkUnreadAsync(conversation.ConnectionId, conversation.Sender); }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); return; }
+        await CloseCustomerDetailsAsync();
+        _selected = null;
+        _holdSelection = true;
+        Nav.NavigateTo("/dashboard/conversations");
+        await RefreshAsync();
+    }
+
+    private async Task CopyConversationIdAsync()
+    {
+        if (_selected is null) return;
+        await Interop.CopyAsync(_selected.Id);
+        Toasts.Show("Conversation ID copied");
+    }
+
+    private async Task OpenCustomerDetailsAsync()
+    {
+        if (_customerOpen || _selected is null) return;
+        _customerOpen = true;
+        if (_self is not null)
+            _customerEscape = await Interop.BindEscapeAsync(_self, nameof(CloseCustomerDetailsAsync));
+    }
+
+    [JSInvokable]
+    public async Task CloseCustomerDetailsAsync()
+    {
+        if (!_customerOpen && _customerEscape is null) return;
+        _customerOpen = false;
+        if (_customerEscape is not null)
+        {
+            await _customerEscape.DisposeAsync();
+            _customerEscape = null;
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void StartConversation() =>
+        Toasts.Show("Starting a conversation is not available yet", ToastStatus.Info,
+            "Customers start conversations by messaging your connected channels.");
+
+    private void OnSearchChanged(string? value) => _filters.Search = value ?? "";
 
     private void SetScope(InboxScope scope) => _filters.Scope = scope;
     private void SetChannel(string? channel) { _filters.Channel = channel; _openFilter = null; }
+    private void SetStatus(ConversationStatus? status) { _filters.Status = status; _openFilter = null; }
+    private void SetAgent(string? agent) { _filters.AgentId = agent; _openFilter = null; }
     private void SetSort(ConversationSort sort) { _filters.Sort = sort; _openFilter = null; }
 
     private void ClearFilters()
     {
         _filters.Channel = null;
+        _filters.Status = null;
+        _filters.AgentId = null;
         _filters.Sort = ConversationSort.Newest;
         _openFilter = null;
     }
@@ -427,11 +645,50 @@
         return Task.CompletedTask;
     }
 
-    // Counts describe the whole loaded inbox, never the current filter. Parrot
-    // has no assignment, so Mine and Unassigned have no count to show.
-    private string ScopeCount(InboxScope scope) => scope == InboxScope.All
-        ? ConversationsState.Conversations.Count.ToString()
-        : "—";
+    // Counts describe the whole loaded inbox, never the current filter.
+    // Without assignment data Mine and Unassigned have no count to show.
+    private string ScopeCount(InboxScope scope) => scope switch
+    {
+        InboxScope.All => Loaded.Count.ToString(),
+        _ when !HasAssignment => "—",
+        InboxScope.Mine => Loaded.Count(c => c.Assignee?.IsMe == true).ToString(),
+        _ => Loaded.Count(c => c.HasAiAgent && c.Assignee is null).ToString()
+    };
+
+    // Aurora's three specialists; an agent the design does not know shows no role.
+    private static string AgentRole(string id) => id switch
+    {
+        "kora" => "Sales & growth",
+        "nia" => "Support & care",
+        "tobi" => "Orders & products",
+        _ => "AI agent"
+    };
+
+    // React's filter marks: a filled circle per option (the agent's colour, the
+    // status's tone), or the channel's own mark. Drawn here, because they are
+    // this page's vocabulary; FilterPopover only lays them out.
+    private static RenderFragment Mark(string tone, IconName glyph) =>
+        @<span class="inbox-mark is-@tone"><Icon Name="glyph" Size="IconSize.Sm" /></span>;
+
+    private static RenderFragment ChannelMark(string? channel) => channel is null
+        ? Mark("brand", IconName.RiChat3Fill)
+        : @<span class="inbox-mark is-channel"><ChannelGlyph Channel="@channel" /></span>;
+
+    private static RenderFragment StatusMark(ConversationStatus? status) => status switch
+    {
+        ConversationStatus.Open => Mark("open", IconName.RiChat3Fill),
+        ConversationStatus.Pending => Mark("pending", IconName.RiTimerFill),
+        _ => Mark("all", IconName.RiInbox2Fill)
+    };
+
+    private static RenderFragment AgentMark(string? agent) => Mark(agent ?? "all", IconName.RiRobot3Fill);
+
+    private static RenderFragment SortMark(ConversationSort sort) => sort switch
+    {
+        ConversationSort.Oldest => Mark("oldest", IconName.RiTimer2Fill),
+        ConversationSort.Priority => Mark("priority", IconName.RiArrowUpDownFill),
+        _ => Mark("newest", IconName.RiTimerFill)
+    };
 
     private static IconName ChannelIcon(string? channel) => channel switch
     {
@@ -441,9 +698,19 @@
         _ => IconName.RiChat3Fill
     };
 
+    private static string ChannelName(string channel) => channel switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Facebook",
+        _ => channel
+    };
+
     public void Dispose()
     {
         _disposed = true; AuthState.OnChange -= AuthChanged;
         _lifetime.Cancel(); _lifetime.Dispose();
+        if (_customerEscape is not null) _ = _customerEscape.DisposeAsync().AsTask().ContinueWith(_ => _self?.Dispose());
+        else _self?.Dispose();
     }
 }

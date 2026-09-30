@@ -1,52 +1,92 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
-@implements IAsyncDisposable
 @inject AuroraInterop Interop
 
-@* Parrot sends plain-text WhatsApp replies (SendReplyRequest: RequestId +
-   Text). Internal notes, attachments and AI drafting have no backend, so
-   those controls are drawn in Aurora's disabled state. *@
-<div class="conversation-composer @ModeClass">
+@* React's composer. A reply goes through Parrot's send (SendReplyRequest:
+   RequestId + Text), with the same request id kept for a safe retry.
+   Internal notes, attachments, saved replies and AI drafts have no endpoint
+   yet: they are offered only when CanUseFeatures confirms API support, and
+   otherwise drawn disabled (notes) or left out. *@
+<div class="conversation-composer @ModeClass @(ReplyLocked ? "is-reply-locked" : null)">
     <header>
-        <div class="conversation-composer__tabs" role="tablist" aria-label="Message type">
-            <button type="button" role="tab" class="@(Mode == ComposerMode.Reply ? "is-active" : null)"
-                    aria-selected="@(Mode == ComposerMode.Reply)" @onclick="() => ChangeModeAsync(ComposerMode.Reply)">Reply</button>
-            <button type="button" role="tab" class="@(Mode == ComposerMode.Note ? "is-active" : null)"
-                    aria-selected="@(Mode == ComposerMode.Note)" disabled title="Internal notes are not available yet">Internal note</button>
-        </div>
+        <Tabs Label="Message type" Variant="TabsVariant.Flat">
+            <Tab Selected="@(Mode == ComposerMode.Reply)" OnClick="() => ChangeModeAsync(ComposerMode.Reply)">Reply</Tab>
+            <Tab Selected="@(Mode == ComposerMode.Note)" Disabled="@(!CanUseFeatures)"
+                 Title="@(CanUseFeatures ? null : "Internal notes are not available yet")"
+                 OnClick="() => ChangeModeAsync(ComposerMode.Note)">Internal note</Tab>
+        </Tabs>
     </header>
 
-    @* No value attribute: the text is pushed only when it changes from outside
-       the keyboard (see OnParametersSet), so a render cannot overwrite typing. *@
-    <textarea @ref="_input"
-              @oninput="OnTextInput"
-              @onkeydown="OnKeyDown"
-              aria-label="Reply"
-              disabled="@InputDisabled"
-              placeholder="@Placeholder"
-              maxlength="4096"
-              rows="3"></textarea>
+    @if (Mode == ComposerMode.Note)
+    {
+        <div class="conversation-composer__disclosure is-note">
+            <Icon Name="IconName.RiLock2Fill" />
+            <Typography TextStyle="TextStyle.Small10Medium" As="span">Only teammates can see this note. It will show your name and timestamp.</Typography>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(DraftedBy))
+    {
+        <div class="conversation-composer__disclosure">
+            <Icon Name="IconName.RiRobot3Fill" />
+            <Typography TextStyle="TextStyle.Small10Medium" As="span">Drafted by @DraftedBy. Review before sending.</Typography>
+        </div>
+    }
+
+    @if (!string.IsNullOrWhiteSpace(AttachmentName))
+    {
+        <div class="conversation-composer__attachment">
+            <Icon Name="IconName.RiAttachment2" />
+            <Typography TextStyle="TextStyle.Small10Medium" As="span">@AttachmentName</Typography>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove attachment"
+                    @onclick="() => OnAttachmentChanged.InvokeAsync(null)">
+                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+            </Button>
+        </div>
+    }
+
+    <TextArea @ref="_field"
+              Value="@Text"
+              ValueChanged="OnTextChanged"
+              OnKeyDown="OnKeyDown"
+              Variant="TextAreaVariant.Plain"
+              AriaLabel="@(Mode == ComposerMode.Note ? "Internal note" : "Reply")"
+              Disabled="@InputDisabled"
+              Placeholder="@Placeholder"
+              MaxLength="4096"
+              Rows="3"
+              AutoGrow
+              SubmitOnEnter
+              FocusOnPush />
 
     <footer>
         <div class="conversation-composer__tools">
-            <span class="conversation-composer__tool is-disabled" aria-disabled="true"
-                  aria-label="Attach a file" title="Attachments are not available yet">
-                <Icon Name="IconName.RiAttachment2" Size="IconSize.Sm" />
-            </span>
-            <SavedRepliesMenu Disabled="@InputDisabled" OnSelect="SelectSavedReplyAsync" />
-            <button type="button" class="conversation-composer__tool" aria-label="Add emoji" title="Add emoji"
-                    disabled="@InputDisabled" @onclick="AddEmojiAsync">
-                <Icon Name="IconName.RiEmotionHappyFill" Size="IconSize.Sm" />
-            </button>
+            @if (CanUseFeatures)
+            {
+                @* The browser opens its file picker only for a click on a real
+                   file input, so the button forwards one to this hidden input. *@
+                <InputFile @ref="_file" class="sr-only" tabindex="-1" aria-hidden="true" OnChange="OnFileSelected" />
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool"
+                        aria-label="Attach a file" title="Attach a file" disabled="@InputDisabled" @onclick="PickFileAsync">
+                    <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                </Button>
+                <SavedRepliesMenu Disabled="@(InputDisabled || Mode == ComposerMode.Note)" OnSelect="SelectSavedReplyAsync" />
+            }
+            <EmojiPicker Class="conversation-composer__tool" Disabled="@InputDisabled" OnPick="InsertEmojiAsync" />
         </div>
 
-        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled title="No AI agent is available for this conversation">
-            <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
-            <ChildContent>Draft with AI</ChildContent>
-        </Button>
+        @if (CanDraft)
+        {
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="@Drafting" disabled="@Drafting" @onclick="OnDraft">
+                <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
+                <ChildContent>@(Drafting ? "Drafting" : $"Draft with {Conversation.AiAgent!.Name}")</ChildContent>
+            </Button>
+        }
 
-        <Typography TextStyle="TextStyle.Small10Regular" As="span" Class="conversation-composer__count">
-            @(Text.Length > 0 ? $"{Text.Length} characters" : "")
-        </Typography>
+        <span class="conversation-composer__hint">
+            <Typography TextStyle="TextStyle.Small10Regular" As="span">@(Text.Length > 0 ? $"{Text.Length} characters" : "")</Typography>
+            @* As WhatsApp Web: Enter sends, so only the less obvious key is shown. *@
+            <kbd class="@TextStyle.Small10Semibold.ToClassName()">Shift</kbd><kbd class="@TextStyle.Small10Semibold.ToClassName()">Enter</kbd>
+            <Typography TextStyle="TextStyle.Small10Regular" As="span">new line</Typography>
+        </span>
 
         <Button Size="ButtonSize.Small" Busy="@Sending" disabled="@(!CanSend)" @onclick="OnSend">
             <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
@@ -64,59 +104,59 @@
     [Parameter] public bool Sending { get; set; }
     /// <summary>A previous send did not confirm: the same text and request id are kept for a safe retry.</summary>
     [Parameter] public bool Retry { get; set; }
+    /// <summary>Notes, attachments, saved replies and AI drafts can be used.</summary>
+    [Parameter] public bool CanUseFeatures { get; set; }
+    [Parameter] public string? AttachmentName { get; set; }
+    [Parameter] public EventCallback<string?> OnAttachmentChanged { get; set; }
+    [Parameter] public string? DraftedBy { get; set; }
+    [Parameter] public bool Drafting { get; set; }
     [Parameter] public EventCallback OnSend { get; set; }
+    [Parameter] public EventCallback OnDraft { get; set; }
 
-    private ElementReference _input;
-    private IAsyncDisposable? _submitOnEnter;
-    // The text the field already shows (last typed, or last pushed) and text waiting to be pushed.
-    private string? _shown;
-    private string? _pending;
+    private InputFile? _file;
+    private TextArea? _field;
 
-    private bool InputDisabled => Sending || Retry;
-    private bool CanSend => !Sending && !string.IsNullOrWhiteSpace(Text);
+    // Whether this conversation's reply box was locked last render, so taking
+    // over can put the caret in it: the reason to take over is to answer.
+    private string? _lockSeenFor;
+    private bool _wasLocked;
+    private bool _focusPending;
+
+    private bool ReplyLocked => Mode == ComposerMode.Reply && Conversation.ReplyLocked;
+    private bool InputDisabled => Sending || Retry || ReplyLocked;
+    private bool CanSend => !Sending && !ReplyLocked && !string.IsNullOrWhiteSpace(Text);
+    private bool CanDraft => CanUseFeatures && Mode == ComposerMode.Reply && Conversation.HasAiAgent && !ReplyLocked;
     private string ModeClass => Mode == ComposerMode.Note ? "is-note" : "is-reply";
-    private string Placeholder => $"Reply to {Conversation.CustomerName}...";
+    private string Placeholder => Mode == ComposerMode.Note
+        ? "Leave private context for your team..."
+        : ReplyLocked
+            ? $"{Conversation.AiAgent?.Name ?? "The AI agent"} currently controls customer replies"
+            : $"Reply to {Conversation.CustomerName}...";
     // "Send" holds while a send is in flight: the button's Busy state draws the
     // brand's relay dots in the icon slot rather than swapping the label.
-    private string SendLabel => Retry ? "Check / retry" : "Send";
+    private string SendLabel => Retry ? "Check / retry" : Mode == ComposerMode.Note ? "Add note" : "Send";
 
-    // Text that differs from what the field shows came from outside the
-    // keyboard: a send clearing the draft, an emoji, a saved reply, or the
-    // draft of the conversation just opened.
     protected override void OnParametersSet()
     {
-        if (Text == _shown) return;
-        _shown = Text;
-        _pending = Text;
-    }
-
-    private Task OnTextInput(ChangeEventArgs args)
-    {
-        _shown = args.Value?.ToString() ?? "";
-        return TextChanged.InvokeAsync(_shown);
+        if (Conversation.Id == _lockSeenFor && _wasLocked && !ReplyLocked) _focusPending = true;
+        _lockSeenFor = Conversation.Id;
+        _wasLocked = ReplyLocked;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) _submitOnEnter = await Interop.SubmitOnEnterAsync(_input);
-        if (_pending is not null)
-        {
-            var text = _pending;
-            _pending = null;
-            await Interop.SetValueAsync(_input, text);
-        }
+        if (!_focusPending || _field is null) return;
+        _focusPending = false;
+        await _field.FocusAsync();
     }
 
-    // Enter sends and Shift+Enter breaks the line; the JS hook keeps Enter from
-    // adding a newline first. Enter that confirms an IME composition is ignored.
+    private Task OnTextChanged(string? value) => TextChanged.InvokeAsync(value ?? "");
+
     private async Task OnKeyDown(KeyboardEventArgs args)
     {
+        // Enter sends and Shift+Enter breaks the line (the TextArea keeps Enter
+        // from adding a newline). Enter that confirms an IME composition is ignored.
         if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing && CanSend) await OnSend.InvokeAsync();
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_submitOnEnter is not null) await _submitOnEnter.DisposeAsync();
     }
 
     private async Task ChangeModeAsync(ComposerMode mode)
@@ -124,7 +164,15 @@
         await ModeChanged.InvokeAsync(mode);
     }
 
-    private Task AddEmojiAsync() => TextChanged.InvokeAsync($"{Text}{(Text.Length > 0 ? " " : "")}😊");
+    private async Task PickFileAsync()
+    {
+        if (_file?.Element is { } element) await Interop.ClickAsync(element);
+    }
+
+    private Task OnFileSelected(InputFileChangeEventArgs args) => OnAttachmentChanged.InvokeAsync(args.File.Name);
+
+    // At the caret, as typing it would, not tacked on the end.
+    private Task InsertEmojiAsync(string emoji) => _field?.InsertAsync(emoji) ?? Task.CompletedTask;
 
     private Task SelectSavedReplyAsync(string body) => TextChanged.InvokeAsync(body);
 }

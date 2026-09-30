@@ -1,14 +1,17 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 
-<span class="channel-glyph channel-glyph--@Channel.ToLowerInvariant()"
+<span class="channel-glyph channel-glyph--@Channel.ToLowerInvariant() @(Tile ? "is-tile" : null) @(Compact ? "is-compact" : null)"
       title="@ChannelLabel"
       aria-label="@ChannelLabel">
     <Icon Name="Glyph" Size="IconSize.Sm" />
 </span>
 
 @code {
-    /// <summary>Parrot's conversations are WhatsApp only; the parameter keeps Aurora's shape.</summary>
+    /// <summary>whatsapp, instagram or facebook; anything else draws a neutral chat mark.</summary>
     [Parameter] public string Channel { get; set; } = "whatsapp";
+    [Parameter] public bool Tile { get; set; }
+    /// <summary>The small mark that sits inline with text, as in the conversation header.</summary>
+    [Parameter] public bool Compact { get; set; }
 
     private string ChannelLabel => Channel.ToLowerInvariant() switch
     {

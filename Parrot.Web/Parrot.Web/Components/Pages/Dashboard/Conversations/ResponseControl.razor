@@ -1,33 +1,144 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 
-@* Parrot has no AI ownership: every conversation is answered by hand, which
-   is Aurora's human-has-control state. There is no agent to return to, so the
-   return action is drawn disabled and the take-over disclosure never opens. *@
-<div class="response-control human-has-control">
-    <div class="response-control__row">
-        <span class="response-control__copy">
-            <span>
-                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">You control customer replies</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Manual replies. No AI agent sends on this conversation.</Typography>
+@* Who answers the customer right now. With an AI agent on the conversation
+   this is React's control bar: the agent is responding and
+   a person can take over, for a while or until they hand it back. Without
+   one, which is every conversation the API sends today, a person always
+   answers, so there is nothing to take over and no agent to return to. *@
+@if (!Conversation.HasAiAgent || !CanAct)
+{
+    <div class="response-control human-has-control">
+        <div class="response-control__row">
+            <span class="response-control__copy">
+                <span>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">You control customer replies</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Messages you send go directly to this customer.</Typography>
+                </span>
             </span>
-        </span>
-
-        <button type="button" class="response-control__action is-return" disabled
-                title="No AI agent is available for this conversation">
-            <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
-            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Return to AI</Typography>
-        </button>
+        </div>
     </div>
+}
+else
+{
+    @* Escape closes the take-over choice while focus is in the bar (it is on
+       the Take over button once that has been pressed). *@
+    <div class="response-control @ControlClass @(_expanded ? "is-expanded" : null) @_settle" @onkeydown="OnKeyDown">
+        @* Keyed on who is in control, so a change redraws the row and it fades in. *@
+        <div class="response-control__row @(_settle is null ? null : "is-arriving")" @key="Conversation.AiState">
+            <span class="response-control__copy">
+                @if (Conversation.AiState == AiState.Active)
+                {
+                    <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                }
+                <span>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Title</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>
+                        @if (Conversation.AiState != AiState.Active && Countdown is not null)
+                        {
+                            <b class="response-control__countdown">@Countdown</b> @($" until {Agent} resumes")
+                        }
+                        else
+                        {
+                            @Description
+                        }
+                    </Typography>
+                </span>
+            </span>
 
-    <div class="response-control__disclosure" id="takeover-options" aria-hidden="true">
-        <div>
-            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Take over for how long?</Typography>
-            <div class="response-control__options">
-                <button type="button" disabled tabindex="-1">15 min</button>
-                <button type="button" disabled tabindex="-1">30 min</button>
-                <button type="button" disabled tabindex="-1">1 hour</button>
-                <button type="button" disabled tabindex="-1">Until I return</button>
+            @if (Conversation.AiState == AiState.Active)
+            {
+                <Button Size="ButtonSize.Small" Class="response-control__action" Busy="@(Busy && !_choosing)"
+                        aria-controls="takeover-options" aria-expanded="@(_expanded ? "true" : "false")"
+                        disabled="@(Busy || _choosing)" @onclick="() => _expanded = !_expanded">
+                    <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
+                    <ChildContent>Take over</ChildContent>
+                </Button>
+            }
+            else
+            {
+                <Button Size="ButtonSize.Small" Class="response-control__action is-return" Busy="@Busy"
+                        disabled="@Busy" @onclick="OnReturn">
+                    <IconLeft><Icon Name="IconName.RiRobot3Fill" /></IconLeft>
+                    <ChildContent>Return to @Agent</ChildContent>
+                </Button>
+            }
+        </div>
+
+        <div class="response-control__disclosure" id="takeover-options" aria-hidden="@(!_expanded)">
+            <div class="response-control__panel">
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Take over for how long?</Typography>
+                <div class="response-control__options">
+                    @* The chosen length holds the spinner until the switch is done, so
+                       the choice never looks as if it was cancelled. *@
+                    @foreach (var option in Durations)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small"
+                                Busy="@(_choosing && _chosen == option.Minutes)"
+                                disabled="@(Busy || _choosing || !_expanded)" tabindex="@(_expanded ? 0 : -1)"
+                                @onclick="() => ChooseAsync(option.Minutes)">@option.Label</Button>
+                    }
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="response-control__cancel"
+                            disabled="@(_choosing || !_expanded)" tabindex="@(_expanded ? 0 : -1)" @onclick="Collapse">Cancel</Button>
+                </div>
             </div>
         </div>
     </div>
-</div>
+}
+
+@code {
+    [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
+    /// <summary>The take-over actions exist when supported; otherwise the bar only states who replies.</summary>
+    [Parameter] public bool CanAct { get; set; }
+    [Parameter] public string? Countdown { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    /// <summary>Minutes to take over for; null means until the person hands it back.</summary>
+    [Parameter] public EventCallback<int?> OnTakeOver { get; set; }
+    [Parameter] public EventCallback OnReturn { get; set; }
+
+    private static readonly (int? Minutes, string Label)[] Durations =
+        [(15, "15 min"), (30, "30 min"), (60, "1 hour"), (null, "Until I return")];
+
+    private bool _expanded;
+    private bool _choosing;
+    private int? _chosen;
+
+    // Which conversation and state the bar last showed, so a change of hands
+    // on the same conversation can be marked, and opening another cannot.
+    private string? _shownId;
+    private AiState? _shownState;
+    private string? _settle;
+    private string Agent => Conversation.AiAgent?.Name ?? "the AI agent";
+    private string ControlClass => Conversation.AiState == AiState.Active ? "ai-has-control" : "human-has-control";
+    private string Title => Conversation.AiState == AiState.Active ? $"{Agent} is responding" : "You control customer replies";
+    private string Description => Conversation.AiState == AiState.Active
+        ? "Human reply is locked to prevent a duplicate response."
+        : $"{Agent} will not send while you are in control.";
+
+    protected override void OnParametersSet()
+    {
+        if (Conversation.Id != _shownId) _settle = null;
+        else if (_shownState is { } before && before != Conversation.AiState)
+            _settle = Conversation.AiState == AiState.Active ? "is-settling-ai" : "is-settling-human";
+        _shownId = Conversation.Id;
+        _shownState = Conversation.AiState;
+    }
+
+    private void Collapse() { if (!_choosing) _expanded = false; }
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") Collapse();
+    }
+
+    private async Task ChooseAsync(int? minutes)
+    {
+        _choosing = true;
+        _chosen = minutes;
+        try { await OnTakeOver.InvokeAsync(minutes); }
+        finally
+        {
+            _choosing = false;
+            _expanded = false;
+        }
+    }
+}

@@ -1,31 +1,123 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+@using Parrot.Web.Services
+@inject IInboxFeatures Features
 
-@* Parrot has no saved-replies endpoint. The menu opens to Aurora's empty
-   state; creating a reply is drawn disabled because nothing could store it. *@
-<div class="saved-replies">
-    <button type="button" class="saved-replies__trigger" aria-label="Open saved replies" title="Saved replies"
-            aria-haspopup="dialog" aria-expanded="@_open" disabled="@Disabled" @onclick="Toggle">
-        <Icon Name="IconName.RiBookmarkFill" Size="IconSize.Sm" />
-    </button>
+@* Reusable replies: insert one into the composer, save a new one, or edit or
+   delete one. The API has no saved-replies endpoint yet, so the composer
+   offers this only when the inbox actions are available (demo mode). *@
+<div class="saved-replies" @onkeydown="OnKeyDown">
+    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool"
+            aria-label="Open saved replies" title="Saved replies"
+            aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")" disabled="@Disabled" @onclick="ToggleAsync">
+        <IconLeft><Icon Name="IconName.RiBookmarkFill" /></IconLeft>
+    </Button>
 
     @if (_open)
     {
+        @* The click-away layer, the documented exception to building from components. *@
         <button type="button" class="saved-replies__dismiss" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
         <section class="saved-replies__menu" role="dialog" aria-label="Saved replies">
             <header>
                 <span><Icon Name="IconName.RiBookmarkFill" Size="IconSize.Sm" /></span>
                 <div>
-                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Saved replies</Typography>
-                    <Typography TextStyle="TextStyle.Small10Regular" As="small">Insert or create a reusable response</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@HeaderTitle</Typography>
+                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@HeaderSubtitle</Typography>
                 </div>
-                <button type="button" class="saved-replies__new" disabled title="Saved replies are not available yet">
-                    <Icon Name="IconName.RiAddFill" />
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">New</Typography>
-                </button>
+                @if (!_editing)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="StartNew">
+                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                        <ChildContent>New</ChildContent>
+                    </Button>
+                }
             </header>
 
-            <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiBookmarkFill"
-                        Title="No saved replies yet" Description="Create one for answers your team sends often." />
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" OnDismiss="() => _error = null" />
+            }
+
+            @if (_editing)
+            {
+                @* One form for a new reply and for changing one. *@
+                <div class="saved-replies__form">
+                    <Parrot.SharedComponents.DesignSystem.Input FloatingLabel="Name" @bind-Value="_title" maxlength="60" />
+                    <TextArea Value="@_body" ValueChanged="value => _body = value ?? string.Empty"
+                              AriaLabel="Message" MaxLength="600" Rows="4" AutoGrow Placeholder="Write the reusable response..." />
+                    <footer>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_saving" @onclick="StopEditing">Cancel</Button>
+                        <Button Size="ButtonSize.Small" Busy="@_saving" disabled="@(!CanSave)" @onclick="SaveAsync">
+                            <IconLeft><Icon Name="IconName.RiBookmarkFill" /></IconLeft>
+                            <ChildContent>@(_editingId is null ? "Save reply" : "Save changes")</ChildContent>
+                        </Button>
+                    </footer>
+                </div>
+            }
+            else if (_loading)
+            {
+                <div class="saved-replies__loading">
+                    <Skeleton Width="42%" /><Skeleton Width="88%" /><Skeleton Width="35%" /><Skeleton Width="76%" />
+                </div>
+            }
+            else if (_items.Count == 0)
+            {
+                <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiBookmarkFill"
+                            Title="No saved replies yet" Description="Create one for answers your team sends often." />
+            }
+            else
+            {
+                @* Past a handful, finding one by name beats scrolling for it. *@
+                @if (_items.Count > SearchFrom)
+                {
+                    <div class="saved-replies__search">
+                        <SearchField Value="@_query" ValueChanged="value => _query = value ?? string.Empty"
+                                     Placeholder="Search saved replies" AriaLabel="Search saved replies" AutoFocus />
+                    </div>
+                }
+                <div class="saved-replies__list">
+                    @if (!Filtered.Any())
+                    {
+                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="saved-replies__none">No saved replies match “@_query”.</Typography>
+                    }
+                    @foreach (var reply in Filtered)
+                    {
+                        <div class="saved-replies__item @(_confirmDeleteId == reply.Id ? "is-confirming" : null)" @key="reply.Id">
+                            @if (_confirmDeleteId == reply.Id)
+                            {
+                                @* Asked in place, so the popover stays where it is. *@
+                                <div class="saved-replies__confirm" role="alert">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Delete “@reply.Title”?</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Regular" As="span">Your team will no longer see it.</Typography>
+                                    <div>
+                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_saving" @onclick="() => _confirmDeleteId = null">Cancel</Button>
+                                        <Button Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" Busy="@_saving" disabled="@_saving"
+                                                @onclick="() => DeleteAsync(reply)">Delete</Button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                @* Choosing the reply is the row itself: one control, like a menu row. *@
+                                <RowButton Class="saved-replies__pick" OnClick="() => SelectAsync(reply)">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@reply.Title</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@reply.Body</Typography>
+                                </RowButton>
+                                <div class="saved-replies__actions">
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Edit {reply.Title}")" title="Edit"
+                                            @onclick="() => StartEdit(reply)">
+                                        <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                                    </Button>
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="saved-replies__delete"
+                                            aria-label="@($"Delete {reply.Title}")" title="Delete"
+                                            @onclick="() => _confirmDeleteId = reply.Id">
+                                        <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                                    </Button>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            }
         </section>
     }
 </div>
@@ -34,8 +126,116 @@
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public EventCallback<string> OnSelect { get; set; }
 
-    private bool _open;
+    private const int SearchFrom = 5;
 
-    private void Toggle() => _open = !_open;
-    private void Close() => _open = false;
+    private IReadOnlyList<InboxSavedReply> _items = [];
+    private bool _open, _loaded, _loading, _editing, _saving;
+    private string? _editingId;
+    private string? _confirmDeleteId;
+    private string? _error;
+    private string? _title;
+    private string _body = "";
+    private string _query = "";
+
+    private IEnumerable<InboxSavedReply> Filtered => _query.Trim() is { Length: > 0 } q
+        ? _items.Where(r => r.Title.Contains(q, StringComparison.OrdinalIgnoreCase) || r.Body.Contains(q, StringComparison.OrdinalIgnoreCase))
+        : _items;
+
+    private bool CanSave => !_saving && !string.IsNullOrWhiteSpace(_title) && !string.IsNullOrWhiteSpace(_body);
+    private string HeaderTitle => !_editing ? "Saved replies" : _editingId is null ? "New saved reply" : "Edit saved reply";
+    private string HeaderSubtitle => !_editing ? "Insert or create a reusable response" : "Name it so the team can find it";
+
+    private async Task ToggleAsync()
+    {
+        _open = !_open;
+        if (_open && !_loaded) await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _items = await Features.GetSavedRepliesAsync();
+            _loaded = true;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException) { _error = exception.Message; }
+        finally { _loading = false; }
+    }
+
+    private void StartNew() => Edit(null, null, "");
+    private void StartEdit(InboxSavedReply reply) => Edit(reply.Id, reply.Title, reply.Body);
+
+    private void Edit(string? id, string? title, string body)
+    {
+        _editing = true;
+        _editingId = id;
+        _title = title;
+        _body = body;
+        _confirmDeleteId = null;
+        _error = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            if (_editingId is null)
+            {
+                var created = await Features.CreateSavedReplyAsync(_title!, _body);
+                _items = [created, .. _items];
+            }
+            else
+            {
+                var updated = await Features.UpdateSavedReplyAsync(_editingId, _title!, _body);
+                _items = _items.Select(r => r.Id == updated.Id ? updated : r).ToList();
+            }
+            StopEditing();
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException) { _error = exception.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task DeleteAsync(InboxSavedReply reply)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            await Features.DeleteSavedReplyAsync(reply.Id);
+            _items = _items.Where(r => r.Id != reply.Id).ToList();
+            _confirmDeleteId = null;
+        }
+        catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException) { _error = exception.Message; }
+        finally { _saving = false; }
+    }
+
+    private async Task SelectAsync(InboxSavedReply reply)
+    {
+        await OnSelect.InvokeAsync(reply.Body);
+        Close();
+    }
+
+    private void StopEditing() { _editing = false; _editingId = null; _title = null; _body = ""; _error = null; }
+
+    private void Close()
+    {
+        _open = false;
+        _confirmDeleteId = null;
+        _query = "";
+        StopEditing();
+    }
+
+    // Escape backs out one step: a delete question, then the form, then the menu.
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key != "Escape") return;
+        if (_confirmDeleteId is not null) _confirmDeleteId = null;
+        else if (_editing) StopEditing();
+        else Close();
+    }
 }
