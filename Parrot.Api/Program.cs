@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Anthropic;
@@ -349,7 +350,13 @@ builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 
 // Realtime: Redis is only the registry of who is online, never a message store.
 builder.Services.AddRedis(builder.Configuration);
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    // Same wire format as the bus (platform as text, camelCase), so a pushed
+    // message and the history API's look identical to the client.
+    .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+builder.Services.TryAddSingleton<Parrot.Infrastructure.MessageBus.IMessageBus, Parrot.Infrastructure.MessageBus.KafkaMessageBus>();
+builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
 
 // Controllers & OpenAPI
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>

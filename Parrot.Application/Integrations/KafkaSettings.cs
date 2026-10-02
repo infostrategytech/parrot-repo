@@ -11,6 +11,9 @@ public class KafkaSettings
     /// <summary>Where a <c>MessagePersisted</c> event goes once a message is stored, keyed by conversation.</summary>
     public string PersistedTopic { get; set; } = "messages.persisted";
 
+    /// <summary>The API's own group for reading the persisted topic for realtime delivery; never the worker's.</summary>
+    public string RealtimeConsumerGroupId { get; set; } = "realtime-gateway";
+
     /// <summary>Max messages accumulated before a Kafka batch is flushed.</summary>
     public int ProducerBatchSize { get; set; } = 100;
 
