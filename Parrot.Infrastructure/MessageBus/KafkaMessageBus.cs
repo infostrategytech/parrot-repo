@@ -50,9 +50,19 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
             cancellationToken);
     }
 
-    public Task SubscribeAsync<TMessage>(string topic, Func<TMessage, CancellationToken, Task> handler, CancellationToken cancellationToken)
+    public Task SubscribeAsync<TMessage>(
+        string topic, Func<TMessage, CancellationToken, Task> handler, SubscriptionOptions options, CancellationToken cancellationToken)
         // Consume() blocks the calling thread, so the loop gets a thread of its own.
-        => Task.Run(() => ConsumeLoopAsync(topic, handler, cancellationToken), CancellationToken.None);
+        => Task.Run(() => ConsumeLoopAsync(topic, handler, options, cancellationToken), CancellationToken.None);
+
+    /// <summary>The consumer settings for one subscription: the bus defaults, with the subscription's overrides.</summary>
+    public static ConsumerConfig ConsumerConfigFor(KafkaSettings settings, SubscriptionOptions options) => new ConsumerConfig
+    {
+        BootstrapServers = settings.BootstrapServers,
+        GroupId = options.GroupId ?? settings.ConsumerGroupId,
+        AutoOffsetReset = options.StartFromLatest ? AutoOffsetReset.Latest : AutoOffsetReset.Earliest,
+        EnableAutoCommit = false,
+    };
 
     public void Dispose()
     {
@@ -60,15 +70,10 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
         _producer.Dispose();
     }
 
-    private async Task ConsumeLoopAsync<TMessage>(string topic, Func<TMessage, CancellationToken, Task> handler, CancellationToken ct)
+    private async Task ConsumeLoopAsync<TMessage>(
+        string topic, Func<TMessage, CancellationToken, Task> handler, SubscriptionOptions options, CancellationToken ct)
     {
-        ConsumerConfig consumerConfig = new ConsumerConfig
-        {
-            BootstrapServers = _settings.BootstrapServers,
-            GroupId = _settings.ConsumerGroupId,
-            AutoOffsetReset = AutoOffsetReset.Earliest,
-            EnableAutoCommit = false,
-        };
+        ConsumerConfig consumerConfig = ConsumerConfigFor(_settings, options);
         ApplyGcpAuth(consumerConfig);
 
         ConsumerBuilder<string?, string> consumerBuilder = new ConsumerBuilder<string?, string>(consumerConfig);
@@ -80,7 +85,7 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
 
         using IConsumer<string?, string> consumer = consumerBuilder.Build();
         consumer.Subscribe(topic);
-        _logger.LogInformation("Message bus subscribed. Topic={Topic} GroupId={GroupId}", topic, _settings.ConsumerGroupId);
+        _logger.LogInformation("Message bus subscribed. Topic={Topic} GroupId={GroupId}", topic, consumerConfig.GroupId);
 
         try
         {
