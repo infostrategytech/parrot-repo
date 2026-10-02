@@ -83,6 +83,9 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: ["redis-server", "--save", "", "--appendonly", "no"]
+    # Published on loopback only, for the Redis tests (PARROT_TEST_REDIS=localhost:16379).
+    ports:
+      - "127.0.0.1:16379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

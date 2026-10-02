@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Parrot.Application.Realtime;
 using StackExchange.Redis;
 
@@ -27,6 +28,8 @@ public static class RedisServiceCollectionExtensions
         options.AbortOnConnectFail = false;
 
         services.AddSingleton<IConnectionMultiplexer>(_ => ConnectionMultiplexer.Connect(options));
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<IOnlineSessionStore, RedisOnlineSessionStore>();
         return services;
     }
 }
