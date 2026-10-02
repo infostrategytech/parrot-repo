@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Text;
 using System.Text.Json;
 using Confluent.Kafka;
 using Google.Apis.Auth.OAuth2;
@@ -24,7 +26,16 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
         ProducerConfig producerConfig = new ProducerConfig
         {
             BootstrapServers = _settings.BootstrapServers,
-            Acks = Acks.Leader,
+
+            // A publish counts only once every in-sync replica has the message,
+            // and a retried send can't be written twice or out of order.
+            Acks = Acks.All,
+            EnableIdempotence = true,
+
+            // Give up after 4 seconds instead of librdkafka's 5 minutes. Messenger
+            // expects a webhook answer within 5 seconds, so a Kafka outage ends
+            // in a 503 the provider can see, not a timeout on its side.
+            MessageTimeoutMs = 4_000,
         };
         ApplyGcpAuth(producerConfig);
 
@@ -46,6 +57,7 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
             {
                 Key = key,
                 Value = JsonSerializer.Serialize(message, MessageJson.Options),
+                Headers = TraceHeaders(),
             },
             cancellationToken);
     }
@@ -323,6 +335,13 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
             }
         }
     }
+
+    // W3C trace context, so a consumer can continue the trace the publisher was
+    // in. Only a W3C id is a valid traceparent; the older hierarchical format is not.
+    private static Headers? TraceHeaders() =>
+        Activity.Current is { IdFormat: ActivityIdFormat.W3C, Id: { } traceParent }
+            ? new Headers { { "traceparent", Encoding.ASCII.GetBytes(traceParent) } }
+            : null;
 
     private void ApplyGcpAuth(ClientConfig config)
     {

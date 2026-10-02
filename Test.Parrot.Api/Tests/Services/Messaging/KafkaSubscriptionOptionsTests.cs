@@ -1,5 +1,6 @@
 using Confluent.Kafka;
 using Parrot.Application.Integrations;
+using Parrot.Application.Messaging;
 using Parrot.Infrastructure.MessageBus;
 
 namespace Test.Parrot.Api.Tests.Services.Messaging;

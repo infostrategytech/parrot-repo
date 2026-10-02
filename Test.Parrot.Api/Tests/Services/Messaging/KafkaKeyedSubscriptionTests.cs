@@ -5,6 +5,7 @@ using Confluent.Kafka.Admin;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Parrot.Application.Integrations;
+using Parrot.Application.Messaging;
 using Parrot.Infrastructure.MessageBus;
 
 namespace Test.Parrot.Api.Tests.Services.Messaging;

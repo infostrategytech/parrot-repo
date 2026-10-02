@@ -16,9 +16,9 @@ public static class MessageJson
     {
         Converters = { new JsonStringEnumConverter() },
 
-        // The default encoder escapes every quote in a raw payload as " so
+        // The default encoder escapes every quote in a raw payload as \u0022 so
         // the JSON is safe inside HTML. These messages never reach a page, and
-        // that escaping roughly doubles the size of the data field.
+        // that escaping makes the data field about 1.5 times its size.
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
     };
 }

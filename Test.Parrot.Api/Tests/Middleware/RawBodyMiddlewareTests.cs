@@ -45,8 +45,17 @@ public class RawBodyMiddlewareTests
             CreateContext("/api/webhooks/facebook", "?ref=abc", """{"object":"page"}"""));
 
         Assert.Contains(logger.Messages, m => m.Contains("Facebook webhook received"));
-        Assert.Contains(logger.Messages, m => m.Contains("Facebook webhook raw payload"));
         Assert.Contains(logger.Messages, m => m.Contains("Facebook webhook completed"));
+    }
+
+    // Payloads carry what customers wrote, so they never reach the logs.
+    [Fact]
+    public async Task WebhookPayloadsAreNeverLogged()
+    {
+        CapturingLogger logger = await RunAsync(
+            CreateContext("/api/webhooks/whatsapp", "?ref=abc", """{"text":"my meter token is 1234"}"""));
+
+        Assert.DoesNotContain(logger.Messages, m => m.Contains("my meter token"));
     }
 
     [Fact]
