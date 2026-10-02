@@ -139,6 +139,19 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
         ClockSkew = TimeSpan.Zero,
     };
+
+    // Browsers cannot set headers on a WebSocket, so SignalR sends the token
+    // in the query string. Accept it there for the hub path only.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            string? token = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments(Parrot.Api.Realtime.MessagingHub.Path))
+                context.Token = token;
+            return Task.CompletedTask;
+        },
+    };
 })
 .AddCookie("ExternalCookies", options =>
 {
@@ -336,6 +349,7 @@ builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 
 // Realtime: Redis is only the registry of who is online, never a message store.
 builder.Services.AddRedis(builder.Configuration);
+builder.Services.AddSignalR();
 
 // Controllers & OpenAPI
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
@@ -422,5 +436,6 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<Parrot.Api.Realtime.MessagingHub>(Parrot.Api.Realtime.MessagingHub.Path);
 
 app.Run();
