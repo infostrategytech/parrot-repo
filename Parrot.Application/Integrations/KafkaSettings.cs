@@ -11,6 +11,15 @@ public class KafkaSettings
     /// <summary>Where a <c>MessagePersisted</c> event goes once a message is stored, keyed by conversation.</summary>
     public string PersistedTopic { get; set; } = "messages.persisted";
 
+    /// <summary>Where the webhooks publish each customer message as an <c>InboundMessage</c>, keyed by conversation.</summary>
+    public string InboundTopic { get; set; } = "messages.inbound";
+
+    /// <summary>Where the message worker puts inbound messages it can never process, with the reason in a header.</summary>
+    public string InboundDeadLetterTopic { get; set; } = "messages.inbound.dlq";
+
+    /// <summary>The message worker's consumer group on the inbound topic.</summary>
+    public string ProcessorConsumerGroupId { get; set; } = "message-processor";
+
     /// <summary>The API's own group for reading the persisted topic for realtime delivery; never the worker's.</summary>
     public string RealtimeConsumerGroupId { get; set; } = "realtime-gateway";
 

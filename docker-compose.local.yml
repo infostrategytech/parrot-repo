@@ -69,12 +69,14 @@ services:
       kafka:
         condition: service_healthy
     # Auto-create is off on the broker, so every topic is made here.
-    # messages.persisted carries MessagePersisted events for realtime delivery.
+    # messages.inbound carries InboundMessage from the webhooks to the message
+    # worker (messages.inbound.dlq what it can never process); messages.persisted
+    # carries MessagePersisted events for realtime delivery.
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
-        for topic in whatsapp.messages:3 messages.persisted:3; do
+        for topic in whatsapp.messages:3 messages.inbound:3 messages.inbound.dlq:1 messages.persisted:3; do
           /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
             --topic "$${topic%%:*}" --partitions "$${topic##*:}" --replication-factor 1
         done
@@ -250,6 +252,30 @@ services:
       MongoDB__Collection: messages
     depends_on:
       mongodb:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+    networks: [parrot]
+
+  # The new message worker: messages.inbound -> MongoDB -> messages.persisted.
+  # It runs beside the old ingestor until the webhooks publish to
+  # messages.inbound; then the ingestor is retired.
+  message-processor:
+    build:
+      context: .
+      dockerfile: MessageProcessor/Dockerfile
+    restart: unless-stopped
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
+      Kafka__BootstrapServers: kafka:9092
+      MongoDB__ConnectionString: mongodb://mongodb:27017
+      MongoDB__Database: parrot
+      MongoDB__Collection: messages
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       kafka-topic-init:
         condition: service_completed_successfully
