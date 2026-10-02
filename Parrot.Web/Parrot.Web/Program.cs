@@ -87,6 +87,9 @@ builder.Services.AddScoped<IMessageVerificationGrpcClient, MessageVerificationGr
 
 builder.Services.AddScoped<TokenStorageService>();
 builder.Services.AddScoped<AuthState>();
+// One messaging-hub connection per circuit, shared by every page that wants pushes.
+builder.Services.AddScoped<Parrot.Web.Services.Realtime.RealtimeClient>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, Parrot.Web.Services.Realtime.RealtimeCircuitHandler>();
 builder.Services.AddScoped<LoginState>();
 builder.Services.AddScoped<RegisterState>();
 builder.Services.AddScoped<ForgotPasswordState>();

@@ -11,6 +11,7 @@
 @inject AuroraInterop Interop
 @inject ToastService Toasts
 @inject Parrot.Web.Services.FeedbackService Feedback
+@inject Parrot.Web.Services.Realtime.RealtimeClient Realtime
 
 <PageTitle>Inbox · OmniAI</PageTitle>
 
@@ -434,6 +435,8 @@
     {
         ConversationsState.Clear();
         AuthState.OnChange += AuthChanged;
+        Realtime.MessageReceived += OnMessagePushed;
+        Realtime.Reconnected += OnRealtimeReconnected;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -453,14 +456,24 @@
         if (!firstRender) return;
         _self = DotNetObjectReference.Create(this);
         await RefreshAsync();
+        await Realtime.StartAsync();
         _ = PollAsync();
     }
+
+    // A push means a new message is in MongoDB: refresh now instead of on the
+    // next poll. Until the inbox reads the cursor history API, which uses the
+    // push's ids, the list is re-read rather than the pushed message merged in.
+    private Task OnMessagePushed(Parrot.Application.Messaging.StoredMessage message) => InvokeAsync(RefreshAsync);
+
+    // Pushes sent while the connection was down were missed; history has them.
+    private Task OnRealtimeReconnected() => InvokeAsync(RefreshAsync);
 
     private void AuthChanged() => _ = InvokeAsync(async () =>
     {
         await CloseCustomerDetailsAsync();
         ConversationsState.Clear(); _selected = null; _loaded = 50; _initialLoad = true;
         await RefreshAsync();
+        await Realtime.StartAsync();
         StateHasChanged();
     });
 
@@ -709,6 +722,7 @@
     public void Dispose()
     {
         _disposed = true; AuthState.OnChange -= AuthChanged;
+        Realtime.MessageReceived -= OnMessagePushed; Realtime.Reconnected -= OnRealtimeReconnected;
         _lifetime.Cancel(); _lifetime.Dispose();
         if (_customerEscape is not null) _ = _customerEscape.DisposeAsync().AsTask().ContinueWith(_ => _self?.Dispose());
         else _self?.Dispose();
