@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using MongoDB.Bson;
 using MongoDB.Driver;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
@@ -24,6 +25,17 @@ public sealed class MongoMessageRepository : IMessageRepository
             Builders<MessageDocument>.IndexKeys.Ascending(x => x.MessageId);
         _collection.Indexes.CreateOne(new CreateIndexModel<MessageDocument>(
             indexKeys, new CreateIndexOptions { Unique = true }));
+
+        // One message per position in a conversation. Partial, so documents
+        // written before sequences existed (which have neither field) are left alone.
+        _collection.Indexes.CreateOne(new CreateIndexModel<MessageDocument>(
+            Builders<MessageDocument>.IndexKeys.Ascending(x => x.ConversationKey).Ascending(x => x.Sequence),
+            new CreateIndexOptions<MessageDocument>
+            {
+                Unique = true,
+                Name = "ConversationKey_Sequence_unique",
+                PartialFilterExpression = Builders<MessageDocument>.Filter.Type(x => x.Sequence, BsonType.Int64),
+            }));
     }
 
     public async Task InsertAsync(IncomingMessage message, CancellationToken cancellationToken = default)
