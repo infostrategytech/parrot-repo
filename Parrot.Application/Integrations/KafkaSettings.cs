@@ -8,6 +8,9 @@ public class KafkaSettings
     public string Topic { get; set; } = "whatsapp.messages";
     public string ConsumerGroupId { get; set; } = "whatsapp-ingestor";
 
+    /// <summary>Where a <c>MessagePersisted</c> event goes once a message is stored, keyed by conversation.</summary>
+    public string PersistedTopic { get; set; } = "messages.persisted";
+
     /// <summary>Max messages accumulated before a Kafka batch is flushed.</summary>
     public int ProducerBatchSize { get; set; } = 100;
 

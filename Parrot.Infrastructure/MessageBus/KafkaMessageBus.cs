@@ -4,6 +4,7 @@ using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Parrot.Application.Integrations;
+using Parrot.Application.Messaging;
 
 namespace Parrot.Infrastructure.MessageBus;
 
@@ -44,7 +45,7 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
             new Message<string?, string>
             {
                 Key = key,
-                Value = JsonSerializer.Serialize(message),
+                Value = JsonSerializer.Serialize(message, MessageJson.Options),
             },
             cancellationToken);
     }
@@ -99,7 +100,7 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
 
                 try
                 {
-                    TMessage message = JsonSerializer.Deserialize<TMessage>(result.Message.Value)
+                    TMessage message = JsonSerializer.Deserialize<TMessage>(result.Message.Value, MessageJson.Options)
                         ?? throw new InvalidOperationException("Kafka message deserialized to null.");
 
                     await handler(message, ct);
