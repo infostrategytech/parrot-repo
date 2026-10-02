@@ -1,4 +1,4 @@
-namespace Parrot.Infrastructure.MessageBus;
+namespace Parrot.Application.Messaging;
 
 public interface IMessageBus
 {

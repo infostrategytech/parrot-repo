@@ -1,4 +1,5 @@
 using MessageProcessor;
+using Parrot.Application.Messaging;
 using Parrot.Infrastructure.MessageBus;
 
 var builder = Host.CreateApplicationBuilder(args);

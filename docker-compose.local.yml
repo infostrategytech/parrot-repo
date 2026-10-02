@@ -61,18 +61,18 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    entrypoint:
-      - /opt/kafka/bin/kafka-topics.sh
-      - --bootstrap-server
-      - kafka:9092
-      - --create
-      - --if-not-exists
-      - --topic
-      - whatsapp.messages
-      - --partitions
-      - "3"
-      - --replication-factor
-      - "1"
+    # Auto-create is off, so every topic is made here. whatsapp.messages stays
+    # until the old ingestor is retired. The keyed topics get 24 partitions,
+    # the most worker instances that can share one topic's load.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        create() { /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --replication-factor 1 --topic "$$1" --partitions "$$2"; }
+        create whatsapp.messages 3
+        create messages.inbound 24
+        create messages.inbound.dlq 3
+        create messages.persisted 24
     restart: "no"
     networks: [parrot]
 
@@ -142,7 +142,6 @@ services:
       JwtSettings__Issuer: ParrotApi
       JwtSettings__Audience: ParrotApp
       Kafka__BootstrapServers: kafka:9092
-      Kafka__Topic: whatsapp.messages
       GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-local-placeholder.apps.googleusercontent.com}
       GoogleOAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-local-placeholder}
       EmailSettings__SmtpHost: mailpit

@@ -1,5 +1,7 @@
 using MongoDB.Driver;
 using Microsoft.Extensions.Options;
+using Parrot.Application.Messaging;
+using Parrot.Infrastructure.MessageBus;
 using Parrot.Infrastructure.Messaging;
 using Parrot.Infrastructure.Conversations;
 using Parrot.Application.Conversations;
@@ -38,6 +40,12 @@ using Parrot.Api.OpenApi;
 using Parrot.Api.Utils;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// Every log line carries the request's trace id, so one id finds a message's
+// whole journey. ParentId is left out; it is empty unless the caller sent a
+// trace header, which Meta's webhooks don't.
+builder.Logging.Configure(options =>
+    options.ActivityTrackingOptions = ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId);
 
 // Configuration
 builder.Services.Configure<FrontendSettings>(builder.Configuration.GetSection(FrontendSettings.SectionName));
@@ -306,9 +314,11 @@ builder.Services.AddHttpClient<IPasswordBreachChecker, PwnedPasswordsBreachCheck
     client.DefaultRequestHeaders.Add("Add-Padding", "true");
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 });
-builder.Services.AddSingleton<KafkaMessagePublisher>();
-builder.Services.AddSingleton<IMessagePublisher>(sp => sp.GetRequiredService<KafkaMessagePublisher>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<KafkaMessagePublisher>());
+
+// Webhooks publish straight to Kafka and wait for it to confirm. One producer
+// for the whole process; the publisher is scoped like the webhook services.
+builder.Services.AddSingleton<IMessageBus, KafkaMessageBus>();
+builder.Services.AddScoped<InboundMessagePublisher>();
 builder.Services.AddScoped<IWhatsAppWebhookService, WhatsAppWebhookService>();
 builder.Services.AddScoped<IFacebookWebhookService, FacebookWebhookService>();
 builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepository>();

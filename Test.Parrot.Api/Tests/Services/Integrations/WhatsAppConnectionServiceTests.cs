@@ -274,7 +274,7 @@ public class WhatsAppConnectionServiceTests
             Entry = [],
         };
         Mock<IWhatsAppWebhookService> webhooks = new();
-        webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, It.IsAny<CancellationToken>()))
+        webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, "raw-body", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         WhatsAppWebhookController controller = new(webhooks.Object)
         {
@@ -286,7 +286,7 @@ public class WhatsAppConnectionServiceTests
         OkResult result = Assert.IsType<OkResult>(await controller.HandleEvent(signature, "identifier", payload));
 
         Assert.Equal(200, result.StatusCode);
-        webhooks.Verify(s => s.ProcessConnectionEventAsync("identifier", payload, It.IsAny<CancellationToken>()), Times.Once);
+        webhooks.Verify(s => s.ProcessConnectionEventAsync("identifier", payload, "raw-body", It.IsAny<CancellationToken>()), Times.Once);
         webhooks.Verify(s => s.IsValidSignature(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
         webhooks.VerifyNoOtherCalls();
     }
@@ -301,7 +301,7 @@ public class WhatsAppConnectionServiceTests
         };
         Mock<IWhatsAppWebhookService> webhooks = new();
         webhooks.Setup(s => s.IsValidSignature("raw-body", "sha256=valid")).Returns(true);
-        webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, It.IsAny<CancellationToken>()))
+        webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, "raw-body", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         WhatsAppWebhookController controller = new(webhooks.Object)
         {
@@ -312,9 +312,9 @@ public class WhatsAppConnectionServiceTests
 
         Assert.IsType<OkResult>(await controller.HandleEvent("sha256=valid", "identifier", payload));
         webhooks.Verify(s => s.ProcessConnectionEventAsync(
-            "identifier", payload, controller.HttpContext.RequestAborted), Times.Once);
+            "identifier", payload, "raw-body", controller.HttpContext.RequestAborted), Times.Once);
         webhooks.Verify(s => s.ProcessEventAsync(
-            It.IsAny<WhatsAppWebhookPayload>(), It.IsAny<CancellationToken>()), Times.Never);
+            It.IsAny<WhatsAppWebhookPayload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -327,7 +327,7 @@ public class WhatsAppConnectionServiceTests
         };
         Mock<IWhatsAppWebhookService> webhooks = new();
         webhooks.Setup(s => s.IsValidSignature("raw-body", "sha256=valid")).Returns(true);
-        webhooks.Setup(s => s.ProcessConnectionEventAsync("unknown", payload, It.IsAny<CancellationToken>()))
+        webhooks.Setup(s => s.ProcessConnectionEventAsync("unknown", payload, "raw-body", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         WhatsAppWebhookController controller = new(webhooks.Object)
         {

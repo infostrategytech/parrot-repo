@@ -46,17 +46,6 @@ public sealed class RawBodyMiddleware
             context.Items["RawBody"] = await reader.ReadToEndAsync(context.RequestAborted);
 
             context.Request.Body.Position = 0;
-
-            if (platform is not null)
-            {
-                // Temporary full-payload diagnostics, explicitly enabled for webhook troubleshooting.
-                // Includes customer message content; remove when troubleshooting is complete.
-                _logger.LogInformation(
-                    "{Platform} webhook raw payload. CorrelationId={CorrelationId} Payload={Payload}",
-                    platform,
-                    context.Response.Headers["X-Correlation-ID"].ToString(),
-                    context.Items["RawBody"]);
-            }
         }
 
         try
