@@ -61,18 +61,16 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    entrypoint:
-      - /opt/kafka/bin/kafka-topics.sh
-      - --bootstrap-server
-      - kafka:9092
-      - --create
-      - --if-not-exists
-      - --topic
-      - whatsapp.messages
-      - --partitions
-      - "3"
-      - --replication-factor
-      - "1"
+    # Auto-create is off on the broker, so every topic is made here.
+    # messages.persisted carries MessagePersisted events for realtime delivery.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        for topic in whatsapp.messages:3 messages.persisted:3; do
+          /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists \
+            --topic "$${topic%%:*}" --partitions "$${topic##*:}" --replication-factor 1
+        done
     restart: "no"
     networks: [parrot]
 

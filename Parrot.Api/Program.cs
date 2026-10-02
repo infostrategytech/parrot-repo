@@ -37,6 +37,7 @@ using Parrot.Infrastructure.Storage;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Api.OpenApi;
+using Parrot.Api.Realtime;
 using Parrot.Api.Utils;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -444,5 +445,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<Parrot.Api.Realtime.MessagingHub>(Parrot.Api.Realtime.MessagingHub.Path);
+app.MapDevelopmentRealtimeStub();
 
 app.Run();
