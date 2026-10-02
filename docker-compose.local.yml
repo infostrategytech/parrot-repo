@@ -76,6 +76,20 @@ services:
     restart: "no"
     networks: [parrot]
 
+  # Who is online right now, for realtime delivery. Nothing here is meant to
+  # survive: no snapshots, no append-only file, no volume. A restart empties
+  # it and connected clients register again; messages live in MongoDB.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [parrot]
+
   mailpit:
     image: axllent/mailpit:latest
     restart: unless-stopped
@@ -143,6 +157,7 @@ services:
       JwtSettings__Audience: ParrotApp
       Kafka__BootstrapServers: kafka:9092
       Kafka__Topic: whatsapp.messages
+      Redis__ConnectionString: redis:6379
       GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-local-placeholder.apps.googleusercontent.com}
       GoogleOAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-local-placeholder}
       EmailSettings__SmtpHost: mailpit
@@ -183,6 +198,9 @@ services:
       kafka-topic-init:
         condition: service_completed_successfully
       mailpit:
+        condition: service_started
+      # Started, not healthy: the API boots without Redis and connects when it appears.
+      redis:
         condition: service_started
     networks: [parrot]
 

@@ -30,6 +30,7 @@ using Parrot.Infrastructure.Auth;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.Email;
 using Parrot.Infrastructure.FeatureFlags;
+using Parrot.Infrastructure.Realtime;
 using Parrot.Infrastructure.SocialMediaIntegrations;
 using Parrot.Infrastructure.Storage;
 using Parrot.Api.Middleware;
@@ -332,6 +333,9 @@ builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
+
+// Realtime: Redis is only the registry of who is online, never a message store.
+builder.Services.AddRedis(builder.Configuration);
 
 // Controllers & OpenAPI
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
