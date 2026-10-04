@@ -122,3 +122,11 @@ TestResults/
 # Markdown documentation stays local.
 *.[mM][dD]
 
+
+# The catalog service ships its README, ADRs and threat model with the code, and its
+# appsettings hold only local-development defaults (like Parrot.Api's, which are tracked).
+!docs/catalog/**/*.md
+!Parrot.Catalog.Api/appsettings.json
+!Parrot.Catalog.Api/appsettings.Development.json
+!Parrot.Catalog.Relay/appsettings.json
+!Parrot.Catalog.Tools/appsettings.json
