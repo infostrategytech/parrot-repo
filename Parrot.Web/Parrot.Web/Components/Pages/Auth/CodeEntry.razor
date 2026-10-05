@@ -13,7 +13,8 @@
    design system's Input: the resend countdown re-renders every second, and a
    server copy of the code written back on each of those renders ate digits
    as they were typed on slow connections. Text is pushed to the field only
-   when the page changes it (a clear, non-digits dropped). Read-only while
+   when the page clears it; anything but digits is dropped in the browser,
+   on what the field shows then, so digits typed meanwhile stay. Read-only while
    prerendered, since what is typed there is lost when the live page takes
    over. *@
 
@@ -109,8 +110,11 @@
     private ElementReference _input;
     private bool _inputWasDisabled;
 
-    // Text for the field that did not come from typing (a clear, digits only), pushed after the next render.
+    // Text for the field that did not come from typing (a clear), pushed after the next render.
     private string? _push;
+
+    // Something other than digits was typed or pasted: tidy the field after the next render.
+    private bool _tidy;
 
     private bool InputDisabled => _verifying || _locked;
 
@@ -141,13 +145,21 @@
         // again whenever the field comes back after a check, a new code or an
         // expired one. OnAfterRender never runs during prerender, so this only
         // happens once the page is interactive.
-        if (_push is not null)
+        try
         {
-            var text = _push;
-            _push = null;
-            try { await Interop.SetValueAsync(_input, text); }
-            catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException) { }
+            if (_push is not null)
+            {
+                var text = _push;
+                _push = null;
+                await Interop.SetValueAsync(_input, text);
+            }
+            else if (_tidy)
+            {
+                _tidy = false;
+                await Interop.KeepDigitsAsync(_input, 6);
+            }
         }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException) { }
 
         var disabled = InputDisabled;
         var focus = !disabled && (firstRender || _inputWasDisabled);
@@ -170,8 +182,8 @@
     {
         var typed = args.Value?.ToString() ?? "";
         _code = new string(typed.Where(char.IsAsciiDigit).Take(6).ToArray());
-        // Only when something other than digits was typed or pasted does the field need correcting.
-        if (typed != _code) _push = _code;
+        // Only when something other than digits was typed or pasted does the field need tidying.
+        if (typed != _code) _tidy = true;
         _error = null;
 
         if (_code.Length == 6) await VerifyAsync();

@@ -157,6 +157,13 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("setValue", element, value, focus);
     }
 
+    /// <summary>Drops anything but digits (up to <paramref name="max"/>) from what the field shows now.</summary>
+    public async Task KeepDigitsAsync(ElementReference element, int max)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("keepDigits", element, max);
+    }
+
     /// <summary>
     /// Keeps room at the end of <paramref name="scroller"/> for a footer that
     /// floats over it, growing the CSS length <paramref name="property"/> as the
