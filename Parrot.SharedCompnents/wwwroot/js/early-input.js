@@ -42,12 +42,14 @@
     try { el.setSelectionRange(start, end); } catch { /* no selection API */ }
   };
 
-  const keep = (el) => {
+  // edited: typed or filled into (not just clicked into), so it wins over a
+  // prefill the live field starts with.
+  const keep = (el, edited) => {
     if (live || !isField(el) || !el.id) return;
     const entry = kept.get(el.id);
     if (entry && entry.el !== el) return; // already moved across to the live field
     const [start, end] = caretOf(el);
-    kept.set(el.id, { el, value: el.value, start, end, hadFocus: false, into: null });
+    kept.set(el.id, { el, value: el.value, start, end, edited: edited || !!entry?.edited, hadFocus: false, into: null });
     watch();
   };
 
@@ -58,7 +60,8 @@
       const next = document.getElementById(id);
       if (!isField(next) || next === entry.el) continue;
       entry.into = next;
-      if (!next.value && entry.value) {
+      // What the person typed wins over the value the live field starts with.
+      if (entry.edited && next.value !== entry.value) {
         next.value = entry.value;
         // Tell the live page at once, the way typing would: it hears this
         // before anything sent later, such as a held submit.
@@ -103,13 +106,13 @@
     stopIfDone();
   };
 
-  document.addEventListener("input", (e) => keep(e.target), true);
-  document.addEventListener("change", (e) => keep(e.target), true);
+  document.addEventListener("input", (e) => keep(e.target, true), true);
+  document.addEventListener("change", (e) => keep(e.target, true), true);
   document.addEventListener("focusin", (e) => {
     if (live || !isField(e.target)) return;
     focused = e.target;
     // Clicked into, even before typing: the live field gets the caret too.
-    keep(e.target);
+    keep(e.target, false);
   }, true);
   document.addEventListener("submit", (e) => {
     if (live || !(e.target instanceof HTMLFormElement)) return;
@@ -127,10 +130,21 @@
       if (!entry || entry.into !== element) return null;
       kept.delete(element.id);
       stopIfDone();
-      // The page may have moved the focus to its heading meanwhile: give it back.
-      if (entry.hadFocus && document.activeElement !== element) {
-        element.focus();
-        placeCaret(element, entry.start, entry.end);
+      // The page moves the focus to its heading when it goes live, sometimes
+      // just after this: give it back, for a moment, but only from the heading
+      // or nowhere, never from something the person moved to.
+      if (entry.hadFocus) {
+        const giveBack = () => {
+          const now = document.activeElement;
+          if (now === element || !element.isConnected) return;
+          if (now && now !== document.body && now.tagName !== "H1") return;
+          element.focus();
+          placeCaret(element, entry.start, entry.end);
+        };
+        giveBack();
+        requestAnimationFrame(giveBack);
+        setTimeout(giveBack, 150);
+        setTimeout(giveBack, 500);
       }
       return element.value || null;
     },
