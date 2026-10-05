@@ -1,4 +1,9 @@
+using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Parrot.Api.Controllers;
 using Microsoft.Extensions.Options;
 using Moq;
 using Parrot.Application.Conversations;
@@ -205,6 +210,45 @@ public class MessageHistoryTests : IAsyncLifetime
         document.ReceivedAt = at;
         return Messages.InsertOneAsync(document);
     }
+
+    // The recovery endpoint end to end over real MongoDB: a client pages with
+    // the cursor each response gives it, and reads only its own messages.
+    [MongoFact]
+    public async Task TheRecoveryEndpoint_PagesTheSignedInUsersConversation()
+    {
+        await Store(Ada, Owner, 1, 2, 4);
+        await Store(Ada, "owner-2", 3);
+
+        using JsonDocument first = await GetHistory(Owner, after: 0, limit: 2);
+        long cursor = first.RootElement.GetProperty("nextCursor").GetInt64();
+        using JsonDocument second = await GetHistory(Owner, cursor, limit: 2);
+        using JsonDocument stranger = await GetHistory("owner-3", after: 0, limit: 50);
+
+        Assert.Equal([1, 2], Sequences(first));
+        Assert.Equal("whatsapp", first.RootElement.GetProperty("messages")[0].GetProperty("platform").GetString());
+        Assert.Equal([4], Sequences(second));
+        Assert.Equal(JsonValueKind.Null, second.RootElement.GetProperty("nextCursor").ValueKind);
+        Assert.Empty(Sequences(stranger));
+    }
+
+    private async Task<JsonDocument> GetHistory(string userId, long after, int limit)
+    {
+        MessageHistoryController controller = new(History())
+        {
+            ControllerContext = new ControllerContext
+            {
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId)], "test")),
+                },
+            },
+        };
+        JsonResult result = Assert.IsType<JsonResult>(await controller.Get(Ada, after, limit));
+        return JsonDocument.Parse(JsonSerializer.Serialize(result.Value, (JsonSerializerOptions)result.SerializerSettings!));
+    }
+
+    private static long[] Sequences(JsonDocument page) =>
+        page.RootElement.GetProperty("messages").EnumerateArray().Select(m => m.GetProperty("sequence").GetInt64()).ToArray();
 
     private Task Store(string conversationKey, string owner, params long[] sequences) =>
         Messages.InsertManyAsync(sequences.Select(n => Document($"wamid.{n}", conversationKey, owner, n, outgoing: false)));
