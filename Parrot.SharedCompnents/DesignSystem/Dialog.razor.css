@@ -61,10 +61,20 @@
   animation: dialog-in var(--ds-dialog-enter) var(--ds-dialog-ease);
 }
 
+/* Clipped sideways so the ambient layer keeps to the rounded card, but still
+   scrolling down. A plain overflow: hidden here overrode the scroll above, so
+   on a short screen the card was cut off with its button out of reach. */
 .dialog--has-ambient {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow: hidden auto;
+}
+
+/* A short window (a small laptop, a tablet on its side): less space around
+   the card, so more of it fits before it has to scroll. */
+@media (max-height: 800px) {
+  .dialog-backdrop { padding: var(--spacing-lg); }
+  .dialog { max-height: calc(100dvh - 2 * var(--spacing-lg)); }
 }
 
 .dialog__ambient {
