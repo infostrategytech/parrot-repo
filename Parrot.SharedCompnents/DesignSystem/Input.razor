@@ -5,7 +5,18 @@
 @* The floating label is driven entirely by CSS. The input always carries a
    placeholder of one space, so :placeholder-shown is false the moment there is
    a value and the label lifts without any "is filled" state in C#. Remove that
-   placeholder and the label stops moving — with no error anywhere. *@
+   placeholder and the label stops moving — with no error anywhere.
+
+   No value attribute once the page is interactive: the field is uncontrolled,
+   and text reaches it only when it changes from outside the keyboard (a form
+   reset, a prefill, a value the page rewrites). A server-rendered value races
+   the keyboard: on a slow connection a render lands mid-typing with an older
+   copy and eats characters or throws the caret around (seen in production on
+   sign-in and sign-up). TextArea has worked this way since fe79605.
+
+   While the page is still prerendered (not yet interactive), the field is
+   read-only: what is typed there would be lost when the live page replaces
+   it, so it is better not taken at all. *@
 
 <div class="@ClassName">
     @if (!string.IsNullOrWhiteSpace(Label))
@@ -53,7 +64,8 @@
                    id="@InputId"
                    class="@TextStyle.BodySmallMedium.ToClassName()"
                    type="@Type"
-                   value="@Value"
+                   value="@(RendererInfo.IsInteractive ? null : Value)"
+                   readonly="@(!RendererInfo.IsInteractive)"
                    placeholder=" "
                    disabled="@Disabled"
                    aria-labelledby="@LabelledBy"
@@ -90,6 +102,11 @@
     private readonly string _generatedId = "field-" + Guid.NewGuid().ToString("N");
     private ElementReference _input;
     private IAsyncDisposable? _autofillBinding;
+
+    // The text the field already shows (last typed or last pushed), and text
+    // waiting to be pushed to it after the next render.
+    private string _shown = "";
+    private string? _pending;
 
     /// <summary>The label that sits in the field until it holds a value. Always required — a field with no name is not usable.</summary>
     [Parameter, EditorRequired] public string FloatingLabel { get; set; } = "";
@@ -145,8 +162,20 @@
         FloatId,
     }.Where(id => id is not null));
 
-    private Task OnInput(ChangeEventArgs args) =>
-        ValueChanged.InvokeAsync(args.Value?.ToString());
+    // Text that differs from what the field shows came from outside the keyboard.
+    protected override void OnParametersSet()
+    {
+        var text = Value ?? "";
+        if (text == _shown) return;
+        _shown = text;
+        _pending = text;
+    }
+
+    private Task OnInput(ChangeEventArgs args)
+    {
+        _shown = args.Value?.ToString() ?? "";
+        return ValueChanged.InvokeAsync(_shown);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -156,6 +185,12 @@
             // a normal input event. Mirror that browser value into ValueChanged
             // so the form and the pixels never disagree.
             _autofillBinding = await Interop.BindAutofillAsync(_input);
+        }
+        if (_pending is not null)
+        {
+            var text = _pending;
+            _pending = null;
+            await Interop.SetValueAsync(_input, text);
         }
     }
 

@@ -1,12 +1,21 @@
 @namespace Parrot.Web.Components.Pages.Auth
 @implements IAsyncDisposable
+@inject AuroraInterop Interop
 
 @* Six digits in six drawn boxes, over one real input, so paste, SMS and email
    autofill and the number keypad all work the way the platform does them.
    It submits itself on the sixth digit.
 
    A wrong code says so and clears; an expired or exhausted one locks the
-   field and makes a new code available straight away, without the wait. *@
+   field and makes a new code available straight away, without the wait.
+
+   The input is uncontrolled once interactive (no value attribute), like the
+   design system's Input: the resend countdown re-renders every second, and a
+   server copy of the code written back on each of those renders ate digits
+   as they were typed on slow connections. Text is pushed to the field only
+   when the page changes it (a clear, non-digits dropped). Read-only while
+   prerendered, since what is typed there is lost when the live page takes
+   over. *@
 
 @if (_resent && string.IsNullOrEmpty(_error))
 {
@@ -19,7 +28,8 @@
         <input @ref="_input"
                id="@InputId"
                type="text"
-               value="@_code"
+               value="@(RendererInfo.IsInteractive ? null : _code)"
+               readonly="@(!RendererInfo.IsInteractive)"
                inputmode="numeric"
                autocomplete="one-time-code"
                maxlength="6"
@@ -99,6 +109,9 @@
     private ElementReference _input;
     private bool _inputWasDisabled;
 
+    // Text for the field that did not come from typing (a clear, digits only), pushed after the next render.
+    private string? _push;
+
     private bool InputDisabled => _verifying || _locked;
 
     /// <summary>Checks the code. On success the page moves on; this component only reports failures.</summary>
@@ -128,6 +141,14 @@
         // again whenever the field comes back after a check, a new code or an
         // expired one. OnAfterRender never runs during prerender, so this only
         // happens once the page is interactive.
+        if (_push is not null)
+        {
+            var text = _push;
+            _push = null;
+            try { await Interop.SetValueAsync(_input, text); }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException) { }
+        }
+
         var disabled = InputDisabled;
         var focus = !disabled && (firstRender || _inputWasDisabled);
         _inputWasDisabled = disabled;
@@ -147,7 +168,10 @@
 
     private async Task OnCodeInput(ChangeEventArgs args)
     {
-        _code = new string((args.Value?.ToString() ?? "").Where(char.IsAsciiDigit).Take(6).ToArray());
+        var typed = args.Value?.ToString() ?? "";
+        _code = new string(typed.Where(char.IsAsciiDigit).Take(6).ToArray());
+        // Only when something other than digits was typed or pasted does the field need correcting.
+        if (typed != _code) _push = _code;
         _error = null;
 
         if (_code.Length == 6) await VerifyAsync();
@@ -168,6 +192,7 @@
 
             _error = outcome.Error;
             _code = "";
+            _push = "";
             if (outcome.Locked)
             {
                 // Nothing typed here can work now, so offer the one thing that
@@ -200,6 +225,7 @@
             if (error is null)
             {
                 _code = "";
+                _push = "";
                 _locked = false;
                 _secondsRemaining = ResendWaitSeconds;
                 _resent = true;
