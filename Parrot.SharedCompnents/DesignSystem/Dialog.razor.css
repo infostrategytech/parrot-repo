@@ -77,6 +77,30 @@
   .dialog { max-height: calc(100dvh - 2 * var(--spacing-lg)); }
 }
 
+/* FitToScreen: the whole card scales down evenly, in steps, so it fits the
+   window in its designed proportions. The height limit is divided by the
+   scale because zoom scales it too. The steps suit a card about 660px tall
+   (the workspace welcome); never below 82%, so text stays readable, and
+   under that it scrolls as any dialog does. */
+.dialog--fit {
+  /* Gap in the token set: no scale steps. 1 is the designed size. */
+  --ds-dialog-fit: 1;
+  zoom: var(--ds-dialog-fit);
+  max-height: calc((100dvh - 2 * var(--spacing-lg)) / var(--ds-dialog-fit));
+}
+
+@media (max-height: 760px) {
+  .dialog--fit { --ds-dialog-fit: 0.94; /* gap: no scale steps */ }
+}
+
+@media (max-height: 651px) {
+  .dialog--fit { --ds-dialog-fit: 0.88; /* gap: no scale steps */ }
+}
+
+@media (max-height: 612px) {
+  .dialog--fit { --ds-dialog-fit: 0.82; /* gap: no scale steps */ }
+}
+
 .dialog__ambient {
   position: absolute;
   inset: 0;

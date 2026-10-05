@@ -398,27 +398,3 @@
   .workspace-channel-token > ::deep svg { animation: none; opacity: 1; }
   .workspace-orbit-signal { display: none; }
 }
-
-/* Short windows (small laptops, tablets on their side): the drawing gets
-   shorter so the whole card, button included, fits without scrolling. The
-   marks are placed as percentages of the stage, so they stay on their lines. */
-@media (max-height: 800px) {
-  .workspace-ai-visual {
-    /* Gaps in the token set, as above: no compact visual-stage or token-size scale. */
-    --ds-workspace-visual-height: 128px;
-    --ds-workspace-channel-token: 44px;
-    --ds-workspace-brand-hub: 54px;
-  }
-}
-
-@media (max-height: 680px) {
-  .workspace-ai-visual {
-    /* Gaps in the token set, as above: no compact visual-stage or token-size scale. */
-    --ds-workspace-visual-height: 104px;
-    --ds-workspace-channel-token: 40px;
-    --ds-workspace-brand-hub: 48px;
-  }
-
-  .workspace-dialog { gap: var(--spacing-lg); }
-  .workspace-dialog__intro { margin-top: var(--spacing-none); }
-}
