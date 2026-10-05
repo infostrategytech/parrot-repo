@@ -353,6 +353,7 @@ builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMap
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+builder.Services.AddSingleton<IMessageHistory, MongoMessageHistory>();
 
 // Registers every "_t" discriminator before the API reads anything from the collection.
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();

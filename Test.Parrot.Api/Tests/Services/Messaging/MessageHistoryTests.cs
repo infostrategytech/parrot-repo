@@ -1,0 +1,177 @@
+using Microsoft.Extensions.Options;
+using MongoDB.Bson;
+using MongoDB.Driver;
+using Parrot.Application.Integrations;
+using Parrot.Application.Messaging;
+using Parrot.Domain.Entities.Messages;
+using Parrot.Domain.Enums;
+using Parrot.Infrastructure.Messaging;
+using static Test.Parrot.Api.Tests.Services.MongoConversationTests;
+
+namespace Test.Parrot.Api.Tests.Services.Messaging;
+
+public class MessageHistoryTests : IAsyncLifetime
+{
+    private const string Owner = "owner-1";
+    private const string Ada = "whatsapp:2348012345678:2349011112222";
+    private const string Tunde = "whatsapp:2348033334444:2349011112222";
+
+    private readonly string _database = "parrot_test_" + Guid.NewGuid().ToString("N");
+    private MongoClient? _client;
+
+    public Task InitializeAsync()
+    {
+        string? connection = Environment.GetEnvironmentVariable("PARROT_TEST_MONGO");
+        if (connection is not null) _client = new MongoClient(connection);
+        MessageSerializationRegistry.Register();
+        return Task.CompletedTask;
+    }
+
+    public async Task DisposeAsync()
+    {
+        if (_client is not null) await _client.DropDatabaseAsync(_database);
+    }
+
+    private IMongoCollection<MessageDocument> Messages =>
+        _client!.GetDatabase(_database).GetCollection<MessageDocument>("messages");
+
+    private MongoMessageHistory History() =>
+        new(_client!, Options.Create(new MongoDbSettings { Database = _database, Collection = "messages" }));
+
+    [MongoFact]
+    public async Task ReturnsTheMessagesAfterTheCursor_OldestFirst()
+    {
+        MongoMessageHistory history = History();
+        // Sequences can skip numbers; 3 and 4 were never stored.
+        await Store(Ada, Owner, 5, 1, 2);
+
+        MessageHistoryPage page = await history.GetAfterAsync(Owner, Ada, afterSequence: 1, limit: 50);
+
+        Assert.Equal([2, 5], page.Messages.Select(m => m.Sequence));
+        Assert.Null(page.NextCursor);
+    }
+
+    [MongoFact]
+    public async Task PagesThroughAConversation_WithTheCursorItReturns()
+    {
+        MongoMessageHistory history = History();
+        await Store(Ada, Owner, 1, 2, 3, 4, 5);
+
+        MessageHistoryPage first = await history.GetAfterAsync(Owner, Ada, 0, limit: 2);
+        MessageHistoryPage second = await history.GetAfterAsync(Owner, Ada, first.NextCursor!.Value, limit: 2);
+        MessageHistoryPage last = await history.GetAfterAsync(Owner, Ada, second.NextCursor!.Value, limit: 2);
+
+        Assert.Equal([1, 2], first.Messages.Select(m => m.Sequence));
+        Assert.Equal(2, first.NextCursor);
+        Assert.Equal([3, 4], second.Messages.Select(m => m.Sequence));
+        Assert.Equal(4, second.NextCursor);
+        Assert.Equal([5], last.Messages.Select(m => m.Sequence));
+        Assert.Null(last.NextCursor);
+    }
+
+    // A conversation key is two phone numbers, so it is easy to guess.
+    [MongoFact]
+    public async Task AnotherUsersConversation_ReadsAsEmpty()
+    {
+        MongoMessageHistory history = History();
+        await Store(Ada, Owner, 1, 2);
+
+        MessageHistoryPage page = await history.GetAfterAsync("owner-2", Ada, 0, limit: 50);
+
+        Assert.Empty(page.Messages);
+        Assert.Null(page.NextCursor);
+    }
+
+    [MongoFact]
+    public async Task LeavesOutOtherConversations_AndMessagesWithoutASequence()
+    {
+        MongoMessageHistory history = History();
+        await Store(Ada, Owner, 1);
+        await Store(Tunde, Owner, 1, 2);
+
+        // An outgoing reply: ConversationService stores it without a sequence.
+        await Messages.InsertOneAsync(Document("reply", Ada, Owner, sequence: null, outgoing: true));
+
+        MessageHistoryPage page = await history.GetAfterAsync(Owner, Ada, 0, limit: 50);
+
+        StoredMessage message = Assert.Single(page.Messages);
+        Assert.Equal(Ada, message.ConversationKey);
+        Assert.Equal(1, message.Sequence);
+    }
+
+    [MongoFact]
+    public async Task CapsThePageSize()
+    {
+        MongoMessageHistory history = History();
+        await Store(Ada, Owner, Enumerable.Range(1, MongoMessageHistory.MaxPageSize + 5).Select(n => (long)n).ToArray());
+
+        MessageHistoryPage page = await history.GetAfterAsync(Owner, Ada, 0, limit: 1000);
+
+        Assert.Equal(MongoMessageHistory.MaxPageSize, page.Messages.Count);
+        Assert.Equal(MongoMessageHistory.MaxPageSize, page.NextCursor);
+    }
+
+    [MongoFact]
+    public async Task MapsTheStoredDocumentToTheSharedShape()
+    {
+        MongoMessageHistory history = History();
+        await Store(Ada, Owner, 7);
+
+        StoredMessage message = Assert.Single((await history.GetAfterAsync(Owner, Ada, 0, limit: 50)).Messages);
+
+        Assert.Equal("whatsapp:wamid.7", message.MessageId);
+        Assert.Equal(MessagingPlatform.WhatsApp, message.Platform);
+        Assert.Equal(Owner, message.OwnerUserId);
+        Assert.Equal("2348012345678", message.Sender);
+        Assert.Equal("2349011112222", message.Receiver);
+        Assert.Equal("Ada", message.SenderName);
+        Assert.Equal("Message 7", message.Text);
+        Assert.False(message.Outgoing);
+    }
+
+    // The query GetAfterAsync sends must be one index range scan, already in
+    // order: no collection scan and no in-memory sort.
+    [MongoFact]
+    public async Task TheCursorQueryUsesTheHistoryIndex()
+    {
+        History();
+        await Store(Ada, Owner, 1, 2, 3);
+
+        BsonDocument explain = await _client!.GetDatabase(_database).RunCommandAsync<BsonDocument>(new BsonDocument("explain", new BsonDocument
+        {
+            { "find", "messages" },
+            { "filter", new BsonDocument { { "OwnerUserId", Owner }, { "ConversationKey", Ada }, { "Sequence", new BsonDocument("$gt", 1L) } } },
+            { "sort", new BsonDocument("Sequence", 1) },
+            { "limit", 3 },
+        }));
+        string plan = explain["queryPlanner"]["winningPlan"].ToJson();
+
+        Assert.Contains(MongoMessageHistory.IndexName, plan);
+        Assert.DoesNotContain("COLLSCAN", plan);
+        Assert.DoesNotContain("\"SORT\"", plan);
+    }
+
+    private Task Store(string conversationKey, string owner, params long[] sequences) =>
+        Messages.InsertManyAsync(sequences.Select(n => Document($"wamid.{n}", conversationKey, owner, n, outgoing: false)));
+
+    private static WhatsAppMessageDocument Document(string providerId, string conversationKey, string owner, long? sequence, bool outgoing) => new()
+    {
+        MessageId = $"whatsapp:{providerId}",
+        Platform = MessagingPlatform.WhatsApp,
+        ExternalAccountId = "102290129340398",
+        ChannelId = "106540352242922",
+        ChannelDisplayName = "+234 901 111 2222",
+        From = conversationKey.Split(':')[1],
+        Receiver = "2349011112222",
+        ContactName = "Ada",
+        Timestamp = "1790971900",
+        Type = "text",
+        TextBody = $"Message {sequence}",
+        OwnerUserId = owner,
+        ConnectionId = Guid.Parse("6f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f"),
+        ConversationKey = conversationKey,
+        Sequence = sequence,
+        Outgoing = outgoing,
+        StoredAt = new DateTime(2026, 10, 4, 9, 0, 0, DateTimeKind.Utc),
+    };
+}
