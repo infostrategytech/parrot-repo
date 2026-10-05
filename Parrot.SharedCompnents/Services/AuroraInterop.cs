@@ -157,6 +157,17 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("setValue", element, value, focus);
     }
 
+    /// <summary>
+    /// What was typed or autofilled into this field before the page was live,
+    /// now put in it with the focus and caret, or null. Call once, on the
+    /// field's first render.
+    /// </summary>
+    public async Task<string?> TakeEarlyAsync(ElementReference element)
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<string?>("takeEarly", element);
+    }
+
     /// <summary>Drops anything but digits (up to <paramref name="max"/>) from what the field shows now.</summary>
     public async Task KeepDigitsAsync(ElementReference element, int max)
     {

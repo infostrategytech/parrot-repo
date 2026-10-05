@@ -163,6 +163,12 @@ export function submitOnEnter(element) {
    A server-rendered value attribute races the keyboard: a render that lands
    mid-keystroke writes back an older copy of the text. The field is left
    uncontrolled and only text that did not come from typing is pushed. */
+/* What was typed or autofilled into this field's prerendered copy, now in
+   this field with the focus and caret (early-input.js), or null. */
+export function takeEarly(element) {
+  return window.auroraEarly?.take(element) ?? null;
+}
+
 /* Keep only digits, up to max, in what the field shows now: a correction made
    on the current text, not on an older copy from the server, so digits typed
    while the correction was on its way are kept. The caret stays at the end. */

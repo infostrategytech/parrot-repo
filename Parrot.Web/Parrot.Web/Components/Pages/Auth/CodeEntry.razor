@@ -14,9 +14,8 @@
    server copy of the code written back on each of those renders ate digits
    as they were typed on slow connections. Text is pushed to the field only
    when the page clears it; anything but digits is dropped in the browser,
-   on what the field shows then, so digits typed meanwhile stay. Read-only while
-   prerendered, since what is typed there is lost when the live page takes
-   over. *@
+   on what the field shows then, so digits typed meanwhile stay. Digits typed
+   before the page was live are taken over too (early-input.js). *@
 
 @if (_resent && string.IsNullOrEmpty(_error))
 {
@@ -30,7 +29,6 @@
                id="@InputId"
                type="text"
                value="@(RendererInfo.IsInteractive ? null : _code)"
-               readonly="@(!RendererInfo.IsInteractive)"
                inputmode="numeric"
                autocomplete="one-time-code"
                maxlength="6"
@@ -141,6 +139,20 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // Digits typed before the page was live: carry on as if just typed here.
+        if (firstRender)
+        {
+            string? early = null;
+            try { early = await Interop.TakeEarlyAsync(_input); }
+            catch (Exception ex) when (ex is JSException or JSDisconnectedException or OperationCanceledException) { }
+            if (early is not null)
+            {
+                await OnCodeInput(new ChangeEventArgs { Value = early });
+                StateHasChanged();
+                return;
+            }
+        }
+
         // The first box is ready to type into as soon as the screen opens, and
         // again whenever the field comes back after a check, a new code or an
         // expired one. OnAfterRender never runs during prerender, so this only

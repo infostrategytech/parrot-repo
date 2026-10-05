@@ -14,9 +14,10 @@
    copy and eats characters or throws the caret around (seen in production on
    sign-in and sign-up). TextArea has worked this way since fe79605.
 
-   While the page is still prerendered (not yet interactive), the field is
-   read-only: what is typed there would be lost when the live page replaces
-   it, so it is better not taken at all. *@
+   Typing does not wait for the page: what is typed or autofilled into the
+   prerendered copy is kept (early-input.js) and taken over, with the focus
+   and caret, when this live field first renders. The field needs an Id for
+   that; the sign-in and sign-up fields have one. *@
 
 <div class="@ClassName">
     @if (!string.IsNullOrWhiteSpace(Label))
@@ -65,7 +66,7 @@
                    class="@TextStyle.BodySmallMedium.ToClassName()"
                    type="@Type"
                    value="@(RendererInfo.IsInteractive ? null : Value)"
-                   readonly="@(!RendererInfo.IsInteractive)"
+
                    placeholder=" "
                    disabled="@Disabled"
                    aria-labelledby="@LabelledBy"
@@ -185,6 +186,13 @@
             // a normal input event. Mirror that browser value into ValueChanged
             // so the form and the pixels never disagree.
             _autofillBinding = await Interop.BindAutofillAsync(_input);
+
+            // Typed before the page was live: carry it on as if just typed here.
+            if (await Interop.TakeEarlyAsync(_input) is { } early && early != _shown)
+            {
+                _shown = early;
+                await ValueChanged.InvokeAsync(early);
+            }
         }
         if (_pending is not null)
         {
