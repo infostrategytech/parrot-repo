@@ -146,7 +146,7 @@ public class MessageDocumentMappingTests
         BsonDocument bson = NewFactory().ToDocument(NewMessage(MessagingPlatform.WhatsApp)).ToBsonDocument<MessageDocument>();
         bson.Remove("SentAt");
 
-        // LastIncomingAsync falls back to ReceivedAt for these rather than refusing the reply.
+        // ConversationService falls back to ReceivedAt for these rather than refusing the reply.
         MessageDocument document = BsonSerializer.Deserialize<MessageDocument>(bson);
         Assert.Null(document.SentAt);
     }

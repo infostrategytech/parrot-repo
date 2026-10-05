@@ -11,7 +11,9 @@ public interface IConversationStore
 {
     Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct);
     Task<MessagePage> ReadAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct);
-    Task<DateTime?> LastIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct);
+
+    // The customer's most recent message on this connection, or null when there is none.
+    Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct);
     Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct);
     Task<bool> ReserveAsync(WhatsAppMessageDocument message, CancellationToken ct);
     Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct);

@@ -9,7 +9,7 @@ namespace Parrot.Application.Messaging;
 /// </summary>
 public static class StoredMessageMapping
 {
-    /// <exception cref="InvalidOperationException">The document has no conversation key or sequence: it predates the worker.</exception>
+    /// <exception cref="InvalidOperationException">The document has no conversation key or sequence: it predates the worker, or is a reply to a message that does.</exception>
     public static StoredMessage ToStoredMessage(this MessageDocument document) => new()
     {
         MessageId = document.MessageId,
@@ -21,8 +21,15 @@ public static class StoredMessageMapping
         ConnectionId = document.ConnectionId,
         OwnerUserId = document.OwnerUserId,
         Outgoing = document.Outgoing,
-        Sender = ConversationKey.NormalizeParticipant(document.Platform, document.From),
-        Receiver = document.Receiver ?? string.Empty,
+
+        // From is always the customer, for both directions (the inbox groups by it);
+        // Receiver is always the business. On a reply the two swap roles.
+        Sender = document.Outgoing
+            ? document.Receiver ?? string.Empty
+            : ConversationKey.NormalizeParticipant(document.Platform, document.From),
+        Receiver = document.Outgoing
+            ? ConversationKey.NormalizeParticipant(document.Platform, document.From)
+            : document.Receiver ?? string.Empty,
         SenderName = document.ContactName,
         Type = document.Type,
         Text = document.TextBody,

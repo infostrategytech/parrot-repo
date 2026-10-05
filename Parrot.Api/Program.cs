@@ -355,6 +355,9 @@ builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapp
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
 builder.Services.AddSingleton<IMessageHistory, MongoMessageHistory>();
 
+// Replies are numbered from the same per-conversation counter the worker uses.
+builder.Services.AddSingleton<IConversationSequence, MongoConversationSequence>();
+
 // Registers every "_t" discriminator before the API reads anything from the collection.
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddScoped<ConversationService>();

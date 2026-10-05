@@ -7,8 +7,9 @@ namespace Parrot.Infrastructure.Messaging;
 
 /// <summary>
 /// One CRM user's messages in one conversation, after a sequence, oldest
-/// first. Only documents the message worker has numbered are returned:
-/// messages stored before it existed, and outgoing replies, have no sequence.
+/// first, customer messages and the business's replies together. Only numbered
+/// messages are returned: those stored before the worker existed, and replies
+/// to them, have no sequence.
 /// </summary>
 public sealed class MongoMessageHistory : IMessageHistory
 {

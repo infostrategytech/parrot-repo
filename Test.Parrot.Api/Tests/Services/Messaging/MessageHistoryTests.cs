@@ -1,11 +1,17 @@
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Options;
+using Moq;
+using Parrot.Application.Conversations;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Domain.Entities.Messages;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
+using Parrot.Infrastructure.Conversations;
 using Parrot.Infrastructure.Messaging;
+using Parrot.Infrastructure.SocialMediaIntegrations;
 using static Test.Parrot.Api.Tests.Services.MongoConversationTests;
 
 namespace Test.Parrot.Api.Tests.Services.Messaging;
@@ -149,6 +155,55 @@ public class MessageHistoryTests : IAsyncLifetime
         Assert.Contains(MongoMessageHistory.IndexName, plan);
         Assert.DoesNotContain("COLLSCAN", plan);
         Assert.DoesNotContain("\"SORT\"", plan);
+    }
+
+    // Ada writes, the business replies through the inbox, Ada writes again:
+    // history returns all three in order, the reply sent by the business.
+    [MongoFact]
+    public async Task ABusinessReply_SitsInTheConversationBetweenTheCustomersMessages()
+    {
+        IOptions<MongoDbSettings> settings = Options.Create(new MongoDbSettings { Database = _database, Collection = "messages" });
+        MongoConversationSequence counter = new(_client!, settings);
+        MongoMessageHistory history = History();
+        WhatsAppConnection connection = new()
+        {
+            OwnerUserId = Owner, Name = "Support", VerifyTokenEncrypted = "encrypted", WebhookVerifiedAt = DateTime.UtcNow,
+            PhoneNumberId = "106540352242922", WhatsAppBusinessAccountId = "102290129340398",
+            // Typed at setup in a different shape from Meta's; the reply must not depend on it.
+            DisplayPhoneNumber = "0901 111 2222",
+        };
+        WhatsAppTokenProtector protector = new(new EphemeralDataProtectionProvider());
+        connection.AccessTokenEncrypted = protector.Protect("token");
+        Mock<IWhatsAppConnectionRepository> connections = new();
+        connections.Setup(c => c.GetByOwnerAndIdAsync(Owner, connection.Id)).ReturnsAsync(connection);
+        Mock<IWhatsAppSender> sender = new();
+        sender.Setup(s => s.SendAsync(It.IsAny<string>(), It.IsAny<string>(), "2348012345678", "Try 1234", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("wamid.reply");
+        ConversationService service = new(new MongoConversationStore(_client!, settings), connections.Object, sender.Object, protector, counter);
+
+        await StoreIncoming("wamid.first", connection.Id, await counter.NextAsync(Ada), DateTime.UtcNow.AddMinutes(-2));
+        await service.SendAsync(Owner, connection.Id, "2348012345678", new SendReplyRequest(Guid.NewGuid(), "Try 1234"), default);
+        await StoreIncoming("wamid.second", connection.Id, await counter.NextAsync(Ada), DateTime.UtcNow);
+
+        MessageHistoryPage page = await history.GetAfterAsync(Owner, Ada, 0, limit: 50);
+
+        Assert.Equal([1, 2, 3], page.Messages.Select(m => m.Sequence));
+        StoredMessage reply = page.Messages[1];
+        Assert.True(reply.Outgoing);
+        Assert.Equal("Try 1234", reply.Text);
+        Assert.Equal("2349011112222", reply.Sender);
+        Assert.Equal("2348012345678", reply.Receiver);
+        Assert.False(page.Messages[0].Outgoing);
+        Assert.Equal("2348012345678", page.Messages[0].Sender);
+    }
+
+    private Task StoreIncoming(string providerId, Guid connectionId, long sequence, DateTime at)
+    {
+        WhatsAppMessageDocument document = Document(providerId, Ada, Owner, sequence, outgoing: false);
+        document.ConnectionId = connectionId;
+        document.SentAt = at;
+        document.ReceivedAt = at;
+        return Messages.InsertOneAsync(document);
     }
 
     private Task Store(string conversationKey, string owner, params long[] sequences) =>
