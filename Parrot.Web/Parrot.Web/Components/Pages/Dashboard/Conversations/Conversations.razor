@@ -16,8 +16,9 @@
 <PageTitle>Inbox · OmniAI</PageTitle>
 
 @* The React inbox (project aurora frontend) over Parrot's conversations.
-   Parrot lists conversations in pages of 50, reads the selected thread, polls
-   every five seconds and sends replies; it has no filter or search endpoint,
+   Parrot lists conversations in pages of 50, reads the selected thread, takes
+   live pushes from the messaging hub, polls as a safety net (every 15 seconds
+   while connected, 5 while not) and sends replies; it has no filter or search endpoint,
    so the queue is searched, filtered and sorted over the loaded list.
 
    Parts of the design need data the API does not send yet (channels other
@@ -460,12 +461,36 @@
         _ = PollAsync();
     }
 
-    // A push means a new message is in MongoDB: refresh now instead of on the
-    // next poll. Until the inbox reads the cursor history API, which uses the
-    // push's ids, the list is re-read rather than the pushed message merged in.
-    private Task OnMessagePushed(Parrot.Application.Messaging.StoredMessage message) => InvokeAsync(RefreshAsync);
+    // A push is a message already in MongoDB. A conversation the list has
+    // shown takes it in place, with no read; only a new customer, or a reply
+    // whose send status the push does not carry, needs one.
+    private Task OnMessagePushed(Parrot.Application.Messaging.StoredMessage message) => InvokeAsync(async () =>
+    {
+        if (_disposed || !AuthState.IsAuthenticated) return;
+        var item = ConversationsState.FindForPush(message);
+        if (item is null)
+        {
+            await RefreshAsync();
+            return;
+        }
 
-    // Pushes sent while the connection was down were missed; history has them.
+        ConversationsState.Touch(item, message);
+        if (item == _selected && item.HistoryLoaded)
+        {
+            if (message.Outgoing)
+            {
+                if (item.Messages.All(m => m.Id != message.MessageId)) await RunAsync(() => ReadSelectedAsync(false));
+            }
+            else if (ConversationsState.MergePushed(item, message))
+            {
+                Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
+            }
+        }
+        StateHasChanged();
+    });
+
+    // Pushes sent while the connection was down were missed. The thread read
+    // pages back until it meets a message it already has, so it fills the gap.
     private Task OnRealtimeReconnected() => InvokeAsync(RefreshAsync);
 
     private void AuthChanged() => _ = InvokeAsync(async () =>
@@ -477,10 +502,23 @@
         StateHasChanged();
     });
 
+    // Pushes carry new messages while the hub is connected, so polling is the
+    // safety net: slow then, fast while pushes cannot arrive. Replies are not
+    // pushed yet, so the slow poll is also how another agent's reply shows.
+    private static readonly TimeSpan ConnectedPoll = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan DisconnectedPoll = TimeSpan.FromSeconds(5);
+
     private async Task PollAsync()
     {
-        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
-        try { while (await timer.WaitForNextTickAsync(_lifetime.Token)) await InvokeAsync(RefreshAsync); }
+        try
+        {
+            while (!_lifetime.IsCancellationRequested)
+            {
+                var connected = Realtime.State == Microsoft.AspNetCore.SignalR.Client.HubConnectionState.Connected;
+                await Task.Delay(connected ? ConnectedPoll : DisconnectedPoll, _lifetime.Token);
+                await InvokeAsync(RefreshAsync);
+            }
+        }
         catch (OperationCanceledException) { }
     }
 
