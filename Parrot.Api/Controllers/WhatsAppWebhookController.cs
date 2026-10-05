@@ -45,7 +45,7 @@ public class WhatsAppWebhookController : ControllerBase
         [FromQuery(Name = "ref")] string? identifier,
         [FromBody] WhatsAppWebhookPayload payload)
     {
-        // string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
+        string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
         // if (string.IsNullOrEmpty(signature) || !_whatsAppWebhookService.IsValidSignature(rawBody, signature))
         // {
         //     return Unauthorized();
@@ -56,11 +56,12 @@ public class WhatsAppWebhookController : ControllerBase
             bool accepted = await _whatsAppWebhookService.ProcessConnectionEventAsync(
                 identifier ?? string.Empty,
                 payload,
+                rawBody,
                 HttpContext.RequestAborted);
             return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
         }
 
-        await _whatsAppWebhookService.ProcessEventAsync(payload, HttpContext.RequestAborted);
+        await _whatsAppWebhookService.ProcessEventAsync(payload, rawBody, HttpContext.RequestAborted);
         return Ok();
     }
 
@@ -107,11 +108,12 @@ public class WhatsAppWebhookController : ControllerBase
             bool accepted = await _whatsAppWebhookService.ProcessConnectionEventAsync(
                 identifier ?? string.Empty,
                 payload,
+                rawBody,
                 HttpContext.RequestAborted);
             return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
         }
 
-        await _whatsAppWebhookService.ProcessEventAsync(payload, HttpContext.RequestAborted);
+        await _whatsAppWebhookService.ProcessEventAsync(payload, rawBody, HttpContext.RequestAborted);
         return Ok();
     }
 

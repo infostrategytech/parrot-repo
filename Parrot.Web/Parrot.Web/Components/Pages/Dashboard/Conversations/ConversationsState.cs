@@ -1,4 +1,5 @@
 using Parrot.Web.Services;
+using Parrot.Application.Messaging;
 
 namespace Parrot.Web.Components.Pages.Dashboard.Conversations;
 
@@ -72,6 +73,47 @@ public class ConversationsState
                 Answer = message.Answer,
             };
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
+    }
+
+    /// <summary>
+    /// The loaded conversation a pushed message belongs to, or null when the
+    /// list has not shown it yet. The list groups by the customer, who is the
+    /// sender of an incoming message and the receiver of a reply.
+    /// </summary>
+    public ConversationItem? FindForPush(StoredMessage message)
+    {
+        string customer = message.Outgoing ? message.Receiver : message.Sender;
+        return Conversations.FirstOrDefault(c => c.ConnectionId == message.ConnectionId && c.Sender == customer);
+    }
+
+    /// <summary>
+    /// Moves a conversation to the top with the pushed message as its preview,
+    /// as the next list read would.
+    /// </summary>
+    public void Touch(ConversationItem item, StoredMessage message)
+    {
+        if (message.PersistedAt < item.UpdatedAt) return;
+        item.LastMessage = message.Text ?? $"[{message.Type} message]";
+        item.UpdatedAt = message.PersistedAt;
+        Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Adds a pushed customer message to a loaded thread, without a read.
+    /// Returns false when the thread already has it. A repeat must not replace
+    /// the copy a read gave, which carries the API's exact time.
+    /// </summary>
+    public static bool MergePushed(ConversationItem item, StoredMessage message)
+    {
+        if (message.Outgoing) throw new ArgumentException("A pushed reply carries no send status; read the thread instead.", nameof(message));
+        if (item.Messages.Any(m => m.Id == message.MessageId)) return false;
+
+        // As the read API sends an incoming message ("received" is the stored
+        // default). PersistedAt is a moment after the webhook's ReceivedAt,
+        // which the next read puts in its place.
+        Merge(item, [new InboxMessageDto(message.MessageId, message.Text ?? $"[{message.Type} message]", false, "received", message.PersistedAt)]);
+        return true;
     }
 
     // Unknown values from a newer API read as "not provided" rather than failing.

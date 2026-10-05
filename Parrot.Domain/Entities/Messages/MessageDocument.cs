@@ -44,4 +44,22 @@ public abstract class MessageDocument
     // Both platforms carry exactly these two, and every index and query uses them, so they live on the base.
     public required string ChannelId { get; set; }
     public required string ChannelDisplayName { get; set; }
+
+    // Written by the message worker; absent on documents stored before it, and on
+    // outgoing replies until those are given one. Left out when null so the
+    // unique (ConversationKey, Sequence) index only ever sees real values.
+
+    // See Parrot.Application.Messaging.ConversationKey: one key for both directions.
+    [BsonIgnoreIfNull]
+    public string? ConversationKey { get; set; }
+
+    // Position within the conversation, from a per-conversation counter. It may
+    // skip numbers (an insert that failed after the increment); compare, don't count.
+    [BsonIgnoreIfNull]
+    public long? Sequence { get; set; }
+
+    // The other participant, normalized like the sender: the business number for
+    // an incoming WhatsApp message, the Page id for Messenger.
+    [BsonIgnoreIfNull]
+    public string? Receiver { get; set; }
 }
