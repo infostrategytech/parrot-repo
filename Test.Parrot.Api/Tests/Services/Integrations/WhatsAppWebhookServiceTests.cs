@@ -304,6 +304,104 @@ public class WhatsAppWebhookServiceTests
         Assert.Empty(_published);
     }
 
+    // Meta's shape for a reply it could not deliver, with fields we do not read.
+    private const string FailedStatusBody = """
+        {"object":"whatsapp_business_account","entry":[{"id":"acct-1","changes":[{"field":"messages","value":{
+          "messaging_product":"whatsapp",
+          "metadata":{"display_phone_number":"+1","phone_number_id":"phone-1"},
+          "statuses":[{"id":"wamid.F","status":"failed","timestamp":"1700000000","recipient_id":"15550001111",
+            "errors":[{"code":131047,"title":"Re-engagement message","message":"Re-engagement message",
+              "error_data":{"details":"Message failed to send because more than 24 hours have passed since the customer last replied to this number."},
+              "href":"https://developers.facebook.com/docs/whatsapp/cloud-api/support/error-codes/"}]}]
+          }}]}]}
+        """;
+
+    private static WhatsAppWebhookPayload Bind(string json) =>
+        System.Text.Json.JsonSerializer.Deserialize<WhatsAppWebhookPayload>(
+            json, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web))!;
+
+    private static WhatsAppWebhookPayload StatusPayload(WhatsAppMessageStatus status) => new()
+    {
+        Object = "whatsapp_business_account",
+        Entry =
+        [
+            new WhatsAppEntry
+            {
+                Id = "acct-1",
+                Changes =
+                [
+                    new WhatsAppChange
+                    {
+                        Field = "messages",
+                        Value = new WhatsAppChangeValue
+                        {
+                            MessagingProduct = "whatsapp",
+                            Metadata = new WhatsAppMetadata { PhoneNumberId = "phone-1", DisplayPhoneNumber = "+1" },
+                            Statuses = [status],
+                        },
+                    },
+                ],
+            },
+        ],
+    };
+
+    [Fact]
+    public void AFailedStatus_BindsWithItsReason()
+    {
+        WhatsAppMessageStatus status = Bind(FailedStatusBody).Entry[0].Changes[0].Value.Statuses![0];
+
+        WhatsAppStatusError error = Assert.Single(status.Errors!);
+        Assert.Equal(131047, error.Code);
+        Assert.Equal("Re-engagement message", error.Title);
+        Assert.StartsWith("Message failed to send because more than 24 hours", error.ErrorData!.Details);
+    }
+
+    // Every field of an error is optional: a reason worded differently must not fail the batch.
+    [Fact]
+    public void AFailedStatus_WithABareError_StillBinds()
+    {
+        WhatsAppWebhookPayload payload = Bind(FailedStatusBody.Replace(
+            "{\"code\":131047,\"title\":\"Re-engagement message\",\"message\":\"Re-engagement message\",", "{\"unexpected\":true,"));
+
+        WhatsAppStatusError error = Assert.Single(payload.Entry[0].Changes[0].Value.Statuses![0].Errors!);
+        Assert.Null(error.Code);
+        Assert.Null(error.Title);
+    }
+
+    [Fact]
+    public async Task ProcessEventAsync_FailedStatus_LogsWhyAsAWarning()
+    {
+        await _sut.ProcessEventAsync(Bind(FailedStatusBody), RawBody);
+
+        _loggerMock.Verify(l => l.LogWarning(
+            It.Is<string>(m => m.StartsWith("WhatsApp message failed.")),
+            It.Is<object?[]>(a => (string)a[0]! == "wamid.F" && (int?)a[1] == 131047
+                && (string?)a[2] == "Re-engagement message" && ((string?)a[3])!.Contains("24 hours"))), Times.Once);
+        Assert.Empty(_published);
+    }
+
+    // Still a warning when Meta gives no reason, so the failure is not lost among info lines.
+    [Fact]
+    public async Task ProcessEventAsync_FailedStatusWithNoReason_StillWarns()
+    {
+        await _sut.ProcessEventAsync(StatusPayload(new WhatsAppMessageStatus { Id = "wamid.G", Status = "failed", Timestamp = "1700000000" }), RawBody);
+
+        _loggerMock.Verify(l => l.LogWarning(
+            It.Is<string>(m => m.StartsWith("WhatsApp message failed.")),
+            It.Is<object?[]>(a => (string)a[0]! == "wamid.G" && a[1] == null && a[2] == null && a[3] == null)), Times.Once);
+    }
+
+    [Fact]
+    public async Task ProcessEventAsync_DeliveredStatus_IsInformationOnly()
+    {
+        await _sut.ProcessEventAsync(StatusPayload(new WhatsAppMessageStatus { Id = "wamid.H", Status = "delivered", Timestamp = "1700000000" }), RawBody);
+
+        _loggerMock.Verify(l => l.LogInformation(
+            It.Is<string>(m => m.StartsWith("WhatsApp status update.")),
+            It.Is<object?[]>(a => (string)a[0]! == "wamid.H" && (string)a[1]! == "delivered")), Times.Once);
+        _loggerMock.Verify(l => l.LogWarning(It.IsAny<string>(), It.IsAny<object?[]>()), Times.Never);
+    }
+
     // A 503 makes Meta send the webhook again, so a Kafka outage loses nothing.
     [Fact]
     public async Task ProcessEventAsync_WhenKafkaFails_ThrowsServiceUnavailable()

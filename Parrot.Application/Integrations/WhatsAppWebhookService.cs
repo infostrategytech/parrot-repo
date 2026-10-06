@@ -188,10 +188,27 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
 
                 foreach (WhatsAppMessageStatus status in change.Value.Statuses ?? [])
                 {
-                    _logger.LogInformation(
-                        "WhatsApp status update. MessageId={Id} Status={Status}",
-                        status.Id,
-                        status.Status);
+                    if (status.Status != "failed")
+                    {
+                        _logger.LogInformation(
+                            "WhatsApp status update. MessageId={Id} Status={Status}",
+                            status.Id,
+                            status.Status);
+                        continue;
+                    }
+
+                    // A reply the customer never got. Meta says why; without it a
+                    // failure can't be told apart from the next one.
+                    List<WhatsAppStatusError?> reasons = status.Errors is { Count: > 0 } ? [.. status.Errors] : [null];
+                    foreach (WhatsAppStatusError? error in reasons)
+                    {
+                        _logger.LogWarning(
+                            "WhatsApp message failed. MessageId={Id} ErrorCode={ErrorCode} ErrorTitle={ErrorTitle} ErrorDetails={ErrorDetails}",
+                            status.Id,
+                            error?.Code,
+                            error?.Title ?? error?.Message,
+                            error?.ErrorData?.Details);
+                    }
                 }
             }
         }
