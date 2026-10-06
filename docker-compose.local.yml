@@ -22,6 +22,9 @@ services:
   mongodb:
     image: mongo:7
     restart: unless-stopped
+    # Published on loopback only, for the MongoDB tests (PARROT_TEST_MONGO=mongodb://localhost:27018).
+    ports:
+      - "127.0.0.1:27018:27017"
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -38,14 +41,18 @@ services:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
-      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      # PLAINTEXT is for the other containers; HOST is published on loopback
+      # only, for the Kafka tests (PARROT_TEST_KAFKA=localhost:29092).
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,HOST://:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,HOST://localhost:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,HOST:PLAINTEXT
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+    ports:
+      - "127.0.0.1:29092:29092"
     volumes:
       - kafka_data:/var/lib/kafka/data
     healthcheck:
@@ -61,19 +68,38 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    entrypoint:
-      - /opt/kafka/bin/kafka-topics.sh
-      - --bootstrap-server
-      - kafka:9092
-      - --create
-      - --if-not-exists
-      - --topic
-      - whatsapp.messages
-      - --partitions
-      - "3"
-      - --replication-factor
-      - "1"
+    # Auto-create is off, so every topic is made here. The keyed topics get
+    # 24 partitions, the most worker instances that can share one topic's load.
+    # messages.persisted carries MessagePersisted events for realtime delivery.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        create() { /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --replication-factor 1 --topic "$$1" --partitions "$$2"; }
+        create messages.inbound 24
+        create messages.inbound.dlq 3
+        create messages.persisted 24
     restart: "no"
+    networks: [parrot]
+
+  # Shared by realtime delivery (who is online) and the catalog cache. Nothing
+  # here is meant to survive: no snapshots, no append-only file, no volume. A
+  # restart empties it; clients register again on their next heartbeat, the
+  # cache refills, and messages live in MongoDB. The memory cap evicts the
+  # least-recently-used key, which costs either user at most a re-register or
+  # a cache miss.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    # Published on loopback only, for the Redis tests (PARROT_TEST_REDIS=localhost:16379).
+    ports:
+      - "127.0.0.1:16379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
     networks: [parrot]
 
   mailpit:
@@ -142,7 +168,7 @@ services:
       JwtSettings__Issuer: ParrotApi
       JwtSettings__Audience: ParrotApp
       Kafka__BootstrapServers: kafka:9092
-      Kafka__Topic: whatsapp.messages
+      Redis__ConnectionString: redis:6379
       GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-local-placeholder.apps.googleusercontent.com}
       GoogleOAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-local-placeholder}
       EmailSettings__SmtpHost: mailpit
@@ -184,6 +210,9 @@ services:
         condition: service_completed_successfully
       mailpit:
         condition: service_started
+      # Started, not healthy: the API boots without Redis and connects when it appears.
+      redis:
+        condition: service_started
     networks: [parrot]
 
   parrot-grpc:
@@ -208,22 +237,24 @@ services:
         condition: service_healthy
     networks: [parrot]
 
-  whatsapp-ingestor:
+  # The message worker, the only thing that stores incoming messages:
+  # messages.inbound -> MongoDB -> messages.persisted.
+  message-processor:
     build:
       context: .
-      dockerfile: WhatsAppMessageIngestor/Dockerfile
+      dockerfile: MessageProcessor/Dockerfile
     restart: unless-stopped
     environment:
       DOTNET_ENVIRONMENT: Development
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
       Kafka__BootstrapServers: kafka:9092
-      Kafka__Topic: whatsapp.messages
-      Kafka__ConsumerGroupId: whatsapp-ingestor-local
       MongoDB__ConnectionString: mongodb://mongodb:27017
       MongoDB__Database: parrot
       MongoDB__Collection: messages
     depends_on:
       mongodb:
+        condition: service_healthy
+      postgres:
         condition: service_healthy
       kafka-topic-init:
         condition: service_completed_successfully
@@ -288,17 +319,6 @@ services:
       - --replication-factor
       - "1"
     restart: "no"
-    networks: [parrot]
-
-  redis:
-    image: redis:7-alpine
-    restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
     networks: [parrot]
 
   catalog-api:

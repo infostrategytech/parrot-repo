@@ -31,14 +31,11 @@ public class RequestContextMiddleware
 
         Stopwatch stopwatch = Stopwatch.StartNew();
 
-        using (_logger.BeginScope(new Dictionary<string, object?>
-        {
-            ["CorrelationId"] = correlationId,
-            ["IpAddress"] = requestContext.IpAddress,
-            ["HttpMethod"] = requestContext.HttpMethod,
-            ["RequestPath"] = requestContext.RequestPath,
-            ["UserAgent"] = requestContext.UserAgent,
-        }))
+        // Only the correlation id goes on every line of the request; the trace id
+        // and request path are already added by ASP.NET Core. A message-template
+        // scope, not a dictionary, so the console prints its value rather than
+        // its type name.
+        using (_logger.BeginScope("CorrelationId:{CorrelationId}", correlationId))
         {
             _logger.LogInformation("HTTP {HttpMethod} {RequestPath} started", requestContext.HttpMethod, requestContext.RequestPath);
 
@@ -65,6 +62,8 @@ public class RequestContextMiddleware
             return incoming;
         }
 
-        return Guid.NewGuid().ToString();
+        // The request's trace id, so a caller who sends none sees the id that
+        // every log line of this request and its messages carries.
+        return Activity.Current?.TraceId.ToHexString() ?? Guid.NewGuid().ToString();
     }
 }

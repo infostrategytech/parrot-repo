@@ -12,6 +12,7 @@ public interface IFacebookWebhookService
     bool IsValidSignature(string rawBody, string signatureHeader);
 
     // Routes an event to the connection named by ?ref=; false means reject with 403.
-    Task<bool> ProcessConnectionEventAsync(string identifier, FacebookWebhookPayload payload,
+    // rawBody is the request body exactly as received; it travels to Kafka unchanged.
+    Task<bool> ProcessConnectionEventAsync(string identifier, FacebookWebhookPayload payload, string rawBody,
         CancellationToken cancellationToken = default);
 }

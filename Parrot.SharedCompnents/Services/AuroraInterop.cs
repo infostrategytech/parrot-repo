@@ -158,6 +158,24 @@ public sealed class AuroraInterop : IAsyncDisposable
     }
 
     /// <summary>
+    /// What was typed or autofilled into this field before the page was live,
+    /// now put in it with the focus and caret, or null. Call once, on the
+    /// field's first render.
+    /// </summary>
+    public async Task<string?> TakeEarlyAsync(ElementReference element)
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<string?>("takeEarly", element);
+    }
+
+    /// <summary>Drops anything but digits (up to <paramref name="max"/>) from what the field shows now.</summary>
+    public async Task KeepDigitsAsync(ElementReference element, int max)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("keepDigits", element, max);
+    }
+
+    /// <summary>
     /// Keeps room at the end of <paramref name="scroller"/> for a footer that
     /// floats over it, growing the CSS length <paramref name="property"/> as the
     /// footer grows, until the handle is disposed.

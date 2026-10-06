@@ -7,12 +7,26 @@ public sealed class RawBodyMiddleware
 {
     private readonly RequestDelegate _next;
 
+    /// <summary>
+    /// Writes each provider webhook's raw body to the logs. Bodies carry what
+    /// customers wrote and their phone numbers, so this is for diagnosing a
+    /// provider's payloads only: turn it off (Webhooks__LogBodies=false) as
+    /// soon as that is done. Read per request, so a config reload applies.
+    /// </summary>
+    public const string LogBodiesKey = "Webhooks:LogBodies";
+
+    // Meta's webhooks are a few KB; this only stops a hostile body flooding the logs.
+    private const int MaxLoggedBodyLength = 16 * 1024;
+
     private readonly ILogger<RawBodyMiddleware> _logger;
 
-    public RawBodyMiddleware(RequestDelegate next, ILogger<RawBodyMiddleware> logger)
+    private readonly IConfiguration _configuration;
+
+    public RawBodyMiddleware(RequestDelegate next, ILogger<RawBodyMiddleware> logger, IConfiguration configuration)
     {
         _next = next;
         _logger = logger;
+        _configuration = configuration;
     }
 
     public async Task InvokeAsync(HttpContext context)
@@ -43,19 +57,20 @@ public sealed class RawBodyMiddleware
             context.Request.EnableBuffering();
 
             using StreamReader reader = new(context.Request.Body, leaveOpen: true);
-            context.Items["RawBody"] = await reader.ReadToEndAsync(context.RequestAborted);
+            string rawBody = await reader.ReadToEndAsync(context.RequestAborted);
+            context.Items["RawBody"] = rawBody;
 
             context.Request.Body.Position = 0;
 
-            if (platform is not null)
+            // Before model binding, so a payload rejected with a 400 is logged too.
+            if (platform is not null && _configuration.GetValue(LogBodiesKey, false))
             {
-                // Temporary full-payload diagnostics, explicitly enabled for webhook troubleshooting.
-                // Includes customer message content; remove when troubleshooting is complete.
                 _logger.LogInformation(
-                    "{Platform} webhook raw payload. CorrelationId={CorrelationId} Payload={Payload}",
+                    "{Platform} webhook body. CorrelationId={CorrelationId} Truncated={Truncated} Body={Body}",
                     platform,
                     context.Response.Headers["X-Correlation-ID"].ToString(),
-                    context.Items["RawBody"]);
+                    rawBody.Length > MaxLoggedBodyLength,
+                    rawBody.Length > MaxLoggedBodyLength ? rawBody[..MaxLoggedBodyLength] : rawBody);
             }
         }
 

@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
+using Parrot.Application.Messaging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
 
@@ -12,13 +13,13 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
 {
     private readonly WhatsAppSettings _settings;
     private readonly IAppLogger<WhatsAppWebhookService> _logger;
-    private readonly IMessagePublisher _publisher;
+    private readonly InboundMessagePublisher _publisher;
     private readonly IWhatsAppConnectionRepository _connections;
 
     public WhatsAppWebhookService(
         IOptions<WhatsAppSettings> settings,
         IAppLogger<WhatsAppWebhookService> logger,
-        IMessagePublisher publisher,
+        InboundMessagePublisher publisher,
         IWhatsAppConnectionRepository connections)
     {
         _settings = settings.Value;
@@ -88,12 +89,13 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         }
     }
 
-    public Task ProcessEventAsync(WhatsAppWebhookPayload payload, CancellationToken cancellationToken = default) =>
-        ProcessEventAsync(payload, null, null, cancellationToken);
+    public Task ProcessEventAsync(WhatsAppWebhookPayload payload, string rawBody, CancellationToken cancellationToken = default) =>
+        ProcessEventAsync(payload, rawBody, null, null, cancellationToken);
 
     public async Task<bool> ProcessConnectionEventAsync(
         string identifier,
         WhatsAppWebhookPayload payload,
+        string rawBody,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(identifier))
@@ -136,16 +138,23 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
             connection.Id,
             payload.Entry.Count);
 
-        await ProcessEventAsync(payload, connection.Id, connection.OwnerUserId, cancellationToken);
+        await ProcessEventAsync(payload, rawBody, connection.Id, connection.OwnerUserId, cancellationToken);
         return true;
     }
 
+    // Reads only what routing needs from each message and hands the body on as
+    // received; the Message Worker decodes the rest.
     private async Task ProcessEventAsync(
         WhatsAppWebhookPayload payload,
+        string rawBody,
         Guid? connectionId,
         string? ownerUserId,
         CancellationToken cancellationToken)
     {
+        string correlationId = InboundMessagePublisher.CurrentCorrelationId();
+        DateTime receivedAt = DateTime.UtcNow;
+        List<InboundMessage> inbound = [];
+
         foreach (WhatsAppEntry entry in payload.Entry)
         {
             foreach (WhatsAppChange change in entry.Changes)
@@ -155,56 +164,55 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
                     continue;
                 }
 
-                if (change.Value.Messages is { Count: > 0 } messages)
+                string business = change.Value.Metadata.DisplayPhoneNumber;
+
+                foreach (WhatsAppMessage msg in change.Value.Messages ?? [])
                 {
-                    Dictionary<string, string> contactNames = change.Value.Contacts?
-                        .ToDictionary(c => c.WaId, c => c.Profile.Name)
-                        ?? [];
-
-                    List<IncomingMessage> batch = new List<IncomingMessage>(messages.Count);
-
-                    foreach (WhatsAppMessage msg in messages)
+                    inbound.Add(new InboundMessage
                     {
-                        _logger.LogInformation(
-                            "WhatsApp message received. From={From} Type={Type} MessageId={Id}",
-                            msg.From,
-                            msg.Type,
-                            msg.Id);
+                        MessageId = $"whatsapp:{msg.Id}",
+                        Source = MessagingPlatform.WhatsApp,
+                        Sender = ConversationKey.NormalizeParticipant(MessagingPlatform.WhatsApp, msg.From),
+                        Receiver = ConversationKey.NormalizeParticipant(MessagingPlatform.WhatsApp, business),
+                        ConversationKey = ConversationKey.Create(MessagingPlatform.WhatsApp, msg.From, business),
+                        Data = rawBody,
 
-                        batch.Add(new IncomingMessage
-                        {
-                            ConnectionId = connectionId,
-                            OwnerUserId = ownerUserId,
-                            MessageId = msg.Id,
-                            Platform = MessagingPlatform.WhatsApp,
-                            ExternalAccountId = entry.Id,
-                            From = msg.From,
-                            Timestamp = msg.Timestamp,
-                            // WhatsApp sends whole seconds; Messenger sends milliseconds.
-                            SentAt = ProviderTimestamp.FromUnixSeconds(msg.Timestamp),
-                            Type = msg.Type,
-                            TextBody = msg.Text?.Body,
-                            ChannelId = change.Value.Metadata.PhoneNumberId,
-                            ChannelDisplayName = change.Value.Metadata.DisplayPhoneNumber,
-                            ContactName = contactNames.GetValueOrDefault(msg.From),
-                            ReceivedAt = DateTime.UtcNow,
-                        });
-                    }
-
-                    await _publisher.PublishBatchAsync(batch, cancellationToken);
+                        // WhatsApp sends whole seconds; Messenger sends milliseconds.
+                        SentAt = ProviderTimestamp.FromUnixSeconds(msg.Timestamp),
+                        ReceivedAt = receivedAt,
+                        CorrelationId = correlationId,
+                        ConnectionId = connectionId,
+                        OwnerUserId = ownerUserId,
+                    });
                 }
 
-                if (change.Value.Statuses is { Count: > 0 } statuses)
+                foreach (WhatsAppMessageStatus status in change.Value.Statuses ?? [])
                 {
-                    foreach (WhatsAppMessageStatus status in statuses)
+                    if (status.Status != "failed")
                     {
                         _logger.LogInformation(
                             "WhatsApp status update. MessageId={Id} Status={Status}",
                             status.Id,
                             status.Status);
+                        continue;
+                    }
+
+                    // A reply the customer never got. Meta says why; without it a
+                    // failure can't be told apart from the next one.
+                    List<WhatsAppStatusError?> reasons = status.Errors is { Count: > 0 } ? [.. status.Errors] : [null];
+                    foreach (WhatsAppStatusError? error in reasons)
+                    {
+                        _logger.LogWarning(
+                            "WhatsApp message failed. MessageId={Id} ErrorCode={ErrorCode} ErrorTitle={ErrorTitle} ErrorDetails={ErrorDetails}",
+                            status.Id,
+                            error?.Code,
+                            error?.Title ?? error?.Message,
+                            error?.ErrorData?.Details);
                     }
                 }
             }
         }
+
+        await _publisher.PublishAsync(inbound, cancellationToken);
     }
 }

@@ -57,16 +57,13 @@ public sealed class MongoConversationStore : IConversationStore
             docs.Count > 100 ? page[^1].Id : null);
     }
 
-    public async Task<DateTime?> LastIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct)
+    public async Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct)
     {
         FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(
             x => x.OwnerUserId == owner && x.ConnectionId == connection && x.From == sender)
             & Builders<MessageDocument>.Filter.Ne(x => x.Outgoing, true);
         // Ordered by ReceivedAt: Timestamp is a provider string whose units differ per platform.
-        MessageDocument? doc = await _messages.Find(filter).SortByDescending(x => x.ReceivedAt).FirstOrDefaultAsync(ct);
-
-        // SentAt is absent on documents written before it existed; ReceivedAt is within seconds of it.
-        return doc is null ? null : doc.SentAt ?? doc.ReceivedAt;
+        return await _messages.Find(filter).SortByDescending(x => x.ReceivedAt).FirstOrDefaultAsync(ct);
     }
 
     public async Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct) =>

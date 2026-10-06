@@ -29,10 +29,8 @@ public class AppLogger<T> : IAppLogger<T>
     public void LogError(Exception exception, string message, params object?[] args) =>
         _logger.LogError(exception, message, args);
 
+    // A message-template scope: the console prints "User:42", and structured
+    // providers still get EntityType and EntityId as fields.
     public IDisposable BeginEntityScope(string entityType, string entityId) =>
-        _logger.BeginScope(new Dictionary<string, object>
-        {
-            ["EntityType"] = entityType,
-            ["EntityId"] = entityId,
-        }) !;
+        _logger.BeginScope("{EntityType}:{EntityId}", entityType, entityId) !;
 }

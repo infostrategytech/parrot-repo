@@ -61,7 +61,7 @@ public class FacebookWebhookController : ControllerBase
         }
 
         bool accepted = await _facebookWebhookService.ProcessConnectionEventAsync(
-            identifier ?? string.Empty, payload, HttpContext.RequestAborted);
+            identifier ?? string.Empty, payload, rawBody, HttpContext.RequestAborted);
         return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
     }
 }

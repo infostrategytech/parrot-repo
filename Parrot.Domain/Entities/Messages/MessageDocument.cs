@@ -8,7 +8,7 @@ namespace Parrot.Domain.Entities.Messages;
 // apart by the "_t" discriminator. Fields common to all platforms belong here; only genuinely
 // platform-specific data belongs on a subclass.
 // BsonIgnoreExtraElements is inherited so that an older process can still read documents written by a
-// newer one — the API and the ingestor deploy independently and both read this collection.
+// newer one — the API and the message worker deploy independently and both read this collection.
 [BsonDiscriminator(Required = true)]
 [BsonKnownTypes(typeof(WhatsAppMessageDocument), typeof(FacebookMessageDocument))]
 [BsonIgnoreExtraElements(Inherited = true)]
@@ -44,4 +44,22 @@ public abstract class MessageDocument
     // Both platforms carry exactly these two, and every index and query uses them, so they live on the base.
     public required string ChannelId { get; set; }
     public required string ChannelDisplayName { get; set; }
+
+    // Written by the message worker; absent on documents stored before it, and on
+    // outgoing replies until those are given one. Left out when null so the
+    // unique (ConversationKey, Sequence) index only ever sees real values.
+
+    // See Parrot.Application.Messaging.ConversationKey: one key for both directions.
+    [BsonIgnoreIfNull]
+    public string? ConversationKey { get; set; }
+
+    // Position within the conversation, from a per-conversation counter. It may
+    // skip numbers (an insert that failed after the increment); compare, don't count.
+    [BsonIgnoreIfNull]
+    public long? Sequence { get; set; }
+
+    // The other participant, normalized like the sender: the business number for
+    // an incoming WhatsApp message, the Page id for Messenger.
+    [BsonIgnoreIfNull]
+    public string? Receiver { get; set; }
 }
