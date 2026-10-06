@@ -1,5 +1,7 @@
 using MongoDB.Driver;
 using Microsoft.Extensions.Options;
+using Parrot.Application.Messaging;
+using Parrot.Infrastructure.MessageBus;
 using Parrot.Infrastructure.Messaging;
 using Parrot.Infrastructure.Conversations;
 using Parrot.Application.Conversations;
@@ -11,6 +13,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Anthropic;
@@ -30,14 +33,22 @@ using Parrot.Infrastructure.Auth;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.Email;
 using Parrot.Infrastructure.FeatureFlags;
+using Parrot.Infrastructure.Realtime;
 using Parrot.Infrastructure.SocialMediaIntegrations;
 using Parrot.Infrastructure.Storage;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Api.OpenApi;
+using Parrot.Api.Realtime;
 using Parrot.Api.Utils;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
+
+// Every log line carries the request's trace id, so one id finds a message's
+// whole journey. ParentId is left out; it is empty unless the caller sent a
+// trace header, which Meta's webhooks don't.
+builder.Logging.Configure(options =>
+    options.ActivityTrackingOptions = ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId);
 
 // Configuration
 builder.Services.Configure<FrontendSettings>(builder.Configuration.GetSection(FrontendSettings.SectionName));
@@ -137,6 +148,19 @@ builder.Services.AddAuthentication(options =>
         ValidAudience = jwtSettings.Audience,
         IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSettings.Secret)),
         ClockSkew = TimeSpan.Zero,
+    };
+
+    // Browsers cannot set headers on a WebSocket, so SignalR sends the token
+    // in the query string. Accept it there for the hub path only.
+    options.Events = new JwtBearerEvents
+    {
+        OnMessageReceived = context =>
+        {
+            string? token = context.Request.Query["access_token"];
+            if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments(Parrot.Api.Realtime.MessagingHub.Path))
+                context.Token = token;
+            return Task.CompletedTask;
+        },
     };
 })
 .AddCookie("ExternalCookies", options =>
@@ -306,9 +330,11 @@ builder.Services.AddHttpClient<IPasswordBreachChecker, PwnedPasswordsBreachCheck
     client.DefaultRequestHeaders.Add("Add-Padding", "true");
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 });
-builder.Services.AddSingleton<KafkaMessagePublisher>();
-builder.Services.AddSingleton<IMessagePublisher>(sp => sp.GetRequiredService<KafkaMessagePublisher>());
-builder.Services.AddHostedService(sp => sp.GetRequiredService<KafkaMessagePublisher>());
+
+// Webhooks publish straight to Kafka and wait for it to confirm. One producer
+// for the whole process; the publisher is scoped like the webhook services.
+builder.Services.AddSingleton<IMessageBus, KafkaMessageBus>();
+builder.Services.AddScoped<InboundMessagePublisher>();
 builder.Services.AddScoped<IWhatsAppWebhookService, WhatsAppWebhookService>();
 builder.Services.AddScoped<IFacebookWebhookService, FacebookWebhookService>();
 builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepository>();
@@ -327,11 +353,24 @@ builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMap
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+builder.Services.AddSingleton<IMessageHistory, MongoMessageHistory>();
+
+// Replies are numbered from the same per-conversation counter the worker uses.
+builder.Services.AddSingleton<IConversationSequence, MongoConversationSequence>();
 
 // Registers every "_t" discriminator before the API reads anything from the collection.
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
+
+// Realtime: Redis is only the registry of who is online, never a message store.
+builder.Services.AddRedis(builder.Configuration);
+builder.Services.AddSignalR()
+    // Same wire format as the bus (platform as text, camelCase), so a pushed
+    // message and the history API's look identical to the client.
+    .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
+builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
 
 // Controllers & OpenAPI
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
@@ -418,5 +457,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapHub<Parrot.Api.Realtime.MessagingHub>(Parrot.Api.Realtime.MessagingHub.Path);
+app.MapDevelopmentRealtimeStub();
 
 app.Run();

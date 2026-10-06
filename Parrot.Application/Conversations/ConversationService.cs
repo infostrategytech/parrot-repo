@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Parrot.Application.Integrations;
+using Parrot.Application.Messaging;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
 using Parrot.Domain.Exceptions;
@@ -7,7 +8,7 @@ using Parrot.Domain.Exceptions;
 namespace Parrot.Application.Conversations;
 
 public sealed class ConversationService(IConversationStore store, IWhatsAppConnectionRepository connections,
-    IWhatsAppSender sender, IWhatsAppTokenProtector protector)
+    IWhatsAppSender sender, IWhatsAppTokenProtector protector, IConversationSequence sequence)
 {
     public async Task<ConversationMessage> SendAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
@@ -34,9 +35,19 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         }
         if (string.IsNullOrWhiteSpace(accessToken))
             throw new ConflictException("Save a replacement access token in this connection's setup.");
-        DateTime? latest = await store.LastIncomingAsync(owner, connectionId, recipient, ct);
-        if (latest is null || latest < DateTime.UtcNow.AddHours(-24))
+        MessageDocument? latest = await store.LatestIncomingAsync(owner, connectionId, recipient, ct);
+
+        // SentAt is absent on documents written before it existed; ReceivedAt is within seconds of it.
+        if (latest is null || (latest.SentAt ?? latest.ReceivedAt) < DateTime.UtcNow.AddHours(-24))
             throw new ConflictException("Ask this customer to message your business first. Text replies require an incoming message within 24 hours.");
+
+        // The reply joins the customer's conversation, so it takes that message's
+        // key and business number rather than rebuilding them from the
+        // connection, whose number was typed in at setup and may be written
+        // differently. A message stored before the worker has no key; the reply
+        // then has none either, as before.
+        string? conversationKey = latest.ConversationKey;
+        long? replySequence = conversationKey is null ? null : await sequence.NextAsync(conversationKey, ct);
 
         DateTime now = DateTime.UtcNow;
         WhatsAppMessageDocument doc = new WhatsAppMessageDocument
@@ -48,6 +59,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), SentAt = now,
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
             Outgoing = true, SendStatus = "pending",
+            ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
         };
         if (!await store.ReserveAsync(doc, ct))
         {

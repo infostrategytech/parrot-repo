@@ -5,7 +5,22 @@
 @* The floating label is driven entirely by CSS. The input always carries a
    placeholder of one space, so :placeholder-shown is false the moment there is
    a value and the label lifts without any "is filled" state in C#. Remove that
-   placeholder and the label stops moving — with no error anywhere. *@
+   placeholder and the label stops moving — with no error anywhere.
+
+   The field is uncontrolled: its value attribute is the starting value only,
+   fixed at the first render and never re-rendered, so the field shows a
+   prefill from its first moment and the server never writes over typing
+   afterwards. Later text reaches it only when it changes from outside the
+   keyboard (a reset, a value the page rewrites), and anything typed since
+   wins over such a change still on its way. A server-rendered value races
+   the keyboard: on a slow connection a render lands mid-typing with an older
+   copy and eats characters or throws the caret around (seen in production on
+   sign-in and sign-up). TextArea works the same way since fe79605.
+
+   Typing does not wait for the page: what is typed or autofilled into the
+   prerendered copy is kept (early-input.js) and taken over, with the focus
+   and caret, when this live field first renders. The field needs an Id for
+   that; the sign-in and sign-up fields have one. *@
 
 <div class="@ClassName">
     @if (!string.IsNullOrWhiteSpace(Label))
@@ -53,7 +68,8 @@
                    id="@InputId"
                    class="@TextStyle.BodySmallMedium.ToClassName()"
                    type="@Type"
-                   value="@Value"
+                   value="@_initial"
+
                    placeholder=" "
                    disabled="@Disabled"
                    aria-labelledby="@LabelledBy"
@@ -90,6 +106,15 @@
     private readonly string _generatedId = "field-" + Guid.NewGuid().ToString("N");
     private ElementReference _input;
     private IAsyncDisposable? _autofillBinding;
+
+    // The text the field already shows (last typed or last pushed), and text
+    // waiting to be pushed to it after the next render.
+    private string _shown = "";
+    private string? _pending;
+
+    // The starting value, rendered once as the attribute and never changed.
+    private string? _initial;
+    private bool _started;
 
     /// <summary>The label that sits in the field until it holds a value. Always required — a field with no name is not usable.</summary>
     [Parameter, EditorRequired] public string FloatingLabel { get; set; } = "";
@@ -145,8 +170,29 @@
         FloatId,
     }.Where(id => id is not null));
 
-    private Task OnInput(ChangeEventArgs args) =>
-        ValueChanged.InvokeAsync(args.Value?.ToString());
+    // Text that differs from what the field shows came from outside the keyboard.
+    protected override void OnParametersSet()
+    {
+        var text = Value ?? "";
+        if (!_started)
+        {
+            _started = true;
+            _initial = Value;
+            _shown = text;
+            return;
+        }
+        if (text == _shown) return;
+        _shown = text;
+        _pending = text;
+    }
+
+    // Typing wins over a change from the page that has not reached the field yet.
+    private Task OnInput(ChangeEventArgs args)
+    {
+        _pending = null;
+        _shown = args.Value?.ToString() ?? "";
+        return ValueChanged.InvokeAsync(_shown);
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -156,6 +202,20 @@
             // a normal input event. Mirror that browser value into ValueChanged
             // so the form and the pixels never disagree.
             _autofillBinding = await Interop.BindAutofillAsync(_input);
+
+            // Typed before the page was live: carry it on as if just typed here.
+            if (await Interop.TakeEarlyAsync(_input) is { } early && early != _shown)
+            {
+                _pending = null;
+                _shown = early;
+                await ValueChanged.InvokeAsync(early);
+            }
+        }
+        if (_pending is not null)
+        {
+            var text = _pending;
+            _pending = null;
+            await Interop.SetValueAsync(_input, text);
         }
     }
 

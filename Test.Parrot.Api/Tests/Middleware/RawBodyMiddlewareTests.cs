@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Parrot.Api.Middleware;
 
@@ -30,10 +31,13 @@ public class RawBodyMiddlewareTests
         return context;
     }
 
-    private static async Task<CapturingLogger> RunAsync(DefaultHttpContext context, int statusCode = 200)
+    private static async Task<CapturingLogger> RunAsync(DefaultHttpContext context, int statusCode = 200, bool? logBodies = null)
     {
         CapturingLogger logger = new();
-        RawBodyMiddleware middleware = new(ctx => { ctx.Response.StatusCode = statusCode; return Task.CompletedTask; }, logger);
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(logBodies is null ? [] : [new(RawBodyMiddleware.LogBodiesKey, logBodies.ToString())])
+            .Build();
+        RawBodyMiddleware middleware = new(ctx => { ctx.Response.StatusCode = statusCode; return Task.CompletedTask; }, logger, configuration);
         await middleware.InvokeAsync(context);
         return logger;
     }
@@ -45,8 +49,51 @@ public class RawBodyMiddlewareTests
             CreateContext("/api/webhooks/facebook", "?ref=abc", """{"object":"page"}"""));
 
         Assert.Contains(logger.Messages, m => m.Contains("Facebook webhook received"));
-        Assert.Contains(logger.Messages, m => m.Contains("Facebook webhook raw payload"));
         Assert.Contains(logger.Messages, m => m.Contains("Facebook webhook completed"));
+    }
+
+    // Payloads carry what customers wrote, so they reach the logs only while
+    // body logging is switched on to diagnose a provider.
+    [Theory]
+    [InlineData(null)]
+    [InlineData(false)]
+    public async Task WebhookPayloadsAreNotLogged_UnlessSwitchedOn(bool? logBodies)
+    {
+        CapturingLogger logger = await RunAsync(
+            CreateContext("/api/webhooks/whatsapp", "?ref=abc", """{"text":"my meter token is 1234"}"""), logBodies: logBodies);
+
+        Assert.DoesNotContain(logger.Messages, m => m.Contains("my meter token"));
+    }
+
+    // Logged before the controller, so a body that then fails model binding is still seen.
+    [Fact]
+    public async Task WebhookPayloadsAreLogged_WhenSwitchedOn_EvenWhenRejected()
+    {
+        CapturingLogger logger = await RunAsync(
+            CreateContext("/api/webhooks/whatsapp/v1", "?ref=abc", """{"contacts":[{"wa_id":"1"}]}"""), statusCode: 400, logBodies: true);
+
+        Assert.Contains(logger.Messages, m => m.Contains("WhatsApp webhook body") && m.Contains("""{"contacts":[{"wa_id":"1"}]}"""));
+    }
+
+    [Fact]
+    public async Task ALoggedPayload_IsCappedInLength()
+    {
+        string huge = "{\"x\":\"" + new string('a', 40_000) + "\"}";
+
+        CapturingLogger logger = await RunAsync(CreateContext("/api/webhooks/facebook", body: huge), logBodies: true);
+
+        string line = Assert.Single(logger.Messages, m => m.Contains("webhook body"));
+        Assert.Contains("Truncated=True", line);
+        Assert.True(line.Length < 17_000);
+    }
+
+    [Fact]
+    public async Task OnlyProviderWebhookBodiesAreLogged()
+    {
+        CapturingLogger logger = await RunAsync(
+            CreateContext("/api/webhooks/other", body: """{"secret":"x"}"""), logBodies: true);
+
+        Assert.DoesNotContain(logger.Messages, m => m.Contains("secret"));
     }
 
     [Fact]

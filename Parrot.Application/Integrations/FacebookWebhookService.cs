@@ -3,25 +3,26 @@ using System.Text;
 using Microsoft.Extensions.Options;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
+using Parrot.Application.Messaging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Integrations;
 
 // The connection a webhook event was routed to, flattened for message building.
-public sealed record FacebookPageRegistration(Guid ConnectionId, string OwnerUserId, string PageId, string PageName);
+public sealed record FacebookPageRegistration(Guid ConnectionId, string OwnerUserId, string PageId);
 
 public sealed class FacebookWebhookService : IFacebookWebhookService
 {
     private readonly FacebookSettings _settings;
     private readonly IFacebookConnectionRepository _connections;
-    private readonly IMessagePublisher _publisher;
+    private readonly InboundMessagePublisher _publisher;
     private readonly IAppLogger<FacebookWebhookService> _logger;
 
     public FacebookWebhookService(
         IOptions<FacebookSettings> settings,
         IFacebookConnectionRepository connections,
-        IMessagePublisher publisher,
+        InboundMessagePublisher publisher,
         IAppLogger<FacebookWebhookService> logger)
     {
         _settings = settings.Value;
@@ -66,6 +67,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
     public async Task<bool> ProcessConnectionEventAsync(
         string identifier,
         FacebookWebhookPayload payload,
+        string rawBody,
         CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(identifier))
@@ -106,123 +108,103 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             return false;
         }
 
-        FacebookPageRegistration registration = new(
-            connection.Id, connection.OwnerUserId, connection.PageId!, connection.PageName ?? connection.PageId!);
+        FacebookPageRegistration registration = new FacebookPageRegistration(connection.Id, connection.OwnerUserId, connection.PageId!);
 
         _logger.LogInformation(
             "Facebook webhook accepted. ConnectionId={ConnectionId} Entries={EntryCount}",
             connection.Id,
             payload.Entry.Count);
 
+        string correlationId = InboundMessagePublisher.CurrentCorrelationId();
+        DateTime receivedAt = DateTime.UtcNow;
+        List<InboundMessage> inbound = [];
+
         foreach (FacebookEntry entry in payload.Entry)
         {
             if (entry.Messaging is { Count: > 0 } messagingEvents)
-                await ProcessMessagingEventsAsync(registration, messagingEvents, cancellationToken);
+            {
+                foreach (FacebookMessagingEvent evt in messagingEvents)
+                {
+                    if (ToInbound(registration, evt, rawBody, correlationId, receivedAt) is { } message)
+                    {
+                        inbound.Add(message);
+                    }
+                }
+            }
 
             if (entry.Changes is { Count: > 0 } changes)
                 ProcessPageChanges(entry.Id, registration.OwnerUserId, changes);
         }
 
+        await _publisher.PublishAsync(inbound, cancellationToken);
         return true;
     }
 
-    private async Task ProcessMessagingEventsAsync(
-        FacebookPageRegistration registration,
-        List<FacebookMessagingEvent> events,
-        CancellationToken cancellationToken)
-    {
-        List<IncomingMessage> batch = new(events.Count);
-
-        foreach (FacebookMessagingEvent evt in events)
-        {
-            // Ignore echo messages sent by the page itself
-            if (evt.Message?.IsEcho == true)
-                continue;
-
-            if (evt.Message is not null)
-            {
-                _logger.LogInformation(
-                    "Facebook message received. TenantId={TenantId} PageId={PageId} SenderId={Sender} Mid={Mid}",
-                    registration.OwnerUserId, registration.PageId, evt.Sender.Id, evt.Message.Mid);
-
-                string type = evt.Message.Attachments is { Count: > 0 }
-                    ? evt.Message.Attachments[0].Type
-                    : "text";
-
-                // Without these the payload is lost and an "image" message can never be retrieved.
-                List<string>? attachmentUrls = evt.Message.Attachments?
-                    .Select(a => a.Payload?.Url)
-                    .Where(url => !string.IsNullOrWhiteSpace(url))
-                    .Select(url => url!)
-                    .ToList();
-
-                batch.Add(ToIncoming(registration, evt, evt.Message.Mid, type, evt.Message.Text,
-                    attachmentUrls is { Count: > 0 } ? attachmentUrls : null));
-                continue;
-            }
-
-            if (evt.Postback is not null)
-            {
-                _logger.LogInformation(
-                    "Facebook postback received. TenantId={TenantId} PageId={PageId} SenderId={Sender} Payload={Payload}",
-                    registration.OwnerUserId, registration.PageId, evt.Sender.Id, evt.Postback.Payload);
-
-                batch.Add(ToIncoming(registration, evt, evt.Postback.Mid, "postback", evt.Postback.Payload));
-                continue;
-            }
-
-            if (evt.Delivery is not null)
-            {
-                _logger.LogInformation(
-                    "Facebook delivery confirmation. TenantId={TenantId} PageId={PageId} Watermark={Watermark}",
-                    registration.OwnerUserId, registration.PageId, evt.Delivery.Watermark);
-                continue;
-            }
-
-            if (evt.Read is not null)
-            {
-                _logger.LogInformation(
-                    "Facebook read confirmation. TenantId={TenantId} PageId={PageId} Watermark={Watermark}",
-                    registration.OwnerUserId, registration.PageId, evt.Read.Watermark);
-                continue;
-            }
-
-            if (evt.Reaction is not null)
-            {
-                _logger.LogInformation(
-                    "Facebook reaction. TenantId={TenantId} PageId={PageId} Mid={Mid} Action={Action}",
-                    registration.OwnerUserId, registration.PageId, evt.Reaction.Mid, evt.Reaction.Action);
-            }
-        }
-
-        if (batch.Count > 0)
-            await _publisher.PublishBatchAsync(batch, cancellationToken);
-    }
-
-    private static IncomingMessage ToIncoming(
+    // A customer's message or postback becomes an InboundMessage; the body goes
+    // on as received for the Message Worker to decode. Everything else is only
+    // logged, without the customer's id or anything they typed.
+    private InboundMessage? ToInbound(
         FacebookPageRegistration registration,
         FacebookMessagingEvent evt,
-        string messageId,
-        string type,
-        string? textBody,
-        IReadOnlyList<string>? attachmentUrls = null) => new()
+        string rawBody,
+        string correlationId,
+        DateTime receivedAt)
     {
-        ConnectionId = registration.ConnectionId,
-        OwnerUserId = registration.OwnerUserId,
-        MessageId = messageId,
-        Platform = MessagingPlatform.Facebook,
-        ExternalAccountId = registration.PageId,
-        From = evt.Sender.Id,
-        Timestamp = evt.Timestamp.ToString(),
-        // Messenger sends milliseconds; WhatsApp sends whole seconds.
-        SentAt = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp),
-        Type = type,
-        TextBody = textBody,
-        AttachmentUrls = attachmentUrls,
-        ChannelId = registration.PageId,
-        ChannelDisplayName = registration.PageName,
-        ReceivedAt = DateTime.UtcNow,
-    };
+        // Echoes are the Page's own replies coming back.
+        if (evt.Message?.IsEcho == true)
+        {
+            return null;
+        }
+
+        string? mid = evt.Message?.Mid ?? evt.Postback?.Mid;
+        if (mid is not null)
+        {
+            return new InboundMessage
+            {
+                MessageId = $"facebook:{mid}",
+                Source = MessagingPlatform.Facebook,
+                Sender = ConversationKey.NormalizeParticipant(MessagingPlatform.Facebook, evt.Sender.Id),
+                Receiver = ConversationKey.NormalizeParticipant(MessagingPlatform.Facebook, registration.PageId),
+                ConversationKey = ConversationKey.Create(MessagingPlatform.Facebook, evt.Sender.Id, registration.PageId),
+                Data = rawBody,
+
+                // Messenger sends milliseconds; WhatsApp sends whole seconds.
+                SentAt = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp),
+                ReceivedAt = receivedAt,
+                CorrelationId = correlationId,
+                ConnectionId = registration.ConnectionId,
+                OwnerUserId = registration.OwnerUserId,
+            };
+        }
+
+        if (evt.Delivery is not null)
+        {
+            _logger.LogInformation(
+                "Facebook delivery confirmation. TenantId={TenantId} PageId={PageId} Watermark={Watermark}",
+                registration.OwnerUserId,
+                registration.PageId,
+                evt.Delivery.Watermark);
+        }
+        else if (evt.Read is not null)
+        {
+            _logger.LogInformation(
+                "Facebook read confirmation. TenantId={TenantId} PageId={PageId} Watermark={Watermark}",
+                registration.OwnerUserId,
+                registration.PageId,
+                evt.Read.Watermark);
+        }
+        else if (evt.Reaction is not null)
+        {
+            _logger.LogInformation(
+                "Facebook reaction. TenantId={TenantId} PageId={PageId} Mid={Mid} Action={Action}",
+                registration.OwnerUserId,
+                registration.PageId,
+                evt.Reaction.Mid,
+                evt.Reaction.Action);
+        }
+
+        return null;
+    }
 
     private void ProcessPageChanges(string pageId, string tenantId, List<FacebookChange> changes)
     {

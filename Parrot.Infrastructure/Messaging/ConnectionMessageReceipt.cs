@@ -51,7 +51,7 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
             })
             .SingleOrDefaultAsync(cancellationToken);
         if (connection is null)
-            throw new InvalidOperationException("Message was stored in MongoDB, but its WhatsApp connection was not found in PostgreSQL. Check that the API and ingestor use the same ConnectionStrings__DefaultConnection.");
+            throw new InvalidOperationException("Message was stored in MongoDB, but its WhatsApp connection was not found in PostgreSQL. Check that the API and message worker use the same ConnectionStrings__DefaultConnection.");
         if (connection.OwnerUserId != message.OwnerUserId
             || connection.WhatsAppBusinessAccountId != message.ExternalAccountId
             || connection.PhoneNumberId != message.ChannelId)

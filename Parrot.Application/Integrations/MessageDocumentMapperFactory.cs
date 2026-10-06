@@ -57,7 +57,7 @@ public sealed class WhatsAppMessageDocumentMapper : IMessageDocumentMapper
     };
 }
 
-// The mapper whose absence previously threw and took the whole ingestor down.
+// The mapper whose absence previously threw and took the whole consumer down.
 public sealed class FacebookMessageDocumentMapper : IMessageDocumentMapper
 {
     public MessagingPlatform Platform => MessagingPlatform.Facebook;

@@ -10,7 +10,6 @@
   <Project Path="Parrot.Web/Parrot.Web.Client/Parrot.Web.Client.csproj" />
   <Project Path="Parrot.Web/Parrot.Web/Parrot.Web.csproj" />
   <Project Path="Test.Parrot.Api/Test.Parrot.Api.csproj" />
-  <Project Path="WhatsAppMessageIngestor/WhatsAppMessageIngestor.csproj" />
   <Project Path="Parrot.Catalog.Domain/Parrot.Catalog.Domain.csproj" />
   <Project Path="Parrot.Catalog.Application/Parrot.Catalog.Application.csproj" />
   <Project Path="Parrot.Catalog.Infrastructure/Parrot.Catalog.Infrastructure.csproj" />

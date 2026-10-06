@@ -48,7 +48,7 @@ public class MongoConversationTests
             await client.GetDatabase(database).GetCollection<MessageDocument>("messages")
                 .UpdateOneAsync(x => x.MessageId == message.MessageId,
                     Builders<MessageDocument>.Update.Unset(x => x.Outgoing).Unset(x => x.SendStatus));
-            Assert.NotNull(await store.LastIncomingAsync("owner", connection, message.From, default));
+            Assert.NotNull(await store.LatestIncomingAsync("owner", connection, message.From, default));
             Assert.Empty(await store.ListAsync("other", 0, 50, default));
             Assert.Empty((await store.ReadAsync("other", connection, message.From, null, default)).Messages);
             await Assert.ThrowsAsync<InvalidOperationException>(() => incoming.InsertAsync(message with { OwnerUserId = "other" }));
