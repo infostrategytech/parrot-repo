@@ -113,4 +113,32 @@ public record WhatsAppMessageStatus
     // Absent for a recipient who uses a username, as wa_id is.
     [JsonPropertyName("recipient_id")]
     public string? RecipientId { get; init; }
+
+    /// <summary>Why a failed message failed. Meta sends it only with "failed".</summary>
+    [JsonPropertyName("errors")]
+    public List<WhatsAppStatusError>? Errors { get; init; }
+}
+
+// Every field optional, so a reason Meta words differently can never fail the
+// payload's model binding and lose the batch.
+public record WhatsAppStatusError
+{
+    /// <summary>Meta's error code, e.g. 131047 (more than 24 hours since the customer wrote).</summary>
+    [JsonPropertyName("code")]
+    public int? Code { get; init; }
+
+    [JsonPropertyName("title")]
+    public string? Title { get; init; }
+
+    [JsonPropertyName("message")]
+    public string? Message { get; init; }
+
+    [JsonPropertyName("error_data")]
+    public WhatsAppStatusErrorData? ErrorData { get; init; }
+}
+
+public record WhatsAppStatusErrorData
+{
+    [JsonPropertyName("details")]
+    public string? Details { get; init; }
 }
