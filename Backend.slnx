@@ -16,5 +16,4 @@
   <Project Path="Parrot.Grpc.Contracts/Parrot.Grpc.Contracts.csproj" />
   <Project Path="Parrot.Infrastructure/Parrot.Infrastructure.csproj" />
   <Project Path="Test.Parrot.Api/Test.Parrot.Api.csproj" />
-  <Project Path="WhatsAppMessageIngestor/WhatsAppMessageIngestor.csproj" />
 </Solution>

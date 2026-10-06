@@ -4,7 +4,7 @@ The Conversations page now reads persisted incoming WhatsApp messages and sends 
 
 ## Configure and run
 
-The API and ingestor must use the **same MongoDB database and collection**. Configure these server environment variables (use the actual MongoDB hostname for your deployment):
+The API and the message worker (`message-processor`) must use the **same MongoDB database and collection**. Configure these server environment variables (use the actual MongoDB hostname for your deployment):
 
 ```dotenv
 MongoDB__ConnectionString=mongodb://mongodb:27017
@@ -17,7 +17,7 @@ Each WhatsApp connection stores its own encrypted Meta access token. In **Channe
 
 Sending uses only the selected connection's token and phone ID. Global `WhatsApp__AccessToken`, `WhatsApp__PhoneNumberId`, and `WhatsApp__BusinessAccountId` values are no longer used for sending. Existing connections must save a token before replying. Tokens are protected with the existing ASP.NET Data Protection provider; retain the configured shared key ring and certificate across deployments/replicas.
 
-Apply the PostgreSQL migration **AddWhatsAppConnectionAccessToken** before starting the updated API. It adds a nullable `AccessTokenEncrypted` column without modifying existing account IDs or messages. Rebuild/redeploy API, web, ingestor, and gRPC together.
+Apply the PostgreSQL migration **AddWhatsAppConnectionAccessToken** before starting the updated API. It adds a nullable `AccessTokenEncrypted` column without modifying existing account IDs or messages. Rebuild/redeploy API, web, message worker, and gRPC together.
 
 The owner-authenticated token endpoint is:
 
@@ -33,7 +33,7 @@ It returns 204 on success. Saving does not send a message or validate the creden
 
 1. Save the actual account IDs in the existing WhatsApp setup flow. Verify the callback and subscribe to messages in Meta.
 2. Send a message from your personal WhatsApp phone to the business number. The connection-scoped webhook URL must include its generated `ref` so the archive has `OwnerUserId` and `ConnectionId`.
-3. Open `/dashboard/conversations` using the connection owner's login. A new conversation appears after the ingestor persists the message and polling refreshes.
+3. Open `/dashboard/conversations` using the connection owner's login. A new conversation appears once the message worker stores the message and the inbox receives the push or polls.
 4. Select the conversation, type a reply, and click Send. The recipient should receive it on WhatsApp.
 5. Reply again from the phone; the incoming message appears in the same conversation.
 

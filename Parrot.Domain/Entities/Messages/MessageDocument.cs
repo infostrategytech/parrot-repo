@@ -8,7 +8,7 @@ namespace Parrot.Domain.Entities.Messages;
 // apart by the "_t" discriminator. Fields common to all platforms belong here; only genuinely
 // platform-specific data belongs on a subclass.
 // BsonIgnoreExtraElements is inherited so that an older process can still read documents written by a
-// newer one — the API and the ingestor deploy independently and both read this collection.
+// newer one — the API and the message worker deploy independently and both read this collection.
 [BsonDiscriminator(Required = true)]
 [BsonKnownTypes(typeof(WhatsAppMessageDocument), typeof(FacebookMessageDocument))]
 [BsonIgnoreExtraElements(Inherited = true)]
