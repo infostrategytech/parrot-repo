@@ -95,6 +95,7 @@ appsettings.*.json
 .env.*
 !.env.example
 !.env.docker.example
+!.env.ec2.example
 
 # Temporary files
 *.tmp

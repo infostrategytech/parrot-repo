@@ -1,0 +1,483 @@
+# The whole Parrot stack on one server (EC2): nginx in front of the web app,
+# the API and gRPC, with the stores they need beside them. Images are built on
+# the server from this checkout, the way the deploy workflow already does it.
+#
+#   cp .env.ec2.example .env        # then fill in every value
+#   docker compose -f docker-compose.ec2.yml up -d --build
+#
+# With PUBLIC_SCHEME=https nginx needs a certificate before it can start. Get
+# one once, with port 80 free and DNS for the three names pointing here:
+#
+#   docker compose -f docker-compose.ec2.yml run --rm -p 80:80 --entrypoint certbot certbot \
+#     certonly --standalone --cert-name parrot --agree-tos -n -m you@example.com \
+#     -d app.example.com -d api.example.com -d grpc.example.com
+#
+# The certbot service renews it from then on. Only nginx publishes ports
+# (80 and 443); every store is reachable from inside the compose network only.
+
+# Docker keeps container logs for ever unless told otherwise, and a full disk
+# takes every service down at once.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  # ---- Stores ---------------------------------------------------------------
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      POSTGRES_DB: parrot
+      POSTGRES_USER: postgres
+      # Read only when the data volume is first created; changing it later
+      # does not change the password of an existing database.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d parrot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [parrot]
+
+  mongodb:
+    image: mongo:8.0
+    restart: unless-stopped
+    logging: *logging
+    # Left alone, MongoDB takes half the machine's memory for its cache; on a
+    # box it shares with everything else, cap it.
+    command: ["--wiredTigerCacheSizeGB", "${MONGO_CACHE_GB:-0.5}"]
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [parrot]
+
+  kafka:
+    image: apache/kafka:3.8.0
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "false"
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      # The broker's default heap is 1 GB, more than a single-node box should give it.
+      KAFKA_HEAP_OPTS: ${KAFKA_HEAP_OPTS:--Xms256m -Xmx512m}
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    networks: [parrot]
+
+  # Auto-create is off, so every topic is made here. The keyed topics get 24
+  # partitions, the most worker instances that can share one topic's load.
+  kafka-topic-init:
+    image: apache/kafka:3.8.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -e
+        create() { /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --replication-factor 1 --topic "$$1" --partitions "$$2"; }
+        create messages.inbound 24
+        create messages.inbound.dlq 3
+        create messages.persisted 24
+        create catalog.events 3
+    restart: "no"
+    logging: *logging
+    networks: [parrot]
+
+  # Who is online, and the catalog's read cache. Nothing in it is meant to
+  # survive a restart, so no snapshots, no append-only file and no volume.
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    logging: *logging
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks: [parrot]
+
+  # The bucket image uploads land in. nginx serves it read-only at
+  # https://<API_DOMAIN>/media/. To use a real S3 bucket instead, set the
+  # STORAGE_* values in .env; this container then sits idle.
+  minio:
+    image: sourcemation/minio:latest
+    restart: unless-stopped
+    logging: *logging
+    command: server /data
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?set MINIO_ROOT_USER in .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?set MINIO_ROOT_PASSWORD in .env}
+    volumes:
+      - minio_data:/data
+    networks: [parrot]
+
+  # Creates the bucket and opens it for public reads once the server answers.
+  minio-init:
+    image: bitnamilegacy/minio-client:latest
+    restart: on-failure
+    logging: *logging
+    depends_on:
+      - minio
+    entrypoint: ["/bin/sh", "-c"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    command:
+      - |
+        until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done;
+        mc mb --ignore-existing local/parrot;
+        mc anonymous set download local/parrot;
+    networks: [parrot]
+
+  # ---- Parrot ---------------------------------------------------------------
+  parrot-api:
+    build:
+      context: .
+      dockerfile: Parrot.Api/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD}
+      Database__ApplyMigrations: "true"
+      # The key ring encrypts every stored WhatsApp and Facebook credential.
+      # Lose the volume or the certificate and each channel must be connected again.
+      DataProtection__KeyRingPath: /app/data-protection-keys
+      DataProtection__CertificatePath: /run/secrets/data_protection_cert
+      DataProtection__CertificatePassword: ${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}
+      JwtSettings__Secret: ${JWT_SECRET:?set JWT_SECRET in .env (32 characters or more)}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+      MongoDB__ConnectionString: mongodb://mongodb:27017
+      MongoDB__Database: parrot
+      MongoDB__Collection: messages
+      Kafka__BootstrapServers: kafka:9092
+      Redis__ConnectionString: redis:6379
+      FrontendSettings__BaseUrl: ${PUBLIC_SCHEME:-https}://${APP_DOMAIN:?set APP_DOMAIN in .env}
+      WhatsApp__WebhookBaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN:?set API_DOMAIN in .env}
+      WhatsApp__VerifyToken: ${WHATSAPP_VERIFY_TOKEN:-}
+      WhatsApp__AppSecret: ${WHATSAPP_APP_SECRET:-}
+      Facebook__WebhookBaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}
+      Facebook__VerifyToken: ${FACEBOOK_VERIFY_TOKEN:-}
+      Facebook__AppSecret: ${FACEBOOK_APP_SECRET:-}
+      # The API will not boot without a client id; the placeholders only mean
+      # Google sign-in fails until real ones are set.
+      GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-not-configured.apps.googleusercontent.com}
+      GoogleOAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-not-configured}
+      Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      BrightData__ApiKey: ${BRIGHTDATA_API_KEY:-}
+      BrightData__Zone: ${BRIGHTDATA_ZONE:-}
+      EmailSettings__SmtpHost: ${SMTP_HOST:-smtp.example.com}
+      EmailSettings__SmtpPort: ${SMTP_PORT:-587}
+      EmailSettings__UseStartTls: ${SMTP_USE_STARTTLS:-true}
+      EmailSettings__RequiresAuthentication: ${SMTP_REQUIRES_AUTHENTICATION:-true}
+      EmailSettings__SmtpUser: ${SMTP_USER:-}
+      EmailSettings__SmtpPassword: ${SMTP_PASSWORD:-}
+      EmailSettings__FromAddress: ${SMTP_FROM_ADDRESS:-no-reply@${APP_DOMAIN}}
+      EmailSettings__FromName: ${SMTP_FROM_NAME:-Parrot}
+      EmailSettings__BaseUrl: ${PUBLIC_SCHEME:-https}://${APP_DOMAIN}
+      # Off lets anyone sign up without proving they own the address. Turn it
+      # on as soon as the SMTP settings above deliver mail.
+      FeatureFlags__RequireEmailVerification: ${REQUIRE_EMAIL_VERIFICATION:-false}
+      # The app writes to the bucket over the compose network; the URLs it
+      # hands back are read by the browser through nginx. A "-" default (no
+      # colon) lets STORAGE_SERVICE_URL be set to empty, which is how the app
+      # is told to use Amazon's own endpoints.
+      Storage__Provider: S3
+      Storage__Bucket: ${STORAGE_BUCKET:-parrot}
+      Storage__Region: ${STORAGE_REGION:-us-east-1}
+      Storage__ServiceUrl: ${STORAGE_SERVICE_URL-http://minio:9000}
+      Storage__PublicBaseUrl: ${STORAGE_PUBLIC_BASE_URL:-${PUBLIC_SCHEME:-https}://${API_DOMAIN}/media}
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
+    volumes:
+      - api_data_protection_keys:/app/data-protection-keys
+    secrets:
+      - data_protection_cert
+    # Kestrel only listens once the migrations have run, so an open port means
+    # the database is ready for the other services. A bare connect, not a
+    # request: the API logs every request it gets.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/localhost/8080"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+      minio-init:
+        condition: service_completed_successfully
+      # Started, not healthy: the API boots without Redis and connects when it appears.
+      redis:
+        condition: service_started
+    networks: [parrot]
+
+  parrot-grpc:
+    build:
+      context: .
+      dockerfile: Parrot.APi.Grpc/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Kestrel__EndpointDefaults__Protocols: Http2
+      JwtSettings__Secret: ${JWT_SECRET}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+      MongoDB__ConnectionString: mongodb://mongodb:27017
+      MongoDB__Database: parrot
+      MongoDB__Collection: messages
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks: [parrot]
+
+  # The message worker, the only thing that stores incoming messages:
+  # messages.inbound -> MongoDB -> messages.persisted.
+  message-processor:
+    build:
+      context: .
+      dockerfile: MessageProcessor/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD}
+      Kafka__BootstrapServers: kafka:9092
+      MongoDB__ConnectionString: mongodb://mongodb:27017
+      MongoDB__Database: parrot
+      MongoDB__Collection: messages
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      # It records receipts in tables the API's migrations create.
+      parrot-api:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+    networks: [parrot]
+
+  parrot-web:
+    build:
+      context: .
+      dockerfile: Parrot.Web/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      # Trust nginx's X-Forwarded-Proto, so the app knows it is served over HTTPS.
+      ASPNETCORE_FORWARDEDHEADERS_ENABLED: "true"
+      # The public address, not the container's: "Continue with Google" sends
+      # the browser to this URL. The web app's own calls use it too, and reach
+      # nginx without leaving the box through the network alias on nginx below.
+      ApiSettings__BaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}/
+      GrpcSettings__BaseUrl: http://parrot-grpc:8080
+    depends_on:
+      - parrot-api
+      - parrot-grpc
+    networks: [parrot]
+
+  # ---- Catalog service ------------------------------------------------------
+  # Creates the catalog's Postgres roles once the database answers. A role that
+  # already exists is left as it is, password included.
+  catalog-db-init:
+    image: postgres:17-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      MIGRATOR_PW: ${CATALOG_MIGRATOR_PASSWORD:?set CATALOG_MIGRATOR_PASSWORD in .env}
+      WRITER_PW: ${CATALOG_WRITER_PASSWORD:?set CATALOG_WRITER_PASSWORD in .env}
+      READER_PW: ${CATALOG_READER_PASSWORD:?set CATALOG_READER_PASSWORD in .env}
+      RELAY_PW: ${CATALOG_RELAY_PASSWORD:?set CATALOG_RELAY_PASSWORD in .env}
+    volumes:
+      - ./infra/catalog/bootstrap-roles.sql:/bootstrap/bootstrap-roles.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        psql -h postgres -U postgres -d parrot -v ON_ERROR_STOP=1 -v dbname=parrot \
+          -v migrator_pw="$$MIGRATOR_PW" -v writer_pw="$$WRITER_PW" \
+          -v reader_pw="$$READER_PW" -v relay_pw="$$RELAY_PW" \
+          -f /bootstrap/bootstrap-roles.sql
+    restart: "no"
+    logging: *logging
+    networks: [parrot]
+
+  # Nothing in the web app calls this yet, so it is published on the server's
+  # loopback only (ssh -L 5240:localhost:5240 to reach it from a laptop).
+  catalog-api:
+    build:
+      context: .
+      dockerfile: Parrot.Catalog.Api/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://+:8080
+      Catalog__ApplyMigrations: "true"
+      Catalog__ConnectionStrings__Migrator: Host=postgres;Port=5432;Database=parrot;Username=catalog_migrator;Password=${CATALOG_MIGRATOR_PASSWORD}
+      Catalog__ConnectionStrings__Writer: Host=postgres;Port=5432;Database=parrot;Username=catalog_writer_app;Password=${CATALOG_WRITER_PASSWORD}
+      Catalog__ConnectionStrings__Reader: Host=postgres;Port=5432;Database=parrot;Username=catalog_reader_app;Password=${CATALOG_READER_PASSWORD}
+      Catalog__ConnectionStrings__Relay: Host=postgres;Port=5432;Database=parrot;Username=catalog_relay_app;Password=${CATALOG_RELAY_PASSWORD}
+      Catalog__Cache__Provider: Redis
+      Catalog__Cache__RedisConnectionString: redis:6379
+      Catalog__Relay__InProcess: "false"
+      Catalog__Relay__BootstrapServers: kafka:9092
+      # Same signing settings as parrot-api, so a session token from the web app works here.
+      JwtSettings__Secret: ${JWT_SECRET}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+    ports:
+      - "127.0.0.1:5240:8080"
+    # The image's own check runs every 30 s; the relay waits on this one.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    depends_on:
+      postgres:
+        condition: service_healthy
+      catalog-db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks: [parrot]
+
+  catalog-relay:
+    build:
+      context: .
+      dockerfile: Parrot.Catalog.Relay/Dockerfile
+    restart: unless-stopped
+    logging: *logging
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      DOTNET_ENVIRONMENT: Production
+      Catalog__ConnectionStrings__Relay: Host=postgres;Port=5432;Database=parrot;Username=catalog_relay_app;Password=${CATALOG_RELAY_PASSWORD}
+      Catalog__Cache__Provider: Redis
+      Catalog__Cache__RedisConnectionString: redis:6379
+      Catalog__Relay__Bus: Kafka
+      Catalog__Relay__BootstrapServers: kafka:9092
+      Catalog__Relay__Topic: catalog.events
+    depends_on:
+      # Its tables come from the catalog API's migrations.
+      catalog-api:
+        condition: service_healthy
+      kafka-topic-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks: [parrot]
+
+  # ---- Edge -----------------------------------------------------------------
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    logging: *logging
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN}
+      GRPC_DOMAIN: ${GRPC_DOMAIN:?set GRPC_DOMAIN in .env}
+    volumes:
+      # https.conf.template or http.conf.template; the image fills in the
+      # three domain names when the container starts.
+      - ./infra/ec2/nginx/${PUBLIC_SCHEME:-https}.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    # nginx reads a certificate once, when it loads its configuration, so
+    # reload twice a day to pick up whatever certbot has renewed.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        (while :; do sleep 43200; nginx -s reload; done) &
+        exec /docker-entrypoint.sh nginx -g 'daemon off;'
+    depends_on:
+      - parrot-api
+      - parrot-grpc
+      - parrot-web
+    networks:
+      parrot:
+        # Inside the compose network the API's public name is nginx itself.
+        aliases:
+          - ${API_DOMAIN}
+
+  # Renews the certificate through the challenge directory nginx serves on
+  # port 80. With no certificate yet (PUBLIC_SCHEME=http) it has nothing to do.
+  certbot:
+    image: certbot/certbot:latest
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        trap exit TERM
+        while :; do
+          certbot renew --webroot -w /var/www/certbot --quiet
+          sleep 43200 & wait $$!
+        done
+    networks: [parrot]
+
+secrets:
+  # The PKCS#12 file that encrypts the API's key ring at rest. It must be
+  # readable by the container's non-root user (chmod 644; its password is what
+  # protects it).
+  data_protection_cert:
+    file: ${DATA_PROTECTION_CERTIFICATE_FILE:?set DATA_PROTECTION_CERTIFICATE_FILE in .env}
+
+networks:
+  parrot:
+
+volumes:
+  api_data_protection_keys:
+  postgres_data:
+  mongodb_data:
+  kafka_data:
+  minio_data:
+  letsencrypt:
+  certbot_www:

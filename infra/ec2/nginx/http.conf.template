@@ -1,0 +1,63 @@
+# The same routing as https.conf.template with no TLS, for PUBLIC_SCHEME=http:
+# a first run before DNS and a certificate exist, or a test on a laptop. Not
+# for real traffic; sign-in tokens would cross the network in the clear.
+
+resolver 127.0.0.11 valid=10s ipv6=off;
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+http2 on;
+
+server {
+    listen 80;
+    server_name ${APP_DOMAIN};
+
+    location / {
+        set $web http://parrot-web:8080;
+        proxy_pass $web;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${API_DOMAIN};
+
+    client_max_body_size 10m;
+
+    location /media/ {
+        set $minio http://minio:9000;
+        rewrite ^/media/(.*)$ /parrot/$1 break;
+        proxy_pass $minio;
+        limit_except GET { deny all; }
+    }
+
+    location / {
+        set $api http://parrot-api:8080;
+        proxy_pass $api;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+    }
+}
+
+server {
+    listen 80;
+    server_name ${GRPC_DOMAIN};
+
+    location / {
+        set $grpc grpc://parrot-grpc:8080;
+        grpc_pass $grpc;
+    }
+}
