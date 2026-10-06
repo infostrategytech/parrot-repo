@@ -88,7 +88,7 @@ public sealed class WhatsAppInboundDecoder : IInboundMessageDecoder
                     TextBody = message.Text?.Body,
                     ChannelId = change.Value.Metadata.PhoneNumberId,
                     ChannelDisplayName = change.Value.Metadata.DisplayPhoneNumber,
-                    ContactName = change.Value.Contacts?.FirstOrDefault(c => c.WaId == message.From)?.Profile.Name,
+                    ContactName = change.Value.Contacts?.FirstOrDefault(c => c.WaId == message.From)?.Profile?.Name,
                     ReceivedAt = inbound.ReceivedAt,
                 };
             }
