@@ -19,7 +19,7 @@
         @* stopPropagation, rather than comparing target to currentTarget as
            React did, so a drag that starts inside the card and ends on the
            backdrop cannot dismiss it. *@
-        <div class="dialog dialog--@Type.ToString().ToLowerInvariant() @(AmbientBackground is not null ? "dialog--has-ambient" : null) @(_closing ? "is-closing" : null)"
+        <div class="dialog dialog--@Type.ToString().ToLowerInvariant() @(AmbientBackground is not null ? "dialog--has-ambient" : null) @(FitToScreen ? "dialog--fit" : null) @(_closing ? "is-closing" : null)"
              role="dialog"
              aria-modal="true"
              aria-labelledby="@_titleId"
@@ -145,6 +145,14 @@
 
     /// <summary>Lets a single decisive action use the full footer width.</summary>
     [Parameter] public bool ConfirmFullWidth { get; set; }
+
+    /// <summary>
+    /// On a short window, scales the whole card down evenly (text, fields,
+    /// artwork and buttons together) so it fits on screen in its designed
+    /// proportions, rather than scrolling. For a card that should be seen
+    /// whole, like the workspace welcome. Very short windows still scroll.
+    /// </summary>
+    [Parameter] public bool FitToScreen { get; set; }
 
     private string ConfirmLabelOrDefault => ConfirmLabel ?? Type switch
     {

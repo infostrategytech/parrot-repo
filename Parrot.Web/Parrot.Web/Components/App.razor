@@ -28,6 +28,11 @@
     <link rel="preload" as="font" type="font/woff2" crossorigin href="_content/Parrot.SharedComponents/fonts/geist-latin-wght-normal.woff2" />
     <link rel="modulepreload" href="_content/Parrot.SharedComponents/js/aurora-interop.js" />
 
+    @* Keeps what is typed or autofilled before the page is live, for the live
+       fields to take over (see early-input.js). In the head, not deferred, so
+       it is listening before the first key. *@
+    <script src="@Assets["_content/Parrot.SharedComponents/js/early-input.js"]"></script>
+
     @* Tokens first: they define the variables everything else resolves against. *@
     <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/fonts.css"]" />
     <link rel="stylesheet" href="@Assets["_content/Parrot.SharedComponents/css/tokens.css"]" />
