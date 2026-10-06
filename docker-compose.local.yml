@@ -82,13 +82,16 @@ services:
     restart: "no"
     networks: [parrot]
 
-  # Who is online right now, for realtime delivery. Nothing here is meant to
-  # survive: no snapshots, no append-only file, no volume. A restart empties
-  # it and connected clients register again; messages live in MongoDB.
+  # Shared by realtime delivery (who is online) and the catalog cache. Nothing
+  # here is meant to survive: no snapshots, no append-only file, no volume. A
+  # restart empties it; clients register again on their next heartbeat, the
+  # cache refills, and messages live in MongoDB. The memory cap evicts the
+  # least-recently-used key, which costs either user at most a re-register or
+  # a cache miss.
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
     # Published on loopback only, for the Redis tests (PARROT_TEST_REDIS=localhost:16379).
     ports:
       - "127.0.0.1:16379:6379"
@@ -272,6 +275,110 @@ services:
     depends_on:
       - parrot-api
       - parrot-grpc
+    networks: [parrot]
+
+  # ---- Catalog service ------------------------------------------------------
+  # Creates the catalog's Postgres roles once the database answers. Group roles are
+  # NOLOGIN; the *_app users are members. Runs again harmlessly (idempotent SQL).
+  catalog-db-init:
+    image: postgres:16-alpine
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:-parrot_dev_password}
+    volumes:
+      - ./infra/catalog/bootstrap-roles.sql:/bootstrap/bootstrap-roles.sql:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        psql -h postgres -U postgres -d parrot -v ON_ERROR_STOP=1 -v dbname=parrot \
+          -v migrator_pw=${CATALOG_MIGRATOR_PASSWORD:-catalog_migrator_dev} \
+          -v writer_pw=${CATALOG_WRITER_PASSWORD:-catalog_writer_dev} \
+          -v reader_pw=${CATALOG_READER_PASSWORD:-catalog_reader_dev} \
+          -v relay_pw=${CATALOG_RELAY_PASSWORD:-catalog_relay_dev} \
+          -f /bootstrap/bootstrap-roles.sql
+    restart: "no"
+    networks: [parrot]
+
+  kafka-topic-init-catalog:
+    image: apache/kafka:3.8.0
+    depends_on:
+      kafka:
+        condition: service_healthy
+    entrypoint:
+      - /opt/kafka/bin/kafka-topics.sh
+      - --bootstrap-server
+      - kafka:9092
+      - --create
+      - --if-not-exists
+      - --topic
+      - catalog.events
+      - --partitions
+      - "3"
+      - --replication-factor
+      - "1"
+    restart: "no"
+    networks: [parrot]
+
+  catalog-api:
+    build:
+      context: .
+      dockerfile: Parrot.Catalog.Api/Dockerfile
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      Catalog__ApplyMigrations: "true"
+      Catalog__ConnectionStrings__Migrator: Host=postgres;Port=5432;Database=parrot;Username=catalog_migrator;Password=${CATALOG_MIGRATOR_PASSWORD:-catalog_migrator_dev}
+      Catalog__ConnectionStrings__Writer: Host=postgres;Port=5432;Database=parrot;Username=catalog_writer_app;Password=${CATALOG_WRITER_PASSWORD:-catalog_writer_dev}
+      Catalog__ConnectionStrings__Reader: Host=postgres;Port=5432;Database=parrot;Username=catalog_reader_app;Password=${CATALOG_READER_PASSWORD:-catalog_reader_dev}
+      Catalog__ConnectionStrings__Relay: Host=postgres;Port=5432;Database=parrot;Username=catalog_relay_app;Password=${CATALOG_RELAY_PASSWORD:-catalog_relay_dev}
+      Catalog__Cache__Provider: Redis
+      Catalog__Cache__RedisConnectionString: redis:6379
+      Catalog__Relay__InProcess: "false"
+      Catalog__Relay__BootstrapServers: kafka:9092
+      # Same signing settings as parrot-api, so a session token from the web app works here.
+      JwtSettings__Secret: ${JWT_SECRET:-parrot-local-development-secret-change-me}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+    ports:
+      - "5240:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      catalog-db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    networks: [parrot]
+
+  catalog-relay:
+    build:
+      context: .
+      dockerfile: Parrot.Catalog.Relay/Dockerfile
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    environment:
+      DOTNET_ENVIRONMENT: Development
+      Catalog__ConnectionStrings__Relay: Host=postgres;Port=5432;Database=parrot;Username=catalog_relay_app;Password=${CATALOG_RELAY_PASSWORD:-catalog_relay_dev}
+      Catalog__Cache__Provider: Redis
+      Catalog__Cache__RedisConnectionString: redis:6379
+      Catalog__Relay__Bus: Kafka
+      Catalog__Relay__BootstrapServers: kafka:9092
+      Catalog__Relay__Topic: catalog.events
+    depends_on:
+      catalog-api:
+        condition: service_started
+      kafka-topic-init-catalog:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
     networks: [parrot]
 
 networks:

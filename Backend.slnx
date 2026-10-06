@@ -16,4 +16,11 @@
   <Project Path="Parrot.Grpc.Contracts/Parrot.Grpc.Contracts.csproj" />
   <Project Path="Parrot.Infrastructure/Parrot.Infrastructure.csproj" />
   <Project Path="Test.Parrot.Api/Test.Parrot.Api.csproj" />
+  <Project Path="Parrot.Catalog.Domain/Parrot.Catalog.Domain.csproj" />
+  <Project Path="Parrot.Catalog.Application/Parrot.Catalog.Application.csproj" />
+  <Project Path="Parrot.Catalog.Infrastructure/Parrot.Catalog.Infrastructure.csproj" />
+  <Project Path="Parrot.Catalog.Api/Parrot.Catalog.Api.csproj" />
+  <Project Path="Parrot.Catalog.Relay/Parrot.Catalog.Relay.csproj" />
+  <Project Path="Parrot.Catalog.Tools/Parrot.Catalog.Tools.csproj" />
+  <Project Path="Test.Parrot.Catalog/Test.Parrot.Catalog.csproj" />
 </Solution>

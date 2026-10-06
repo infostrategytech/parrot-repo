@@ -16,6 +16,11 @@ namespace Parrot.Application.Auth;
 
 public class AuthService : IAuthService
 {
+    // Claim names the catalog service validates (see Parrot.Catalog.Application.Security.CatalogClaims).
+    private const string CatalogTenantClaim = "tenant_id";
+    private const string ScopeClaim = "scope";
+    private const string CatalogOwnerScopes = "catalog:read catalog:write catalog:publish catalog:admin";
+
     private const string InvalidCodeMessage = AuthMessages.InvalidCode;
     private const string TooManyCodesMessage = AuthMessages.TooManyCodes;
 
@@ -506,6 +511,14 @@ public class AuthService : IAuthService
         {
             claims.Add(new Claim("businessName", user.BusinessName));
         }
+
+        // The catalog service keys every row to a tenant and reads it from this claim
+        // alone. Today one business account is one tenant, so the user id is the
+        // tenant id; its owner administers that tenant's catalog. The AI agent gets
+        // catalog:ai-tools through a separate service token, never through a user
+        // session (docs/catalog/adr/ADR-003-auth-tenant-and-scopes.md).
+        claims.Add(new Claim(CatalogTenantClaim, user.Id));
+        claims.Add(new Claim(ScopeClaim, CatalogOwnerScopes));
 
         DateTime expiresAt = _jwtHelper.GetDefaultExpiration();
         string token = _jwtHelper.GenerateToken(claims, expiresAt);
