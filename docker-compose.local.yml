@@ -68,16 +68,14 @@ services:
     depends_on:
       kafka:
         condition: service_healthy
-    # Auto-create is off, so every topic is made here. whatsapp.messages stays
-    # until the old ingestor is retired. The keyed topics get 24 partitions,
-    # the most worker instances that can share one topic's load.
+    # Auto-create is off, so every topic is made here. The keyed topics get
+    # 24 partitions, the most worker instances that can share one topic's load.
     # messages.persisted carries MessagePersisted events for realtime delivery.
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
         set -e
         create() { /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --replication-factor 1 --topic "$$1" --partitions "$$2"; }
-        create whatsapp.messages 3
         create messages.inbound 24
         create messages.inbound.dlq 3
         create messages.persisted 24
@@ -236,30 +234,8 @@ services:
         condition: service_healthy
     networks: [parrot]
 
-  whatsapp-ingestor:
-    build:
-      context: .
-      dockerfile: WhatsAppMessageIngestor/Dockerfile
-    restart: unless-stopped
-    environment:
-      DOTNET_ENVIRONMENT: Development
-      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
-      Kafka__BootstrapServers: kafka:9092
-      Kafka__Topic: whatsapp.messages
-      Kafka__ConsumerGroupId: whatsapp-ingestor-local
-      MongoDB__ConnectionString: mongodb://mongodb:27017
-      MongoDB__Database: parrot
-      MongoDB__Collection: messages
-    depends_on:
-      mongodb:
-        condition: service_healthy
-      kafka-topic-init:
-        condition: service_completed_successfully
-    networks: [parrot]
-
-  # The new message worker: messages.inbound -> MongoDB -> messages.persisted.
-  # It runs beside the old ingestor until the webhooks publish to
-  # messages.inbound; then the ingestor is retired.
+  # The message worker, the only thing that stores incoming messages:
+  # messages.inbound -> MongoDB -> messages.persisted.
   message-processor:
     build:
       context: .
