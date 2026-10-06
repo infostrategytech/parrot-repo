@@ -32,6 +32,18 @@ public class InboundMessageDecodingTests
         ]}]}
         """;
 
+    // Meta leaves out a contact's profile, and a username customer's wa_id;
+    // a status to such a customer has no recipient_id.
+    private const string WhatsAppBodyWithBareContacts = """
+        {"object":"whatsapp_business_account","entry":[{"id":"waba-1","changes":[{"field":"messages","value":{
+          "messaging_product":"whatsapp",
+          "metadata":{"display_phone_number":"+234 901 111 2222","phone_number_id":"phone-1"},
+          "contacts":[{"wa_id":"2348012345678"},{"profile":{"name":"Tunde"}},{"wa_id":"2348055556666","profile":{}}],
+          "messages":[{"from":"2348012345678","id":"wamid.C","timestamp":"1790589125","type":"text","text":{"body":"Hi"}}],
+          "statuses":[{"id":"wamid.D","status":"delivered","timestamp":"1790589126"}]
+          }}]}]}
+        """;
+
     private static InboundMessage Inbound(MessagingPlatform source, string messageId, string data) => new()
     {
         MessageId = messageId,
@@ -142,5 +154,31 @@ public class InboundMessageDecodingTests
 
         Assert.Throws<UnprocessableMessageException>(
             () => whatsAppOnly.Decode(Inbound(MessagingPlatform.Facebook, "facebook:m.1", FacebookBody)));
+    }
+
+    // The API binds the webhook with the web JSON defaults; a required field
+    // Meta left out failed the whole batch with a 400 and lost its messages.
+    [Fact]
+    public void WhatsApp_APayloadWithBareContacts_StillBinds()
+    {
+        WhatsAppWebhookPayload? payload = System.Text.Json.JsonSerializer.Deserialize<WhatsAppWebhookPayload>(
+            WhatsAppBodyWithBareContacts, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        WhatsAppChangeValue value = payload!.Entry[0].Changes[0].Value;
+        Assert.Equal(3, value.Contacts!.Count);
+        Assert.Null(value.Contacts[0].Profile);
+        Assert.Null(value.Contacts[1].WaId);
+        Assert.Null(value.Contacts[2].Profile!.Name);
+        Assert.Null(value.Statuses![0].RecipientId);
+    }
+
+    [Fact]
+    public void WhatsApp_AContactWithNoProfile_DecodesWithNoName()
+    {
+        IncomingMessage message = Decoders.Decode(Inbound(MessagingPlatform.WhatsApp, "whatsapp:wamid.C", WhatsAppBodyWithBareContacts));
+
+        Assert.Equal("2348012345678", message.From);
+        Assert.Equal("Hi", message.TextBody);
+        Assert.Null(message.ContactName);
     }
 }

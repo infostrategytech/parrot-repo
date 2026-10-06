@@ -56,19 +56,23 @@ public record WhatsAppMetadata
     public required string PhoneNumberId { get; init; }
 }
 
+// Meta does not always send a contact's profile or wa_id (a customer who uses
+// a username has no wa_id). Requiring them failed the whole payload's model
+// binding with a 400 before the controller ran, and the batch's messages were
+// lost, so everything here is optional: the name is only a display nicety.
 public record WhatsAppContact
 {
     [JsonPropertyName("profile")]
-    public required WhatsAppProfile Profile { get; init; }
+    public WhatsAppProfile? Profile { get; init; }
 
     [JsonPropertyName("wa_id")]
-    public required string WaId { get; init; }
+    public string? WaId { get; init; }
 }
 
 public record WhatsAppProfile
 {
     [JsonPropertyName("name")]
-    public required string Name { get; init; }
+    public string? Name { get; init; }
 }
 
 public record WhatsAppMessage
@@ -106,6 +110,7 @@ public record WhatsAppMessageStatus
     [JsonPropertyName("timestamp")]
     public required string Timestamp { get; init; }
 
+    // Absent for a recipient who uses a username, as wa_id is.
     [JsonPropertyName("recipient_id")]
-    public required string RecipientId { get; init; }
+    public string? RecipientId { get; init; }
 }
