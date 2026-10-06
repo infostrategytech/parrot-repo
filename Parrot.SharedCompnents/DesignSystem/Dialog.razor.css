@@ -61,10 +61,44 @@
   animation: dialog-in var(--ds-dialog-enter) var(--ds-dialog-ease);
 }
 
+/* Clipped sideways so the ambient layer keeps to the rounded card, but still
+   scrolling down. A plain overflow: hidden here overrode the scroll above, so
+   on a short screen the card was cut off with its button out of reach. */
 .dialog--has-ambient {
   position: relative;
   isolation: isolate;
-  overflow: hidden;
+  overflow: hidden auto;
+}
+
+/* A short window (a small laptop, a tablet on its side): less space around
+   the card, so more of it fits before it has to scroll. */
+@media (max-height: 800px) {
+  .dialog-backdrop { padding: var(--spacing-lg); }
+  .dialog { max-height: calc(100dvh - 2 * var(--spacing-lg)); }
+}
+
+/* FitToScreen: the whole card scales down evenly, in steps, so it fits the
+   window in its designed proportions. The height limit is divided by the
+   scale because zoom scales it too. The steps suit a card about 660px tall
+   (the workspace welcome); never below 82%, so text stays readable, and
+   under that it scrolls as any dialog does. */
+.dialog--fit {
+  /* Gap in the token set: no scale steps. 1 is the designed size. */
+  --ds-dialog-fit: 1;
+  zoom: var(--ds-dialog-fit);
+  max-height: calc((100dvh - 2 * var(--spacing-lg)) / var(--ds-dialog-fit));
+}
+
+@media (max-height: 760px) {
+  .dialog--fit { --ds-dialog-fit: 0.94; /* gap: no scale steps */ }
+}
+
+@media (max-height: 651px) {
+  .dialog--fit { --ds-dialog-fit: 0.88; /* gap: no scale steps */ }
+}
+
+@media (max-height: 612px) {
+  .dialog--fit { --ds-dialog-fit: 0.82; /* gap: no scale steps */ }
 }
 
 .dialog__ambient {
