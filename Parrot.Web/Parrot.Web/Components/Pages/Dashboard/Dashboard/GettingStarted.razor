@@ -3,6 +3,7 @@
 @inject AuthState AuthState
 @inject ChannelsState ChannelsState
 @inject NavigationManager Nav
+@inject AgentGate AgentGate
 @implements IDisposable
 
 @* The dashboard before any channel is connected (Aurora's activation
@@ -96,7 +97,13 @@
     private bool HasConnectedChannel => ChannelsState.Workspace.ConnectedCount > 0;
 
     private void OpenChannels() => Nav.NavigateTo("/dashboard/channels");
-    private void OpenAiAgents() => Nav.NavigateTo("/dashboard/ai-agents");
+    // An agent needs a connected channel, then knowledge the business has
+    // approved ("Teach your AI"); then setup opens.
+    private Task OpenAiAgents() => AgentGate.RequireAsync(() =>
+    {
+        Nav.NavigateTo("/ai-operations?new=1");
+        return Task.CompletedTask;
+    });
 
     // The welcome card names the business through AuthState; that is the
     // moment this page becomes live and plays its entrance.

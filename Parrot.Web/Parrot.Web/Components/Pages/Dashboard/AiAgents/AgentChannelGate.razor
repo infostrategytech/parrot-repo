@@ -1,0 +1,44 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@implements IDisposable
+@inject AgentGate Gate
+@inject NavigationManager Nav
+
+@* "Connect a channel first": what creating an agent shows when nothing is
+   connected for it to answer on. Hosted once, in the dashboard layout, beside
+   Teach your AI, so every way of creating an agent meets the same dialog. *@
+
+<Dialog Open="Gate.NeedsChannel"
+        Title="Connect a channel first"
+        Subtitle="Your agent replies where customers message you. Connect one, then come back to set it up."
+        Dismissible
+        ConfirmLabel="Connect a channel"
+        CancelLabel="Not now"
+        OnCancel="Gate.Dismiss"
+        OnConfirm="Connect">
+    <GlyphContent><Icon Name="IconName.RiLinksFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <ul class="agent-channel-gate">
+            @foreach (var channel in AgentBuilderCopy.Channels)
+            {
+                <li>
+                    <ChannelIcon Channel="@channel.Key" Size="IconSize.Lg" />
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@channel.Name</Typography>
+                </li>
+            }
+        </ul>
+    </Body>
+</Dialog>
+
+@code {
+    protected override void OnInitialized() => Gate.Changed += Changed;
+
+    private void Changed() => _ = InvokeAsync(StateHasChanged);
+
+    private void Connect()
+    {
+        Gate.Dismiss();
+        Nav.NavigateTo("/dashboard/channels");
+    }
+
+    public void Dispose() => Gate.Changed -= Changed;
+}

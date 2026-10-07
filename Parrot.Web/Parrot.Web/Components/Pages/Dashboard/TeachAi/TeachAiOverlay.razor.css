@@ -1,0 +1,745 @@
+.teach-ai {
+  /* Missing from the token set: no large guided-workspace measure, mascot
+     size, overlay layer or motion values for this experience. */
+  --ds-teach-ai-layer: 100;
+  --ds-teach-ai-panel: 980px;
+  /* As tall as the window allows, up to this, so a large screen gives the
+     conversation room; a short laptop gets the window's height. */
+  --ds-teach-ai-panel-height: 1040px;
+  --ds-teach-ai-measure: 720px;
+  /* The title stops short of the close button in the corner. */
+  --ds-teach-ai-bar-end: calc(var(--spacing-3xl) + var(--spacing-4xl));
+  --ds-teach-ai-summary: 760px;
+  /* Attachments: the widest a file's name runs, and a sent picture's thumbnail. */
+  --ds-teach-ai-file-width: 220px;
+  --ds-teach-ai-file-thumb: 96px;
+  /* A voice note in a bubble, and the "Noted" card under a message: their widths. */
+  --ds-teach-ai-note: 260px;
+  --ds-teach-ai-noted: 440px;
+  --ds-teach-ai-ring: 2px;
+  --ds-teach-ai-dock-min: 128px;
+  --ds-teach-ai-dock-shadow: 36px;
+  /* The conversation's own sizes: the orb at the start, in the voice bar,
+     and beside the agent's messages. */
+  --ds-teach-ai-hello-orb: 168px;
+  --ds-teach-ai-hello-copy: 480px;
+  /* The two ways to start share one width, so neither reads as the lesser. */
+  --ds-teach-ai-choice: 160px;
+  --ds-teach-ai-bar-orb: 44px;
+  --ds-teach-ai-avatar: 28px;
+  --ds-teach-ai-caret: 1em;
+  /* The agent's words arriving: each fades in over this long, and typed
+     text staggers by this much per character (about 55 a second). */
+  --ds-teach-ai-word: 220ms;
+  --ds-teach-ai-type: 18ms;
+  --ds-teach-ai-motion: 320ms;
+  --ds-teach-ai-quick: 160ms;
+  --ds-teach-ai-pulse: 1.2s;
+  --ds-teach-ai-breath: 3.8s;
+  --ds-teach-ai-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-teach-ai-fade: linear-gradient(to bottom, transparent, var(--colors-surface-background) var(--spacing-2xl));
+  --ds-teach-ai-blur: 6px;
+
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-teach-ai-layer);
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-2xl);
+}
+
+.teach-ai__shell {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: center;
+  width: min(var(--ds-teach-ai-panel), 100%);
+}
+
+/* The current entry screen remains visible, so this reads as guided work inside
+   OmniAI rather than a separate full-screen product. It may open from the
+   Dashboard, the standalone AI Operations module or Business Setup. Keep the
+   blur on its own layer so chat updates do not repaint the whole backdrop. */
+.teach-ai::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: "";
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-teach-ai-blur));
+  animation: teach-ai-in var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+}
+
+.teach-ai__panel {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  width: 100%;
+  overflow: hidden;
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-popover);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  outline: none;
+  box-shadow: 0 var(--spacing-xl) var(--spacing-4xl) var(--colors-surface-shadow);
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+  transition: height var(--ds-teach-ai-motion) var(--ds-teach-ai-ease);
+}
+.teach-ai__shell.is-compact .teach-ai__panel { height: auto; }
+.teach-ai__shell.is-expanded .teach-ai__panel {
+  height: min(var(--ds-teach-ai-panel-height), calc(100dvh - 2 * var(--spacing-2xl)));
+}
+
+/* ── Top bar: what this is and how far along, voice or text, close ──────── */
+/* The header and the topic row run edge to edge, on the panel's own margin,
+   level with the close button; the conversation keeps its narrower column. */
+.teach-ai__bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-2xl) var(--ds-teach-ai-bar-end) var(--spacing-lg) var(--spacing-3xl);
+}
+.teach-ai__heading { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.teach-ai__heading ::deep span { color: var(--colors-text-muted); }
+.teach-ai__title-row { display: flex; align-items: center; }
+.teach-ai__title-row ::deep h2 { margin: 0; color: var(--colors-text-primary); }
+.teach-ai__bar ::deep .teach-ai__close { position: absolute; top: var(--spacing-xl); right: var(--spacing-xl); }
+/* Figma draws the close cross at 14px in its 32px box; the 24px icon gives that. */
+.teach-ai__bar ::deep .teach-ai__close .ds-button__icon { width: var(--icon-size-icon-lg); height: var(--icon-size-icon-lg); }
+
+/* Compact topic indicators keep progress available without surrounding the
+   mascot with six competing cards. Each remains a real navigation target. */
+.teach-ai__topics {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+  padding: 0 var(--spacing-3xl) var(--spacing-md);
+}
+.teach-ai__steps { display: flex; flex: 1; gap: var(--spacing-xs); min-width: 0; }
+/* Where you are, in words, at the end of the bar (the only place it is said). */
+.teach-ai__topics ::deep .teach-ai__topics-count { flex: none; color: var(--colors-text-secondary); white-space: nowrap; }
+/* Each segment is a button back to its topic: the bar is thin, the target
+   is tall enough to hit. */
+.teach-ai__topics ::deep .teach-ai__tile {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  height: var(--spacing-xl);
+  padding: 0;
+  background: transparent;
+}
+.teach-ai__topics ::deep .teach-ai__tile::before {
+  width: 100%;
+  height: var(--spacing-xs);
+  content: "";
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  transition: background-color var(--ds-teach-ai-motion) var(--ds-teach-ai-ease);
+}
+.teach-ai__topics ::deep .teach-ai__tile:disabled { cursor: default; }
+.teach-ai__topics ::deep .teach-ai__tile:hover:not(:disabled)::before { background: var(--colors-icon-muted); }
+.teach-ai__topics ::deep .teach-ai__tile.is-confirmed::before { background: var(--colors-brand-primary); }
+.teach-ai__topics ::deep .teach-ai__tile.is-skipped::before { background: var(--colors-icon-disabled); }
+.teach-ai__topics ::deep .teach-ai__tile:is(.is-current, .is-checking)::before { background: var(--colors-accent-brand-border); }
+
+/* ── Stage ───────────────────────────────────────────────────────────────── */
+.teach-ai__stage {
+  /* The last row, whether or not the topic row is showing. */
+  grid-row: 3;
+  display: grid;
+  min-height: 0;
+  padding: 0 var(--spacing-xl) var(--spacing-xl);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.teach-ai__shell.is-compact .teach-ai__stage { padding-bottom: var(--spacing-xl); }
+.teach-ai__shell.is-compact .teach-ai__centre {
+  min-height: 0;
+  padding-block: var(--spacing-2xl) var(--spacing-4xl);
+}
+.teach-ai__centre {
+  display: grid;
+  gap: var(--spacing-xl);
+  justify-items: center;
+  width: min(var(--ds-teach-ai-measure), 100%);
+  min-height: 100%;
+  margin: auto;
+  padding: var(--spacing-2xl);
+  text-align: center;
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+}
+.teach-ai__stage ::deep .teach-ai__caption { margin: 0; color: var(--colors-text-primary); text-wrap: balance; }
+.teach-ai__stage ::deep .teach-ai__eyebrow {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-md);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+/* The person's words, live, as they speak. */
+.teach-ai__stage ::deep .teach-ai__heard {
+  margin: 0;
+  color: var(--colors-text-muted);
+  opacity: 0;
+  transition: opacity var(--ds-teach-ai-quick) ease;
+}
+.teach-ai__stage ::deep .teach-ai__heard.is-on { opacity: 1; }
+
+.teach-ai__replies { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: center; }
+.teach-ai__replies.is-chips { justify-content: flex-start; padding-left: calc(var(--ds-teach-ai-avatar) + var(--spacing-sm)); }
+/* Shown once the question is out: after the voice stops, or after the typed
+   words have landed (--after). */
+.teach-ai__replies.is-chips:not(.is-waiting) {
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+  animation-delay: var(--after);
+}
+.teach-ai__replies.is-chips.is-waiting { visibility: hidden; opacity: 0; }
+
+/* ── The start: an empty state ───────────────────────────────────────────── */
+/* Centred in the room the conversation will fill: the orb on a soft glow,
+   the headline, what was found and where, then two equal ways to start. */
+.teach-ai__hello {
+  display: grid;
+  gap: var(--spacing-lg);
+  align-self: center;
+  justify-items: center;
+  width: 100%;
+  padding-block: var(--spacing-2xl);
+  text-align: center;
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+}
+.teach-ai__hello ::deep .teach-ai__hello-orb {
+  width: auto;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.teach-ai__hello ::deep .teach-ai__hello-orb .ds-button__icon { width: auto; height: auto; }
+.teach-ai__hello ::deep .teach-ai__hello-orb .ds-voice-orb,
+.teach-ai__hello ::deep .teach-ai__hello-still { --ds-voice-orb-size: var(--ds-teach-ai-hello-orb); }
+/* Pointing at it wakes the orb: a preview of it listening. */
+.teach-ai__hello ::deep .teach-ai__hello-orb:hover .ds-voice-orb { --ds-voice-orb-wake: 1; }
+.teach-ai__hello-copy { display: grid; gap: var(--spacing-sm); max-width: var(--ds-teach-ai-hello-copy); margin-top: var(--spacing-sm); }
+.teach-ai__hello-copy ::deep h3 { margin: 0; color: var(--colors-text-primary); text-wrap: balance; }
+.teach-ai__hello-copy ::deep p { margin: 0; color: var(--colors-text-secondary); text-wrap: pretty; }
+.teach-ai__hello-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: center; margin-top: var(--spacing-sm); }
+.teach-ai__hello-actions ::deep .ds-button { min-width: var(--ds-teach-ai-choice); }
+.teach-ai__chat ::deep .teach-ai__start-note { margin: 0; color: var(--colors-text-muted); }
+
+/* ── One floating dock, with a voice and a text state ────────────────────── */
+.teach-ai__dock {
+  position: relative;
+  z-index: 2;
+  display: grid;
+  align-items: center;
+  padding: var(--spacing-md);
+  background: color-mix(in srgb, var(--colors-surface-card) 96%, transparent);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-lg) var(--ds-teach-ai-dock-shadow) var(--colors-surface-shadow);
+  transition:
+    background-color var(--ds-teach-ai-motion) var(--ds-teach-ai-ease),
+    border-color var(--ds-teach-ai-motion) var(--ds-teach-ai-ease),
+    box-shadow var(--ds-teach-ai-motion) var(--ds-teach-ai-ease);
+}
+/* Text gets the room to write; voice is one row, so the conversation keeps the space. */
+.teach-ai__dock.is-text { min-height: var(--ds-teach-ai-dock-min); }
+/* Typing: a soft brand edge says where the words go. No ring: the box is
+   focused for you on every turn, and a ring there all the time reads as an
+   error. Buttons inside keep their own keyboard focus rings. */
+.teach-ai__dock.is-text:focus-within { border-color: var(--colors-accent-brand-border); }
+
+.teach-ai__voicebar {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  width: 100%;
+  padding: 0 var(--spacing-xs);
+  outline: none;
+}
+.teach-ai__voicebar ::deep .teach-ai__bar-orb { --ds-voice-orb-size: var(--ds-teach-ai-bar-orb); }
+/* At 44px the rings' 3D turn bends the orb out of round; here they turn
+   flat, so it stays a circle with its colours still moving. */
+.teach-ai__voicebar ::deep .teach-ai__bar-orb .ds-voice-orb__rings::before,
+.teach-ai__voicebar ::deep .teach-ai__bar-orb .ds-voice-orb__rings::after { animation-name: teach-ai-orb-spin; }
+/* And the core's speaking flare would push a point through its edge. */
+.teach-ai__voicebar ::deep .teach-ai__bar-orb .ds-voice-orb__lines { animation: none; }
+.teach-ai__voicebar-text { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.teach-ai__voicebar ::deep .teach-ai__status { margin: 0; color: var(--colors-text-primary); transition: color var(--ds-teach-ai-quick) ease; }
+.teach-ai__voicebar ::deep .teach-ai__status:is(.is-listening, .is-speaking) { color: var(--colors-brand-primary); }
+.teach-ai__voicebar ::deep .teach-ai__status.is-muted { color: var(--colors-text-destructive); }
+.teach-ai__voicebar ::deep .teach-ai__hint { margin: 0; overflow: hidden; color: var(--colors-text-muted); white-space: nowrap; text-overflow: ellipsis; }
+.teach-ai__voicebar ::deep .teach-ai__mute.is-on { color: var(--colors-text-destructive); }
+.teach-ai__voice-actions { display: flex; flex: none; gap: var(--spacing-xs); align-items: center; }
+
+/* ── Text: the thread and the composer ───────────────────────────────────── */
+.teach-ai__chat {
+  display: grid;
+  /* The thread takes the room; the quick answers (when there are any) and
+     the box sit under it at their own height. */
+  grid-template-rows: minmax(0, 1fr);
+  grid-auto-rows: auto;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-teach-ai-measure), 100%);
+  height: 100%;
+  min-height: 0;
+  margin-inline: auto;
+}
+.teach-ai__thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-height: 0;
+  margin: 0 calc(var(--spacing-md) * -1);
+  padding: var(--spacing-xl) var(--spacing-md) var(--spacing-lg);
+  overflow: auto;
+  list-style: none;
+  /* Older lines fade out under the bar instead of being cut. */
+  -webkit-mask-image: var(--ds-teach-ai-fade);
+  mask-image: var(--ds-teach-ai-fade);
+}
+/* Like a chat app: a short conversation sits just above the bar, and grows up. */
+.teach-ai__thread > :first-child { margin-top: auto; }
+.teach-ai__line {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  max-width: 80%;
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+}
+.teach-ai__line.is-turn:not(:first-child) { margin-top: var(--spacing-md); }
+.teach-ai__line.is-agent { align-self: flex-start; max-width: 88%; }
+.teach-ai__line.is-person { flex-direction: column; gap: var(--spacing-2xs); align-items: flex-end; align-self: flex-end; }
+/* The agent's avatar: the orb, still, at the start of each of its turns;
+   its later messages keep the same indent. */
+.teach-ai__line ::deep .teach-ai__avatar { flex: none; --ds-voice-orb-size: var(--ds-teach-ai-avatar); }
+.teach-ai__avatar-space { flex: none; width: var(--ds-teach-ai-avatar); }
+.teach-ai__bubble {
+  min-width: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-radius-2xl);
+}
+.teach-ai__bubble ::deep p { margin: 0; }
+/* The Inbox's colours, so a conversation looks the same across the product:
+   the AI's messages in the soft brand tint, the person's own in solid brand. */
+.teach-ai__line.is-agent .teach-ai__bubble {
+  color: var(--colors-text-secondary);
+  background: var(--colors-accent-brand-subtle);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-muted);
+  border-radius: var(--radius-radius-sm) var(--radius-radius-2xl) var(--radius-radius-2xl) var(--radius-radius-2xl);
+}
+.teach-ai__line.is-person .teach-ai__bubble {
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border: var(--ds-hairline) solid var(--colors-brand-primary);
+  border-radius: var(--radius-radius-2xl) var(--radius-radius-sm) var(--radius-radius-2xl) var(--radius-radius-2xl);
+  transition: color var(--ds-teach-ai-motion) var(--ds-teach-ai-ease), background-color var(--ds-teach-ai-motion) var(--ds-teach-ai-ease), border-color var(--ds-teach-ai-motion) var(--ds-teach-ai-ease);
+}
+
+/* What was found: one card, an item per row, each under what it is about
+   and where it came from. Read once, here; the agent's words frame it. */
+.teach-ai__evidence {
+  display: grid;
+  margin: var(--spacing-sm) 0 0;
+  padding: 0;
+  overflow: hidden;
+  list-style: none;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-md) var(--colors-surface-shadow-diffuse);
+}
+.teach-ai__evidence-item { display: grid; gap: var(--spacing-2xs); padding: var(--spacing-sm) var(--spacing-md); }
+.teach-ai__evidence-item + .teach-ai__evidence-item { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.teach-ai__evidence ::deep p { margin: 0; color: var(--colors-text-primary); }
+/* The checkpoint's states: confirmed (a tick, two lines at most: the summary
+   has the rest), found but unchecked ("I think…"), and still to ask. */
+.teach-ai__evidence-item.is-confirmed ::deep .teach-ai__evidence-state { color: var(--colors-text-success); }
+.teach-ai__evidence-item.is-confirmed ::deep p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.teach-ai__evidence-item.is-unsure ::deep p { color: var(--colors-text-secondary); }
+.teach-ai__evidence-item.is-open ::deep p { color: var(--colors-text-muted); font-style: italic; }
+.teach-ai__bubble ::deep .teach-ai__then { margin-top: var(--spacing-sm); }
+
+/* A voice note in your bubble: the player in the bubble's own ink, then what
+   was heard, smaller, as a transcript. */
+.teach-ai__line.is-person .teach-ai__bubble ::deep .teach-ai__note {
+  --ds-voice-note-ink: var(--colors-brand-primary-foreground);
+  min-width: var(--ds-teach-ai-note);
+}
+.teach-ai__bubble ::deep .teach-ai__transcript { margin-top: var(--spacing-xs); }
+
+/* Under your words: what it understood, a sentence per topic, each value a
+   chip to tap and correct. Saved already; fixing is a tap. */
+.teach-ai__noted {
+  display: grid;
+  gap: var(--spacing-xs);
+  width: min(var(--ds-teach-ai-noted), 100%);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-md) var(--colors-surface-shadow-diffuse);
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+}
+.teach-ai__noted-head { display: flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-success); }
+.teach-ai__noted ul { display: grid; gap: var(--spacing-sm); margin: 0; padding: 0; list-style: none; }
+.teach-ai__noted-row { display: grid; gap: var(--spacing-2xs); }
+.teach-ai__noted-row ::deep .teach-ai__noted-topic { color: var(--colors-text-muted); }
+.teach-ai__noted-row ::deep .teach-ai__noted-text { margin: 0; color: var(--colors-text-primary); }
+
+/* Editing a message, as in other AI chats: the actions show when you point
+   at your message (or tab to them); editing opens the whole message in place,
+   across the column. */
+.teach-ai__sent { display: flex; gap: var(--spacing-xs); align-items: center; justify-content: flex-end; max-width: 100%; }
+.teach-ai__sent .teach-ai__bubble { min-width: 0; }
+.teach-ai__message-actions {
+  display: flex;
+  flex: none;
+  opacity: 0;
+  transition: opacity var(--ds-teach-ai-quick) ease;
+}
+.teach-ai__line.is-person:hover .teach-ai__message-actions,
+.teach-ai__line.is-person:focus-within .teach-ai__message-actions { opacity: 1; }
+.teach-ai__line.is-person.is-editing { align-self: stretch; max-width: 100%; }
+.teach-ai__edit {
+  display: grid;
+  gap: var(--spacing-xs);
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.teach-ai__edit-actions { display: flex; gap: var(--spacing-xs); justify-content: flex-end; }
+
+/* The voice note being recorded takes the text box's place in the dock. */
+.teach-ai__composer ::deep .teach-ai__recording { min-height: var(--ds-text-area-plain-min-height, var(--spacing-4xl)); }
+
+/* Under your words: topics kept as they were found. */
+.teach-ai__saved {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  align-items: center;
+  justify-content: flex-end;
+  color: var(--colors-text-success);
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+}
+.teach-ai__saved ::deep .teach-ai__saved-topic {
+  padding: 0 var(--spacing-xs);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+}
+.teach-ai__evidence-source { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.teach-ai__evidence-source ::deep .ds-icon { color: var(--colors-icon-secondary); }
+
+/* The agent's newest line arriving. Spoken: each word shows as the voice
+   reaches it (voice.js marks it data-on). Typed: the words fade in one after
+   another at reading pace. Hidden words keep their room, so the bubble is its
+   full size from the start and nothing below it shifts. */
+.teach-ai__bubble.is-streaming ::deep .teach-ai__word { transition: opacity var(--ds-teach-ai-word) ease-out; }
+.teach-ai__bubble.is-streaming ::deep .teach-ai__word:not([data-on]) { opacity: 0; }
+.teach-ai__bubble.is-typing ::deep .teach-ai__word {
+  animation: teach-ai-word var(--ds-teach-ai-word) ease-out both;
+  animation-delay: calc(var(--at) * var(--type, var(--ds-teach-ai-type)));
+}
+
+/* Words still arriving as the person speaks: lighter, with a caret. When
+   they are sent, the same bubble settles into a normal message. */
+.teach-ai__line.is-live .teach-ai__bubble {
+  color: var(--colors-text-secondary);
+  background: transparent;
+  border: var(--ds-hairline) dashed var(--colors-accent-brand-border);
+}
+.teach-ai__caret {
+  display: inline-block;
+  width: var(--spacing-2xs);
+  height: var(--ds-teach-ai-caret);
+  margin-left: var(--spacing-2xs);
+  vertical-align: text-bottom;
+  background: var(--colors-brand-primary);
+  animation: teach-ai-pulse var(--ds-teach-ai-pulse) steps(2) infinite;
+}
+.teach-ai__bubble ::deep .teach-ai__note-tag {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  margin-bottom: var(--spacing-2xs);
+  opacity: 0.8;
+}
+.teach-ai__bubble.is-thinking { display: flex; gap: var(--spacing-xs); align-items: center; padding-block: var(--spacing-md); }
+.teach-ai__bubble.is-thinking span {
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  background: var(--colors-icon-muted);
+  border-radius: var(--radius-radius-full);
+  animation: teach-ai-dot var(--ds-teach-ai-pulse) ease-in-out infinite;
+}
+.teach-ai__bubble.is-thinking span:nth-child(2) { animation-delay: calc(var(--ds-teach-ai-pulse) / 6); }
+.teach-ai__bubble.is-thinking span:nth-child(3) { animation-delay: calc(var(--ds-teach-ai-pulse) / 3); }
+
+.teach-ai__composer {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: 100%;
+}
+.teach-ai__composer ::deep .teach-ai__answer-field {
+  /* The text-area component has no compact conversation min/max height tokens. */
+  --ds-text-area-plain-min-height: 64px;
+  --ds-text-area-plain-max-height: 168px;
+  padding: var(--spacing-sm);
+  color: var(--colors-text-primary);
+  line-height: var(--typography-leading-leading-lg);
+}
+.teach-ai__composer-footer { display: flex; gap: var(--spacing-sm); align-items: center; }
+.teach-ai__composer-tools { display: flex; flex: 1; gap: var(--spacing-2xs); align-items: center; }
+/* Files waiting to be sent, in a row above what is being typed. */
+.teach-ai__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding: var(--spacing-2xs) var(--spacing-2xs) 0;
+  list-style: none;
+}
+.teach-ai__attachment {
+  display: flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  max-width: 100%;
+  padding: var(--spacing-2xs);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+/* A file: a picture's thumbnail, or its type, name and size. */
+.teach-ai__file {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-width: 0;
+  max-width: var(--ds-teach-ai-file-width);
+}
+.teach-ai__file-thumb {
+  display: block;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  object-fit: cover;
+  border-radius: var(--radius-radius-md);
+}
+.teach-ai__file-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  color: var(--colors-icon-brand);
+  background: var(--colors-surface-popover);
+  border-radius: var(--radius-radius-md);
+}
+.teach-ai__file.is-pdf .teach-ai__file-icon { color: var(--colors-accent-red-text); }
+.teach-ai__file.is-document .teach-ai__file-icon { color: var(--colors-accent-blue-text); }
+.teach-ai__file.is-sheet .teach-ai__file-icon { color: var(--colors-accent-green-text); }
+.teach-ai__file-text { display: grid; gap: var(--spacing-2xs); min-width: 0; padding-right: var(--spacing-xs); }
+.teach-ai__file-text ::deep span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.teach-ai__file-text ::deep .teach-ai__file-name { color: var(--colors-text-primary); }
+.teach-ai__file-text ::deep .teach-ai__file-size { color: var(--colors-text-muted); }
+
+/* Files sent in a message, above its words. */
+.teach-ai__line-files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs);
+  align-items: flex-start;
+  margin: 0 0 var(--spacing-xs);
+  padding: 0;
+  list-style: none;
+}
+.teach-ai__line-files:last-child { margin-bottom: 0; }
+.teach-ai__line-files > li {
+  padding: var(--spacing-2xs);
+  background: var(--colors-surface-popover);
+  border-radius: var(--radius-radius-lg);
+}
+.teach-ai__line-files .teach-ai__file-thumb { width: var(--ds-teach-ai-file-thumb); height: var(--ds-teach-ai-file-thumb); }
+.teach-ai__line-files.is-summary > li { background: var(--colors-surface-muted); }
+
+/* ── Summary ─────────────────────────────────────────────────────────────── */
+.teach-ai__summary {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: var(--spacing-xl);
+  width: min(var(--ds-teach-ai-measure), 100%);
+  min-height: 100%;
+  margin-inline: auto;
+  animation: teach-ai-rise var(--ds-teach-ai-motion) var(--ds-teach-ai-ease) both;
+}
+.teach-ai__summary-head { display: grid; gap: var(--spacing-xs); }
+.teach-ai__summary-head ::deep :is(h3, p) { margin: 0; }
+.teach-ai__summary-head ::deep p { color: var(--colors-text-muted); }
+.teach-ai__facts { display: grid; gap: var(--spacing-sm); margin: 0; padding: 0; list-style: none; }
+.teach-ai__fact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.teach-ai__fact.is-skipped { background: transparent; border-style: dashed; }
+.teach-ai__fact-icon {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-muted);
+  border-radius: var(--radius-radius-full);
+}
+.teach-ai__fact.is-skipped .teach-ai__fact-icon { color: var(--colors-icon-muted); background: var(--colors-surface-muted); }
+.teach-ai__fact-body { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.teach-ai__fact-body ::deep p { margin: 0; }
+.teach-ai__fact-body ::deep strong { color: var(--colors-text-muted); }
+.teach-ai__fact-body ::deep .teach-ai__fact-source,
+.teach-ai__fact-body ::deep .teach-ai__fact-missing { color: var(--colors-text-muted); }
+.teach-ai__fact-actions { display: flex; gap: var(--spacing-xs); }
+.teach-ai__fact-source-row { display: inline-flex; gap: var(--spacing-2xs); align-items: center; }
+
+
+/* Approve stays in reach however long the list is. */
+/* Pinned to the foot of the panel, covering the stage's own bottom padding
+   too, so nothing shows beneath it; the fade lets what scrolls under it go
+   softly. */
+.teach-ai__approve {
+  position: sticky;
+  bottom: calc(var(--spacing-xl) * -1);
+  align-self: end;
+  margin-bottom: calc(var(--spacing-xl) * -1);
+  padding-block: var(--spacing-xl);
+  background: linear-gradient(transparent, var(--colors-surface-popover) var(--spacing-xl));
+}
+
+.teach-ai__done ::deep p { margin: 0; }
+.teach-ai__done ::deep p + p { color: var(--colors-text-muted); }
+
+/* Smaller desktop windows retain the same hierarchy without clipping controls. */
+@media (max-width: 1180px) {
+  .teach-ai { padding: var(--spacing-md); }
+  .teach-ai__shell.is-expanded .teach-ai__panel {
+    height: calc(100dvh - 2 * var(--spacing-md));
+  }
+  .teach-ai__bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    /* Still clear of the close button, which keeps its corner. */
+    padding-inline: var(--spacing-lg) calc(var(--spacing-lg) + var(--spacing-3xl) + var(--spacing-sm));
+  }
+  .teach-ai__bar ::deep .teach-ai__close { grid-column: 2; grid-row: 1; }
+  .teach-ai__topics { padding-inline: var(--spacing-lg); }
+  .teach-ai__stage { padding-inline: var(--spacing-md); }
+}
+
+/* Short windows (small laptops, a tablet or phone on its side): everything
+   around the conversation gets more compact, so the conversation keeps the
+   room and nothing is pushed off the bottom. The orb at the start shrinks
+   with the height, so Talk and Type stay in view. */
+@media (max-height: 760px) {
+  .teach-ai { padding: var(--spacing-md); }
+  .teach-ai__shell.is-expanded .teach-ai__panel { height: calc(100dvh - 2 * var(--spacing-md)); }
+  .teach-ai__shell.is-compact .teach-ai__panel { max-height: calc(100dvh - 2 * var(--spacing-md)); }
+  .teach-ai__bar { padding-block: var(--spacing-lg) var(--spacing-sm); }
+  .teach-ai__bar ::deep .teach-ai__close { top: var(--spacing-md); }
+  .teach-ai__topics { padding-bottom: var(--spacing-xs); }
+  .teach-ai__stage { padding-bottom: var(--spacing-md); }
+  .teach-ai__hello { gap: var(--spacing-md); padding-block: var(--spacing-md); }
+  .teach-ai {
+    /* Gaps in the token set, as above: the compact orb and box heights. */
+    --ds-teach-ai-hello-orb: 120px;
+    --ds-teach-ai-dock-min: 104px;
+  }
+}
+
+@media (max-height: 560px) {
+  .teach-ai__heading ::deep span { display: none; }
+  .teach-ai__hello { gap: var(--spacing-sm); padding-block: var(--spacing-xs); }
+  .teach-ai__hello-copy { margin-top: 0; }
+  .teach-ai {
+    /* Gaps in the token set, as above: the smallest orb and box heights. */
+    --ds-teach-ai-hello-orb: 72px;
+    --ds-teach-ai-dock-min: 88px;
+  }
+}
+
+@keyframes teach-ai-orb-spin {
+  to { transform: rotate(1turn); }
+}
+@keyframes teach-ai-word {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes teach-ai-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes teach-ai-rise {
+  from { opacity: 0; transform: translateY(var(--spacing-sm)); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes teach-ai-dot {
+  0%, 60%, 100% { opacity: 0.35; transform: none; }
+  30% { opacity: 1; transform: translateY(calc(var(--spacing-2xs) * -1)); }
+}
+@keyframes teach-ai-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes teach-ai-wave {
+  0%, 100% { transform: scaleY(0.55); opacity: 0.55; }
+  50% { transform: scaleY(1); opacity: 1; }
+}
+@keyframes teach-ai-breathe {
+  0%, 100% { transform: scale(0.94); opacity: 0.72; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+/* The agent's typing dots: Figma draws them at 35%; they rise to full in turn. */
+@keyframes teach-ai-typing {
+  0%, 60%, 100% { opacity: 0.35; transform: none; }
+  30% { opacity: 0.9; transform: translateY(calc(var(--spacing-2xs) * -1)); }
+}
+@keyframes teach-ai-float {
+  0%, 100% { transform: translateY(var(--spacing-2xs)); }
+  50% { transform: translateY(calc(var(--spacing-2xs) * -1)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .teach-ai,
+  .teach-ai::before,
+  .teach-ai__panel,
+  .teach-ai__centre,
+  .teach-ai__line,
+  .teach-ai__summary,
+  .teach-ai__replies.is-chips:not(.is-waiting),
+  .teach-ai__saved,
+  .teach-ai__noted,
+  .teach-ai__bubble.is-thinking span,
+  .teach-ai__caret,
+  .teach-ai__bubble.is-typing ::deep .teach-ai__word { animation: none; }
+  .teach-ai__topics ::deep .teach-ai__tile::before,
+  .teach-ai__message-actions { transition: none; }
+  /* The words are simply there. */
+  .teach-ai__bubble.is-streaming ::deep .teach-ai__word,
+  .teach-ai__bubble.is-streaming ::deep .teach-ai__word:not([data-on]) { opacity: 1; transition: none; }
+}

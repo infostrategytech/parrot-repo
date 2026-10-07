@@ -1,13 +1,21 @@
+@page "/ai-operations/{AgentId}"
 @page "/dashboard/ai-agents/{AgentId}"
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.AiAgents
 @inject AiAgentsState AiAgentsState
 @inject NavigationManager Nav
 @inject ToastService Toasts
+@inject IBusinessKnowledge Knowledge
+@inject AuthState AuthState
+@inject AgentGate Gate
+@inject IAiOperationsFeed Feed
+@inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
+@implements IDisposable
 
-@* One agent, in Aurora's list-page idiom: a header with the identity, a tab
-   tray, and a card per section. Parrot has no Aurora screen for this, so the
-   structure is Parrot's and the dress is Aurora's. *@
+@* One agent: who it is and whether it is on, then its day (what it did,
+   what it needs from you, what it said), then how it is set up. Playbooks and
+   Settings are the other two tabs; the figures link to where the work is. *@
 
 @{
     var agent = AiAgentsState.GetAgent(AgentId);
@@ -15,7 +23,25 @@
 
 <PageTitle>@(agent?.Name ?? "Agent") · AI Operations · OmniAI</PageTitle>
 
-@if (agent is null)
+@if (!AiAgentsState.IsLoaded && !AiAgentsState.LoadFailed)
+{
+    <main class="agent-detail">
+        <LoadingState Glyph="IconName.RiRobot3Fill" Title="Opening your agent" Description="Loading its day and settings." />
+    </main>
+}
+else if (agent is null && AiAgentsState.LoadFailed)
+{
+    <main class="agent-detail">
+        <EmptyState Glyph="IconName.RiErrorWarningFill"
+                    Title="We couldn't load this agent"
+                    Description="Check your connection and try again.">
+            <Action>
+                <Button Busy="AiAgentsState.IsLoading" @onclick="RetryLoadAsync">Try again</Button>
+            </Action>
+        </EmptyState>
+    </main>
+}
+else if (agent is null)
 {
     <main class="agent-detail">
         <EmptyState Glyph="IconName.RiRobot3Fill"
@@ -29,12 +55,12 @@
 }
 else
 {
-    <main class="agent-detail" @onclick="CloseMenus">
+    <main class="agent-detail">
         <header class="agent-detail__header">
-            <button type="button" class="agent-detail__back" @onclick="BackToAgents">
-                <Icon Name="IconName.RiArrowLeftLine" Size="IconSize.Md" />
-                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Back to agents</Typography>
-            </button>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="agent-detail__back" @onclick="BackToAgents">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Back to agents</ChildContent>
+            </Button>
 
             <div class="agent-detail__identity">
                 <span class="agent-detail__avatar agent-tone-slate">
@@ -43,284 +69,309 @@ else
                 <div class="agent-detail__titles">
                     <div class="agent-detail__name-row">
                         <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@agent.Name</Typography>
-                        <StatusBadge Tone="@(agent.IsActive ? StatusTone.Success : StatusTone.Neutral)">
-                            @(agent.IsActive ? "Active" : "Deactivated")
-                        </StatusBadge>
+                        <StatusBadge Tone="@StatusToneOf(agent)">@StatusOf(agent)</StatusBadge>
                     </div>
-                    <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="agent-detail__lede">
-                        @(string.IsNullOrWhiteSpace(agent.Description) ? "—" : agent.Description)
-                    </Typography>
+                    @* Its job and where it answers, as the channels' marks so any
+                       number of them stays one line; the description is in Settings. *@
+                    <div class="agent-detail__job">
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="agent-detail__lede">
+                            @AgentRole.NameOf(agent.Settings) · @(agent.ChannelCount == 0 ? "Not answering anywhere yet" : "Answers on")
+                        </Typography>
+                        @if (agent.ChannelCount > 0)
+                        {
+                            <ChannelStack Channels="ChannelKeys(agent)" />
+                        }
+                    </div>
                 </div>
+                @* On or off is the one thing an owner does here most; Edit opens Settings. *@
                 <div class="agent-detail__actions">
-                    <Button Variant="ButtonVariant.Secondary" @onclick="GoToBuilderCanvas">
-                        <IconLeft><Icon Name="IconName.RiSparkling2Fill" /></IconLeft>
-                        <ChildContent>Builder canvas</ChildContent>
-                    </Button>
-                    <Button @onclick="GoToOrientation">
-                        <IconLeft><Icon Name="IconName.RiChatSmile3Fill" /></IconLeft>
-                        <ChildContent>Give orientation</ChildContent>
-                    </Button>
+                    @if (_activeTab != "settings")
+                    {
+                        <Button Variant="ButtonVariant.Secondary" @onclick="@(() => _activeTab = "settings")">Edit</Button>
+                    }
+                    @if (agent.IsActive && !agent.IsDraft)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Busy="_switching" @onclick="() => SetLiveAsync(agent, false)">Turn off</Button>
+                    }
+                    else
+                    {
+                        <Button disabled="@(agent.ChannelCount == 0)" Busy="_switching"
+                                title="@(agent.ChannelCount == 0 ? "Choose where it answers first, in Settings." : null)"
+                                @onclick="() => SetLiveAsync(agent, true)">Turn on</Button>
+                    }
                 </div>
             </div>
         </header>
 
-        <div class="agent-detail__tabs" role="tablist" aria-label="Agent sections">
-            @foreach (var tab in Tabs)
-            {
-                <button type="button"
-                        role="tab"
-                        aria-selected="@((_activeTab == tab.Id).ToString().ToLowerInvariant())"
-                        class="@(_activeTab == tab.Id ? "is-active" : null)"
-                        @onclick="() => _activeTab = tab.Id">
-                    <Icon Name="@tab.Glyph" Size="IconSize.Sm" />
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">@tab.Label</Typography>
-                </button>
-            }
-        </div>
-
-        @if (_activeTab == "overview")
+        @* Just turned on from setup: one line, where it is live, and what next. *@
+        @if (Live == "1" && agent.IsActive && agent.ChannelCount > 0 && !_liveDismissed && _activeTab == "overview")
         {
-            <section class="agent-detail__stats" aria-label="Agent summary">
-                @foreach (var stat in OverviewStats)
-                {
-                    <article>
-                        <span class="agent-detail__stat-icon"><Icon Name="@stat.Glyph" Size="IconSize.Md" /></span>
-                        <div>
-                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">@stat.Value</Typography>
-                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@stat.Label</Typography>
-                        </div>
-                    </article>
-                }
-            </section>
-
-            <section class="agent-detail__card">
-                <header class="agent-detail__card-head">
-                    <div>
-                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Default behaviour</Typography>
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p">Control how this agent handles conversations and automation.</Typography>
-                    </div>
-                </header>
-                <div class="agent-detail__row">
-                    <div class="agent-detail__row-text">
-                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Human takeover</Typography>
-                        <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>Allow a team member to step in and continue the conversation.</Typography>
-                    </div>
-                    <StatusBadge Tone="@(agent.HumanTakeover ? StatusTone.Success : StatusTone.Neutral)">
-                        @(agent.HumanTakeover ? "Active" : "Inactive")
-                    </StatusBadge>
+            <section class="agent-detail__live" aria-labelledby="agent-live-title">
+                <span class="agent-detail__live-icon"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-live-title" Class="agent-detail__live-title">
+                    @agent.Name is live on <ChannelStack Channels="ChannelKeys(agent)" />
+                </Typography>
+                <div class="agent-detail__live-actions">
+                    <Button Size="ButtonSize.Small" @onclick="OpenInbox">See its replies</Button>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Dismiss" title="Dismiss" @onclick="() => _liveDismissed = true">
+                        <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                    </Button>
                 </div>
             </section>
         }
 
-        @if (_activeTab == "playbooks")
-        {
-            @if (!agent.Playbooks.Any())
+        <Tabs Label="Agent sections" Variant="TabsVariant.Floating" Class="agent-detail__tabs">
+            @foreach (var tab in Tabs)
             {
-                <section class="agent-detail__card agent-detail__empty">
-                    <EmptyState Glyph="IconName.RiBookOpenFill"
-                                Title="Create your first playbook"
-                                Description="Playbooks define how this agent handles specific customer requests. Create structured workflows to guide conversations, collect information, and automate actions like orders, bookings, or notifications.">
-                        <Action>
-                            <Button @onclick="CreateNewPlaybook">
-                                <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-                                <ChildContent>Create playbook</ChildContent>
-                            </Button>
-                        </Action>
-                    </EmptyState>
-                    <div class="agent-detail__capabilities">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="p">What can a playbook do?</Typography>
-                        <ul>
-                            @foreach (var item in _playbookCapabilities)
-                            {
-                                <li>
-                                    <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
-                                    <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose>@item</Typography>
-                                </li>
-                            }
-                        </ul>
+                var current = tab;
+                <Tab Selected="@(_activeTab == tab.Id)" OnClick="() => _activeTab = current.Id">
+                    <Icon Name="@tab.Glyph" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">@tab.Label@(tab.Id == "settings" && Dirty ? " •" : null)</Typography>
+                </Tab>
+            }
+        </Tabs>
+
+        @if (_activeTab == "overview")
+        {
+            @* Its day: is it doing the work, does it need me, what has it said. *@
+            @if (!Feed.Available)
+            {
+                @* Real mode: no operations feed yet, so there is no day to show. *@
+            }
+            else if (!agent.IsActive || agent.IsDraft)
+            {
+                <section class="agent-detail__card agent-detail__quiet">
+                    <span class="agent-detail__fact-icon"><Icon Name="IconName.RiPauseCircleFill" Size="IconSize.Md" /></span>
+                    <div class="agent-detail__row-text">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@agent.Name isn't answering customers</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Turn it on to see its day here: the conversations it replied to, what it passed to you and the tasks it created.</Typography>
                     </div>
+                </section>
+            }
+            else if (agent.ChannelCount == 0)
+            {
+                <section class="agent-detail__card agent-detail__quiet">
+                    <span class="agent-detail__fact-icon"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
+                    <div class="agent-detail__row-text">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@agent.Name isn't answering customers anywhere yet</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Choose where it answers in Settings.</Typography>
+                    </div>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ds-no-shrink" @onclick="@(() => _activeTab = "settings")">Choose channels</Button>
                 </section>
             }
             else
             {
-                <header class="agent-detail__section-head">
-                    <div>
-                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Automation playbooks</Typography>
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p">Playbooks define how this agent handles specific customer requests.</Typography>
-                    </div>
-                    <Button @onclick="CreateNewPlaybook">
-                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-                        <ChildContent>Create playbook</ChildContent>
-                    </Button>
-                </header>
-
-                <section class="agent-detail__table-wrap">
-                    <div class="agent-detail__table" role="table" aria-label="Playbooks">
-                        <div class="agent-detail__table-head" role="row">
-                            @foreach (var column in PlaybookColumns)
-                            {
-                                <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">@column</Typography>
-                            }
-                            <span role="columnheader" aria-label="Actions"></span>
-                        </div>
-                        @foreach (var pb in agent.Playbooks)
+                var channel = ChannelFor(agent);
+                var today = Feed.Today(agent, channel);
+                <section class="agent-detail__today" aria-labelledby="agent-today-title">
+                    <header class="agent-detail__section-head">
+                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="agent-today-title">Today</Typography>
+                        @* One menu instead of a table per channel, however many it
+                           answers on: only for two or more. *@
+                        @if (ChannelKeys(agent) is { Count: > 1 } keys)
                         {
-                            var playbook = pb;
-                            <div class="agent-detail__table-row" role="row" @onclick="() => OpenPlaybook(playbook.Id)">
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" role="cell" Class="agent-detail__cell-title">@playbook.Title</Typography>
-                                <Typography TextStyle="TextStyle.Small12Regular" As="span" role="cell" Class="agent-detail__cell-muted">@(string.IsNullOrWhiteSpace(playbook.Description) ? "—" : TruncateText(playbook.Description, 55))</Typography>
-                                <Typography TextStyle="TextStyle.Small12Regular" As="span" role="cell">@playbook.StepCount</Typography>
-                                <Typography TextStyle="TextStyle.Small12Regular" As="span" role="cell">@playbook.Execution</Typography>
-                                <span role="cell">
-                                    <StatusBadge Tone="@(playbook.Status == "Active" ? StatusTone.Success : StatusTone.Neutral)">@playbook.Status</StatusBadge>
-                                </span>
-                                <Typography TextStyle="TextStyle.Small12Regular" As="span" role="cell" Class="agent-detail__cell-muted">@playbook.DateCreated.ToString("dd MMM, yyyy • hh:mm tt")</Typography>
-                                <span role="cell" class="agent-detail__row-menu" @onclick:stopPropagation="true">
-                                    <Button Variant="ButtonVariant.Ghost"
-                                            Size="ButtonSize.Small"
-                                            aria-label="@($"Actions for {playbook.Title}")"
-                                            @onclick="() => TogglePbMenu(playbook.Id)">
-                                        <IconLeft><Icon Name="IconName.RiMore2Fill" /></IconLeft>
-                                    </Button>
-                                    @if (_openPbMenu == playbook.Id)
-                                    {
-                                        <div class="agent-detail__menu" role="menu">
-                                            <PopoverOption Label="Edit details" Description="Open the playbook builder" OnSelect="() => OpenPlaybook(playbook.Id)" />
-                                            <PopoverOption Label="Duplicate" Description="Copy this playbook" OnSelect="() => DuplicatePlaybook(playbook)" />
-                                            <PopoverOption Label="@(playbook.Status == "Active" ? "Deactivate" : "Activate")"
-                                                           Description="@(playbook.Status == "Active" ? "Stop running this playbook" : "Start running this playbook")"
-                                                           OnSelect="() => TogglePlaybookStatus(playbook)" />
-                                        </div>
-                                    }
-                                </span>
-                            </div>
-                        }
-                    </div>
-                    <footer class="agent-detail__pagination">
-                        <Typography TextStyle="TextStyle.Small12Regular" As="span">Showing 1–@agent.Playbooks.Count of @agent.Playbooks.Count</Typography>
-                        <Typography TextStyle="TextStyle.Small12Regular" As="span">Page 1 of 1</Typography>
-                    </footer>
-                </section>
-            }
-        }
-
-        @if (_activeTab == "channels")
-        {
-            <section class="agent-detail__card">
-                <header class="agent-detail__card-head">
-                    <div>
-                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Connected channels</Typography>
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p">Assign messaging channels to this agent.</Typography>
-                    </div>
-                </header>
-                @foreach (var ch in agent.Channels)
-                {
-                    var channel = ch;
-                    <div class="agent-detail__row">
-                        <AgentChannelGlyph Key="@channel.Key" />
-                        <div class="agent-detail__row-text">
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@channel.Name</Typography>
-                            <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@channel.Description</Typography>
-                        </div>
-                        <Toggle AriaLabel="@($"Toggle {channel.Name}")"
-                                Checked="channel.IsEnabled"
-                                CheckedChanged="value => channel.IsEnabled = value" />
-                    </div>
-                }
-            </section>
-        }
-
-        @if (_activeTab == "analytics")
-        {
-            <header class="agent-detail__section-head">
-                <div>
-                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Agent performance</Typography>
-                    <Typography TextStyle="TextStyle.Small12Regular" As="p">Track how this AI agent is performing across conversations, tasks, and customer interaction.</Typography>
-                </div>
-            </header>
-
-            <section class="agent-detail__stats" aria-label="Agent performance">
-                @foreach (var stat in AnalyticsStats)
-                {
-                    <article>
-                        <span class="agent-detail__stat-icon"><Icon Name="@stat.Glyph" Size="IconSize.Md" /></span>
-                        <div>
-                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">@stat.Value</Typography>
-                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@stat.Label</Typography>
-                        </div>
-                    </article>
-                }
-            </section>
-
-            <div class="agent-detail__charts">
-                <section class="agent-detail__card">
-                    <header class="agent-detail__card-head">
-                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Conversations over time</Typography>
-                    </header>
-                    <div class="agent-detail__hbars" role="img" aria-label="Conversations per day this week">
-                        @foreach (var day in _convByDay)
-                        {
-                            <div class="agent-detail__hbar">
-                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="agent-detail__hbar-label">@day.Day</Typography>
-                                <div class="agent-detail__hbar-track"><div class="agent-detail__hbar-fill" style="width: @(Math.Round(day.Count * 100.0 / 200))%"></div></div>
-                                <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="agent-detail__hbar-value">@day.Count</Typography>
-                            </div>
-                        }
-                    </div>
-                </section>
-
-                <section class="agent-detail__card">
-                    <header class="agent-detail__card-head">
-                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Most triggered playbook</Typography>
-                    </header>
-                    <div class="agent-detail__vbars" role="img" aria-label="Runs per playbook">
-                        <div class="agent-detail__vbar-axis">
-                            @for (var tick = 700; tick >= 0; tick -= 100)
-                            {
-                                <Typography TextStyle="TextStyle.Small10Regular" As="span">@tick</Typography>
-                            }
-                        </div>
-                        <div class="agent-detail__vbar-area">
-                            <div class="agent-detail__vbar-plot">
-                                <div class="agent-detail__vbar-grid">
-                                    @for (var line = 0; line < 8; line++)
-                                    {
-                                        <div class="agent-detail__vbar-gridline"></div>
-                                    }
-                                </div>
-                                <div class="agent-detail__vbar-columns">
-                                    @foreach (var pb in _triggeredPlaybooks)
-                                    {
-                                        <div class="agent-detail__vbar-column">
-                                            <div class="agent-detail__vbar-fill" style="height: @(Math.Round(pb.Count * 100.0 / 700))%"></div>
-                                        </div>
-                                    }
-                                </div>
-                            </div>
-                            <div class="agent-detail__vbar-labels">
-                                @foreach (var pb in _triggeredPlaybooks)
+                            <FilterPopover Label="@(channel is null ? "All channels" : ChannelStack.NameOf(channel))"
+                                           Title="Channel"
+                                           Subtitle="@($"Show {agent.Name}'s day on one channel")"
+                                           Leading="@(channel is null ? null : ChannelMark(channel))"
+                                           AlignEnd
+                                           Open="_channelMenu"
+                                           OpenChanged="open => _channelMenu = open">
+                                <PopoverOption Label="All channels" Active="@(channel is null)" OnSelect="() => PickChannel(null)" />
+                                @foreach (var key in keys)
                                 {
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="span">@pb.Name</Typography>
+                                    var current = key;
+                                    <PopoverOption Label="@ChannelStack.NameOf(current)" Active="@(channel == current)" Leading="@(ChannelMark(current))" OnSelect="() => PickChannel(current)" />
                                 }
-                            </div>
+                            </FilterPopover>
+                        }
+                    </header>
+                    <div class="agent-detail__stats" aria-label="Today">
+                        <RowButton Class="agent-detail__stat" OnClick="OpenInbox" aria-label="@($"{today.Conversations} conversations today. See them in the Inbox.")">
+                            <span class="agent-detail__stat-icon is-conversations"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
+                            <span class="agent-detail__stat-text">
+                                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@today.Conversations</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span">Conversations</Typography>
+                            </span>
+                        </RowButton>
+                        <div class="agent-detail__stat">
+                            <span class="agent-detail__stat-icon is-answered"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Md" /></span>
+                            <span class="agent-detail__stat-text">
+                                <span class="agent-detail__figure">
+                                    <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@today.AnsweredAlone</Typography>
+                                    @if (today.Conversations > 0)
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="agent-detail__share">@today.AnsweredShare%</Typography>
+                                    }
+                                </span>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span">Answered on its own</Typography>
+                            </span>
                         </div>
+                        <RowButton Class="agent-detail__stat" OnClick="OpenInbox" aria-label="@($"{today.PassedToTeam} passed to your team. See them in the Inbox.")">
+                            <span class="agent-detail__stat-icon is-passed"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
+                            <span class="agent-detail__stat-text">
+                                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@today.PassedToTeam</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span">Passed to your team</Typography>
+                                @if (today.TeamReplyMinutes is { } minutes)
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Class="agent-detail__note">Replied in @minutes min on average</Typography>
+                                }
+                            </span>
+                        </RowButton>
+                        <RowButton Class="agent-detail__stat" OnClick="OpenTasks" aria-label="@($"{today.TasksCreated} tasks created. See them in Task Requests.")">
+                            <span class="agent-detail__stat-icon is-tasks"><Icon Name="IconName.RiTaskFill" Size="IconSize.Md" /></span>
+                            <span class="agent-detail__stat-text">
+                                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@today.TasksCreated</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span">Tasks created</Typography>
+                            </span>
+                        </RowButton>
                     </div>
                 </section>
-            </div>
 
-            <div class="agent-detail__donuts">
-                @foreach (var share in _channelShare)
+                @if (Feed.Waiting(AiAgentsState.Agents).Where(q => q.AgentName == agent.Name).ToList() is { Count: > 0 } waiting)
                 {
-                    <section class="agent-detail__card agent-detail__donut-card">
-                        <div class="agent-detail__donut" style="--ds-donut-value: @share.Percent; --ds-donut-colour: var(@share.Token);">
-                            <div class="agent-detail__donut-hole">
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@share.Percent%</Typography>
-                            </div>
+                    <section class="agent-detail__needs" aria-labelledby="agent-needs-title">
+                        <span class="agent-detail__needs-icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
+                        <div class="agent-detail__row-text">
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-needs-title">
+                                @(waiting.Count == 1 ? $"1 question {agent.Name} couldn't answer" : $"{waiting.Count} questions {agent.Name} couldn't answer")
+                            </Typography>
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>“@waiting[0].Question” from @waiting[0].Customer@(waiting.Count > 1 ? $", and {waiting.Count - 1} more" : ""). Answer once and it will know next time.</Typography>
                         </div>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@share.Label</Typography>
+                        <Button Class="ds-no-shrink" @onclick="OpenInbox">Answer</Button>
                     </section>
                 }
+
+                <div class="agent-detail__pair">
+                    <section class="agent-detail__card" aria-labelledby="agent-recent-title">
+                        <header class="agent-detail__card-head">
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-recent-title">Recent conversations</Typography>
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OpenInbox">
+                                <ChildContent>See all in Inbox</ChildContent>
+                                <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                            </Button>
+                        </header>
+                        @{
+                            var recent = Feed.Recent(agent, channel);
+                        }
+                        @if (recent.Count == 0)
+                        {
+                            <div class="agent-detail__recent-empty">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">No conversations yet</Typography>
+                                <span class="agent-detail__recent-hint">
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>They'll show here when customers message you on</Typography>
+                                    <ChannelStack Channels="@(channel is null ? ChannelKeys(agent) : [channel])" />
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>and @agent.Name replies.</Typography>
+                                </span>
+                            </div>
+                        }
+                        <ul class="agent-detail__recent">
+                            @foreach (var chat in recent)
+                            {
+                                <li>
+                                    <RowButton Class="agent-detail__recent-row" OnClick="OpenInbox">
+                                        <ChannelIcon Channel="@chat.Channel" Size="IconSize.Md" />
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="agent-detail__recent-name">@chat.Customer</Typography>
+                                        <StatusBadge Tone="@OutcomeTone(chat.Outcome)">@OutcomeText(chat)</StatusBadge>
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="agent-detail__recent-time">@Ago(chat.MinutesAgo)</Typography>
+                                    </RowButton>
+                                </li>
+                            }
+                        </ul>
+                    </section>
+
+                    <section class="agent-detail__card" aria-labelledby="agent-week-title">
+                        <header class="agent-detail__card-head">
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-week-title">Last 7 days</Typography>
+                            @{
+                                // Seven days even with no figures, so the shape is the same from day one.
+                                var week = Feed.Week(agent, channel) is { Count: > 0 } days ? days : (IReadOnlyList<int>)Enumerable.Repeat(0, 7).ToList();
+                                var peak = Math.Max(1, week.Max());
+                            }
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="agent-detail__muted">@(week.All(n => n == 0) ? "Nothing yet" : "Conversations per day")</Typography>
+                        </header>
+                        <div class="agent-detail__week" role="img" aria-label="@($"Conversations per day: {string.Join(", ", week.Select((n, i) => $"{DayName(i, week.Count)} {n}"))}")">
+                            @for (var i = 0; i < week.Count; i++)
+                            {
+                                // Copied out: the labels render after the loop has moved on.
+                                var count = week[i];
+                                var day = DayName(i, week.Count);
+                                var isToday = i == week.Count - 1;
+                                <div class="agent-detail__day @(isToday ? "is-today" : null)">
+                                    <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="agent-detail__day-value">@count</Typography>
+                                    <span class="agent-detail__day-bar @(count == 0 ? "is-empty" : null)" style="--ds-detail-bar: @(Math.Round(count * 100.0 / peak))%"></span>
+                                    <Typography TextStyle="@(isToday ? TextStyle.Small12Semibold : TextStyle.Small12Medium)" As="span" Class="agent-detail__day-name">@day</Typography>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                </div>
+            }
+
+            @* What it is allowed to do, in a few lines; each Edit opens Settings. *@
+            <section class="agent-detail__card" aria-labelledby="agent-setup-title">
+                <header class="agent-detail__card-head">
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-setup-title">How it's set up</Typography>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="@(() => _activeTab = "settings")">Edit</Button>
+                </header>
+                @* The marks, then the names spelled out: the one place they are. *@
+                <div class="agent-detail__row">
+                    <span class="agent-detail__fact-icon"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
+                    <div class="agent-detail__row-text">
+                        @if (agent.ChannelCount == 0)
+                        {
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Not answering anywhere yet</Typography>
+                        }
+                        else
+                        {
+                            <span class="agent-detail__fact-title">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Answers on</Typography>
+                                <ChannelStack Channels="ChannelKeys(agent)" />
+                            </span>
+                        }
+                        <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@ChannelDetail(agent)</Typography>
+                    </div>
+                </div>
+                @Fact(IconName.RiUserSharedFill, "Hands customers to a person when it can't help", AgentBasics.HandoverDetail(agent.Settings))
+                @Fact(IconName.RiShieldCheckFill, AgentBasics.MoneyRule(agent.Settings), AgentBasics.MoneyDetailOf(agent.Settings))
+                @Fact(IconName.RiChatSmile3Fill, $"{ToneWord(agent.Settings.Tone)} tone, {LengthWord(agent.Settings.Length)} replies", "How it talks, under Advanced settings.")
+            </section>
+        }
+
+        @if (_activeTab == "settings" && _form is not null)
+        {
+            <div class="agent-detail__settings">
+                <div class="agent-detail__settings-form">
+                    <AgentRolePicker Form="_form" Others="OthersThan(agent)" Tried="_tried" OnChange="StateHasChanged" />
+                    <AgentBasics Form="_form" Others="OthersThan(agent)" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" />
+
+                    <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" ShowCanvas />
+
+                    @if (Dirty)
+                    {
+                        @* A save that fails keeps every change, and says so in the bar,
+                           where the person is looking. *@
+                        <footer class="agent-detail__save">
+                            <Button Size="ButtonSize.Large" Busy="_saving" disabled="@(!_form.HasName || !_form.HasRoleName)" @onclick="() => SaveAsync(agent)">Save changes</Button>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" disabled="@_saving" @onclick="() => Discard(agent)">Discard</Button>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="@(_saveError is null ? null : "is-error")" aria-live="polite">@(_saveError ?? SaveNote(agent))</Typography>
+                        </footer>
+                    }
+                </div>
+
+                <AgentPreview Form="_form" Cards="_cards" Business="@Business" />
             </div>
+        }
+
+        @if (_activeTab == "playbooks")
+        {
+            @* Coming soon (designer's decision): the playbook builder is not
+               designed yet, so the tab says what is on the way instead. *@
+            <section class="agent-detail__card agent-detail__empty">
+                <EmptyState Glyph="IconName.RiBookOpenFill"
+                            Title="Playbooks are coming soon"
+                            Description="@($"Soon you'll guide {agent.Name} through set tasks, like taking an order or booking a table.")" />
+            </section>
         }
     </main>
 }
@@ -328,116 +379,245 @@ else
 @code {
     [Parameter] public string AgentId { get; set; } = string.Empty;
 
+    // ?live=1: just turned on from setup.
+    [SupplyParameterFromQuery(Name = "live")] public string? Live { get; set; }
+
+    // ?tab=settings: sent here to change its settings (the card's menu).
+    [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
+
+    private bool _liveDismissed;
+    private string? _appliedTab;
+
+    // Settings: the agent being changed, as it was when last saved, and the
+    // knowledge every agent shares.
+    private AgentForm? _form;
+    private string? _formFor;
+    private string _saved = string.Empty;
+    private bool _tried;
+    private IReadOnlyList<KnowledgeCard> _cards = [];
+    private IReadOnlyList<AgentChannelChoice> _channels = [];
+
     private sealed record Tab(string Id, string Label, IconName Glyph);
-    private sealed record Stat(string Label, string Value, IconName Glyph);
-    private sealed record DayCount(string Day, int Count);
-    private sealed record PbCount(string Name, int Count);
-    private sealed record ChannelShare(string Label, int Percent, string Token);
 
     private string _activeTab = "overview";
-    private string _openPbMenu = string.Empty;
+
+    // A save or a switch on its way to the store, and a save that failed.
+    private bool _saving;
+    private bool _switching;
+    private string? _saveError;
+
+    // The channel the day is shown for; null is all of them.
+    private string? _channel;
+    private bool _channelMenu;
 
     private static readonly Tab[] Tabs =
     [
         new("overview", "Overview", IconName.RiHome5Fill),
         new("playbooks", "Playbooks", IconName.RiBookOpenFill),
-        new("channels", "Channels", IconName.RiLinksFill),
-        new("analytics", "Analytics", IconName.RiBarChartBoxFill)
+        new("settings", "Settings", IconName.RiSettings4Fill)
     ];
 
-    private static readonly string[] PlaybookColumns = ["Title", "Description", "Steps", "Execution", "Status", "Date created"];
-
-    // The figures below are the ones Parrot's page already showed; Parrot has
-    // no analytics source behind them yet.
-    private static readonly Stat[] OverviewStats =
-    [
-        new("Conversations handled", "1,247", IconName.RiChat3Fill),
-        new("Tasks created", "389", IconName.RiTaskFill),
-        new("Avg response time", "1.2s", IconName.RiTimerFlashFill),
-        new("Satisfaction score", "4.6 / 5", IconName.RiEmotionHappyFill)
-    ];
-
-    private static readonly Stat[] AnalyticsStats =
-    [
-        new("Conversations handled", "1,247", IconName.RiChat3Fill),
-        new("Tasks created", "389", IconName.RiTaskFill),
-        new("Avg response time", "1.2s", IconName.RiTimerFlashFill),
-        new("Completion rate", "94%", IconName.RiBarChartBoxFill)
-    ];
-
-    private readonly string[] _playbookCapabilities =
-    [
-        "Trigger when customers send specific messages",
-        "Ask questions and collect information",
-        "Select items from your catalog",
-        "Send confirmations and notifications",
-        "Request payment or complete tasks"
-    ];
-
-    private readonly List<DayCount> _convByDay = new()
+    protected override async Task OnInitializedAsync()
     {
-        new("Mon", 163), new("Tue", 100), new("Wed", 120),
-        new("Thu", 120), new("Fri", 120), new("Sat", 120), new("Sun", 45)
-    };
-
-    private readonly List<PbCount> _triggeredPlaybooks = new()
-    {
-        new("Place food order", 350),
-        new("Delivery tracking", 590),
-        new("Refund request", 640),
-        new("Book table", 640)
-    };
-
-    private readonly List<ChannelShare> _channelShare = new()
-    {
-        new("WhatsApp Business", 62, "--colors-chart-chart-1"),
-        new("Instagram", 62, "--colors-chart-chart-2"),
-        new("facebook Marketplace", 62, "--colors-chart-chart-3")
-    };
-
-    private void CloseMenus() => _openPbMenu = string.Empty;
-
-    private void TogglePbMenu(string id) => _openPbMenu = _openPbMenu == id ? string.Empty : id;
-
-    private void BackToAgents() => Nav.NavigateTo("/dashboard/ai-agents");
-
-    private void GoToOrientation() => Nav.NavigateTo($"/dashboard/ai-agents/{AgentId}/orientation");
-
-    private void GoToBuilderCanvas() => Nav.NavigateTo($"/dashboard/ai-agents/{AgentId}/builder");
-
-    private void OpenPlaybook(string pbId) => Nav.NavigateTo($"/dashboard/ai-agents/{AgentId}/playbooks/{pbId}");
-
-    private void CreateNewPlaybook()
-    {
-        var agent = AiAgentsState.GetAgent(AgentId);
-        if (agent is null) return;
-        var pb = new Playbook { Id = Guid.NewGuid().ToString(), Title = "New Playbook", Status = "Draft" };
-        agent.Playbooks.Add(pb);
-        Nav.NavigateTo($"/dashboard/ai-agents/{AgentId}/playbooks/{pb.Id}");
+        TeachAi.Changed += KnowledgeChanged;
+        await AiAgentsState.LoadAsync();
+        ResetIfNew();
+        _cards = await Knowledge.GetDraftAsync();
+        // The channels it can answer on are the ones connected now.
+        _channels = await Gate.ConnectedAsync();
     }
 
-    private void DuplicatePlaybook(Playbook source)
+    private async Task RetryLoadAsync()
     {
-        var agent = AiAgentsState.GetAgent(AgentId);
-        if (agent is null) return;
-        agent.Playbooks.Add(new Playbook
+        await AiAgentsState.LoadAsync(again: true);
+        ResetIfNew();
+    }
+
+    private void ResetIfNew()
+    {
+        if (AiAgentsState.GetAgent(AgentId) is { } agent && _formFor != agent.Id) Reset(agent);
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (TabQuery != _appliedTab)
         {
-            Title = $"{source.Title} (copy)",
-            Description = source.Description,
-            StepCount = source.StepCount,
-            Status = "Draft",
-            TriggerPhrases = source.TriggerPhrases.ToList()
-        });
-        _openPbMenu = string.Empty;
-        Toasts.Show($"{source.Title} was duplicated.");
+            _appliedTab = TabQuery;
+            if (Tabs.Any(t => t.Id == TabQuery)) _activeTab = TabQuery!;
+        }
+        ResetIfNew();
     }
 
-    private void TogglePlaybookStatus(Playbook playbook)
+    // "Teach more" closed: read the knowledge again, so the preview answers
+    // from what was just taught.
+    private void KnowledgeChanged() => _ = InvokeAsync(async () =>
     {
-        playbook.Status = playbook.Status == "Active" ? "Draft" : "Active";
-        _openPbMenu = string.Empty;
+        if (TeachAi.IsOpen) return;
+        _cards = await Knowledge.GetDraftAsync();
+        StateHasChanged();
+    });
+
+    public void Dispose() => TeachAi.Changed -= KnowledgeChanged;
+
+    private string Business => AuthState.CurrentUser?.BusinessName ?? string.Empty;
+
+    private bool Dirty => _form is not null && _form.Snapshot() != _saved;
+
+    private IReadOnlyList<AiAgent> OthersThan(AiAgent agent) => AiAgentsState.Agents.Where(a => a.Id != agent.Id).ToList();
+
+    private string SaveNote(AiAgent agent) =>
+        _form is { HasRoleName: false } ? "Name its job."
+        : _form is { HasName: false } ? "Give it a name."
+        : _form is { Channels.Count: 0 } && agent.IsActive && !agent.IsDraft ? "With no channel chosen, it won't answer anyone."
+        : "You have changes that aren't saved.";
+
+    private void Reset(AiAgent agent)
+    {
+        _form = AgentForm.From(agent);
+        _formFor = agent.Id;
+        _saved = _form.Snapshot();
+        _tried = false;
     }
 
-    private static string TruncateText(string text, int max) =>
-        text.Length <= max ? text : text[..max] + "...";
+    // The changes go onto a copy; the agent shown changes only once saved.
+    private async Task SaveAsync(AiAgent agent)
+    {
+        _tried = true;
+        if (_form is null || !_form.HasName || !_form.HasRoleName || _saving) return;
+        var changed = AiAgentsState.Copy(agent);
+        _form.ApplyTo(changed);
+        _saving = true;
+        _saveError = null;
+        try
+        {
+            await AiAgentsState.SaveAsync(changed);
+            _saved = _form.Snapshot();
+            _tried = false;
+            Toasts.Show($"Saved. {changed.Name} works this way from now on.");
+        }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception))
+        {
+            _saveError = "We couldn't save your changes. Check your connection and try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void Discard(AiAgent agent)
+    {
+        _saveError = null;
+        Reset(agent);
+    }
+
+    private async Task SetLiveAsync(AiAgent agent, bool on)
+    {
+        if (_switching) return;
+        _switching = true;
+        try
+        {
+            await AiAgentsState.SetLiveAsync(agent, on);
+            Toasts.Show(on ? $"{agent.Name} is on." : $"{agent.Name} is off. It won't answer customers until you turn it on.");
+        }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception))
+        {
+            Toasts.ShowError(on ? $"We couldn't turn {agent.Name} on. Try again." : $"We couldn't turn {agent.Name} off. Try again.");
+        }
+        finally
+        {
+            _switching = false;
+        }
+    }
+
+    private static string ToneWord(AgentVoicePreset tone) => tone switch
+    {
+        AgentVoicePreset.Professional => "Professional",
+        AgentVoicePreset.Upbeat => "Upbeat",
+        _ => "Warm",
+    };
+
+    private static string LengthWord(AgentResponseLength length) => length switch
+    {
+        AgentResponseLength.Concise => "short",
+        AgentResponseLength.Detailed => "detailed",
+        _ => "balanced",
+    };
+
+    private static string StatusOf(AiAgent agent) => agent.IsDraft ? "Draft" : agent.IsActive ? "On" : "Off";
+
+    private static StatusTone StatusToneOf(AiAgent agent) =>
+        agent.IsDraft ? StatusTone.Neutral : agent.IsActive ? StatusTone.Success : StatusTone.Warning;
+
+    // The channels it answers on, in the order owners see them everywhere
+    // else; any channel added later follows the ones known today.
+    private static IReadOnlyList<string> ChannelKeys(AiAgent agent) =>
+        agent.Channels.Where(c => c.IsEnabled)
+            .OrderBy(c => AgentBuilderCopy.Channels.ToList().FindIndex(k => string.Equals(k.Key, c.Key, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? i : int.MaxValue)
+            .Select(c => c.Key.ToLowerInvariant())
+            .ToList();
+
+    // The channel picked, while the agent still answers there.
+    private string? ChannelFor(AiAgent agent) => _channel is not null && ChannelKeys(agent).Contains(_channel) ? _channel : null;
+
+    private void PickChannel(string? key)
+    {
+        _channel = key;
+        _channelMenu = false;
+    }
+
+    private static RenderFragment ChannelMark(string key) => __builder =>
+    {
+        <ChannelIcon Channel="@key" Size="IconSize.Sm" />
+    };
+
+    private static string ChannelDetail(AiAgent agent)
+    {
+        var status = agent.IsDraft ? "A draft: it answers no one until you turn it on."
+            : agent.IsActive ? "On now." : "Off: it answers no one until you turn it on.";
+        // With nowhere to answer, "On now" would contradict the line above it.
+        return agent.ChannelCount == 0 ? "Choose where it answers in Settings." : $"{AgentBuilderCopy.ChannelList(agent)}. {status}";
+    }
+
+    private static StatusTone OutcomeTone(ConversationOutcome outcome) => outcome switch
+    {
+        ConversationOutcome.Answered => StatusTone.Success,
+        ConversationOutcome.PassedToTeam => StatusTone.Info,
+        _ => StatusTone.Neutral,
+    };
+
+    private static string OutcomeText(RecentConversation chat) => chat.Outcome switch
+    {
+        ConversationOutcome.Answered => "Answered",
+        ConversationOutcome.PassedToTeam => "Passed to you",
+        _ => $"Task: {chat.Task}",
+    };
+
+    private static string Ago(int minutes) =>
+        minutes < 1 ? "Just now"
+        : minutes < 60 ? $"{minutes} min ago"
+        : minutes < 120 ? "1 hr ago"
+        : $"{minutes / 60} hrs ago";
+
+    // The week ends today: "Today" last, the six days before it by name.
+    private static string DayName(int index, int count) =>
+        index == count - 1 ? "Today" : DateTime.Today.AddDays(index - (count - 1)).ToString("ddd");
+
+    // One plain sentence about how the agent works, under its icon.
+    private static RenderFragment Fact(IconName icon, string title, string detail) => __builder =>
+    {
+        <div class="agent-detail__row">
+            <span class="agent-detail__fact-icon"><Icon Name="@icon" Size="IconSize.Md" /></span>
+            <div class="agent-detail__row-text">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@title</Typography>
+                <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@detail</Typography>
+            </div>
+        </div>
+    };
+
+    private void BackToAgents() => Nav.NavigateTo("/ai-operations");
+
+    private void OpenInbox() => Nav.NavigateTo("/dashboard/conversations");
+
+    private void OpenTasks() => Nav.NavigateTo("/dashboard/task-requests");
 }

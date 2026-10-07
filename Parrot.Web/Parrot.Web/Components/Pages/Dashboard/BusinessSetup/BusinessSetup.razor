@@ -5,6 +5,7 @@
 @using Parrot.Web.Components.Pages.Dashboard.BusinessSetup.Services
 @using Parrot.Web.Features.Auth.State
 @inject NavigationManager Nav
+@inject AgentGate AgentGate
 @inject IBusinessSetupService BusinessSetupService
 @inject AuthState AuthState
 
@@ -29,7 +30,7 @@
                 </Typography>
                 <div class="guided__success-actions">
                     <Button Variant="ButtonVariant.Secondary" @onclick="@(() => Nav.NavigateTo("/dashboard"))">Go to overview</Button>
-                    <Button @onclick="@(() => Nav.NavigateTo("/dashboard/ai-agents"))">
+                    <Button @onclick="@(() => Nav.NavigateTo("/ai-operations"))">
                         <ChildContent>View AI agents</ChildContent>
                         <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
                     </Button>
@@ -523,7 +524,12 @@
             _selectedAgentIds.Remove(id);
     }
 
-    private void CreateNewAgent() => Nav.NavigateTo("/dashboard/ai-agents");
+    // As on the dashboard: a connected channel, then "Teach your AI", then setup.
+    private Task CreateNewAgent() => AgentGate.RequireAsync(() =>
+    {
+        Nav.NavigateTo("/ai-operations?new=1");
+        return Task.CompletedTask;
+    });
 
     private async Task Finish()
     {

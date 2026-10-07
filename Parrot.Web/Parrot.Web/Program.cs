@@ -105,6 +105,17 @@ builder.Services.AddScoped<ToastService>();
 builder.Services.AddScoped<ConversationClient>();
 // The API has none of the extra inbox actions yet, so the inbox hides them.
 builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
+// Business knowledge and the AI Operations figures: no API for either yet, so
+// the screens hide what they cannot show (see agents-backend-requests).
+builder.Services.AddSingleton<IBusinessKnowledge, UnavailableBusinessKnowledge>();
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.UnavailableAiOperationsFeed>();
+// "Teach your AI" before the first agent, and the browser's voice for it.
+builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState>();
+builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentGate>();
+builder.Services.AddScoped<Parrot.SharedComponents.Services.VoiceInterop>();
+// Where agents are kept. Session-only until the agents API is connected:
+// replace this one registration with the API-backed store then.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.SessionAgentStore>();
 builder.Services.AddScoped<AiAgentsState>();
 builder.Services.AddScoped<CatalogState>();
 builder.Services.AddScoped<ChannelsState>();

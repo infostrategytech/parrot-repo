@@ -1,3 +1,6 @@
+using Parrot.SharedComponents.DesignSystem;
+using Parrot.Web.Services;
+
 namespace Parrot.Web.Components.Pages.Dashboard.AiAgents;
 
 // Aurora's agent builder works on a richer agent than Parrot stores. Parrot's
@@ -131,6 +134,23 @@ public static class AgentBuilderCopy
 
     public static readonly IReadOnlyList<string> Mascots = ["Nova", "Atlas", "Bolt", "Aegis", "Buzz", "Luna"];
 
+    /// <summary>The channels an agent can answer on, as owners call them.</summary>
+    public static readonly IReadOnlyList<(string Key, string Name)> Channels =
+        [("whatsapp", "WhatsApp"), ("instagram", "Instagram"), ("facebook", "Facebook")];
+
+    public static string ChannelName(AgentChannel channel) =>
+        Channels.FirstOrDefault(c => string.Equals(c.Key, channel.Key, StringComparison.OrdinalIgnoreCase)).Name ?? channel.Name;
+
+    /// <summary>"WhatsApp, Instagram and Facebook".</summary>
+    public static string ChannelList(AiAgent agent)
+    {
+        // In the order owners see them everywhere else.
+        var names = agent.Channels.Where(c => c.IsEnabled)
+            .OrderBy(c => Channels.ToList().FindIndex(k => string.Equals(k.Key, c.Key, StringComparison.OrdinalIgnoreCase)) is var i and >= 0 ? i : int.MaxValue)
+            .Select(ChannelName).ToList();
+        return names.Count <= 1 ? string.Concat(names) : $"{string.Join(", ", names[..^1])} and {names[^1]}";
+    }
+
     /// <summary>The channel rows AiAgentsState seeds on a new agent, with the
     /// same keys, names and copy, so the detail page reads the same whichever
     /// path created the agent.</summary>
@@ -144,4 +164,52 @@ public static class AgentBuilderCopy
             new() { Key = "instagram", Name = "Instagram Dm", Description = "Allow this agent to respond to conversations from this channel.", IsEnabled = enabled.Contains("instagram") }
         ];
     }
+}
+
+/// <summary>
+/// A job an agent can be set up for, in the owner's words: what it is called
+/// on the setup screen, what it does, how it opens a chat and how it ends an
+/// answer, and the avatar it suggests. Owners can have one agent per role.
+/// </summary>
+public sealed record AgentRole(
+    AgentRoleTemplate Id,
+    string Name,
+    string Does,
+    string Description,
+    IconName Icon,
+    string Opening,
+    string Closing,
+    string Mascot,
+    IReadOnlyList<KnowledgeTopic> Asks)
+{
+    public static readonly IReadOnlyList<AgentRole> All =
+    [
+        new(AgentRoleTemplate.Support, "Customer support", "Questions and problems",
+            "Answers customer questions and sorts out problems, kindly and quickly.",
+            IconName.RiCustomerService2Fill,
+            "How can I help today?", "Is there anything else I can help with?", "Nova",
+            [KnowledgeTopic.Hours, KnowledgeTopic.Returns, KnowledgeTopic.Delivery]),
+        new(AgentRoleTemplate.Sales, "Sales & growth", "Helps customers choose and buy",
+            "Helps customers find the right thing and buy it.",
+            IconName.RiShoppingBag3Fill,
+            "Looking for something? I can help you find it.", "Would you like help placing an order?", "Atlas",
+            [KnowledgeTopic.Products, KnowledgeTopic.Prices, KnowledgeTopic.Payment]),
+        new(AgentRoleTemplate.Orders, "Orders & products", "Products, orders and delivery",
+            "Answers questions about products, orders and delivery.",
+            IconName.RiTruckFill,
+            "Ask me about any product or your order.", "Anything else about your order?", "Bolt",
+            [KnowledgeTopic.Delivery, KnowledgeTopic.Products, KnowledgeTopic.Payment]),
+        new(AgentRoleTemplate.Custom, "Build my own", "Describe the job yourself",
+            "Helps your customers.",
+            IconName.RiSparkling2Fill,
+            "How can I help?", "Is there anything else I can help with?", "Luna",
+            [KnowledgeTopic.Products, KnowledgeTopic.Hours, KnowledgeTopic.Delivery]),
+    ];
+
+    public static AgentRole Of(AgentRoleTemplate? id) => All.FirstOrDefault(r => r.Id == id) ?? All[0];
+
+    /// <summary>A job as owners read it: the role's name, or the owner's own name for Build my own.</summary>
+    public static string NameOf(AgentSettings settings) =>
+        settings.Role != AgentRoleTemplate.Custom ? Of(settings.Role).Name
+        : string.IsNullOrWhiteSpace(settings.CustomRole) ? "Your own job" : settings.CustomRole.Trim();
 }

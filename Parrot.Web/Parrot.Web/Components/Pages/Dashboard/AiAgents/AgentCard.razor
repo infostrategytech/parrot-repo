@@ -1,112 +1,105 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.AiAgents
 
-@* One agent on the AI Operations grid — Aurora's AgentCard, bound to Parrot's
-   AiAgent. Parrot stores no role, avatar tone, automation rate or confidence,
-   so those slots show Aurora's unavailable treatment (hidden line, em dash)
-   rather than a number nobody measured.
+@* One agent on AI Operations: who it is and its job, whether it is on, how
+   its day is going, where it answers, and the one thing to do next. The rest
+   (settings, turning it off, deleting a draft) is in its menu.
 
-   The card itself opens the agent, as Parrot's did; every control inside it
-   stops the click so a press on "Delete" is never also a press on the card. *@
+   The card itself opens the agent; the controls inside it stop the click, so
+   a press in the menu is never also a press on the card. *@
 
-<article class="agent-card agent-tone-slate"
+<article class="agent-card"
          role="link"
          tabindex="0"
          aria-label="@($"Open {Agent.Name}")"
          @onclick="OnOpen"
          @onkeydown="OnKeyDown">
     <header>
-        <span class="agent-card-avatar">
+        <span class="agent-card__avatar">
             <img src="@AgentBuilderCopy.MascotImage(Agent.Mascot)" alt="" />
         </span>
-        <div>
-            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2">@Agent.Name</Typography>
+        <div class="agent-card__who">
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Agent.Name</Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">@AgentRole.NameOf(Agent.Settings)</Typography>
         </div>
-        <span class="@(Agent.IsActive ? "agent-status" : "agent-status status-inactive")">
-            <i></i>
-            <Typography TextStyle="TextStyle.Small10Semibold" As="span">@(Agent.IsActive ? "Active" : "Deactivated")</Typography>
+        <StatusBadge Tone="@StatusTone">@StatusText</StatusBadge>
+        <span class="agent-card__menu" @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+            <ActionMenu Label="@($"More for {Agent.Name}")">
+                <ActionMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" OnClick="OnConfigure" />
+                @if (!Agent.IsDraft && Agent.IsActive)
+                {
+                    <ActionMenuItem Label="Turn off" Glyph="IconName.RiPauseCircleFill" Disabled="@Busy" OnClick="OnStatusChange" />
+                }
+                @if (!HasReplied)
+                {
+                    <ActionMenuItem Label="Delete" Glyph="IconName.RiDeleteBin6Fill" Disabled="@Busy" OnClick="OnDelete" />
+                }
+            </ActionMenu>
         </span>
-        <button type="button"
-                class="agent-more"
-                aria-label="@($"Edit {Agent.Name}")"
-                title="Edit identity"
-                @onclick="OnConfigure"
-                @onclick:stopPropagation="true">
-            <Icon Name="IconName.RiMore2Fill" Size="IconSize.Md" />
-        </button>
     </header>
 
-    <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="agent-description">@Agent.Description</Typography>
-
-    <div class="agent-metrics">
-        <div>
-            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@Agent.MessagesToday</Typography>
-            <Typography TextStyle="TextStyle.Small10Regular" As="span">Handled today</Typography>
-        </div>
-        <div>
-            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">—</Typography>
-            <Typography TextStyle="TextStyle.Small10Regular" As="span">Automated</Typography>
-        </div>
-        <div>
-            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">—</Typography>
-            <Typography TextStyle="TextStyle.Small10Regular" As="span">Confidence</Typography>
-        </div>
-    </div>
-
-    @* Aurora lists the agent's skills here. Parrot's nearest thing is the
-       playbooks the agent runs. *@
-    <div class="agent-skill-row">
-        @foreach (var skill in Agent.Playbooks.Take(2))
+    <div class="agent-card__today">
+        @if (Agent.IsDraft)
         {
-            <Typography TextStyle="TextStyle.Small10Regular" As="span">@skill.Title</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Not answering customers yet. Turn it on when you're ready.</Typography>
         }
-        @if (Agent.Playbooks.Count > 2)
+        else if (!Agent.IsActive)
         {
-            <Typography TextStyle="TextStyle.Small10Regular" As="span">+@(Agent.Playbooks.Count - 2)</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Turned off, so it isn't answering customers.</Typography>
+        }
+        else if (!ShowToday)
+        {
+            @* No figures yet (real mode): say what it is doing, not a 0 nobody measured. *@
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>On, and replying to your customers.</Typography>
+        }
+        else
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@Today.Conversations</Typography>
+                @(Today.Conversations == 1 ? " conversation today" : " conversations today")@if (Today.Conversations > 0)
+                {
+                    <text> · @Today.AnsweredShare% answered on its own</text>
+                }
+            </Typography>
         }
     </div>
 
     <footer>
-        <div class="agent-channels" aria-label="@($"{Agent.Name} channels")">
-            @foreach (var channel in EnabledChannels)
-            {
-                <AgentChannelGlyph Key="@channel.Key" />
-            }
+        <div class="agent-card__channels" aria-label="@($"Where {Agent.Name} answers")">
             @if (EnabledChannels.Count == 0)
             {
-                <Typography TextStyle="TextStyle.Small10Regular" As="span">Channels not assigned</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="agent-card__none">No channel yet</Typography>
+            }
+            else
+            {
+                @* Overlapping, so five channels take the room of three. *@
+                <ChannelStack Channels="@EnabledChannels.Select(channel => channel.Key.ToLowerInvariant()).ToList()" />
             }
         </div>
-
-        @if (!HasReplied)
-        {
-            <button type="button"
-                    class="agent-delete-action with-label"
-                    disabled="@Busy"
-                    @onclick="OnDelete"
-                    @onclick:stopPropagation="true">
-                <Icon Name="IconName.RiDeleteBin6Fill" Size="IconSize.Sm" />
-                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Delete agent</Typography>
-            </button>
-        }
-        else
-        {
-            <button type="button"
-                    class="@(Agent.IsActive ? "agent-secondary-action to-deactivate" : "agent-secondary-action to-reactivate")"
-                    disabled="@Busy"
-                    @onclick="OnStatusChange"
-                    @onclick:stopPropagation="true">
-                @if (!Agent.IsActive)
-                {
-                    <Icon Name="IconName.RiPlayFill" Size="IconSize.Sm" />
-                }
-                <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(Agent.IsActive ? "Deactivate" : "Reactivate")</Typography>
-            </button>
-        }
+        <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
+            @if (Agent.IsDraft || !Agent.IsActive)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="Busy" @onclick="OnStatusChange">Turn on</Button>
+            }
+            else
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnOpen">
+                    <ChildContent>Open</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            }
+        </span>
     </footer>
 </article>
 
 @code {
     [Parameter, EditorRequired] public AiAgent Agent { get; set; } = default!;
+
+    /// <summary>Its day so far, from the operations feed.</summary>
+    [Parameter] public AgentToday Today { get; set; } = AgentToday.None;
+
+    /// <summary>False until there are figures to show (real mode has no operations feed yet).</summary>
+    [Parameter] public bool ShowToday { get; set; } = true;
 
     [Parameter] public bool Busy { get; set; }
 
@@ -118,11 +111,14 @@
 
     [Parameter] public EventCallback OnStatusChange { get; set; }
 
-    // Aurora only offers delete to an agent that has never replied to a
-    // customer. Parrot's only record of replies is today's message count.
-    private bool HasReplied => Agent.MessagesToday > 0;
+    // Only an agent that has never replied to a customer can be deleted.
+    private bool HasReplied => Agent.MessagesToday > 0 || Today.Conversations > 0;
 
     private List<AgentChannel> EnabledChannels => Agent.Channels.Where(c => c.IsEnabled).ToList();
+
+    private string StatusText => Agent.IsDraft ? "Draft" : Agent.IsActive ? "On" : "Off";
+
+    private StatusTone StatusTone => Agent.IsDraft ? StatusTone.Neutral : Agent.IsActive ? StatusTone.Success : StatusTone.Warning;
 
     private async Task OnKeyDown(KeyboardEventArgs args)
     {

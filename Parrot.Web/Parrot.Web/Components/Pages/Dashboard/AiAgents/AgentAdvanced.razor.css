@@ -1,0 +1,179 @@
+/* Advanced settings: one quiet card, closed until opened on purpose (power
+   users only); inside, a white card per topic that opens on its own. The basics' rhythm: 16px from the
+   heading to the cards, 12px between cards, 20px inside them, rows at least
+   72px, 4px between a title and its description. Cards are white with a
+   hairline, never muted: the page is the muted grey. */
+
+.agent-advanced {
+  /* Missing from the token set: no icon-badge size, control measure, row
+     height or disclosure motion duration. */
+  --ds-agent-advanced-icon: 40px;
+  --ds-agent-advanced-control: 320px;
+  --ds-agent-advanced-row: 72px;
+  --ds-agent-advanced-motion: 180ms;
+
+  display: grid;
+  gap: var(--spacing-lg);
+}
+
+::deep .agent-advanced__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.agent-advanced__text { display: grid; gap: var(--spacing-xs); align-content: center; min-width: 0; }
+.agent-advanced__text ::deep strong,
+.agent-advanced__row > ::deep strong,
+.agent-advanced__field > ::deep strong { color: var(--colors-text-primary); }
+
+.agent-advanced__title { display: flex; gap: var(--spacing-sm); align-items: center; }
+
+/* The fold: a white card that says what is inside and that it is optional. */
+.agent-advanced ::deep .agent-advanced__toggle {
+  display: grid;
+  grid-template-columns: var(--ds-agent-advanced-icon) minmax(0, 1fr) auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+  min-height: var(--ds-agent-advanced-row);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  transition: border-color var(--ds-agent-advanced-motion) ease;
+}
+.agent-advanced ::deep .agent-advanced__toggle:hover,
+.agent-advanced ::deep .agent-advanced__toggle.is-open { border-color: var(--colors-accent-brand-border); }
+.agent-advanced ::deep .agent-advanced__toggle.is-open .agent-advanced__chevron { transform: rotate(180deg); }
+
+.agent-advanced__icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-agent-advanced-icon);
+  height: var(--ds-agent-advanced-icon);
+  color: var(--colors-icon-brand);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+/* The fold's own icon is neutral: these are not part of the simple path. */
+/* Blue is knowledge, as on the setup screen and AI Operations. */
+.agent-advanced__icon.is-knowledge { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
+.agent-advanced__icon.is-quiet { color: var(--colors-icon-secondary); background: var(--colors-surface-muted); }
+.agent-advanced__chevron {
+  display: grid;
+  color: var(--colors-icon-secondary);
+  transition: transform var(--ds-agent-advanced-motion) ease;
+}
+.agent-advanced__group.is-open ::deep .agent-advanced__head .agent-advanced__chevron { transform: rotate(180deg); }
+
+/* ── Topics ──────────────────────────────────────────────────────────────── */
+
+.agent-advanced__groups {
+  display: grid;
+  gap: var(--spacing-md);
+  animation: agent-advanced-open var(--ds-agent-advanced-motion) var(--ds-motion-enter);
+}
+.agent-advanced__group {
+  display: grid;
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  transition: border-color var(--ds-agent-advanced-motion) ease;
+}
+.agent-advanced__group:hover,
+.agent-advanced__group.is-open { border-color: var(--colors-accent-brand-border); }
+.agent-advanced__group ::deep .agent-advanced__head {
+  display: grid;
+  grid-template-columns: var(--ds-agent-advanced-icon) minmax(0, 1fr) auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+  width: 100%;
+  min-height: var(--ds-agent-advanced-row);
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+.agent-advanced__group ::deep .agent-advanced__head h3,
+.agent-advanced__head-static ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.agent-advanced__group.is-open ::deep .agent-advanced__head { border-bottom: var(--ds-hairline) solid var(--colors-surface-border); }
+.agent-advanced__content {
+  display: grid;
+  animation: agent-advanced-open var(--ds-agent-advanced-motion) var(--ds-motion-enter);
+}
+@keyframes agent-advanced-open {
+  from { opacity: 0; transform: translateY(calc(-1 * var(--spacing-xs))); }
+}
+
+/* ── Settings inside a topic ─────────────────────────────────────────────── */
+
+.agent-advanced__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-xl);
+  align-items: center;
+  min-height: var(--ds-agent-advanced-row);
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+.agent-advanced__content > .agent-advanced__row + .agent-advanced__row,
+.agent-advanced__content > .agent-advanced__row + .agent-advanced__field,
+.agent-advanced__content > .agent-advanced__field + .agent-advanced__field,
+.agent-advanced__content > .agent-advanced__field + .agent-advanced__row,
+.agent-advanced__topics + .agent-advanced__field { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.agent-advanced__row ::deep .ds-segmented { width: var(--ds-agent-advanced-control); }
+.agent-advanced__field { display: grid; gap: var(--spacing-md); padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl); }
+.agent-advanced__field.is-indented { padding-top: var(--spacing-none); border-top: 0; }
+
+/* The notes' files, one per row, and the tools to add a file or a voice note. */
+.agent-advanced__files { display: grid; gap: var(--spacing-xs); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.agent-advanced__files li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-md);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+.agent-advanced__files li ::deep span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.agent-advanced__note-tools { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+/* Opened on purpose: brought into view with room above it. */
+.agent-advanced,
+.agent-advanced__group { scroll-margin-top: var(--spacing-xl); }
+
+/* Shared knowledge is a quick scan, not another form. */
+/* Each topic a chip that switches on and off: on, ticked in brand; off,
+   plain with a cross; not taught yet, muted and not a choice. */
+.agent-advanced__topics { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+.agent-advanced__topics ::deep .agent-advanced__topic {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.agent-advanced__topics ::deep .agent-advanced__topic.is-on {
+  color: var(--colors-text-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-color: var(--colors-accent-brand-border);
+}
+.agent-advanced__topics ::deep .agent-advanced__topic.is-on .ds-icon { color: var(--colors-icon-brand); }
+.agent-advanced__topics ::deep .agent-advanced__topic:disabled { color: var(--colors-text-muted); background: var(--colors-surface-muted); border-color: transparent; }
+
+.agent-advanced__head-static {
+  display: grid;
+  grid-template-columns: var(--ds-agent-advanced-icon) minmax(0, 1fr);
+  gap: var(--spacing-lg);
+  align-items: center;
+  min-width: 0;
+}
+
+@media (max-width: 1180px) {
+  .agent-advanced__row { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-md); }
+  .agent-advanced__row ::deep .ds-segmented { width: 100%; }
+  .agent-advanced__canvas ::deep .ds-button { justify-self: start; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-advanced__chevron,
+  .agent-advanced__group { transition: none; }
+  .agent-advanced__content,
+  .agent-advanced__groups { animation: none; }
+}

@@ -1,0 +1,148 @@
+/* An agent's basics: the look and name in one card, and channels and safety
+   as rows in one card each. One rhythm throughout:
+   16px from a heading to its content, 20px inside a card, 16px between
+   cards, rows at least 72px, and 4px between a title and its (Prose)
+   description. Anything resting on the page is a white card with a hairline:
+   the page itself is the muted grey, so muted panels would vanish into it. */
+
+.agent-basics__section {
+  /* Missing from the token set: no icon-badge, avatar or row sizes, focus
+     ring width, or motion value for a choice. The look control matches the
+     Input's 58px field. */
+  --ds-agent-basics-icon: 40px;
+  --ds-agent-basics-avatar: 56px;
+  --ds-agent-basics-look-avatar: 40px;
+  --ds-agent-basics-look: 220px;
+  --ds-agent-basics-field: 58px;
+  --ds-agent-basics-row: 72px;
+  --ds-agent-basics-ring: 2px;
+  --ds-agent-basics-motion: 200ms;
+
+  display: grid;
+  gap: var(--spacing-lg);
+}
+.agent-basics__section ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+::deep .agent-basics__muted { color: var(--colors-text-muted); }
+.agent-basics__text { display: grid; gap: var(--spacing-xs); align-content: center; min-width: 0; }
+/* A rule's title with its tag (Always on, Needs care) beside it. */
+.agent-basics__title-row { display: flex; flex-wrap: wrap; gap: var(--spacing-xs) var(--spacing-sm); align-items: center; }
+.agent-basics__text ::deep strong { color: var(--colors-text-primary); }
+
+/* ── Name and look ───────────────────────────────────────────────────────── */
+
+.agent-basics__identity {
+  display: grid;
+  grid-template-columns: var(--ds-agent-basics-look) minmax(0, 1fr);
+  gap: var(--spacing-lg);
+  align-items: start;
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.agent-basics__identity ::deep .agent-basics__look {
+  display: grid;
+  grid-template-columns: var(--ds-agent-basics-look-avatar) minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  height: var(--ds-agent-basics-field);
+  padding: var(--spacing-none) var(--spacing-md) var(--spacing-none) var(--spacing-sm);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.agent-basics__identity ::deep .agent-basics__look:hover,
+.agent-basics__identity ::deep .agent-basics__look.is-open { border-color: var(--colors-accent-brand-border); }
+.agent-basics__identity ::deep .agent-basics__look > img {
+  width: var(--ds-agent-basics-look-avatar);
+  height: var(--ds-agent-basics-look-avatar);
+  object-fit: cover;
+  border-radius: var(--radius-radius-full);
+}
+.agent-basics__chevron { display: grid; color: var(--colors-icon-secondary); transition: transform var(--ds-agent-basics-motion) ease; }
+.agent-basics__identity ::deep .is-open .agent-basics__chevron { transform: rotate(180deg); }
+/* The choice of looks opens inside the card, under both. */
+.agent-basics__looks {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-lg);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.agent-basics__avatars { display: flex; flex-wrap: wrap; gap: var(--spacing-md); }
+.agent-basics__avatars ::deep .agent-basics__avatar {
+  display: grid;
+  place-items: center;
+  width: var(--ds-agent-basics-avatar);
+  height: var(--ds-agent-basics-avatar);
+  padding: var(--spacing-none);
+  overflow: hidden;
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 0 0 var(--ds-hairline) var(--colors-surface-border);
+  transition: box-shadow var(--ds-agent-basics-motion) ease;
+}
+.agent-basics__avatars ::deep .agent-basics__avatar:hover { box-shadow: 0 0 0 var(--ds-agent-basics-ring) var(--colors-accent-brand-border); }
+.agent-basics__avatars ::deep .agent-basics__avatar.is-chosen {
+  box-shadow: 0 0 0 var(--ds-agent-basics-ring) var(--colors-surface-card), 0 0 0 calc(var(--ds-agent-basics-ring) * 2) var(--colors-brand-primary);
+}
+.agent-basics__avatars ::deep img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* ── Channels and safety: one row each ───────────────────────────────────── */
+
+.agent-basics__list {
+  display: grid;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  overflow: hidden;
+  list-style: none;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.agent-basics__item {
+  display: grid;
+  grid-template-columns: var(--ds-agent-basics-icon) minmax(0, 1fr) auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+  min-height: var(--ds-agent-basics-row);
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+.agent-basics__item.is-on { background: var(--colors-accent-brand-subtle); }
+.agent-basics__item + .agent-basics__item { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.agent-basics__badge {
+  display: grid;
+  place-items: center;
+  width: var(--ds-agent-basics-icon);
+  height: var(--ds-agent-basics-icon);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+.agent-basics__badge.is-rule { color: var(--colors-icon-secondary); }
+.agent-basics__badge.is-knowledge { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
+.agent-basics__badge.is-handover { color: var(--colors-accent-violet-text); background: var(--colors-accent-violet-subtle); }
+.agent-basics__badge.is-money { color: var(--colors-accent-amber-text); background: var(--colors-accent-amber-subtle); }
+/* A rule being changed: its control right under its words. */
+.agent-basics__change {
+  display: grid;
+  grid-column: 2 / -1;
+  gap: var(--spacing-lg);
+  padding-bottom: var(--spacing-xs);
+}
+.agent-basics__empty {
+  display: grid;
+  grid-template-columns: var(--ds-agent-basics-icon) minmax(0, 1fr) auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+
+@media (max-width: 1280px) {
+  .agent-basics__identity { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-basics__avatars ::deep .agent-basics__avatar,
+  .agent-basics__chevron { transition: none; }
+}

@@ -1,0 +1,19 @@
+/* The three channels an agent can answer on, each in its own colour. */
+.agent-channel-gate {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-md);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+.agent-channel-gate li {
+  display: grid;
+  gap: var(--spacing-sm);
+  justify-items: center;
+  padding: var(--spacing-lg) var(--spacing-md);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}

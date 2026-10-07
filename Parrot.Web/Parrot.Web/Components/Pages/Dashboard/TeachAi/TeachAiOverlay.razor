@@ -1,0 +1,1783 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TeachAi
+@using Parrot.Web.Features.Auth.State
+@inject TeachAiState State
+@inject IBusinessKnowledge Knowledge
+@inject AuthState Auth
+@inject VoiceInterop Voice
+@inject AuroraInterop Interop
+@implements IAsyncDisposable
+
+@* "Teach your AI": before the first agent, the business checks what Parrot
+   found about it, fills the gaps and approves it, by talking or typing.
+
+   One conversation, as ChatGPT, Gemini and Claude now do it: voice and text
+   share the thread, and only the bar at the foot changes. At the start it
+   offers both (talk, or type); in voice it is the call's bar (the orb, what it
+   is doing, mute and end); in text it is the composer, with Talk to switch.
+   The step bar above shows progress, and the light along the panel's edges shows
+   who is talking. *@
+@if (State.IsOpen)
+{
+    <div class="teach-ai">
+      <div class="@($"teach-ai__shell {(CompactPanel ? "is-compact" : "is-expanded")}")">
+       <section class="teach-ai__panel" role="dialog" aria-modal="true" aria-labelledby="teach-ai-title" tabindex="-1" @ref="_root">
+        @* The light along the panel's edges, inside it: who is talking. *@
+        <VoiceAura @ref="_aura" State="@AuraState" />
+        <header class="teach-ai__bar">
+            <div class="teach-ai__heading">
+                <div class="teach-ai__title-row">
+                    <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h2" id="teach-ai-title">Tell us about @Business</Typography>
+                </div>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">Your agent learns from what you share here</Typography>
+            </div>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="teach-ai__close"
+                    aria-label="Close" title="Close (Esc). Your answers are kept." @onclick="CloseAsync">
+                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+            </Button>
+        </header>
+
+        @* How far along: a segment per topic (each one goes back to it), and where
+           you are in words. *@
+        @if (_conversation is not null && !_approved && _conversation.Step != TeachAiStep.Welcome)
+        {
+            <nav class="teach-ai__topics" aria-label="Business knowledge topics">
+                <div class="teach-ai__steps">
+                    @foreach (var card in Tiles)
+                    {
+                        @Tile(card)
+                    }
+                </div>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="teach-ai__topics-count">@ProgressText</Typography>
+            </nav>
+        }
+
+        <main class="teach-ai__stage">
+            @if (_conversation is null)
+            {
+                <div class="teach-ai__centre">
+                    @if (_loadError is not null)
+                    {
+                        <InlineError Message="@_loadError">
+                            <Action><Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action>
+                        </InlineError>
+                    }
+                    else
+                    {
+                        <Typography TextStyle="TextStyle.HeadingH3Medium" As="p" Class="teach-ai__caption">Reading your channels…</Typography>
+                    }
+                </div>
+            }
+            else if (_approved)
+            {
+                <div class="teach-ai__centre teach-ai__done" aria-live="polite">
+                    <Typography TextStyle="TextStyle.HeadingH2Semibold" As="p">The business basics are ready</Typography>
+                    <Typography TextStyle="TextStyle.BodyLargeMedium" As="p" Prose>You can improve them anytime. Next, let's set up your AI.</Typography>
+                </div>
+            }
+            else if (_conversation.Step == TeachAiStep.Summary)
+            {
+                <div class="teach-ai__summary">
+                    <div class="teach-ai__summary-head">
+                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3">Here's what your AI will know</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>Check it over. Your AI will only use what you approve here.</Typography>
+                    </div>
+
+                    <ul class="teach-ai__facts">
+                        @foreach (var card in _conversation.Cards.Where(c => c.Topic != KnowledgeTopic.Notes || c.HasContent))
+                        {
+                            <li class="teach-ai__fact @(card.Status == KnowledgeStatus.Skipped ? "is-skipped" : null)">
+                                <span class="teach-ai__fact-icon"><Icon Name="@TopicIcon(card.Topic)" /></span>
+                                <div class="teach-ai__fact-body">
+                                    <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@TeachAiConversation.Name(card.Topic)</Typography>
+                                    @if (_editing == card.Topic)
+                                    {
+                                        <TextArea Value="@_editText" ValueChanged="v => _editText = v ?? string.Empty" AriaLabel="@TeachAiConversation.Name(card.Topic)"
+                                                  Rows="2" AutoGrow SubmitOnEnter OnKeyDown="args => EditKeyAsync(args, card.Topic)" />
+                                        <div class="teach-ai__fact-actions">
+                                            <Button Size="ButtonSize.Small" @onclick="() => SaveEdit(card.Topic)">Save</Button>
+                                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _editing = null">Cancel</Button>
+                                        </div>
+                                    }
+                                    else if (card.HasContent && card.Status != KnowledgeStatus.Skipped)
+                                    {
+                                        @if (card.Text.Length > 0)
+                                        {
+                                            <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>@card.Text</Typography>
+                                        }
+                                        @if (card.Files is { Count: > 0 } names)
+                                        {
+                                            <ul class="teach-ai__line-files is-summary">
+                                                @foreach (var name in names)
+                                                {
+                                                    <li>@FileChip(new TeachAiFile(name, 0, KindOf(name)))</li>
+                                                }
+                                            </ul>
+                                        }
+                                        <span class="teach-ai__fact-source-row">
+                                            @if (ChannelIcon.From(card.Source) is { } channel)
+                                            {
+                                                <ChannelIcon Channel="@channel" />
+                                            }
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="teach-ai__fact-source">@SourceText(card)</Typography>
+                                        </span>
+                                    }
+                                    else
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="teach-ai__fact-missing">Not added. Your AI will say it'll check with your team.</Typography>
+                                    }
+                                </div>
+                                @if (_editing != card.Topic)
+                                {
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Edit {TeachAiConversation.Name(card.Topic)}")" title="Edit"
+                                            @onclick="() => StartEdit(card)">
+                                        <IconLeft><Icon Name="@(card.HasContent && card.Status != KnowledgeStatus.Skipped ? IconName.RiPencilFill : IconName.RiAddFill)" /></IconLeft>
+                                    </Button>
+                                }
+                            </li>
+                        }
+                    </ul>
+
+                    <div class="teach-ai__approve">
+                        <Button Size="ButtonSize.Large" FullWidth Busy="@_approving" disabled="@(_approving || _conversation.Cards.All(c => c.Status != KnowledgeStatus.Confirmed))"
+                                @onclick="ApproveAsync">
+                            <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
+                            <ChildContent>Approve and continue</ChildContent>
+                        </Button>
+                    </div>
+                </div>
+            }
+            else
+            {
+                <div class="teach-ai__chat">
+                    @if (_conversation.Step == TeachAiStep.Welcome)
+                    {
+                        @* The start, to be understood without reading: the orb, one
+                           instruction, how long, then talk or type. What was found is
+                           checked in the conversation, one thing at a time. *@
+                        <div class="teach-ai__hello">
+                            @if (CanTalk)
+                            {
+                                @* A click on the orb talks too; the Button below is the control
+                                   for the keyboard and screen readers. *@
+                                <Button Variant="ButtonVariant.Ghost" Class="teach-ai__hello-orb"
+                                        aria-label="Start a voice conversation" title="Start a voice conversation" @onclick="TalkAsync">
+                                    <IconLeft><VoiceOrb ShowMic /></IconLeft>
+                                </Button>
+                            }
+                            else
+                            {
+                                <VoiceOrb Still Class="teach-ai__hello-still" />
+                            }
+                            <div class="teach-ai__hello-copy">
+                                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h3">Tell me about your business</Typography>
+                                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">A short chat · About 3 minutes</Typography>
+                            </div>
+                            @MicHelp
+                            <div class="teach-ai__hello-actions">
+                                @if (CanTalk)
+                                {
+                                    <Button Size="ButtonSize.Large" Busy="@_askingMic" @onclick="TalkAsync">
+                                        <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                                        <ChildContent>Talk</ChildContent>
+                                    </Button>
+                                }
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="TypeInsteadAsync">
+                                    <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
+                                    <ChildContent>Type</ChildContent>
+                                </Button>
+                            </div>
+                            @if (StartNote is { } note)
+                            {
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="teach-ai__start-note">@note</Typography>
+                            }
+                        </div>
+                    }
+                    else
+                    {
+                        <ol class="teach-ai__thread" @ref="_thread" aria-live="@(_mode == Mode.Voice ? "off" : "polite")">
+                            @* Every bubble comes from this one place, keyed by its position
+                               in the conversation, so a bubble that changes keeps its
+                               element: your live words become your message, and the
+                               agent's thinking dots become its answer, without a pop. *@
+                            @{ Row? previous = null; }
+                            @foreach (var row in Rows)
+                            {
+                                // A new turn: the speaker changes. The agent's orb shows at the
+                                // start of each of its turns, not beside every message.
+                                var turn = previous is null || previous.Agent != row.Agent;
+                                previous = row;
+                                var editing = row.Line is { } open && open == _editingLine;
+                                <li @key="row.Key" class="@($"teach-ai__line {(row.Agent ? "is-agent" : "is-person")} {(turn ? "is-turn" : null)} {(editing ? "is-editing" : null)} {row.LineCss}")" aria-label="@row.Label">
+                                    @if (row.Agent)
+                                    {
+                                        if (turn)
+                                        {
+                                            <VoiceOrb Still Class="teach-ai__avatar" />
+                                        }
+                                        else
+                                        {
+                                            <span class="teach-ai__avatar-space" aria-hidden="true"></span>
+                                        }
+                                    }
+                                    @if (editing)
+                                    {
+                                        @EditBox
+                                    }
+                                    else
+                                    {
+                                        @if (row.Line is { } sent)
+                                        {
+                                            @* As in ChatGPT and Claude: point at your message to edit it.
+                                               The button sits beside it, so it takes no room of its own. *@
+                                            <div class="teach-ai__sent">
+                                                @if (_conversation.CanEdit(sent) && _phase != Phase.Thinking)
+                                                {
+                                                    <div class="teach-ai__message-actions">
+                                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Edit message" title="Edit" @onclick="() => EditMessage(sent)">
+                                                            <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                                                        </Button>
+                                                    </div>
+                                                }
+                                                <div class="@($"teach-ai__bubble {row.BubbleCss}")" @ref="_lastBubble">@row.Content</div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <div class="@($"teach-ai__bubble {row.BubbleCss}")" @ref="_lastBubble">@row.Content</div>
+                                        }
+                                        @row.Footer
+                                    }
+                                </li>
+                            }
+                        </ol>
+
+                        @* The suggested replies sit on top of the bar in both modes; a
+                           question with its own answers to pick carries its own Skip. *@
+                        @if (_conversation.Choices is { Count: > 0 } choices && !AsksToPick)
+                        {
+                            // Their room is kept for the whole question, and they show once
+                            // it has been said (or typed out), so they never arrive before
+                            // what they answer and nothing above them jumps.
+                            var waiting = _phase is Phase.Thinking or Phase.Speaking;
+                            var after = _freshLine is { } typing && !_freshSpoken ? TypingMs(typing) : 0;
+                            <div @key="_conversation.Lines.Count" class="@($"teach-ai__replies is-chips {(waiting ? "is-waiting" : null)}")" style="--after: @(after)ms">
+                                @foreach (var choice in choices)
+                                {
+                                    @if (ChoiceIcon(choice.Kind) is { } icon)
+                                    {
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@waiting" @onclick="() => ChooseAsync(choice)">
+                                            <IconLeft><Icon Name="@icon" /></IconLeft>
+                                            <ChildContent>@choice.Label</ChildContent>
+                                        </Button>
+                                    }
+                                    else
+                                    {
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@waiting" @onclick="() => ChooseAsync(choice)">@choice.Label</Button>
+                                    }
+                                }
+                            </div>
+                        }
+                        @if (_voiceNotice is not null)
+                        {
+                            <InlineError Message="@_voiceNotice" Tone="InlineErrorTone.Warning" OnDismiss="() => _voiceNotice = null" />
+                        }
+                        @MicHelp
+
+                        @* The browser opens its file picker only for a click on a real
+                           file input, so the buttons forward one to this hidden input. *@
+                        <InputFile @ref="_picker" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="@AcceptedFiles" OnChange="OnFilesPickedAsync" />
+
+                        @* A question with answers to pick takes the composer's place, as
+                           AI chats ask for a choice; the composer is back once it is
+                           answered or skipped. Payment only, for now (a showcase). *@
+                        @if (AsksToPick)
+                        {
+                            <ChoicePrompt @key="_conversation.Lines.Count" Question="How do customers pay you?" Multiple
+                                          Options="PaymentOptions" OtherPlaceholder="Another way, in your own words"
+                                          SkipLabel="Skip for now" Disabled="@(_phase is Phase.Thinking or Phase.Speaking)"
+                                          OnSubmit="PickedAsync" OnSkip="SkipPickAsync" />
+                        }
+                        else
+                        {
+                        @* Voice and text occupy the same floating dock. Switching mode
+                           changes its controls, not its place in the conversation. *@
+                        <section class="@($"teach-ai__dock {(_mode == Mode.Voice ? "is-voice" : "is-text")}")"
+                                 aria-label="@(_mode == Mode.Voice ? "Voice conversation" : "Your answer")">
+                            @if (_mode == Mode.Voice)
+                            {
+                                @* Interrupting needs no extra action: speaking while the AI
+                                   talks hands the turn back to the person. *@
+                                <div class="teach-ai__voicebar" role="group" aria-label="Voice controls" tabindex="-1" @ref="_voiceBar">
+                                    <VoiceOrb @ref="_orb" State="@OrbState" Class="teach-ai__bar-orb" />
+                                    <div class="teach-ai__voicebar-text">
+                                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p" Class="@($"teach-ai__status is-{StatusKey}")" role="status" aria-live="polite">@StatusText</Typography>
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="teach-ai__hint">@VoiceHint</Typography>
+                                    </div>
+                                    <div class="teach-ai__voice-actions">
+                                        @* Finished talking: no need to wait for the pause. *@
+                                        @if (_phase == Phase.Listening && _interim.Length > 0)
+                                        {
+                                            <Button Size="ButtonSize.Small" title="I've finished" @onclick="DoneTalkingAsync">
+                                                <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
+                                                <ChildContent>Done</ChildContent>
+                                            </Button>
+                                        }
+                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" title="Share a picture or document"
+                                                disabled="@(_phase == Phase.Thinking)" @onclick="PickFilesAsync">
+                                            <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                                            <ChildContent>Add a file</ChildContent>
+                                        </Button>
+                                        @* Labelled: in a call, mute is the control that matters most. *@
+                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="@(_muted ? "teach-ai__mute is-on" : "teach-ai__mute")"
+                                                aria-pressed="@(_muted ? "true" : "false")" title="@($"{MuteLabel} (Ctrl/⌘ + D)")" @onclick="ToggleMuteAsync">
+                                            <IconLeft><Icon Name="@(_muted ? IconName.RiMicOffFill : IconName.RiMicFill)" /></IconLeft>
+                                            <ChildContent>@MuteLabel</ChildContent>
+                                        </Button>
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" title="Type instead: the conversation carries on" @onclick="EndVoiceAsync">
+                                            <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
+                                            <ChildContent>Type</ChildContent>
+                                        </Button>
+                                    </div>
+                                </div>
+                            }
+                            else
+                            {
+                                @Composer
+                            }
+                        </section>
+                        }
+                    }
+                </div>
+            }
+        </main>
+
+       </section>
+      </div>
+    </div>
+}
+
+@code {
+    private enum Mode { Voice, Text }
+    private enum Phase { Idle, Speaking, Listening, Thinking, Paused }
+
+    private static readonly IReadOnlyList<KnowledgeCard> Placeholder =
+        Enum.GetValues<KnowledgeTopic>().Where(t => t != KnowledgeTopic.Notes).Select(t => new KnowledgeCard(t, "", KnowledgeStatus.Missing, null)).ToList();
+
+    private ElementReference _root;
+    private ElementReference _thread;
+    private VoiceOrb? _orb;
+    private VoiceAura? _aura;
+    private VoiceNoteRecording? _recorder;
+    private VoiceRecording? _recording;
+    private CancellationTokenSource? _recordClock;
+    private int _recordSeconds;
+    private bool _recordingStarting;
+    private bool _recordingOpening;
+    private ElementReference _voiceBar;
+    private bool _muted;
+    private IAsyncDisposable? _permissionWatch;
+    private IAsyncDisposable? _visibilityWatch;
+    private IAsyncDisposable? _networkWatch;
+    // The connection, as the browser reports it: ok, poor or offline.
+    private string _network = "ok";
+    private IAsyncDisposable? _muteShortcut;
+    // The site's microphone access as last known: granted, prompt, unknown,
+    // or a problem (denied, system, none, busy, error).
+    private string _micAccess = "unknown";
+    private bool _askingMic;
+    private bool _wantVoice;
+    private bool _pausedAway;
+    private bool _focusComposer;
+    private bool _focusVoiceBar;
+    private TaskCompletionSource? _rendered;
+    private TextArea? _field;
+    private InputFile? _picker;
+    private readonly List<TeachAiFile> _files = [];
+    private DotNetObjectReference<TeachAiOverlay>? _self;
+    private IAsyncDisposable? _trap;
+    private VoiceSpeech? _speech;
+    // The agent's newest line while it is still arriving: spoken (its words
+    // revealed in step with the voice) or typed (at reading pace).
+    private TeachAiLine? _freshLine;
+    private bool _freshSpoken;
+    // What the person just said, shown while the agent thinks, so it never vanishes.
+    private Pending? _pending;
+    private ElementReference _lastBubble;
+
+    private sealed record Pending(string Text, TeachAiVoiceNote? Note = null, IReadOnlyList<TeachAiFile>? Files = null);
+    private sealed record Row(string Key, bool Agent, string LineCss, string BubbleCss, RenderFragment Content, string? Label = null, RenderFragment? Footer = null, int? Line = null);
+    private IAsyncDisposable? _listen;
+    private IAsyncDisposable? _mic;
+
+    private TeachAiConversation? _conversation;
+    private VoiceCapabilities? _caps;
+    private Mode _mode = Mode.Text;
+    private Phase _phase;
+    private TeachAiLine? _lastAgent;
+    private string _interim = "";
+    private string _text = "";
+    private string? _voiceNotice;
+    private string? _loadError;
+    private int _misses;
+    private int _turn;
+    private bool _wasOpen;
+    private bool _scrollPending;
+    private bool _approving;
+    private bool _approved;
+    private KnowledgeTopic? _editing;
+    private string _editText = "";
+
+
+    private string Business => string.IsNullOrWhiteSpace(Auth.CurrentUser?.BusinessName) ? "your business" : Auth.CurrentUser!.BusinessName!;
+    private bool CanTalk => _caps is { Speak: true, Listen: true, Microphone: true };
+    private KnowledgeCard? Current => _conversation?.Current;
+    private IReadOnlyList<KnowledgeCard> Tiles => _conversation?.Core.ToList() ?? Placeholder;
+
+    private string ProgressText => _conversation is null ? "Getting ready"
+        : _approved ? "Approved"
+        : _conversation.Step == TeachAiStep.Topics && _conversation.Stage is TeachAiStage.Review or TeachAiStage.Changing or TeachAiStage.Which ? "Checking what I found"
+        : _conversation.Step == TeachAiStep.Topics && _conversation.Stage == TeachAiStage.Checkpoint ? "Quick check"
+        : _conversation.Step == TeachAiStep.Topics && _conversation.Stage == TeachAiStage.Extras ? "Almost done"
+        : Current is { } card ? $"{TileTitle(card.Topic)} · {_conversation.Covered} of {Tiles.Count} covered"
+        : $"{_conversation.Covered} of {Tiles.Count} covered";
+
+    private bool CompactPanel => _conversation is null || _approved;
+
+    // The light along the panel's edges, for voice only: whoever is talking.
+    // Off in text, at the start, at the summary, and when muted or paused.
+    private VoiceState? AuraState =>
+        _mode != Mode.Voice || _conversation is not { Step: TeachAiStep.Topics } || _approved ? null
+        : _phase == Phase.Paused || (_muted && _phase is not (Phase.Speaking or Phase.Thinking)) ? null
+        : OrbState;
+
+    // Where the voice's level goes: the orb, and the light along the panel's edges.
+    private IReadOnlyList<ElementReference> LevelTargets =>
+        _aura is null ? [_orb!.Element] : [_orb!.Element, _aura.Element];
+
+    private VoiceState OrbState => _phase switch
+    {
+        Phase.Speaking => VoiceState.Speaking,
+        Phase.Listening => VoiceState.Listening,
+        Phase.Thinking => VoiceState.Thinking,
+        _ => VoiceState.Idle,
+    };
+
+    // For styling the status line: what it is saying.
+    private string StatusKey => _muted && _phase is not (Phase.Speaking or Phase.Thinking) ? "muted" : _phase.ToString().ToLowerInvariant();
+
+    private string MuteLabel => _muted ? "Unmute" : _phase == Phase.Paused ? "Listen again" : "Mute";
+
+    private string StatusText =>
+        _approved ? "All set"
+        : _pausedAway ? "Paused"
+        : _muted && _phase is not (Phase.Speaking or Phase.Thinking) && _mode == Mode.Voice ? "Muted"
+        : _conversation is null ? (_loadError is null ? "Reading" : "")
+        : _phase switch
+        {
+            Phase.Speaking => "Speaking",
+            Phase.Listening => "Listening",
+            Phase.Thinking => "Thinking",
+            Phase.Paused => "Paused",
+            _ => _conversation.Step == TeachAiStep.Summary ? "Ready when you are" : " ",
+        };
+
+    protected override void OnInitialized()
+    {
+        _self = DotNetObjectReference.Create(this);
+        State.Changed += StateChanged;
+    }
+
+    private void StateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var rendered = _rendered;
+        _rendered = null;
+        rendered?.TrySetResult();
+        if (State.IsOpen && !_wasOpen)
+        {
+            _wasOpen = true;
+            _trap = await Interop.TrapFocusAsync(_root, _self!, nameof(EscapeAsync));
+            await OpenAsync();
+        }
+        else if (!State.IsOpen && _wasOpen)
+        {
+            _wasOpen = false;
+            await StopVoiceAsync();
+            await CancelNoteAsync();
+            if (_trap is not null) { await _trap.DisposeAsync(); _trap = null; }
+        }
+        if (_recordingStarting && _recording is null && !_recordingOpening && _recorder is not null)
+        {
+            _recordingOpening = true;
+            try { await StartRecordingAsync(); }
+            finally { _recordingOpening = false; }
+            StateHasChanged();
+        }
+        if (_scrollPending && _conversation is { Step: TeachAiStep.Topics } && !_approved)
+        {
+            _scrollPending = false;
+            await Interop.ScrollToBottomAsync(_thread);
+        }
+        // Focus follows the bar: the call's controls when voice starts, the
+        // box when it ends or text is chosen.
+        if (_focusVoiceBar && _mode == Mode.Voice && _conversation is { Step: TeachAiStep.Topics })
+        {
+            _focusVoiceBar = false;
+            try { await _voiceBar.FocusAsync(); }
+            catch (Exception ex) when (ex is InvalidOperationException or JSException) { }
+        }
+        // Only once the box is on screen again (not mid-way out of voice).
+        if (_focusEdit && _editField is not null)
+        {
+            _focusEdit = false;
+            try { await _editField.FocusAsync(); }
+            catch (JSException) { }
+        }
+        if (_focusComposer && _field is not null && _mode == Mode.Text && _editingLine is null)
+        {
+            _focusComposer = false;
+            try { await _field.FocusAsync(); }
+            catch (JSException) { }
+        }
+    }
+
+    private async Task OpenAsync()
+    {
+        _approved = false;
+        _approving = false;
+        _voiceNotice = null;
+        try { _caps ??= await Voice.CapabilitiesAsync(); }
+        catch (JSException) { _caps = new VoiceCapabilities(false, false, false, false); }
+        if (CanTalk)
+        {
+            try
+            {
+                _micAccess = await Voice.MicPermissionAsync();
+                _permissionWatch ??= await Voice.WatchMicPermissionAsync(_self!, nameof(MicPermissionChanged));
+                _visibilityWatch ??= await Voice.WatchVisibilityAsync(_self!, nameof(VisibilityChanged));
+                _network = await Voice.NetworkStateAsync();
+                _networkWatch ??= await Voice.WatchNetworkAsync(_self!, nameof(NetworkChanged));
+            }
+            catch (JSException) { }
+        }
+        _conversation = State.Conversation;
+        if (_conversation is null) await LoadAsync();
+        else if (_conversation.Step == TeachAiStep.Topics) _lastAgent = _conversation.Lines.LastOrDefault(l => l.Speaker == TeachAiSpeaker.Agent);
+        if (_mode == Mode.Voice && !CanTalk) _mode = Mode.Text;
+        _scrollPending = true;
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        StateHasChanged();
+        try
+        {
+            var draft = await Knowledge.GetDraftAsync();
+            _conversation = State.Conversation = new TeachAiConversation(Business, draft);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            _loadError = "We couldn't read your channels. Check your connection and try again.";
+        }
+    }
+
+    // ── Starting and switching ──────────────────────────────────────────────
+
+    // Talk: ask for the microphone first (the browser's prompt, if it has not
+    // been answered), then start the call. A click is also what lets the
+    // agent's voice play. Trouble with the microphone shows how to fix it.
+    private async Task TalkAsync()
+    {
+        if (_conversation is null || _askingMic || _mode == Mode.Voice) return;
+        _voiceNotice = null;
+        _wantVoice = true;
+        _askingMic = true;
+        StateHasChanged();
+        string result;
+        try { result = await Voice.RequestMicAsync(); }
+        catch (JSException) { result = "error"; }
+        _askingMic = false;
+        _micAccess = result;
+        if (result == "granted") await StartVoiceAsync();
+    }
+
+    private async Task StartVoiceAsync()
+    {
+        if (_conversation is null) return;
+        _wantVoice = false;
+        _focusVoiceBar = true;
+        try { _muteShortcut ??= await Voice.BindMuteShortcutAsync(_self!, nameof(MutePressedAsync)); }
+        catch (JSException) { }
+        if (_conversation.Step == TeachAiStep.Welcome) await BeginAsync(Mode.Voice);
+        else await SwitchModeAsync(Mode.Voice);
+    }
+
+    // Typing from the start: the first question comes, and the box takes the focus.
+    private async Task TypeInsteadAsync()
+    {
+        if (_conversation is not { Step: TeachAiStep.Welcome }) return;
+        _focusComposer = true;
+        await BeginAsync(Mode.Text);
+    }
+
+    // The browser reports a change (someone allowed the microphone in its settings):
+    // if they were trying to talk, carry on by ourselves.
+    [JSInvokable]
+    public async Task MicPermissionChanged(string state)
+    {
+        _micAccess = state;
+        if (state == "granted" && _wantVoice && !_askingMic && _mode != Mode.Voice) await StartVoiceAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Nobody is listened to without knowing: listening pauses while the tab
+    // is hidden, and picks up again on return.
+    [JSInvokable]
+    public async Task VisibilityChanged(bool visible)
+    {
+        if (!visible)
+        {
+            if (_mode == Mode.Voice && !_muted && _phase is Phase.Listening or Phase.Speaking or Phase.Idle)
+            {
+                await StopVoiceAsync();
+                _phase = Phase.Paused;
+                _pausedAway = true;
+            }
+        }
+        else if (_pausedAway)
+        {
+            _pausedAway = false;
+            await ListenAsync();
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task MutePressedAsync() => InvokeAsync(async () =>
+    {
+        if (_mode != Mode.Voice) return;
+        await ToggleMuteAsync();
+        StateHasChanged();
+    });
+
+    private async Task ReleaseMuteShortcutAsync()
+    {
+        var shortcut = _muteShortcut;
+        _muteShortcut = null;
+        if (shortcut is not null) await shortcut.DisposeAsync();
+    }
+
+    private async Task BeginAsync(Mode mode)
+    {
+        if (_conversation is null) return;
+        _mode = mode;
+        await SayAsync(_conversation.Start());
+    }
+
+    private async Task SwitchModeAsync(Mode mode)
+    {
+        if (mode == _mode || _conversation is null) return;
+        await StopVoiceAsync();
+        _mode = mode;
+        _voiceNotice = null;
+        _interim = "";
+        if (mode == Mode.Voice && _lastAgent is not null) await SayAsync(_lastAgent);
+        else
+        {
+            _phase = Phase.Idle;
+            _scrollPending = true;
+        }
+    }
+
+    // ── Talking ─────────────────────────────────────────────────────────────
+
+    /// <summary>The agent's turn: aloud in voice mode, then it listens.</summary>
+    private async Task SayAsync(TeachAiLine line)
+    {
+        _lastAgent = line;
+        _scrollPending = true;
+        await StopVoiceAsync();
+        // The orb appears with the voice view; draw it before its level is used.
+        if (_mode == Mode.Voice && _orb is null) await RenderedAsync();
+        if (_mode != Mode.Voice || !CanTalk || _orb is null)
+        {
+            _phase = Phase.Idle;
+            _freshLine = line;
+            _freshSpoken = false;
+            // Typing: the box is ready for the answer, no click needed.
+            _focusComposer = _mode == Mode.Text;
+            StateHasChanged();
+            return;
+        }
+        _phase = Phase.Speaking;
+        _misses = 0;
+        _freshLine = line;
+        _freshSpoken = true;
+        // Drawn first, so the voice has the words to reveal.
+        await RenderedAsync();
+        try { _speech = await Voice.SpeakAsync(LevelTargets, line.Text, _self!, nameof(SpokenAsync), _lastBubble, nameof(SpeechStalledAsync)); }
+        catch (JSException) { await SpokenAsync(); return; }
+        await ListenForInterruptionAsync();
+    }
+
+    // ── Interrupting by voice ───────────────────────────────────────────────
+    // While the agent speaks, recognition keeps running. Words that are not
+    // the agent's own (its voice coming back through the speakers) mean the
+    // person has started talking: the agent stops, and it is their turn, with
+    // what they have said so far kept. No button: they just speak.
+
+    private async Task ListenForInterruptionAsync()
+    {
+        if (_phase != Phase.Speaking || _muted || _mode != Mode.Voice) return;
+        try { _listen = await Voice.ListenAsync(_self!, nameof(Heard), nameof(HeardAllAsync), nameof(NotHeardAsync)); }
+        catch (JSException) { }
+    }
+
+    private bool IsInterruption(string heard)
+    {
+        var said = Words(heard);
+        if (said.Count == 0) return false;
+        var spoken = Words(_lastAgent?.Text ?? "").ToHashSet();
+        var own = said.Count(w => !spoken.Contains(w));
+        // Two words of their own, or a short yes/no/skip that the agent did not say.
+        return own >= 2 || (own >= 1 && said.Count <= 3 && TeachAiConversation.IsQuickAnswer(heard));
+    }
+
+    private static List<string> Words(string text) =>
+        System.Text.RegularExpressions.Regex.Matches(text.ToLowerInvariant(), "[a-z0-9']+").Select(m => m.Value).ToList();
+
+    // The agent stops mid-sentence and listens, keeping what was heard.
+    private async Task InterruptAsync(string heard)
+    {
+        if (_speech is not null && _freshLine is not null && _freshSpoken)
+            _conversation?.Cut(_freshLine, await _speech.SaidAsync());
+        await StopSpeechAsync();
+        _phase = Phase.Listening;
+        _interim = heard;
+        State.HeadphonesTipShown = true;
+        if (_orb is not null)
+        {
+            try { _mic = await Voice.MicLevelAsync(LevelTargets); }
+            catch (JSException) { }
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Recognition ended while the agent was still talking: listen again.
+    private async Task ResumeInterruptionListeningAsync()
+    {
+        var listen = _listen;
+        _listen = null;
+        if (listen is not null) await listen.DisposeAsync();
+        await ListenForInterruptionAsync();
+    }
+
+    /// <summary>Completes once what is about to change has been drawn.</summary>
+    private Task RenderedAsync()
+    {
+        _rendered ??= new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        StateHasChanged();
+        return _rendered.Task;
+    }
+
+    [JSInvokable]
+    public async Task SpokenAsync()
+    {
+        if (_phase != Phase.Speaking) return;
+        await StopSpeechAsync();
+        // The recognition that was waiting for an interruption gives way to a fresh one.
+        await StopListeningAsync();
+        if (_conversation is { Step: TeachAiStep.Topics } && _mode == Mode.Voice && State.IsOpen) await ListenAsync();
+        else _phase = Phase.Idle;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ListenAsync()
+    {
+        if (_orb is null) return;
+        if (_muted)
+        {
+            _phase = Phase.Paused;
+            return;
+        }
+        _phase = Phase.Listening;
+        _interim = "";
+        State.HeadphonesTipShown = true;
+        var turn = ++_turn;
+        IAsyncDisposable mic;
+        try
+        {
+            mic = await Voice.MicLevelAsync(LevelTargets);
+        }
+        catch (JSException)
+        {
+            Blocked();
+            return;
+        }
+        // Stopped (a button, a switch to text) while the microphone was opening.
+        if (turn != _turn)
+        {
+            await mic.DisposeAsync();
+            return;
+        }
+        _mic = mic;
+        _listen = await Voice.ListenAsync(_self!, nameof(Heard), nameof(HeardAllAsync), nameof(NotHeardAsync));
+    }
+
+    [JSInvokable]
+    public async Task Heard(string text)
+    {
+        if (_phase == Phase.Speaking)
+        {
+            if (IsInterruption(text)) await InterruptAsync(text);
+            return;
+        }
+        if (_phase != Phase.Listening) return;
+        _interim = text;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public async Task HeardAllAsync(string text)
+    {
+        if (_phase == Phase.Speaking)
+        {
+            if (!IsInterruption(text))
+            {
+                await ResumeInterruptionListeningAsync();
+                return;
+            }
+            await InterruptAsync(text);
+        }
+        if (_phase != Phase.Listening) return;
+        await StopListeningAsync();
+        if (string.IsNullOrWhiteSpace(text)) { await ListenAsync(); return; }
+        await RespondAsync(c => c.Reply(text), new Pending(text));
+    }
+
+    // The Done button: their turn ends now, with what they have said.
+    private async Task DoneTalkingAsync()
+    {
+        var said = _interim.Trim();
+        if (_phase != Phase.Listening || said.Length == 0) return;
+        await StopListeningAsync();
+        await RespondAsync(c => c.Reply(said), new Pending(said));
+    }
+
+    // The connection changed: voice cannot keep up on a poor one.
+    [JSInvokable]
+    public async Task NetworkChanged(string state)
+    {
+        _network = state;
+        if (state != "ok" && _mode == Mode.Voice) await DegradeAsync();
+        else await InvokeAsync(StateHasChanged);
+    }
+
+    // The agent's voice did not start in time: the connection is too slow for it.
+    [JSInvokable]
+    public Task SpeechStalledAsync() => InvokeAsync(DegradeAsync);
+
+    // Carries on in text so nothing is lost: what the agent was saying shows in
+    // full, the box takes the focus, and Talk is there for when it is better.
+    private async Task DegradeAsync()
+    {
+        if (_mode != Mode.Voice) return;
+        await StopVoiceAsync();
+        _muted = false;
+        _pausedAway = false;
+        await ReleaseMuteShortcutAsync();
+        _mode = Mode.Text;
+        _phase = Phase.Idle;
+        _voiceNotice = "Your connection is slow, so I've switched to text so we don't lose anything. Press Talk when it's better.";
+        _focusComposer = true;
+        _scrollPending = true;
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task NotHeardAsync(string reason)
+    {
+        if (reason == "network")
+        {
+            await InvokeAsync(DegradeAsync);
+            return;
+        }
+        if (_phase == Phase.Speaking)
+        {
+            if (reason is not ("not-allowed" or "service-not-allowed" or "audio-capture")) await ResumeInterruptionListeningAsync();
+            return;
+        }
+        if (_phase != Phase.Listening) return;
+        await StopListeningAsync();
+        if (reason is "not-allowed" or "service-not-allowed" or "audio-capture") Blocked();
+        else if (reason == "no-speech" && ++_misses < 2) await ListenAsync();
+        else
+        {
+            _phase = Phase.Paused;
+            _voiceNotice = "No rush. Press Listen again when you're ready, or type instead.";
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void Blocked()
+    {
+        _phase = Phase.Idle;
+        _mode = Mode.Text;
+        _micAccess = "denied";
+        _ = ReleaseMuteShortcutAsync();
+        _voiceNotice = "Your microphone is blocked, so let's type. You can allow it in the browser's address bar.";
+        _scrollPending = true;
+    }
+
+    // Mute stops the agent hearing you (and being interrupted) without
+    // stopping it talking; unmute picks up where the turn is.
+    private async Task ToggleMuteAsync()
+    {
+        _voiceNotice = null;
+        if (!_muted && _phase == Phase.Paused)
+        {
+            _misses = 0;
+            await ListenAsync();
+            return;
+        }
+        _muted = !_muted;
+        if (_muted)
+        {
+            await StopListeningAsync();
+            if (_phase == Phase.Listening) _phase = Phase.Paused;
+            return;
+        }
+        _misses = 0;
+        if (_phase == Phase.Speaking) await ListenForInterruptionAsync();
+        else if (_phase is Phase.Paused or Phase.Idle) await ListenAsync();
+    }
+
+    // Ends the voice conversation; it carries on in text, every answer kept.
+    private async Task EndVoiceAsync()
+    {
+        _muted = false;
+        _pausedAway = false;
+        await ReleaseMuteShortcutAsync();
+        await SwitchModeAsync(Mode.Text);
+        _focusComposer = true;
+    }
+
+    /// <summary>A reply, from the voice, the keyboard or a button: a short think, then the agent's next line.</summary>
+    private async Task RespondAsync(Func<TeachAiConversation, TeachAiLine> reply, Pending said)
+    {
+        if (_conversation is null) return;
+        await StopVoiceAsync();
+        _interim = "";
+        _voiceNotice = null;
+        _pending = said;
+        _freshLine = null;
+        _phase = Phase.Thinking;
+        _scrollPending = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(ThinkingTime);
+        var line = reply(_conversation);
+        _pending = null;
+        await InvokeAsync(() => SayAsync(line));
+    }
+
+    // Long enough to read as thought, short enough not to wait on. (The
+    // scripted demo answers at once; a real agent's own latency replaces this.)
+    private static readonly TimeSpan ThinkingTime = TimeSpan.FromMilliseconds(280);
+
+    private async Task StopSpeechAsync()
+    {
+        if (_freshSpoken) _freshLine = null;
+        _freshSpoken = false;
+        var speech = _speech;
+        _speech = null;
+        if (speech is not null) await speech.DisposeAsync();
+    }
+
+    private async Task StopListeningAsync()
+    {
+        _turn++;
+        var listen = _listen;
+        var mic = _mic;
+        _listen = null;
+        _mic = null;
+        if (listen is not null) await listen.DisposeAsync();
+        if (mic is not null) await mic.DisposeAsync();
+    }
+
+    private async Task StopVoiceAsync()
+    {
+        await StopSpeechAsync();
+        await StopListeningAsync();
+        if (_phase is Phase.Speaking or Phase.Listening) _phase = Phase.Idle;
+    }
+
+    // ── The conversation's parts ───────────────────────────────────────────
+
+    // The thread as rows: every line, then what is still arriving
+    // (your words, live or waiting on the agent; the agent thinking). A row's
+    // key is its place in the conversation, so it keeps its bubble as it
+    // turns from live to sent, or from thinking to its answer.
+    private IEnumerable<Row> Rows
+    {
+        get
+        {
+            if (_conversation is null) yield break;
+            var lines = _conversation.Lines;
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var line = lines[i];
+                var index = i;
+                var fresh = ReferenceEquals(line, _freshLine);
+                yield return new Row($"line-{i}", line.Speaker == TeachAiSpeaker.Agent, "",
+                    fresh ? (_freshSpoken ? "is-streaming" : "is-typing") : "",
+                    fresh ? Words(line) : LineContent(line),
+                    Footer: line.Learned.Count > 0 || line.Understood.Count > 0 ? Saved(line) : null,
+                    Line: line.Speaker == TeachAiSpeaker.Person ? index : null);
+            }
+            var next = lines.Count;
+            if (_pending is { } pending)
+                yield return new Row($"line-{next++}", false, "", "",
+                    LineContent(new TeachAiLine(TeachAiSpeaker.Person, pending.Text) { Files = pending.Files ?? [], Note = pending.Note }));
+            else if (_mode == Mode.Voice && _phase == Phase.Listening && _interim.Length > 0)
+                yield return new Row($"line-{next++}", false, "is-live", "", Live);
+            if (_phase == Phase.Thinking)
+                yield return new Row($"line-{next}", true, "", "is-thinking", Dots, "Thinking");
+        }
+    }
+
+    // What the person is saying, as they say it.
+    private RenderFragment Live => __builder =>
+    {
+        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>@_interim<span class="teach-ai__caret" aria-hidden="true"></span></Typography>
+    };
+
+    private RenderFragment Dots => __builder =>
+    {
+        <span></span><span></span><span></span>
+    };
+
+    // The agent's newest line, a word at a time. Each word carries where it
+    // falls in the spoken sentence (data-at: the voice reveals it on reaching
+    // that point) and where it falls in the text (--at: typing staggers by it).
+    // Found items show as the voice reaches each one; the question comes last.
+    private RenderFragment Words(TeachAiLine line) => __builder =>
+    {
+        // Worked out here, not inside the paragraphs: their content draws later.
+        var opening = line.Display.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var then = line.Then?.Split(' ', StringSplitOptions.RemoveEmptyEntries) ?? [];
+        var openingEnd = Math.Max(1, line.ScreenEnd);
+        var thenStart = line.ThenAt;
+        var thenSpan = Math.Max(1, line.Text.Length - thenStart);
+        var typed = 0;
+        var openingAt = new int[opening.Length];
+        for (var w = 0; w < opening.Length; w++) { openingAt[w] = typed; typed += opening[w].Length + 1; }
+        var itemAt = new int[line.Items.Count];
+        var itemSaid = new int[line.Items.Count];
+        for (var i = 0; i < line.Items.Count; i++) { itemAt[i] = typed; itemSaid[i] = line.ItemAt(i); typed += line.Items[i].Text.Length + 1; }
+        var thenAt = new int[then.Length];
+        for (var w = 0; w < then.Length; w++) { thenAt[w] = typed; typed += then[w].Length + 1; }
+        <div class="teach-ai__words" style="--type: @(TypeStep(line))ms">
+            <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                @for (var w = 0; w < opening.Length; w++)
+                {
+                    <span class="teach-ai__word" data-at="@((int)((double)w / opening.Length * openingEnd))" style="--at: @openingAt[w]">@(opening[w] + " ")</span>
+                }
+            </Typography>
+            @if (line.Items.Count > 0)
+            {
+                <ul class="teach-ai__evidence teach-ai__word" data-at="@itemSaid[0]" style="--at: @itemAt[0]">
+                    @for (var i = 0; i < line.Items.Count; i++)
+                    {
+                        <li class="@($"teach-ai__evidence-item teach-ai__word is-{line.Items[i].State.ToString().ToLowerInvariant()}")" data-at="@itemSaid[i]" style="--at: @itemAt[i]">@Item(line.Items[i])</li>
+                    }
+                </ul>
+            }
+            @if (then.Length > 0)
+            {
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="teach-ai__then">
+                    @for (var w = 0; w < then.Length; w++)
+                    {
+                        <span class="teach-ai__word" data-at="@(thenStart + (int)((double)w / then.Length * thenSpan))" style="--at: @thenAt[w]">@(then[w] + " ")</span>
+                    }
+                </Typography>
+            }
+        </div>
+    };
+
+    // Typing pace: about 55 characters a second, quicker for a long line so
+    // none takes more than about three seconds to type out.
+    private static int TypedLength(TeachAiLine line) =>
+        line.Display.Length + line.Items.Sum(i => i.Text.Length + 1) + (line.Then?.Length ?? 0);
+
+    private static int TypeStep(TeachAiLine line) => Math.Clamp(2800 / Math.Max(1, TypedLength(line)), 4, 18);
+
+    // How long a line takes to type out, to its last word's fade.
+    private static int TypingMs(TeachAiLine line) => TypedLength(line) * TypeStep(line) + 220;
+
+    // What a line shows: a voice note's length, files, words, found items, its question.
+    private RenderFragment LineContent(TeachAiLine line) => __builder =>
+    {
+        if (line.Note is { } note)
+        {
+            <VoiceNotePlayer Url="@note.Url" Seconds="note.Seconds" Peaks="note.Peaks" Class="teach-ai__note" />
+        }
+        if (line.Files.Count > 0)
+        {
+            <ul class="teach-ai__line-files">
+                @foreach (var file in line.Files)
+                {
+                    <li>@FileChip(file)</li>
+                }
+            </ul>
+        }
+        if (line.Display.Length > 0)
+        {
+            @* Under a voice note, what was heard: smaller, as a transcript. *@
+            <Typography TextStyle="@(line.Note is null ? TextStyle.BodyDefaultMedium : TextStyle.BodySmallMedium)" As="p" Prose
+                        Class="@(line.Note is null ? null : "teach-ai__transcript")">@line.Display</Typography>
+        }
+        if (line.Items.Count > 0)
+        {
+            <ul class="teach-ai__evidence">
+                @foreach (var item in line.Items)
+                {
+                    <li class="@($"teach-ai__evidence-item is-{item.State.ToString().ToLowerInvariant()}")">@Item(item)</li>
+                }
+            </ul>
+        }
+        if (line.Then is { Length: > 0 } question)
+        {
+            <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="teach-ai__then">@question</Typography>
+        }
+    };
+
+    // A found item: what it is about and where it came from, then what it says.
+    // An item on a card. Found: what it is about and where it came from. At the
+    // checkpoint: confirmed (a tick), "I think…" (found, not yet checked) or
+    // still to ask.
+    private RenderFragment Item(TeachAiItem item) => __builder =>
+    {
+        <span class="teach-ai__evidence-source">
+            @switch (item.State)
+            {
+                case TeachAiItemState.Confirmed:
+                    <Icon Name="IconName.RiCheckFill" Class="teach-ai__evidence-state" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(item.Topic)</Typography>
+                    break;
+                case TeachAiItemState.Unsure:
+                    <Icon Name="@TopicIcon(item.Topic)" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(item.Topic) · I think…</Typography>
+                    break;
+                case TeachAiItemState.Open:
+                    <Icon Name="@TopicIcon(item.Topic)" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(item.Topic)</Typography>
+                    break;
+                default:
+                    @* A channel in its own colour, so the source reads at a glance. *@
+                    if (ChannelIcon.From(item.Source) is { } channel)
+                    {
+                        <ChannelIcon Channel="@channel" />
+                    }
+                    else
+                    {
+                        <Icon Name="@SourceIcon(item.Source)" />
+                    }
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(item.Topic) · @SourceName(item.Source)</Typography>
+                    break;
+            }
+        </span>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(item.State == TeachAiItemState.Open ? "Still to ask" : item.Text)</Typography>
+    };
+
+    private static string SourceName(string? source) => source switch
+    {
+        null => "Found",
+        "you" => "From you",
+        var s when s.StartsWith("your ", StringComparison.OrdinalIgnoreCase) => char.ToUpperInvariant(s[5]) + s[6..],
+        var s => s,
+    };
+
+    // Under the person's words: what they taught it, so they can see it was kept.
+    private RenderFragment Saved(TeachAiLine line) => __builder =>
+    {
+        if (line.Understood.Count > 0)
+        {
+            <section class="teach-ai__noted" aria-label="What I understood">
+                <header class="teach-ai__noted-head">
+                    <Icon Name="IconName.RiCheckFill" />
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">Noted</Typography>
+                </header>
+                <ul>
+                    @foreach (var understood in line.Understood)
+                    {
+                        <li class="teach-ai__noted-row">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="teach-ai__noted-topic">@TeachAiConversation.Name(understood.Topic)</Typography>
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="teach-ai__noted-text">@understood.Sentence</Typography>
+                        </li>
+                    }
+                </ul>
+            </section>
+        }
+        if (line.Learned.Count == 0) return;
+        <div class="teach-ai__saved">
+            <Icon Name="IconName.RiCheckFill" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">Saved</Typography>
+            @foreach (var topic in line.Learned)
+            {
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="teach-ai__saved-topic">@TeachAiConversation.Name(topic)</Typography>
+            }
+        </div>
+    };
+
+    // Where found knowledge came from: the channel's own mark, or a sparkle.
+    // A source that is not a channel: the owner, or something found elsewhere.
+    private static IconName SourceIcon(string? source) => source == "you" ? IconName.RiChatSmile3Fill : IconName.RiSparkling2Fill;
+
+    // The text state of the shared conversation dock: the answer gets the
+    // room; tools sit quietly beneath it, as in the Inbox composer.
+    private RenderFragment Composer => __builder =>
+    {
+        <div class="teach-ai__composer">
+            @if (_files.Count > 0)
+            {
+                <ul class="teach-ai__attachments" aria-label="Attached files">
+                    @foreach (var file in _files)
+                    {
+                        <li class="teach-ai__attachment">
+                            @FileChip(file)
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {file.Name}")" title="Remove"
+                                    @onclick="() => _files.Remove(file)">
+                                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                            </Button>
+                        </li>
+                    }
+                </ul>
+            }
+            @if (_recording is not null || _recordingStarting)
+            {
+                <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" OnDelete="CancelNoteAsync" OnSend="SendNoteAsync" Class="teach-ai__recording" />
+            }
+            else
+            {
+            <TextArea @ref="_field" Value="@_text" ValueChanged="v => _text = v ?? string.Empty" AriaLabel="Your answer"
+                      Class="teach-ai__answer-field" Variant="TextAreaVariant.Plain" TextStyle="TextStyle.BodyDefaultMedium"
+                      Placeholder="Type your answer…" Rows="2" MaxLength="1000"
+                      AutoGrow SubmitOnEnter FocusOnPush OnKeyDown="ComposerKeyAsync" />
+            <footer class="teach-ai__composer-footer">
+                <div class="teach-ai__composer-tools">
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Attach pictures or documents" title="Attach pictures or documents"
+                        disabled="@(_phase == Phase.Thinking || _files.Count >= MaxFiles)" @onclick="PickFilesAsync">
+                    <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                </Button>
+                </div>
+                @if (CanTalk)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" title="Talk instead: the conversation carries on" Busy="@_askingMic"
+                            disabled="@(_phase == Phase.Thinking)" @onclick="TalkAsync">
+                        <IconLeft><Icon Name="IconName.RiVoiceprintFill" /></IconLeft>
+                        <ChildContent>Talk</ChildContent>
+                    </Button>
+                }
+                @* As in WhatsApp: with nothing typed, the send button is a microphone
+                   for a voice note; once there is something to send, it is send.
+                   Talk (beside it) is different: a live conversation. *@
+                @if (CanSend || !CanRecord)
+                {
+                    <Button Size="ButtonSize.Small" aria-label="Send" title="Send"
+                            disabled="@(!CanSend)" @onclick="SendTextAsync">
+                        <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                    </Button>
+                }
+                else
+                {
+                    <Button Size="ButtonSize.Small" aria-label="Record a voice note" title="Record a voice note"
+                            disabled="@(_phase == Phase.Thinking)" @onclick="RecordNote">
+                        <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                    </Button>
+                }
+            </footer>
+            }
+        </div>
+    };
+
+    // Under Talk it through: what will happen with the microphone.
+    // Under the start's buttons, only when there is something to know first.
+    private string? StartNote => !CanTalk ? "Talking works in Chrome or Edge."
+        : _askingMic ? "Choose Allow in your browser's prompt, by the address bar."
+        : _network != "ok" ? "Your connection looks slow, so typing may work better."
+        : _micAccess == "granted" || MicProblem is not null ? null
+        : "Your browser will ask to use your microphone.";
+
+    // A microphone problem, in the person's terms, with how to fix it.
+    private string? MicProblem => _micAccess switch
+    {
+        "denied" => "Your browser is blocking the microphone for this site. Click the icon at the left of the address bar, set Microphone to Allow, then try again.",
+        "system" => "Your computer is blocking the browser from using the microphone. Allow it in Windows Settings › Privacy & security › Microphone, or on a Mac in System Settings › Privacy & Security › Microphone, then try again.",
+        "none" => "We couldn't find a microphone. Connect one, or type your answers instead.",
+        "busy" => "Another app is using your microphone, such as a call. Close it, then try again.",
+        "error" => "We couldn't start your microphone. Try again, or type your answers instead.",
+        _ => null,
+    };
+
+    private RenderFragment MicHelp => __builder =>
+    {
+        if (_askingMic && _mode != Mode.Voice && _conversation?.Step != TeachAiStep.Welcome)
+        {
+            <InlineError Message="Choose Allow in your browser's prompt, by the address bar." Tone="InlineErrorTone.Info" />
+        }
+        else if (MicProblem is { } problem && (_wantVoice || _conversation?.Step == TeachAiStep.Welcome))
+        {
+            <InlineError Message="@problem" Tone="InlineErrorTone.Warning">
+                <Action>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="TalkAsync">Try again</Button>
+                </Action>
+            </InlineError>
+        }
+    };
+
+    // Under the status in the voice bar: what to do now.
+    private string VoiceHint =>
+        _pausedAway ? "Paused while you're away. Back soon."
+        : _muted ? "Press Unmute, or Ctrl/⌘ + D, when you're ready."
+        : !State.HeadphonesTipShown ? "Tip: headphones help me hear you clearly."
+        : _phase == Phase.Listening && _misses > 0 && _interim.Length == 0 ? "Take your time. I'm listening."
+        : _conversation?.Hint ?? "";
+
+    // ── Editing a message ───────────────────────────────────────────────────
+    // As in other AI chats: the whole message, in place. The latest is
+    // answered again; an earlier one changes what it taught, and the rest of
+    // the conversation stays.
+
+    private int? _editingLine;
+    private string _messageText = "";
+    private TextArea? _editField;
+    private bool _focusEdit;
+
+    private RenderFragment EditBox => __builder =>
+    {
+        <div class="teach-ai__edit">
+            <TextArea @ref="_editField" Value="@_messageText" ValueChanged="v => _messageText = v ?? string.Empty" AriaLabel="Edit your message"
+                      Variant="TextAreaVariant.Plain" TextStyle="TextStyle.BodyDefaultMedium" Rows="2" MaxLength="1000"
+                      AutoGrow SubmitOnEnter OnKeyDown="EditMessageKeyAsync" />
+            <div class="teach-ai__edit-actions">
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _editingLine = null">Cancel</Button>
+                <Button Size="ButtonSize.Small" disabled="@string.IsNullOrWhiteSpace(_messageText)" @onclick="SendEditAsync">Send</Button>
+            </div>
+        </div>
+    };
+
+    private void EditMessage(int line)
+    {
+        if (_conversation is null) return;
+        _editingLine = line;
+        _messageText = _conversation.Lines[line].Text;
+        _focusEdit = true;
+    }
+
+    private async Task SendEditAsync()
+    {
+        if (_conversation is null || _editingLine is not { } line) return;
+        var text = _messageText.Trim();
+        if (text.Length == 0) return;
+        _editingLine = null;
+        if (text == _conversation.Lines[line].Text) return;
+        if (_conversation.IsLatest(line))
+        {
+            var sent = _conversation.Rewind(line);
+            await RespondAsync(c => c.Reply(text, sent.Note, sent.Files), new Pending(text, sent.Note, sent.Files));
+        }
+        else
+        {
+            _conversation.Revise(line, text);
+        }
+    }
+
+    private async Task EditMessageKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing) await SendEditAsync();
+        else if (args.Key == "Escape") _editingLine = null;
+    }
+
+    // ── Buttons, typing and voice notes ─────────────────────────────────────
+
+    // A suggested reply is sent as if said. "Change something" opens the box for it.
+    // ── Answers to pick ─────────────────────────────────────────────────────
+    // Typing only: in voice, the question is said and answered aloud as before.
+    private bool AsksToPick => _mode == Mode.Text && _conversation is { Stage: TeachAiStage.Asking, Current.Topic: KnowledgeTopic.Payment };
+
+    private static readonly IReadOnlyList<ChoicePromptOption> PaymentOptions =
+    [
+        new("Bank transfer", "To your business account"),
+        new("Card", "Online or with a POS"),
+        new("Pay on delivery", "Cash or transfer at the door"),
+        new("USSD", "Like *737#"),
+    ];
+
+    // Sent as their reply, in words, as if typed: "Bank transfer, card and pay on delivery".
+    private async Task PickedAsync(ChoicePromptAnswer answer)
+    {
+        var parts = answer.Picked.Select((p, i) => i > 0 && p.Length > 1 && char.IsLower(p[1]) ? char.ToLowerInvariant(p[0]) + p[1..] : p).ToList();
+        if (answer.Other is { } other) parts.Add(other);
+        var text = parts.Count == 1 ? parts[0] : $"{string.Join(", ", parts[..^1])} and {parts[^1]}";
+        await RespondAsync(c => c.Reply(text), new Pending(text));
+        _focusComposer = true;
+    }
+
+    private async Task SkipPickAsync()
+    {
+        if (_conversation?.Choices.FirstOrDefault(c => c.Kind == TeachAiChoiceKind.Skip) is { } skip) await ChooseAsync(skip);
+        _focusComposer = true;
+    }
+
+    private async Task ChooseAsync(TeachAiChoice choice)
+    {
+        await RespondAsync(c => c.Reply(choice.Label), new Pending(choice.Label));
+        if (choice.Kind == TeachAiChoiceKind.Change && _mode == Mode.Text) _focusComposer = true;
+    }
+
+    private static IconName? ChoiceIcon(TeachAiChoiceKind kind) => kind switch
+    {
+        TeachAiChoiceKind.Yes => IconName.RiCheckFill,
+        TeachAiChoiceKind.Change => IconName.RiPencilFill,
+        TeachAiChoiceKind.Skip => IconName.RiSubtractFill,
+        TeachAiChoiceKind.Done => IconName.RiCheckDoubleFill,
+        _ => null,
+    };
+
+    private async Task ComposerKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing) await SendTextAsync();
+    }
+
+    private bool CanSend => (_text.Trim().Length > 0 || _files.Count > 0) && _phase != Phase.Thinking;
+
+    private bool CanRecord => _caps is { Record: true, Microphone: true };
+
+    // The recording bar is drawn first (OnAfterRenderAsync starts the
+    // microphone), so its level has an element to move.
+    private void RecordNote()
+    {
+        _voiceNotice = null;
+        _recordSeconds = 0;
+        _recordingStarting = true;
+    }
+
+    private async Task StartRecordingAsync()
+    {
+        try
+        {
+            _recording = await Voice.RecordNoteAsync(_recorder!.Element);
+            _recordClock = new CancellationTokenSource();
+            _ = TickAsync(_recordClock.Token);
+        }
+        catch (JSException)
+        {
+            _voiceNotice = "Your microphone is blocked. You can allow it from the icon at the left of the address bar.";
+        }
+        finally
+        {
+            _recordingStarting = false;
+        }
+    }
+
+    private async Task TickAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(1000, token);
+                _recordSeconds++;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task CancelNoteAsync()
+    {
+        _recordClock?.Cancel();
+        _recordingStarting = false;
+        var recording = _recording;
+        _recording = null;
+        if (recording is not null) await recording.CancelAsync();
+    }
+
+    private async Task SendNoteAsync()
+    {
+        _recordClock?.Cancel();
+        var recording = _recording;
+        _recording = null;
+        if (recording is null) return;
+        VoiceNote note;
+        try { note = await recording.StopAsync(); }
+        catch (JSException) { note = new VoiceNote("", 0); }
+        if (string.IsNullOrWhiteSpace(note.Transcript))
+        {
+            _voiceNotice = "I couldn't make out that voice note. Try again, or type it.";
+            return;
+        }
+        var voice = new TeachAiVoiceNote(note.Url, Math.Max(1, note.Seconds), note.Peaks);
+        await RespondAsync(c => c.Reply(note.Transcript, voice), new Pending(note.Transcript, voice));
+    }
+
+    private async Task SendTextAsync()
+    {
+        if (!CanSend) return;
+        var text = _text.Trim();
+        var files = _files.ToList();
+        _text = "";
+        _files.Clear();
+        await RespondAsync(c => c.Reply(text, null, files), new Pending(text, null, files));
+    }
+
+    // ── Attachments ─────────────────────────────────────────────────────────
+    // Pictures and documents (a price list, a menu, a returns policy). Frontend
+    // only for now: names and picture previews stay in the browser session until
+    // the API can take uploads; see knowledge-backend-requests.
+
+    private const int MaxFiles = 5;
+    private const long MaxFileBytes = 10 * 1024 * 1024;
+    private const long MaxPreviewBytes = 512 * 1024;
+    private const string AcceptedFiles = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt";
+
+    private async Task PickFilesAsync()
+    {
+        if (_picker?.Element is { } element) await Interop.ClickAsync(element);
+    }
+
+    private async Task OnFilesPickedAsync(InputFileChangeEventArgs args)
+    {
+        _voiceNotice = null;
+        var room = MaxFiles - _files.Count;
+        if (args.FileCount > room) _voiceNotice = $"You can attach up to {MaxFiles} files at a time.";
+        foreach (var file in args.GetMultipleFiles(args.FileCount).Take(Math.Max(0, room)))
+        {
+            if (file.Size > MaxFileBytes)
+            {
+                _voiceNotice = $"{file.Name} is over 10 MB. Try a smaller file.";
+                continue;
+            }
+            var kind = KindOf(file.Name, file.ContentType);
+            _files.Add(new TeachAiFile(file.Name, file.Size, kind, kind == TeachAiFileKind.Image ? await PreviewAsync(file) : null));
+        }
+        // In voice there is no box to add words in: the files go now, and the agent answers.
+        if (_mode == Mode.Voice)
+        {
+            if (_files.Count == 0) return;
+            var files = _files.ToList();
+            _files.Clear();
+            await RespondAsync(c => c.Reply("", null, files), new Pending("", null, files));
+            return;
+        }
+        if (_field is not null) await _field.FocusAsync();
+    }
+
+    // A small copy of a picture for its thumbnail; none if the browser cannot make one.
+    private static async Task<string?> PreviewAsync(IBrowserFile file)
+    {
+        try
+        {
+            var small = await file.RequestImageFileAsync("image/jpeg", 160, 160);
+            await using var stream = small.OpenReadStream(MaxPreviewBytes);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            return "data:image/jpeg;base64," + Convert.ToBase64String(copy.ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or JSException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private static TeachAiFileKind KindOf(string name, string? contentType = null)
+    {
+        var extension = Path.GetExtension(name).ToLowerInvariant();
+        if (contentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) == true
+            || extension is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".heic") return TeachAiFileKind.Image;
+        return extension switch
+        {
+            ".pdf" => TeachAiFileKind.Pdf,
+            ".doc" or ".docx" or ".txt" => TeachAiFileKind.Document,
+            ".xls" or ".xlsx" or ".csv" => TeachAiFileKind.Sheet,
+            _ => TeachAiFileKind.Other,
+        };
+    }
+
+    private static IconName FileIcon(TeachAiFileKind kind) => kind switch
+    {
+        TeachAiFileKind.Image => IconName.RiImageFill,
+        TeachAiFileKind.Pdf => IconName.RiFilePdf2Fill,
+        TeachAiFileKind.Document => IconName.RiFileWord2Fill,
+        TeachAiFileKind.Sheet => IconName.RiFileExcel2Fill,
+        _ => IconName.RiFileTextFill,
+    };
+
+    private static string FileSize(long bytes) => bytes switch
+    {
+        <= 0 => "",
+        < 1024 * 1024 => $"{Math.Max(1, bytes / 1024)} KB",
+        _ => $"{bytes / (1024d * 1024):0.#} MB",
+    };
+
+    // A picture shows as its thumbnail; anything else as its type, name and size.
+    private RenderFragment FileChip(TeachAiFile file) => __builder =>
+    {
+        <span class="@($"teach-ai__file is-{file.Kind.ToString().ToLowerInvariant()}")" title="@file.Name">
+            @if (file.Preview is not null)
+            {
+                <img class="teach-ai__file-thumb" src="@file.Preview" alt="@file.Name" />
+            }
+            else
+            {
+                <span class="teach-ai__file-icon"><Icon Name="@FileIcon(file.Kind)" /></span>
+                <span class="teach-ai__file-text">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="teach-ai__file-name">@file.Name</Typography>
+                    @if (FileSize(file.Size) is { Length: > 0 } size)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Medium" As="span" Class="teach-ai__file-size">@size</Typography>
+                    }
+                </span>
+            }
+        </span>
+    };
+
+    // ── Tiles ───────────────────────────────────────────────────────────────
+
+    private RenderFragment Tile(KnowledgeCard card) => __builder =>
+    {
+        var current = Current?.Topic == card.Topic && _conversation?.Step == TeachAiStep.Topics;
+        var state = current ? "current" : card.Status.ToString().ToLowerInvariant();
+        // Being checked now, with everything else that was found.
+        if (card.Status == KnowledgeStatus.Found && _conversation?.Stage is TeachAiStage.Review or TeachAiStage.Changing or TeachAiStage.Which) state = "checking";
+        <RowButton Class="@($"teach-ai__tile is-{state}")"
+                   Disabled="@(_conversation is null or { Step: TeachAiStep.Welcome } || _approved || _phase is Phase.Thinking or Phase.Speaking or Phase.Listening)"
+                   OnClick="() => RevisitAsync(card.Topic)"
+                   aria-current="@(current ? "step" : null)"
+                   aria-label="@($"{TileTitle(card.Topic)}: {TileStatus(card, current)}")"
+                   title="@($"{TileTitle(card.Topic)}: {TileStatus(card, current)}")" />
+    };
+
+    private async Task RevisitAsync(KnowledgeTopic topic)
+    {
+        if (_conversation is null || _conversation.Step == TeachAiStep.Welcome) return;
+        if (Current?.Topic == topic && _conversation.Step == TeachAiStep.Topics) return;
+        _editing = null;
+        await SayAsync(_conversation.Revisit(topic));
+    }
+
+    // The same plain words everywhere: the step bar, the cards and the summary.
+    private static string TileTitle(KnowledgeTopic topic) => TeachAiConversation.Name(topic);
+
+    private static string TileStatus(KnowledgeCard card, bool current) => current ? "Now" : card.Status switch
+    {
+        KnowledgeStatus.Found => "Found",
+        KnowledgeStatus.Confirmed => "Done",
+        KnowledgeStatus.Skipped => "Skipped",
+        _ => "To add",
+    };
+
+    private static IconName TopicIcon(KnowledgeTopic topic) => topic switch
+    {
+        KnowledgeTopic.Products => IconName.RiShoppingBag3Fill,
+        KnowledgeTopic.Prices => IconName.RiPriceTag3Fill,
+        KnowledgeTopic.Delivery => IconName.RiTruckFill,
+        KnowledgeTopic.Payment => IconName.RiBankCardFill,
+        KnowledgeTopic.Hours => IconName.RiMapPin2Fill,
+        KnowledgeTopic.Returns => IconName.RiRefund2Fill,
+        KnowledgeTopic.Handover => IconName.RiCustomerService2Fill,
+        _ => IconName.RiQuestionAnswerFill,
+    };
+
+    private static string SourceText(KnowledgeCard card) => card.Source switch
+    {
+        null or "you" => "Added by you",
+        var source => "From " + source,
+    };
+
+    private static string Clock(int seconds) => $"{seconds / 60}:{seconds % 60:00}";
+
+    // ── Summary ─────────────────────────────────────────────────────────────
+
+    private void StartEdit(KnowledgeCard card)
+    {
+        _editing = card.Topic;
+        _editText = card.Status == KnowledgeStatus.Skipped ? "" : card.Text;
+    }
+
+    private void SaveEdit(KnowledgeTopic topic)
+    {
+        _conversation?.Edit(topic, _editText);
+        _editing = null;
+    }
+
+    private Task EditKeyAsync(KeyboardEventArgs args, KnowledgeTopic topic)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing) SaveEdit(topic);
+        else if (args.Key == "Escape") _editing = null;
+        return Task.CompletedTask;
+    }
+
+    private async Task ApproveAsync()
+    {
+        if (_conversation is null || _approving) return;
+        _approving = true;
+        try
+        {
+            await Knowledge.ApproveAsync(_conversation.Cards);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException)
+        {
+            _approving = false;
+            _voiceNotice = "We couldn't save that. Please try again.";
+            return;
+        }
+        _approved = true;
+        StateHasChanged();
+        // A moment for the parrot to celebrate before the agent builder opens.
+        await Task.Delay(TimeSpan.FromMilliseconds(1600));
+        _conversation = null;
+        _lastAgent = null;
+        _mode = Mode.Text;
+        _phase = Phase.Idle;
+        await State.CompleteAsync();
+    }
+
+    // ── Closing ─────────────────────────────────────────────────────────────
+
+    [JSInvokable]
+    public Task EscapeAsync() => InvokeAsync(CloseAsync);
+
+    private async Task CloseAsync()
+    {
+        if (_approved) return;
+        if (_editing is not null) { _editing = null; StateHasChanged(); return; }
+        await StopVoiceAsync();
+        await CancelNoteAsync();
+        await ReleaseMuteShortcutAsync();
+        _wantVoice = false;
+        _pausedAway = false;
+        _phase = Phase.Idle;
+        State.Close();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        State.Changed -= StateChanged;
+        _recordClock?.Cancel();
+        try
+        {
+            await StopVoiceAsync();
+            if (_trap is not null) await _trap.DisposeAsync();
+            await ReleaseMuteShortcutAsync();
+            if (_permissionWatch is not null) await _permissionWatch.DisposeAsync();
+            if (_visibilityWatch is not null) await _visibilityWatch.DisposeAsync();
+            if (_networkWatch is not null) await _networkWatch.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+        _self?.Dispose();
+    }
+}
