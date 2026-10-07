@@ -15,9 +15,9 @@ public sealed record NavEntry(
 /// The navigation, as data. One table drives the rail, the active state and
 /// the per-page shell class.
 ///
-/// The rows, their order and their glyphs are Aurora's. The paths are
-/// Parrot's existing routes, so no page moved to make the rail match: Overview
-/// is the dashboard, Customers is Contacts, Insights is QA &amp; Conversation
+/// The rows, their order and their glyphs are Aurora's. Overview keeps the
+/// existing dashboard route, while standalone modules use their own canonical
+/// routes; AI Operations is not a dashboard child. Customers is Contacts and Insights is QA &amp; Conversation
 /// Insight. The two rows with a null Path — Campaigns and Help Centre — are
 /// drawn in Aurora with no screen behind them, and there is none in Parrot
 /// either, so they stay marked rather than feeling broken.
@@ -32,7 +32,7 @@ public static class NavMap
         new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products"),
         new("/dashboard/task-requests", "Task Requests", IconName.RiClipboardFill, "Requests"),
         new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels"),
-        new("/dashboard/ai-agents", "AI Operations", IconName.RiRobot3Fill, "AI"),
+        new("/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI"),
         new(null, "Campaigns", IconName.RiMegaphoneFill, "Campaigns"),
         new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill, "Insights")
     ];
