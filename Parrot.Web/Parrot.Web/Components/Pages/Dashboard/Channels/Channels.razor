@@ -97,7 +97,8 @@
     <div class="channels channels--setup">
         <ConnectionSuccess Channel="finished"
                            OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
-                           OnConnectAnother="CloseSetup" />
+                           OnConnectAnother="CloseSetup"
+                           OnSetUpAgent="SetUpAgent" />
     </div>
 }
 else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
@@ -167,7 +168,8 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     <div class="channels channels--setup">
         <FacebookManualSetup Channel="facebook"
                              OnExit="CloseSetup"
-                             OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))" />
+                             OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                             OnSetUpAgent="SetUpAgent" />
     </div>
 }
 
@@ -201,7 +203,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
             case EmbeddedStage.Connected:
                 <ConnectionSuccess Channel="flow"
                                    OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
-                                   OnConnectAnother="CloseSetup" />
+                                   OnConnectAnother="CloseSetup"
+                                   OnSetUpAgent="SetUpAgent" />
                 break;
 
             case EmbeddedStage.Failed:
@@ -287,6 +290,16 @@ else if (Active is { } flow && _view == SetupView.Flow)
     /// back to the list's own address.
     /// </summary>
     [Parameter] public ChannelId? Resume { get; set; }
+
+    /// <summary>
+    /// ?for=agent: sent here by "Connect a channel first". Once a channel is
+    /// connected, its success screen leads back to setting up the agent.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "for")] public string? For { get; set; }
+
+    private EventCallback SetUpAgent => For == "agent"
+        ? EventCallback.Factory.Create(this, () => Nav.NavigateTo("/ai-operations?new=1"))
+        : default;
 
     /// <summary>The check is running, including the pacing floor above it.</summary>
     private bool _checking;

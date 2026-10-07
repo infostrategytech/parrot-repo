@@ -111,6 +111,8 @@ builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
 // the screens hide what they cannot show (see agents-backend-requests).
 builder.Services.AddSingleton<IBusinessKnowledge, UnavailableBusinessKnowledge>();
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.UnavailableAiOperationsFeed>();
+// An agent cannot reply yet, so agents are saved as drafts (see agents-backend-requests).
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.LiveAgentCapabilities>();
 // "Teach your AI" before the first agent, and the browser's voice for it.
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState>();
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentGate>();

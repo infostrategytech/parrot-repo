@@ -1,4 +1,5 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@inject Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities Capabilities
 @using Parrot.Web.Features.Dashboard.AiAgents
 
 @* One agent on AI Operations: who it is and its job, whether it is on, how
@@ -41,7 +42,7 @@
     <div class="agent-card__today">
         @if (Agent.IsDraft)
         {
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Not answering customers yet. Turn it on when you're ready.</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(Capabilities.CanReply ? "Not answering customers yet. Turn it on when you're ready." : "A draft. You'll be able to turn it on once agents can reply to customers.")</Typography>
         }
         else if (!Agent.IsActive)
         {
@@ -77,7 +78,7 @@
             }
         </div>
         <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-            @if (Agent.IsDraft || !Agent.IsActive)
+            @if ((Agent.IsDraft || !Agent.IsActive) && Capabilities.CanReply)
             {
                 <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="Busy" @onclick="OnStatusChange">Turn on</Button>
             }

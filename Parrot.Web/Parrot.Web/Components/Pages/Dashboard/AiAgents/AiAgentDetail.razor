@@ -10,6 +10,7 @@
 @inject AuthState AuthState
 @inject AgentGate Gate
 @inject IAiOperationsFeed Feed
+@inject IAgentCapabilities Capabilities
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
 @implements IDisposable
 
@@ -93,7 +94,7 @@ else
                     {
                         <Button Variant="ButtonVariant.Secondary" Busy="_switching" @onclick="() => SetLiveAsync(agent, false)">Turn off</Button>
                     }
-                    else
+                    else if (Capabilities.CanReply)
                     {
                         <Button disabled="@(agent.ChannelCount == 0)" Busy="_switching"
                                 title="@(agent.ChannelCount == 0 ? "Choose where it answers first, in Settings." : null)"
@@ -376,6 +377,22 @@ else
     </main>
 }
 
+@* Leaving with unsaved changes asks first (tabs keep them): the rail, Back, or closing the tab. *@
+<NavigationLock OnBeforeInternalNavigation="OnNavigating" ConfirmExternalNavigation="@(Dirty && !_leaving)" />
+
+<Dialog Open="_confirmingLeave"
+        Type="DialogType.Destructive"
+        Title="Leave without saving?"
+        ConfirmLabel="Leave"
+        CancelLabel="Keep editing"
+        OnCancel="() => _confirmingLeave = false"
+        OnConfirm="Leave">
+    <GlyphContent><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>Your changes to @(_form?.DisplayName ?? "this agent") aren't saved. To keep them, stay and select Save changes.</p>
+    </Body>
+</Dialog>
+
 @code {
     [Parameter] public string AgentId { get; set; } = string.Empty;
 
@@ -505,6 +522,25 @@ else
         }
     }
 
+    private bool _confirmingLeave, _leaving;
+    private string? _leaveTo;
+
+    // Tabs keep the changes; leaving the page would drop them, so it asks.
+    private void OnNavigating(LocationChangingContext context)
+    {
+        if (!Dirty || _leaving) return;
+        context.PreventNavigation();
+        _leaveTo = context.TargetLocation;
+        _confirmingLeave = true;
+    }
+
+    private void Leave()
+    {
+        _confirmingLeave = false;
+        _leaving = true;
+        if (_leaveTo is { } to) Nav.NavigateTo(to);
+    }
+
     private void Discard(AiAgent agent)
     {
         _saveError = null;
@@ -571,9 +607,10 @@ else
         <ChannelIcon Channel="@key" Size="IconSize.Sm" />
     };
 
-    private static string ChannelDetail(AiAgent agent)
+    private string ChannelDetail(AiAgent agent)
     {
-        var status = agent.IsDraft ? "A draft: it answers no one until you turn it on."
+        var status = agent.IsDraft && !Capabilities.CanReply ? "A draft: it answers no one yet."
+            : agent.IsDraft ? "A draft: it answers no one until you turn it on."
             : agent.IsActive ? "On now." : "Off: it answers no one until you turn it on.";
         // With nowhere to answer, "On now" would contradict the line above it.
         return agent.ChannelCount == 0 ? "Choose where it answers in Settings." : $"{AgentBuilderCopy.ChannelList(agent)}. {status}";

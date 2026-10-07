@@ -5,6 +5,8 @@
 @inject AgentGate Gate
 @inject AuroraInterop Interop
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
+@inject Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities Capabilities
+@inject NavigationManager Nav
 @implements IDisposable
 
 @* Setting up an agent on one screen, one question first. Nothing is chosen
@@ -22,16 +24,19 @@
    nothing here asks for it again. An owner can have several agents, one per
    job: the jobs other agents already do are marked. *@
 
+@* Leaving with something chosen asks first: the rail, Back, or closing the tab. *@
+<NavigationLock OnBeforeInternalNavigation="OnNavigating" ConfirmExternalNavigation="@(HasProgress && !_done)" />
+
 <main class="agent-setup" @ref="_top">
     <div class="agent-setup__page">
         <header class="agent-setup__header">
-            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnCancel">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="RequestLeaveAsync">
                 <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
                 <ChildContent>Back to agents</ChildContent>
             </Button>
             <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@(Others.Count == 0 ? "Meet your first agent" : "Add an agent")</Typography>
             <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="agent-setup__lede">
-                It already knows your business. Start by choosing its job.
+                @(Knows ? "It already knows your business. Start by choosing its job." : "Start by choosing its job.")
             </Typography>
         </header>
 
@@ -57,8 +62,16 @@
                 }
                 <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="agent-setup__muted">@ActionsNote</Typography>
                 <div class="agent-setup__action-buttons">
-                    <Button Variant="ButtonVariant.Secondary" Busy="@(_saving && !_confirmingActivation)" disabled="@(!_revealed)" @onclick="SaveDraftAsync">Save as draft</Button>
-                    <Button disabled="@(!CanTurnOn)" @onclick="ReviewTurnOn">@(_form.HasName ? $"Turn on {_form.DisplayName}" : "Turn on")</Button>
+                    @if (Capabilities.CanReply)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Busy="@(_saving && !_confirmingActivation)" disabled="@(!_revealed)" @onclick="SaveDraftAsync">Save as draft</Button>
+                        <Button disabled="@(!CanTurnOn)" @onclick="ReviewTurnOn">@(_form.HasName ? $"Turn on {_form.DisplayName}" : "Turn on")</Button>
+                    }
+                    else
+                    {
+                        @* Agents can't reply yet (IAgentCapabilities), so saving it is the way on. *@
+                        <Button Busy="_saving" disabled="@(!_revealed)" @onclick="SaveDraftAsync">Save as draft</Button>
+                    }
                 </div>
             </footer>
         </aside>
@@ -95,13 +108,16 @@
                         <Typography TextStyle="TextStyle.BodySmallMedium" As="span">New matching conversations only.</Typography>
                     </div>
                 </li>
-                <li>
-                    <span class="is-knowledge"><Icon Name="IconName.RiBookOpenFill" Size="IconSize.Sm" /></span>
-                    <div>
-                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Uses your approved business knowledge</Typography>
-                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">If it is unsure, it will not guess.</Typography>
-                    </div>
-                </li>
+                @if (Knows)
+                {
+                    <li>
+                        <span class="is-knowledge"><Icon Name="IconName.RiBookOpenFill" Size="IconSize.Sm" /></span>
+                        <div>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Uses your approved business knowledge</Typography>
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">If it is unsure, it will not guess.</Typography>
+                        </div>
+                    </li>
+                }
                 <li>
                     <span><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Sm" /></span>
                     <div>
@@ -111,6 +127,19 @@
                 </li>
             </ul>
         </div>
+    </Body>
+</Dialog>
+
+<Dialog Open="_confirmingLeave"
+        Type="DialogType.Destructive"
+        Title="Leave without saving?"
+        ConfirmLabel="Leave"
+        CancelLabel="Keep editing"
+        OnCancel="() => _confirmingLeave = false"
+        OnConfirm="LeaveAsync">
+    <GlyphContent><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>@LeaveNote</p>
     </Body>
 </Dialog>
 
@@ -142,11 +171,58 @@
     // Every agent already set up, drafts too: their jobs, names and avatars are taken.
     private IReadOnlyList<AiAgent> Others => AiAgentsState.Agents;
 
+    // What Teach your AI approved, which the agent answers from. With nothing
+    // approved (real mode has no knowledge API yet), nothing claims it knows.
+    private bool Knows => Knowledge.Available && _cards.Any(card => card.Status == KnowledgeStatus.Confirmed && card.HasContent);
+
+    // Something chosen or typed, which leaving would lose.
+    private bool HasProgress => _form.HasRole || _form.HasName;
+
+    private bool _confirmingLeave;
+
+    // Saved, or leaving on purpose: nothing left to ask about.
+    private bool _done;
+
+    // Where the person was going when asked (the rail, Back); null for Back to agents.
+    private string? _leaveTo;
+
+    private string LeaveNote =>
+        !_revealed ? "What you've chosen here isn't saved."
+        : _form.HasName ? $"{_form.DisplayName} isn't saved yet. To keep it, stay and save it as a draft."
+        : "This agent isn't saved yet. To keep it, stay and save it as a draft.";
+
+    private async Task RequestLeaveAsync()
+    {
+        if (!HasProgress) { await OnCancel.InvokeAsync(); return; }
+        _leaveTo = null;
+        _confirmingLeave = true;
+    }
+
+    private void OnNavigating(LocationChangingContext context)
+    {
+        if (!HasProgress || _done) return;
+        context.PreventNavigation();
+        _leaveTo = context.TargetLocation;
+        _confirmingLeave = true;
+    }
+
+    private async Task LeaveAsync()
+    {
+        _confirmingLeave = false;
+        _done = true;
+        if (_leaveTo is { } to) Nav.NavigateTo(to);
+        else await OnCancel.InvokeAsync();
+    }
+
     private bool CanTurnOn => _revealed && _form.HasRole && _form.HasRoleName && _form.HasName && _form.Channels.Count > 0 && !_saving;
 
     private string ActionsNote =>
         !_form.HasRole ? "Choose its job to begin."
         : !_revealed ? "Name its job, then continue."
+        : !Capabilities.CanReply
+            ? !_form.HasRoleName ? "Name its job to save it."
+            : !_form.HasName ? "Give it a name to save it."
+            : "Save it as a draft. You'll be able to turn it on once agents can reply to customers."
         : !_form.HasRoleName ? "Name its job to turn it on."
         : !_form.HasName ? "Give it a name to turn it on."
         : _channels.Count == 0 ? "Connect a channel before turning it on."
@@ -231,9 +307,12 @@
         if (!_form.HasRole || !_form.HasRoleName || !_form.HasName || (live && _form.Channels.Count == 0) || _saving) return false;
         _saving = true;
         _saveError = null;
+        // The page moves on once it is saved, which is not leaving it unsaved.
+        _done = true;
         var error = await Save(_form.ToAgent(live));
         _saving = false;
         _saveError = error;
+        if (error is not null) _done = false;
         return error is null;
     }
 }

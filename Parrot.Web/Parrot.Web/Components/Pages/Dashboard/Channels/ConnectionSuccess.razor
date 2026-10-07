@@ -32,8 +32,17 @@
         </div>
     }
 
+    @* Sent here to connect a channel for an agent ("Connect a channel first"):
+       the way back to it comes first. *@
     <div class="connected__actions">
-        <Button @onclick="OnOpenInbox">Open inbox</Button>
+        @if (OnSetUpAgent.HasDelegate)
+        {
+            <Button @onclick="OnSetUpAgent">Set up your agent</Button>
+        }
+        else
+        {
+            <Button @onclick="OnOpenInbox">Open inbox</Button>
+        }
         <Button Variant="ButtonVariant.Secondary" @onclick="OnConnectAnother">Connect another channel</Button>
     </div>
 </section>
@@ -44,6 +53,9 @@
     [Parameter] public EventCallback OnOpenInbox { get; set; }
 
     [Parameter] public EventCallback OnConnectAnother { get; set; }
+
+    /// <summary>Set when the person came to connect a channel for an agent.</summary>
+    [Parameter] public EventCallback OnSetUpAgent { get; set; }
 
     private ElementReference _root;
 

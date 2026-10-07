@@ -17,7 +17,7 @@
 
 @if (_connected)
 {
-    <ConnectionSuccess Channel="Shown" OnOpenInbox="OnOpenInbox" OnConnectAnother="OnExit" />
+    <ConnectionSuccess Channel="Shown" OnOpenInbox="OnOpenInbox" OnConnectAnother="OnExit" OnSetUpAgent="OnSetUpAgent" />
 }
 else if (_testing)
 {
@@ -221,6 +221,9 @@ else
     [Parameter] public EventCallback OnExit { get; set; }
 
     [Parameter] public EventCallback OnOpenInbox { get; set; }
+
+    /// <summary>Set when the person came to connect a channel for an agent.</summary>
+    [Parameter] public EventCallback OnSetUpAgent { get; set; }
 
     // As on WhatsApp's test: a floor under how long the check appears to take,
     // and a few tries a couple of seconds apart.
