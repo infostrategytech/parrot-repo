@@ -162,6 +162,12 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// now put in it with the focus and caret, or null. Call once, on the
     /// field's first render.
     /// </summary>
+    public async Task FollowRailTooltipsAsync(ElementReference rail)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("followRailTooltips", rail);
+    }
+
     public async Task<string?> TakeEarlyAsync(ElementReference element)
     {
         var module = await _module.Value;

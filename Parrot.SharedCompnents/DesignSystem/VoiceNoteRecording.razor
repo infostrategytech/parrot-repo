@@ -1,0 +1,39 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Recording a voice note, laid out as WhatsApp and Telegram do, so it needs no
+   explaining: delete on the left, the red dot and the time, the voice as
+   moving bars, send on the right. It takes the place of the text box while it
+   records. The voice module writes the live level onto Element as --level
+   (0 to 1), so the bars move with no re-render. *@
+<div class="ds-voice-recording @Class" @ref="Element">
+    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Delete voice note" title="Delete" @onclick="OnDelete">
+        <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+    </Button>
+    <span class="ds-voice-recording__dot" aria-hidden="true"></span>
+    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="ds-voice-recording__time" role="timer" aria-label="@($"Recording, {Clock}")">@Clock</Typography>
+    <span class="ds-voice-recording__bars" aria-hidden="true">
+        @for (var i = 0; i < Bars; i++)
+        {
+            <i style="--bar: @i"></i>
+        }
+    </span>
+    <Button Size="ButtonSize.Small" aria-label="Send voice note" title="Send" @onclick="OnSend">
+        <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+    </Button>
+</div>
+
+@code {
+    private const int Bars = 32;
+
+    /// <summary>How long it has been recording.</summary>
+    [Parameter] public int Seconds { get; set; }
+
+    [Parameter] public EventCallback OnDelete { get; set; }
+    [Parameter] public EventCallback OnSend { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>The bar's element, for the voice module to write the live level onto.</summary>
+    public ElementReference Element { get; private set; }
+
+    private string Clock => $"{Seconds / 60}:{Seconds % 60:00}";
+}

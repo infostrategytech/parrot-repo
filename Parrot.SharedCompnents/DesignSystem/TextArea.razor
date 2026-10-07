@@ -39,6 +39,8 @@
     [Parameter] public int Rows { get; set; } = 3;
     [Parameter] public int? MaxLength { get; set; }
     [Parameter] public TextAreaVariant Variant { get; set; } = TextAreaVariant.Field;
+    /// <summary>The complete design-system text style used inside the field.</summary>
+    [Parameter] public TextStyle TextStyle { get; set; } = TextStyle.BodySmallMedium;
     [Parameter] public EventCallback<KeyboardEventArgs> OnKeyDown { get; set; }
     [Parameter] public string? Id { get; set; }
     [Parameter] public string? Class { get; set; }
@@ -63,7 +65,7 @@
     {
         get
         {
-            var name = $"ds-text-area ds-text-area--{Variant.ToString().ToLowerInvariant()} {TextStyle.BodySmallMedium.ToClassName()}";
+            var name = $"ds-text-area ds-text-area--{Variant.ToString().ToLowerInvariant()} {TextStyle.ToClassName()}";
             if (AutoGrow) name += " is-auto-grow";
             if (Disabled) name += " is-disabled";
             return string.IsNullOrWhiteSpace(Class) ? name : $"{name} {Class}";

@@ -72,6 +72,8 @@
 .learning-dialog { display: grid; gap: var(--spacing-lg); }
 .learning-dialog__source { display: grid; gap: var(--spacing-xs); padding: var(--spacing-md); background: var(--colors-surface-muted); border-radius: var(--radius-radius-lg); }
 .learning-dialog__source ::deep > span { color: var(--colors-text-muted); }
+/* The field label keeps its own colour, not the dialog description's. */
+.learning-dialog__field ::deep > span { color: var(--colors-text-secondary); }
 .learning-dialog__source ::deep p { color: var(--colors-text-secondary); white-space: pre-wrap; }
 .learning-dialog > label { display: grid; gap: var(--spacing-xs); }
 .learning-dialog > label textarea { width: 100%; padding: var(--spacing-md); color: var(--colors-text-primary); line-height: var(--typography-leading-leading-lg); resize: vertical; background: var(--colors-surface-input); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-lg); outline: 0; }

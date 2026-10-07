@@ -1179,9 +1179,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.4588235294117647,
-            0.6078431372549019,
-            0.6235294117647059
+            0.45719999074935913,
+            0.6062399744987488,
+            0.6227999925613403
           ],
           "alpha": 1,
           "hex": "#759B9F"
@@ -1309,9 +1309,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.6392156862745098,
-            0.7490196078431373,
-            0.7607843137254902
+            0.6399999856948853,
+            0.7480000257492065,
+            0.7599999904632568
           ],
           "alpha": 1,
           "hex": "#A3BFC2"
@@ -1336,9 +1336,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.7764705882352941,
-            0.8549019607843137,
-            0.8627450980392157
+            0.7767999768257141,
+            0.8545600175857544,
+            0.8632000088691711
           ],
           "alpha": 1,
           "hex": "#C6DADC"
@@ -1363,14 +1363,14 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.15294118225574493,
-            0.15294118225574493,
-            0.16470588743686676
+            0.8235294222831726,
+            0.48235294222831726,
+            0.40784314274787903
           ],
           "alpha": 1,
-          "hex": "#27272A"
+          "hex": "#D27B68"
         },
-        "$description": "Secondary button and action background",
+        "$description": "Use for complementary brand actions and promotional emphasis that should be distinct from the primary brand action. Do not use for warning or destructive meaning.",
         "$extensions": {
           "com.figma.variableId": "VariableID:6:542",
           "com.figma.scopes": [
@@ -1378,8 +1378,8 @@
             "STROKE"
           ],
           "com.figma.aliasData": {
-            "targetVariableId": "VariableID:a745b1ab876a30d6c919636532675638e130da07/-1:-1",
-            "targetVariableName": "color/zinc/800",
+            "targetVariableId": "VariableID:67c100a3e13b146c1fa1ee475a0cf37bd81a8070/-1:-1",
+            "targetVariableName": "color/secondary/400",
             "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
             "targetVariableSetName": "Primitives"
           }
@@ -1397,7 +1397,7 @@
           "alpha": 1,
           "hex": "#FAFAFA"
         },
-        "$description": "Text/icon color on secondary backgrounds",
+        "$description": "Use for text and icons placed directly on brand-secondary fills.",
         "$extensions": {
           "com.figma.variableId": "VariableID:6:543",
           "com.figma.scopes": [
@@ -1412,19 +1412,95 @@
           }
         }
       },
+      "secondary-foreground-mute": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9803921580314636,
+            0.9803921580314636,
+            0.9803921580314636
+          ],
+          "alpha": 0.7200000286102295,
+          "hex": "#FAFAFA"
+        },
+        "$description": "Use for lower-emphasis text or icons on brand-secondary fills.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:708:352",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.composedColor": {
+            "colorArg": {
+              "type": "alias",
+              "alias": {
+                "targetVariableName": "colors/brand/secondary-foreground"
+              }
+            },
+            "opacityArg": {
+              "type": "alias",
+              "alias": {
+                "targetVariableId": "VariableID:1d64b2076ac3b04f5c65eca701975afa4859023b/-1:-1",
+                "targetVariableName": "opacity/foreground-mute",
+                "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+                "targetVariableSetName": "Primitives"
+              }
+            }
+          }
+        }
+      },
+      "secondary-foreground-subtle": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9803921580314636,
+            0.9803921580314636,
+            0.9803921580314636
+          ],
+          "alpha": 0.5,
+          "hex": "#FAFAFA"
+        },
+        "$description": "Use for the lowest-emphasis supporting content on brand-secondary fills.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:708:353",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.composedColor": {
+            "colorArg": {
+              "type": "alias",
+              "alias": {
+                "targetVariableName": "colors/brand/secondary-foreground"
+              }
+            },
+            "opacityArg": {
+              "type": "alias",
+              "alias": {
+                "targetVariableId": "VariableID:cd3cb921709bd75649da3adeb5f6848d9242ad18/-1:-1",
+                "targetVariableName": "opacity/foreground-subtle",
+                "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+                "targetVariableSetName": "Primitives"
+              }
+            }
+          }
+        }
+      },
       "secondary-hover": {
         "$type": "color",
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.24705882370471954,
-            0.24705882370471954,
-            0.27843138575553894
+            0.8627451062202454,
+            0.5882353186607361,
+            0.5333333611488342
           ],
           "alpha": 1,
-          "hex": "#3F3F47"
+          "hex": "#DC9688"
         },
-        "$description": "Secondary background on hover",
+        "$description": "Use only as the hover state of brand-secondary interactive elements.",
         "$extensions": {
           "com.figma.variableId": "VariableID:6:544",
           "com.figma.scopes": [
@@ -1432,8 +1508,8 @@
             "STROKE"
           ],
           "com.figma.aliasData": {
-            "targetVariableId": "VariableID:4852d40fb41b90f44312928dfdf3ead5e81e505e/-1:-1",
-            "targetVariableName": "color/zinc/700",
+            "targetVariableId": "VariableID:b2e68438e28fc7c21ff9e96230224aef0a42ca00/-1:-1",
+            "targetVariableName": "color/secondary/300",
             "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
             "targetVariableSetName": "Primitives"
           }
@@ -1444,14 +1520,14 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.32156863808631897,
-            0.32156863808631897,
-            0.3607843220233917
+            0.9137254953384399,
+            0.7176470756530762,
+            0.686274528503418
           ],
           "alpha": 1,
-          "hex": "#52525C"
+          "hex": "#E9B7AF"
         },
-        "$description": "Secondary background on active/pressed",
+        "$description": "Use only as the pressed or active state of brand-secondary interactive elements.",
         "$extensions": {
           "com.figma.variableId": "VariableID:6:545",
           "com.figma.scopes": [
@@ -1459,8 +1535,8 @@
             "STROKE"
           ],
           "com.figma.aliasData": {
-            "targetVariableId": "VariableID:3bea8799d13b4ce9bec8c23a79e50c814b2566b7/-1:-1",
-            "targetVariableName": "color/zinc/600",
+            "targetVariableId": "VariableID:e05a972aafa61f49c76c2541af71b28d13bd1364/-1:-1",
+            "targetVariableName": "color/secondary/200",
             "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
             "targetVariableSetName": "Primitives"
           }
@@ -1583,9 +1659,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.14901960784313725,
-            0.20784313725490197,
-            0.21176470588235294
+            0.147599995136261,
+            0.2059199959039688,
+            0.21240000426769257
           ],
           "alpha": 1,
           "hex": "#263536"
@@ -1611,9 +1687,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.7764705882352941,
-            0.8549019607843137,
-            0.8627450980392157
+            0.7767999768257141,
+            0.8545600175857544,
+            0.8632000088691711
           ],
           "alpha": 1,
           "hex": "#C6DADC"
@@ -1692,9 +1768,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.34509803921568627,
-            0.4823529411764706,
-            0.49411764705882355
+            0.34439998865127563,
+            0.48047998547554016,
+            0.49559998512268066
           ],
           "alpha": 1,
           "hex": "#587B7E"
@@ -2101,6 +2177,60 @@
             }
           }
         }
+      },
+      "secondary-accent": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.32156863808631897,
+            0.1882352977991104,
+            0.11372549086809158
+          ],
+          "alpha": 1,
+          "hex": "#52301D"
+        },
+        "$description": "Use for subtle secondary-brand surfaces such as promotional cards, callouts, highlighted chips, or intentional secondary selections. Do not use for generic containers or feedback states.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:354",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.aliasData": {
+            "targetVariableId": "VariableID:67185ff1d3da91d7419862ea6d8fa698b8cc7add/-1:-1",
+            "targetVariableName": "color/secondary/900",
+            "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+            "targetVariableSetName": "Primitives"
+          }
+        }
+      },
+      "secondary-accent-foreground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9137254953384399,
+            0.7176470756530762,
+            0.686274528503418
+          ],
+          "alpha": 1,
+          "hex": "#E9B7AF"
+        },
+        "$description": "Use for text and icons placed on surface/secondary-accent. Do not use independently on unrelated surfaces.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:355",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.aliasData": {
+            "targetVariableId": "VariableID:e05a972aafa61f49c76c2541af71b28d13bd1364/-1:-1",
+            "targetVariableName": "color/secondary/200",
+            "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+            "targetVariableSetName": "Primitives"
+          }
+        }
       }
     },
     "text": {
@@ -2367,6 +2497,17 @@
             "targetVariableSetName": "Primitives"
           }
         }
+      },
+      "on-secondary": {
+        "$type": "color",
+        "$value": "{colors.brand.secondary-foreground}",
+        "$description": "Use for text placed directly on brand-secondary fills. Do not use as ordinary secondary body text.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:353",
+          "com.figma.scopes": [
+            "TEXT_FILL"
+          ]
+        }
       }
     },
     "icon": {
@@ -2510,9 +2651,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.4588235294117647,
-            0.6078431372549019,
-            0.6235294117647059
+            0.45719999074935913,
+            0.6062399744987488,
+            0.6227999925613403
           ],
           "alpha": 1,
           "hex": "#759B9F"
@@ -2554,6 +2695,33 @@
           "com.figma.aliasData": {
             "targetVariableId": "VariableID:8d351b1d66fec65d3df59344fc5035d28a277366/-1:-1",
             "targetVariableName": "color/red/400",
+            "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+            "targetVariableSetName": "Primitives"
+          }
+        }
+      },
+      "brand-secondary": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.8235294222831726,
+            0.48235294222831726,
+            0.40784314274787903
+          ],
+          "alpha": 1,
+          "hex": "#D27B68"
+        },
+        "$description": "Use for decorative or branded icons that need complementary secondary emphasis. Do not use for neutral icon hierarchy or status icons.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:352",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.aliasData": {
+            "targetVariableId": "VariableID:67c100a3e13b146c1fa1ee475a0cf37bd81a8070/-1:-1",
+            "targetVariableName": "color/secondary/400",
             "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
             "targetVariableSetName": "Primitives"
           }
@@ -3160,9 +3328,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.34509803921568627,
-            0.4823529411764706,
-            0.49411764705882355
+            0.34439998865127563,
+            0.48047998547554016,
+            0.49559998512268066
           ],
           "alpha": 1,
           "hex": "#587B7E"
@@ -3186,9 +3354,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.14901960784313725,
-            0.20784313725490197,
-            0.21176470588235294
+            0.147599995136261,
+            0.2059199959039688,
+            0.21240000426769257
           ],
           "alpha": 1,
           "hex": "#263536"
@@ -3213,9 +3381,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.7764705882352941,
-            0.8549019607843137,
-            0.8627450980392157
+            0.7767999768257141,
+            0.8545600175857544,
+            0.8632000088691711
           ],
           "alpha": 1,
           "hex": "#C6DADC"
@@ -3351,6 +3519,60 @@
             "ALL_SCOPES"
           ]
         }
+      },
+      "selected-secondary": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.32156863808631897,
+            0.1882352977991104,
+            0.11372549086809158
+          ],
+          "alpha": 1,
+          "hex": "#52301D"
+        },
+        "$description": "Use for selected tabs, filters, chips, or toggles only when secondary-brand emphasis is intentional. Use interaction/selected for the default selected state.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:358",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.aliasData": {
+            "targetVariableId": "VariableID:67185ff1d3da91d7419862ea6d8fa698b8cc7add/-1:-1",
+            "targetVariableName": "color/secondary/900",
+            "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+            "targetVariableSetName": "Primitives"
+          }
+        }
+      },
+      "selected-secondary-foreground": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.9137254953384399,
+            0.7176470756530762,
+            0.686274528503418
+          ],
+          "alpha": 1,
+          "hex": "#E9B7AF"
+        },
+        "$description": "Use for content inside interaction/selected-secondary states. Do not use as a standalone foreground color.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:359",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.aliasData": {
+            "targetVariableId": "VariableID:e05a972aafa61f49c76c2541af71b28d13bd1364/-1:-1",
+            "targetVariableName": "color/secondary/200",
+            "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+            "targetVariableSetName": "Primitives"
+          }
+        }
       }
     },
     "accent": {
@@ -3413,9 +3635,9 @@
           "$value": {
             "colorSpace": "srgb",
             "components": [
-              0.14901960784313725,
-              0.20784313725490197,
-              0.21176470588235294
+              0.147599995136261,
+              0.2059199959039688,
+              0.21240000426769257
             ],
             "alpha": 1,
             "hex": "#263536"
@@ -3440,9 +3662,9 @@
           "$value": {
             "colorSpace": "srgb",
             "components": [
-              0.21176470588235294,
-              0.2823529411764706,
-              0.2901960784313726
+              0.20999999344348907,
+              0.28200000524520874,
+              0.28999999165534973
             ],
             "alpha": 1,
             "hex": "#36484A"
@@ -3467,9 +3689,9 @@
           "$value": {
             "colorSpace": "srgb",
             "components": [
-              0.23137254901960785,
-              0.3176470588235294,
-              0.32941176470588235
+              0.23240000009536743,
+              0.31808000802993774,
+              0.32760000228881836
             ],
             "alpha": 1,
             "hex": "#3B5154"
@@ -3494,9 +3716,9 @@
           "$value": {
             "colorSpace": "srgb",
             "components": [
-              0.4588235294117647,
-              0.6078431372549019,
-              0.6235294117647059
+              0.45719999074935913,
+              0.6062399744987488,
+              0.6227999925613403
             ],
             "alpha": 1,
             "hex": "#759B9F"
@@ -3521,9 +3743,9 @@
           "$value": {
             "colorSpace": "srgb",
             "components": [
-              0.34509803921568627,
-              0.4823529411764706,
-              0.49411764705882355
+              0.34439998865127563,
+              0.48047998547554016,
+              0.49559998512268066
             ],
             "alpha": 1,
             "hex": "#587B7E"
@@ -3548,9 +3770,9 @@
           "$value": {
             "colorSpace": "srgb",
             "components": [
-              0.6392156862745098,
-              0.7490196078431373,
-              0.7607843137254902
+              0.6399999856948853,
+              0.7480000257492065,
+              0.7599999904632568
             ],
             "alpha": 1,
             "hex": "#A3BFC2"
@@ -3565,6 +3787,197 @@
             "com.figma.aliasData": {
               "targetVariableId": "VariableID:7df65c9b07000638b7f58f3f7933f984d38eced9/-1:-1",
               "targetVariableName": "color/primary/300",
+              "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+              "targetVariableSetName": "Primitives"
+            }
+          }
+        }
+      },
+      "secondary": {
+        "on-solid": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.9803921580314636,
+              0.9803921580314636,
+              0.9803921580314636
+            ],
+            "alpha": 1,
+            "hex": "#FAFAFA"
+          },
+          "$description": "Use for text and icons on accent/secondary/solid.",
+          "$extensions": {
+            "com.figma.variableId": "VariableID:708:354",
+            "com.figma.scopes": [
+              "ALL_FILLS",
+              "STROKE"
+            ],
+            "com.figma.aliasData": {
+              "targetVariableId": "VariableID:f6610f45817f3ed2b40e152b0c9cd72d673a2cf8/-1:-1",
+              "targetVariableName": "color/zinc/50",
+              "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+              "targetVariableSetName": "Primitives"
+            }
+          }
+        },
+        "subtle": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.32156863808631897,
+              0.1882352977991104,
+              0.11372549086809158
+            ],
+            "alpha": 1,
+            "hex": "#52301D"
+          },
+          "$description": "Use for the lightest secondary accent background, including subtle callouts and soft highlights.",
+          "$extensions": {
+            "com.figma.variableId": "VariableID:708:355",
+            "com.figma.scopes": [
+              "ALL_FILLS",
+              "STROKE"
+            ],
+            "com.figma.aliasData": {
+              "targetVariableId": "VariableID:67185ff1d3da91d7419862ea6d8fa698b8cc7add/-1:-1",
+              "targetVariableName": "color/secondary/900",
+              "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+              "targetVariableSetName": "Primitives"
+            }
+          }
+        },
+        "muted": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.4274509847164154,
+              0.1764705926179886,
+              0.13333334028720856
+            ],
+            "alpha": 1,
+            "hex": "#6D2D22"
+          },
+          "$description": "Use for muted secondary accent backgrounds and low-emphasis selected states.",
+          "$extensions": {
+            "com.figma.variableId": "VariableID:708:356",
+            "com.figma.scopes": [
+              "ALL_FILLS",
+              "STROKE"
+            ],
+            "com.figma.aliasData": {
+              "targetVariableId": "VariableID:3af5254d8d25b433dd46e090b8646d4f0a86325f/-1:-1",
+              "targetVariableName": "color/secondary/800",
+              "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+              "targetVariableSetName": "Primitives"
+            }
+          }
+        },
+        "border": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.5960784554481506,
+              0.23137255012989044,
+              0.16078431904315948
+            ],
+            "alpha": 1,
+            "hex": "#983B29"
+          },
+          "$description": "Use for borders paired with secondary accent surfaces.",
+          "$extensions": {
+            "com.figma.variableId": "VariableID:708:357",
+            "com.figma.scopes": [
+              "ALL_FILLS",
+              "STROKE"
+            ],
+            "com.figma.aliasData": {
+              "targetVariableId": "VariableID:a7ec3893be4376a8bfa862a0a9b3f3f941db5fb6/-1:-1",
+              "targetVariableName": "color/secondary/700",
+              "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+              "targetVariableSetName": "Primitives"
+            }
+          }
+        },
+        "base": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8235294222831726,
+              0.48235294222831726,
+              0.40784314274787903
+            ],
+            "alpha": 1,
+            "hex": "#D27B68"
+          },
+          "$description": "Use for medium-emphasis secondary decoration, icons, or data marks.",
+          "$extensions": {
+            "com.figma.variableId": "VariableID:708:358",
+            "com.figma.scopes": [
+              "ALL_FILLS",
+              "STROKE"
+            ],
+            "com.figma.aliasData": {
+              "targetVariableId": "VariableID:67c100a3e13b146c1fa1ee475a0cf37bd81a8070/-1:-1",
+              "targetVariableName": "color/secondary/400",
+              "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+              "targetVariableSetName": "Primitives"
+            }
+          }
+        },
+        "solid": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.7843137383460999,
+              0.3333333432674408,
+              0.239215686917305
+            ],
+            "alpha": 1,
+            "hex": "#C8553D"
+          },
+          "$description": "Use for strong secondary accent fills such as badges and emphasized chips. Do not use for feedback status.",
+          "$extensions": {
+            "com.figma.variableId": "VariableID:708:359",
+            "com.figma.scopes": [
+              "ALL_FILLS",
+              "STROKE"
+            ],
+            "com.figma.aliasData": {
+              "targetVariableId": "VariableID:83238bfeca4c0b65fda6fac24035e179c4b48f2e/-1:-1",
+              "targetVariableName": "color/secondary/500",
+              "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+              "targetVariableSetName": "Primitives"
+            }
+          }
+        },
+        "text": {
+          "$type": "color",
+          "$value": {
+            "colorSpace": "srgb",
+            "components": [
+              0.8627451062202454,
+              0.5882353186607361,
+              0.5333333611488342
+            ],
+            "alpha": 1,
+            "hex": "#DC9688"
+          },
+          "$description": "Use for readable secondary-colored text on neutral or subtle secondary surfaces; verify contrast at small sizes.",
+          "$extensions": {
+            "com.figma.variableId": "VariableID:708:360",
+            "com.figma.scopes": [
+              "ALL_FILLS",
+              "STROKE"
+            ],
+            "com.figma.aliasData": {
+              "targetVariableId": "VariableID:b2e68438e28fc7c21ff9e96230224aef0a42ca00/-1:-1",
+              "targetVariableName": "color/secondary/300",
               "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
               "targetVariableSetName": "Primitives"
             }
@@ -7108,9 +7521,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.4588235294117647,
-            0.6078431372549019,
-            0.6235294117647059
+            0.45719999074935913,
+            0.6062399744987488,
+            0.6227999925613403
           ],
           "alpha": 1,
           "hex": "#759B9F"
@@ -7243,9 +7656,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.34509803921568627,
-            0.4823529411764706,
-            0.49411764705882355
+            0.34439998865127563,
+            0.48047998547554016,
+            0.49559998512268066
           ],
           "alpha": 1,
           "hex": "#587B7E"
@@ -7264,6 +7677,45 @@
             "targetVariableSetName": "Primitives"
           }
         }
+      },
+      "sidebar-secondary": {
+        "$type": "color",
+        "$value": {
+          "colorSpace": "srgb",
+          "components": [
+            0.8235294222831726,
+            0.48235294222831726,
+            0.40784314274787903
+          ],
+          "alpha": 1,
+          "hex": "#D27B68"
+        },
+        "$description": "Use for special sidebar badges, promotional navigation, or secondary-brand emphasis. Keep standard active navigation on sidebar-primary.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:356",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ],
+          "com.figma.aliasData": {
+            "targetVariableId": "VariableID:67c100a3e13b146c1fa1ee475a0cf37bd81a8070/-1:-1",
+            "targetVariableName": "color/secondary/400",
+            "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
+            "targetVariableSetName": "Primitives"
+          }
+        }
+      },
+      "sidebar-secondary-foreground": {
+        "$type": "color",
+        "$value": "{colors.brand.secondary-foreground}",
+        "$description": "Use for text and icons placed on sidebar-secondary. Do not use for default sidebar content.",
+        "$extensions": {
+          "com.figma.variableId": "VariableID:712:357",
+          "com.figma.scopes": [
+            "ALL_FILLS",
+            "STROKE"
+          ]
+        }
       }
     },
     "chart": {
@@ -7272,9 +7724,9 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0.4588235294117647,
-            0.6078431372549019,
-            0.6235294117647059
+            0.45719999074935913,
+            0.6062399744987488,
+            0.6227999925613403
           ],
           "alpha": 1,
           "hex": "#759B9F"
@@ -7298,22 +7750,22 @@
         "$value": {
           "colorSpace": "srgb",
           "components": [
-            0,
-            0.8313725590705872,
-            0.572549045085907
+            0.8235294222831726,
+            0.48235294222831726,
+            0.40784314274787903
           ],
           "alpha": 1,
-          "hex": "#00D492"
+          "hex": "#D27B68"
         },
-        "$description": "Second series — emerald",
+        "$description": "Use for the second branded data series, paired with chart-1. Do not use to communicate warning, error, or destructive status.",
         "$extensions": {
           "com.figma.variableId": "VariableID:34:3",
           "com.figma.scopes": [
             "ALL_SCOPES"
           ],
           "com.figma.aliasData": {
-            "targetVariableId": "VariableID:38b7a0b52e5b73964653374398339f541a085b7d/-1:-1",
-            "targetVariableName": "color/emerald/400",
+            "targetVariableId": "VariableID:67c100a3e13b146c1fa1ee475a0cf37bd81a8070/-1:-1",
+            "targetVariableName": "color/secondary/400",
             "targetVariableSetId": "VariableCollectionId:d66684856413cad74673e34552b10d6647224f3f/-1:-1",
             "targetVariableSetName": "Primitives"
           }

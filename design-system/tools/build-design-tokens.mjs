@@ -114,13 +114,34 @@ function primitiveRef(token, alias, value, type) {
   return null;
 }
 
+// A semantic token can also alias another SEMANTIC token rather than a
+// primitive — colors/text/on-secondary points at colors/brand/secondary-
+// foreground. Figma exports that as the reference string "{colors.brand.
+// secondary-foreground}" instead of a resolved value, so it never reaches
+// toCss() and the token used to be dropped without a word.
+//
+// Point at the other custom property rather than inlining its value, for the
+// same reason primitive aliases do: the relationship is the design decision,
+// and it keeps working when the target changes. Forward references are fine —
+// custom properties resolve where they are used, not where they are declared.
+function semanticRef(token, value, flat) {
+  if (typeof value !== "string" || !value.startsWith("{") || !value.endsWith("}")) return null;
+  const target = value.slice(1, -1);
+  if (!(target in flat)) {
+    aliasWarnings.push(`${token} -> ${target}: no semantic token by that name, dropped`);
+    return null;
+  }
+  return `var(${cssName(target, false)})`;
+}
+
 function emit(source, isPrimitive) {
   const flat = flatten(source, "", {});
   const lines = [];
   const seen = new Set();
+  const dropped = [];
 
   for (const [token, { value, type, alias }] of Object.entries(flat)) {
-    let css = isPrimitive ? null : primitiveRef(token, alias, value, type);
+    let css = isPrimitive ? null : primitiveRef(token, alias, value, type) ?? semanticRef(token, value, flat);
     if (css != null) {
       // referenced, nothing more to do
     } else if (type === "color") css = toCss(value);
@@ -131,13 +152,30 @@ function emit(source, isPrimitive) {
       // quoting and runtime name as the semantic family that points at it.
       css = /font-family|\.font\.|^font\./i.test(token) ? `"${font}"` : value;
     }
-    if (css == null) continue;
+    // A token Figma defines but we cannot express is a hole in the system that
+    // nothing else would catch: the CSS stays valid, check-tokens still passes
+    // because no component references the missing name yet, and the first
+    // symptom is a var() that resolves to nothing months later. Collect them
+    // and fail the build instead.
+    if (css == null) {
+      dropped.push(`${token} (${type ?? "unknown type"}): ${JSON.stringify(value)}`);
+      continue;
+    }
 
     const name = cssName(token, isPrimitive);
     if (seen.has(name)) continue;
     seen.add(name);
     lines.push(`  ${name}: ${css};`);
   }
+
+  if (dropped.length) {
+    console.error(`build-design-tokens  ${dropped.length} token(s) in the export could not be emitted:\n`);
+    for (const d of dropped) console.error(`  ${d}`);
+    console.error("\nEvery token Figma exports must land in tokens.css. Fix the export or teach");
+    console.error("the generator this value shape — do not ship a silently incomplete token set.");
+    process.exit(1);
+  }
+
   return lines;
 }
 

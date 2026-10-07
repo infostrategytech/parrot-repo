@@ -1,0 +1,101 @@
+/* The field matches Input's box; pills are neutral (not warnings), each with
+   its own remove; suggestions are dashed, one tap each. */
+.tag-input {
+  /* Gaps in the token set: the field's resting height and the pill height. */
+  --ds-tag-input-height: 52px;
+  --ds-tag-input-pill: 32px;
+  --ds-tag-input-ring: 1.5px;
+
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.tag-input__head { display: flex; gap: var(--spacing-sm); align-items: baseline; }
+.tag-input__head label { color: var(--colors-text-primary); cursor: pointer; }
+.tag-input__head ::deep .tag-input__optional { color: var(--colors-text-muted); }
+
+.tag-input__box {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-height: var(--ds-tag-input-height);
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+  cursor: text;
+}
+.tag-input__box:hover { box-shadow: inset 0 0 0 var(--ds-hairline) var(--colors-surface-border); }
+.tag-input__box:focus-within {
+  border-color: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-hairline) var(--colors-brand-primary);
+}
+.tag-input__box.is-full { cursor: not-allowed; background: var(--colors-surface-muted); }
+
+/* One line, its words level with the box; it still grows if a phrase wraps. */
+.tag-input__box ::deep .tag-input__field {
+  --ds-text-area-plain-min-height: var(--spacing-3xl);
+  flex: 1;
+  min-width: 0;
+  padding-inline: 0;
+}
+
+.tag-input ::deep .tag-input__help { margin: 0; color: var(--colors-text-muted); }
+.tag-input ::deep .tag-input__help.is-note { color: var(--colors-text-secondary); }
+
+.tag-input__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.tag-input__pill {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  min-height: var(--ds-tag-input-pill);
+  padding: var(--spacing-none) var(--spacing-2xs) var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-muted);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+
+.tag-input__pill ::deep .tag-input__remove {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
+  color: var(--colors-icon-secondary);
+  border-radius: var(--radius-radius-full);
+}
+.tag-input__pill ::deep .tag-input__remove:hover { color: var(--colors-text-primary); }
+.tag-input__pill ::deep .tag-input__remove:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--ds-tag-input-ring) var(--colors-interaction-focus);
+}
+
+.tag-input__suggestions { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; }
+.tag-input__suggestions ::deep .tag-input__try { margin-right: var(--spacing-2xs); color: var(--colors-text-muted); }
+
+.tag-input__suggestions ::deep .tag-input__suggestion {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  min-height: var(--ds-tag-input-pill);
+  padding: var(--spacing-none) var(--spacing-md) var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-text-secondary);
+  border: var(--ds-hairline) dashed var(--colors-surface-input);
+  border-radius: var(--radius-radius-full);
+}
+.tag-input__suggestions ::deep .tag-input__suggestion:hover {
+  color: var(--colors-text-primary);
+  border-color: var(--colors-icon-muted);
+}
+.tag-input__suggestions ::deep .tag-input__suggestion:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--ds-tag-input-ring) var(--colors-interaction-focus);
+}

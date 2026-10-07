@@ -1,20 +1,18 @@
 @namespace Parrot.SharedComponents.Layout
-@inject NavigationManager Nav
 
 @* One row of the account menu. The same row the workspace menu draws, so the
    two menus at the foot of the rail read as one thing. *@
 
-<button type="button"
-        role="menuitem"
-        class="@ClassName"
-        disabled="@Disabled"
-        @onclick="ActivateAsync">
-    @if (Glyph is not null)
-    {
-        <Icon Name="Glyph.Value" Size="IconSize.Sm" />
-    }
-    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="user-menu-item__label">@Label</Typography>
-</button>
+@* A row that goes somewhere is a real link (it can open in a new tab); one
+   that does something, like signing out, is a button. *@
+@if (Href is not null && !Disabled)
+{
+    <a href="@Href" role="menuitem" class="@ClassName" @onclick="ClickAsync">@Content</a>
+}
+else
+{
+    <button type="button" role="menuitem" class="@ClassName" disabled="@Disabled" @onclick="ClickAsync">@Content</button>
+}
 
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
@@ -33,9 +31,14 @@
 
     private string ClassName => Danger ? "user-menu-item is-danger" : "user-menu-item";
 
-    private async Task ActivateAsync()
+    private RenderFragment Content => __builder =>
     {
-        if (OnClick.HasDelegate) await OnClick.InvokeAsync();
-        if (Href is not null) Nav.NavigateTo(Href);
-    }
+        if (Glyph is not null)
+        {
+            <Icon Name="Glyph.Value" Size="IconSize.Sm" />
+        }
+        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="user-menu-item__label">@Label</Typography>
+    };
+
+    private Task ClickAsync() => OnClick.HasDelegate ? OnClick.InvokeAsync() : Task.CompletedTask;
 }

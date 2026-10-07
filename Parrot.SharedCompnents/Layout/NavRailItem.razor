@@ -1,32 +1,42 @@
 @namespace Parrot.SharedComponents.Layout
-@inject NavigationManager Nav
 
 @* One row of the rail. Was a RenderFragment built by hand inside NavSidebar,
    which is a component written the hard way — so it is a component. *@
 
-<button type="button"
-        class="@ClassName"
-        data-tooltip="@Tooltip"
-        disabled="@IsPlaceholder"
-        aria-disabled="@(IsPlaceholder ? "true" : null)"
-        aria-current="@(IsActive ? "page" : null)"
-        @onclick="Navigate">
-    <Icon Name="Entry.Glyph" Size="IconSize.Sm" />
-    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="nav-item__label">
-        @Entry.Label
-    </Typography>
-    @if (Badge is > 0)
-    {
-        <Typography TextStyle="TextStyle.Small10Semibold"
-                    As="em"
-                    Class="nav-item__count"
-                    aria-label="@($"{Badge} unread conversations")">
-            @(Badge > 99 ? "99+" : Badge.ToString())
-        </Typography>
-    }
-</button>
+@* A real link, so a page opens in a new tab the way it does on any site
+   (Ctrl or Cmd and click, the middle button, the right-click menu) and the
+   address shows on hover; a plain click is routed in place. A place with no
+   page yet stays a disabled button. *@
+@if (IsPlaceholder)
+{
+    <button type="button" class="@ClassName" data-tooltip="@Tooltip" disabled aria-disabled="true">@Content</button>
+}
+else
+{
+    <a href="@Entry.Path" class="@ClassName" data-tooltip="@Tooltip" aria-current="@(IsActive ? "page" : null)">@Content</a>
+}
 
 @code {
+    private RenderFragment Content => __builder =>
+    {
+        <Icon Name="Entry.Glyph" Size="IconSize.Sm" />
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="nav-item__label">
+            @Entry.Label
+        </Typography>
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="nav-item__compact-label">
+            @(Entry.CompactLabel ?? Entry.Label)
+        </Typography>
+        if (Badge is > 0)
+        {
+            <Typography TextStyle="TextStyle.Small10Semibold"
+                        As="em"
+                        Class="nav-item__count"
+                        aria-label="@($"{Badge} unread conversations")">
+                @(Badge > 99 ? "99+" : Badge.ToString())
+            </Typography>
+        }
+    };
+
     [Parameter, EditorRequired] public NavEntry Entry { get; set; } = default!;
 
     [Parameter] public bool IsActive { get; set; }
@@ -55,10 +65,5 @@
             if (Compact) name += " is-compact";
             return name;
         }
-    }
-
-    private void Navigate()
-    {
-        if (Entry.Path is not null) Nav.NavigateTo(Entry.Path);
     }
 }

@@ -1,0 +1,234 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@inject NavigationManager Nav
+@inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
+@inject IBusinessKnowledge Knowledge
+
+@* An agent's basics after its job (AgentRolePicker), the same on the setup
+   screen and on its page: its name and look, where it answers, and how it
+   stays safe, in plain sentences. A rule's Change opens a small control
+   right under it: owners change it where they read it, never sent into
+   Advanced settings (usability testing, 4 October). Edits the form only; the
+   host saves it.
+
+   Descriptions are Prose: the text styles are set solid (line-height 1), and
+   a wrapped description without it reads as one cramped block. *@
+
+<section class="agent-basics__section" aria-labelledby="@($"{_id}-identity")">
+    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="@($"{_id}-identity")">Name and look</Typography>
+    @* One card: the look on the left (it opens the choice of looks below),
+       the name beside it, the same height. *@
+    <div class="agent-basics__identity">
+        <RowButton Class="@($"agent-basics__look{(_showAvatars ? " is-open" : null)}")"
+                   OnClick="ToggleAvatars"
+                   aria-expanded="@(_showAvatars ? "true" : "false")"
+                   aria-controls="@($"{_id}-avatars")"
+                   aria-label="Change look">
+            <img src="@AgentBuilderCopy.MascotImage(Form.Mascot)" alt="" />
+            <span class="agent-basics__text">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Change look</Typography>
+                @* Not the look's own name: the looks share names with agents, so
+                   showing one here read as if the agent were already named. *@
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">Pick how it looks</Typography>
+            </span>
+            <span class="agent-basics__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
+        </RowButton>
+        <Input FloatingLabel="Name"
+               Value="@Form.Name"
+               ValueChanged="v => SetAsync(() => Form.Name = v ?? string.Empty)"
+               Error="@(Tried && !Form.HasName)"
+               HelperText="@(Tried && !Form.HasName ? "Give it a name." : "Customers see this when it replies.")"
+               maxlength="24" />
+        @if (_showAvatars)
+        {
+            <div class="agent-basics__looks" id="@($"{_id}-avatars")">
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="agent-basics__muted">Choose a look</Typography>
+                <div class="agent-basics__avatars" role="group" aria-label="Choose a look">
+                    @for (var i = 0; i < AgentBuilderCopy.Mascots.Count; i++)
+                    {
+                        var current = AgentBuilderCopy.Mascots[i];
+                        var chosen = Form.Mascot == current;
+                        var look = $"Look {i + 1} of {AgentBuilderCopy.Mascots.Count}";
+                        <RowButton Class="@($"agent-basics__avatar{(chosen ? " is-chosen" : null)}")"
+                                   OnClick="() => ChooseAvatarAsync(current)"
+                                   aria-pressed="@(chosen ? "true" : "false")"
+                                   aria-label="@look"
+                                   title="@look">
+                            <img src="@AgentBuilderCopy.MascotImage(current)" alt="" />
+                        </RowButton>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</section>
+
+<section class="agent-basics__section" aria-labelledby="@($"{_id}-channels")">
+    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="@($"{_id}-channels")">Where should it answer?</Typography>
+    @if (Channels.Count == 0)
+    {
+        @* Setup is gated on a connected channel; this shows only if one was
+           disconnected meanwhile. *@
+        <div class="agent-basics__empty">
+            <span class="agent-basics__badge"><Icon Name="IconName.RiLinksFill" Size="IconSize.Md" /></span>
+            <span class="agent-basics__text">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>No channel is connected</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">Connect WhatsApp, Instagram or Facebook for it to answer on.</Typography>
+            </span>
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="@(() => Nav.NavigateTo("/dashboard/channels"))">Connect a channel</Button>
+        </div>
+    }
+    else
+    {
+        <ul class="agent-basics__list">
+            @foreach (var channel in Channels)
+            {
+                var key = channel.Key;
+                var on = Form.Channels.Contains(key);
+                var there = AgentForm.Covering(Others, key);
+                var detail = there.Count > 0
+                    ? $"{string.Join(" and ", there)} {(on ? "also answers here" : "answers here now")}"
+                    : string.IsNullOrWhiteSpace(channel.AccountName) ? "Connected" : channel.AccountName;
+                <li class="agent-basics__item @(on ? "is-on" : null)">
+                    <span class="agent-basics__badge"><ChannelIcon Channel="@key" Size="IconSize.Md" /></span>
+                    <span class="agent-basics__text">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@channel.Name</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">@detail</Typography>
+                    </span>
+                    <Toggle Checked="@on" CheckedChanged="v => SetAsync(() => { if (v) Form.Channels.Add(key); else Form.Channels.Remove(key); })" AriaLabel="@($"Answer on {channel.Name}")" />
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+<section class="agent-basics__section" aria-labelledby="@($"{_id}-safety")">
+    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="@($"{_id}-safety")">Keeping it safe</Typography>
+    <ul class="agent-basics__list">
+        <li class="agent-basics__item">
+            <span class="agent-basics__badge is-rule is-knowledge"><Icon Name="IconName.RiBookOpenFill" Size="IconSize.Md" /></span>
+            <span class="agent-basics__text">
+                <span class="agent-basics__title-row">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Answers only from what you taught it</Typography>
+                    <StatusBadge Tone="StatusTone.Neutral" Glyph="IconName.RiLock2Fill">Always on</StatusBadge>
+                </span>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">If it doesn't know something, it says so and checks with you.</Typography>
+            </span>
+            @* Back into Teach your AI to add to what every agent knows. *@
+            @if (Knowledge.Available)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="TeachAi.TeachMore">Teach more</Button>
+            }
+        </li>
+        <li class="agent-basics__item @(_changing == Rule.Handover ? "is-changing" : null)">
+            <span class="agent-basics__badge is-rule is-handover"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
+            <span class="agent-basics__text">
+                <span class="agent-basics__title-row">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Hands customers to a person when it can't help</Typography>
+                    <StatusBadge Tone="StatusTone.Neutral" Glyph="IconName.RiLock2Fill">Always on</StatusBadge>
+                </span>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">@HandoverDetail(Form.Settings)</Typography>
+            </span>
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-expanded="@(_changing == Rule.Handover ? "true" : "false")" @onclick="() => Change(Rule.Handover)">
+                @(_changing == Rule.Handover ? "Done" : "Change")
+            </Button>
+            @if (_changing == Rule.Handover)
+            {
+                <div class="agent-basics__change">
+                    <Input FloatingLabel="Who should it pass customers to?"
+                           Value="@Form.Settings.HandoverTo"
+                           ValueChanged="v => SetAsync(() => Form.Settings.HandoverTo = v ?? string.Empty)"
+                           HelperText="A name and a phone number is perfect. Leave it empty to take them yourself, in the Inbox."
+                           maxlength="120" />
+                </div>
+            }
+        </li>
+        <li class="agent-basics__item @(_changing == Rule.Money ? "is-changing" : null)">
+            <span class="agent-basics__badge is-rule is-money"><Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Md" /></span>
+            <span class="agent-basics__text">
+                <span class="agent-basics__title-row">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@MoneyRule(Form.Settings)</Typography>
+                    @* Money is the part to think about: worth a word, not a block. *@
+                    <StatusBadge Tone="StatusTone.Warning" Glyph="IconName.RiErrorWarningFill">Needs care</StatusBadge>
+                </span>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">@MoneyDetail</Typography>
+            </span>
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-expanded="@(_changing == Rule.Money ? "true" : "false")" @onclick="() => Change(Rule.Money)">
+                @(_changing == Rule.Money ? "Done" : "Change")
+            </Button>
+            @if (_changing == Rule.Money)
+            {
+                <div class="agent-basics__change">
+                    <Toggle Stretch Checked="@Form.Settings.CanOfferDiscounts" CheckedChanged="v => SetAsync(() => Form.Settings.CanOfferDiscounts = v)" Label="Can offer discounts" Description="Otherwise it asks you first." />
+                    <Toggle Stretch Checked="@Form.Settings.CanApproveRefunds" CheckedChanged="v => SetAsync(() => Form.Settings.CanApproveRefunds = v)" Label="Can approve refunds" Description="Otherwise it passes refunds to a person." />
+                </div>
+            }
+        </li>
+    </ul>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public AgentForm Form { get; set; } = default!;
+
+    /// <summary>Every other agent: the avatars and channels they already have.</summary>
+    [Parameter] public IReadOnlyList<AiAgent> Others { get; set; } = [];
+
+    /// <summary>Only channels already connected to this workspace.</summary>
+    [Parameter] public IReadOnlyList<AgentChannelChoice> Channels { get; set; } = [];
+
+    /// <summary>Saving was tried: missing answers say so.</summary>
+    [Parameter] public bool Tried { get; set; }
+
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private enum Rule { None, Handover, Money }
+
+    // For the ids each section's heading labels it by.
+    private readonly string _id = "agent-basics-" + Guid.NewGuid().ToString("N")[..8];
+    private bool _showAvatars;
+    private Rule _changing;
+
+    /// <summary>Who takes over, in a sentence's end: their words, or the owner in the Inbox.</summary>
+    public static string HandoverLabel(AgentSettings settings) =>
+        string.IsNullOrWhiteSpace(settings.HandoverTo) ? "You, in the Inbox" : settings.HandoverTo.Trim();
+
+    /// <summary>
+    /// Who takes over, and what happens then: it stops, the team gets the reason
+    /// and a summary, and the customer is not left hanging.
+    /// </summary>
+    public static string HandoverDetail(AgentSettings settings) =>
+        $"To {HandoverTo(settings)}. It stops replying, sends the reason and a summary of the chat, and waits.";
+
+    private static string HandoverTo(AgentSettings settings) =>
+        string.IsNullOrWhiteSpace(settings.HandoverTo) ? "you, in the Inbox" : settings.HandoverTo.Trim();
+
+    public static string MoneyRule(AgentSettings settings) => (settings.CanOfferDiscounts, settings.CanApproveRefunds) switch
+    {
+        (false, false) => "Never offers discounts or approves refunds",
+        (true, false) => "Can offer discounts, never approves refunds",
+        (false, true) => "Can approve refunds, never offers discounts",
+        _ => "Can offer discounts and approve refunds",
+    };
+
+    private string MoneyDetail => MoneyDetailOf(Form.Settings);
+
+    /// <summary>What the money rule means in practice, under the rule.</summary>
+    public static string MoneyDetailOf(AgentSettings settings) => settings is { CanOfferDiscounts: true, CanApproveRefunds: true }
+        ? "Only in the ways you described when you taught it."
+        : "It passes these to a person instead.";
+
+    private void ToggleAvatars() => _showAvatars = !_showAvatars;
+
+    private void Change(Rule rule) => _changing = _changing == rule ? Rule.None : rule;
+
+    private async Task ChooseAvatarAsync(string mascot)
+    {
+        await SetAsync(() => Form.ChooseAvatar(mascot));
+        _showAvatars = false;
+    }
+
+    private Task SetAsync(Action change)
+    {
+        change();
+        return OnChange.InvokeAsync();
+    }
+}

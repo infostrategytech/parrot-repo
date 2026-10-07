@@ -29,6 +29,8 @@
   min-width: 0;
 }
 
+::deep .user-card__compact-label { display: none; }
+
 ::deep .user-card__name {
   overflow: hidden;
   white-space: nowrap;

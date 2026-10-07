@@ -7,30 +7,44 @@
    17px/650 and 10px/650, none of which are on the scale. */
 
 .sidebar {
+  position: relative;
+  z-index: var(--ds-rail-layer);
+  outline: none;
   display: flex;
   flex-direction: column;
+  width: var(--ds-rail-expanded-width);
   min-height: 0;
   padding: var(--spacing-2xl) var(--spacing-md) var(--spacing-md);
   color: var(--colors-text-secondary);
   background: var(--colors-sidebar-background);
   border-right: var(--ds-rail-hairline) solid var(--colors-surface-border);
+  box-shadow: var(--spacing-sm) var(--spacing-none) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+  transition:
+    width var(--ds-rail-motion) ease,
+    box-shadow var(--ds-rail-motion) ease;
 }
 
 .sidebar {
   /* Gaps in the token set: no border-width scale, no motion scale, and no
      control-size scale for the rail's own furniture. */
   --ds-rail-hairline: 1px;
+  --ds-rail-expanded-width: 232px;
   --ds-rail-motion: 140ms;
   --ds-rail-control: 30px;
   --ds-rail-mark: 24px;
   --ds-rail-mark-bar: 3px;
   --ds-rail-tooltip-offset: 12px;
-  --ds-rail-layer: 40;
-  --ds-rail-collapsed-gutter: 12px;
+  --ds-rail-layer: 45;
+  --ds-rail-collapsed-gutter: 8px;
   --ds-rail-collapsed-brand-gap: 14px;
   --ds-rail-dot: 7px;
   --ds-rail-dot-top: 7px;
   --ds-rail-dot-right: 10px;
+  /* Room to breathe: a taller row, space between rows, and the label set a
+     little apart from its icon. The list scrolls, so this never cuts anything. */
+  --ds-rail-compact-item: 52px;
+  --ds-rail-compact-row-gap: 6px;
+  --ds-rail-menu-width: 224px;
 }
 
 .sidebar__brand {
@@ -57,14 +71,16 @@
   white-space: nowrap;
 }
 
-.sidebar__collapse,
-.sidebar__expand {
+/* Open: Collapse sits at the far end of the brand row, always visible. */
+.sidebar__brand ::deep .sidebar__collapse { flex: 0 0 auto; margin-left: auto; color: var(--colors-text-muted); }
+
+.sidebar__brand-toggle {
+  position: relative;
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   width: var(--ds-rail-control);
   height: var(--ds-rail-control);
-  margin-left: auto;
   padding: var(--spacing-none);
   color: var(--colors-text-muted);
   background: transparent;
@@ -76,62 +92,153 @@
     color var(--ds-rail-motion) ease;
 }
 
-.sidebar__collapse:hover {
+.sidebar__brand-toggle:hover,
+.sidebar__brand-toggle:focus-visible {
   color: var(--colors-text-primary);
   background: var(--colors-interaction-hover);
 }
 
-/* Collapsed, the mark itself becomes the expand control: the icon takes its
-   place on hover, so the rail keeps its identity at rest. */
-.sidebar__expand { width: auto; margin: var(--spacing-none); }
-.sidebar__expand .sidebar__expand-icon { display: none; }
-.sidebar__expand:hover .sidebar__mark { display: none; }
-.sidebar__expand:hover .sidebar__expand-icon { display: grid; place-items: center; }
+/* The logo stays calm at rest and becomes the rail control only when someone
+   reaches for it. Keyboard focus gets the same clear affordance as hover. */
+.sidebar__brand-toggle-icon { display: none; }
 
-.sidebar__nav { margin-top: var(--spacing-2xl); }
+.sidebar__brand-toggle:hover .sidebar__mark,
+.sidebar__brand-toggle:focus-visible .sidebar__mark { display: none; }
+
+.sidebar__brand-toggle:hover .sidebar__brand-toggle-icon,
+.sidebar__brand-toggle:focus-visible .sidebar__brand-toggle-icon {
+  display: grid;
+  place-items: center;
+}
+
+/* Every place is in one list — the pages, then Knowledge, Help and Settings —
+   and the list scrolls when the window is short; only the account stays at
+   the foot. Items keep their full size at every height. */
+.sidebar__nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin-top: var(--spacing-2xl);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-color: var(--colors-surface-border) transparent;
+  scrollbar-width: thin;
+}
+
+/* A soft fade at the foot of the list while there is more below it. It is
+   painted over the list, not cut out of it, so it hides nothing that sits
+   outside the rail (the tooltips). At the end of the list it covers only
+   empty space. */
+.sidebar__nav::after {
+  position: sticky;
+  bottom: 0;
+  display: block;
+  height: var(--spacing-xl);
+  margin-top: calc(var(--spacing-xl) * -1);
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(transparent, var(--colors-sidebar-background));
+}
+.sidebar__nav { padding-bottom: var(--spacing-xl); }
+
+/* Compact rows sit a little apart, so the labels never crowd the next icon. */
+.sidebar.is-collapsed ::deep .nav-item { margin-block: var(--ds-rail-compact-row-gap); }
+
+/* Between the pages and Knowledge, Help and Settings. */
+.sidebar__divider {
+  height: var(--ds-rail-hairline);
+  margin: var(--spacing-md) var(--spacing-sm);
+  background: var(--colors-surface-border);
+}
 
 ::deep .sidebar__group-label {
   margin: var(--spacing-none) var(--spacing-sm) var(--spacing-sm);
   color: var(--colors-text-subtle);
 }
 
-.sidebar__footer { margin-top: auto; }
+.sidebar__footer {
+  flex: 0 0 auto;
+  padding-top: var(--spacing-sm);
+  border-top: var(--ds-rail-hairline) solid var(--colors-surface-border);
+}
 
 /* ── Collapsed ──────────────────────────────────────────────────────────── */
-/* Labels live inside child components, so reaching them needs ::deep. This is
-   the sanctioned use: the rail owns the collapsed layout, the row owns how a
-   row looks. */
+/* The compact rail keeps short labels visible. Full identities stay in each
+   component and return when the temporary expanded rail opens. */
 
 .sidebar.is-collapsed ::deep .sidebar__wordmark,
 .sidebar.is-collapsed ::deep .sidebar__group-label {
   display: none;
 }
 
+/* Only the rail's own buttons lose their names; the menus they open keep
+   theirs (the business's name under "Signed in"). */
 .sidebar.is-collapsed ::deep .nav-item__label,
-.sidebar.is-collapsed ::deep .workspace__identity,
-.sidebar.is-collapsed ::deep .user-card__identity {
+.sidebar.is-collapsed ::deep .workspace__trigger .workspace__identity,
+.sidebar.is-collapsed ::deep .user-card > .user-card__identity {
   display: none;
+}
+
+.sidebar.is-collapsed ::deep .nav-item__compact-label,
+.sidebar.is-collapsed ::deep .workspace__compact-label,
+.sidebar.is-collapsed ::deep .user-card__compact-label {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  color: inherit;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar.is-collapsed ::deep .nav-item,
 .sidebar.is-collapsed ::deep .workspace__trigger,
 .sidebar.is-collapsed ::deep .user-card {
+  flex-direction: column;
   justify-content: center;
-  padding: var(--spacing-none);
+  gap: var(--spacing-xs);
+  min-height: var(--ds-rail-compact-item);
+  padding: var(--spacing-xs) var(--spacing-2xs);
 }
 
-.sidebar.is-collapsed ::deep .workspace__trigger { grid-template-columns: auto; }
+.sidebar.is-collapsed ::deep .workspace__trigger {
+  display: flex;
+  border-color: transparent;
+  background: transparent;
+}
+
+.sidebar.is-collapsed ::deep .workspace__trigger:hover,
+.sidebar.is-collapsed ::deep .user-card:hover { background: var(--colors-interaction-hover); }
+
+.sidebar.is-collapsed ::deep .workspace__chevron,
+.sidebar.is-collapsed ::deep .user-card__chevron { display: none; }
+
+.sidebar.is-collapsed ::deep .workspace__menu {
+  top: 0;
+  right: auto;
+  left: calc(100% + var(--spacing-sm));
+  width: var(--ds-rail-menu-width);
+}
+
+.sidebar.is-collapsed ::deep .user-card__menu {
+  right: auto;
+  bottom: 0;
+  left: calc(100% + var(--spacing-sm));
+  width: var(--ds-rail-menu-width);
+}
 
 /* Narrower gutter: with no labels to clear, the icons want to sit closer to
    the edges than the expanded rail allows. */
 .sidebar.is-collapsed { padding-inline: var(--ds-rail-collapsed-gutter); }
 
-/* The lockup stacks, because side by side there is no room for the mark and
-   the expand control on a rail this narrow. */
+.sidebar.is-collapsed {
+  width: 100%;
+  box-shadow: none;
+}
+
+/* The compact header leaves the logo in the same place as the labels below. */
 .sidebar.is-collapsed .sidebar__brand {
-  flex-direction: column;
-  gap: var(--ds-rail-collapsed-brand-gap);
-  padding: var(--spacing-none) var(--spacing-none) var(--spacing-xl);
+  justify-content: center;
+  padding: var(--spacing-none) var(--spacing-2xs) var(--spacing-lg);
 }
 
 /* The count becomes a dot. A row with no label has nowhere to put a number —
@@ -154,20 +261,23 @@
   text-indent: -100%;
 }
 
-/* A collapsed rail hides every label, so the tooltip is the only name an item
-   has. Built from data-tooltip rather than title, which appears far too slowly
-   to help someone scanning the rail. */
+/* Tooltips still reveal full destination names when compact labels are
+   shortened, such as Products & Services becoming Products. */
 .sidebar.is-collapsed [data-tooltip],
 .sidebar.is-collapsed ::deep [data-tooltip] {
   position: relative;
 }
 
+/* Placed against the window (fixed), not inside the rail, so the scrolling
+   list cannot clip them. Where to put each one is worked out when it is
+   pointed at or focused (followRailTooltips in aurora-interop.js): the
+   middle of the item's height, just past the rail's edge. */
 .sidebar.is-collapsed [data-tooltip]::after,
 .sidebar.is-collapsed ::deep [data-tooltip]::after {
   content: attr(data-tooltip);
-  position: absolute;
-  top: 50%;
-  left: calc(100% + var(--ds-rail-tooltip-offset));
+  position: fixed;
+  top: var(--ds-tip-top, -100vh);
+  left: var(--ds-tip-left, 0);
   z-index: calc(var(--ds-rail-layer) + 2);
   padding: var(--spacing-xs) var(--spacing-sm);
   color: var(--colors-text-inverse);

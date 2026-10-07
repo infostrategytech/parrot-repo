@@ -1,0 +1,118 @@
+.ds-voice-aura {
+  /* An illustration, like the orb, so the same in both themes. The agent's
+     light is the orb's aurora (teal, cyan, blue, violet); the person's is
+     warm (amber, orange, rose), so the two never read as one. */
+  --ds-voice-aura-cool-1: var(--p-color-teal-400);
+  --ds-voice-aura-cool-2: var(--p-color-cyan-500);
+  --ds-voice-aura-cool-3: var(--p-color-blue-500);
+  --ds-voice-aura-cool-4: var(--p-color-violet-500);
+  --ds-voice-aura-warm-1: var(--p-color-amber-400);
+  --ds-voice-aura-warm-2: var(--p-color-orange-500);
+  --ds-voice-aura-warm-3: var(--p-color-rose-500);
+  /* Only the alpha of a mask counts; any solid colour cuts a band's middle out. */
+  --ds-voice-aura-solid: linear-gradient(var(--p-white) 0 0);
+  /* Missing from the token set: the two bands of light along the edge (a
+     bright line, and a wide halo reaching about 80px in), how soft each is,
+     the crisp rim at the very edge, and the motion. */
+  --ds-voice-aura-tight: 4px;
+  --ds-voice-aura-tight-blur: 10px;
+  --ds-voice-aura-wide: 16px;
+  --ds-voice-aura-wide-blur: 34px;
+  --ds-voice-aura-rim: 2px;
+  --ds-voice-aura-turn: 12s;
+  --ds-voice-aura-fade: 450ms;
+  /* How bright each light is with no voice; the voice lifts it to full. */
+  --ds-voice-aura-rest: 0.28;
+
+  /* 0 to 1, written by the voice module. */
+  --level: 0;
+
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Each tone (cool, warm) is a soft glow along the inside of the edge and a
+   crisp rim at the edge itself, faded in for its state. The glow is a band
+   of light, blurred: half its blur falls outside the surface and is cut off,
+   so it only ever spreads inward. Inside each, the light itself follows the voice. */
+.ds-voice-aura__glow,
+.ds-voice-aura__rim {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity var(--ds-voice-aura-fade) ease;
+}
+.ds-voice-aura__glow.is-tight { --ds-voice-aura-band: var(--ds-voice-aura-tight); filter: blur(var(--ds-voice-aura-tight-blur)) saturate(1.08); }
+.ds-voice-aura__glow.is-wide { --ds-voice-aura-band: var(--ds-voice-aura-wide); filter: blur(var(--ds-voice-aura-wide-blur)) saturate(1.08); }
+.ds-voice-aura__band,
+.ds-voice-aura__rim {
+  overflow: hidden;
+  -webkit-mask: var(--ds-voice-aura-solid) content-box, var(--ds-voice-aura-solid);
+  -webkit-mask-composite: xor;
+  mask: var(--ds-voice-aura-solid) content-box exclude, var(--ds-voice-aura-solid);
+}
+.ds-voice-aura__band {
+  position: absolute;
+  inset: 0;
+  padding: var(--ds-voice-aura-band);
+  border-radius: inherit;
+}
+.ds-voice-aura__rim { padding: var(--ds-voice-aura-rim); }
+
+/* Speech rarely lifts the level past half, so it counts nearly double: a
+   quiet voice still shows. */
+.ds-voice-aura__light {
+  position: absolute;
+  opacity: calc(var(--ds-voice-aura-rest) + min(1, var(--level) * 1.8) * (1 - var(--ds-voice-aura-rest)));
+}
+/* The agent: an aurora turning round the edge. A square three times as wide
+   as the surface, centred on it, so it covers every corner as it turns. */
+.is-cool .ds-voice-aura__light {
+  top: 50%;
+  left: -100%;
+  width: 300%;
+  aspect-ratio: 1;
+  background: conic-gradient(var(--ds-voice-aura-cool-1), var(--ds-voice-aura-cool-2), var(--ds-voice-aura-cool-3), var(--ds-voice-aura-cool-4), var(--ds-voice-aura-cool-1));
+  translate: 0 -50%;
+  will-change: rotate;
+  animation: ds-voice-aura-turn var(--ds-voice-aura-turn) linear infinite;
+}
+/* The person: warm along the bottom edge, rising up the sides as they speak up. */
+.is-warm .ds-voice-aura__light {
+  inset: 0;
+  background: radial-gradient(ellipse 110% 100% at 50% 100%, var(--ds-voice-aura-warm-1), var(--ds-voice-aura-warm-2) 30%, var(--ds-voice-aura-warm-3) 60%, transparent 90%);
+  transform-origin: 50% 100%;
+  scale: 1 calc(0.8 + var(--level) * 0.5);
+}
+
+.ds-voice-aura[data-state="idle"] { --ds-voice-aura-rest: 0.2; }
+.ds-voice-aura[data-state="idle"] .is-cool { opacity: 0.3; }
+.ds-voice-aura[data-state="idle"] .is-cool.is-wide { opacity: 0.18; }
+/* Speaking and listening rest as calmly as before; the voice lifts them to full. */
+.ds-voice-aura[data-state="speaking"] { --ds-voice-aura-rest: 0.3; }
+.ds-voice-aura[data-state="speaking"] .is-cool { opacity: 1; }
+.ds-voice-aura[data-state="speaking"] .is-cool.is-wide { opacity: 0.8; }
+.ds-voice-aura[data-state="thinking"] { --ds-voice-aura-rest: 0.24; }
+.ds-voice-aura[data-state="thinking"] .is-cool { opacity: 0.42; }
+.ds-voice-aura[data-state="thinking"] .is-cool.is-wide { opacity: 0.3; }
+.ds-voice-aura[data-state="listening"] { --ds-voice-aura-rest: 0.25; }
+.ds-voice-aura[data-state="listening"] .is-warm { opacity: 1; }
+.ds-voice-aura[data-state="listening"] .is-warm.is-wide { opacity: 0.85; }
+/* Lights that are off stop moving. */
+.ds-voice-aura:is([data-state="off"], [data-state="listening"]) .is-cool .ds-voice-aura__light { animation-play-state: paused; }
+
+@keyframes ds-voice-aura-turn {
+  to { rotate: 1turn; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-voice-aura__glow,
+  .ds-voice-aura__rim { transition: none; }
+  .is-cool .ds-voice-aura__light { animation: none; }
+  .is-warm .ds-voice-aura__light { scale: none; }
+}

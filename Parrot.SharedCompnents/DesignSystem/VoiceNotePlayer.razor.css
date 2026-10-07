@@ -1,0 +1,38 @@
+.ds-voice-note {
+  /* Missing from the token set: the waveform's bar width and height. The
+     colours follow the bubble the note sits in. */
+  --ds-voice-note-bar: 3px;
+  --ds-voice-note-height: 24px;
+  --ds-voice-note-ink: var(--colors-brand-primary);
+  --ds-voice-note-rest: color-mix(in srgb, var(--ds-voice-note-ink) 40%, transparent);
+  /* 0 to 1, written by the voice module as it plays. */
+  --progress: 0;
+
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-width: 0;
+  color: var(--ds-voice-note-ink);
+}
+.ds-voice-note ::deep .ds-voice-note__play { flex: none; color: var(--ds-voice-note-ink); }
+.ds-voice-note__icon { display: grid; flex: none; place-items: center; width: var(--spacing-3xl); }
+.ds-voice-note__wave { position: relative; display: grid; flex: 1; min-width: 0; }
+.ds-voice-note__bars {
+  display: flex;
+  grid-area: 1 / 1;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  height: var(--ds-voice-note-height);
+}
+.ds-voice-note__bars i {
+  flex: none;
+  width: var(--ds-voice-note-bar);
+  height: calc(var(--ds-voice-note-height) * var(--peak));
+  background: var(--ds-voice-note-rest);
+  border-radius: var(--radius-radius-full);
+}
+/* The same bars over the top, in full ink, showing only as far as it has played. */
+.ds-voice-note__bars.is-played { clip-path: inset(0 calc((1 - var(--progress)) * 100%) 0 0); }
+.ds-voice-note__bars.is-played i { background: var(--ds-voice-note-ink); }
+.ds-voice-note ::deep .ds-voice-note__time { flex: none; font-variant-numeric: tabular-nums; }
+.ds-voice-note audio { display: none; }

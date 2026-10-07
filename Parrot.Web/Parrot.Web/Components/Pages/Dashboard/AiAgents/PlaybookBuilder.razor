@@ -1,4 +1,6 @@
-@page "/dashboard/ai-agents/{AgentId}/playbooks/{PlaybookId}"
+@* Not routed for now: Playbooks and the builder canvas are coming soon
+   (designer's decision). Their addresses open the agent page instead
+   (PlaybooksComingSoon). Kept for when they are designed. *@
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject AiAgentsState AiAgentsState
@@ -23,7 +25,7 @@
                     Title="Playbook not found"
                     Description="This playbook does not exist.">
             <Action>
-                <Button Variant="ButtonVariant.Secondary" @onclick='() => Nav.NavigateTo("/dashboard/ai-agents")'>Back to agents</Button>
+                <Button Variant="ButtonVariant.Secondary" @onclick='() => Nav.NavigateTo("/ai-operations")'>Back to agents</Button>
             </Action>
         </EmptyState>
     </main>
@@ -155,7 +157,7 @@ else
         if (_showTestPanel) _selectedStepId = string.Empty;
     }
 
-    private void BackToAgent() => Nav.NavigateTo($"/dashboard/ai-agents/{AgentId}");
+    private void BackToAgent() => Nav.NavigateTo($"/ai-operations/{AgentId}");
 
     private void OpenSaveModal() => _showSaveModal = true;
     private void CloseSaveModal() => _showSaveModal = false;

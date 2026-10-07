@@ -1,0 +1,108 @@
+/* The composer's own surface, so the question reads as the composer asking:
+   the same fill, edge, corner and lift. Rows are numbered like keys. */
+.choice-prompt {
+  /* Gaps in the token set: the key badge and the tick box / ring sizes. */
+  --ds-choice-prompt-key: 22px;
+  --ds-choice-prompt-mark: 18px;
+  --ds-choice-prompt-ring: 1.5px;
+  --ds-choice-prompt-shadow: 36px;
+
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-lg) var(--ds-choice-prompt-shadow) var(--colors-surface-shadow);
+  outline: none;
+  animation: choice-prompt-in var(--ds-motion-base) var(--ds-motion-enter) both;
+}
+
+.choice-prompt__head {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs) var(--spacing-xs) 0;
+}
+.choice-prompt__head ::deep p { margin: 0; }
+.choice-prompt__head ::deep span { color: var(--colors-text-muted); }
+
+.choice-prompt__options { display: grid; gap: var(--spacing-2xs); }
+
+.choice-prompt__options ::deep .choice-prompt__option,
+.choice-prompt__other {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: 100%;
+  min-height: var(--spacing-4xl);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-radius-lg);
+}
+.choice-prompt__other { grid-template-columns: auto minmax(0, 1fr); }
+
+.choice-prompt__options ::deep .choice-prompt__option.is-picked,
+.choice-prompt__other.is-picked { background: var(--colors-accent-brand-subtle); }
+.choice-prompt__options ::deep .choice-prompt__option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--ds-choice-prompt-ring) var(--colors-interaction-focus);
+}
+
+.choice-prompt__key {
+  display: grid;
+  place-items: center;
+  width: var(--ds-choice-prompt-key);
+  height: var(--ds-choice-prompt-key);
+  color: var(--colors-text-muted);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-sm);
+}
+.choice-prompt__options ::deep .choice-prompt__option.is-picked .choice-prompt__key,
+.choice-prompt__other.is-picked .choice-prompt__key {
+  color: var(--colors-brand-primary);
+  border-color: var(--colors-accent-brand-border);
+}
+
+.choice-prompt__text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.choice-prompt__text ::deep small { color: var(--colors-text-muted); }
+
+/* A tick box for several, a ring for one. */
+.choice-prompt__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-choice-prompt-mark);
+  height: var(--ds-choice-prompt-mark);
+  color: var(--colors-text-on-primary);
+  box-shadow: inset 0 0 0 var(--ds-choice-prompt-ring) var(--colors-surface-input);
+}
+.choice-prompt__mark.is-box { border-radius: var(--radius-radius-sm); }
+.choice-prompt__mark.is-ring { border-radius: var(--radius-radius-full); }
+.choice-prompt__options ::deep .is-picked .choice-prompt__mark {
+  background: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-choice-prompt-ring) var(--colors-brand-primary);
+}
+
+/* One line, like the rows above it, with its words level with their labels;
+   it still grows if they write more. */
+.choice-prompt__other ::deep .choice-prompt__other-input {
+  --ds-text-area-plain-min-height: var(--spacing-3xl);
+  min-width: 0;
+  padding-inline: 0;
+}
+
+.choice-prompt__foot {
+  display: flex;
+  gap: var(--spacing-xs);
+  justify-content: flex-end;
+  padding-top: var(--spacing-2xs);
+}
+
+@keyframes choice-prompt-in {
+  from { opacity: 0; transform: translateY(var(--spacing-sm)); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice-prompt { animation: none; }
+}

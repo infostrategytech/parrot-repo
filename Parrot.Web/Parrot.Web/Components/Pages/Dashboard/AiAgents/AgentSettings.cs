@@ -1,0 +1,233 @@
+using System.Text.Json;
+using Parrot.Web.Services;
+
+namespace Parrot.Web.Components.Pages.Dashboard.AiAgents;
+
+/// <summary>A connected workspace channel that an agent may answer on.</summary>
+public sealed record AgentChannelChoice(string Key, string Name, string? AccountName);
+
+/// <summary>The topics of Advanced settings, which a basic rule's Change opens.</summary>
+public enum AgentTopic { Talk, Actions, Handoff, Knowledge }
+
+/// <summary>
+/// What an agent does and how, beyond what Parrot stores (name, description,
+/// mascot, channels): the basics chosen on the setup screen, and the advanced
+/// settings on the agent's page. Frontend only until the agents API has
+/// them; see agents-backend-requests.
+/// </summary>
+public sealed class AgentSettings
+{
+    // ── Basics ──────────────────────────────────────────────────────────────
+
+    /// <summary>The job it was set up for; owners can have one agent per role.</summary>
+    public AgentRoleTemplate Role { get; set; } = AgentRoleTemplate.Support;
+
+    /// <summary>Build my own: the job's name, in the owner's words ("Bookings"). Its description is the agent's.</summary>
+    public string CustomRole { get; set; } = string.Empty;
+
+    /// <summary>Who it passes a customer to when it cannot help, in the owner's words. Empty: the owner, in the Inbox.</summary>
+    public string HandoverTo { get; set; } = string.Empty;
+
+    public bool CanOfferDiscounts { get; set; }
+    public bool CanApproveRefunds { get; set; }
+
+    // ── How it talks ────────────────────────────────────────────────────────
+
+    public AgentVoicePreset Tone { get; set; } = AgentVoicePreset.Warm;
+    public AgentResponseLength Length { get; set; } = AgentResponseLength.Balanced;
+    public AgentEmojiUsage Emoji { get; set; } = AgentEmojiUsage.Light;
+
+    /// <summary>Its first message, in the owner's words. Empty: one written for its role.</summary>
+    public string Greeting { get; set; } = string.Empty;
+
+    /// <summary>Words and phrases it never says, one each, as the owner added them.</summary>
+    public List<string> AvoidPhrases { get; set; } = [];
+
+    // ── What it can do ──────────────────────────────────────────────────────
+
+    public bool CanRecommend { get; set; } = true;
+    public bool CanCheckOrders { get; set; }
+
+    /// <summary>Asks for a name and phone number before handing over, so the team can follow up.</summary>
+    public bool CanTakeDetails { get; set; } = true;
+
+    // ── When it hands over (asking for a person always does) ────────────────
+
+    public bool HandOverWhenUpset { get; set; } = true;
+    public bool HandOverAfterMisses { get; set; } = true;
+    public bool HandOverBigOrders { get; set; }
+    public int BigOrderNaira { get; set; } = 50000;
+
+    // ── What else it knows ──────────────────────────────────────────────────
+
+    /// <summary>What only this agent should know; the business's knowledge is shared by every agent.</summary>
+    public string Notes { get; set; } = string.Empty;
+
+    /// <summary>Files added to those notes, by name (a price list, a booking policy). Frontend only until the API takes uploads.</summary>
+    public List<string> NoteFiles { get; set; } = [];
+
+    /// <summary>Topics of the shared knowledge this agent leaves out. None by default: it uses everything taught.</summary>
+    public List<KnowledgeTopic> LeftOut { get; set; } = [];
+
+    /// <summary>Whether it answers from a topic of the shared knowledge.</summary>
+    public bool Uses(KnowledgeTopic topic) => !LeftOut.Contains(topic);
+
+    public AgentSettings Copy()
+    {
+        var copy = (AgentSettings)MemberwiseClone();
+        copy.NoteFiles = [.. NoteFiles];
+        copy.LeftOut = [.. LeftOut];
+        return copy;
+    }
+
+    /// <summary>
+    /// What a job means for how it works: its tone and reply length, what it
+    /// can do and when it hands over. Choosing a job sets these (and nothing
+    /// about its name or look), so a non-technical owner gets sensible
+    /// settings for that job without opening Advanced settings.
+    /// </summary>
+    public void UseDefaultsFor(AgentRoleTemplate role)
+    {
+        (Tone, Length) = role switch
+        {
+            AgentRoleTemplate.Sales => (AgentVoicePreset.Upbeat, AgentResponseLength.Balanced),
+            AgentRoleTemplate.Orders => (AgentVoicePreset.Professional, AgentResponseLength.Concise),
+            _ => (AgentVoicePreset.Warm, AgentResponseLength.Balanced),
+        };
+        // Sales suggests what to buy; support and orders look orders up.
+        CanRecommend = role is AgentRoleTemplate.Sales or AgentRoleTemplate.Orders or AgentRoleTemplate.Custom;
+        CanCheckOrders = role is AgentRoleTemplate.Support or AgentRoleTemplate.Orders;
+        CanTakeDetails = true;
+        HandOverWhenUpset = true;
+        HandOverAfterMisses = true;
+        // A person closes large sales.
+        HandOverBigOrders = role == AgentRoleTemplate.Sales;
+    }
+}
+
+/// <summary>
+/// An agent being set up or changed: everything the setup screen and the
+/// agent's settings edit, so neither touches the agent until it is saved.
+/// </summary>
+public sealed class AgentForm
+{
+    public string Name { get; set; } = string.Empty;
+
+    public string Mascot { get; set; } = "Nova";
+
+    /// <summary>The owner changed an advanced setting: choosing another job no longer resets them.</summary>
+    public bool Tuned { get; set; }
+
+    /// <summary>A custom role's job, in the owner's words.</summary>
+    public string Job { get; set; } = string.Empty;
+
+    /// <summary>A job has been chosen. A new agent starts without one, so setup asks that first and shows the rest after.</summary>
+    public bool HasRole { get; set; }
+
+    public HashSet<string> Channels { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+    public AgentSettings Settings { get; set; } = new();
+
+    public AgentRole Role => AgentRole.Of(Settings.Role);
+
+    /// <summary>The job as owners read it: the role's name, or the owner's own for Build my own.</summary>
+    public string RoleName => AgentRole.NameOf(Settings);
+
+    /// <summary>Build my own needs its job named; the others are named already.</summary>
+    public bool HasRoleName => Settings.Role != AgentRoleTemplate.Custom || !string.IsNullOrWhiteSpace(Settings.CustomRole);
+
+    public bool HasName => !string.IsNullOrWhiteSpace(Name);
+    public string DisplayName => HasName ? Name.Trim() : "your agent";
+
+    /// <summary>
+    /// A new agent's starting point: no job and no name yet (usability
+    /// testing, 4 October: a job already chosen and filled in left owners
+    /// unsure what to do), a look no other agent wears, and every channel no
+    /// live agent answers yet; on the first agent, all of them.
+    /// </summary>
+    public static AgentForm Suggested(IReadOnlyList<AiAgent> others, IEnumerable<string>? availableChannels = null)
+    {
+        var form = new AgentForm { Mascot = FreeMascot(AgentBuilderCopy.Mascots[0], others) };
+        var available = availableChannels is null
+            ? AgentBuilderCopy.Channels.Select(c => c.Key).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : availableChannels.ToHashSet(StringComparer.OrdinalIgnoreCase);
+        foreach (var channel in AgentBuilderCopy.Channels.Where(c => available.Contains(c.Key) && Covering(others, c.Key).Count == 0))
+            form.Channels.Add(channel.Key);
+        return form;
+    }
+
+    /// <summary>A job: its sensible settings come with it (never a name), unless the owner has tuned them.</summary>
+    public void Choose(AgentRole role, IReadOnlyList<AiAgent> others)
+    {
+        Settings.Role = role.Id;
+        HasRole = true;
+        if (!Tuned) Settings.UseDefaultsFor(role.Id);
+    }
+
+    public void ChooseAvatar(string mascot) => Mascot = mascot;
+
+    // The preferred avatar unless another agent wears it; then the first free one.
+    private static string FreeMascot(string preferred, IReadOnlyList<AiAgent> others)
+    {
+        bool Taken(string m) => others.Any(a => a.Mascot == m);
+        return !Taken(preferred) ? preferred : AgentBuilderCopy.Mascots.FirstOrDefault(m => !Taken(m)) ?? preferred;
+    }
+
+    /// <summary>The names of live agents already answering on a channel.</summary>
+    public static List<string> Covering(IReadOnlyList<AiAgent> others, string key) => others
+        .Where(a => a.IsActive && !a.IsDraft && a.Channels.Any(c => c.IsEnabled && string.Equals(c.Key, key, StringComparison.OrdinalIgnoreCase)))
+        .Select(a => a.Name)
+        .ToList();
+
+    public static AgentForm From(AiAgent agent)
+    {
+        var form = new AgentForm
+        {
+            Name = agent.Name,
+            Mascot = agent.Mascot,
+            HasRole = true,
+            // Its settings are its own: another job keeps them.
+            Tuned = true,
+            Job = agent.Settings.Role == AgentRoleTemplate.Custom ? agent.Description : string.Empty,
+            Settings = agent.Settings.Copy(),
+        };
+        foreach (var channel in agent.Channels.Where(c => c.IsEnabled)) form.Channels.Add(channel.Key);
+        return form;
+    }
+
+    /// <summary>A new agent from this form: turned on, or a draft.</summary>
+    public AiAgent ToAgent(bool live)
+    {
+        var agent = new AiAgent
+        {
+            IsDraft = !live,
+            IsActive = live,
+            // A person can always step in; who that is, is in the settings.
+            HumanTakeover = true,
+            Channels = AgentBuilderCopy.DefaultChannels(Channels),
+        };
+        ApplyTo(agent);
+        return agent;
+    }
+
+    public void ApplyTo(AiAgent agent)
+    {
+        var job = Job.Trim();
+        agent.Name = Name.Trim();
+        agent.Mascot = Mascot;
+        agent.Description = Settings.Role == AgentRoleTemplate.Custom && job.Length > 0 ? job : Role.Description;
+        agent.Settings = Settings.Copy();
+        foreach (var channel in agent.Channels)
+            channel.IsEnabled = Channels.Contains(channel.Key);
+    }
+
+    /// <summary>Everything that would be saved, to tell whether anything changed.</summary>
+    public string Snapshot() => JsonSerializer.Serialize(new
+    {
+        Name = Name.Trim(),
+        Mascot,
+        Job = Job.Trim(),
+        Channels = Channels.Select(c => c.ToLowerInvariant()).Order(),
+        Settings,
+    });
+}

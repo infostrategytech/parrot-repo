@@ -1,0 +1,154 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A question asked where the person types, with answers to pick: it takes the
+   composer's place, the way AI chats ask for a choice (Claude, for one), and
+   the composer comes back once it is answered or skipped.
+
+   One choice or several (Multiple), each row numbered so a key picks it, and
+   "Something else" to answer in their own words. Send hands back what was
+   picked and typed; the caller turns it into the reply. *@
+
+<section class="choice-prompt @Class" role="group" aria-labelledby="@_titleId" tabindex="-1"
+         @ref="_root" @onkeydown="KeyAsync">
+    <header class="choice-prompt__head">
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p" id="@_titleId">@Question</Typography>
+        <Typography TextStyle="TextStyle.Small12Medium" As="span">@(Hint ?? (Multiple ? "Pick all that apply" : "Pick one"))</Typography>
+    </header>
+
+    <div class="choice-prompt__options" role="@(Multiple ? "group" : "radiogroup")" aria-labelledby="@_titleId">
+        @for (var i = 0; i < Options.Count; i++)
+        {
+            var option = Options[i];
+            var picked = _picked.Contains(option.Label);
+            var number = i + 1;
+            <RowButton Class="@($"choice-prompt__option {(picked ? "is-picked" : null)}")" Disabled="@Disabled"
+                       role="@(Multiple ? "checkbox" : "radio")" aria-checked="@(picked ? "true" : "false")"
+                       OnClick="() => Toggle(option.Label)">
+                <span class="choice-prompt__key" aria-hidden="true"><Typography TextStyle="TextStyle.Small10Medium" As="span">@number</Typography></span>
+                <span class="choice-prompt__text">
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@option.Label</Typography>
+                    @if (option.Description is { Length: > 0 } description)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small">@description</Typography>
+                    }
+                </span>
+                <span class="@($"choice-prompt__mark {(Multiple ? "is-box" : "is-ring")}")" aria-hidden="true">
+                    @if (picked)
+                    {
+                        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                    }
+                </span>
+            </RowButton>
+        }
+
+        @if (AllowOther)
+        {
+            <div class="@($"choice-prompt__other {(_other.Length > 0 ? "is-picked" : null)}")"
+                 @onfocusin="() => _inOther = true" @onfocusout="() => _inOther = false">
+                <span class="choice-prompt__key" aria-hidden="true"><Typography TextStyle="TextStyle.Small10Medium" As="span">@(Options.Count + 1)</Typography></span>
+                <TextArea Value="@_other" ValueChanged="OtherChanged" Placeholder="@OtherPlaceholder" AriaLabel="@OtherPlaceholder"
+                          Variant="TextAreaVariant.Plain" Rows="1" MaxLength="300" AutoGrow SubmitOnEnter
+                          Disabled="@Disabled" Class="choice-prompt__other-input" @ref="_otherInput" />
+            </div>
+        }
+    </div>
+
+    <footer class="choice-prompt__foot">
+        @if (OnSkip.HasDelegate)
+        {
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Disabled" @onclick="() => OnSkip.InvokeAsync()">@SkipLabel</Button>
+        }
+        <Button Size="ButtonSize.Small" disabled="@(Disabled || !HasAnswer)" @onclick="SendAsync">
+            <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+            <ChildContent>@SubmitLabel</ChildContent>
+        </Button>
+    </footer>
+</section>
+
+@code {
+    private readonly string _titleId = $"choice-prompt-{Guid.NewGuid():N}";
+    private readonly List<string> _picked = [];
+    private string _other = "";
+    private bool _inOther;
+    private ElementReference _root;
+    private TextArea? _otherInput;
+
+    [Parameter, EditorRequired] public string Question { get; set; } = "";
+
+    /// <summary>Under the question; null says "Pick all that apply" or "Pick one".</summary>
+    [Parameter] public string? Hint { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<ChoicePromptOption> Options { get; set; } = [];
+
+    /// <summary>Several answers at once (a tick box each) rather than one (a ring).</summary>
+    [Parameter] public bool Multiple { get; set; }
+
+    /// <summary>A last row to answer in their own words.</summary>
+    [Parameter] public bool AllowOther { get; set; } = true;
+
+    [Parameter] public string OtherPlaceholder { get; set; } = "Something else";
+
+    [Parameter] public string SubmitLabel { get; set; } = "Send";
+
+    [Parameter] public string SkipLabel { get; set; } = "Skip";
+
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>What was picked, in the order shown, and what was typed.</summary>
+    [Parameter] public EventCallback<ChoicePromptAnswer> OnSubmit { get; set; }
+
+    /// <summary>Omit it and there is no Skip.</summary>
+    [Parameter] public EventCallback OnSkip { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private bool HasAnswer => _picked.Count > 0 || _other.Trim().Length > 0;
+
+    // Ready for a number key as soon as it shows, as the composer would be for typing.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await _root.FocusAsync();
+    }
+
+    private void Toggle(string label)
+    {
+        if (Disabled) return;
+        if (_picked.Remove(label)) return;
+        if (!Multiple)
+        {
+            _picked.Clear();
+            _other = "";
+        }
+        _picked.Add(label);
+    }
+
+    private void OtherChanged(string? value)
+    {
+        _other = value ?? "";
+        // One choice: their own words replace a picked row.
+        if (!Multiple && _other.Length > 0) _picked.Clear();
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs args)
+    {
+        if (Disabled || args.IsComposing) return;
+        if (args.Key == "Enter" && !args.ShiftKey && (_inOther || HasAnswer))
+        {
+            await SendAsync();
+            return;
+        }
+        // Number keys pick a row, except while typing in "Something else".
+        if (_inOther || args.CtrlKey || args.MetaKey || args.AltKey) return;
+        if (!int.TryParse(args.Key, out var number) || number < 1) return;
+        if (number <= Options.Count) Toggle(Options[number - 1].Label);
+        else if (AllowOther && number == Options.Count + 1 && _otherInput is not null) await _otherInput.FocusAsync();
+    }
+
+    private async Task SendAsync()
+    {
+        if (Disabled || !HasAnswer) return;
+        var picked = Options.Select(o => o.Label).Where(_picked.Contains).ToList();
+        var other = _other.Trim();
+        await OnSubmit.InvokeAsync(new ChoicePromptAnswer(picked, other.Length > 0 ? other : null));
+    }
+}

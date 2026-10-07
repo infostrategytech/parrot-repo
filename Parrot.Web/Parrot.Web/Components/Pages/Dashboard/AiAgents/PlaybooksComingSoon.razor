@@ -1,0 +1,20 @@
+@page "/ai-operations/{AgentId}/playbooks/{PlaybookId}"
+@page "/dashboard/ai-agents/{AgentId}/playbooks/{PlaybookId}"
+@page "/ai-operations/{AgentId}/builder"
+@page "/dashboard/ai-agents/{AgentId}/builder"
+@layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@inject NavigationManager Nav
+
+@* Playbooks and the builder canvas are coming soon (designer's decision), so
+   their old addresses open the agent page where that is said: a playbook on
+   its Playbooks tab, the canvas on Settings. *@
+
+@code {
+    [Parameter] public string AgentId { get; set; } = string.Empty;
+
+    [Parameter] public string? PlaybookId { get; set; }
+
+    protected override void OnInitialized() =>
+        Nav.NavigateTo($"/ai-operations/{AgentId}?tab={(PlaybookId is null ? "settings" : "playbooks")}", replace: true);
+}

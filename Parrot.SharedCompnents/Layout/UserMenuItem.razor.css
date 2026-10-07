@@ -10,6 +10,7 @@
   border-radius: var(--radius-radius-md);
   text-align: left;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .user-menu-item:hover:not(:disabled) { background: var(--colors-interaction-hover); }

@@ -1,0 +1,30 @@
+/* The Segmented tabs' look: a muted tray whose options share its width, the
+   chosen one a raised card. */
+.ds-segmented {
+  display: flex;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+}
+.ds-segmented__option {
+  display: inline-flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--spacing-3xl);
+  padding-inline: var(--spacing-md);
+  color: var(--colors-text-muted);
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+.ds-segmented__option:hover:not(:disabled):not(.is-chosen) { color: var(--colors-text-primary); }
+.ds-segmented__option:disabled { color: var(--colors-interaction-disabled-foreground); cursor: not-allowed; }
+.ds-segmented__option.is-chosen {
+  color: var(--colors-brand-primary);
+  background: var(--colors-surface-card);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
+}

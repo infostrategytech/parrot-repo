@@ -1,0 +1,87 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@inject Parrot.SharedComponents.Services.VoiceInterop Voice
+@implements IAsyncDisposable
+
+@* A voice note in a conversation, as messaging apps show one: play or pause,
+   its waveform filling in as it plays, and its length. Without audio (a note
+   from before the page was opened) it shows the waveform and length only.
+   Its colours follow the bubble it sits in: set --ds-voice-note-ink (the
+   played bars, the button) and --ds-voice-note-rest (the bars still to play). *@
+<div class="ds-voice-note @Class" @ref="_host">
+    @if (Url is not null)
+    {
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="ds-voice-note__play"
+                aria-label="@(_playing ? "Pause voice note" : "Play voice note")" @onclick="ToggleAsync">
+            <IconLeft><Icon Name="@(_playing ? IconName.RiPauseFill : IconName.RiPlayFill)" /></IconLeft>
+        </Button>
+    }
+    else
+    {
+        <span class="ds-voice-note__icon"><Icon Name="IconName.RiMicFill" /></span>
+    }
+    <span class="ds-voice-note__wave" aria-hidden="true">
+        <span class="ds-voice-note__bars">@Waveform</span>
+        <span class="ds-voice-note__bars is-played">@Waveform</span>
+    </span>
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="ds-voice-note__time">@Clock</Typography>
+    @if (Url is not null)
+    {
+        <audio @ref="_audio" src="@Url" preload="metadata"></audio>
+    }
+</div>
+
+@code {
+    private ElementReference _host;
+    private ElementReference _audio;
+    private VoicePlayer? _player;
+    private DotNetObjectReference<VoiceNotePlayer>? _self;
+    private bool _playing;
+
+    /// <summary>The audio; null when only its length and waveform are known.</summary>
+    [Parameter] public string? Url { get; set; }
+
+    [Parameter] public int Seconds { get; set; }
+
+    /// <summary>The waveform, 0 to 1 per bar.</summary>
+    [Parameter] public IReadOnlyList<double>? Peaks { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private string Clock => $"{Seconds / 60}:{Seconds % 60:00}";
+
+    private RenderFragment Waveform => __builder =>
+    {
+        foreach (var peak in Peaks is { Count: > 0 } peaks ? peaks : Flat)
+        {
+            <i style="--peak: @peak.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"></i>
+        }
+    };
+
+    private static readonly IReadOnlyList<double> Flat = Enumerable.Repeat(0.3, 32).ToList();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_player is not null || Url is null) return;
+        _self ??= DotNetObjectReference.Create(this);
+        try { _player = await Voice.BindPlayerAsync(_audio, _host, Seconds, _self, nameof(PlaybackChanged)); }
+        catch (JSException) { }
+    }
+
+    private async Task ToggleAsync()
+    {
+        if (_player is not null) await _player.ToggleAsync();
+    }
+
+    [JSInvokable]
+    public Task PlaybackChanged(bool playing) => InvokeAsync(() =>
+    {
+        _playing = playing;
+        StateHasChanged();
+    });
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_player is not null) await _player.DisposeAsync();
+        _self?.Dispose();
+    }
+}

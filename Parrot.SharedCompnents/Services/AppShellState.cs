@@ -18,7 +18,9 @@ public sealed class AppShellState
     public const string NarrowQuery = "(max-width: 1180px)";
 
     private bool _collapsedByViewport;
-    private bool? _collapsedByPerson;
+    // The compact rail is the product's default. A person may still expand it
+    // for the current session; narrow viewports continue to begin compact.
+    private bool? _collapsedByPerson = true;
 
     /// <summary>
     /// A deliberate collapse outranks the viewport: if someone collapses the
@@ -31,6 +33,15 @@ public sealed class AppShellState
     public void Toggle()
     {
         _collapsedByPerson = !Collapsed;
+        Changed?.Invoke();
+    }
+
+    public void Collapse()
+    {
+        if (Collapsed)
+            return;
+
+        _collapsedByPerson = true;
         Changed?.Invoke();
     }
 

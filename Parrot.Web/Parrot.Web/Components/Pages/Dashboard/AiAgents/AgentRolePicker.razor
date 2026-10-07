@@ -1,0 +1,82 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+@* "What should it do?": the job, chosen from four compact cards. On the
+   setup screen it comes first, with nothing chosen, and the rest comes in
+   under it once a job is picked (usability testing, 4 October: a job already
+   chosen and filled in left owners unsure what to do). A job sets sensible
+   settings for that kind of agent, never its name. Build my own asks for the
+   job's name and what it does, in one row; on setup, Continue brings in the
+   rest once it has a name. Edits the form only; the host saves it. *@
+
+<section class="agent-roles" aria-labelledby="@($"{_id}-job")">
+    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="@($"{_id}-job")">What should it do?</Typography>
+    <div class="agent-roles__grid">
+        @foreach (var role in AgentRole.All)
+        {
+            var current = role;
+            var chosen = Form.HasRole && Form.Settings.Role == role.Id;
+            // Custom jobs differ from one another, so only the set roles are marked as taken.
+            var doing = role.Id == AgentRoleTemplate.Custom ? null : Others.FirstOrDefault(a => a.Settings.Role == role.Id);
+            <RowButton Class="@($"agent-roles__tile is-{role.Id.ToString().ToLowerInvariant()}{(chosen ? " is-chosen" : null)}")"
+                       OnClick="() => ChooseAsync(current)"
+                       aria-pressed="@(chosen ? "true" : "false")"
+                       title="@(doing is null ? null : $"{doing.Name} does this already")">
+                <span class="agent-roles__icon"><Icon Name="@role.Icon" Size="IconSize.Sm" /></span>
+                <span class="agent-roles__text">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@role.Name</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-roles__muted">@(doing is null ? role.Does : $"{doing.Name} does this already")</Typography>
+                </span>
+                <span class="agent-roles__tick" aria-hidden="true"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
+            </RowButton>
+        }
+    </div>
+
+    @if (Form.HasRole && Form.Settings.Role == AgentRoleTemplate.Custom)
+    {
+        <div class="agent-roles__own">
+            <Input FloatingLabel="Job name"
+                   Value="@Form.Settings.CustomRole"
+                   ValueChanged="v => SetAsync(() => Form.Settings.CustomRole = v ?? string.Empty)"
+                   Error="@(Tried && !Form.HasRoleName)"
+                   HelperText="@(Tried && !Form.HasRoleName ? "Give its job a name." : null)"
+                   maxlength="40" />
+            <Input FloatingLabel="What it does"
+                   Value="@Form.Job"
+                   ValueChanged="v => SetAsync(() => Form.Job = v ?? string.Empty)"
+                   maxlength="200" />
+            @if (OnContinue.HasDelegate)
+            {
+                <Button disabled="@(!Form.HasRoleName)" @onclick="OnContinue">
+                    <ChildContent>Continue</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            }
+        </div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public AgentForm Form { get; set; } = default!;
+
+    /// <summary>Every other agent: the jobs they already do.</summary>
+    [Parameter] public IReadOnlyList<AiAgent> Others { get; set; } = [];
+
+    /// <summary>Saving was tried: a missing job name says so.</summary>
+    [Parameter] public bool Tried { get; set; }
+
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    /// <summary>Build my own's Continue, on setup before the rest appears; no button without it.</summary>
+    [Parameter] public EventCallback OnContinue { get; set; }
+
+    // For the id the heading labels the section by.
+    private readonly string _id = "agent-roles-" + Guid.NewGuid().ToString("N")[..8];
+
+    private Task ChooseAsync(AgentRole role) => SetAsync(() => Form.Choose(role, Others));
+
+    private Task SetAsync(Action change)
+    {
+        change();
+        return OnChange.InvokeAsync();
+    }
+}

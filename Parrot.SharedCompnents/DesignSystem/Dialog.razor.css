@@ -159,8 +159,10 @@
   background: var(--colors-feedback-destructive-subtle);
 }
 
+/* Descriptions are medium and muted everywhere (EmptyState, page ledes), so
+   a dialog's reads the same: scanned, under a title that says it all. */
 .dialog__body {
-  color: var(--colors-text-secondary);
+  color: var(--colors-text-muted);
 }
 
 .dialog__body p { margin: var(--spacing-none); }

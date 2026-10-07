@@ -110,6 +110,13 @@
             <StatusBadge Tone="StatusTone.Success" Glyph="IconName.RiCheckFill">Connected</StatusBadge>
         </div>
 
+        @* Where an agent answers: one channel or many, one short line. *@
+        <div class="ds-gallery__cell">
+            <ChannelStack Channels="@(["instagram"])" />
+            <ChannelStack Channels="@(["whatsapp", "instagram", "facebook"])" />
+            <ChannelStack Channels="@(["whatsapp", "instagram", "facebook", "tiktok", "x", "telegram"])" />
+        </div>
+
         <div class="ds-gallery__stack">
             <InlineError Message="We could not reach the WhatsApp Business API. Your details are saved." />
             <InlineError Tone="InlineErrorTone.Warning" Message="This token expires in 24 hours." />

@@ -1,0 +1,56 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Where something answers, as the channels' own marks overlapping in a row,
+   the way a group of avatars stacks: one channel or ten, it stays one short
+   line. Each mark names itself on hover, and the stack is read out as one
+   list ("WhatsApp, Instagram and Facebook"). Past Max, the rest become "+N".
+
+   The marks are ringed in the surface behind them, so the overlap reads; set
+   --ds-channel-stack-ring when the stack sits on anything but a card. *@
+
+<span class="ds-channel-stack @Class" role="img" aria-label="@Spoken">
+    @foreach (var channel in Shown)
+    {
+        <span class="ds-channel-stack__mark" title="@NameOf(channel)">
+            <ChannelIcon Channel="@channel" Size="IconSize.Sm" />
+        </span>
+    }
+    @if (Hidden.Count > 0)
+    {
+        <span class="ds-channel-stack__mark is-more" title="@List(Hidden.Select(NameOf).ToList())">
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span">+@Hidden.Count</Typography>
+        </span>
+    }
+</span>
+
+@code {
+    /// <summary>Channel keys, in the order to show them: whatsapp, instagram, facebook, tiktok.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<string> Channels { get; set; } = [];
+
+    /// <summary>The most marks shown before the rest become "+N".</summary>
+    [Parameter] public int Max { get; set; } = 5;
+
+    [Parameter] public string? Class { get; set; }
+
+    // With one over the limit, show it rather than a "+1" in its place.
+    private IReadOnlyList<string> Shown => Channels.Count <= Max ? Channels : Channels.Take(Max - 1).ToList();
+
+    private IReadOnlyList<string> Hidden => Channels.Skip(Shown.Count).ToList();
+
+    private string Spoken => List(Channels.Select(NameOf).ToList());
+
+    /// <summary>A channel as owners call it: "whatsapp" is WhatsApp.</summary>
+    public static string NameOf(string channel) => channel.ToLowerInvariant() switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Facebook",
+        "tiktok" => "TikTok",
+        "x" or "twitter" => "X",
+        var other when other.Length > 0 => char.ToUpperInvariant(other[0]) + other[1..],
+        _ => "",
+    };
+
+    private static string List(IReadOnlyList<string> names) =>
+        names.Count <= 1 ? string.Concat(names) : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
+}

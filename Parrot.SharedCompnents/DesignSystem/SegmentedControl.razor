@@ -1,0 +1,60 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@typeparam TValue
+
+@* One choice of a few, all in view, that takes effect straight away: how an
+   agent sounds, how long its replies are. It looks like the Segmented tabs
+   but it is a setting, not a switch between views, so it is a radio group:
+   one stop in the tab order, arrow keys move the choice. *@
+
+<div class="ds-segmented @Class" role="radiogroup" aria-label="@Label">
+    @for (var i = 0; i < Options.Count; i++)
+    {
+        var index = i;
+        var option = Options[i];
+        var chosen = IsChosen(option);
+        <button type="button"
+                role="radio"
+                aria-checked="@(chosen ? "true" : "false")"
+                tabindex="@(chosen || (index == 0 && !Options.Any(IsChosen)) ? 0 : -1)"
+                disabled="@Disabled"
+                class="ds-segmented__option @(chosen ? "is-chosen" : null) @TextStyle.Small12Semibold.ToClassName()"
+                @ref="_buttons[index]"
+                @onclick="() => ChooseAsync(index)"
+                @onkeydown="e => KeyAsync(e, index)">
+            @option.Label
+        </button>
+    }
+</div>
+
+@code {
+    /// <summary>What is being chosen, for screen readers: "Tone", "Reply length".</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter, EditorRequired] public IReadOnlyList<SegmentedOption<TValue>> Options { get; set; } = [];
+
+    [Parameter] public TValue? Value { get; set; }
+    [Parameter] public EventCallback<TValue> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private readonly Dictionary<int, ElementReference> _buttons = [];
+
+    private bool IsChosen(SegmentedOption<TValue> option) => EqualityComparer<TValue>.Default.Equals(option.Value, Value);
+
+    private Task ChooseAsync(int index) => ValueChanged.InvokeAsync(Options[index].Value);
+
+    // Arrow keys choose the next or previous option and follow it, wrapping round.
+    private async Task KeyAsync(KeyboardEventArgs args, int index)
+    {
+        var step = args.Key switch
+        {
+            "ArrowRight" or "ArrowDown" => 1,
+            "ArrowLeft" or "ArrowUp" => -1,
+            _ => 0,
+        };
+        if (step == 0 || Options.Count == 0) return;
+        var next = (index + step + Options.Count) % Options.Count;
+        await ChooseAsync(next);
+        if (_buttons.TryGetValue(next, out var button)) await button.FocusAsync();
+    }
+}

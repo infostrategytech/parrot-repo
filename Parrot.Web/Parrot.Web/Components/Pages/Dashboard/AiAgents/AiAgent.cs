@@ -11,6 +11,15 @@ namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
         public List<Playbook> Playbooks { get; set; } = new();
         public List<AgentChannel> Channels { get; set; } = new();
         public int MessagesToday { get; set; }
+
+        // Frontend only until the agents API has them; see agents-backend-requests.
+
+        /// <summary>Saved but not turned on yet: it answers no one.</summary>
+        public bool IsDraft { get; set; }
+
+        /// <summary>Its job, safety rules, how it talks and when it hands over.</summary>
+        public AgentSettings Settings { get; set; } = new();
+
         public int PlaybookCount => Playbooks.Count;
         public int ChannelCount => Channels.Count(c => c.IsEnabled);
     }

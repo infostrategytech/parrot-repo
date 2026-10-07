@@ -20,7 +20,7 @@
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
-          UserImageUrl="@AuthState.CurrentUser?.LogoUrl">
+          InboxUnread="@Conversations.UnreadConversations">
     <UserMenu>
         <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
         <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
@@ -39,6 +39,11 @@
         @Body
     </ChildContent>
 </AppShell>
+
+@* Before an agent: a channel for it to answer on, then the business checks
+   what its AI will know. *@
+<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentChannelGate />
+<Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiOverlay />
 
 <div id="blazor-error-ui" data-nosnippet>
     An unhandled error has occurred.

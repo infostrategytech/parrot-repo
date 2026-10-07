@@ -1,0 +1,209 @@
+.ds-voice-orb {
+  /* Brand colours, not one flat hue: an aurora round our teal. The ball is
+     the brand teal; the core glows aqua; the rings run from white through
+     green, cyan and blue to violet. Neighbouring hues, so where the gooey
+     blur melts them together they stay bright instead of turning grey. The
+     orb is an illustration, so these are the same in both themes. */
+  --ds-voice-orb-ball: color-mix(in srgb, var(--p-color-teal-600) 60%, var(--p-color-primary-600));
+  --ds-voice-orb-core: var(--p-color-cyan-300);
+  --ds-voice-orb-light: color-mix(in srgb, var(--p-white) 75%, transparent);
+  --ds-voice-orb-ring-1: var(--p-white);
+  --ds-voice-orb-ring-2: var(--p-color-emerald-300);
+  --ds-voice-orb-ring-3: var(--p-color-cyan-400);
+  --ds-voice-orb-ring-4: var(--p-color-blue-500);
+  --ds-voice-orb-ring-5: var(--p-color-violet-400);
+  --ds-voice-orb-glow-cool: color-mix(in srgb, var(--p-color-teal-400) 30%, transparent);
+  --ds-voice-orb-glow-warm: color-mix(in srgb, var(--p-color-violet-400) 28%, transparent);
+  --ds-voice-orb-mic: var(--p-white);
+  /* Missing from the token set: the orb's size and motion. The reference is
+     drawn on a 64px ball shown at about 1.8 times; everything inside is a
+     share of that ball (--ds-voice-orb-unit), so the orb scales as one. */
+  --ds-voice-orb-size: 154px;
+  --ds-voice-orb-wake: 0;
+  --ds-voice-orb-unit: calc(var(--ds-voice-orb-size) / 1.8);
+  /* The reference's 4, 8 and 12px glows on its 64px ball, as shares of
+     the ball, so the glow suits the orb at any size. */
+  --ds-voice-orb-glow-sm: calc(var(--ds-voice-orb-unit) * 0.0625);
+  --ds-voice-orb-glow-md: calc(var(--ds-voice-orb-unit) * 0.125);
+  --ds-voice-orb-glow-lg: calc(var(--ds-voice-orb-unit) * 0.1875);
+  --ds-voice-orb-breath: 4.2s;
+  --ds-voice-orb-turn: 10s;
+  --ds-voice-orb-flare: 6s;
+  --ds-voice-orb-think: 1.6s;
+  --ds-voice-orb-ease: 500ms cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ds-voice-orb-follow: 90ms;
+  --ds-voice-orb-quick: 300ms;
+
+  /* 0 to 1, written by the voice module. */
+  --level: 0;
+
+  position: relative;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-voice-orb-size);
+  aspect-ratio: 1;
+  /* Layout only: paint containment would clip the glow to a square. The
+     ball keeps its own layer (will-change), which is what limits redraws. */
+  contain: layout;
+}
+
+/* The orb as a whole: its glow, and the lift when woken. */
+.ds-voice-orb__body {
+  display: grid;
+  place-items: center;
+  width: var(--ds-voice-orb-unit);
+  aspect-ratio: 1;
+  /* Woken (pointed at), the teal and violet light spreads, as the reference's hover does. */
+  /* Only coloured light leaves the ball. A surface-coloured shadow looked
+     like a white or grey background plate around the transparent orb. */
+  filter:
+    drop-shadow(0 0 calc(var(--ds-voice-orb-glow-lg) * (1 - var(--ds-voice-orb-wake) * 0.17)) var(--ds-voice-orb-glow-cool))
+    drop-shadow(0 calc(var(--ds-voice-orb-glow-sm) * 1.5 * var(--ds-voice-orb-wake)) calc(var(--ds-voice-orb-glow-sm) * (1.25 + var(--ds-voice-orb-wake) * 5.25)) var(--ds-voice-orb-glow-warm));
+  scale: calc(1.2 + var(--ds-voice-orb-wake) * 0.1);
+  transition: scale var(--ds-voice-orb-ease);
+}
+
+/* The ball: the gooey shape everything else melts into. */
+.ds-voice-orb__ball {
+  position: relative;
+  will-change: transform;
+  display: flex;
+  flex-shrink: 0;
+  width: var(--ds-voice-orb-unit);
+  aspect-ratio: 1;
+  background-color: var(--ds-voice-orb-ball);
+  border-radius: 50%;
+  scale: 1.5;
+  animation: ds-voice-orb-breathe var(--ds-voice-orb-breath) ease-in-out infinite;
+}
+
+/* The core: white at the heart, aqua at the edge, flaring as it speaks. */
+.ds-voice-orb__lines {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: calc(var(--ds-voice-orb-unit) * 1.5625);
+  aspect-ratio: 1;
+  background-image: radial-gradient(ellipse at center, var(--ds-voice-orb-light) 15%, var(--ds-voice-orb-core) 50%);
+  clip-path: polygon(50% 25%, 65% 30%, 75% 42%, 75% 58%, 65% 70%, 50% 75%, 35% 70%, 26% 58%, 25% 42%, 35% 30%);
+  translate: -50% -50%;
+  pointer-events: none;
+}
+
+/* Two rings of iridescent light, turning through each other in 3D. */
+.ds-voice-orb__rings {
+  position: absolute;
+  inset: 0;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  perspective: calc(var(--ds-voice-orb-unit) * 2.75);
+}
+.ds-voice-orb__rings::before,
+.ds-voice-orb__rings::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: linear-gradient(var(--ds-voice-orb-ring-1), var(--ds-voice-orb-ring-2), var(--ds-voice-orb-ring-3), var(--ds-voice-orb-ring-4), var(--ds-voice-orb-ring-5)) border-box;
+  border: calc(var(--ds-voice-orb-unit) * 0.09375) solid transparent;
+  border-radius: 50%;
+  mask: linear-gradient(var(--p-white) 0 0) padding-box, linear-gradient(var(--p-white) 0 0);
+  mask-composite: exclude;
+}
+/* Always turning, as the reference's do: seen through the gooey filter,
+   their tilt is what gives the ball its living, uneven edge. */
+.ds-voice-orb__rings::before { animation: ds-voice-orb-ring-180 var(--ds-voice-orb-turn) linear infinite; }
+.ds-voice-orb__rings::after { animation: ds-voice-orb-ring-90 var(--ds-voice-orb-turn) linear infinite; }
+
+/* The microphone at the centre: faint at rest, full when woken. */
+.ds-voice-orb__body { position: relative; }
+.ds-voice-orb__mic {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: calc(var(--ds-voice-orb-unit) * 0.375);
+  aspect-ratio: 1;
+  color: var(--ds-voice-orb-mic);
+  opacity: calc(0.5 + var(--ds-voice-orb-wake) * 0.5);
+  translate: -50% -50%;
+  scale: calc(1 + var(--ds-voice-orb-wake) * 0.1);
+  filter: drop-shadow(0 0 calc(var(--ds-voice-orb-glow-sm) * var(--ds-voice-orb-wake)) var(--ds-voice-orb-mic));
+  transition: opacity var(--ds-voice-orb-quick) ease-in-out, scale var(--ds-voice-orb-quick) ease-in-out;
+  pointer-events: none;
+}
+.ds-voice-orb__mic ::deep svg { width: 100%; height: 100%; }
+
+.ds-voice-orb__defs { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ── States ──────────────────────────────────────────────────────────────── */
+/* Each state moves differently, so it reads at a glance:
+   idle       breathes slowly
+   listening  swells with the person's voice, and nothing else moves faster
+   speaking   swells with the agent's voice, its core flaring, rings hurrying
+   thinking   a slow, even pulse with the core dimmed */
+.ds-voice-orb:is([data-state="listening"], [data-state="speaking"]) .ds-voice-orb__ball {
+  animation: none;
+  scale: calc(1.5 + var(--level) * 0.15);
+  transition: scale var(--ds-voice-orb-follow) linear;
+}
+.ds-voice-orb[data-state="speaking"] .ds-voice-orb__lines {
+  animation: ds-voice-orb-flare var(--ds-voice-orb-flare) ease infinite;
+}
+.ds-voice-orb[data-state="speaking"] .ds-voice-orb__rings::before,
+.ds-voice-orb[data-state="speaking"] .ds-voice-orb__rings::after { animation-duration: calc(var(--ds-voice-orb-turn) / 2); }
+.ds-voice-orb[data-state="thinking"] .ds-voice-orb__ball {
+  animation: ds-voice-orb-think var(--ds-voice-orb-think) ease-in-out infinite;
+}
+.ds-voice-orb[data-state="thinking"] .ds-voice-orb__lines { opacity: 0.55; }
+
+@keyframes ds-voice-orb-think {
+  0%, 100% { scale: 1.44; }
+  50% { scale: 1.56; }
+}
+@keyframes ds-voice-orb-breathe {
+  0% { scale: 1.5; }
+  15% { scale: 1.53; }
+  30% { scale: 1.48; }
+  45% { scale: 1.44; }
+  60% { scale: 1.47; }
+  85% { scale: 1.53; }
+  100% { scale: 1.5; }
+}
+@keyframes ds-voice-orb-ring-180 {
+  0% { transform: rotateY(180deg) rotateX(180deg) rotateZ(180deg); }
+  50% { transform: rotateY(360deg) rotateX(360deg) rotateZ(360deg) scale(1.1); }
+  100% { transform: rotateY(540deg) rotateX(540deg) rotateZ(540deg); }
+}
+@keyframes ds-voice-orb-ring-90 {
+  0% { transform: rotateY(90deg) rotateX(90deg) rotateZ(90deg); }
+  50% { transform: rotateY(270deg) rotateX(270deg) rotateZ(270deg) scale(1.1); }
+  100% { transform: rotateY(450deg) rotateX(450deg) rotateZ(450deg); }
+}
+@keyframes ds-voice-orb-flare {
+  2% { clip-path: polygon(50% 25%, 50% 0, 75% 42%, 75% 58%, 65% 70%, 50% 75%, 35% 70%, 26% 58%, 25% 42%, 50% 0); }
+  4% { clip-path: polygon(50% 25%, 70% 0, 75% 42%, 85% 66%, 65% 100%, 50% 75%, 35% 100%, 15% 65%, 25% 42%, 30% 0); }
+  6% { clip-path: polygon(50% 25%, 50% 15%, 75% 42%, 75% 58%, 65% 70%, 50% 75%, 35% 70%, 26% 58%, 25% 42%, 50% 15%); }
+  7%, 59% { clip-path: polygon(50% 25%, 100% 12%, 75% 42%, 85% 66%, 65% 70%, 50% 75%, 35% 70%, 15% 65%, 25% 42%, 0 12%); }
+  9%, 57% { clip-path: polygon(50% 25%, 50% 0, 75% 42%, 75% 58%, 65% 70%, 50% 75%, 35% 70%, 26% 58%, 25% 42%, 50% 0); }
+  12%, 55%, 61% { clip-path: polygon(50% 25%, 65% 30%, 75% 42%, 75% 58%, 65% 70%, 50% 75%, 35% 70%, 26% 58%, 25% 42%, 35% 30%); }
+}
+
+/* Still: an avatar beside the agent's messages. Drawn once, never moving,
+   so a thread full of them costs nothing. */
+.ds-voice-orb.is-still .ds-voice-orb__ball,
+.ds-voice-orb.is-still .ds-voice-orb__lines,
+.ds-voice-orb.is-still .ds-voice-orb__rings::before,
+.ds-voice-orb.is-still .ds-voice-orb__rings::after { animation: none; }
+.ds-voice-orb.is-still .ds-voice-orb__rings::after { transform: rotateY(60deg) rotateX(30deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-voice-orb__ball,
+  .ds-voice-orb__lines,
+  .ds-voice-orb__rings::before,
+  .ds-voice-orb__rings::after { animation: none !important; }
+  .ds-voice-orb__body,
+  .ds-voice-orb__ball { transition: none; }
+}

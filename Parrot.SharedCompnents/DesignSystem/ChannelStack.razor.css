@@ -1,0 +1,29 @@
+/* Overlapping channel marks: each a small disc on the card colour, ringed in
+   the surface behind so one edge cuts cleanly into the next. */
+.ds-channel-stack {
+  /* Gaps in the token set: the disc's size and the ring that separates the
+     overlapping discs. */
+  --ds-channel-stack-size: 26px;
+  --ds-channel-stack-ring-width: 2px;
+
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  vertical-align: middle;
+}
+
+.ds-channel-stack__mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-channel-stack-size);
+  height: var(--ds-channel-stack-size);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 0 0 var(--ds-channel-stack-ring-width) var(--ds-channel-stack-ring, var(--colors-surface-card));
+}
+
+.ds-channel-stack__mark + .ds-channel-stack__mark { margin-inline-start: calc(-1 * var(--spacing-sm)); }
+
+.ds-channel-stack__mark.is-more { color: var(--colors-text-secondary); background: var(--colors-surface-muted); }
