@@ -1,3 +1,4 @@
+/* The same card as the test it replaces, so the result lands in place. */
 .connected {
   display: grid;
   justify-items: center;
@@ -13,43 +14,90 @@
 }
 
 .connected {
-  /* Gaps in the token set: no page-width or control-size scale. */
+  /* Gaps in the token set: no page-width, control-size, border-width or
+     motion scale. The mark matches the test card's. */
   --ds-connected-width: var(--ds-setup-card-width);
   --ds-connected-hairline: var(--ds-setup-card-hairline);
   --ds-connected-pad: var(--ds-setup-card-pad);
   --ds-connected-shadow: var(--ds-setup-card-shadow);
-  --ds-connected-mark: 72px;
+  --ds-connected-mark: 54px;
+  --ds-connected-mark-radius: 17px;
+  --ds-connected-badge: 24px;
+  --ds-connected-badge-offset: -6px;
   --ds-connected-measure: 46ch;
   --ds-connected-glow: 28px;
+  --ds-connected-enter: 320ms;
+  --ds-connected-enter-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-connected-rise: 6px;
+}
+
+/* Focus is moved here by script so a screen reader hears the result; it is
+   not a control, so it draws no focus ring. */
+.connected:focus { outline: none; }
+
+/* The words and buttons ease in where the test's were; the card itself
+   stays put. */
+.connected > * {
+  animation: connected-enter var(--ds-connected-enter) var(--ds-connected-enter-ease) both;
+}
+
+/* The tick lands on the channel's mark a moment after the words. */
+.connected__badge {
+  position: absolute;
+  right: var(--ds-connected-badge-offset);
+  bottom: var(--ds-connected-badge-offset);
+  display: grid;
+  place-items: center;
+  width: var(--ds-connected-badge);
+  height: var(--ds-connected-badge);
+  color: var(--colors-feedback-success);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+  animation: connected-tick var(--ds-connected-enter) var(--ds-connected-enter-ease) var(--ds-connected-enter) both;
+}
+
+@keyframes connected-enter {
+  from { opacity: 0; transform: translateY(var(--ds-connected-rise)); }
+}
+
+@keyframes connected-tick {
+  from { opacity: 0; transform: scale(0.4); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .connected > *,
+  .connected__badge { animation: none; }
 }
 
 .connected__mark {
+  position: relative;
   display: grid;
   place-items: center;
   width: var(--ds-connected-mark);
   height: var(--ds-connected-mark);
   margin-bottom: var(--spacing-md);
-  color: var(--colors-feedback-success-text);
-  background: var(--colors-feedback-success-subtle);
-  border-radius: var(--radius-radius-full);
+  color: var(--colors-text-inverse);
+  border-radius: var(--ds-connected-mark-radius);
 }
 
+/* The brands' own colours, as on the test card: third-party marks. */
 .channel-whatsapp.connected .connected__mark {
-  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #22a968 20%, transparent);
+  background: #22a968;
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #22a968 23%, transparent);
 }
 
 .channel-instagram.connected .connected__mark {
-  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #c63886 20%, transparent);
+  background: #c63886;
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #c63886 23%, transparent);
 }
 
 .channel-facebook.connected .connected__mark {
-  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #1877f2 20%, transparent);
+  background: #1877f2;
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #1877f2 23%, transparent);
 }
 
 /* X follows the text colour, so it stays visible in dark mode. */
-.channel-x.connected .connected__mark {
-  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, var(--colors-text-primary) 20%, transparent);
-}
+.channel-x.connected .connected__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
 
 ::deep .connected__lede {
   max-width: var(--ds-connected-measure);

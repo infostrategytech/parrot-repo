@@ -156,7 +156,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                 }
             </ConnectionContent>
             <TestContent>
-                <MessageTest Channel="guided" Busy="_checking" Verified="_verified" OnCheck="VerifyAsync" />
+                <MessageTest Channel="guided" Busy="_checking" Missed="_missed" OnCheck="VerifyAsync" />
             </TestContent>
         </GuidedSetup>
     </div>
@@ -195,7 +195,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
                 break;
 
             case EmbeddedStage.ReadyToTest:
-                <MessageTest Channel="flow" Busy="_checking" Verified="_verified" OnCheck="VerifyAsync" />
+                <MessageTest Channel="flow" Busy="_checking" Missed="_missed" OnCheck="VerifyAsync" />
                 break;
 
             case EmbeddedStage.Connected:
@@ -258,13 +258,6 @@ else if (Active is { } flow && _view == SetupView.Flow)
     private static readonly TimeSpan CheckPacing = TimeSpan.FromMilliseconds(2400);
 
     /// <summary>
-    /// How long the confirmed tick holds before the screen changes. This is
-    /// the only moment that tells you the message actually arrived, so it has
-    /// to outlast a glance.
-    /// </summary>
-    private static readonly TimeSpan VerifiedPause = TimeSpan.FromMilliseconds(2200);
-
-    /// <summary>
     /// The message check polls Parrot's gRPC verification service: a message
     /// sent from a phone takes a few seconds to reach Meta and be relayed, so
     /// one press of the button asks several times before giving up.
@@ -278,13 +271,13 @@ else if (Active is { } flow && _view == SetupView.Flow)
     /// <summary>
     /// The stage the screen shows, which is not always the stage the setup
     /// holds. Verifying flips the setup to Connected immediately, and the
-    /// re-render that follows would replace the test screen before the
-    /// confirmation on it has been seen — so while the check is running or its
-    /// tick is showing, the view stays put.
+    /// re-render that follows would replace the test screen while the check
+    /// is still running — so until it ends, the view stays put. Then the
+    /// result replaces the test in place.
     /// </summary>
     private EmbeddedStage DisplayStage =>
         Active is null ? EmbeddedStage.Idle
-        : (_checking || _verified) && Active.Setup.Stage == EmbeddedStage.Connected
+        : _checking && Active.Setup.Stage == EmbeddedStage.Connected
             ? EmbeddedStage.ReadyToTest
             : Active.Setup.Stage;
 
@@ -298,8 +291,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
     /// <summary>The check is running, including the pacing floor above it.</summary>
     private bool _checking;
 
-    /// <summary>The check has come back positive but the screen has not moved yet.</summary>
-    private bool _verified;
+    /// <summary>The last check found no message: the test says so and offers Check again.</summary>
+    private bool _missed;
 
     private readonly CancellationTokenSource _lifetime = new();
 
@@ -471,6 +464,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
         _accepted = false;
         _chosenPath = null;
         _error = null;
+        _missed = false;
         _mode = channel.Setup.Mode;
         _stage = channel.Setup.Stage;
         _failure = channel.Setup.Failure;
@@ -549,6 +543,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
         _accepted = false;
         _accessToken = null;
         _error = null;
+        _missed = false;
         if (Resume is not null) Nav.NavigateTo("/dashboard/channels");
     }
 
@@ -816,11 +811,11 @@ else if (Active is { } flow && _view == SetupView.Flow)
             return;
         }
         if (ChannelsState.WhatsAppSetup is not { } setup) return;
-        var name = Active.Name;
 
         // The pacing runs alongside the call rather than after it, so a slow
         // server costs nothing extra — the floor only applies when the answer
         // comes back faster than a person can read the spinner.
+        _missed = false;
         _checking = true;
         await InvokeAsync(StateHasChanged);
         var pacing = Task.Delay(CheckPacing);
@@ -848,12 +843,12 @@ else if (Active is { } flow && _view == SetupView.Flow)
         if (!ok) { await InvokeAsync(StateHasChanged); return; }
         if (!received)
         {
-            _error = "Waiting for a verified incoming message to be saved. You can leave and resume later.";
+            _missed = true;
             await InvokeAsync(StateHasChanged);
             return;
         }
 
-        await ConfirmConnectedAsync(name);
+        await ConfirmConnectedAsync();
     }
 
     /// <summary>
@@ -870,9 +865,9 @@ else if (Active is { } flow && _view == SetupView.Flow)
         await Task.Delay(CheckPacing);
         _checking = false;
         ChannelsState.ConnectChannel(KeyOf(channel), DemoAccount(channel.Id), DateTimeOffset.UtcNow.ToString("O"));
-        // Connecting clears the record; put it back, so the tick shows on the test screen.
+        // Connecting clears the record; put it back, so the flow can show its result.
         Persist();
-        await ConfirmConnectedAsync(channel.Name);
+        await ConfirmConnectedAsync();
     }
 
     private string DemoAccount(ChannelId id)
@@ -882,16 +877,10 @@ else if (Active is { } flow && _view == SetupView.Flow)
         return id == ChannelId.Facebook ? business : handle;
     }
 
-    private async Task ConfirmConnectedAsync(string name)
+    // The result replaces the test where it stands, as the answer to "I've
+    // sent it": no timed pause and no toast, because the result says it.
+    private async Task ConfirmConnectedAsync()
     {
-        Toasts.Show($"{name} is connected.");
-
-        // A beat on the confirmed tick before the screen changes.
-        _verified = true;
-        await InvokeAsync(StateHasChanged);
-        await Task.Delay(VerifiedPause);
-        _verified = false;
-
         // The embedded flow is driven by the stage the setup holds, which is
         // now Connected. The guided flow has no such stage, so it steps past
         // the last step to reach its own success screen.

@@ -1,13 +1,14 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Channels
 @using Parrot.Web.Features.Dashboard.Channels.Models
 
-@* The live check, shared by both routes.
+@* The live check, shared by every route.
 
    A channel is only marked connected once a real message arrives. The manual
    flow used to end on a thinner version of this that never said which number
-   to message and never warned against closing the page — so "did it work?" was
-   answered differently depending on how the channel was connected. Both end
-   here now. *@
+   to message — so "did it work?" was answered differently depending on how
+   the channel was connected. All of them end here now. When the message
+   arrives, the result replaces this card where it stands (ConnectionSuccess),
+   as the answer to "I've sent it": no timed pause, no extra click. *@
 
 <section class="live-test channel-@Channel.Id.ToString().ToLowerInvariant()">
     <span class="live-test__mark"><ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain /></span>
@@ -22,41 +23,21 @@
         reaches your OmniAI inbox.
     </Typography>
 
-    <div class="live-test__status">
-        <i class="@(Verified ? "is-verified" : Busy ? "is-listening" : null)" aria-hidden="true"></i>
+    @* The line under the title follows the check, and is announced as it
+       changes, so a slow check is never a silent wait. *@
+    <div class="@(ShowMissed ? "live-test__status is-missed" : "live-test__status")" role="status">
+        <i class="@(Busy ? "is-checking" : ShowMissed ? "is-missed" : null)" aria-hidden="true"></i>
         <span class="live-test__status-copy">
-            <Typography TextStyle="TextStyle.BodySmallBold" As="strong" Prose>
-                @(Verified ? "Your message arrived" : Busy ? "Checking for your message…" : "Waiting for your test message")
-            </Typography>
-            <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>
-                A channel is only marked connected once a real message arrives. Do not close this page yet.
-            </Typography>
+            <Typography TextStyle="TextStyle.BodySmallBold" As="strong" Prose>@StatusTitle</Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@StatusDetail</Typography>
         </span>
     </div>
 
-    @* Three states, so the control itself reports the result: idle, the
-       brand's relay dots while the check runs (the Button draws them in its
-       icon slot and keeps its label), and a tick that lands before the screen
-       moves. The status line above says what the check is doing, so a slow
-       one is never a silent wait. *@
-    <Button Size="ButtonSize.Large"
-            Class="@(Verified ? "live-test__action is-verified" : "live-test__action")"
-            Busy="@Busy"
-            disabled="@Verified"
-            @onclick="OnCheck">
-        <ChildContent>
-            @(Verified ? "Message received" : "I’ve sent it")
-        </ChildContent>
-        <IconRight>
-            @if (Verified)
-            {
-                <span class="live-test__tick"><Icon Name="IconName.RiCheckFill" /></span>
-            }
-            else
-            {
-                <Icon Name="IconName.RiArrowRightLine" />
-            }
-        </IconRight>
+    @* The brand's relay dots while the check runs (the Button draws them in
+       its icon slot and keeps its label). *@
+    <Button Size="ButtonSize.Large" Class="live-test__action" Busy="@Busy" @onclick="OnCheck">
+        <ChildContent>@(ShowMissed ? "Check again" : "I’ve sent it")</ChildContent>
+        <IconRight><Icon Name="@(ShowMissed ? IconName.RiRefreshLine : IconName.RiArrowRightLine)" /></IconRight>
     </Button>
 </section>
 
@@ -65,17 +46,28 @@
 
     [Parameter] public bool Busy { get; set; }
 
-    /// <summary>The check has succeeded and the screen is about to change.</summary>
-    [Parameter] public bool Verified { get; set; }
+    /// <summary>The last check found no message: say so, and offer Check again.</summary>
+    [Parameter] public bool Missed { get; set; }
 
     [Parameter] public EventCallback OnCheck { get; set; }
 
     private MessageTestCopy Copy => ChannelRoutes.Test(Channel.Id);
 
+    private bool ShowMissed => Missed && !Busy;
+
     /// <summary>
     /// The account name once Meta has handed it back; otherwise a description
     /// of it, because "send Hello to null" helps nobody.
     /// </summary>
-    private string Target => Channel.AccountName ?? Copy.Fallback;
+    private string Target => ChannelRoutes.KeepTogether(Channel.AccountName ?? Copy.Fallback);
 
+    private string StatusTitle =>
+        Busy ? "Checking for your message…"
+        : ShowMissed ? "We haven’t received it yet"
+        : "Waiting for your test message";
+
+    private string StatusDetail =>
+        Busy ? "This usually takes a few seconds."
+        : ShowMissed ? $"Check you sent Hello to {Target}, then check again."
+        : "Send it, then select I’ve sent it.";
 }

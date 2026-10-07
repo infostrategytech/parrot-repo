@@ -1,24 +1,25 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Channels
 @using Parrot.Web.Features.Dashboard.Channels.Models
 
-@* The end of both routes. A real message arrived, so this is the only screen
-   in the module allowed to say the channel is connected. *@
+@* The end of every route. A real message arrived, so this is the only screen
+   in the module allowed to say the channel is connected.
 
-<section class="connected channel-@Channel.Id.ToString().ToLowerInvariant()">
-    <span class="connected__mark"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Lg" /></span>
+   It replaces the test card where it stands, in the same shape: the channel's
+   own mark, now with a tick, and a heading the same size. Focus moves here,
+   so a screen reader hears the result. *@
 
-    <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@Channel.Name is connected</Typography>
+<section class="connected channel-@Channel.Id.ToString().ToLowerInvariant()"
+         tabindex="-1" aria-labelledby="connected-title" @ref="_root">
+    <span class="connected__mark">
+        <ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain />
+        <span class="connected__badge"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" /></span>
+    </span>
+
+    <Typography TextStyle="TextStyle.HeadingH2Bold" As="h1" id="connected-title">@Channel.Name is connected</Typography>
 
     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="connected__lede">
-        @if (Lede is not null)
-        {
-            @Lede
-        }
-        else
-        {
-            <text>Your test message reached OmniAI. New messages sent to
-            <strong>@(Channel.AccountName ?? Channel.Name)</strong> will now appear in your inbox.</text>
-        }
+        We received your Hello. New messages sent to
+        <strong>@ChannelRoutes.KeepTogether(Channel.AccountName ?? Channel.Name)</strong> will now appear in your inbox.
     </Typography>
 
     @if (Channel.Attention is { } note)
@@ -40,13 +41,14 @@
 @code {
     [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
 
-    /// <summary>
-    /// Parrot only: Instagram and X connect without a message test, so their
-    /// pages say what actually happened instead of the default line.
-    /// </summary>
-    [Parameter] public RenderFragment? Lede { get; set; }
-
     [Parameter] public EventCallback OnOpenInbox { get; set; }
 
     [Parameter] public EventCallback OnConnectAnother { get; set; }
+
+    private ElementReference _root;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await _root.FocusAsync(preventScroll: true);
+    }
 }

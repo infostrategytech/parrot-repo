@@ -321,6 +321,13 @@ public static class ChannelRoutes
         _ => new("Send a Message to your Page", "From another Facebook account,", "your Facebook Page")
     };
 
+    /// <summary>
+    /// A phone number kept on one line ("+234 803 456 7890" never splits after
+    /// "+234"); anything else as it is, so a long Page name can still wrap.
+    /// </summary>
+    public static string KeepTogether(string text) =>
+        text.StartsWith('+') ? text.Replace(' ', ' ') : text;
+
     /// <summary>The three real calls after Meta hands back the code, named per channel.</summary>
     public static IReadOnlyList<string> ConnectingSteps(ChannelId channel) => channel switch
     {

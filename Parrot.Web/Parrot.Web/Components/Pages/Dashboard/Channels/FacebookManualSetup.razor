@@ -17,11 +17,11 @@
 
 @if (_connected)
 {
-    <ConnectionSuccess Channel="Channel" OnOpenInbox="OnOpenInbox" OnConnectAnother="OnExit" />
+    <ConnectionSuccess Channel="Shown" OnOpenInbox="OnOpenInbox" OnConnectAnother="OnExit" />
 }
 else if (_testing)
 {
-    <MessageTest Channel="Channel" Busy="_checking" Verified="_verified" OnCheck="CheckMessageAsync" />
+    <MessageTest Channel="Shown" Busy="_checking" Missed="_missed" OnCheck="CheckMessageAsync" />
 }
 else
 {
@@ -223,10 +223,9 @@ else
     [Parameter] public EventCallback OnOpenInbox { get; set; }
 
     // As on WhatsApp's test: a floor under how long the check appears to take,
-    // a few tries a couple of seconds apart, and a beat on the tick.
+    // and a few tries a couple of seconds apart.
     private static readonly TimeSpan CheckPacing = TimeSpan.FromMilliseconds(2400);
     private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan VerifiedPause = TimeSpan.FromMilliseconds(2200);
     private const int CheckAttempts = 10;
 
     private static readonly string[] Instructions =
@@ -242,7 +241,7 @@ else
     private FacebookWebhookSetup? _setup;
     private string? _error;
     private string? _pageId, _pageName, _accessToken;
-    private bool _busy, _disposed, _testing, _checking, _verified, _connected;
+    private bool _busy, _disposed, _testing, _checking, _missed, _connected;
     private Section _open = Section.Webhook;
     private DateTimeOffset _testStartedAt;
     private readonly CancellationTokenSource _lifetime = new();
@@ -266,6 +265,9 @@ else
         && !string.IsNullOrWhiteSpace(_accessToken);
 
     private string? Token => AuthState.CurrentUser?.Token;
+
+    /// <summary>The channel under the Page name saved here, so the test and its result name the Page.</summary>
+    private BusinessChannel Shown => _setup?.PageName is { Length: > 0 } page ? Channel with { AccountName = page } : Channel;
 
     private string SectionClass(int index, Section section)
     {
@@ -350,10 +352,12 @@ else
     private async Task CheckMessageAsync()
     {
         if (_setup is null || Token is not { Length: > 0 } token || _checking) return;
+        _missed = false;
         _checking = true;
         await InvokeAsync(StateHasChanged);
         var pacing = Task.Delay(CheckPacing);
         var received = false;
+        var failed = false;
         try
         {
             for (var attempt = 0; attempt < CheckAttempts && !received; attempt++)
@@ -367,17 +371,15 @@ else
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
         catch (Exception exception) when (exception is HttpRequestException or global::Grpc.Core.RpcException or OperationCanceledException)
         {
+            failed = true;
             Toasts.ShowError("We couldn't check for your message. Try again.");
         }
         await pacing;
         _checking = false;
-        if (!received) { await InvokeAsync(StateHasChanged); return; }
+        // No message (not a failed call): the test says so and offers Check again.
+        if (!received) { _missed = !failed; await InvokeAsync(StateHasChanged); return; }
 
-        Toasts.Show($"{Channel.Name} is connected.");
-        _verified = true;
-        await InvokeAsync(StateHasChanged);
-        await Task.Delay(VerifiedPause);
-        _verified = false;
+        // The result replaces the test where it stands, as on WhatsApp's.
         _connected = true;
         await InvokeAsync(StateHasChanged);
     }
