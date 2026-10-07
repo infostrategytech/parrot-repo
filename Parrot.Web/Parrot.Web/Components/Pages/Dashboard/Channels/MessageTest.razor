@@ -10,7 +10,7 @@
    here now. *@
 
 <section class="live-test channel-@Channel.Id.ToString().ToLowerInvariant()">
-    <span class="live-test__mark"><Icon Name="@Mark" Size="IconSize.Lg" /></span>
+    <span class="live-test__mark"><ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain /></span>
 
     <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="live-test__eyebrow ds-overline">
         One last check
@@ -19,7 +19,7 @@
 
     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="live-test__instruction">
         @Copy.From send <strong>Hello</strong> to <strong>@Target</strong>. We’ll confirm when it
-        reaches your Parrot inbox.
+        reaches your OmniAI inbox.
     </Typography>
 
     <div class="live-test__status">
@@ -78,10 +78,4 @@
     /// </summary>
     private string Target => Channel.AccountName ?? Copy.Fallback;
 
-    private IconName Mark => Channel.Id switch
-    {
-        ChannelId.Whatsapp => IconName.RiWhatsappFill,
-        ChannelId.Instagram => IconName.RiInstagramFill,
-        _ => IconName.RiFacebookCircleFill
-    };
 }

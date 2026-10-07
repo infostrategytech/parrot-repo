@@ -440,19 +440,7 @@
   border-radius: var(--radius-radius-full);
 }
 
-.meta-api__replay {
-  display: inline-flex;
-  gap: var(--spacing-2xs);
-  align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-  color: var(--colors-text-link);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-radius-full);
-  cursor: pointer;
-}
 
-.meta-api__replay:hover { background: var(--colors-interaction-hover); }
 
 /* Every track returns to its starting state before 100%, so the loop restarts
    without a visible cut. */

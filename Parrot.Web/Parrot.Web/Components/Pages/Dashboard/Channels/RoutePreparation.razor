@@ -19,7 +19,7 @@
         </Button>
 
         <span class="prep__route channel-@Channel.Id.ToString().ToLowerInvariant()">
-            <Icon Name="@Mark" Size="IconSize.Sm" />
+            <ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Sm" Plain />
             <Typography TextStyle="TextStyle.Small12Bold" As="span">@Route.Label</Typography>
         </span>
     </header>
@@ -89,28 +89,13 @@
             <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@Route.Assurance</Typography>
         </div>
 
-        @* Locked until the acknowledgement is ticked. The things it confirms
-           are the ones that cannot be undone afterwards. React keeps a
-           disabled button at full opacity — only the grey fill should read,
-           not a doubled-up dim — so this is a bespoke control rather than the
-           design-system Button, whose disabled state also dims by half. *@
-        @* While it waits the label holds and the brand's relay dots take the
-           arrow's place, as the design-system Button does when Busy. *@
-        <button type="button"
-                class="@(Busy ? "prep__continue is-busy" : "prep__continue")"
-                disabled="@(Busy || !Accepted)"
-                aria-busy="@(Busy ? "true" : null)"
-                @onclick="OnContinue">
-            <Typography TextStyle="TextStyle.BodySmallBold" As="span">@Route.Cta</Typography>
-            @if (Busy)
-            {
-                <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="22" />
-            }
-            else
-            {
-                <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
-            }
-        </button>
+        @* Locked until the acknowledgement is ticked: the things it confirms
+           are the ones that cannot be undone afterwards. While the provider
+           window opens, the Button keeps its label and shows the relay dots. *@
+        <Button Size="ButtonSize.Large" Busy="Busy" disabled="@(!Accepted)" Class="prep__continue" @onclick="OnContinue">
+            <ChildContent>@Route.Cta</ChildContent>
+            <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+        </Button>
     </footer>
 </section>
 
@@ -134,10 +119,4 @@
 
     private string BackLabel => CanChangeRoute ? "Change option" : "Back to channels";
 
-    private IconName Mark => Channel.Id switch
-    {
-        ChannelId.Whatsapp => IconName.RiWhatsappFill,
-        ChannelId.Instagram => IconName.RiInstagramFill,
-        _ => IconName.RiFacebookCircleFill
-    };
 }

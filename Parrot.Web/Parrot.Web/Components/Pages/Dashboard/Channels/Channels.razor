@@ -10,6 +10,7 @@
 @inject AuthState AuthState
 @inject ToastService Toasts
 @inject NavigationManager Nav
+@inject IChannelCapabilities Capabilities
 
 <PageTitle>Channels · OmniAI</PageTitle>
 
@@ -22,7 +23,7 @@
     {
     <header class="channels__header">
         <div class="channels__heading">
-            <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h1">Channels</Typography>
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Channels</Typography>
             <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="channels__lede">
                 Connect and manage the places your customers message you.
             </Typography>
@@ -69,7 +70,7 @@
 {
     <RouteChoice Channel="choosing"
                  OnChoose="ChooseRouteAsync"
-                 OnUseManual="UseManualSetup"
+                 OnUseManual="@(Capabilities.CanSetUpManually(choosing.Id) ? EventCallback.Factory.Create(this, UseManualSetup) : default)"
                  OnClose="CloseSetup" />
 }
 
@@ -79,7 +80,7 @@
         @SetupError
         <RoutePreparation Channel="prepChannel"
                           Route="route"
-                          CanChangeRoute="@(ChannelRoutes.For(prepChannel.Id).Count > 1)"
+                          CanChangeRoute="@HasChoice(prepChannel.Id)"
                           @bind-Accepted="_accepted"
                           Busy="_busy"
                           OnBack="BackFromPreparation"
@@ -124,7 +125,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                 }
             </Demo>
             <ConnectionContent>
-                @if (_data.Webhook is { } webhook)
+                @if (WebhookFor(guided) is { } webhook)
                 {
                     <ManualConnection ManualStage="_manualStage"
                                       @bind-OpenSection="_openSection"
@@ -134,7 +135,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                                       @bind-AccessToken="_accessToken"
                                       @bind-Permanent="_permanentToken"
                                       @bind-WebhookConfirmed="_webhookConfirmed"
-                                      HasSavedToken="@(ChannelsState.WhatsAppConnection?.HasAccessToken == true)"
+                                      HasSavedToken="@(guided.Id == ChannelId.Whatsapp && ChannelsState.WhatsAppConnection?.HasAccessToken == true)"
                                       Busy="_busy"
                                       OnAdvance="AdvanceManualStageAsync"
                                       OnFinish="FinishManualConnectionAsync"
@@ -161,19 +162,32 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     </div>
 }
 
-@if (Active is { } flow && _view == SetupView.Flow)
+@if (Active is { } facebook && _view == SetupView.FacebookManual)
+{
+    <div class="channels channels--setup">
+        <FacebookManualSetup Channel="facebook"
+                             OnExit="CloseSetup"
+                             OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))" />
+    </div>
+}
+
+@* The provider window sits outside the page wrapper, like the route choice:
+   the wrapper eases in on arrival (app.css, page-enter), and a full-screen
+   window inside a moving parent is drawn against that parent until the move
+   ends, so it jumped from a strip at the top to the middle of the screen. *@
+@if (Active is { } popup && _view == SetupView.Flow && DisplayStage == EmbeddedStage.Popup)
+{
+    <ProviderPopup Channel="popup"
+                   Path="popup.Setup.Path"
+                   OnCancel="CloseProviderEarlyAsync"
+                   OnComplete="CompleteProviderHandoffAsync" />
+}
+else if (Active is { } flow && _view == SetupView.Flow)
 {
     <div class="channels channels--setup">
         @SetupError
         @switch (DisplayStage)
         {
-            case EmbeddedStage.Popup:
-                <ProviderPopup Channel="flow"
-                               Path="flow.Setup.Path"
-                               OnCancel="CloseProviderEarlyAsync"
-                               OnComplete="CompleteProviderHandoffAsync" />
-                break;
-
             case EmbeddedStage.Linking:
             case EmbeddedStage.Registering:
             case EmbeddedStage.Subscribing:
@@ -194,7 +208,6 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                 <SetupFailure Channel="flow"
                               Route="SelectedRoute"
                               OnRetry="RetryAsync"
-                              OnUseManual="UseManualSetup"
                               OnBack="CloseSetup" />
                 break;
         }
@@ -211,11 +224,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
         OnConfirm="DisconnectAsync">
     <GlyphContent><Icon Name="IconName.RiLinksFill" Size="IconSize.Md" /></GlyphContent>
     <Body>
-        <p>
-            New messages from this channel will stop arriving in Parrot, and any AI agent
-            answering on it will stop.
-        </p>
-        <p>You can connect it again at any time, but you will need to go through setup.</p>
+        <p>New messages stop arriving and your agents stop replying there. You can reconnect anytime.</p>
     </Body>
 </Dialog>
 
@@ -231,11 +240,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
         OnConfirm="RestartAsync">
     <GlyphContent><Icon Name="IconName.RiRefreshLine" Size="IconSize.Md" /></GlyphContent>
     <Body>
-        <p>
-            This clears the progress you have made, including anything you have
-            already entered, and takes you back to the list of setup options.
-        </p>
-        <p>Nothing is connected yet, so no messages are affected.</p>
+        <p>This clears what you've entered. Nothing is connected yet, so no messages are affected.</p>
     </Body>
 </Dialog>
 
@@ -331,7 +336,12 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     /// <summary>When the test step was reached, so the check only counts messages sent after it.</summary>
     private DateTimeOffset? _testStartedAt;
 
-    private enum SetupView { None, Choice, Preparation, Flow, Guided }
+    private enum SetupView { None, Choice, Preparation, Flow, Guided, FacebookManual }
+
+    // The choice of how to connect shows whenever there is more than one way
+    // in: several routes, or a route and a manual setup. With one way only,
+    // asking would be a screen that exists only to be dismissed.
+    private bool HasChoice(ChannelId id) => ChannelRoutes.For(id).Count > 1 || Capabilities.CanSetUpManually(id);
 
     private BusinessChannel? Active =>
         _activeId is null ? null : _data?.Channels.FirstOrDefault(c => c.Id == _activeId);
@@ -404,8 +414,8 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                 ChannelsState.SetWhatsApp(connections.FirstOrDefault(c => c.DisabledAt is null) ?? connections.FirstOrDefault());
             }
             catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
-            catch (HttpRequestException) { _error = "Could not load WhatsApp status. Please retry."; }
-            catch (System.Text.Json.JsonException) { _error = "Could not load WhatsApp status. Please retry."; }
+            catch (HttpRequestException) { _error = "We couldn't load WhatsApp. Try again."; }
+            catch (System.Text.Json.JsonException) { _error = "We couldn't load WhatsApp. Try again."; }
 
             try
             {
@@ -417,8 +427,8 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
             // Not configured on the API server yet: there is no Facebook status
             // to show, which the card already says by being "Not connected".
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
-            catch (HttpRequestException) { _error ??= "Could not load Facebook status. Please retry."; }
-            catch (System.Text.Json.JsonException) { _error ??= "Could not load Facebook status. Please retry."; }
+            catch (HttpRequestException) { _error ??= "We couldn't load Facebook. Try again."; }
+            catch (System.Text.Json.JsonException) { _error ??= "We couldn't load Facebook. Try again."; }
         }
         finally
         {
@@ -454,14 +464,8 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
 
     private async Task OpenSetupAsync(BusinessChannel channel)
     {
-        // Facebook, Instagram and X keep Parrot's own setup pages at their
-        // own addresses.
-        switch (channel.Id)
-        {
-            case ChannelId.Facebook: Nav.NavigateTo("/dashboard/channels/connect-facebook"); return;
-            case ChannelId.Instagram: Nav.NavigateTo("/dashboard/channels/connect-instagram"); return;
-            case ChannelId.X: Nav.NavigateTo("/dashboard/channels/connect-x"); return;
-        }
+        // Nothing can connect it yet (its card says Coming soon).
+        if (!Capabilities.CanUseWindow(channel.Id) && !Capabilities.CanSetUpManually(channel.Id)) return;
 
         _activeId = channel.Id;
         _accepted = false;
@@ -471,21 +475,29 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
         _stage = channel.Setup.Stage;
         _failure = channel.Setup.Failure;
 
-        // A channel with one route has nothing to choose between, so asking
-        // would be a screen that exists only to be dismissed.
-        // Reopening a guided setup drops back where it stopped.
-        if (channel.Setup.Mode == ChannelSetupMode.Guided || channel.Status == ChannelStatus.Connected)
+        // Facebook's manual setup reopens where it stopped (the API knows how far it got).
+        if (channel.Id == ChannelId.Facebook && channel.Setup.Mode == ChannelSetupMode.Guided)
         {
-            // Every screen from here needs the callback URL and verify token
-            // Parrot issued for the connection.
-            if (ChannelsState.WhatsAppSetup is null && ChannelsState.WhatsAppConnection is { DisabledAt: null })
-            {
-                await RunAsync(EnsureSetupAsync, "Could not load your connection. Try again to continue with the same saved connection.");
-            }
+            _view = SetupView.FacebookManual;
+            return;
+        }
 
-            var setup = channel.Status == ChannelStatus.Connected && ChannelsState.WhatsAppConnection is { } live
-                ? ChannelsState.SeedWhatsApp(live) with { Step = GuidedSteps.ConnectionStep }
-                : channel.Setup;
+        // Reopening WhatsApp's guided setup drops back where it stopped.
+        if (channel.Id == ChannelId.Whatsapp && (channel.Setup.Mode == ChannelSetupMode.Guided || channel.Status == ChannelStatus.Connected))
+        {
+            var setup = channel.Setup;
+            if (channel.Id == ChannelId.Whatsapp)
+            {
+                // Every screen from here needs the callback URL and verify token
+                // Parrot issued for the connection.
+                if (ChannelsState.WhatsAppSetup is null && ChannelsState.WhatsAppConnection is { DisabledAt: null })
+                {
+                    await RunAsync(EnsureSetupAsync, "We couldn't load your connection. Try again to pick up where you left off.");
+                }
+
+                if (channel.Status == ChannelStatus.Connected && ChannelsState.WhatsAppConnection is { } live)
+                    setup = ChannelsState.SeedWhatsApp(live) with { Step = GuidedSteps.ConnectionStep };
+            }
 
             _mode = ChannelSetupMode.Guided;
             _step = setup.Step;
@@ -515,19 +527,22 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
         }
 
         var routes = ChannelRoutes.For(channel.Id);
-        if (routes.Count == 1)
+        if (HasChoice(channel.Id))
         {
-            _chosenPath = routes[0].Id;
-            _view = SetupView.Preparation;
+            _view = SetupView.Choice;
         }
         else
         {
-            _view = SetupView.Choice;
+            _chosenPath = routes[0].Id;
+            _view = SetupView.Preparation;
         }
     }
 
     private void CloseSetup()
     {
+        // A step that saved through the API (Facebook's manual setup) has
+        // already updated the state; read it again so the cards show it.
+        Refresh();
         _activeId = null;
         _view = SetupView.None;
         _chosenPath = null;
@@ -547,7 +562,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
 
     private void BackFromPreparation()
     {
-        if (Active is not null && ChannelRoutes.For(Active.Id).Count > 1)
+        if (Active is not null && HasChoice(Active.Id))
         {
             _view = SetupView.Choice;
             _accepted = false;
@@ -564,11 +579,18 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     //
     // This is where Parrot's connection is created (or the saved one picked
     // up): the manual path is the one Parrot's backend actually implements.
+    // WhatsApp's guided setup, or Facebook's own two sections; Instagram and
+    // X have none (designer's decision).
     private async Task UseManualSetup()
     {
-        if (Active is null) return;
+        if (Active is { Id: ChannelId.Facebook })
+        {
+            _view = SetupView.FacebookManual;
+            return;
+        }
+        if (Active is not { Id: ChannelId.Whatsapp }) return;
 
-        if (!await RunAsync(EnsureSetupAsync, "Could not load your connection. Try again to continue with the same saved connection."))
+        if (!await RunAsync(EnsureSetupAsync, "We couldn't load your connection. Try again to pick up where you left off."))
         {
             return;
         }
@@ -637,7 +659,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                     await IntegrationsService.SaveWhatsAppAccessTokenAsync(setup.Connection.Id, token, Token, cancellation);
                 }
                 ChannelsState.SetWhatsApp(await IntegrationsService.GetWhatsAppStatusAsync(setup.Connection.Id, Token, cancellation));
-            }, "Could not save account details. Check the IDs and try again.");
+            }, "We couldn't save those details. Check the IDs and try again.");
 
             if (!ok) return;
             _accessToken = null;
@@ -660,7 +682,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
 
         var ok = await RunAsync(async cancellation =>
             ChannelsState.SetWhatsApp(await IntegrationsService.GetWhatsAppStatusAsync(setup.Connection.Id, Token, cancellation)),
-            "Could not check verification. Please try again.");
+            "We couldn't check the verification. Try again.");
         if (!ok) return;
 
         var connection = ChannelsState.WhatsAppConnection;
@@ -672,6 +694,11 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
             return;
         }
 
+        CompleteManualStage();
+    }
+
+    private void CompleteManualStage()
+    {
         _manualStage = ManualSetupStage.Complete;
         _openSection = ManualSetupStage.Webhook;
         _step += 1;
@@ -679,6 +706,12 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
         Persist();
         Toasts.Show("Webhook verified.");
     }
+
+    /// <summary>What Meta calls back: only WhatsApp has a manual setup, so only its connection.</summary>
+    private ChannelWebhook? WebhookFor(BusinessChannel channel) =>
+        channel.Id == ChannelId.Whatsapp ? _data?.Webhook : null;
+
+    private string KeyOf(BusinessChannel channel) => ChannelsState.Channels.First(c => c.Id == channel.Id).Key;
 
     private static int Order(ManualSetupStage stage) => stage switch
     {
@@ -717,8 +750,8 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
             Persist();
             await InvokeAsync(StateHasChanged);
 
-            if (stage == EmbeddedStage.Linking
-                && !await RunAsync(EnsureSetupAsync, "Could not prepare your connection. Please try again."))
+            if (stage == EmbeddedStage.Linking && Active.Id == ChannelId.Whatsapp
+                && !await RunAsync(EnsureSetupAsync, "We couldn't prepare your connection. Try again."))
             {
                 _failure = _error;
                 _error = null;
@@ -739,16 +772,31 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     {
         if (Active is null) return Task.CompletedTask;
         var provider = ChannelRoutes.Popup(Active.Id).Provider;
-        _failure = $"The {provider} window closed before setup finished. Nothing was changed.";
+        _failure = $"The {provider} window closed early. Nothing was changed.";
         _stage = EmbeddedStage.Failed;
         Persist();
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Try again goes back to choosing how to connect, where WhatsApp's manual
+    /// setup also lives, so the failure screen needs no third action. A
+    /// channel with one route has nothing to choose, so its window reopens.
+    /// </summary>
     private Task RetryAsync()
     {
         if (Active is null) return Task.CompletedTask;
         _failure = null;
+        if (HasChoice(Active.Id))
+        {
+            _mode = null;
+            _stage = EmbeddedStage.Idle;
+            _chosenPath = null;
+            _accepted = false;
+            Persist();
+            _view = SetupView.Choice;
+            return Task.CompletedTask;
+        }
         _stage = EmbeddedStage.Popup;
         Persist();
         return Task.CompletedTask;
@@ -761,7 +809,13 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     /// </summary>
     private async Task VerifyAsync()
     {
-        if (Active is null || ChannelsState.WhatsAppSetup is not { } setup) return;
+        if (Active is null) return;
+        if (Active.Id != ChannelId.Whatsapp)
+        {
+            await VerifyWindowChannelAsync(Active);
+            return;
+        }
+        if (ChannelsState.WhatsAppSetup is not { } setup) return;
         var name = Active.Name;
 
         // The pacing runs alongside the call rather than after it, so a slow
@@ -787,7 +841,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                 ChannelsState.SetWhatsApp(await IntegrationsService.GetWhatsAppStatusAsync(setup.Connection.Id, Token, cancellation));
                 ChannelsState.MarkWhatsAppVerified();
             }
-        }, "Could not check for your message. Please try again.");
+        }, "We couldn't check for your message. Try again.");
         await pacing;
         _checking = false;
 
@@ -799,6 +853,37 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
             return;
         }
 
+        await ConfirmConnectedAsync(name);
+    }
+
+    /// <summary>
+    /// Instagram, Facebook and X connected by their window. Only demo mode can
+    /// (IChannelCapabilities): the test message "arrives" after the same pause
+    /// a real check takes, and the channel is connected for the session under
+    /// the business's own handle. When the API can connect one of them, its
+    /// window completion and message check replace this.
+    /// </summary>
+    private async Task VerifyWindowChannelAsync(BusinessChannel channel)
+    {
+        _checking = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(CheckPacing);
+        _checking = false;
+        ChannelsState.ConnectChannel(KeyOf(channel), DemoAccount(channel.Id), DateTimeOffset.UtcNow.ToString("O"));
+        // Connecting clears the record; put it back, so the tick shows on the test screen.
+        Persist();
+        await ConfirmConnectedAsync(channel.Name);
+    }
+
+    private string DemoAccount(ChannelId id)
+    {
+        var business = AuthState.CurrentUser?.BusinessName is { Length: > 0 } name ? name.Trim() : "Adire Lagos";
+        var handle = "@" + new string(business.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        return id == ChannelId.Facebook ? business : handle;
+    }
+
+    private async Task ConfirmConnectedAsync(string name)
+    {
         Toasts.Show($"{name} is connected.");
 
         // A beat on the confirmed tick before the screen changes.
@@ -830,7 +915,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     }
 
     private Task ReloadSetupAsync() =>
-        RunAsync(EnsureSetupAsync, "Could not load your connection. Try again to continue with the same saved connection.");
+        RunAsync(EnsureSetupAsync, "We couldn't load your connection. Try again to pick up where you left off.");
 
     /// <summary>Every write goes through here, so busy and error are handled once.</summary>
     private async Task<bool> RunAsync(Func<CancellationToken, Task> call, string failureMessage)
@@ -846,7 +931,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return false; }
         catch (OperationCanceledException)
         {
-            _error = "The request timed out. Try again to load your saved connection.";
+            _error = "That took too long. Try again.";
             return false;
         }
         catch (HttpRequestException ex)
@@ -926,7 +1011,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
             catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
             catch (HttpRequestException)
             {
-                _error = "Could not disable the connection. Please retry.";
+                _error = "We couldn't disconnect it. Try again.";
                 _pendingDisconnect = null;
             }
             finally { _busy = false; }

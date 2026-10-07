@@ -1,5 +1,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Channels
 @using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@inject IChannelCapabilities Capabilities
 
 @* Choosing a route is the only modal step in this module.
 
@@ -15,24 +17,23 @@
 
         <header class="route-choice__header">
             <span class="route-choice__mark channel-@Channel.Id.ToString().ToLowerInvariant()">
-                <Icon Name="@Mark" Size="IconSize.Lg" />
+                <ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain />
             </span>
             <div class="route-choice__intro">
                 <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2" id="@_titleId">@Copy.Title</Typography>
                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="route-choice__lede">@Copy.Intro</Typography>
             </div>
-            @* A bespoke circle, not a design-system Button — React draws this
-               as a filled 36px muted circle, which the Ghost variant does not
-               give us at this size. *@
-            <button type="button" class="route-choice__close" aria-label="Close" @onclick="OnClose">
-                <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
-            </button>
+            @* The design-system close, as on Dialog: a small Ghost Button on a muted circle. *@
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="route-choice__close" aria-label="Close" @onclick="OnClose">
+                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+            </Button>
         </header>
 
         <div class="route-choice__cards" aria-label="@($"How are you connecting {Channel.Name}")">
             @foreach (var route in Routes)
             {
-                <button type="button" class="@CardClass(route)" @onclick="() => OnChoose.InvokeAsync(route.Id)">
+                @* A route that cannot connect yet shows what it will be, marked Coming soon. *@
+                <RowButton Class="@CardClass(route)" Disabled="@(!CanUseWindow)" aria-disabled="@(CanUseWindow ? null : "true")" OnClick="() => OnChoose.InvokeAsync(route.Id)">
                     <span class="route-card__icon"><Icon Name="route.Glyph" Size="IconSize.Lg" /></span>
                     <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="route-card__marker">
                         @route.Marker
@@ -43,23 +44,32 @@
                     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="route-card__explanation">
                         @route.Explanation
                     </Typography>
-                    <span class="route-card__go">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Continue with this option</Typography>
-                        <span class="route-card__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
-                    </span>
-                </button>
+                    @if (CanUseWindow)
+                    {
+                        <span class="route-card__go">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Continue with this option</Typography>
+                            <span class="route-card__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="route-card__go"><StatusBadge Tone="StatusTone.Neutral">Coming soon</StatusBadge></span>
+                    }
+                </RowButton>
             }
         </div>
 
-        @* Always reachable. Meta's own flow fails often enough that a way round
-           it has to be on the first screen, not buried after a failure. This is
-           a plain underlined link, not a Button — React draws it borderless. *@
-        <footer class="route-choice__footer">
-            <Typography TextStyle="TextStyle.Small12Medium" As="span">Having trouble with Meta?</Typography>
-            <button type="button" class="route-choice__manual-link" @onclick="OnUseManual">
-                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Use manual setup</Typography>
-            </button>
-        </footer>
+        @* Always reachable where a channel has a manual setup (WhatsApp, Facebook).
+           Meta's own flow fails often enough that a way round it has to be on
+           the first screen, and while the one-step routes are coming soon it
+           is the way in. A text link: the Ghost Button, underlined. *@
+        @if (OnUseManual.HasDelegate)
+        {
+            <footer class="route-choice__footer">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@(CanUseWindow ? "Having trouble with Meta?" : "Connecting in one step is coming soon.")</Typography>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="route-choice__manual" @onclick="OnUseManual">Use manual setup</Button>
+            </footer>
+        }
     </section>
 </div>
 
@@ -76,24 +86,20 @@
 
     private IReadOnlyList<ChannelRoute> Routes => ChannelRoutes.For(Channel.Id);
 
+    private bool CanUseWindow => Capabilities.CanUseWindow(Channel.Id);
+
     private PathChoiceCopy Copy => ChannelRoutes.Choice(Channel.Id);
 
-    private IconName Mark => Channel.Id switch
-    {
-        ChannelId.Whatsapp => IconName.RiWhatsappFill,
-        ChannelId.Instagram => IconName.RiInstagramFill,
-        _ => IconName.RiFacebookCircleFill
-    };
 
     /// <summary>
     /// Coexistence is emerald and migration is violet in the design — a fresh
     /// number carries no tint of its own, so it takes the brand blue every
     /// other "primary path" in the product uses.
     /// </summary>
-    private static string CardClass(ChannelRoute route) => route.Id switch
+    private string CardClass(ChannelRoute route) => (route.Id switch
     {
         ChannelPath.Coexistence => "route-card route-card--coexistence",
         ChannelPath.Migration => "route-card route-card--migration",
         _ => "route-card"
-    };
+    }) + (CanUseWindow ? null : " is-soon");
 }

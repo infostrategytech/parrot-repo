@@ -1,0 +1,392 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@using Parrot.Web.Features.Dashboard.Channels.State
+@implements IDisposable
+@inject ChannelsState ChannelsState
+@inject IIntegrationsService IntegrationsService
+@inject IMessageVerificationGrpcClient MessageVerification
+@inject AuthState AuthState
+@inject ToastService Toasts
+
+@* Facebook, set up by hand: the way the API connects a Facebook Page today.
+   WhatsApp's guided card and manual sections, in two steps through the API's
+   own calls (Meta verifies the webhook, then the Page and its access token
+   are saved), and then a test message, so the Page counts as connected once
+   a real message arrives. *@
+
+@if (_connected)
+{
+    <ConnectionSuccess Channel="Channel" OnOpenInbox="OnOpenInbox" OnConnectAnother="OnExit" />
+}
+else if (_testing)
+{
+    <MessageTest Channel="Channel" Busy="_checking" Verified="_verified" OnCheck="CheckMessageAsync" />
+}
+else
+{
+    <section class="guided">
+        <header class="guided__header">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnExit">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Back to channels</ChildContent>
+            </Button>
+            <div class="guided__counter">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">Facebook setup</Typography>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">Step @(Reached + 1) of 3</Typography>
+            </div>
+        </header>
+
+        <div class="guided__progress" role="progressbar" aria-label="Facebook setup progress"
+             aria-valuenow="@(Reached + 1)" aria-valuemin="1" aria-valuemax="3">
+            <i style="width: @Percent%"></i>
+        </div>
+
+        <div class="guided__body">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Connect your Facebook Page</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="guided__lede">
+                Two steps in Meta, then a test message. Your progress is saved after each step.
+            </Typography>
+
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" OnDismiss="() => _error = null" />
+            }
+
+            @if (_setup is null && _busy)
+            {
+                <LoadingState Glyph="IconName.RiFacebookCircleFill"
+                              Title="Preparing your webhook details"
+                              Description="Getting the callback URL and verify token for your workspace." />
+            }
+            else if (_setup is null)
+            {
+                <EmptyState Glyph="IconName.RiFacebookCircleFill"
+                            Size="EmptyStateSize.Panel"
+                            Title="We couldn't load your Facebook setup"
+                            Description="Check your connection and try again.">
+                    <Action>
+                        <Button Variant="ButtonVariant.Secondary" Busy="_busy" @onclick="LoadAsync">Try again</Button>
+                    </Action>
+                </EmptyState>
+            }
+            else
+            {
+                <ol class="guided__instructions">
+                    @for (var index = 0; index < Instructions.Length; index++)
+                    {
+                        var number = index + 1;
+                        var instruction = Instructions[index];
+                        <li>
+                            <Typography TextStyle="TextStyle.Small12Bold" As="span" Class="guided__marker">@number</Typography>
+                            <div class="guided__instruction">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    <Emphasis Text="@instruction" />
+                                </Typography>
+                                @if (index == 0)
+                                {
+                                    @* A link to Meta's own site, in a new tab. *@
+                                    <a class="guided__link @TextStyle.BodySmallSemibold.ToClassName()"
+                                       href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer">
+                                        Open Meta for Developers
+                                        <Icon Name="IconName.RiExternalLinkLine" />
+                                    </a>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ol>
+
+                <div class="manual">
+                    @* ── 1: the webhook ───────────────────────────────────── *@
+                    <section class="manual__section @SectionClass(0, Section.Webhook)">
+                        <header class="manual__header">
+                            <span class="manual__marker">
+                                @if (Reached > 0)
+                                {
+                                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Bold" As="span">1</Typography>
+                                }
+                            </span>
+                            <div class="manual__titles">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Turn On Incoming Messages</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Connect Meta's webhook so new messages reach your inbox.</Typography>
+                            </div>
+                            <ManualSectionAside Done="Reached > 0"
+                                                IsCurrent="Reached == 0"
+                                                IsOpen="_open == Section.Webhook"
+                                                OnReopen="() => _open = Section.Webhook" />
+                        </header>
+
+                        @if (_open == Section.Webhook)
+                        {
+                            <div class="manual__body">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    Open <strong>Messenger → Messenger API Settings</strong>. Paste these under Configure webhooks, then select
+                                    <strong>Verify and save</strong>.
+                                </Typography>
+                                <div class="manual__copy-values">
+                                    <CopyValue Label="Callback URL" Value="@_setup.WebhookUrl" OnCopy="@(label => Toasts.Show($"{label} copied."))" />
+                                    <CopyValue Label="Verify Token" Value="@_setup.VerifyToken" OnCopy="@(label => Toasts.Show($"{label} copied."))" />
+                                </div>
+                                <InlineError Tone="InlineErrorTone.Info"
+                                             Message="This verify token is not your Page access token. Meta uses it once, to confirm the callback." />
+                                <Button Busy="_busy" @onclick="CheckVerificationAsync">
+                                    <ChildContent>@(_setup.WebhookVerified ? "Continue to your Page" : "I've verified it")</ChildContent>
+                                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                                </Button>
+                            </div>
+                        }
+                    </section>
+
+                    @* ── 2: the Page ──────────────────────────────────────── *@
+                    <section class="manual__section @SectionClass(1, Section.Page)">
+                        <header class="manual__header">
+                            <span class="manual__marker">
+                                @if (Reached > 1)
+                                {
+                                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Bold" As="span">2</Typography>
+                                }
+                            </span>
+                            <div class="manual__titles">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Your Page</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the Page customers message, and its access token.</Typography>
+                            </div>
+                            <ManualSectionAside Done="Reached > 1"
+                                                IsCurrent="Reached == 1"
+                                                IsOpen="_open == Section.Page"
+                                                OnReopen="() => _open = Section.Page" />
+                        </header>
+
+                        @if (_open == Section.Page)
+                        {
+                            <div class="manual__body">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    In Messenger API Settings, under <strong>Generate access tokens</strong>, connect your Page and copy its token.
+                                </Typography>
+
+                                <div class="manual__fields">
+                                    <Input FloatingLabel="Page ID"
+                                           @bind-Value="_pageId"
+                                           inputmode="numeric"
+                                           maxlength="64"
+                                           HelperText="The number Meta shows for your Page, not its name." />
+
+                                    <Input FloatingLabel="Page name"
+                                           @bind-Value="_pageName"
+                                           maxlength="128"
+                                           HelperText="As customers see it on Facebook." />
+
+                                    @* type=password, autocomplete off, and cleared after
+                                       saving: the API encrypts it before it is stored. *@
+                                    <Parrot.SharedComponents.DesignSystem.Input
+                                        FloatingLabel="Page access token"
+                                        @bind-Value="_accessToken"
+                                        type="password"
+                                        autocomplete="new-password"
+                                        spellcheck="false"
+                                        maxlength="8192"
+                                        HelperText="@(_setup.HasAccessToken ? "A token is saved. Enter a new one only to replace it." : "Hidden as you type and cleared after saving. Never send this token in a chat or email.")">
+                                        <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                                    </Parrot.SharedComponents.DesignSystem.Input>
+                                </div>
+
+                                <Button Busy="_busy" disabled="@(!PageReady)" @onclick="SavePageAsync">
+                                    <ChildContent>Save and continue</ChildContent>
+                                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                                </Button>
+                            </div>
+                        }
+                    </section>
+                </div>
+            }
+        </div>
+
+        <footer class="guided__footer">
+            <Button Variant="ButtonVariant.Secondary" @onclick="OnExit">Save and exit</Button>
+        </footer>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    [Parameter] public EventCallback OnExit { get; set; }
+
+    [Parameter] public EventCallback OnOpenInbox { get; set; }
+
+    // As on WhatsApp's test: a floor under how long the check appears to take,
+    // a few tries a couple of seconds apart, and a beat on the tick.
+    private static readonly TimeSpan CheckPacing = TimeSpan.FromMilliseconds(2400);
+    private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan VerifiedPause = TimeSpan.FromMilliseconds(2200);
+    private const int CheckAttempts = 10;
+
+    private static readonly string[] Instructions =
+    [
+        "Open your app in Meta for Developers and add **Messenger**.",
+        "In **Messenger API Settings**, paste the callback URL and verify token below, then select **Verify and save**.",
+        "Under **Generate access tokens**, connect the Facebook Page you manage and copy its token.",
+        "Subscribe the Page to **messages**, so new messages reach your inbox."
+    ];
+
+    private enum Section { Webhook, Page }
+
+    private FacebookWebhookSetup? _setup;
+    private string? _error;
+    private string? _pageId, _pageName, _accessToken;
+    private bool _busy, _disposed, _testing, _checking, _verified, _connected;
+    private Section _open = Section.Webhook;
+    private DateTimeOffset _testStartedAt;
+    private readonly CancellationTokenSource _lifetime = new();
+
+    /// <summary>
+    /// The furthest step finished, read off the API: a verified webhook finishes
+    /// the first, a saved Page with its token the second.
+    /// </summary>
+    private int Reached =>
+        _setup is null ? 0
+        : _setup.WebhookVerified && _setup.HasAccessToken && !string.IsNullOrEmpty(_setup.PageId) ? 2
+        : _setup.WebhookVerified ? 1
+        : 0;
+
+    private int Percent => (int)Math.Round((Reached + 1) / 3.0 * 100);
+
+    private bool PageReady =>
+        _setup is { WebhookVerified: true }
+        && !string.IsNullOrWhiteSpace(_pageId)
+        && !string.IsNullOrWhiteSpace(_pageName)
+        && !string.IsNullOrWhiteSpace(_accessToken);
+
+    private string? Token => AuthState.CurrentUser?.Token;
+
+    private string SectionClass(int index, Section section)
+    {
+        var name = Reached > index ? "is-complete" : Reached == index ? "is-current" : "is-upcoming";
+        return _open == section ? name + " is-open" : name;
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_busy || _disposed || Token is not { Length: > 0 } token) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var setup = await IntegrationsService.GetFacebookSetupAsync(token, _lifetime.Token);
+            if (_disposed) return;
+            _setup = setup;
+            ChannelsState.SetFacebook(setup);
+            _pageId = setup.PageId ?? _pageId;
+            _pageName = setup.PageName ?? _pageName;
+            _open = Reached >= 1 ? Section.Page : Section.Webhook;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable
+                ? "Facebook isn't set up on the server yet. Ask your administrator to add the Facebook webhook address."
+                : "We couldn't load your Facebook setup. Check your connection and try again.";
+        }
+        catch (OperationCanceledException) { _error = "That took too long. Try again."; }
+        catch (System.Text.Json.JsonException) { _error = "We couldn't read your Facebook setup. Try again."; }
+        finally { _busy = false; }
+    }
+
+    // The webhook only counts once Meta has called it, which the setup reports.
+    private async Task CheckVerificationAsync()
+    {
+        if (_setup is { WebhookVerified: true }) { _open = Section.Page; return; }
+        await LoadAsync();
+        if (_disposed || _setup is null) return;
+        if (_setup.WebhookVerified)
+        {
+            Toasts.Show("Webhook verified.");
+            _open = Section.Page;
+        }
+        else
+        {
+            _error ??= "Meta hasn't verified it yet. Select Verify and save in Meta, then try again.";
+        }
+    }
+
+    private async Task SavePageAsync()
+    {
+        if (_busy || _setup is null || Token is not { Length: > 0 } token) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            await IntegrationsService.SaveFacebookPageAsync((_pageId ?? "").Trim(), (_pageName ?? "").Trim(), (_accessToken ?? "").Trim(), token, _lifetime.Token);
+            _accessToken = null;
+            _setup = await IntegrationsService.GetFacebookSetupAsync(token, _lifetime.Token);
+            ChannelsState.SetFacebook(_setup);
+            Toasts.Show("Page details saved securely.");
+            _testStartedAt = DateTimeOffset.UtcNow;
+            _testing = true;
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode == System.Net.HttpStatusCode.Conflict
+                ? "Verify the webhook in Meta first, or check whether this Page is already connected."
+                : "We couldn't save your Page. Check the details and try again.";
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) { _error = "That took too long. Try again."; }
+        finally { _busy = false; }
+    }
+
+    // The API's message check, a few times a couple of seconds apart: a message
+    // sent from a phone takes a moment to reach Meta and be relayed.
+    private async Task CheckMessageAsync()
+    {
+        if (_setup is null || Token is not { Length: > 0 } token || _checking) return;
+        _checking = true;
+        await InvokeAsync(StateHasChanged);
+        var pacing = Task.Delay(CheckPacing);
+        var received = false;
+        try
+        {
+            for (var attempt = 0; attempt < CheckAttempts && !received; attempt++)
+            {
+                var result = await MessageVerification.CheckForMessageAsync(
+                    _setup.ConnectionId.ToString(), _testStartedAt.ToUnixTimeSeconds(), "facebook", token, _lifetime.Token);
+                received = result.Received;
+                if (!received) await Task.Delay(CheckInterval, _lifetime.Token);
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+        catch (Exception exception) when (exception is HttpRequestException or global::Grpc.Core.RpcException or OperationCanceledException)
+        {
+            Toasts.ShowError("We couldn't check for your message. Try again.");
+        }
+        await pacing;
+        _checking = false;
+        if (!received) { await InvokeAsync(StateHasChanged); return; }
+
+        Toasts.Show($"{Channel.Name} is connected.");
+        _verified = true;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(VerifiedPause);
+        _verified = false;
+        _connected = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _accessToken = null;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
+}

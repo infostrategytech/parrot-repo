@@ -1,30 +1,7 @@
-/* Parrot's Facebook setup page. The page frame, the guided card and the
-   manual sections are Aurora's — ChannelsPage.razor.css, GuidedSetup.razor.css
-   and ManualConnection.razor.css — repeated here because a Blazor scoped
+/* Facebook's manual setup, a step in the Channels flow. The guided card and
+   the manual sections are Aurora's (GuidedSetup.razor.css and
+   ManualConnection.razor.css), repeated here because a Blazor scoped
    stylesheet cannot reach another component's classes. */
-
-.channels {
-  padding: var(--spacing-4xl) var(--ds-channels-gutter) var(--spacing-5xl);
-}
-
-.channels > * {
-  width: min(var(--ds-channels-max), 100%);
-  margin-inline: auto;
-}
-
-.channels {
-  /* Gaps in the token set: no page-gutter or content-width scale. Both come
-     from the design. */
-  --ds-channels-gutter: clamp(28px, 4vw, 66px);
-  --ds-channels-max: 1040px;
-}
-
-/* A setup flow gets the page to itself and sits higher up it, because it is a
-   single task rather than a list to browse. */
-.channels--setup {
-  padding-top: var(--spacing-5xl);
-  padding-bottom: var(--spacing-4xl);
-}
 
 .guided {
   display: grid;

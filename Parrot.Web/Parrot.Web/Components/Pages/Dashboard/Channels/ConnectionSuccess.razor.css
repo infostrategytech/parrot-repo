@@ -46,9 +46,9 @@
   box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #1877f2 20%, transparent);
 }
 
-/* X's mark is black in every theme — a brand literal like the three above. */
+/* X follows the text colour, so it stays visible in dark mode. */
 .channel-x.connected .connected__mark {
-  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, #000000 20%, transparent);
+  box-shadow: 0 var(--spacing-sm) var(--ds-connected-glow) color-mix(in srgb, var(--colors-text-primary) 20%, transparent);
 }
 
 ::deep .connected__lede {

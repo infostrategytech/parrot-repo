@@ -58,7 +58,9 @@ public enum ChannelPath
     /// <summary>Instagram, without needing a Facebook Page — the requirement most SMEs fall down on.</summary>
     [JsonStringEnumMemberName("instagram-login")] InstagramLogin,
     [JsonStringEnumMemberName("facebook-login")] FacebookLogin,
-    [JsonStringEnumMemberName("facebook-page")] FacebookPage
+    [JsonStringEnumMemberName("facebook-page")] FacebookPage,
+    /// <summary>X: sign in with X and approve access to the account's DMs.</summary>
+    [JsonStringEnumMemberName("x-login")] XLogin
 }
 
 /// <summary>

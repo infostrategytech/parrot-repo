@@ -9,7 +9,7 @@
 
 <section class="connecting channel-@Channel.Id.ToString().ToLowerInvariant()">
     <div class="connecting__pulse" aria-hidden="true">
-        <span class="connecting__mark"><Icon Name="@Mark" Size="IconSize.Lg" /></span>
+        <span class="connecting__mark"><ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain /></span>
         <i></i><i></i><i></i>
     </div>
 
@@ -18,7 +18,7 @@
     </Typography>
     <Typography TextStyle="TextStyle.HeadingH2Bold" As="h1">We’re connecting @Channel.Name</Typography>
     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="connecting__lede">
-        Keep this page open while Parrot safely finishes the connection.
+        Keep this page open while OmniAI safely finishes the connection.
     </Typography>
 
     <ol class="connecting__steps">
@@ -45,12 +45,6 @@
 
     private int CurrentIndex => Array.IndexOf(ChannelRoutes.ConnectingStages, Channel.Setup.Stage);
 
-    private IconName Mark => Channel.Id switch
-    {
-        ChannelId.Whatsapp => IconName.RiWhatsappFill,
-        ChannelId.Instagram => IconName.RiInstagramFill,
-        _ => IconName.RiFacebookCircleFill
-    };
 
     /// <summary>
     /// The middle step is named for what is actually happening to the number,

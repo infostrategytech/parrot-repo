@@ -72,6 +72,8 @@ builder.Services.AddScoped<HttpClient>(sp => new HttpClient(new ActivityHandler(
     },
 }) { BaseAddress = new Uri(apiBaseUrl) });
 builder.Services.AddScoped<IIntegrationsService, IntegrationsService>();
+// What the real API can connect today; the Channels screens offer only that.
+builder.Services.AddSingleton<IChannelCapabilities, LiveChannelCapabilities>();
 // Whether any channel is connected, for pages that only need that (the dashboard).
 builder.Services.AddScoped<ChannelStatusLoader>();
 builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();

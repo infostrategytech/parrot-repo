@@ -1,23 +1,14 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Channels
 @using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@inject IChannelCapabilities Capabilities
 
 @* One channel on the landing screen: what it is, where its connection stands,
    and the single next thing to do about it. *@
 
 <article class="channel-card channel-@Channel.Id.ToString().ToLowerInvariant()">
     <span class="channel-card__mark">
-        @if (Channel.Id == ChannelId.X)
-        {
-            @* The sprite has no X glyph, so this card keeps Parrot's own mark.
-               It is the one inline path in the module. *@
-            <svg class="channel-card__x" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.631 5.905-5.631Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-            </svg>
-        }
-        else
-        {
-            <Icon Name="@Mark" Size="IconSize.Lg" />
-        }
+        <ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain />
     </span>
 
     <div class="channel-card__copy">
@@ -38,11 +29,18 @@
     <div class="channel-card__actions">
         @if (IsConnected)
         {
-            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnDisconnect">Disconnect</Button>
+            @if (Capabilities.CanDisconnect(Channel.Id))
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnDisconnect">Disconnect</Button>
+            }
             <span class="channel-card__ready">
                 <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                 <Typography TextStyle="TextStyle.Small12Semibold" As="span">Ready</Typography>
             </span>
+        }
+        else if (!Available)
+        {
+            @* Nothing to start yet: no button, so nothing pretends to connect. *@
         }
         else
         {
@@ -85,20 +83,18 @@
     [Parameter] public bool ActionDisabled { get; set; }
 
     private bool IsConnected => Channel.Status == ChannelStatus.Connected;
+
+    /// <summary>Something can connect it now: its window, or a manual setup. Otherwise it is coming soon.</summary>
+    private bool Available => Capabilities.CanUseWindow(Channel.Id) || Capabilities.CanSetUpManually(Channel.Id);
     private bool NeedsAttention => Channel.Status == ChannelStatus.NeedsAttention;
 
     /// <summary>Started but not finished. Worth saying, because it changes the button.</summary>
     private bool InProgress => !IsConnected && !NeedsAttention && Channel.Setup.Mode is not null;
 
-    private IconName Mark => Channel.Id switch
-    {
-        ChannelId.Whatsapp => IconName.RiWhatsappFill,
-        ChannelId.Instagram => IconName.RiInstagramFill,
-        _ => IconName.RiFacebookCircleFill
-    };
 
     private string StatusLabel =>
         IsConnected ? "Connected"
+        : !Available ? "Coming soon"
         : NeedsAttention ? "Needs attention"
         : InProgress ? "Setup in progress"
         : "Not connected";
@@ -115,7 +111,8 @@
     private string? MetaLine =>
         NeedsAttention ? Channel.Attention
         : IsConnected ? Channel.AccountName
-        : Channel.Id == ChannelId.Whatsapp
+        : !Available ? "You'll be able to connect it here soon."
+        : Channel.Id == ChannelId.Whatsapp && Capabilities.CanUseWindow(Channel.Id)
             ? "Connect with Facebook · about 5 minutes"
             : Channel.GuidedMinutes > 0
                 ? $"You'll need: {Channel.Requirement} · about {Channel.GuidedMinutes} minutes"

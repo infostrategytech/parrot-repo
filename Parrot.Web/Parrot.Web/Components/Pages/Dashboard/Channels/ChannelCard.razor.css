@@ -45,14 +45,8 @@
 .channel-whatsapp .channel-card__mark { background: #22a968; }
 .channel-instagram .channel-card__mark { background: #c63886; }
 .channel-facebook .channel-card__mark { background: #1877f2; }
-/* X's mark is black in every theme; it is a brand literal like the three above. */
-.channel-x .channel-card__mark { background: #000000; }
-
-/* Parrot's own X mark, drawn at the sprite's large size so the four marks line up. */
-.channel-card__x {
-  width: var(--icon-size-icon-lg);
-  height: var(--icon-size-icon-lg);
-}
+/* X is black on white and white on black, so its disc follows the text colour. */
+.channel-x .channel-card__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
 
 .channel-card__copy {
   display: grid;

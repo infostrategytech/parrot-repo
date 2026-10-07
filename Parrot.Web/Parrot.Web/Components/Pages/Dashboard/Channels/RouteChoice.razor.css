@@ -67,6 +67,8 @@
   background: #c63886;
   box-shadow: 0 var(--spacing-sm) var(--spacing-xl) color-mix(in srgb, #c63886 20%, transparent);
 }
+.channel-x.route-choice__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
+
 .channel-facebook.route-choice__mark {
   background: #1877f2;
   box-shadow: 0 var(--spacing-sm) var(--spacing-xl) color-mix(in srgb, #1877f2 20%, transparent);
@@ -75,20 +77,9 @@
 .route-choice__intro { display: grid; gap: var(--spacing-xs); min-width: 0; }
 ::deep .route-choice__lede { color: var(--colors-text-muted); }
 
-.route-choice__close {
-  display: grid;
-  place-items: center;
-  width: var(--ds-route-close);
-  height: var(--ds-route-close);
-  padding: var(--spacing-none);
-  color: var(--colors-text-muted);
-  background: var(--colors-surface-muted);
-  border: 0;
-  border-radius: var(--radius-radius-full);
-  cursor: pointer;
-}
 
-.route-choice__close:hover { color: var(--colors-text-primary); }
+/* As Dialog draws its close: muted, on a muted circle. */
+.route-choice__header ::deep .route-choice__close { flex: none; color: var(--colors-text-muted); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
 
 /* One column per route: WhatsApp always offers exactly three, and this modal
    never renders for a channel with fewer — that screen is skipped entirely
@@ -101,7 +92,7 @@
 
 .route-choice-backdrop { --ds-route-card-gap: 14px; }
 
-.route-card {
+.route-choice__cards ::deep .route-card {
   position: relative;
   isolation: isolate;
   display: grid;
@@ -140,7 +131,7 @@
 /* A soft tinted circle bleeding off the top-right corner — decorative only,
    so it sits behind the content (z-index -1 inside this card's own isolated
    stacking context) and grows slightly on hover. */
-.route-card::after {
+.route-choice__cards ::deep .route-card::after {
   position: absolute;
   z-index: -1;
   top: -46px;
@@ -159,13 +150,24 @@
   --ds-route-circle-motion: 180ms;
 }
 
-.route-card:hover {
+.route-choice__cards ::deep .route-card:hover {
   border-color: var(--colors-accent-brand-border);
   box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-brand-primary) 11%, transparent);
   transform: translateY(-3px);
 }
 
-.route-card:hover::after { transform: scale(1.12); }
+.route-choice__cards ::deep .route-card:hover::after { transform: scale(1.12); }
+
+/* Coming soon: the card stays readable but does not answer the pointer. */
+.route-choice__cards ::deep .route-card.is-soon { cursor: not-allowed; }
+.route-choice__cards ::deep .route-card.is-soon:hover {
+  border-color: var(--colors-accent-brand-muted);
+  box-shadow: none;
+  transform: none;
+}
+.route-choice__cards ::deep .route-card.is-soon:hover::after { transform: none; }
+.route-choice__cards ::deep .route-card--coexistence.is-soon:hover { border-color: var(--colors-accent-emerald-muted); box-shadow: none; }
+.route-choice__cards ::deep .route-card--migration.is-soon:hover { border-color: var(--colors-accent-violet-border); box-shadow: none; }
 
 /* No focus rule: the app-wide ring in app.css covers these cards, and a
    bespoke one here only made them inconsistent with every other control. */
@@ -228,30 +230,30 @@
    emerald. The generated theme mapping splits this one card across teal AND
    green depending on which rule it looked at, so this is authored directly
    against the emerald ramp instead of following it. */
-.route-card--coexistence {
+.route-choice__cards ::deep .route-card--coexistence {
   border-color: var(--colors-accent-emerald-muted);
 }
 
-.route-card--coexistence::after {
+.route-choice__cards ::deep .route-card--coexistence::after {
   background: color-mix(in srgb, var(--colors-accent-emerald-solid) 7%, transparent);
 }
 
-.route-card--coexistence:hover {
+.route-choice__cards ::deep .route-card--coexistence:hover {
   border-color: var(--colors-accent-emerald-solid);
   box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-accent-emerald-solid) 11%, transparent);
 }
 
-.route-card--coexistence .route-card__icon {
+.route-choice__cards ::deep .route-card--coexistence .route-card__icon {
   color: var(--colors-accent-emerald-text);
   background: var(--colors-accent-emerald-muted);
   box-shadow: 0 var(--spacing-sm) var(--spacing-lg) color-mix(in srgb, var(--colors-accent-emerald-solid) 10%, transparent);
 }
 
-.route-card--coexistence ::deep .route-card__marker { color: var(--colors-accent-emerald-text); }
+.route-choice__cards ::deep .route-card--coexistence .route-card__marker { color: var(--colors-accent-emerald-text); }
 
-.route-card--coexistence .route-card__go { color: var(--colors-accent-emerald-text); }
+.route-choice__cards ::deep .route-card--coexistence .route-card__go { color: var(--colors-accent-emerald-text); }
 
-.route-card--coexistence .route-card__arrow {
+.route-choice__cards ::deep .route-card--coexistence .route-card__arrow {
   color: var(--colors-text-on-primary);
   background: var(--colors-accent-emerald-solid);
 }
@@ -259,30 +261,30 @@
 /* Migration: violet.
    The one family the generated theme already gets right end to end — its
    border token (#ddd6ff) matches the React literal exactly. */
-.route-card--migration {
+.route-choice__cards ::deep .route-card--migration {
   border-color: var(--colors-accent-violet-border);
 }
 
-.route-card--migration::after {
+.route-choice__cards ::deep .route-card--migration::after {
   background: color-mix(in srgb, var(--colors-accent-violet-base) 7%, transparent);
 }
 
-.route-card--migration:hover {
+.route-choice__cards ::deep .route-card--migration:hover {
   border-color: var(--colors-accent-violet-solid);
   box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-accent-violet-solid) 11%, transparent);
 }
 
-.route-card--migration .route-card__icon {
+.route-choice__cards ::deep .route-card--migration .route-card__icon {
   color: var(--colors-accent-violet-text);
   background: var(--colors-accent-violet-muted);
   box-shadow: 0 var(--spacing-sm) var(--spacing-lg) color-mix(in srgb, var(--colors-accent-violet-solid) 10%, transparent);
 }
 
-.route-card--migration ::deep .route-card__marker { color: var(--colors-accent-violet-text); }
+.route-choice__cards ::deep .route-card--migration .route-card__marker { color: var(--colors-accent-violet-text); }
 
-.route-card--migration .route-card__go { color: var(--colors-accent-violet-text); }
+.route-choice__cards ::deep .route-card--migration .route-card__go { color: var(--colors-accent-violet-text); }
 
-.route-card--migration .route-card__arrow {
+.route-choice__cards ::deep .route-card--migration .route-card__arrow {
   color: var(--colors-text-on-primary);
   background: var(--colors-accent-violet-solid);
 }
@@ -298,14 +300,11 @@
 
 .route-choice-backdrop { --ds-route-footer-gap: 21px; }
 
-.route-choice__manual-link {
-  padding: var(--spacing-none);
-  color: var(--colors-text-muted);
-  background: transparent;
-  border: 0;
+/* The manual link: the Ghost Button, text only and underlined, so it reads as
+   a way round rather than a second choice. */
+.route-choice__footer ::deep .route-choice__manual {
   text-decoration: underline;
   text-underline-offset: var(--ds-route-underline-offset);
-  cursor: pointer;
 }
 
 .route-choice-backdrop {
@@ -313,7 +312,8 @@
   --ds-route-underline-offset: 3px;
 }
 
-.route-choice__manual-link:hover { color: var(--colors-text-secondary); }
+
+
 
 @keyframes route-backdrop-in {
   from { opacity: 0; }

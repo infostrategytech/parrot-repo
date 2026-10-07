@@ -77,8 +77,8 @@
                 }
             </span>
             <div class="manual__titles">
-                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Meta to Parrot</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the three details Parrot needs to send messages.</Typography>
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Meta to OmniAI</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the three details OmniAI needs to send messages.</Typography>
             </div>
             <ManualSectionAside Done="Reached > 1"
                                 IsCurrent="Reached == 1"
@@ -93,13 +93,12 @@
                    temporary token works today and silently takes the
                    connection down tomorrow. *@
                 <InlineError Tone="InlineErrorTone.Warning"
-                             Message="The temporary token on API Setup is fine for testing and expires after about a day. Use a permanent token when you want Parrot to stay connected." />
+                             Message="The temporary token on API Setup is fine for testing and expires after about a day. Use a permanent token when you want OmniAI to stay connected." />
 
                 <div class="manual__token-type" role="group" aria-label="Access token type">
-                    <button type="button"
-                            class="@(Permanent ? "manual__token is-selected" : "manual__token")"
+                    <RowButton Class="@(Permanent ? "manual__token is-selected" : "manual__token")"
                             aria-pressed="@Permanent.ToString().ToLowerInvariant()"
-                            @onclick="() => PermanentChanged.InvokeAsync(true)">
+                            OnClick="() => PermanentChanged.InvokeAsync(true)">
                         <Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Sm" />
                         <span class="manual__token-copy">
                             <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Permanent Token</Typography>
@@ -108,12 +107,11 @@
                         <span class="manual__token-tick@(Permanent ? " is-shown" : null)" aria-hidden="true">
                             <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                         </span>
-                    </button>
+                    </RowButton>
 
-                    <button type="button"
-                            class="@(Permanent ? "manual__token" : "manual__token is-selected")"
+                    <RowButton Class="@(Permanent ? "manual__token" : "manual__token is-selected")"
                             aria-pressed="@((!Permanent).ToString().ToLowerInvariant())"
-                            @onclick="() => PermanentChanged.InvokeAsync(false)">
+                            OnClick="() => PermanentChanged.InvokeAsync(false)">
                         <Icon Name="IconName.RiTimeFill" Size="IconSize.Sm" />
                         <span class="manual__token-copy">
                             <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Temporary Token</Typography>
@@ -122,7 +120,7 @@
                         <span class="manual__token-tick@(!Permanent ? " is-shown" : null)" aria-hidden="true">
                             <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                         </span>
-                    </button>
+                    </RowButton>
                 </div>
 
                 @if (Permanent)
@@ -231,7 +229,7 @@
                 <Checkbox State="@(WebhookConfirmed ? CheckboxState.Checked : CheckboxState.Unchecked)"
                           StateChanged="@(state => WebhookConfirmedChanged.InvokeAsync(state == CheckboxState.Checked))"
                           Label="I verified the webhook and subscribed to messages"
-                          Description="This allows new customer messages to arrive in Parrot." />
+                          Description="This allows new customer messages to arrive in OmniAI." />
 
                 <Button disabled="@(!WebhookConfirmed || Busy)" @onclick="OnFinish">
                     <ChildContent>Continue to Message Test</ChildContent>

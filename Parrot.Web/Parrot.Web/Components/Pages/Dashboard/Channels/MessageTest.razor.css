@@ -51,6 +51,8 @@
   box-shadow: 0 var(--spacing-sm) var(--ds-test-glow) color-mix(in srgb, #c63886 23%, transparent);
 }
 
+.channel-x.live-test .live-test__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
+
 .channel-facebook.live-test .live-test__mark {
   background: #1877f2;
   box-shadow: 0 var(--spacing-sm) var(--ds-test-glow) color-mix(in srgb, #1877f2 23%, transparent);
