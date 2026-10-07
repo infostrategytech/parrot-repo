@@ -1,0 +1,68 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A channel's own mark in its own colour (WhatsApp green, Instagram pink,
+   Facebook blue, TikTok in the text colour), so where something came from
+   reads at a glance, without reading. These are other companies' brand marks:
+   the one place the design system uses colours that are not ours. Decorative
+   unless Label is set; the words beside it usually say the channel. *@
+<span class="ds-channel-icon is-@Key @(Plain ? "is-plain" : null) @Class" title="@Label">
+    @if (Key == "x")
+    {
+        @* The sprite is generated from the React app, which never drew X, so
+           X's published mark is drawn here: a third-party brand mark, the one
+           exception to the sprite. Same box and classes as Icon. *@
+        <svg class="ds-icon ds-icon--@Size.ToString().ToLowerInvariant()" viewBox="0 0 24 24" fill="currentColor"
+             role="@(Label is null ? null : "img")" aria-label="@Label" aria-hidden="@(Label is null ? "true" : null)" focusable="false">
+            <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.746l7.73-8.835L1.254 2.25H8.08l4.259 5.631 5.905-5.631Zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+        </svg>
+    }
+    else
+    {
+        <Icon Name="@Glyph" Label="@Label" Size="@Size" />
+    }
+</span>
+
+@code {
+    /// <summary>whatsapp, instagram, facebook, tiktok or x (also "twitter"); case does not matter; anything else draws a neutral chat mark.</summary>
+    [Parameter, EditorRequired] public string Channel { get; set; } = "";
+
+    [Parameter] public IconSize Size { get; set; } = IconSize.Inherit;
+
+    /// <summary>Read out by screen readers; leave null when the channel is named beside it.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// Paint the mark in the colour around it instead of the brand's own: for
+    /// a mark sitting on a disc already in the brand's colour.
+    /// </summary>
+    [Parameter] public bool Plain { get; set; }
+
+    private string Key => Channel.ToLowerInvariant() switch
+    {
+        "whatsapp" or "instagram" or "facebook" or "tiktok" or "x" => Channel.ToLowerInvariant(),
+        "twitter" => "x",
+        _ => "other",
+    };
+
+    private IconName Glyph => Key switch
+    {
+        "whatsapp" => IconName.RiWhatsappFill,
+        "instagram" => IconName.RiInstagramFill,
+        "facebook" => IconName.RiFacebookCircleFill,
+        "tiktok" => IconName.RiTiktokFill,
+        _ => IconName.RiChat3Fill,
+    };
+
+    /// <summary>The channel named in a source such as "your WhatsApp Business profile", or null.</summary>
+    public static string? From(string? source) => source switch
+    {
+        null => null,
+        var s when s.Contains("WhatsApp", StringComparison.OrdinalIgnoreCase) => "whatsapp",
+        var s when s.Contains("Instagram", StringComparison.OrdinalIgnoreCase) => "instagram",
+        var s when s.Contains("Facebook", StringComparison.OrdinalIgnoreCase) => "facebook",
+        var s when s.Contains("TikTok", StringComparison.OrdinalIgnoreCase) => "tiktok",
+        _ => null,
+    };
+}

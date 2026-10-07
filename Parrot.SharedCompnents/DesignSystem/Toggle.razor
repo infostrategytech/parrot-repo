@@ -13,20 +13,14 @@
         @onclick="ToggleAsync"
         @attributes="AdditionalAttributes">
 
+    @* Stretch puts the words first, so they also come first when read aloud. *@
+    @if (Stretch) { @Text }
+
     <span class="toggle__track">
         <span class="toggle__thumb"></span>
     </span>
 
-    @if (HasVisibleLabel)
-    {
-        <span class="toggle__text" id="@_labelId">
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@Label</Typography>
-            @if (!string.IsNullOrWhiteSpace(Description))
-            {
-                <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@Description</Typography>
-            }
-        </span>
-    }
+    @if (!Stretch) { @Text }
 </button>
 
 @code {
@@ -49,6 +43,26 @@
     [Parameter] public string? AriaLabel { get; set; }
 
     [Parameter] public ToggleSize Size { get; set; } = ToggleSize.Md;
+
+    /// <summary>
+    /// A settings row: it fills its width, with the label and description on
+    /// the far left and the switch on the far right.
+    /// </summary>
+    [Parameter] public bool Stretch { get; set; }
+
+    private RenderFragment Text => __builder =>
+    {
+        if (HasVisibleLabel)
+        {
+            <span class="toggle__text" id="@_labelId">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@Label</Typography>
+                @if (!string.IsNullOrWhiteSpace(Description))
+                {
+                    <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@Description</Typography>
+                }
+            </span>
+        }
+    };
 
     [Parameter] public string? Class { get; set; }
 
@@ -76,6 +90,7 @@
             var name = "toggle";
             if (Size == ToggleSize.Sm) name += " toggle--sm";
             if (Checked) name += " is-on";
+            if (Stretch) name += " is-stretch";
             return string.IsNullOrWhiteSpace(Class) ? name : name + " " + Class;
         }
     }

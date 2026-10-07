@@ -1,0 +1,146 @@
+.ds-mascot {
+  /* The mascot is an illustration, so it draws in the primitive colours
+     directly, the same in both themes, like a brand mark. */
+  --ds-mascot-blue: var(--p-color-blue-700);
+  --ds-mascot-blue-deep: var(--p-color-blue-800);
+  --ds-mascot-navy: var(--p-color-blue-950);
+  --ds-mascot-face: var(--p-white);
+  --ds-mascot-beak: var(--p-color-amber-400);
+  --ds-mascot-beak-shade: var(--p-color-amber-500);
+  --ds-mascot-gold: var(--p-color-amber-300);
+  --ds-mascot-iris: var(--p-color-blue-900);
+  --ds-mascot-pupil: var(--p-color-zinc-950);
+  --ds-mascot-tongue: var(--p-color-red-400);
+  --ds-mascot-blush: var(--p-color-red-300);
+  --ds-mascot-glow: color-mix(in srgb, var(--p-color-blue-500) 55%, transparent);
+  --ds-mascot-glow-soft: color-mix(in srgb, var(--p-color-blue-500) 18%, transparent);
+  /* Missing from the token set: the drawing's own coordinates (pivots and
+     small moves, in the SVG's units) and the mascot's motion values. */
+  --ds-mascot-pivot-bob: 60px 106px;
+  --ds-mascot-pivot-head: 60px 100px;
+  --ds-mascot-pivot-crest: 58px 22px;
+  --ds-mascot-pivot-jaw: 60px 80px;
+  --ds-mascot-look-up: translate(-2.6px, -3.6px);
+  --ds-mascot-brow-down: translateY(1.5px) rotate(4deg);
+  --ds-mascot-bob-height: -1.6px;
+  --ds-mascot-ring: 2px;
+  --ds-mascot-size: 96px;
+  --ds-mascot-breath: 3.6s;
+  --ds-mascot-blink: 5.2s;
+  --ds-mascot-sway: 4.2s;
+  --ds-mascot-ripple: 1.6s;
+  --ds-mascot-think: 1.8s;
+  --ds-mascot-dot: 1.2s;
+  --ds-mascot-hop: 700ms;
+  --ds-mascot-turn: 420ms;
+  --ds-mascot-quick: 200ms;
+  --ds-mascot-follow: 90ms;
+  --ds-mascot-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-mascot-bounce: cubic-bezier(0.3, 1.6, 0.5, 1);
+  --ds-mascot-blur: 8px;
+
+  /* 0 to 1, written by the voice module: the person's voice when listening,
+     the agent's when speaking. */
+  --level: 0;
+
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--ds-mascot-size);
+  aspect-ratio: 120 / 112;
+}
+
+/* The glow: soft, behind the parrot, breathing at rest and following a voice. */
+.ds-mascot__glow {
+  position: absolute;
+  inset: -12%;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, var(--ds-mascot-glow), var(--ds-mascot-glow-soft) 60%, transparent 100%);
+  filter: blur(var(--ds-mascot-blur));
+  opacity: 0.42;
+  transform: scale(0.9);
+  animation: ds-mascot-glow var(--ds-mascot-breath) ease-in-out infinite;
+  transition: opacity var(--ds-mascot-follow) linear, transform var(--ds-mascot-follow) linear;
+}
+.ds-mascot__ring {
+  position: absolute;
+  inset: -2%;
+  border: var(--ds-mascot-ring) solid var(--ds-mascot-glow);
+  border-radius: 50%;
+  opacity: 0;
+}
+.ds-mascot svg { position: relative; width: 100%; height: 100%; overflow: visible; }
+
+/* The drawing's own colours. */
+.ds-mascot__blue { fill: var(--ds-mascot-blue); }
+.ds-mascot__deep, .ds-mascot__dots { fill: var(--ds-mascot-blue-deep); }
+.ds-mascot__navy { fill: var(--ds-mascot-navy); }
+.ds-mascot__face { fill: var(--ds-mascot-face); }
+.ds-mascot__iris { fill: var(--ds-mascot-iris); }
+.ds-mascot__pupil-dark { fill: var(--ds-mascot-pupil); }
+.ds-mascot__shine { fill: var(--ds-mascot-face); }
+.ds-mascot__beak { fill: var(--ds-mascot-beak); }
+.ds-mascot__beak-shade { fill: var(--ds-mascot-beak-shade); }
+.ds-mascot__tongue { fill: var(--ds-mascot-tongue); opacity: 0; transition: opacity var(--ds-mascot-follow) linear; }
+.ds-mascot__cheek { fill: var(--ds-mascot-blush); opacity: 0.35; transition: opacity var(--ds-mascot-quick) ease; }
+.ds-mascot__sparkle { fill: var(--ds-mascot-gold); opacity: 0; transition: opacity var(--ds-mascot-quick) ease; }
+.ds-mascot__brow,
+.ds-mascot__happy-eye { fill: none; stroke: var(--ds-mascot-navy); stroke-linecap: round; }
+.ds-mascot__brow { stroke-width: 3.6; transform-box: fill-box; transform-origin: center; transition: transform var(--ds-mascot-turn) var(--ds-mascot-ease); }
+.ds-mascot__happy-eye { stroke-width: 4; opacity: 0; transition: opacity var(--ds-mascot-quick) ease; }
+
+/* The parts that move. */
+.ds-mascot__bob { transform-origin: var(--ds-mascot-pivot-bob); animation: ds-mascot-bob var(--ds-mascot-breath) ease-in-out infinite; }
+.ds-mascot__head { transform-origin: var(--ds-mascot-pivot-head); transition: transform var(--ds-mascot-turn) var(--ds-mascot-ease); }
+.ds-mascot__crest { transform-origin: var(--ds-mascot-pivot-crest); animation: ds-mascot-sway var(--ds-mascot-sway) ease-in-out infinite; }
+.ds-mascot__eye { transform-box: fill-box; transform-origin: center; animation: ds-mascot-blink var(--ds-mascot-blink) infinite; }
+.ds-mascot__pupil { transform-box: fill-box; transform-origin: center; transition: transform var(--ds-mascot-turn) var(--ds-mascot-ease); }
+.ds-mascot__jaw { transform-origin: var(--ds-mascot-pivot-jaw); transition: transform var(--ds-mascot-follow) linear; }
+.ds-mascot__dots { opacity: 0; transition: opacity var(--ds-mascot-quick) ease; }
+.ds-mascot__dots circle { animation: ds-mascot-dot var(--ds-mascot-dot) ease-in-out infinite; }
+.ds-mascot__dots circle:nth-child(2) { animation-delay: calc(var(--ds-mascot-dot) / 8); }
+.ds-mascot__dots circle:nth-child(3) { animation-delay: calc(var(--ds-mascot-dot) / 4); }
+
+/* Listening: leans in, brows up, eyes a touch wider; the glow is their voice. */
+.ds-mascot[data-state="listening"] .ds-mascot__head { transform: rotate(-7deg); }
+.ds-mascot[data-state="listening"] .ds-mascot__brow { transform: translateY(-4px); }
+.ds-mascot[data-state="listening"] .ds-mascot__pupil { transform: scale(1.08); }
+.ds-mascot[data-state="listening"] .ds-mascot__glow { animation: none; opacity: calc(0.4 + var(--level) * 0.6); transform: scale(calc(0.92 + var(--level) * 0.3)); }
+.ds-mascot[data-state="listening"] .ds-mascot__ring { animation: ds-mascot-ripple var(--ds-mascot-ripple) ease-out infinite; }
+
+/* Thinking: looks up and away, one brow raised, three dots. */
+.ds-mascot[data-state="thinking"] .ds-mascot__head { transform: rotate(6deg); }
+.ds-mascot[data-state="thinking"] .ds-mascot__pupil { transform: var(--ds-mascot-look-up); }
+.ds-mascot[data-state="thinking"] .ds-mascot__brow--left { transform: translateY(-5px) rotate(-6deg); }
+.ds-mascot[data-state="thinking"] .ds-mascot__brow--right { transform: var(--ds-mascot-brow-down); }
+.ds-mascot[data-state="thinking"] .ds-mascot__dots { opacity: 1; }
+.ds-mascot[data-state="thinking"] .ds-mascot__glow { animation: ds-mascot-shimmer var(--ds-mascot-think) ease-in-out infinite; }
+
+/* Speaking: the beak and brows move with the voice. */
+.ds-mascot[data-state="speaking"] .ds-mascot__jaw { transform: translateY(calc(var(--level) * 8px)); }
+.ds-mascot[data-state="speaking"] .ds-mascot__tongue { opacity: calc(var(--level) * 1.6); }
+.ds-mascot[data-state="speaking"] .ds-mascot__brow { transform: translateY(calc(var(--level) * -3px)); }
+.ds-mascot[data-state="speaking"] .ds-mascot__glow { animation: none; opacity: calc(0.4 + var(--level) * 0.5); transform: scale(calc(0.94 + var(--level) * 0.2)); }
+
+/* Happy: a hop, smiling eyes, warm cheeks, a sparkle. */
+.ds-mascot[data-state="happy"] .ds-mascot__bob { animation: ds-mascot-hop var(--ds-mascot-hop) var(--ds-mascot-bounce) 1, ds-mascot-bob var(--ds-mascot-breath) ease-in-out var(--ds-mascot-hop) infinite; }
+.ds-mascot[data-state="happy"] .ds-mascot__eye { opacity: 0; animation: none; }
+.ds-mascot[data-state="happy"] .ds-mascot__happy-eye,
+.ds-mascot[data-state="happy"] .ds-mascot__sparkle { opacity: 1; }
+.ds-mascot[data-state="happy"] .ds-mascot__cheek { opacity: 0.9; }
+.ds-mascot[data-state="happy"] .ds-mascot__brow { transform: translateY(-3px); }
+.ds-mascot[data-state="happy"] .ds-mascot__glow { opacity: 0.7; }
+
+@keyframes ds-mascot-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(var(--ds-mascot-bob-height)); } }
+@keyframes ds-mascot-sway { 0%, 100% { transform: rotate(0); } 50% { transform: rotate(-5deg); } }
+@keyframes ds-mascot-blink { 0%, 93%, 100% { transform: scaleY(1); } 95.5% { transform: scaleY(0.08); } }
+@keyframes ds-mascot-glow { 0%, 100% { opacity: 0.38; transform: scale(0.9); } 50% { opacity: 0.55; transform: scale(0.96); } }
+@keyframes ds-mascot-shimmer { 0%, 100% { opacity: 0.35; transform: scale(0.9); } 50% { opacity: 0.65; transform: scale(1); } }
+@keyframes ds-mascot-ripple { 0% { opacity: 0.55; transform: scale(0.9); } 100% { opacity: 0; transform: scale(1.35); } }
+@keyframes ds-mascot-dot { 0%, 100% { transform: translateY(0); opacity: 0.45; } 50% { transform: translateY(-3px); opacity: 1; } }
+@keyframes ds-mascot-hop { 0% { transform: translateY(0); } 35% { transform: translateY(-9px) scale(1.02, 0.98); } 70% { transform: translateY(0) scale(1.03, 0.97); } 100% { transform: translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-mascot *,
+  .ds-mascot__glow { animation: none !important; transition: none !important; }
+}

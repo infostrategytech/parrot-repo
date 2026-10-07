@@ -107,6 +107,15 @@
   min-width: 0;
 }
 
+/* A settings row: words on the far left, the switch on the far right. */
+.toggle.is-stretch {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  gap: var(--spacing-lg);
+  text-align: left;
+}
+
 .toggle__text ::deep strong { color: var(--colors-text-primary); }
 .toggle__text ::deep small { color: var(--colors-text-muted); }
 

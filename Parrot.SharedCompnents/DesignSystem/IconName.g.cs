@@ -34,6 +34,8 @@ public enum IconName
     RiArrowUpDownFill,
     /// <summary>react-icons/ri/RiAttachment2</summary>
     RiAttachment2,
+    /// <summary>react-icons/ri/RiBankCardFill</summary>
+    RiBankCardFill,
     /// <summary>react-icons/ri/RiBarChartBoxFill</summary>
     RiBarChartBoxFill,
     /// <summary>react-icons/ri/RiBookAiFill</summary>
@@ -92,10 +94,16 @@ public enum IconName
     RiFeedbackFill,
     /// <summary>react-icons/ri/RiFileCopyFill</summary>
     RiFileCopyFill,
+    /// <summary>react-icons/ri/RiFileExcel2Fill</summary>
+    RiFileExcel2Fill,
     /// <summary>react-icons/ri/RiFileList3Fill</summary>
     RiFileList3Fill,
+    /// <summary>react-icons/ri/RiFilePdf2Fill</summary>
+    RiFilePdf2Fill,
     /// <summary>react-icons/ri/RiFileTextFill</summary>
     RiFileTextFill,
+    /// <summary>react-icons/ri/RiFileWord2Fill</summary>
+    RiFileWord2Fill,
     /// <summary>react-icons/ri/RiFlashlightFill</summary>
     RiFlashlightFill,
     /// <summary>react-icons/ri/RiFolderAddFill</summary>
@@ -106,6 +114,8 @@ public enum IconName
     RiGroupFill,
     /// <summary>react-icons/ri/RiHome5Fill</summary>
     RiHome5Fill,
+    /// <summary>react-icons/ri/RiImageFill</summary>
+    RiImageFill,
     /// <summary>react-icons/ri/RiInbox2Fill</summary>
     RiInbox2Fill,
     /// <summary>react-icons/ri/RiInboxUnarchiveFill</summary>
@@ -114,6 +124,8 @@ public enum IconName
     RiInformationFill,
     /// <summary>react-icons/ri/RiInstagramFill</summary>
     RiInstagramFill,
+    /// <summary>react-icons/ri/RiKeyboardFill</summary>
+    RiKeyboardFill,
     /// <summary>react-icons/ri/RiLinksFill</summary>
     RiLinksFill,
     /// <summary>react-icons/ri/RiLoader4Fill</summary>
@@ -136,12 +148,18 @@ public enum IconName
     RiMenuUnfoldFill,
     /// <summary>react-icons/ri/RiMessage2Fill</summary>
     RiMessage2Fill,
+    /// <summary>react-icons/ri/RiMicFill</summary>
+    RiMicFill,
+    /// <summary>react-icons/ri/RiMicOffFill</summary>
+    RiMicOffFill,
     /// <summary>react-icons/ri/RiMoonFill</summary>
     RiMoonFill,
     /// <summary>react-icons/ri/RiMore2Fill</summary>
     RiMore2Fill,
     /// <summary>react-icons/ri/RiPauseCircleFill</summary>
     RiPauseCircleFill,
+    /// <summary>react-icons/ri/RiPauseFill</summary>
+    RiPauseFill,
     /// <summary>react-icons/ri/RiPencilFill</summary>
     RiPencilFill,
     /// <summary>react-icons/ri/RiPhoneFill</summary>
@@ -182,14 +200,20 @@ public enum IconName
     RiSparkling2Fill,
     /// <summary>react-icons/ri/RiSparklingFill</summary>
     RiSparklingFill,
+    /// <summary>react-icons/ri/RiStopFill</summary>
+    RiStopFill,
     /// <summary>react-icons/ri/RiStore2Fill</summary>
     RiStore2Fill,
+    /// <summary>react-icons/ri/RiSubtractFill</summary>
+    RiSubtractFill,
     /// <summary>react-icons/ri/RiSunFill</summary>
     RiSunFill,
     /// <summary>react-icons/ri/RiTaskFill</summary>
     RiTaskFill,
     /// <summary>react-icons/ri/RiTeamFill</summary>
     RiTeamFill,
+    /// <summary>react-icons/ri/RiTiktokFill</summary>
+    RiTiktokFill,
     /// <summary>react-icons/ri/RiTimeFill</summary>
     RiTimeFill,
     /// <summary>react-icons/ri/RiTimer2Fill</summary>
@@ -212,6 +236,8 @@ public enum IconName
     RiUserSharedFill,
     /// <summary>react-icons/ri/RiUserUnfollowFill</summary>
     RiUserUnfollowFill,
+    /// <summary>react-icons/ri/RiVoiceprintFill</summary>
+    RiVoiceprintFill,
     /// <summary>react-icons/ri/RiWhatsappFill</summary>
     RiWhatsappFill,
     /// <summary>react-icons/hi2/HiAdjustmentsHorizontal</summary>
@@ -244,6 +270,7 @@ public static class IconNameExtensions
         "ri-arrow-right-s-line",
         "ri-arrow-up-down-fill",
         "ri-attachment2",
+        "ri-bank-card-fill",
         "ri-bar-chart-box-fill",
         "ri-book-ai-fill",
         "ri-book-open-fill",
@@ -273,17 +300,22 @@ public static class IconNameExtensions
         "ri-facebook-circle-fill",
         "ri-feedback-fill",
         "ri-file-copy-fill",
+        "ri-file-excel2-fill",
         "ri-file-list3-fill",
+        "ri-file-pdf2-fill",
         "ri-file-text-fill",
+        "ri-file-word2-fill",
         "ri-flashlight-fill",
         "ri-folder-add-fill",
         "ri-global-fill",
         "ri-group-fill",
         "ri-home5-fill",
+        "ri-image-fill",
         "ri-inbox2-fill",
         "ri-inbox-unarchive-fill",
         "ri-information-fill",
         "ri-instagram-fill",
+        "ri-keyboard-fill",
         "ri-links-fill",
         "ri-loader4-fill",
         "ri-lock2-fill",
@@ -295,9 +327,12 @@ public static class IconNameExtensions
         "ri-menu-fold-fill",
         "ri-menu-unfold-fill",
         "ri-message2-fill",
+        "ri-mic-fill",
+        "ri-mic-off-fill",
         "ri-moon-fill",
         "ri-more2-fill",
         "ri-pause-circle-fill",
+        "ri-pause-fill",
         "ri-pencil-fill",
         "ri-phone-fill",
         "ri-play-fill",
@@ -318,10 +353,13 @@ public static class IconNameExtensions
         "ri-smartphone-fill",
         "ri-sparkling2-fill",
         "ri-sparkling-fill",
+        "ri-stop-fill",
         "ri-store2-fill",
+        "ri-subtract-fill",
         "ri-sun-fill",
         "ri-task-fill",
         "ri-team-fill",
+        "ri-tiktok-fill",
         "ri-time-fill",
         "ri-timer2-fill",
         "ri-timer-fill",
@@ -333,6 +371,7 @@ public static class IconNameExtensions
         "ri-user-received2-fill",
         "ri-user-shared-fill",
         "ri-user-unfollow-fill",
+        "ri-voiceprint-fill",
         "ri-whatsapp-fill",
         "hi-adjustments-horizontal",
         "hi-chevron-down",

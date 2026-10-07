@@ -1,0 +1,35 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The light along a surface's edges while a voice conversation happens on
+   it: a sign of life that also says whose turn it is, without words. It
+   glows inward from the edge and never past it: a bright line at the edge
+   and a wider halo inside it. The agent speaking is a cool aurora travelling
+   round the edge, in the orb's colours; the person speaking is a warm light
+   along the bottom edge, where they talk, rising up the sides as they speak
+   up; thinking is the aurora, quieter; at rest it glows faintly; with no
+   State, it is off. Both lights follow the voice: the voice
+   module writes the level onto Element as --level (0 to 1), as it does for
+   VoiceOrb.
+
+   Put it inside the surface, as its first child. The surface needs a
+   position (relative) and is its frame: the light takes the surface's
+   corners and draws over the edges of its content, never on top of the
+   middle. Decorative: the status line says the same in words. *@
+<div class="ds-voice-aura @Class" data-state="@(State?.ToString().ToLowerInvariant() ?? "off")" aria-hidden="true" @ref="Element">
+    <span class="ds-voice-aura__glow is-wide is-cool"><span class="ds-voice-aura__band"><span class="ds-voice-aura__light"></span></span></span>
+    <span class="ds-voice-aura__glow is-tight is-cool"><span class="ds-voice-aura__band"><span class="ds-voice-aura__light"></span></span></span>
+    <span class="ds-voice-aura__glow is-wide is-warm"><span class="ds-voice-aura__band"><span class="ds-voice-aura__light"></span></span></span>
+    <span class="ds-voice-aura__glow is-tight is-warm"><span class="ds-voice-aura__band"><span class="ds-voice-aura__light"></span></span></span>
+    <span class="ds-voice-aura__rim is-cool"><span class="ds-voice-aura__light"></span></span>
+    <span class="ds-voice-aura__rim is-warm"><span class="ds-voice-aura__light"></span></span>
+</div>
+
+@code {
+    /// <summary>Who is talking, or thinking; null for no light.</summary>
+    [Parameter] public VoiceState? State { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>The aura's element, for the voice module to write the live level onto.</summary>
+    public ElementReference Element { get; private set; }
+}

@@ -1,0 +1,153 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A short list typed one item at a time: each becomes a pill that can be
+   removed. Enter or a comma adds what was typed, and a pasted list ("Calm
+   down, That's not our fault") becomes several pills at once. Suggestions
+   are one tap each and disappear once used.
+
+   For phrases an agent never says today; it fits anything else of the kind
+   (trigger phrases, tags). *@
+
+<div class="tag-input @Class">
+    <div class="tag-input__head">
+        @* Typography has no <label>, so the label wraps the text: clicking it still focuses the field. *@
+        <label for="@_fieldId"><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@Label</Typography></label>
+        @if (Optional)
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="tag-input__optional">Optional</Typography>
+        }
+    </div>
+
+    <div class="@($"tag-input__box {(Full ? "is-full" : null)}")">
+        <TextArea Id="@_fieldId" Value="@_text" ValueChanged="TextChanged" AriaLabel="@Label"
+                  Placeholder="@(Full ? $"That's the most it can hold ({MaxItems})." : Placeholder)"
+                  Variant="TextAreaVariant.Plain" Rows="1" MaxLength="@MaxLength" SubmitOnEnter
+                  Disabled="@Full" OnKeyDown="KeyAsync" Class="tag-input__field" />
+        @* Only once there is something to add, so an empty field has no dead button. *@
+        @if (_text.Trim().Length > 0)
+        {
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ds-no-shrink" @onclick="AddTyped">Add</Button>
+        }
+    </div>
+
+    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="@($"tag-input__help {(_note is not null ? "is-note" : null)}")" aria-live="polite">
+        @(_note ?? HelperText)
+    </Typography>
+
+    @if (Values.Count > 0)
+    {
+        <ul class="tag-input__pills" aria-label="@Label">
+            @foreach (var value in Values)
+            {
+                var current = value;
+                <li class="tag-input__pill">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">@current</Typography>
+                    <RowButton Class="tag-input__remove" aria-label="@($"Remove “{current}”")" title="Remove" OnClick="() => RemoveAsync(current)">
+                        <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
+                    </RowButton>
+                </li>
+            }
+        </ul>
+    }
+
+    @if (Unused.Count > 0 && !Full)
+    {
+        <div class="tag-input__suggestions">
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="tag-input__try">Try</Typography>
+            @foreach (var suggestion in Unused)
+            {
+                var current = suggestion;
+                <RowButton Class="tag-input__suggestion" aria-label="@($"Add “{current}”")" OnClick="() => AddAsync([current])">
+                    <Icon Name="IconName.RiAddFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@current</Typography>
+                </RowButton>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private readonly string _fieldId = $"tag-input-{Guid.NewGuid():N}";
+    private string _text = "";
+    private string? _note;
+
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    [Parameter] public bool Optional { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<string> Values { get; set; } = [];
+
+    [Parameter] public EventCallback<IReadOnlyList<string>> ValuesChanged { get; set; }
+
+    [Parameter] public string Placeholder { get; set; } = "Type and press Enter";
+
+    [Parameter] public string? HelperText { get; set; }
+
+    /// <summary>One-tap additions, shown until they are used.</summary>
+    [Parameter] public IReadOnlyList<string> Suggestions { get; set; } = [];
+
+    /// <summary>The longest one item may be, so a paragraph does not become a pill.</summary>
+    [Parameter] public int MaxLength { get; set; } = 40;
+
+    [Parameter] public int MaxItems { get; set; } = 20;
+
+    [Parameter] public string? Class { get; set; }
+
+    private bool Full => Values.Count >= MaxItems;
+
+    private List<string> Unused => Suggestions.Where(s => !Has(Values, s)).ToList();
+
+    private static bool Has(IEnumerable<string> list, string value) =>
+        list.Any(v => string.Equals(v, value, StringComparison.OrdinalIgnoreCase));
+
+    // A comma or a new line ends an item, typed or pasted; what follows the
+    // last one stays in the field.
+    private async Task TextChanged(string? value)
+    {
+        var text = value ?? "";
+        var parts = text.Split([',', '\n', '\r']);
+        if (parts.Length > 1)
+        {
+            _text = parts[^1].TrimStart();
+            await AddAsync(parts[..^1]);
+            return;
+        }
+        _text = text;
+        _note = null;
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing) await AddTyped();
+    }
+
+    private async Task AddTyped()
+    {
+        var text = _text;
+        _text = "";
+        await AddAsync([text]);
+    }
+
+    private async Task AddAsync(IEnumerable<string> items)
+    {
+        var next = Values.ToList();
+        var repeated = false;
+        foreach (var raw in items)
+        {
+            var item = raw.Trim();
+            if (item.Length == 0) continue;
+            if (item.Length > MaxLength) item = item[..MaxLength].TrimEnd();
+            if (Has(next, item)) { repeated = true; continue; }
+            if (next.Count >= MaxItems) break;
+            next.Add(item);
+        }
+        _note = repeated ? "Already in the list." : null;
+        if (next.Count != Values.Count) await ValuesChanged.InvokeAsync(next);
+    }
+
+    private Task RemoveAsync(string value)
+    {
+        _note = null;
+        return ValuesChanged.InvokeAsync(Values.Where(v => v != value).ToList());
+    }
+}

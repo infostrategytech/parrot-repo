@@ -1,0 +1,60 @@
+.ds-voice-recording {
+  /* Missing from the token set: the bars' width, how tall they rest and peak,
+     how fast they follow the voice, and the dot's pulse. */
+  --ds-voice-recording-bar: 3px;
+  --ds-voice-recording-rest: 4px;
+  --ds-voice-recording-peak: 24px;
+  --ds-voice-recording-follow: 80ms;
+  --ds-voice-recording-pulse: 1.2s;
+  --level: 0;
+
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: 100%;
+  min-height: var(--spacing-4xl);
+}
+.ds-voice-recording__dot {
+  flex: none;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
+  background: var(--colors-feedback-destructive);
+  border-radius: var(--radius-radius-full);
+  animation: ds-voice-recording-pulse var(--ds-voice-recording-pulse) ease-in-out infinite;
+}
+.ds-voice-recording ::deep .ds-voice-recording__time {
+  flex: none;
+  min-width: var(--spacing-3xl);
+  color: var(--colors-text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.ds-voice-recording__bars {
+  display: flex;
+  flex: 1;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  height: var(--ds-voice-recording-peak);
+  overflow: hidden;
+}
+.ds-voice-recording__bars i {
+  flex: none;
+  width: var(--ds-voice-recording-bar);
+  /* Each bar its own share of the level, so the line moves like a voice. */
+  height: calc(var(--ds-voice-recording-rest) + var(--level) * var(--ds-voice-recording-peak) * (0.25 + 0.75 * sin(var(--bar) * 1.7) * sin(var(--bar) * 1.7)));
+  max-height: 100%;
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+  transition: height var(--ds-voice-recording-follow) linear;
+}
+
+@keyframes ds-voice-recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-voice-recording__dot { animation: none; }
+  .ds-voice-recording__bars i { transition: none; }
+}

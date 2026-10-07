@@ -1,0 +1,63 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The voice agent's presence, after "V.A.O." by Cobp (Uiverse.io): a gooey
+   ball of light with a bright core and two iridescent rings turning in 3D,
+   in our brand colours. The gooey filter blurs everything inside
+   the ball and then sharpens its edge again, so the parts melt into one
+   liquid shape.
+
+   At rest it breathes. Listening, it swells with the person's voice;
+   speaking, it swells with the agent's, its core flaring and rings hurrying;
+   thinking, it pulses slowly.
+   The level is not a parameter: it changes many times a second, so the voice
+   module writes it straight onto Element as --level (0 to 1) and the styles
+   read it there, with no re-render.
+
+   Size it with --ds-voice-orb-size (what it measures on screen). A parent can
+   set --ds-voice-orb-wake to 1 (on hover, say) to wake it. The filter id is
+   made per instance. Decorative unless Label is set. *@
+<span class="ds-voice-orb @(Still ? "is-still" : null) @Class" data-state="@State.ToString().ToLowerInvariant()" @ref="Element"
+      role="@(Label is null ? null : "img")" aria-label="@Label" aria-hidden="@(Label is null ? "true" : null)">
+    <span class="ds-voice-orb__body">
+        @if (ShowMic)
+        {
+            <span class="ds-voice-orb__mic"><Icon Name="IconName.RiMicFill" /></span>
+        }
+        <span class="ds-voice-orb__ball" style="filter: url(#@_id)">
+            <span class="ds-voice-orb__lines"></span>
+            <span class="ds-voice-orb__rings"></span>
+        </span>
+    </span>
+    <svg class="ds-voice-orb__defs" focusable="false">
+        @* The reference blurs its 64px ball by 6px; as a share of the ball
+           (objectBoundingBox) the melt is the same at any size. *@
+        <filter id="@_id" primitiveUnits="objectBoundingBox">
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.094" result="blur" />
+            <feColorMatrix in="blur" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 20 -10" />
+        </filter>
+    </svg>
+</span>
+
+@code {
+    private readonly string _id = "voice-orb-" + Guid.NewGuid().ToString("N")[..8];
+
+    [Parameter] public VoiceState State { get; set; }
+
+    /// <summary>Read out by screen readers ("Listening"); leave null when the state is said elsewhere.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>
+    /// A microphone at the centre, for where the orb invites you to talk (a
+    /// "use voice" card). Leave it off in a conversation: there it would read as
+    /// a button, and the controls belong beside the orb.
+    /// </summary>
+    [Parameter] public bool ShowMic { get; set; }
+
+    /// <summary>Drawn once and never moving: for an avatar, where many may show at once.</summary>
+    [Parameter] public bool Still { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>The orb's element, for the voice module to write the live level onto.</summary>
+    public ElementReference Element { get; private set; }
+}

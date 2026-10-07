@@ -21,11 +21,13 @@
         </span>
     }
 
-    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Title</Typography>
+    @* A whole empty page reads at body size (16px title, 14px medium text); in a
+       panel or card it stays compact so it never outgrows its container. *@
+    <Typography TextStyle="@(Size == EmptyStateSize.Page ? TextStyle.BodyDefaultSemibold : TextStyle.BodySmallSemibold)" As="strong">@Title</Typography>
 
     @if (!string.IsNullOrWhiteSpace(Description))
     {
-        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="empty-state__body">
+        <Typography TextStyle="@(Size == EmptyStateSize.Page ? TextStyle.BodySmallMedium : TextStyle.Small12Regular)" As="p" Prose Class="empty-state__body">
             @Description
         </Typography>
     }

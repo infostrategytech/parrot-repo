@@ -1,0 +1,32 @@
+.ds-channel-icon {
+  /* Not a token, as on Icon: 1em follows the text the mark sits in. */
+  --ds-channel-icon-inherit: 1em;
+
+  /* Missing from the token set, and rightly so: other companies' brand
+     colours, used only for their own marks, as listed in brand-literals.json. */
+  --ds-channel-whatsapp: #25d366;
+  --ds-channel-instagram: #c63886;
+  --ds-channel-facebook: #1877f2;
+
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+}
+/* On the icon itself, so a surrounding style that tints icons does not win. */
+.ds-channel-icon.is-whatsapp ::deep .ds-icon { color: var(--ds-channel-whatsapp); }
+.ds-channel-icon.is-instagram ::deep .ds-icon { color: var(--ds-channel-instagram); }
+.ds-channel-icon.is-facebook ::deep .ds-icon { color: var(--ds-channel-facebook); }
+.ds-channel-icon.is-tiktok ::deep .ds-icon { color: var(--colors-text-primary); }
+.ds-channel-icon.is-other ::deep .ds-icon { color: var(--colors-icon-secondary); }
+/* X is black on white and white on black, so it follows the text colour. */
+.ds-channel-icon.is-x ::deep .ds-icon { color: var(--colors-text-primary); }
+/* On a disc already in the brand's colour, the mark takes the disc's ink. */
+.ds-channel-icon.is-plain ::deep .ds-icon { color: inherit; }
+
+/* X's mark is drawn here, not by Icon, so Icon's scoped sizes do not reach
+   it: the same four boxes, on the same tokens. */
+.ds-channel-icon.is-x > svg { display: inline-block; flex-shrink: 0; vertical-align: middle; }
+.ds-channel-icon.is-x > .ds-icon--inherit { width: var(--ds-channel-icon-inherit); height: var(--ds-channel-icon-inherit); }
+.ds-channel-icon.is-x > .ds-icon--sm { width: var(--icon-size-icon-sm); height: var(--icon-size-icon-sm); }
+.ds-channel-icon.is-x > .ds-icon--md { width: var(--icon-size-icon-md); height: var(--icon-size-icon-md); }
+.ds-channel-icon.is-x > .ds-icon--lg { width: var(--icon-size-icon-lg); height: var(--icon-size-icon-lg); }

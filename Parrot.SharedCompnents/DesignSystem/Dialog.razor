@@ -51,7 +51,7 @@
                     {
                         <div class="dialog__heading">
                             <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="@_titleId">@Title</Typography>
-                            <Typography TextStyle="TextStyle.Small12Regular" As="p">@Subtitle</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@Subtitle</Typography>
                         </div>
                     }
                     @if (Dismissible && OnCancel.HasDelegate)
@@ -64,7 +64,7 @@
                 </header>
             }
 
-            <div class="dialog__body @TextStyle.BodySmallRegular.ToClassName(prose: true)">
+            <div class="dialog__body @TextStyle.BodySmallMedium.ToClassName(prose: true)">
                 @Body
             </div>
 

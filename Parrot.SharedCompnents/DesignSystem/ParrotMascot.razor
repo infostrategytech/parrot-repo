@@ -1,0 +1,67 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The OmniAI parrot, alive: its face shows what it is doing (idle, listening,
+   thinking, speaking, happy) and a soft glow behind it follows a voice level.
+   The level is not a parameter: it changes many times a second, so the voice
+   module writes it straight onto the element as --level (0 to 1) rather than
+   re-rendering. Decorative to screen readers unless Label is set. *@
+<div class="ds-mascot" data-state="@State.ToString().ToLowerInvariant()" @ref="Element"
+     role="@(Label is null ? null : "img")" aria-label="@Label" aria-hidden="@(Label is null ? "true" : null)">
+    <div class="ds-mascot__glow"></div>
+    <div class="ds-mascot__ring"></div>
+    <svg viewBox="0 0 120 112" focusable="false">
+        <g class="ds-mascot__bob">
+            <g class="ds-mascot__head">
+                <g class="ds-mascot__crest">
+                    <path d="M53 22 C47 12 49 4 56 1 C56 8 58 14 61 19 Z" class="ds-mascot__deep"/>
+                    <path d="M59 19 C58 10 63 3 71 2 C67 8 66 14 67 21 Z" class="ds-mascot__blue"/>
+                    <path d="M49 26 C41 21 39 13 43 8 C45 14 49 19 55 22 Z" class="ds-mascot__blue"/>
+                </g>
+                <ellipse cx="60" cy="62" rx="46" ry="44" class="ds-mascot__blue"/>
+                <path d="M22 58 C20 40 36 30 50 38 C55 41 65 41 70 38 C84 30 100 40 98 58 C96 76 84 86 70 84 L50 84 C36 86 24 76 22 58 Z" class="ds-mascot__face"/>
+                <ellipse class="ds-mascot__cheek" cx="31" cy="72" rx="6" ry="3.6"/>
+                <ellipse class="ds-mascot__cheek" cx="89" cy="72" rx="6" ry="3.6"/>
+                <path class="ds-mascot__brow ds-mascot__brow--left" d="M32 40 Q42 33 52 39"/>
+                <path class="ds-mascot__brow ds-mascot__brow--right" d="M68 39 Q78 33 88 40"/>
+                @foreach (var x in EyeCentres)
+                {
+                    <g class="ds-mascot__eye">
+                        <circle cx="@x" cy="56" r="11.5" class="ds-mascot__iris"/>
+                        <g class="ds-mascot__pupil">
+                            <circle cx="@(x + 0.8)" cy="56.8" r="7.6" class="ds-mascot__pupil-dark"/>
+                            <circle cx="@(x - 3)" cy="52.6" r="3" class="ds-mascot__shine"/>
+                            <circle cx="@(x + 3.8)" cy="60" r="1.3" class="ds-mascot__shine"/>
+                        </g>
+                    </g>
+                }
+                <path class="ds-mascot__happy-eye" d="M33 58 Q43 47 53 58"/>
+                <path class="ds-mascot__happy-eye" d="M67 58 Q77 47 87 58"/>
+                <g class="ds-mascot__jaw">
+                    <path class="ds-mascot__tongue" d="M53 82 Q60 90 67 82 Z"/>
+                    <path d="M51.5 80 Q60 93 68.5 80 Q60 86 51.5 80 Z" class="ds-mascot__navy"/>
+                </g>
+                <path d="M47 69 Q60 59 73 69 Q75.5 78 64 89 Q60 92 56 89 Q44.5 78 47 69 Z" class="ds-mascot__beak"/>
+                <path d="M60 90.5 Q64 89 65.6 85 Q61.6 86.4 57.4 85.6 Q58.2 89.2 60 90.5 Z" class="ds-mascot__beak-shade"/>
+                <g class="ds-mascot__dots">
+                    <circle cx="100" cy="22" r="3"/><circle cx="108" cy="14" r="2.5"/><circle cx="115" cy="7" r="2"/>
+                </g>
+            </g>
+            <g class="ds-mascot__sparkle">
+                <path d="M106 32 l2.2 5.4 l5.4 2.2 l-5.4 2.2 l-2.2 5.4 l-2.2 -5.4 l-5.4 -2.2 l5.4 -2.2 Z"/>
+                <path d="M12 34 l1.6 3.8 l3.8 1.6 l-3.8 1.6 l-1.6 3.8 l-1.6 -3.8 l-3.8 -1.6 l3.8 -1.6 Z"/>
+            </g>
+        </g>
+    </svg>
+</div>
+
+@code {
+    private static readonly double[] EyeCentres = [43, 77];
+
+    [Parameter] public MascotState State { get; set; }
+
+    /// <summary>Read out by screen readers ("OmniAI is listening"); leave null when the state is said elsewhere.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    /// <summary>The mascot's element, for the voice module to write the live level onto.</summary>
+    public ElementReference Element { get; private set; }
+}
