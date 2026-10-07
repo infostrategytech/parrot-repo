@@ -8,7 +8,8 @@ namespace Parrot.SharedComponents.Layout;
 public sealed record NavEntry(
     string? Path,
     string Label,
-    IconName Glyph);
+    IconName Glyph,
+    string? CompactLabel = null);
 
 /// <summary>
 /// The navigation, as data. One table drives the rail, the active state and
@@ -25,22 +26,22 @@ public static class NavMap
 {
     public static readonly IReadOnlyList<NavEntry> Primary =
     [
-        new("/dashboard", "Overview", IconName.RiHome5Fill),
-        new("/dashboard/conversations", "Inbox", IconName.RiInbox2Fill),
-        new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill),
-        new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill),
-        new("/dashboard/task-requests", "Task Requests", IconName.RiClipboardFill),
-        new("/dashboard/channels", "Channels", IconName.RiLinksFill),
-        new("/dashboard/ai-agents", "AI Operations", IconName.RiRobot3Fill),
-        new(null, "Campaigns", IconName.RiMegaphoneFill),
-        new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill)
+        new("/dashboard", "Overview", IconName.RiHome5Fill, "Overview"),
+        new("/dashboard/conversations", "Inbox", IconName.RiInbox2Fill, "Inbox"),
+        new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill, "Customers"),
+        new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products"),
+        new("/dashboard/task-requests", "Task Requests", IconName.RiClipboardFill, "Requests"),
+        new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels"),
+        new("/dashboard/ai-agents", "AI Operations", IconName.RiRobot3Fill, "AI"),
+        new(null, "Campaigns", IconName.RiMegaphoneFill, "Campaigns"),
+        new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill, "Insights")
     ];
 
     public static readonly IReadOnlyList<NavEntry> Footer =
     [
-        new("/dashboard/knowledge", "Knowledge", IconName.RiBookOpenFill),
-        new(null, "Help Centre", IconName.RiQuestionFill),
-        new("/dashboard/settings", "Settings", IconName.RiSettings4Fill)
+        new("/dashboard/knowledge", "Knowledge", IconName.RiBookOpenFill, "Knowledge"),
+        new(null, "Help Centre", IconName.RiQuestionFill, "Help"),
+        new("/dashboard/settings", "Settings", IconName.RiSettings4Fill, "Settings")
     ];
 
     public static IEnumerable<NavEntry> All => Primary.Concat(Footer);

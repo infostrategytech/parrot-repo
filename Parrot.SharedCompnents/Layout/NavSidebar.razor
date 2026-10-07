@@ -3,6 +3,7 @@
 @implements IDisposable
 @inject NavigationManager Nav
 @inject AppShellState Shell
+@inject AuroraInterop Interop
 
 @* Composition only. Every row, the workspace switcher and the account card are
    components of their own; this decides what goes where and nothing else.
@@ -11,34 +12,38 @@
    rail is shared by the web app and the mobile app, and only the host knows
    where its session lives. *@
 
-<aside class="@(Shell.Collapsed ? "sidebar is-collapsed" : "sidebar")">
+@* Opened over the page, the rail takes the focus, so Esc closes it straight
+   away and Tab moves through it. *@
+<aside class="@(Shell.Collapsed ? "sidebar is-collapsed" : "sidebar")"
+       tabindex="-1"
+       @ref="_rail"
+       @onkeydown="OnKeyDown">
     <div class="sidebar__brand">
         @if (Shell.Collapsed)
         {
+            @* Compact: the logo is the way to open the full rail. *@
             <button type="button"
-                    class="sidebar__expand"
+                    class="sidebar__brand-toggle"
                     aria-label="Expand sidebar"
                     data-tooltip="Expand sidebar"
                     @onclick="Shell.Toggle">
                 <span class="sidebar__mark" aria-hidden="true"><CadenceMark Size="26" Tight /></span>
-                <span class="sidebar__expand-icon" aria-hidden="true">
+                <span class="sidebar__brand-toggle-icon" aria-hidden="true">
                     <Icon Name="IconName.RiMenuUnfoldFill" Size="IconSize.Sm" />
                 </span>
             </button>
         }
         else
         {
+            @* Open: the logo and name, with Collapse in plain sight. *@
             <span class="sidebar__mark" aria-hidden="true"><CadenceMark Size="26" Tight /></span>
             <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span" Class="sidebar__wordmark cadence-wordmark">
                 @BrandName
             </Typography>
-            <button type="button"
-                    class="sidebar__collapse"
-                    aria-label="Collapse sidebar"
-                    data-tooltip="Collapse sidebar"
-                    @onclick="Shell.Toggle">
-                <Icon Name="IconName.RiMenuFoldFill" Size="IconSize.Sm" />
-            </button>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="sidebar__collapse"
+                    aria-label="Collapse sidebar" title="Collapse sidebar (Esc)" @onclick="Shell.Collapse">
+                <IconLeft><Icon Name="IconName.RiMenuFoldFill" /></IconLeft>
+            </Button>
         }
     </div>
 
@@ -60,14 +65,17 @@
                          IsActive="@(Current?.Label == entry.Label)"
                          Badge="@(entry.Label == "Inbox" ? InboxUnread : null)" />
         }
-    </nav>
 
-    <div class="sidebar__footer">
+        @* Knowledge, Help and Settings follow the pages in the same list and
+           scroll with them; only the account stays at the foot. *@
+        <div class="sidebar__divider" role="presentation"></div>
         @foreach (var entry in NavMap.Footer)
         {
             <NavRailItem Entry="entry" IsActive="@(Current?.Label == entry.Label)" Compact />
         }
+    </nav>
 
+    <div class="sidebar__footer">
         @if (!string.IsNullOrWhiteSpace(UserName))
         {
             <UserCard Name="@UserName" Role="@UserRole" Initials="@UserInitials" Seed="@UserSeed" ImageUrl="@UserImageUrl">
@@ -115,6 +123,23 @@
 
     private NavEntry? Current => NavMap.Match(new Uri(Nav.Uri).AbsolutePath);
 
+    private ElementReference _rail;
+    private bool _wasCollapsed = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Interop.FollowRailTooltipsAsync(_rail);
+
+        // Just opened: take the focus, so Esc and Tab work from the rail.
+        if (_wasCollapsed && !Shell.Collapsed) await _rail.FocusAsync();
+        _wasCollapsed = Shell.Collapsed;
+    }
+
+    private void OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") Shell.Collapse();
+    }
+
     protected override void OnInitialized()
     {
         Shell.Changed += OnChanged;
@@ -123,8 +148,13 @@
 
     private void OnChanged() => _ = InvokeAsync(StateHasChanged);
 
+    // Opening the full rail is for the moment: picking a page closes it.
     private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) =>
-        _ = InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(() =>
+        {
+            Shell.Collapse();
+            StateHasChanged();
+        });
 
     public void Dispose()
     {

@@ -23,6 +23,19 @@
                 InboxUnread="@InboxUnread"
                 UserMenu="@UserMenu" />
 
+    @if (!Shell.Collapsed)
+    {
+        @* Expanding the compact rail is temporary and must not resize the page.
+           This transparent layer dismisses it when the page is clicked. It is
+           for the pointer only: out of the tab order and hidden from screen
+           readers, which close the rail with Esc or its Collapse button. *@
+        <button type="button"
+                class="app-shell__nav-dismiss"
+                tabindex="-1"
+                aria-hidden="true"
+                @onclick="Shell.Collapse"></button>
+    }
+
     <main class="app-main">
         @ChildContent
     </main>

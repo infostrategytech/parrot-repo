@@ -32,6 +32,8 @@
   min-width: 0;
 }
 
+::deep .workspace__compact-label { display: none; }
+
 ::deep .workspace__name {
   overflow: hidden;
   white-space: nowrap;

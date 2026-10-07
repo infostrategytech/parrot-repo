@@ -294,6 +294,28 @@ export function scrollToBottom(element) {
       if (!image.complete) image.addEventListener("load", moveToLatest, { once: true });
     });
   });
+  followEnd(element, moveToLatest);
+}
+
+/* While the reader is at the newest message, keep them there when the region
+   itself gets shorter: a smaller window, quick replies appearing under it, a
+   composer growing as they type. Without this the newest message slid out of
+   view below the fold. Someone who has scrolled up to read is left alone. */
+function followEnd(element, moveToLatest) {
+  if (element.__auroraFollowEnd) return;
+  let atEnd = true;
+  let height = element.clientHeight;
+  element.addEventListener("scroll", () => {
+    // A resize moves the scroll position too (the browser keeps what was in
+    // view). That is not the reader scrolling up, so it does not count.
+    if (element.clientHeight !== height) return;
+    atEnd = element.scrollHeight - element.scrollTop - element.clientHeight < 24;
+  }, { passive: true });
+  element.__auroraFollowEnd = new ResizeObserver(() => {
+    height = element.clientHeight;
+    if (atEnd) moveToLatest();
+  });
+  element.__auroraFollowEnd.observe(element);
 }
 
 /* Bring an element to the top of the scrolling region.
@@ -303,6 +325,25 @@ export function scrollToBottom(element) {
    collapse left it — often below the fold on a long card. This lifts it back
    to the top instead of leaving the reader to find it. scroll-margin-top on
    the section keeps it clear of the edge. */
+/* The rail's tooltips are placed against the window (position: fixed), so a
+   scrolling list cannot clip them. CSS cannot know where an item is on
+   screen, so this tells each one as the pointer or the focus reaches it:
+   the middle of its height, and just past the rail's right edge. */
+export function followRailTooltips(rail) {
+  if (!rail || rail.__auroraRailTips) return;
+  rail.__auroraRailTips = true;
+  const place = (event) => {
+    const item = event.target.closest?.("[data-tooltip]");
+    if (!item || !rail.contains(item)) return;
+    const box = item.getBoundingClientRect();
+    const edge = rail.getBoundingClientRect().right;
+    item.style.setProperty("--ds-tip-top", `${box.top + box.height / 2}px`);
+    item.style.setProperty("--ds-tip-left", `${edge + 8}px`);
+  };
+  rail.addEventListener("pointerover", place, { passive: true });
+  rail.addEventListener("focusin", place);
+}
+
 export function scrollIntoView(element) {
   if (!element) return;
   // One frame later, so the panel has been laid out before we measure it.

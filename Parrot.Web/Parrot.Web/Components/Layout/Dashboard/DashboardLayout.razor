@@ -20,7 +20,7 @@
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
-          UserImageUrl="@AuthState.CurrentUser?.LogoUrl">
+          InboxUnread="@Conversations.UnreadConversations">
     <UserMenu>
         <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
         <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />

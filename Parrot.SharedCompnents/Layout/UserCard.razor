@@ -24,7 +24,8 @@
                 <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="user-card__role">@Role</Typography>
             }
         </span>
-        <Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Sm" />
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="user-card__compact-label">Account</Typography>
+        <span class="user-card__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Sm" /></span>
     </button>
 
     @if (_open && ChildContent is not null)

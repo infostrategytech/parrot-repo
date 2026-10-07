@@ -37,10 +37,14 @@
   background: var(--colors-interaction-hover);
 }
 
-.nav-item.is-active {
+/* The current page: a brand-tinted fill a step stronger than the selected
+   tint, and a brand icon, so it never looks like the grey of a hover. */
+.nav-item.is-active,
+.nav-item.is-active:hover:not(:disabled) {
   color: var(--colors-interaction-selected-foreground);
-  background: var(--colors-interaction-selected);
+  background: var(--colors-accent-brand-muted);
 }
+.nav-item.is-active ::deep .ds-icon { color: var(--colors-icon-brand); }
 
 /* Drawn in the demo, with nothing behind it. React rendered these identically
    to the real ones and swallowed the click, so the rail felt broken rather
@@ -54,6 +58,8 @@
   overflow: hidden;
   white-space: nowrap;
 }
+
+::deep .nav-item__compact-label { display: none; }
 
 ::deep .nav-item__count {
   display: inline-grid;

@@ -15,6 +15,9 @@
     <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="nav-item__label">
         @Entry.Label
     </Typography>
+    <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="nav-item__compact-label">
+        @(Entry.CompactLabel ?? Entry.Label)
+    </Typography>
     @if (Badge is > 0)
     {
         <Typography TextStyle="TextStyle.Small10Semibold"
