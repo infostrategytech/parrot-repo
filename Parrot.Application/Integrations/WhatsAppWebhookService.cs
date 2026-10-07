@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using Parrot.Application.Conversations;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
 using Parrot.Application.Messaging;
@@ -11,21 +12,27 @@ namespace Parrot.Application.Integrations;
 
 public class WhatsAppWebhookService : IWhatsAppWebhookService
 {
+    // How long one webhook may spend looking up send times for delivery latency.
+    private static readonly TimeSpan StatusLookupBudget = TimeSpan.FromSeconds(1);
+
     private readonly WhatsAppSettings _settings;
     private readonly IAppLogger<WhatsAppWebhookService> _logger;
     private readonly InboundMessagePublisher _publisher;
     private readonly IWhatsAppConnectionRepository _connections;
+    private readonly IReplySendTimes? _sendTimes;
 
     public WhatsAppWebhookService(
         IOptions<WhatsAppSettings> settings,
         IAppLogger<WhatsAppWebhookService> logger,
         InboundMessagePublisher publisher,
-        IWhatsAppConnectionRepository connections)
+        IWhatsAppConnectionRepository connections,
+        IReplySendTimes? sendTimes = null)
     {
         _settings = settings.Value;
         _logger = logger;
         _publisher = publisher;
         _connections = connections;
+        _sendTimes = sendTimes;
     }
 
     public string GetWebhookUrl() =>
@@ -98,39 +105,50 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         string rawBody,
         CancellationToken cancellationToken = default)
     {
+        // A false return is answered 200 and the event dropped (quarantined in
+        // the logs): the request is authentic, so a retry would fail the same way.
         if (string.IsNullOrWhiteSpace(identifier))
         {
             _logger.LogWarning("WhatsApp webhook rejected because its connection reference is empty.");
-            return false;
+            return Rejected("unknown_connection");
         }
 
         WhatsAppConnection? connection = await _connections.GetActiveByIdentifierAsync(identifier);
         if (connection is null)
         {
             _logger.LogWarning("WhatsApp webhook rejected because its connection reference is unknown or disabled.");
-            return false;
+            return Rejected("unknown_connection");
         }
 
         if (connection.WebhookVerifiedAt is null)
         {
             _logger.LogWarning("WhatsApp webhook rejected for unverified connection. ConnectionId={ConnectionId}", connection.Id);
-            return false;
+            return Rejected("unknown_connection");
         }
 
         if (string.IsNullOrEmpty(connection.WhatsAppBusinessAccountId)
             || string.IsNullOrEmpty(connection.PhoneNumberId))
         {
             _logger.LogWarning("WhatsApp webhook rejected because account IDs are incomplete. ConnectionId={ConnectionId}", connection.Id);
-            return false;
+            return Rejected("unknown_connection");
         }
 
-        if (payload.Entry.Count == 0
-            || payload.Entry.Any(entry => entry.Id != connection.WhatsAppBusinessAccountId
-                || entry.Changes.Any(change => change.Field == "messages"
-                    && change.Value.Metadata.PhoneNumberId != connection.PhoneNumberId)))
+        WhatsAppEntry? mismatch = payload.Entry.FirstOrDefault(entry => entry.Id != connection.WhatsAppBusinessAccountId
+            || entry.Changes.Any(change => change.Field == "messages"
+                && change.Value.Metadata.PhoneNumberId != connection.PhoneNumberId));
+        if (payload.Entry.Count == 0 || mismatch is not null)
         {
-            _logger.LogWarning("WhatsApp webhook rejected because Meta account IDs do not match. ConnectionId={ConnectionId}", connection.Id);
-            return false;
+            // entry[].id is the WABA ID: check the stored value is that, not the
+            // Business Manager or phone number ID. Meta's dashboard test events
+            // carry a placeholder ID and always mismatch.
+            _logger.LogWarning(
+                "WhatsApp webhook rejected: account ID mismatch. ConnectionId={ConnectionId} Expected={Expected} Received={Received} ExpectedPhoneNumberId={ExpectedPhoneNumberId} PhoneNumberId={PhoneNumberId}",
+                connection.Id,
+                connection.WhatsAppBusinessAccountId,
+                mismatch?.Id,
+                connection.PhoneNumberId,
+                mismatch?.Changes.FirstOrDefault(change => change.Field == "messages")?.Value.Metadata.PhoneNumberId);
+            return Rejected("account_mismatch");
         }
 
         _logger.LogInformation(
@@ -140,6 +158,12 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
 
         await ProcessEventAsync(payload, rawBody, connection.Id, connection.OwnerUserId, cancellationToken);
         return true;
+    }
+
+    private static bool Rejected(string result)
+    {
+        MessageMetrics.Webhooks.Add(1, new KeyValuePair<string, object?>("result", result));
+        return false;
     }
 
     // Reads only what routing needs from each message and hands the body on as
@@ -154,6 +178,8 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         string correlationId = InboundMessagePublisher.CurrentCorrelationId();
         DateTime receivedAt = DateTime.UtcNow;
         List<InboundMessage> inbound = [];
+        List<string> types = [];
+        List<WhatsAppMessageStatus> statuses = [];
 
         foreach (WhatsAppEntry entry in payload.Entry)
         {
@@ -168,6 +194,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
 
                 foreach (WhatsAppMessage msg in change.Value.Messages ?? [])
                 {
+                    types.Add(msg.Type);
                     inbound.Add(new InboundMessage
                     {
                         MessageId = $"whatsapp:{msg.Id}",
@@ -188,6 +215,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
 
                 foreach (WhatsAppMessageStatus status in change.Value.Statuses ?? [])
                 {
+                    statuses.Add(status);
                     if (status.Status != "failed")
                     {
                         _logger.LogInformation(
@@ -214,5 +242,54 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         }
 
         await _publisher.PublishAsync(inbound, cancellationToken);
+
+        // Only now: a webhook that failed to publish answers 503 and comes back,
+        // and must not be counted twice.
+        MessageMetrics.Webhooks.Add(1, new KeyValuePair<string, object?>("result", "ok"));
+        foreach (string type in types)
+        {
+            MessageMetrics.Received.Add(1, MessageMetrics.MessageType(type));
+        }
+
+        if (statuses.Count == 0)
+        {
+            return;
+        }
+
+        // Latency lookups get one short budget for the whole webhook: a slow or
+        // unreachable database must never hold up the 200 Meta is waiting for.
+        using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(StatusLookupBudget);
+        foreach (WhatsAppMessageStatus status in statuses)
+        {
+            await RecordStatusAsync(status, budget.Token);
+        }
+    }
+
+    // Counts the status and, for a reply Parrot sent, how long Meta took to report
+    // it. Never fails or delays the webhook: once the lookup budget is spent the
+    // status is still counted, only its latency sample is skipped.
+    private async Task RecordStatusAsync(WhatsAppMessageStatus status, CancellationToken budget)
+    {
+        string label = status.Status is "sent" or "delivered" or "read" or "failed" ? status.Status : "other";
+        KeyValuePair<string, object?> tag = new("status", label);
+        MessageMetrics.StatusUpdates.Add(1, tag);
+
+        if (_sendTimes is null || budget.IsCancellationRequested)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await _sendTimes.SentAtAsync(status.Id, budget) is { } sentAt)
+            {
+                MessageMetrics.DeliveryLatency.Record(Math.Max(0, (DateTime.UtcNow - sentAt).TotalSeconds), tag);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning("WhatsApp status latency not recorded. Status={Status} Reason={Reason}", label, ex.Message);
+        }
     }
 }

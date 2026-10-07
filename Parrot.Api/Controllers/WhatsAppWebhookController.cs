@@ -39,7 +39,6 @@ public class WhatsAppWebhookController : ControllerBase
     [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> HandleEvent(
         [FromHeader(Name = "X-Hub-Signature-256")] string? signature,
         [FromQuery(Name = "ref")] string? identifier,
@@ -53,12 +52,15 @@ public class WhatsAppWebhookController : ControllerBase
 
         if (Request.Query.ContainsKey("ref"))
         {
-            bool accepted = await _whatsAppWebhookService.ProcessConnectionEventAsync(
+            // An unknown connection or account mismatch is answered 200 too: the
+            // request is authentic Meta traffic, and a 403 only makes Meta retry it
+            // (and eventually disable the subscription). The service logs it.
+            await _whatsAppWebhookService.ProcessConnectionEventAsync(
                 identifier ?? string.Empty,
                 payload,
                 rawBody,
                 HttpContext.RequestAborted);
-            return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
+            return Ok();
         }
 
         await _whatsAppWebhookService.ProcessEventAsync(payload, rawBody, HttpContext.RequestAborted);
@@ -91,7 +93,6 @@ public class WhatsAppWebhookController : ControllerBase
     [EnableRateLimiting(RateLimitPolicies.WhatsAppWebhook)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> HandleEventV1(
         [FromHeader(Name = "X-Hub-Signature-256")] string? signature,
         [FromQuery(Name = "ref")] string? identifier,
@@ -105,12 +106,15 @@ public class WhatsAppWebhookController : ControllerBase
 
         if (Request.Query.ContainsKey("ref"))
         {
-            bool accepted = await _whatsAppWebhookService.ProcessConnectionEventAsync(
+            // An unknown connection or account mismatch is answered 200 too: the
+            // request is authentic Meta traffic, and a 403 only makes Meta retry it
+            // (and eventually disable the subscription). The service logs it.
+            await _whatsAppWebhookService.ProcessConnectionEventAsync(
                 identifier ?? string.Empty,
                 payload,
                 rawBody,
                 HttpContext.RequestAborted);
-            return accepted ? Ok() : StatusCode(StatusCodes.Status403Forbidden);
+            return Ok();
         }
 
         await _whatsAppWebhookService.ProcessEventAsync(payload, rawBody, HttpContext.RequestAborted);

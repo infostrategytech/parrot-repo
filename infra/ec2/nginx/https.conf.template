@@ -56,6 +56,10 @@ server {
         limit_except GET { deny all; }
     }
 
+    # Prometheus scrapes parrot-api:8080/metrics on the internal network; never publicly.
+    # Case-insensitive, with any trailing path: ASP.NET serves /Metrics and /metrics/ too.
+    location ~* ^/metrics(/|$) { return 404; }
+
     location / {
         set $api http://parrot-api:8080;
         proxy_pass $api;

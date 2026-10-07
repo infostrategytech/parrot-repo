@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using Confluent.Kafka;
+using Confluent.Kafka.Admin;
 using Google.Apis.Auth.OAuth2;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -76,10 +78,50 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
         EnableAutoCommit = false,
     };
 
+    /// <summary>
+    /// Messages on <paramref name="topic"/> that <paramref name="groupId"/> has
+    /// not yet committed: the queue depth, or the unreviewed dead letters. A
+    /// partition the group has never committed counts every message it still holds.
+    /// </summary>
+    public async Task<long> ConsumerLagAsync(string topic, string groupId, TimeSpan timeout)
+    {
+        using IAdminClient admin = new DependentAdminClientBuilder(_producer.Handle).Build();
+        (Dictionary<int, long> earliest, Dictionary<int, long> latest) = await OffsetsAsync(admin, topic, timeout);
+
+        List<ListConsumerGroupOffsetsResult> groups = await admin.ListConsumerGroupOffsetsAsync(
+            [new ConsumerGroupTopicPartitions(groupId, latest.Keys.Select(p => new TopicPartition(topic, p)).ToList())],
+            new ListConsumerGroupOffsetsOptions { RequestTimeout = timeout });
+        Dictionary<int, long> committed = groups.SelectMany(g => g.Partitions)
+            .Where(p => p.Offset.Value >= 0)
+            .ToDictionary(p => p.Partition.Value, p => p.Offset.Value);
+
+        return latest.Sum(p => Math.Max(0, p.Value - Math.Max(earliest[p.Key], committed.GetValueOrDefault(p.Key, earliest[p.Key]))));
+    }
+
     public void Dispose()
     {
         _producer.Flush(TimeSpan.FromSeconds(10));
         _producer.Dispose();
+    }
+
+    private static async Task<(Dictionary<int, long> Earliest, Dictionary<int, long> Latest)> OffsetsAsync(
+        IAdminClient admin, string topic, TimeSpan timeout)
+    {
+        // GetMetadata blocks; keep it off the caller's thread.
+        Metadata metadata = await Task.Run(() => admin.GetMetadata(topic, timeout));
+        List<TopicPartition> partitions = metadata.Topics
+            .SelectMany(t => t.Partitions.Select(p => new TopicPartition(topic, p.PartitionId)))
+            .ToList();
+
+        async Task<Dictionary<int, long>> At(OffsetSpec spec)
+        {
+            ListOffsetsResult result = await admin.ListOffsetsAsync(
+                partitions.Select(p => new TopicPartitionOffsetSpec { TopicPartition = p, OffsetSpec = spec }),
+                new ListOffsetsOptions { RequestTimeout = timeout });
+            return result.ResultInfos.ToDictionary(r => r.TopicPartitionOffsetError.Partition.Value, r => r.TopicPartitionOffsetError.Offset.Value);
+        }
+
+        return (await At(OffsetSpec.Earliest()), await At(OffsetSpec.Latest()));
     }
 
     private async Task ConsumeLoopAsync<TMessage>(
@@ -174,11 +216,21 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
         MessageFailurePolicy policy = new MessageFailurePolicy();
         TimeSpan backoff = TimeSpan.FromSeconds(1);
 
-        Task Handle(BatchItem<ConsumeResult<string?, string>> item, CancellationToken token) =>
-            HandleOneAsync(item.Message, handler, token);
+        // Offsets already dead-lettered but not yet committed. A batch that fails after
+        // dead-lettering one of its messages is rewound and read again; these are then
+        // skipped rather than dead-lettered a second time. Forgotten once committed.
+        ConcurrentDictionary<(int Partition, long Offset), byte> deadLettered = new();
 
-        Task DeadLetter(BatchItem<ConsumeResult<string?, string>> item, Parrot.Application.Messaging.UnprocessableMessageException ex, CancellationToken token) =>
-            DeadLetterAsync(item.Message, ex.Reason, options.DeadLetterTopic, token);
+        Task Handle(BatchItem<ConsumeResult<string?, string>> item, CancellationToken token) =>
+            deadLettered.ContainsKey((item.Partition, item.Offset))
+                ? Task.CompletedTask
+                : HandleOneAsync(item.Message, handler, token);
+
+        async Task DeadLetter(BatchItem<ConsumeResult<string?, string>> item, Parrot.Application.Messaging.UnprocessableMessageException ex, CancellationToken token)
+        {
+            await DeadLetterAsync(item.Message, ex.Reason, options.DeadLetterTopic, token);
+            deadLettered.TryAdd((item.Partition, item.Offset), 0);
+        }
 
         void OnRetry(BatchItem<ConsumeResult<string?, string>> item, int attempt, Exception ex) =>
             _logger.LogWarning(ex, "message.retrying Topic={Topic} Partition={Partition} Offset={Offset} Attempt={Attempt}",
@@ -198,7 +250,18 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
                 try
                 {
                     await processor.ProcessAsync(batch, (item, token) => policy.HandleAsync(item, Handle, DeadLetter, OnRetry, token), processing.Token);
-                    Commit(consumer, topic, batch);
+                    if (Commit(consumer, topic, batch))
+                    {
+                        IReadOnlyDictionary<int, long> committed = KeyedBatchProcessor.CommitOffsets(batch);
+                        foreach ((int Partition, long Offset) key in deadLettered.Keys)
+                        {
+                            if (committed.TryGetValue(key.Partition, out long next) && key.Offset < next)
+                            {
+                                deadLettered.TryRemove(key, out _);
+                            }
+                        }
+                    }
+
                     backoff = TimeSpan.FromSeconds(1);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException)
@@ -304,19 +367,22 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
             result.Topic, result.Partition.Value, result.Offset.Value, reason);
     }
 
-    private void Commit<T>(IConsumer<string?, string> consumer, string topic, IReadOnlyList<BatchItem<T>> batch)
+    // True once the batch's offsets are committed.
+    private bool Commit<T>(IConsumer<string?, string> consumer, string topic, IReadOnlyList<BatchItem<T>> batch)
     {
         IReadOnlyDictionary<int, long> offsets = KeyedBatchProcessor.CommitOffsets(batch);
         try
         {
             consumer.Commit(offsets.Select(o => new TopicPartitionOffset(topic, o.Key, o.Value)));
             _logger.LogDebug("batch.committed Topic={Topic} Messages={Messages} Partitions={Partitions}", topic, batch.Count, offsets.Count);
+            return true;
         }
         catch (KafkaException ex)
         {
             // Usually a partition moved to another consumer mid-batch; it re-reads
             // from the last commit, which the handlers' duplicate checks make safe.
             _logger.LogWarning(ex, "batch.commit_failed Topic={Topic} Reason={Reason}", topic, ex.Error.Reason);
+            return false;
         }
     }
 

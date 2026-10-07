@@ -19,6 +19,10 @@ public sealed class MongoConversationStore : IConversationStore
             Builders<MessageDocument>.IndexKeys.Ascending(x => x.MessageId), new CreateIndexOptions { Unique = true }));
         _messages.Indexes.CreateOne(new CreateIndexModel<MessageDocument>(Builders<MessageDocument>.IndexKeys
             .Ascending(x => x.OwnerUserId).Ascending(x => x.ConnectionId).Ascending(x => x.From).Descending(x => x.Id)));
+
+        // MongoReplySendTimes finds a reply by Meta's wamid. Sparse: only sent replies have one.
+        _messages.Indexes.CreateOne(new CreateIndexModel<MessageDocument>(
+            Builders<MessageDocument>.IndexKeys.Ascending(x => x.ProviderMessageId), new CreateIndexOptions { Sparse = true }));
     }
 
     public async Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct)

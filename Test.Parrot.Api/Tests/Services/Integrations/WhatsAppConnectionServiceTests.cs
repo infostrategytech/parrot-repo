@@ -318,7 +318,9 @@ public class WhatsAppConnectionServiceTests
     }
 
     [Fact]
-    public async Task IncomingReference_WithUnknownConnection_IsRejected()
+    // Answered 200, not 403: the request is authentic, so a 403 only makes Meta
+    // retry it. The service still rejects it (logs and counts it).
+    public async Task IncomingReference_WithUnknownConnection_IsDroppedWith200()
     {
         WhatsAppWebhookPayload payload = new()
         {
@@ -336,9 +338,8 @@ public class WhatsAppConnectionServiceTests
         controller.HttpContext.Items["RawBody"] = "raw-body";
         controller.Request.QueryString = new QueryString("?ref=unknown");
 
-        StatusCodeResult result = Assert.IsType<StatusCodeResult>(
-            await controller.HandleEvent("sha256=valid", "unknown", payload));
-        Assert.Equal(403, result.StatusCode);
+        Assert.IsType<OkResult>(await controller.HandleEvent("sha256=valid", "unknown", payload));
+        webhooks.Verify(s => s.ProcessConnectionEventAsync("unknown", payload, "raw-body", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Theory]

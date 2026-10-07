@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using MessageProcessor;
+using MessageProcessor.Monitoring;
+using OpenTelemetry.Metrics;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Infrastructure.Data;
@@ -56,6 +58,15 @@ builder.Services.AddSingleton<IMessagePersistedPublisher, KafkaMessagePersistedP
 builder.Services.AddSingleton<InboundMessageProcessor>();
 builder.Services.AddHostedService<Worker>();
 
+// The Parrot.Messaging meter on http://<host>:<Monitoring:MetricsPort>/metrics for
+// Prometheus. The worker has no web server, so the exporter brings its own
+// listener; keep the port on the internal network only.
+int metricsPort = builder.Configuration.GetValue("Monitoring:MetricsPort", 9464);
+builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
+    .AddMeter(MessageMetrics.MeterName)
+    .AddPrometheusHttpListener(options => options.UriPrefixes = [$"http://+:{metricsPort}/"]));
+builder.Services.AddHostedService<QueueGauges>();
+
 // Registers every "_t" discriminator before anything reads the collection.
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 
@@ -65,5 +76,9 @@ IHost host = builder.Build();
 // created, fail the boot rather than the first message.
 host.Services.GetRequiredService<IMessageDocumentMapperFactory>();
 host.Services.GetRequiredService<MongoMessageRepository>();
+
+// The meter provider must exist first: measurements made before it are dropped.
+host.Services.GetRequiredService<MeterProvider>();
+MessageMetrics.StartAtZero();
 
 host.Run();
