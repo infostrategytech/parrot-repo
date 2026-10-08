@@ -1008,8 +1008,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
     }
 
     /// <summary>
-    /// WhatsApp is disabled on Parrot's backend; the other three are
-    /// disconnected in state, exactly as before.
+    /// WhatsApp and Facebook are disabled on Parrot's backend, so their
+    /// webhooks stop at once; the others are disconnected in state.
     /// </summary>
     private async Task DisconnectAsync()
     {
@@ -1017,13 +1017,19 @@ else if (Active is { } flow && _view == SetupView.Flow)
         var channel = _pendingDisconnect;
         var key = ChannelsState.Channels.First(c => c.Id == channel.Id).Key;
 
-        if (channel.Id == ChannelId.Whatsapp && ChannelsState.WhatsAppConnection is { } connection)
+        var whatsApp = channel.Id == ChannelId.Whatsapp ? ChannelsState.WhatsAppConnection : null;
+        var facebook = channel.Id == ChannelId.Facebook && ChannelsState.FacebookSetup is not null;
+        if (whatsApp is not null || facebook)
         {
             if (_busy) return;
             _busy = true;
             try
             {
-                await IntegrationsService.DisableWhatsAppAsync(connection.Id, AuthState.CurrentUser?.Token ?? "", _lifetime.Token);
+                var token = AuthState.CurrentUser?.Token ?? "";
+                if (whatsApp is not null)
+                    await IntegrationsService.DisableWhatsAppAsync(whatsApp.Id, token, _lifetime.Token);
+                else
+                    await IntegrationsService.DisableFacebookAsync(token, _lifetime.Token);
                 ChannelsState.DisconnectChannel(key);
                 _pendingDisconnect = null;
                 await LoadAsync();

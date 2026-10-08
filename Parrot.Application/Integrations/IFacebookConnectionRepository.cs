@@ -17,6 +17,9 @@ public interface IFacebookConnectionRepository
     // Stamps the first successful Meta webhook challenge; later challenges keep the original time.
     Task<bool> MarkVerifiedAsync(Guid id, DateTime verifiedAt, CancellationToken cancellationToken = default);
 
+    // Marks the owner's active connection disabled; its ?ref= stops routing webhooks at once.
+    Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default);
+
     // Saves the encrypted App Secret of the customer's own Meta app (manual setup).
     Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret, CancellationToken cancellationToken = default);
 

@@ -34,6 +34,16 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
         return NoContent();
     }
 
+    // POST /api/facebook/setup/disable - disconnects the Page; its webhooks are refused from now on.
+    [HttpPost("disable")]
+    public async Task<IActionResult> Disable(CancellationToken cancellationToken)
+    {
+        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
+        await connections.DisableAsync(owner, cancellationToken);
+        return NoContent();
+    }
+
     // PUT /api/facebook/setup/app-secret - manual setup: the App Secret of the customer's own Meta app.
     [HttpPut("app-secret")]
     public async Task<IActionResult> SaveAppSecret([FromBody] AppSecretRequest request, CancellationToken cancellationToken)

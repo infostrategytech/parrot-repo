@@ -40,6 +40,9 @@ public class IntegrationsService : IIntegrationsService
     public Task DisableWhatsAppAsync(Guid id, string token, CancellationToken cancellationToken = default) =>
         SendCommandAsync(HttpMethod.Post, $"api/whatsapp/connections/{id}/disable", token, null, cancellationToken);
 
+    public Task DisableFacebookAsync(string token, CancellationToken cancellationToken = default) =>
+        SendCommandAsync(HttpMethod.Post, "api/facebook/setup/disable", token, null, cancellationToken);
+
     private async Task SendCommandAsync(HttpMethod method, string path, string token, object? body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);
