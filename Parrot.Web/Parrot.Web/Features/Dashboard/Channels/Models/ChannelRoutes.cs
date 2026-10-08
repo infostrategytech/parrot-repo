@@ -70,9 +70,9 @@ public static class ChannelRoutes
         new()
         {
             Id = ChannelPath.New,
-            Label = "Connect a New Number",
+            Label = "Connect a new number",
             Explanation = "Set up a fresh number for customer messages in OmniAI.",
-            Marker = "Fresh Number",
+            Marker = "Fresh number",
             Glyph = IconName.RiAddCircleFill,
             PageTitle = "Connect your New Number",
             PageIntro = "Meta will create the WhatsApp connection and verify that the number belongs to you.",
@@ -97,9 +97,9 @@ public static class ChannelRoutes
         new()
         {
             Id = ChannelPath.Coexistence,
-            Label = "Use My WhatsApp Business Number",
+            Label = "Use my WhatsApp Business number",
             Explanation = "Connect the number customers already know and keep using the Business app.",
-            Marker = "Keep Your App",
+            Marker = "Keep your app",
             Glyph = IconName.RiSmartphoneFill,
             PageTitle = "Use your Existing Business Number",
             PageIntro = "Your WhatsApp Business app stays active while OmniAI helps manage the same number.",
@@ -126,9 +126,9 @@ public static class ChannelRoutes
         new()
         {
             Id = ChannelPath.Migration,
-            Label = "Move from Another Provider",
+            Label = "Move from another provider",
             Explanation = "Bring an existing WhatsApp API number from your current platform.",
-            Marker = "Switch Provider",
+            Marker = "Switch provider",
             Glyph = IconName.RiExchangeBoxFill,
             PageTitle = "Move your Number to OmniAI",
             PageIntro = "Meta will transfer your WhatsApp Business Platform number from your current provider.",
@@ -235,7 +235,7 @@ public static class ChannelRoutes
             Id = ChannelPath.XLogin,
             Label = "Connect your X account",
             Explanation = "Sign in with X and approve access to your DMs.",
-            Marker = "Your Account",
+            Marker = "Your account",
             Glyph = IconName.RiChat3Fill,
             PageTitle = "Connect your X account",
             PageIntro = "X opens a window where you approve OmniAI. You stay signed in to X as usual.",
@@ -264,11 +264,27 @@ public static class ChannelRoutes
 
     public static IReadOnlyList<ChannelRoute> For(ChannelId channel) => channel switch
     {
-        ChannelId.Whatsapp => Whatsapp,
+        ChannelId.Whatsapp => WhatsappOffered,
         ChannelId.Instagram => Instagram,
         ChannelId.Facebook => Facebook,
         ChannelId.X => X,
         _ => []
+    };
+
+    /// <summary>
+    /// Move from Another Provider is not offered for now (designer, 8 October
+    /// 2026): its card gave way to manual setup. Its copy stays, for when it is.
+    /// </summary>
+    private static readonly ChannelRoute[] WhatsappOffered = [.. Whatsapp.Where(route => route.Id != ChannelPath.Migration)];
+
+    /// <summary>
+    /// The manual setup's card on the choice, beside the routes (WhatsApp,
+    /// Facebook). No time on it (designer, 8 October 2026).
+    /// </summary>
+    public static string ManualExplanation(ChannelId channel) => channel switch
+    {
+        ChannelId.Whatsapp => "Use your own Meta app and connect your number step by step.",
+        _ => "Use your own Meta app and connect your Page step by step."
     };
 
     public static ChannelRoute? Find(ChannelId channel, ChannelPath? path) =>
@@ -276,14 +292,16 @@ public static class ChannelRoutes
 
     public static PathChoiceCopy Choice(ChannelId channel) => channel switch
     {
-        ChannelId.Whatsapp => new("How Do You Want to Connect WhatsApp?",
-            "Choose what describes your number today. We’ll guide you through the rest."),
-        ChannelId.Instagram => new("How Do You Want to Connect Instagram?",
+        // Sentence case, and a subtitle that fits a manual option as well as
+        // the kinds of number (designer, 8 October 2026).
+        ChannelId.Whatsapp => new("How do you want to connect WhatsApp?",
+            "Choose how you’d like to connect. We’ll guide you through the rest."),
+        ChannelId.Instagram => new("How do you want to connect Instagram?",
             "Both routes bring your DMs into OmniAI. Choose the one that matches your account."),
-        ChannelId.X => new("How Do You Want to Connect X?",
+        ChannelId.X => new("How do you want to connect X?",
             "Choose the option that matches your account."),
-        _ => new("How Do You Want to Connect Facebook?",
-            "Choose the option that matches your Page.")
+        _ => new("How do you want to connect Facebook?",
+            "Choose how you’d like to connect. We’ll guide you through the rest.")
     };
 
     /// <summary>

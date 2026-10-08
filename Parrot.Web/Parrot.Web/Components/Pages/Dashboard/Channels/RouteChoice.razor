@@ -2,6 +2,8 @@
 @using Parrot.Web.Features.Dashboard.Channels.Models
 @using Parrot.Web.Features.Dashboard.Channels.Services
 @inject IChannelCapabilities Capabilities
+@inject AuroraInterop Interop
+@implements IAsyncDisposable
 
 @* Choosing a route is the only modal step in this module.
 
@@ -9,10 +11,14 @@
    SME does not have to make a choice and then confirm making it. *@
 
 <div class="route-choice-backdrop" @onmousedown="OnClose">
+    @* As the design-system Dialog: focus moves in and stays in, Escape
+       closes, and focus goes back where it was. *@
     <section class="route-choice"
              role="dialog"
              aria-modal="true"
              aria-labelledby="@_titleId"
+             tabindex="-1"
+             @ref="_card"
              @onmousedown:stopPropagation="true">
 
         <header class="route-choice__header">
@@ -57,12 +63,29 @@
                     }
                 </RowButton>
             }
+
+            @* Manual setup is a card of its own where a channel has one (WhatsApp,
+               Facebook; designer, 8 October 2026), in the place Move from Another
+               Provider had. It always works, so it is never Coming soon. *@
+            @if (OnUseManual.HasDelegate)
+            {
+                <RowButton Class="route-card route-card--manual" OnClick="OnUseManual">
+                    <span class="route-card__icon"><Icon Name="IconName.RiFileList3Fill" Size="IconSize.Lg" /></span>
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="route-card__marker">Step by step</Typography>
+                    <Typography TextStyle="TextStyle.HeadingH4Bold" As="strong" Class="route-card__label">Set up manually</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="route-card__explanation">
+                        @ChannelRoutes.ManualExplanation(Channel.Id)
+                    </Typography>
+                    <span class="route-card__go">
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Continue with this option</Typography>
+                        <span class="route-card__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
+                    </span>
+                </RowButton>
+            }
         </div>
 
-        @* Always reachable where a channel has a manual setup (WhatsApp, Facebook).
-           Meta's own flow fails often enough that a way round it has to be on
-           the first screen, and while the one-step routes are coming soon it
-           is the way in. A text link: the Ghost Button, underlined. *@
+        @* Commented out for now (designer, 8 October 2026): manual setup is a
+           card above. Kept for when it goes back to being a way round Meta.
         @if (OnUseManual.HasDelegate)
         {
             <footer class="route-choice__footer">
@@ -70,6 +93,7 @@
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="route-choice__manual" @onclick="OnUseManual">Use manual setup</Button>
             </footer>
         }
+        *@
     </section>
 </div>
 
@@ -90,11 +114,33 @@
 
     private PathChoiceCopy Copy => ChannelRoutes.Choice(Channel.Id);
 
+    private ElementReference _card;
+    private IAsyncDisposable? _trap;
+    private DotNetObjectReference<RouteChoice>? _self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await _card.FocusAsync();
+        // Escape is caught in the browser, as Dialog does, so keystrokes stay there.
+        _self = DotNetObjectReference.Create(this);
+        _trap = await Interop.TrapFocusAsync(_card, _self, nameof(OnEscapeAsync));
+    }
+
+    [JSInvokable]
+    public Task OnEscapeAsync() => OnClose.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_trap is not null) await _trap.DisposeAsync();
+        _self?.Dispose();
+    }
+
 
     /// <summary>
-    /// Coexistence is emerald and migration is violet in the design — a fresh
-    /// number carries no tint of its own, so it takes the brand blue every
-    /// other "primary path" in the product uses.
+    /// Coexistence is emerald and migration (and manual setup in its place) is
+    /// violet in the design; a fresh number, and a channel's only route, take
+    /// the brand family so they carry the same weight.
     /// </summary>
     private string CardClass(ChannelRoute route) => (route.Id switch
     {

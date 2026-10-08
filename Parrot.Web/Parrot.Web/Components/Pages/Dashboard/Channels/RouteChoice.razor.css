@@ -10,10 +10,15 @@
   animation: route-backdrop-in var(--ds-route-backdrop-enter) ease;
 }
 
+/* Focus is moved here by script (as Dialog does); it is not a control, so no ring. */
+.route-choice:focus { outline: none; }
+
+/* The modal hugs its cards: three for WhatsApp, two for Facebook. */
 .route-choice {
   display: grid;
   gap: var(--spacing-xl);
-  width: min(var(--ds-route-width), 100%);
+  width: fit-content;
+  max-width: 100%;
   max-height: 100%;
   overflow-y: auto;
   padding: var(--ds-route-pad);
@@ -29,7 +34,6 @@
      radius rungs. */
   --ds-route-layer: 150;
   --ds-route-backdrop-pad: 28px;
-  --ds-route-width: 940px;
   --ds-route-pad: 32px;
   --ds-route-radius: 25px;
   --ds-route-blur: 5px;
@@ -42,7 +46,10 @@
   --ds-route-close: 36px;
 }
 
+/* The heading wraps to the cards' width rather than widening the modal. */
 .route-choice__header {
+  width: 0;
+  min-width: 100%;
   display: grid;
   grid-template-columns: var(--ds-route-mark) minmax(0, 1fr) var(--ds-route-close);
   gap: var(--spacing-md);
@@ -81,16 +88,23 @@
 /* As Dialog draws its close: muted, on a muted circle. */
 .route-choice__header ::deep .route-choice__close { flex: none; color: var(--colors-text-muted); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
 
-/* One column per route: WhatsApp always offers exactly three, and this modal
-   never renders for a channel with fewer — that screen is skipped entirely
-   when there is nothing to choose between. */
+/* One column per card, each the width three took at the original 940px, so
+   the modal is as wide as its cards; on a narrower window they share what
+   there is. It never renders with fewer than two: the screen is skipped when
+   there is nothing to choose between. */
 .route-choice__cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, var(--ds-route-card-width));
   gap: var(--ds-route-card-gap);
 }
 
-.route-choice-backdrop { --ds-route-card-gap: 14px; }
+.route-choice-backdrop {
+  /* Gaps in the token set: the design's 14px card gap, and each card's width,
+     (940 - 2 × 32 padding - 2 × 14 gaps) ÷ 3. */
+  --ds-route-card-gap: 14px;
+  --ds-route-card-width: 283px;
+}
 
 .route-choice__cards ::deep .route-card {
   position: relative;
@@ -151,7 +165,7 @@
 }
 
 .route-choice__cards ::deep .route-card:hover {
-  border-color: var(--colors-accent-brand-border);
+  border-color: var(--colors-accent-brand-solid);
   box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-brand-primary) 11%, transparent);
   transform: translateY(-3px);
 }
@@ -172,14 +186,17 @@
 /* No focus rule: the app-wide ring in app.css covers these cards, and a
    bespoke one here only made them inconsistent with every other control. */
 
+/* The plain card (a fresh number, a channel's only route) takes the brand
+   family, as coexistence takes emerald and manual setup violet, so no card
+   reads weaker than the others. */
 .route-card__icon {
   display: grid;
   place-items: center;
   width: var(--ds-route-icon);
   height: var(--ds-route-icon);
   margin-bottom: var(--spacing-2xl);
-  color: var(--colors-brand-primary);
-  background: var(--colors-interaction-selected);
+  color: var(--colors-accent-brand-text);
+  background: var(--colors-accent-brand-muted);
   border-radius: var(--ds-route-icon-radius);
   box-shadow: 0 var(--spacing-sm) var(--spacing-lg) color-mix(in srgb, var(--colors-brand-primary) 9%, transparent);
 }
@@ -187,7 +204,7 @@
 ::deep .route-card__marker {
   width: max-content;
   padding: var(--spacing-xs) var(--spacing-sm);
-  color: var(--colors-brand-primary);
+  color: var(--colors-accent-brand-text);
   background: color-mix(in srgb, var(--colors-surface-card) 72%, transparent);
   border-radius: var(--radius-radius-full);
 }
@@ -212,7 +229,7 @@
   justify-content: space-between;
   align-self: end;
   gap: var(--spacing-sm);
-  color: var(--colors-brand-primary);
+  color: var(--colors-accent-brand-text);
 }
 
 .route-card__arrow {
@@ -221,7 +238,7 @@
   width: var(--ds-route-arrow);
   height: var(--ds-route-arrow);
   color: var(--colors-text-on-primary);
-  background: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-solid);
   border-radius: var(--radius-radius-full);
 }
 
@@ -258,37 +275,45 @@
   background: var(--colors-accent-emerald-solid);
 }
 
-/* Migration: violet.
+/* Migration, and manual setup in its place: violet.
    The one family the generated theme already gets right end to end — its
    border token (#ddd6ff) matches the React literal exactly. */
-.route-choice__cards ::deep .route-card--migration {
+.route-choice__cards ::deep .route-card--migration,
+.route-choice__cards ::deep .route-card--manual {
   border-color: var(--colors-accent-violet-border);
 }
 
-.route-choice__cards ::deep .route-card--migration::after {
+.route-choice__cards ::deep .route-card--migration::after,
+.route-choice__cards ::deep .route-card--manual::after {
   background: color-mix(in srgb, var(--colors-accent-violet-base) 7%, transparent);
 }
 
-.route-choice__cards ::deep .route-card--migration:hover {
+.route-choice__cards ::deep .route-card--migration:hover,
+.route-choice__cards ::deep .route-card--manual:hover {
   border-color: var(--colors-accent-violet-solid);
   box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) color-mix(in srgb, var(--colors-accent-violet-solid) 11%, transparent);
 }
 
-.route-choice__cards ::deep .route-card--migration .route-card__icon {
+.route-choice__cards ::deep .route-card--migration .route-card__icon,
+.route-choice__cards ::deep .route-card--manual .route-card__icon {
   color: var(--colors-accent-violet-text);
   background: var(--colors-accent-violet-muted);
   box-shadow: 0 var(--spacing-sm) var(--spacing-lg) color-mix(in srgb, var(--colors-accent-violet-solid) 10%, transparent);
 }
 
-.route-choice__cards ::deep .route-card--migration .route-card__marker { color: var(--colors-accent-violet-text); }
+.route-choice__cards ::deep .route-card--migration .route-card__marker,
+.route-choice__cards ::deep .route-card--manual .route-card__marker { color: var(--colors-accent-violet-text); }
 
-.route-choice__cards ::deep .route-card--migration .route-card__go { color: var(--colors-accent-violet-text); }
+.route-choice__cards ::deep .route-card--migration .route-card__go,
+.route-choice__cards ::deep .route-card--manual .route-card__go { color: var(--colors-accent-violet-text); }
 
-.route-choice__cards ::deep .route-card--migration .route-card__arrow {
+.route-choice__cards ::deep .route-card--migration .route-card__arrow,
+.route-choice__cards ::deep .route-card--manual .route-card__arrow {
   color: var(--colors-text-on-primary);
   background: var(--colors-accent-violet-solid);
 }
 
+/* The footer link is commented out for now (RouteChoice.razor); its styles stay with it. */
 .route-choice__footer {
   display: flex;
   gap: var(--spacing-xs);
