@@ -44,4 +44,28 @@ public class WhatsAppSenderTests
             return new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         }
     }
+
+    // Messenger's Send API: the Page's token, the customer's id, a RESPONSE within 24 hours.
+    [Theory]
+    [InlineData(200, "{\"recipient_id\":\"6215837091842310\",\"message_id\":\"m_reply\"}", "accepted")]
+    [InlineData(400, "{\"error\":{\"code\":10,\"error_subcode\":2018278}}", "failed")]
+    [InlineData(500, "{}", "unknown")]
+    [InlineData(200, "{}", "unknown")]
+    public async Task Messenger_SendsExpectedRequestAndDoesNotRetry(int status, string body, string outcome)
+    {
+        var handler = new FakeHandler((HttpStatusCode)status, body);
+        using var http = new HttpClient(handler);
+        var sender = new FacebookSender(http, Options.Create(new FacebookSettings { ApiVersion = "v25.0" }));
+        if (outcome == "accepted") Assert.Equal("m_reply", await sender.SendAsync("185860297939218", "page-token", "6215837091842310", "Hello", default));
+        else if (outcome == "failed")
+            Assert.Equal("10", (await Assert.ThrowsAsync<FacebookRejectedException>(() => sender.SendAsync("185860297939218", "page-token", "6215837091842310", "Hello", default))).MetaErrorCode);
+        else await Assert.ThrowsAnyAsync<Exception>(() => sender.SendAsync("185860297939218", "page-token", "6215837091842310", "Hello", default));
+        Assert.Equal(1, handler.Calls);
+        Assert.Equal("https://graph.facebook.com/v25.0/185860297939218/messages", handler.Url);
+        Assert.Equal("Bearer page-token", handler.Authorization);
+        using var json = JsonDocument.Parse(handler.Payload!);
+        Assert.Equal("6215837091842310", json.RootElement.GetProperty("recipient").GetProperty("id").GetString());
+        Assert.Equal("RESPONSE", json.RootElement.GetProperty("messaging_type").GetString());
+        Assert.Equal("Hello", json.RootElement.GetProperty("message").GetProperty("text").GetString());
+    }
 }

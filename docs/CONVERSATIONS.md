@@ -37,7 +37,9 @@ It returns 204 on success. Saving does not send a message or validate the creden
 4. Select the conversation, type a reply, and click Send. The recipient should receive it on WhatsApp.
 5. Reply again from the phone; the incoming message appears in the same conversation.
 
-Free-form replies require a recent incoming message within 24 hours. This implementation enforces that window and does not implement templates, outbound attachments, or starting new conversations. Incoming non-text messages show a type placeholder. Meta may impose additional recipient/test-number restrictions.
+Free-form replies require a recent incoming message within 24 hours. This implementation enforces that window and does not implement templates, outbound attachments, or starting new conversations.
+
+Replies use the same endpoint for both channels: a thread on a WhatsApp number goes out through the WhatsApp Cloud API, a thread on a Facebook Page through Messenger's Send API (`POST /{page-id}/messages`, `messaging_type: RESPONSE`) with the Page access token saved in setup. Messenger has the same 24-hour window (outside it Meta answers error 10, subcode 2018278) and allows up to 2000 characters. Message tags such as `HUMAN_AGENT` are not implemented. Incoming non-text messages show a type placeholder. Meta may impose additional recipient/test-number restrictions.
 
 `Accepted by WhatsApp` means Meta returned a message ID, not delivery/read confirmation. Delivery receipt reconciliation is not implemented; the pre-existing webhook logs statuses. Provider failures are displayed as failed/unknown, never represented as delivered.
 

@@ -200,4 +200,40 @@ public class FacebookPipelineTests : IAsyncLifetime
         Assert.Equal(ConnectionId, summary.ConnectionId);
         Assert.Equal(Customer, summary.Sender);
     }
+
+    // The business answers in the inbox: the reply goes out through the Page and lands in the same
+    // conversation, numbered after the customer's messages, sent by the Page.
+    [MongoFact]
+    public async Task AReplyFromTheInbox_JoinsTheMessengerConversationInOrder()
+    {
+        InboundMessageProcessor worker = Worker();
+        foreach (InboundMessage message in await ReceiveWebhookAsync()) await worker.ProcessAsync(message, CancellationToken.None);
+        Mock<IFacebookConnectionRepository> pages = new();
+        pages.Setup(p => p.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(new FacebookConnection
+        {
+            Id = ConnectionId, OwnerUserId = Owner, VerifyTokenEncrypted = "encrypted", PageId = PageId,
+            PageName = "Oma's Kitchen", WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "page-token",
+        });
+        Mock<IFacebookCredentialProtector> protector = new();
+        protector.Setup(p => p.Unprotect("page-token")).Returns("page-token");
+        Mock<IFacebookSender> messenger = new();
+        messenger.Setup(m => m.SendAsync(PageId, "page-token", Customer, "Yes, we deliver to Lekki.", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("m_reply");
+        ConversationService service = new(new MongoConversationStore(_client!, Settings), Mock.Of<IWhatsAppConnectionRepository>(),
+            Mock.Of<IWhatsAppSender>(), Mock.Of<IWhatsAppTokenProtector>(), new MongoConversationSequence(_client!, Settings),
+            pages.Object, messenger.Object, protector.Object);
+
+        ConversationMessage reply = await service.SendAsync(Owner, ConnectionId, Customer,
+            new SendReplyRequest(Guid.NewGuid(), "Yes, we deliver to Lekki."), CancellationToken.None);
+
+        Assert.Equal("accepted", reply.Status);
+        MessageHistoryPage history = await new MongoMessageHistory(_client!, Settings)
+            .GetAfterAsync(Owner, ConversationKey.Create(MessagingPlatform.Facebook, Customer, PageId), 0, 50);
+        Assert.Equal([1L, 2L, 3L, 4L], history.Messages.Select(m => m.Sequence));
+        StoredMessage last = history.Messages[^1];
+        Assert.True(last.Outgoing);
+        Assert.Equal(PageId, last.Sender);
+        Assert.Equal(Customer, last.Receiver);
+        Assert.Equal("Yes, we deliver to Lekki.", last.Text);
+    }
 }
