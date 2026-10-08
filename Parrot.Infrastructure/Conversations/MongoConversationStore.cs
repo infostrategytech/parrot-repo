@@ -4,6 +4,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Parrot.Application.Conversations;
 using Parrot.Domain.Entities.Messages;
+using Parrot.Domain.Enums;
 using Parrot.Domain.Exceptions;
 using Parrot.Infrastructure.Messaging;
 
@@ -43,7 +44,10 @@ public sealed class MongoConversationStore : IConversationStore
             MessageDocument d = BsonSerializer.Deserialize<MessageDocument>(row["latest"].AsBsonDocument);
             string name = row["name"].IsString ? row["name"].AsString : d.From;
             return new ConversationSummary(d.ConnectionId!.Value, d.From, name,
-                d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt);
+                d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt)
+            {
+                Channel = d.Platform == MessagingPlatform.Facebook ? "facebook" : "whatsapp",
+            };
         }).ToList();
     }
 

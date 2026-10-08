@@ -146,10 +146,14 @@ dotnet build Backend.slnx --no-restore -m:1 -p:UseSharedCompilation=false -nodeR
 dotnet test Test.Parrot.Api/Test.Parrot.Api.csproj --no-build --no-restore
 ```
 
-The Mongo integration test is skipped unless `PARROT_TEST_MONGO` is set. Use a disposable local Mongo instance; the test creates and drops its own unique `parrot_test_*` database:
+Integration tests are skipped unless their service is set. Each creates and drops its own `parrot_test_*` database, so point them at the local compose stack, never a shared server:
 
 ```bash
-PARROT_TEST_MONGO=mongodb://127.0.0.1:27028 dotnet test Test.Parrot.Api/Test.Parrot.Api.csproj --no-build --no-restore
+PARROT_TEST_MONGO=mongodb://127.0.0.1:27018 \
+PARROT_TEST_KAFKA=localhost:29092 \
+PARROT_TEST_REDIS=localhost:16379 \
+PARROT_TEST_POSTGRES='Host=localhost;Port=15432;Username=postgres;Password=parrot_dev_password' \
+dotnet test Backend.slnx
 ```
 
 Automated tests use a fake Meta HTTP endpoint and a real temporary MongoDB. They do not send messages to real phones. A real delivery check requires your server credentials and the phone steps above.
