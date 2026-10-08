@@ -1,0 +1,19 @@
+# Prometheus scrape config for Parrot message processing (see the Parrot message
+# processing monitoring guide). Both services record on the Parrot.Messaging
+# meter; every dashboard query sums across them.
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  # Webhooks (stage 1), received, replies to Meta (stage 5), status updates (stage 6).
+  - job_name: parrot-api
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["parrot-api:8080"]
+
+  # Persistence, queue, processing (stages 2-4) and the queue / dead-letter gauges.
+  # Its own port: the worker has no web server. Internal network only.
+  - job_name: message-processor
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["message-processor:9464"]

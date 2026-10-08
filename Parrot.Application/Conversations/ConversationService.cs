@@ -72,16 +72,28 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         using CancellationTokenSource timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         string status;
         string? providerId = null;
+        string metaErrorCode = "none";
         try
         {
             providerId = await sender.SendAsync(connection.PhoneNumberId!, accessToken, recipient, request.Text, timeout.Token);
             status = "accepted";
+
+            // From the customer's message arriving to Meta accepting the reply.
+            MessageMetrics.EndToEnd.Record(Math.Max(0, (DateTime.UtcNow - latest.ReceivedAt).TotalSeconds));
         }
-        catch (WhatsAppRejectedException) { status = "failed"; }
+        catch (WhatsAppRejectedException ex)
+        {
+            status = "failed";
+            metaErrorCode = ex.MetaErrorCode ?? "unknown";
+        }
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException)
         {
             status = "unknown";
         }
+        MessageMetrics.Sent.Add(
+            1,
+            new KeyValuePair<string, object?>("status", status),
+            new KeyValuePair<string, object?>("meta_error_code", metaErrorCode));
         using CancellationTokenSource persistTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await store.CompleteAsync(doc.MessageId, status, providerId, persistTimeout.Token);
         doc.SendStatus = status;

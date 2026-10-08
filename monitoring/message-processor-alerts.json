@@ -1,0 +1,384 @@
+{
+  "apiVersion": 1,
+  "groups": [
+    {
+      "orgId": 1,
+      "name": "parrot-message-processing",
+      "folder": "Parrot",
+      "interval": "1m",
+      "rules": [
+        {
+          "uid": "parrot-messages-unaccounted",
+          "title": "Messages unaccounted",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "PROMETHEUS_DATASOURCE_UID",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(messages_received_total[30m])) - sum(increase(messages_persisted_total[30m])) - sum(increase(messages_deduplicated_total[30m]))",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        50
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "15m",
+          "labels": {
+            "severity": "critical",
+            "team": "parrot"
+          },
+          "annotations": {
+            "summary": "Messages received but not persisted or deduplicated",
+            "description": "{{ $values.A }} messages received in the last 30 minutes are not accounted for (threshold 50). Check that MessageProcessor is running and consuming, and the Queue depth panel. Tune the threshold to about twice the normal in-flight count.",
+            "__dashboardUid__": "parrot-message-processing",
+            "__panelId__": "4"
+          }
+        },
+        {
+          "uid": "parrot-persist-failures",
+          "title": "Persist failures",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "PROMETHEUS_DATASOURCE_UID",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(messages_persist_failed_total[5m]))",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "labels": {
+            "severity": "critical",
+            "team": "parrot"
+          },
+          "annotations": {
+            "summary": "Messages are failing to save",
+            "description": "{{ $values.A }} failed saves in the last 5 minutes. See Persist failures by reason; the worker retries them.",
+            "__dashboardUid__": "parrot-message-processing",
+            "__panelId__": "13"
+          }
+        },
+        {
+          "uid": "parrot-dead-letters",
+          "title": "Dead letters",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "PROMETHEUS_DATASOURCE_UID",
+              "model": {
+                "refId": "A",
+                "expr": "sum(message_dead_letter_depth)",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "5m",
+          "labels": {
+            "severity": "warning",
+            "team": "parrot"
+          },
+          "annotations": {
+            "summary": "Messages on the dead-letter queue",
+            "description": "{{ $values.A }} dead letters on messages.inbound.dlq have not been reviewed. Fix and replay them, then mark them reviewed (monitoring/README.md).",
+            "__dashboardUid__": "parrot-message-processing",
+            "__panelId__": "5"
+          }
+        },
+        {
+          "uid": "parrot-low-processing-success",
+          "title": "Low processing success",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "PROMETHEUS_DATASOURCE_UID",
+              "model": {
+                "refId": "A",
+                "expr": "sum(rate(messages_processed_total{status=\"success\"}[30m])) / (sum(rate(messages_processed_total[30m])) > 0) * 100",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "lt",
+                      "params": [
+                        95
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "labels": {
+            "severity": "warning",
+            "team": "parrot"
+          },
+          "annotations": {
+            "summary": "Processing success below 95%",
+            "description": "Processing success is {{ $values.A }}% over 30 minutes. See Top 5 failure reasons.",
+            "__dashboardUid__": "parrot-message-processing",
+            "__panelId__": "6"
+          }
+        },
+        {
+          "uid": "parrot-queue-backing-up",
+          "title": "Queue backing up",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "PROMETHEUS_DATASOURCE_UID",
+              "model": {
+                "refId": "A",
+                "expr": "(deriv(max(message_queue_depth)[10m:1m]) > 0 and max(message_queue_depth) > 0) or histogram_quantile(0.95, sum by (le) (rate(message_queue_wait_seconds_bucket[5m]))) > 30",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "10m",
+          "labels": {
+            "severity": "warning",
+            "team": "parrot"
+          },
+          "annotations": {
+            "summary": "The message queue is backing up",
+            "description": "Queue depth has been rising, or the p95 wait is above 30 s, for 10 minutes. See Queue depth and wait.",
+            "__dashboardUid__": "parrot-message-processing",
+            "__panelId__": "18"
+          }
+        },
+        {
+          "uid": "parrot-webhook-rejections",
+          "title": "Webhook rejections",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "PROMETHEUS_DATASOURCE_UID",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(whatsapp_webhooks_total{result!=\"ok\"}[10m]))",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "labels": {
+            "severity": "warning",
+            "team": "parrot"
+          },
+          "annotations": {
+            "summary": "WhatsApp webhooks are being rejected",
+            "description": "{{ $values.A }} webhooks failed validation in the last 10 minutes. See Webhook results; logs carry expected vs received account IDs.",
+            "__dashboardUid__": "parrot-message-processing",
+            "__panelId__": "14"
+          }
+        },
+        {
+          "uid": "parrot-meta-rate-limiting",
+          "title": "Meta rate limiting",
+          "condition": "C",
+          "data": [
+            {
+              "refId": "A",
+              "relativeTimeRange": {
+                "from": 1800,
+                "to": 0
+              },
+              "datasourceUid": "PROMETHEUS_DATASOURCE_UID",
+              "model": {
+                "refId": "A",
+                "expr": "sum(increase(messages_sent_total{meta_error_code=\"130429\"}[10m]))",
+                "instant": true,
+                "range": false
+              }
+            },
+            {
+              "refId": "C",
+              "datasourceUid": "__expr__",
+              "model": {
+                "refId": "C",
+                "type": "threshold",
+                "expression": "A",
+                "conditions": [
+                  {
+                    "evaluator": {
+                      "type": "gt",
+                      "params": [
+                        0
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "noDataState": "OK",
+          "execErrState": "Error",
+          "for": "0s",
+          "labels": {
+            "severity": "warning",
+            "team": "parrot"
+          },
+          "annotations": {
+            "summary": "Meta is rate limiting replies (130429)",
+            "description": "{{ $values.A }} replies were rejected with Meta error 130429 in the last 10 minutes.",
+            "__dashboardUid__": "parrot-message-processing",
+            "__panelId__": "22"
+          }
+        }
+      ]
+    }
+  ]
+}

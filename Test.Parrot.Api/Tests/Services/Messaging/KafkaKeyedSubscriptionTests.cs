@@ -127,6 +127,39 @@ public class KafkaKeyedSubscriptionTests : IAsyncLifetime
         Assert.Equal(_topic, Encoding.UTF8.GetString(dead.Message.Headers.GetLastBytes("dlq.source.topic")));
     }
 
+    // A dead letter in a batch that is then rewound (another message outlasts its
+    // retries) must not be dead-lettered again each time the batch is read again.
+    [KafkaFact]
+    public async Task AMessageIsDeadLetteredOnce_EvenWhenItsBatchIsRewound()
+    {
+        await PublishRaw("ada", "not json");
+        await Publish("tunde", 1);
+
+        int failuresLeft = 8; // two rewinds: more than the three retries, twice
+        ConcurrentQueue<int> succeeded = new();
+        using CancellationTokenSource stop = new();
+        Task run = _bus!.SubscribeKeyedAsync<TestMessage>(_topic, (m, _) =>
+        {
+            if (Interlocked.Decrement(ref failuresLeft) >= 0) throw new TimeoutException("MongoDB is down");
+            succeeded.Enqueue(m.N);
+            return Task.CompletedTask;
+        }, Options_, stop.Token);
+
+        await Until(() => succeeded.Contains(1), seconds: 60);
+        await stop.CancelAsync();
+        await run;
+
+        using IConsumer<string, string> dlq = new ConsumerBuilder<string, string>(new ConsumerConfig
+        {
+            BootstrapServers = _servers, GroupId = "dlq-reader-" + Guid.NewGuid().ToString("N"), AutoOffsetReset = AutoOffsetReset.Earliest,
+        }).Build();
+        dlq.Subscribe(Dlq);
+        List<ConsumeResult<string, string>> dead = [];
+        while (dlq.Consume(TimeSpan.FromSeconds(5)) is { } record) dead.Add(record);
+
+        Assert.Equal("not json", Assert.Single(dead).Message.Value);
+    }
+
     // MongoDB down for longer than the retries: the batch is rewound and read
     // again, and the message is handled once it recovers, still in order.
     [KafkaFact]

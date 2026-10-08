@@ -1,4 +1,5 @@
 using MongoDB.Driver;
+using OpenTelemetry.Metrics;
 using Microsoft.Extensions.Options;
 using Parrot.Application.Messaging;
 using Parrot.Infrastructure.MessageBus;
@@ -299,6 +300,13 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<RequestMetrics>();
 builder.Services.AddSingleton<MonitoringStore>();
 
+// Message processing metrics (the Parrot.Messaging meter) and HTTP metrics, on
+// /metrics for Prometheus. nginx keeps /metrics off the public site.
+builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
+    .AddAspNetCoreInstrumentation()
+    .AddMeter(MessageMetrics.MeterName)
+    .AddPrometheusExporter());
+
 // Services
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
@@ -353,6 +361,7 @@ builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMap
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+builder.Services.AddSingleton<IReplySendTimes, MongoReplySendTimes>();
 builder.Services.AddSingleton<IMessageHistory, MongoMessageHistory>();
 
 // Replies are numbered from the same per-conversation counter the worker uses.
@@ -395,6 +404,22 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
                 context.HttpContext.Request.Path.Value,
                 context.HttpContext.Response.Headers["X-Correlation-ID"].ToString(),
                 System.Text.Json.JsonSerializer.Serialize(errors));
+
+            // WhatsApp: answered 200, because Meta would only resend the same broken
+            // body. The hash and length identify the body; Webhooks__LogBodies=true
+            // logs it in full against the same CorrelationId.
+            if (HttpMethods.IsPost(context.HttpContext.Request.Method)
+                && context.HttpContext.Request.Path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase))
+            {
+                string rawBody = context.HttpContext.Items["RawBody"] as string ?? string.Empty;
+                logger.LogWarning(
+                    "WhatsApp webhook quarantined: payload could not be parsed. CorrelationId={CorrelationId} BodyLength={BodyLength} BodySha256={BodySha256}",
+                    context.HttpContext.Response.Headers["X-Correlation-ID"].ToString(),
+                    rawBody.Length,
+                    Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(rawBody))));
+                MessageMetrics.Webhooks.Add(1, new KeyValuePair<string, object?>("result", "parse_error"));
+                return new Microsoft.AspNetCore.Mvc.OkResult();
+            }
         }
         return defaultResponseFactory(context);
     };
@@ -457,6 +482,11 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapPrometheusScrapingEndpoint("/metrics");
+
+// The meter provider must exist first: measurements made before it are dropped.
+app.Services.GetRequiredService<MeterProvider>();
+MessageMetrics.StartAtZero();
 app.MapHub<Parrot.Api.Realtime.MessagingHub>(Parrot.Api.Realtime.MessagingHub.Path);
 app.MapDevelopmentRealtimeStub();
 

@@ -19,6 +19,13 @@ public interface IConversationStore
     Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct);
 }
 
+// When a reply was sent, found by the wamid Meta gave it: for delivery latency
+// when Meta later reports the reply delivered or read. Null when unknown.
+public interface IReplySendTimes
+{
+    Task<DateTime?> SentAtAsync(string providerMessageId, CancellationToken ct);
+}
+
 public interface IWhatsAppSender
 {
     Task<string> SendAsync(string phoneNumberId, string accessToken, string recipient, string text, CancellationToken ct);
@@ -26,5 +33,10 @@ public interface IWhatsAppSender
 
 public sealed class WhatsAppRejectedException : Exception
 {
-    public WhatsAppRejectedException() : base("WhatsApp rejected the message. Check the recipient, access token and messaging permissions.") { }
+    public WhatsAppRejectedException(string? metaErrorCode = null)
+        : base("WhatsApp rejected the message. Check the recipient, access token and messaging permissions.") =>
+        MetaErrorCode = metaErrorCode;
+
+    // Meta's error.code (e.g. "131047", "130429"), when the response carried one.
+    public string? MetaErrorCode { get; }
 }

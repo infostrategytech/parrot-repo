@@ -118,6 +118,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         string correlationId = InboundMessagePublisher.CurrentCorrelationId();
         DateTime receivedAt = DateTime.UtcNow;
         List<InboundMessage> inbound = [];
+        List<string> types = [];
 
         foreach (FacebookEntry entry in payload.Entry)
         {
@@ -128,6 +129,10 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
                     if (ToInbound(registration, evt, rawBody, correlationId, receivedAt) is { } message)
                     {
                         inbound.Add(message);
+
+                        // The same type the Message Worker decodes, so received and persisted line up.
+                        types.Add(evt.Message is null ? "postback"
+                            : evt.Message.Attachments is { Count: > 0 } attachments ? attachments[0].Type : "text");
                     }
                 }
             }
@@ -137,6 +142,13 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         }
 
         await _publisher.PublishAsync(inbound, cancellationToken);
+
+        // Counted only once safely queued, so a webhook that failed and is resent counts once.
+        foreach (string type in types)
+        {
+            MessageMetrics.Received.Add(1, MessageMetrics.MessageType(type));
+        }
+
         return true;
     }
 

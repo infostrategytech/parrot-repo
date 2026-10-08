@@ -131,3 +131,6 @@ TestResults/
 !Parrot.Catalog.Api/appsettings.Development.json
 !Parrot.Catalog.Relay/appsettings.json
 !Parrot.Catalog.Tools/appsettings.json
+
+# The monitoring setup guide (Prometheus, dashboard import, alert loading) ships with its config.
+!monitoring/*.md
