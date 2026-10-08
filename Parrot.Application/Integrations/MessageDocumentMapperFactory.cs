@@ -82,3 +82,28 @@ public sealed class FacebookMessageDocumentMapper : IMessageDocumentMapper
         AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
     };
 }
+
+public sealed class TikTokMessageDocumentMapper : IMessageDocumentMapper
+{
+    public MessagingPlatform Platform => MessagingPlatform.TikTok;
+
+    public MessageDocument ToDocument(IncomingMessage message) => new TikTokMessageDocument
+    {
+        ConnectionId = message.ConnectionId,
+        OwnerUserId = message.OwnerUserId,
+        MessageId = message.MessageId,
+        Platform = message.Platform,
+        ExternalAccountId = message.ExternalAccountId,
+        From = message.From,
+        Timestamp = message.Timestamp,
+        SentAt = message.SentAt,
+        Type = message.Type,
+        TextBody = message.TextBody,
+        ContactName = message.ContactName,
+        ReceivedAt = message.ReceivedAt,
+        StoredAt = DateTime.UtcNow,
+        ChannelId = message.ChannelId,
+        ChannelDisplayName = message.ChannelDisplayName,
+        AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
+    };
+}

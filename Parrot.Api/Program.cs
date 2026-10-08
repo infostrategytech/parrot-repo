@@ -346,6 +346,7 @@ builder.Services.AddScoped<InboundMessagePublisher>();
 builder.Services.AddScoped<IWhatsAppWebhookService, WhatsAppWebhookService>();
 builder.Services.AddScoped<IFacebookWebhookService, FacebookWebhookService>();
 builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepository>();
+builder.Services.AddScoped<ITikTokConnectionRepository, TikTokConnectionRepository>();
 builder.Services.AddScoped<IFacebookConnectionService, FacebookConnectionService>();
 builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<RequestContext>());
@@ -359,6 +360,7 @@ builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection(Mon
 builder.Services.AddSingleton<IMongoClient>(sp => new MongoClient(sp.GetRequiredService<IOptions<MongoDbSettings>>().Value.ConnectionString));
 builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
 builder.Services.AddSingleton<IReplySendTimes, MongoReplySendTimes>();

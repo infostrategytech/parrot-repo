@@ -30,7 +30,7 @@ public class MongoConversationTests
         try
         {
             var mappers = new MessageDocumentMapperFactory(
-                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]);
+                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
             var incoming = new MongoMessageRepository(client, settings, mappers);
             var store = new MongoConversationStore(client, settings);
             var connection = Guid.NewGuid();

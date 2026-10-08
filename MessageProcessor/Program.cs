@@ -41,6 +41,7 @@ builder.Services.AddSingleton<IConnectionMessageReceipt, ConnectionMessageReceip
 
 builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 
 builder.Services.AddSingleton<IInboundMessageDecoder, WhatsAppInboundDecoder>();

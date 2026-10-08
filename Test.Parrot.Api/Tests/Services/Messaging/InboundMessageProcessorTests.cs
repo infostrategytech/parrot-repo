@@ -92,7 +92,7 @@ public class InboundMessageProcessorTests
     private InboundMessageProcessor Processor(IStoredMessageStore? store = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
-        new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]),
+        new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]),
         _receipts, _publisher, NullLogger<InboundMessageProcessor>.Instance);
 
     private static InboundMessage Inbound(string messageId = "whatsapp:wamid.A", string body = Body, string? owner = "user-1") => new()
@@ -245,7 +245,7 @@ public class InboundMessageProcessorTests
         try
         {
             _ = new MongoMessageRepository(client, settings,
-                new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]));
+                new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]));
             MongoStoredMessageStore store = new(client, settings);
 
             await Processor(store).ProcessAsync(Inbound(), CancellationToken.None);

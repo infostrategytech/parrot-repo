@@ -10,7 +10,7 @@ namespace Test.Parrot.Api.Tests.Services.Integrations;
 public class MessageDocumentMappingTests
 {
     private static MessageDocumentMapperFactory NewFactory() =>
-        new([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]);
+        new([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
 
     private static IncomingMessage NewMessage(MessagingPlatform platform) => new()
     {
@@ -37,6 +37,16 @@ public class MessageDocumentMappingTests
     }
 
     [Fact]
+    public void TikTokMessagesMapToTheirOwnDocumentType()
+    {
+        MessageDocument document = NewFactory().ToDocument(NewMessage(MessagingPlatform.TikTok));
+
+        TikTokMessageDocument tiktok = Assert.IsType<TikTokMessageDocument>(document);
+        Assert.Equal("channel", tiktok.ChannelId);
+        Assert.Equal(MessagingPlatform.TikTok, tiktok.Platform);
+    }
+
+    [Fact]
     public void WhatsAppMessagesStillMapToTheirOwnDocumentType()
     {
         MessageDocument document = NewFactory().ToDocument(NewMessage(MessagingPlatform.WhatsApp));
@@ -50,6 +60,7 @@ public class MessageDocumentMappingTests
         InvalidOperationException error = Assert.Throws<InvalidOperationException>(
             () => new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper()]));
         Assert.Contains("Facebook", error.Message);
+        Assert.Contains("TikTok", error.Message);
     }
 
     [Fact]
