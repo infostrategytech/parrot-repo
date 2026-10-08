@@ -187,6 +187,7 @@ services:
       Facebook__WebhookBaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}
       Facebook__VerifyToken: ${FACEBOOK_VERIFY_TOKEN:-}
       Facebook__AppSecret: ${FACEBOOK_APP_SECRET:-}
+      TikTok__WebhookBaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}
       # The API will not boot without a client id; the placeholders only mean
       # Google sign-in fails until real ones are set.
       GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-not-configured.apps.googleusercontent.com}

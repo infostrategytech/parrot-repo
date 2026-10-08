@@ -95,6 +95,7 @@ builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
+builder.Services.Configure<TikTokSettings>(builder.Configuration.GetSection(TikTokSettings.SectionName));
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.Configure<BrightDataSettings>(builder.Configuration.GetSection(BrightDataSettings.SectionName));
 builder.Services.Configure<AnthropicSettings>(builder.Configuration.GetSection(AnthropicSettings.SectionName));
@@ -348,6 +349,8 @@ builder.Services.AddScoped<IFacebookWebhookService, FacebookWebhookService>();
 builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepository>();
 builder.Services.AddScoped<ITikTokConnectionRepository, TikTokConnectionRepository>();
 builder.Services.AddScoped<IFacebookConnectionService, FacebookConnectionService>();
+builder.Services.AddScoped<ITikTokConnectionService, TikTokConnectionService>();
+builder.Services.AddHttpClient<ITikTokApiClient, TikTokApiClient>();
 builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<RequestContext>());
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(AppLogger<>));

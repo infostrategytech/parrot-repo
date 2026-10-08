@@ -50,6 +50,7 @@ public static class WhatsAppDataProtectionExtensions
 
         services.AddSingleton<IWhatsAppTokenProtector, WhatsAppTokenProtector>();
         services.AddSingleton<IFacebookCredentialProtector, FacebookCredentialProtector>();
+        services.AddSingleton<ITikTokCredentialProtector, TikTokCredentialProtector>();
         return services;
     }
 }
