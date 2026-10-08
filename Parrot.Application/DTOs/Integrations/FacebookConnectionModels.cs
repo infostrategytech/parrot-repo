@@ -10,7 +10,9 @@ public sealed record FacebookSetupResponse(
     bool WebhookVerified,
     string? PageId,
     string? PageName,
-    bool HasAccessToken);
+    bool HasAccessToken,
+    // A manual connection's own App Secret is saved; its webhooks are checked with it.
+    bool HasAppSecret);
 
 // Page details the customer pastes in after Meta verifies the webhook.
 public sealed class FacebookPageRequest

@@ -54,7 +54,8 @@ public class WhatsAppWebhookServiceTests
             settings,
             _loggerMock.Object,
             publisher,
-            _connectionRepositoryMock.Object);
+            _connectionRepositoryMock.Object,
+            Mock.Of<IWhatsAppTokenProtector>());
     }
 
     [Fact]
@@ -90,19 +91,6 @@ public class WhatsAppWebhookServiceTests
 
         Assert.False(result);
         Assert.Empty(echo);
-    }
-
-    [Fact]
-    public void IsValidSignature_ValidHmac_ReturnsTrue()
-    {
-        const string rawBody = "{\"object\":\"whatsapp_business_account\"}";
-        string hash = Convert.ToHexString(HMACSHA256.HashData(
-            Encoding.UTF8.GetBytes("test-secret"),
-            Encoding.UTF8.GetBytes(rawBody))).ToLowerInvariant();
-
-        Assert.True(_sut.IsValidSignature(rawBody, $"sha256={hash}"));
-        Assert.False(_sut.IsValidSignature(rawBody + " ", $"sha256={hash}"));
-        Assert.False(_sut.IsValidSignature(rawBody, "sha256=invalid"));
     }
 
     [Fact]

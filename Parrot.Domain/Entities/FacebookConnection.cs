@@ -19,6 +19,11 @@ public sealed class FacebookConnection
 
     // Page access token (not a user token); encrypted by IFacebookCredentialProtector.
     public string? AccessTokenEncrypted { get; set; }
+
+    // The App Secret of the customer's own Meta app, for a manually set up connection: Meta signs
+    // its webhooks with it. Null for a connection made through Parrot's app (Embedded Signup), whose
+    // webhooks are checked with the app-level Facebook:AppSecret. Encrypted like the access token.
+    public string? AppSecretEncrypted { get; set; }
     public DateTime? WebhookVerifiedAt { get; set; }
     public DateTime? DisabledAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

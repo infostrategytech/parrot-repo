@@ -123,6 +123,18 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         await _repository.SaveAccessTokenAsync(id, ownerUserId, _protector.Protect(token));
     }
 
+    // Manual setup: the customer's own Meta app signs this connection's webhooks with it.
+    public async Task SaveAppSecretAsync(string ownerUserId, Guid id, AppSecretRequest request)
+    {
+        WhatsAppConnection connection = await GetOwnedAsync(ownerUserId, id);
+        if (connection.DisabledAt.HasValue)
+            throw new ConflictException("This WhatsApp connection is disabled.");
+        string secret = request.AppSecret?.Trim() ?? string.Empty;
+        if (!WebhookSignature.IsAppSecret(secret))
+            throw new ValidationException("Enter the App Secret from your Meta app's App settings > Basic: 32 letters and numbers.");
+        await _repository.SaveAppSecretAsync(id, ownerUserId, _protector.Protect(secret));
+    }
+
     private static bool IsMetaId(string? value) =>
         value is { Length: > 0 and <= 64 } && value.All(c => c is >= '0' and <= '9');
 
@@ -184,6 +196,7 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
     private static WhatsAppConnectionResponse ToResponse(WhatsAppConnection connection) => new()
     {
         HasAccessToken = !string.IsNullOrEmpty(connection.AccessTokenEncrypted),
+        HasAppSecret = !string.IsNullOrEmpty(connection.AppSecretEncrypted),
         Id = connection.Id,
         Name = connection.Name,
         SetupStatus = connection.SetupStatus,

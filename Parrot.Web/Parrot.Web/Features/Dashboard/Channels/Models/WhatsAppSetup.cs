@@ -5,6 +5,8 @@ public sealed record WhatsAppConnectionInfo(
     string? DisplayPhoneNumber, DateTime? WebhookVerifiedAt, DateTime? DisabledAt)
 {
     public bool HasAccessToken { get; init; }
+    /// <summary>The App Secret of the business's own Meta app is saved; webhooks are checked with it.</summary>
+    public bool HasAppSecret { get; init; }
     public string? WhatsAppBusinessAccountId { get; init; }
     public DateTime? FirstMessageReceivedAt { get; init; }
 }
@@ -19,4 +21,8 @@ public sealed record FacebookWebhookSetup(
     bool WebhookVerified,
     string? PageId,
     string? PageName,
-    bool HasAccessToken);
+    bool HasAccessToken)
+{
+    /// <summary>The App Secret of the business's own Meta app is saved; webhooks are checked with it.</summary>
+    public bool HasAppSecret { get; init; }
+}

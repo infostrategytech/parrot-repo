@@ -5,6 +5,8 @@ namespace Parrot.Web.Features.Dashboard.Channels.Services;
 public interface IIntegrationsService
 {
     Task SaveWhatsAppAccessTokenAsync(Guid id, string accessToken, string token, CancellationToken cancellationToken = default);
+    Task SaveWhatsAppAppSecretAsync(Guid id, string appSecret, string token, CancellationToken cancellationToken = default);
+    Task SaveFacebookAppSecretAsync(string appSecret, string token, CancellationToken cancellationToken = default);
     Task<FacebookWebhookSetup> GetFacebookSetupAsync(string token, CancellationToken cancellationToken = default);
     Task SaveFacebookPageAsync(string pageId, string pageName, string accessToken, string token,
         CancellationToken cancellationToken = default);

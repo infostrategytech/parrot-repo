@@ -190,6 +190,7 @@ public class MessageMetricsTests : IDisposable
             Mock.Of<IAppLogger<WhatsAppWebhookService>>(),
             new InboundMessagePublisher(Mock.Of<IMessageBus>(), Options.Create(new KafkaSettings()), Mock.Of<IAppLogger<InboundMessagePublisher>>()),
             connections.Object,
+            Mock.Of<IWhatsAppTokenProtector>(),
             sendTimes);
     }
 

@@ -7,6 +7,7 @@ using Parrot.Api.Rest.Controllers;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Entities;
+using Parrot.Domain.Exceptions;
 
 namespace Test.Parrot.Api.Tests.Services.Integrations;
 
@@ -17,7 +18,7 @@ public class FacebookSetupTests
     {
         Mock<IFacebookConnectionService> connections = new();
         FacebookSetupResponse expected = new(Guid.NewGuid(), "https://api.example.com/api/webhooks/facebook?ref=abc",
-            "verify-token", false, null, null, false);
+            "verify-token", false, null, null, false, false);
         connections.Setup(x => x.GetSetupAsync("owner", default)).ReturnsAsync(expected);
         connections.Setup(x => x.VerifyWebhookAsync("abc", "subscribe", "verify-token", default)).ReturnsAsync(true);
         FacebookSetupController setup = new(connections.Object);
@@ -79,6 +80,34 @@ public class FacebookSetupTests
 
         Assert.Equal("enc:page-secret", repository.Connection!.AccessTokenEncrypted);
         Assert.Equal("123456", repository.Connection.PageId);
+    }
+
+    // Manual setup: allowed before verification, so it can be entered with the callback URL.
+    [Fact]
+    public async Task TheAppSecretIsStoredEncrypted_AndOnlyReportedAsSaved()
+    {
+        MemoryFacebookRepository repository = new();
+        FacebookConnectionService service = NewService(repository);
+        Assert.False((await service.GetSetupAsync("owner")).HasAppSecret);
+
+        await service.SaveAppSecretAsync("owner", new AppSecretRequest { AppSecret = "0123456789abcdef0123456789abcdef" });
+
+        Assert.Equal("enc:0123456789abcdef0123456789abcdef", repository.Connection!.AppSecretEncrypted);
+        FacebookSetupResponse setup = await service.GetSetupAsync("owner");
+        Assert.True(setup.HasAppSecret);
+        Assert.DoesNotContain("0123456789abcdef0123456789abcdef", System.Text.Json.JsonSerializer.Serialize(setup));
+    }
+
+    [Fact]
+    public async Task AnAppIdOrOtherValue_IsNotAcceptedAsTheAppSecret()
+    {
+        MemoryFacebookRepository repository = new();
+        FacebookConnectionService service = NewService(repository);
+        await service.GetSetupAsync("owner");
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.SaveAppSecretAsync("owner", new AppSecretRequest { AppSecret = "185860297939218" }));
+        Assert.Null(repository.Connection!.AppSecretEncrypted);
     }
 
     [Fact]
@@ -153,6 +182,13 @@ public class FacebookSetupTests
             Connection!.PageId = pageId;
             Connection.PageName = pageName;
             Connection.AccessTokenEncrypted = encryptedAccessToken;
+            return Task.CompletedTask;
+        }
+
+        public Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret,
+            CancellationToken cancellationToken = default)
+        {
+            Connection!.AppSecretEncrypted = encryptedSecret;
             return Task.CompletedTask;
         }
     }

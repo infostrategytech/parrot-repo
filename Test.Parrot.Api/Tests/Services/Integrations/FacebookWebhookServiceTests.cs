@@ -44,7 +44,8 @@ public class FacebookWebhookServiceTests
             Options.Create(new FacebookSettings { AppSecret = "test-secret", WebhookBaseUrl = "https://api.example.com" }),
             _connections.Object,
             new InboundMessagePublisher(_busMock.Object, Options.Create(new KafkaSettings()), Mock.Of<IAppLogger<InboundMessagePublisher>>()),
-            Mock.Of<IAppLogger<FacebookWebhookService>>());
+            Mock.Of<IAppLogger<FacebookWebhookService>>(),
+            Mock.Of<IFacebookCredentialProtector>());
     }
 
     [Fact]

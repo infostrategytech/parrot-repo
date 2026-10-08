@@ -50,6 +50,56 @@ public class WhatsAppConnectionServiceTests
         Assert.Equal("replacement-token", _protector.Unprotect(stored!));
     }
 
+    // Manual setup: the business's own Meta app signs webhooks with this secret.
+    [Fact]
+    public async Task SaveAppSecret_EncryptsIt_AndOnlyReportsThatOneIsSaved()
+    {
+        var connection = Connection();
+        _repository.Setup(r => r.GetByOwnerAndIdAsync("owner", connection.Id)).ReturnsAsync(connection);
+        string? stored = null;
+        _repository.Setup(r => r.SaveAppSecretAsync(connection.Id, "owner", It.IsAny<string>()))
+            .Callback<Guid, string, string>((id, owner, encrypted) => stored = encrypted)
+            .Returns(Task.CompletedTask);
+
+        await CreateService().SaveAppSecretAsync("owner", connection.Id, new() { AppSecret = " 0123456789abcdef0123456789abcdef " });
+
+        Assert.Equal("0123456789abcdef0123456789abcdef", _protector.Unprotect(stored!));
+        connection.AppSecretEncrypted = stored;
+        var response = await CreateService().GetByIdAsync("owner", connection.Id);
+        Assert.True(response.HasAppSecret);
+        string json = System.Text.Json.JsonSerializer.Serialize(response);
+        Assert.DoesNotContain("0123456789abcdef0123456789abcdef", json);
+        Assert.DoesNotContain(stored!, json);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("185860297939218")]
+    [InlineData("0123456789abcdef0123456789abcdeg")]
+    public async Task SaveAppSecret_RejectsAnythingButA32CharacterHexSecret(string secret)
+    {
+        var connection = Connection();
+        _repository.Setup(r => r.GetByOwnerAndIdAsync("owner", connection.Id)).ReturnsAsync(connection);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            CreateService().SaveAppSecretAsync("owner", connection.Id, new() { AppSecret = secret }));
+        _repository.Verify(r => r.SaveAppSecretAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SaveAppSecret_RejectsOtherOwnerAndDisabledConnection()
+    {
+        var connection = Connection();
+        var service = CreateService();
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            service.SaveAppSecretAsync("other", connection.Id, new() { AppSecret = "0123456789abcdef0123456789abcdef" }));
+        connection.DisabledAt = DateTime.UtcNow;
+        _repository.Setup(r => r.GetByOwnerAndIdAsync("owner", connection.Id)).ReturnsAsync(connection);
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            service.SaveAppSecretAsync("owner", connection.Id, new() { AppSecret = "0123456789abcdef0123456789abcdef" }));
+        _repository.Verify(r => r.SaveAppSecretAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+    }
+
     [Fact]
     public async Task SaveAccessToken_RejectsOtherOwnerAndDisabledConnection()
     {
@@ -263,10 +313,11 @@ public class WhatsAppConnectionServiceTests
         legacy.VerifyNoOtherCalls();
     }
 
+    // LogOnly (or Off): the service accepts a missing or wrong signature, so the event is processed.
     [Theory]
     [InlineData(null)]
     [InlineData("sha256=invalid")]
-    public async Task IncomingReference_WithMissingOrInvalidSignature_IsProcessedWhenValidationIsBypassed(string? signature)
+    public async Task IncomingReference_TheServiceAccepts_IsProcessed(string? signature)
     {
         WhatsAppWebhookPayload payload = new()
         {
@@ -274,6 +325,7 @@ public class WhatsAppConnectionServiceTests
             Entry = [],
         };
         Mock<IWhatsAppWebhookService> webhooks = new();
+        webhooks.Setup(s => s.IsAuthenticAsync("identifier", "raw-body", signature, It.IsAny<CancellationToken>())).ReturnsAsync(true);
         webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, "raw-body", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         WhatsAppWebhookController controller = new(webhooks.Object)
@@ -287,8 +339,32 @@ public class WhatsAppConnectionServiceTests
 
         Assert.Equal(200, result.StatusCode);
         webhooks.Verify(s => s.ProcessConnectionEventAsync("identifier", payload, "raw-body", It.IsAny<CancellationToken>()), Times.Once);
-        webhooks.Verify(s => s.IsValidSignature(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
-        webhooks.VerifyNoOtherCalls();
+    }
+
+    // Enforce: a signature the service rejects is answered 401 and never processed.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ARejectedSignature_Is401_AndNotProcessed(bool withReference)
+    {
+        WhatsAppWebhookPayload payload = new()
+        {
+            Object = "whatsapp_business_account",
+            Entry = [],
+        };
+        string? identifier = withReference ? "identifier" : null;
+        Mock<IWhatsAppWebhookService> webhooks = new();
+        webhooks.Setup(s => s.IsAuthenticAsync(identifier, "raw-body", "sha256=forged", It.IsAny<CancellationToken>())).ReturnsAsync(false);
+        WhatsAppWebhookController controller = new(webhooks.Object)
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() },
+        };
+        if (withReference) controller.Request.QueryString = new QueryString("?ref=identifier");
+        controller.HttpContext.Items["RawBody"] = "raw-body";
+
+        Assert.IsType<UnauthorizedResult>(await controller.HandleEventV1("sha256=forged", identifier, payload));
+        webhooks.Verify(s => s.ProcessConnectionEventAsync(It.IsAny<string>(), It.IsAny<WhatsAppWebhookPayload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        webhooks.Verify(s => s.ProcessEventAsync(It.IsAny<WhatsAppWebhookPayload>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -300,7 +376,7 @@ public class WhatsAppConnectionServiceTests
             Entry = [],
         };
         Mock<IWhatsAppWebhookService> webhooks = new();
-        webhooks.Setup(s => s.IsValidSignature("raw-body", "sha256=valid")).Returns(true);
+        webhooks.Setup(s => s.IsAuthenticAsync(It.IsAny<string?>(), "raw-body", "sha256=valid", It.IsAny<CancellationToken>())).ReturnsAsync(true);
         webhooks.Setup(s => s.ProcessConnectionEventAsync("identifier", payload, "raw-body", It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
         WhatsAppWebhookController controller = new(webhooks.Object)
@@ -328,7 +404,7 @@ public class WhatsAppConnectionServiceTests
             Entry = [],
         };
         Mock<IWhatsAppWebhookService> webhooks = new();
-        webhooks.Setup(s => s.IsValidSignature("raw-body", "sha256=valid")).Returns(true);
+        webhooks.Setup(s => s.IsAuthenticAsync(It.IsAny<string?>(), "raw-body", "sha256=valid", It.IsAny<CancellationToken>())).ReturnsAsync(true);
         webhooks.Setup(s => s.ProcessConnectionEventAsync("unknown", payload, "raw-body", It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
         WhatsAppWebhookController controller = new(webhooks.Object)

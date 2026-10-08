@@ -20,6 +20,11 @@ public class WhatsAppConnection
 
     public string? AccessTokenEncrypted { get; set; }
 
+    // The App Secret of the customer's own Meta app, for a manually set up connection: Meta signs
+    // its webhooks with it. Null for a connection made through Parrot's app (Embedded Signup), whose
+    // webhooks are checked with the app-level WhatsApp:AppSecret. Encrypted like the access token.
+    public string? AppSecretEncrypted { get; set; }
+
     public string? PhoneNumberId { get; set; }
 
     public string? DisplayPhoneNumber { get; set; }
