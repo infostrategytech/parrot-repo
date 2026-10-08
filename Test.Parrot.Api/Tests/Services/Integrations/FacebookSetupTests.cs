@@ -110,6 +110,42 @@ public class FacebookSetupTests
         Assert.Null(repository.Connection!.AppSecretEncrypted);
     }
 
+    // Disconnecting stops the Page's webhooks at once; setting up again gets a new callback URL.
+    [Fact]
+    public async Task DisconnectStopsTheOldReference_AndSetupStartsAFreshConnection()
+    {
+        MemoryFacebookRepository repository = new();
+        FacebookConnectionService service = NewService(repository);
+        FacebookSetupResponse first = await service.GetSetupAsync("owner");
+        string oldReference = repository.Connection!.WebhookIdentifier;
+        Assert.True(await service.VerifyWebhookAsync(oldReference, "subscribe", first.VerifyToken));
+
+        await service.DisableAsync("owner");
+
+        Assert.Null(await repository.GetActiveByIdentifierAsync(oldReference));
+        Assert.False(await service.VerifyWebhookAsync(oldReference, "subscribe", first.VerifyToken));
+        FacebookSetupResponse again = await service.GetSetupAsync("owner");
+        Assert.NotEqual(first.ConnectionId, again.ConnectionId);
+        Assert.NotEqual(first.WebhookUrl, again.WebhookUrl);
+        Assert.False(again.WebhookVerified);
+    }
+
+    [Fact]
+    public async Task DisconnectWithNothingConnected_IsNotFound()
+    {
+        FacebookConnectionService service = NewService(new MemoryFacebookRepository());
+
+        await Assert.ThrowsAsync<NotFoundException>(() => service.DisableAsync("owner"));
+    }
+
+    // The card offers Disconnect only where the backend can really stop the messages.
+    [Theory]
+    [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.Whatsapp, true)]
+    [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.Facebook, true)]
+    [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.Instagram, false)]
+    public void DisconnectIsOfferedWhereTheBackendCanDisable(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId channel, bool expected) =>
+        Assert.Equal(expected, new global::Parrot.Web.Features.Dashboard.Channels.Services.LiveChannelCapabilities().CanDisconnect(channel));
+
     [Fact]
     public async Task VerificationFailsWhenTheReferenceDoesNotMatchTheToken()
     {
@@ -163,8 +199,17 @@ public class FacebookSetupTests
             return Task.CompletedTask;
         }
 
+        // Like the real one: a disabled connection is not the owner's connection any more.
         public Task<FacebookConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Connection?.OwnerUserId == ownerUserId ? Connection : null);
+            Task.FromResult(Connection?.OwnerUserId == ownerUserId && Connection.DisabledAt is null ? Connection : null);
+
+        public Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default)
+        {
+            if (Connection?.Id != id || Connection.OwnerUserId != ownerUserId || Connection.DisabledAt is not null)
+                return Task.FromResult(false);
+            Connection.DisabledAt = disabledAt;
+            return Task.FromResult(true);
+        }
 
         public Task<FacebookConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default) =>
             Task.FromResult(Connection?.WebhookIdentifier == identifier && Connection.DisabledAt is null ? Connection : null);

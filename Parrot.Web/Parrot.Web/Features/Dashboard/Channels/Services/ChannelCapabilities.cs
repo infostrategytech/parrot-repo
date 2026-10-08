@@ -29,8 +29,8 @@ public interface IChannelCapabilities
 /// With the real backend today: WhatsApp and Facebook connect manually (the
 /// API's webhook and credential calls). Meta's Embedded Signup needs Tech
 /// Provider approval, and there is no Facebook Login, Instagram or X
-/// connection yet, so those say "Coming soon"; only WhatsApp has a disconnect
-/// call (see channels-backend-requests).
+/// connection yet, so those say "Coming soon". WhatsApp and Facebook have a
+/// disconnect call.
 /// </summary>
 public sealed class LiveChannelCapabilities : IChannelCapabilities
 {
@@ -38,5 +38,5 @@ public sealed class LiveChannelCapabilities : IChannelCapabilities
 
     public bool CanSetUpManually(ChannelId channel) => channel is ChannelId.Whatsapp or ChannelId.Facebook;
 
-    public bool CanDisconnect(ChannelId channel) => channel is ChannelId.Whatsapp;
+    public bool CanDisconnect(ChannelId channel) => channel is ChannelId.Whatsapp or ChannelId.Facebook;
 }

@@ -86,6 +86,13 @@ public sealed class FacebookConnectionService(
             protector.Protect(token), cancellationToken);
     }
 
+    public async Task DisableAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    {
+        FacebookConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+            ?? throw new NotFoundException("There is no Facebook connection to disconnect.");
+        await repository.DisableAsync(connection.Id, ownerUserId, DateTime.UtcNow, cancellationToken);
+    }
+
     // Manual setup: the customer's own Meta app signs this connection's webhooks with it. Allowed
     // before verification, so it can be saved alongside the callback URL in one sitting.
     public async Task SaveAppSecretAsync(string ownerUserId, AppSecretRequest request, CancellationToken cancellationToken = default)
