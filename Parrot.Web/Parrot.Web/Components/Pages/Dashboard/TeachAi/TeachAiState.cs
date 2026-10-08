@@ -23,8 +23,12 @@ public sealed class TeachAiState(IBusinessKnowledge knowledge)
 
     public event Action? Changed;
 
-    public async Task RequireAsync(Func<Task> then)
+    /// <summary>Opened on the way to setting up an agent, so it can say what comes next.</summary>
+    public bool SetsUpAgent { get; private set; }
+
+    public async Task RequireAsync(Func<Task> then, bool setsUpAgent = false)
     {
+        SetsUpAgent = setsUpAgent;
         if (!knowledge.Available || await knowledge.HasApprovedAsync())
         {
             await then();
@@ -44,6 +48,7 @@ public sealed class TeachAiState(IBusinessKnowledge knowledge)
     {
         if (!knowledge.Available) return;
         _then = null;
+        SetsUpAgent = false;
         Conversation = null;
         IsOpen = true;
         Changed?.Invoke();

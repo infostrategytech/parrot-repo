@@ -433,19 +433,7 @@
   border-radius: var(--radius-radius-full);
 }
 
-.meta-usecase__replay {
-  display: inline-flex;
-  gap: var(--spacing-2xs);
-  align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-  color: var(--colors-text-link);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-radius-full);
-  cursor: pointer;
-}
 
-.meta-usecase__replay:hover { background: var(--colors-interaction-hover); }
 
 /* ── Keyframes ───────────────────────────────────────────────────────────
    Each row's border warms a beat after the pointer arrives on it, so cause

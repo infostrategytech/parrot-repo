@@ -187,9 +187,9 @@ public sealed partial class TeachAiConversation(string business, IReadOnlyList<K
             _reviewed = true;
             _askedExtras = true;
             Stage = TeachAiStage.Extras;
-            return Say($"Welcome back! What else should your AI know about {Business}? Tell me anything new, or send a file.");
+            return Say($"Welcome back! What else should your agent know about {Business}? Tell me anything new, or send a file.");
         }
-        var hello = $"Hi! I'll learn about {Business} so your AI can answer customers the way you would.";
+        var hello = $"Hi! I'll learn about {Business} so your agent can answer customers the way you would.";
         var found = Unchecked();
         _reviewTopics = found.Select(c => c.Topic).ToList();
         if (found.Count == 0) return NextGap(hello + " I'll ask a few quick questions.");
@@ -698,7 +698,7 @@ public sealed partial class TeachAiConversation(string business, IReadOnlyList<K
     {
         Step = TeachAiStep.Summary;
         Stage = TeachAiStage.Done;
-        return Say($"{lead} That's everything I need. Here's what your AI will know about {Business}. Have a look, then approve it.");
+        return Say($"{lead} That's everything I need. Here's what your agent will know about {Business}. Have a look, then approve it.");
     }
 
     // Open questions, in plain words, one at a time, inviting a file where

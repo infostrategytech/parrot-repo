@@ -147,8 +147,12 @@
             <span class="agent-basics__text">
                 <span class="agent-basics__title-row">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@MoneyRule(Form.Settings)</Typography>
-                    @* Money is the part to think about: worth a word, not a block. *@
-                    <StatusBadge Tone="StatusTone.Warning" Glyph="IconName.RiErrorWarningFill">Needs care</StatusBadge>
+                    @* Money is the part to think about once it is allowed: worth a word,
+                       not a block. The safe default needs no warning. *@
+                    @if (Form.Settings.CanOfferDiscounts || Form.Settings.CanApproveRefunds)
+                    {
+                        <StatusBadge Tone="StatusTone.Warning" Glyph="IconName.RiErrorWarningFill">Needs care</StatusBadge>
+                    }
                 </span>
                 <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">@MoneyDetail</Typography>
             </span>

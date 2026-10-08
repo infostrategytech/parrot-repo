@@ -33,7 +33,7 @@
                 <label>
                     <strong>App name</strong>
                     <small>This name will appear on your My Apps page.</small>
-                    <span class="meta-details__name"><b>Parrot WhatsApp</b><i></i></span>
+                    <span class="meta-details__name"><b>OmniAI WhatsApp</b><i></i></span>
                 </label>
 
                 <label>
@@ -55,10 +55,10 @@
     <p class="meta-details__caption">
         <span class="meta-details__dot" aria-hidden="true"></span>
         <Typography TextStyle="TextStyle.Small10Medium" As="span">Follow the moving highlight</Typography>
-        <button type="button" class="meta-details__replay" @onclick="Replay">
-            <Icon Name="IconName.RiRefreshLine" />
-            <Typography TextStyle="TextStyle.Small10Semibold" As="span">Replay</Typography>
-        </button>
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="Replay">
+            <IconLeft><Icon Name="IconName.RiRefreshLine" /></IconLeft>
+            <ChildContent>Replay</ChildContent>
+        </Button>
     </p>
 </div>
 

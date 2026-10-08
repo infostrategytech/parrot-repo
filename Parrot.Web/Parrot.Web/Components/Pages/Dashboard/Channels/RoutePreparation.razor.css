@@ -73,6 +73,7 @@
 .channel-whatsapp.prep__route { color: var(--colors-accent-emerald-text); background: var(--colors-accent-emerald-subtle); }
 .channel-instagram.prep__route { color: var(--colors-accent-pink-text); background: var(--colors-accent-pink-subtle); }
 .channel-facebook.prep__route { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
+.channel-x.prep__route { color: var(--colors-text-primary); background: var(--colors-surface-muted); }
 
 .prep { --ds-prep-chip-pad: 9px 13px; }
 
@@ -185,6 +186,9 @@
    component default of primary. */
 .prep__agreement ::deep .checkbox__text strong { color: var(--colors-text-secondary); }
 
+/* The design-system Button, held to the width the design gives it. */
+.prep__footer ::deep .prep__continue { min-width: var(--ds-prep-cta-width); }
+
 .prep__footer {
   display: flex;
   flex-wrap: wrap;
@@ -214,35 +218,8 @@
    a disabled state at full opacity — only the grey fill should read — while
    the shared Button also dims disabled states by half, which double-fades
    the exact control this page opens on (locked until the tick above it). */
-.prep__continue {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--spacing-xs);
-  min-width: var(--ds-prep-cta-width);
-  height: var(--ds-prep-cta-height);
-  padding: var(--spacing-none) var(--spacing-xl);
-  color: var(--colors-text-on-primary);
-  background: var(--colors-brand-primary);
-  border: 0;
-  border-radius: var(--radius-radius-full);
-  cursor: pointer;
-}
 
 .prep { --ds-prep-cta-width: 220px; --ds-prep-cta-height: 46px; }
 
-.prep__continue:hover:not(:disabled) { background: var(--colors-brand-primary-hover); }
 
-.prep__continue:disabled {
-  color: var(--colors-interaction-disabled-foreground);
-  background: var(--colors-interaction-disabled-background);
-  cursor: not-allowed;
-}
 
-/* Waiting is not the same as locked: while the provider window opens the
-   control keeps its colour, as the design-system Button does when Busy. */
-.prep__continue.is-busy:disabled {
-  color: var(--colors-text-on-primary);
-  background: var(--colors-brand-primary);
-  cursor: progress;
-}

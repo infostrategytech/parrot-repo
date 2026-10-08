@@ -11,6 +11,9 @@
   padding: var(--spacing-2xl);
   background: var(--colors-surface-overlay);
   backdrop-filter: blur(var(--ds-provider-blur));
+  /* Its own fade, in place of the page arrival (app.css, page-enter): a
+     full-screen layer that slid up with it left a strip of page uncovered. */
+  animation: provider-backdrop-in var(--ds-provider-enter) ease;
 }
 
 .provider {
@@ -48,18 +51,17 @@
 
 ::deep .provider__chrome-icon { color: #1877f2; }
 .channel-instagram ::deep .provider__chrome-icon { color: #c63886; }
-/* X is Parrot's fourth channel. Its mark is black in every theme — a brand
-   literal, like Meta's two above. */
-.channel-x ::deep .provider__chrome-icon { color: #000000; }
+/* X is black on white and white on black, so it follows the text colour. */
+.channel-x ::deep .provider__chrome-icon { color: var(--colors-text-primary); }
 
 /* The CTA hands off into Meta's own flow, so it takes Meta's colour rather
    than ours — the same reasoning as the chrome bar above. */
 ::deep .provider__cta.ds-button--primary { background: #1877f2; }
 .channel-instagram ::deep .provider__cta.ds-button--primary { background: #c63886; }
-.channel-x ::deep .provider__cta.ds-button--primary { background: #000000; }
+.channel-x ::deep .provider__cta.ds-button--primary { color: var(--colors-surface-card); background: var(--colors-text-primary); }
 ::deep .provider__cta.ds-button--primary:hover:not(:disabled) { background: color-mix(in srgb, #1877f2 88%, black); }
 .channel-instagram ::deep .provider__cta.ds-button--primary:hover:not(:disabled) { background: color-mix(in srgb, #c63886 88%, black); }
-.channel-x ::deep .provider__cta.ds-button--primary:hover:not(:disabled) { background: color-mix(in srgb, #000000 80%, white); }
+.channel-x ::deep .provider__cta.ds-button--primary:hover:not(:disabled) { background: color-mix(in srgb, var(--colors-text-primary) 85%, var(--colors-surface-card)); }
 
 .provider__body {
   display: grid;
@@ -88,9 +90,19 @@
   border-top: var(--ds-provider-hairline) solid var(--colors-surface-border);
 }
 
+@keyframes provider-backdrop-in {
+  from { opacity: 0; }
+}
+
 @keyframes provider-in {
   from {
     opacity: 0;
     transform: scale(0.97);
   }
+}
+
+/* No motion asked for: both appear in place. */
+@media (prefers-reduced-motion: reduce) {
+  .provider-backdrop,
+  .provider { animation: none; }
 }

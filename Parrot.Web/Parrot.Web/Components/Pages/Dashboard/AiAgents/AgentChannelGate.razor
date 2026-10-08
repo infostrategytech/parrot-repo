@@ -37,7 +37,8 @@
     private void Connect()
     {
         Gate.Dismiss();
-        Nav.NavigateTo("/dashboard/channels");
+        // ?for=agent: the connected screen offers the way back to setting it up.
+        Nav.NavigateTo("/dashboard/channels?for=agent");
     }
 
     public void Dispose() => Gate.Changed -= Changed;

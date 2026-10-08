@@ -40,22 +40,23 @@ public class ChannelsState
 
     public IReadOnlyList<ChannelInfo> Channels { get; } =
     [
-        new(ChannelId.Whatsapp, "whatsapp", "Whatsapp Business",
-            "Allow your AI agents to handle customer conversations on WhatsApp.",
+        // Names, descriptions and what you need are Aurora's copy (the design).
+        new(ChannelId.Whatsapp, "whatsapp", "WhatsApp",
+            "Reply to customers using your business number.",
             "assets/images/icons/whatsapp.png",
-            "Access to Meta Business Manager and an approved WhatsApp Business number", 10),
-        new(ChannelId.Facebook, "facebook", "Facebook Marketplace",
-            "Handle customer messages from Facebook pages and Marketplace.",
-            "assets/images/icons/facebook.png",
-            "a Facebook Page you manage", 0),
+            "A Facebook account", 25),
         new(ChannelId.Instagram, "instagram", "Instagram",
-            "Automatically respond to customer DMs sent to your Instagram account.",
+            "Bring Instagram DMs into your OmniAI inbox.",
             "assets/images/icons/instagram.png",
-            "an Instagram Business or Creator account", 3),
-        new(ChannelId.X, "twitter", "X (formerly Twitter)",
-            "Allow your AI agents to handle customer conversations on WhatsApp.",
+            "An Instagram professional account", 5),
+        new(ChannelId.Facebook, "facebook", "Facebook",
+            "Manage messages sent to your Facebook Page.",
+            "assets/images/icons/facebook.png",
+            "Admin access to a Facebook Page", 8),
+        new(ChannelId.X, "twitter", "X",
+            "Bring X DMs into your OmniAI inbox.",
             "",
-            "an X account with DM access", 5),
+            "An X account with DMs open", 5),
     ];
 
     /// <summary>The WhatsApp connection the page works with: the live one, or the disabled one if that is all there is.</summary>
@@ -95,7 +96,13 @@ public class ChannelsState
         WhatsAppConnection = setup.Connection;
     }
 
-    public void MarkWhatsAppVerified() => _whatsAppVerified = true;
+    // A message that arrived is the proof of a connection, so an earlier
+    // disconnect no longer stands (the demo can connect WhatsApp again).
+    public void MarkWhatsAppVerified()
+    {
+        _whatsAppVerified = true;
+        _dismissed.Remove(ChannelId.Whatsapp);
+    }
 
     public void SetFacebook(FacebookWebhookSetup? setup)
     {
@@ -148,10 +155,12 @@ public class ChannelsState
         }
     }
 
+    // Facebook connected by its window (demo mode) is held in state, like
+    // Instagram and X; otherwise it is what the API's setup says.
     private BusinessChannel Build(ChannelInfo info) => info.Id switch
     {
         ChannelId.Whatsapp => BuildWhatsApp(info),
-        ChannelId.Facebook => BuildFacebook(info),
+        ChannelId.Facebook when FacebookSetup is not null && !_stateOnly.ContainsKey(ChannelId.Facebook) => BuildFacebook(info),
         _ => BuildStateOnly(info)
     };
 
@@ -212,7 +221,10 @@ public class ChannelsState
             GuidedMinutes = info.GuidedMinutes,
             Status = connected ? ChannelStatus.Connected : ChannelStatus.NotConnected,
             AccountName = connected ? account.Account : null,
-            Setup = connected ? new ChannelSetupState() : Setup(info.Id)
+            ConnectedAt = connected && DateTimeOffset.TryParse(account.Date, out var at) ? at : null,
+            // Kept once connected, as for WhatsApp: the demo flow's success
+            // screen is the Connected stage of this record.
+            Setup = Setup(info.Id)
         };
     }
 

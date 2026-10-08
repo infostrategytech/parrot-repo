@@ -72,6 +72,8 @@ builder.Services.AddScoped<HttpClient>(sp => new HttpClient(new ActivityHandler(
     },
 }) { BaseAddress = new Uri(apiBaseUrl) });
 builder.Services.AddScoped<IIntegrationsService, IntegrationsService>();
+// What the real API can connect today; the Channels screens offer only that.
+builder.Services.AddSingleton<IChannelCapabilities, LiveChannelCapabilities>();
 // Whether any channel is connected, for pages that only need that (the dashboard).
 builder.Services.AddScoped<ChannelStatusLoader>();
 builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
@@ -109,6 +111,8 @@ builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
 // the screens hide what they cannot show (see agents-backend-requests).
 builder.Services.AddSingleton<IBusinessKnowledge, UnavailableBusinessKnowledge>();
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.UnavailableAiOperationsFeed>();
+// An agent cannot reply yet, so agents are saved as drafts (see agents-backend-requests).
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.LiveAgentCapabilities>();
 // "Teach your AI" before the first agent, and the browser's voice for it.
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState>();
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentGate>();

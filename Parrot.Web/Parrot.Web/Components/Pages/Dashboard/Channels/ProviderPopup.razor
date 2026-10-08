@@ -11,7 +11,14 @@
 <div class="provider-backdrop">
     <section class="provider channel-@Channel.Id.ToString().ToLowerInvariant()" role="dialog" aria-modal="true" aria-labelledby="@_titleId">
         <header class="provider__chrome">
-            <Icon Name="Copy.Glyph" Size="IconSize.Md" Class="provider__chrome-icon" />
+            @if (Channel.Id == ChannelId.X)
+            {
+                <ChannelIcon Channel="x" Size="IconSize.Md" Plain Class="provider__chrome-icon" />
+            }
+            else
+            {
+                <Icon Name="Copy.Glyph" Size="IconSize.Md" Class="provider__chrome-icon" />
+            }
             <Typography TextStyle="TextStyle.Small12Semibold" As="span" id="@_titleId">@Copy.Header</Typography>
         </header>
 

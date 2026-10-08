@@ -11,9 +11,14 @@
    component's attribute, so the whole block would match nothing and every
    local below would silently be undefined. */
 .checkbox {
+  /* The whole row is the target, at least the 24px a finger or a pointer
+     needs (WCAG 2.2 target size); a gap in the token set. */
+  --ds-checkbox-target: 24px;
+
   display: inline-flex;
   align-items: flex-start;
   gap: var(--spacing-sm);
+  min-height: var(--ds-checkbox-target);
   padding: var(--spacing-none);
   background: transparent;
   border: 0;

@@ -25,7 +25,7 @@
 
         <div class="meta-api__scene meta-api__scene--dashboard">
             <aside>
-                <strong>Parrot WhatsApp</strong>
+                <strong>OmniAI WhatsApp</strong>
                 <b>Dashboard</b>
                 <span>Required actions</span>
                 <span>Use cases</span>
@@ -82,10 +82,10 @@
     <p class="meta-api__caption">
         <span class="meta-api__dot" aria-hidden="true"></span>
         <Typography TextStyle="TextStyle.Small10Medium" As="span">Follow the moving highlight</Typography>
-        <button type="button" class="meta-api__replay" @onclick="Replay">
-            <Icon Name="IconName.RiRefreshLine" />
-            <Typography TextStyle="TextStyle.Small10Semibold" As="span">Replay</Typography>
-        </button>
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="Replay">
+            <IconLeft><Icon Name="IconName.RiRefreshLine" /></IconLeft>
+            <ChildContent>Replay</ChildContent>
+        </Button>
     </p>
 </div>
 

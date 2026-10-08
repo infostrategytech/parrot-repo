@@ -11,10 +11,10 @@
 
 @if (Done && !IsOpen)
 {
-    <button type="button" class="aside__reopen" @onclick="OnReopen">
-        <Icon Name="IconName.RiEditFill" Size="IconSize.Sm" />
-        <Typography TextStyle="TextStyle.Small10Semibold" As="span">Edit</Typography>
-    </button>
+    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="OnReopen">
+        <IconLeft><Icon Name="IconName.RiEditFill" /></IconLeft>
+        <ChildContent>Edit</ChildContent>
+    </Button>
 }
 else
 {

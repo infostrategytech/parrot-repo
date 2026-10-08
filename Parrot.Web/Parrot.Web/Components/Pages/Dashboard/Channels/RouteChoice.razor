@@ -1,5 +1,9 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Channels
 @using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@inject IChannelCapabilities Capabilities
+@inject AuroraInterop Interop
+@implements IAsyncDisposable
 
 @* Choosing a route is the only modal step in this module.
 
@@ -7,32 +11,35 @@
    SME does not have to make a choice and then confirm making it. *@
 
 <div class="route-choice-backdrop" @onmousedown="OnClose">
+    @* As the design-system Dialog: focus moves in and stays in, Escape
+       closes, and focus goes back where it was. *@
     <section class="route-choice"
              role="dialog"
              aria-modal="true"
              aria-labelledby="@_titleId"
+             tabindex="-1"
+             @ref="_card"
              @onmousedown:stopPropagation="true">
 
         <header class="route-choice__header">
             <span class="route-choice__mark channel-@Channel.Id.ToString().ToLowerInvariant()">
-                <Icon Name="@Mark" Size="IconSize.Lg" />
+                <ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain />
             </span>
             <div class="route-choice__intro">
                 <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2" id="@_titleId">@Copy.Title</Typography>
                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="route-choice__lede">@Copy.Intro</Typography>
             </div>
-            @* A bespoke circle, not a design-system Button — React draws this
-               as a filled 36px muted circle, which the Ghost variant does not
-               give us at this size. *@
-            <button type="button" class="route-choice__close" aria-label="Close" @onclick="OnClose">
-                <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
-            </button>
+            @* The design-system close, as on Dialog: a small Ghost Button on a muted circle. *@
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="route-choice__close" aria-label="Close" @onclick="OnClose">
+                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+            </Button>
         </header>
 
         <div class="route-choice__cards" aria-label="@($"How are you connecting {Channel.Name}")">
             @foreach (var route in Routes)
             {
-                <button type="button" class="@CardClass(route)" @onclick="() => OnChoose.InvokeAsync(route.Id)">
+                @* A route that cannot connect yet shows what it will be, marked Coming soon. *@
+                <RowButton Class="@CardClass(route)" Disabled="@(!CanUseWindow)" aria-disabled="@(CanUseWindow ? null : "true")" OnClick="() => OnChoose.InvokeAsync(route.Id)">
                     <span class="route-card__icon"><Icon Name="route.Glyph" Size="IconSize.Lg" /></span>
                     <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="route-card__marker">
                         @route.Marker
@@ -43,23 +50,50 @@
                     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="route-card__explanation">
                         @route.Explanation
                     </Typography>
+                    @if (CanUseWindow)
+                    {
+                        <span class="route-card__go">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">Continue with this option</Typography>
+                            <span class="route-card__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
+                        </span>
+                    }
+                    else
+                    {
+                        <span class="route-card__go"><StatusBadge Tone="StatusTone.Neutral">Coming soon</StatusBadge></span>
+                    }
+                </RowButton>
+            }
+
+            @* Manual setup is a card of its own where a channel has one (WhatsApp,
+               Facebook; designer, 8 October 2026), in the place Move from Another
+               Provider had. It always works, so it is never Coming soon. *@
+            @if (OnUseManual.HasDelegate)
+            {
+                <RowButton Class="route-card route-card--manual" OnClick="OnUseManual">
+                    <span class="route-card__icon"><Icon Name="IconName.RiFileList3Fill" Size="IconSize.Lg" /></span>
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="small" Class="route-card__marker">Step by step</Typography>
+                    <Typography TextStyle="TextStyle.HeadingH4Bold" As="strong" Class="route-card__label">Set up manually</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="route-card__explanation">
+                        @ChannelRoutes.ManualExplanation(Channel.Id)
+                    </Typography>
                     <span class="route-card__go">
                         <Typography TextStyle="TextStyle.Small12Semibold" As="span">Continue with this option</Typography>
                         <span class="route-card__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
                     </span>
-                </button>
+                </RowButton>
             }
         </div>
 
-        @* Always reachable. Meta's own flow fails often enough that a way round
-           it has to be on the first screen, not buried after a failure. This is
-           a plain underlined link, not a Button — React draws it borderless. *@
-        <footer class="route-choice__footer">
-            <Typography TextStyle="TextStyle.Small12Medium" As="span">Having trouble with Meta?</Typography>
-            <button type="button" class="route-choice__manual-link" @onclick="OnUseManual">
-                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Use manual setup</Typography>
-            </button>
-        </footer>
+        @* Commented out for now (designer, 8 October 2026): manual setup is a
+           card above. Kept for when it goes back to being a way round Meta.
+        @if (OnUseManual.HasDelegate)
+        {
+            <footer class="route-choice__footer">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@(CanUseWindow ? "Having trouble with Meta?" : "Connecting in one step is coming soon.")</Typography>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="route-choice__manual" @onclick="OnUseManual">Use manual setup</Button>
+            </footer>
+        }
+        *@
     </section>
 </div>
 
@@ -76,24 +110,42 @@
 
     private IReadOnlyList<ChannelRoute> Routes => ChannelRoutes.For(Channel.Id);
 
+    private bool CanUseWindow => Capabilities.CanUseWindow(Channel.Id);
+
     private PathChoiceCopy Copy => ChannelRoutes.Choice(Channel.Id);
 
-    private IconName Mark => Channel.Id switch
+    private ElementReference _card;
+    private IAsyncDisposable? _trap;
+    private DotNetObjectReference<RouteChoice>? _self;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        ChannelId.Whatsapp => IconName.RiWhatsappFill,
-        ChannelId.Instagram => IconName.RiInstagramFill,
-        _ => IconName.RiFacebookCircleFill
-    };
+        if (!firstRender) return;
+        await _card.FocusAsync();
+        // Escape is caught in the browser, as Dialog does, so keystrokes stay there.
+        _self = DotNetObjectReference.Create(this);
+        _trap = await Interop.TrapFocusAsync(_card, _self, nameof(OnEscapeAsync));
+    }
+
+    [JSInvokable]
+    public Task OnEscapeAsync() => OnClose.InvokeAsync();
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_trap is not null) await _trap.DisposeAsync();
+        _self?.Dispose();
+    }
+
 
     /// <summary>
-    /// Coexistence is emerald and migration is violet in the design — a fresh
-    /// number carries no tint of its own, so it takes the brand blue every
-    /// other "primary path" in the product uses.
+    /// Coexistence is emerald and migration (and manual setup in its place) is
+    /// violet in the design; a fresh number, and a channel's only route, take
+    /// the brand family so they carry the same weight.
     /// </summary>
-    private static string CardClass(ChannelRoute route) => route.Id switch
+    private string CardClass(ChannelRoute route) => (route.Id switch
     {
         ChannelPath.Coexistence => "route-card route-card--coexistence",
         ChannelPath.Migration => "route-card route-card--migration",
         _ => "route-card"
-    };
+    }) + (CanUseWindow ? null : " is-soon");
 }

@@ -176,7 +176,7 @@
   width: 100%;
 }
 
-.manual__token {
+.manual__token-type ::deep .manual__token {
   display: grid;
   grid-template-columns: var(--ds-manual-token-icon) minmax(0, 1fr) var(--ds-manual-token-tick);
   gap: var(--ds-manual-token-inner);
@@ -194,9 +194,9 @@
     border-color var(--ds-manual-token-motion) ease;
 }
 
-.manual__token:hover { background: var(--colors-interaction-hover); }
+.manual__token-type ::deep .manual__token:hover { background: var(--colors-interaction-hover); }
 
-.manual__token.is-selected {
+.manual__token-type ::deep .manual__token.is-selected {
   color: var(--colors-brand-primary);
   background: color-mix(in srgb, var(--colors-brand-primary) 5%, var(--colors-surface-card));
   border-color: color-mix(in srgb, var(--colors-brand-primary) 30%, var(--colors-surface-border));
@@ -239,8 +239,8 @@
 .manual__token-tick.is-shown { visibility: visible; }
 
 .manual__token-copy { display: grid; gap: var(--spacing-2xs); min-width: 0; }
-.manual__token ::deep strong { color: var(--colors-text-primary); }
-.manual__token.is-selected ::deep strong { color: var(--colors-brand-primary); }
+.manual__token-type ::deep .manual__token strong { color: var(--colors-text-primary); }
+.manual__token-type ::deep .manual__token.is-selected strong { color: var(--colors-brand-primary); }
 
 .manual__section {
   /* Gap in the token set: no sub-4px spacing rung. */

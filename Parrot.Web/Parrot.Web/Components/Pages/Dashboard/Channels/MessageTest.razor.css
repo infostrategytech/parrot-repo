@@ -51,6 +51,8 @@
   box-shadow: 0 var(--spacing-sm) var(--ds-test-glow) color-mix(in srgb, #c63886 23%, transparent);
 }
 
+.channel-x.live-test .live-test__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
+
 .channel-facebook.live-test .live-test__mark {
   background: #1877f2;
   box-shadow: 0 var(--spacing-sm) var(--ds-test-glow) color-mix(in srgb, #1877f2 23%, transparent);
@@ -65,10 +67,10 @@
 
 .live-test__instruction ::deep strong { color: var(--colors-text-primary); }
 
-/* The waiting state. An amber dot breathes while the page waits for the
-   person's message; once the check is running it turns green and holds still,
-   because the button below carries the brand's loader and a view shows one
-   animated loader at a time. */
+/* The status line. An amber dot breathes while the page waits for the
+   person's message, and holds still while the check runs, because the button
+   below carries the brand's loader and a view shows one animated loader at a
+   time. Green is kept for the result. */
 .live-test__status {
   display: flex;
   gap: var(--spacing-md);
@@ -92,8 +94,17 @@
   animation: live-test-waiting var(--ds-test-listen) ease-in-out infinite;
 }
 
-.live-test__status i.is-listening {
-  background: var(--colors-feedback-success);
+.live-test__status i.is-checking { animation: none; }
+
+/* No message yet: the line turns to the warning colours, so it reads as
+   something to act on rather than more waiting. */
+.live-test__status.is-missed {
+  background: var(--colors-feedback-warning-subtle);
+  border-color: var(--colors-feedback-warning-border);
+}
+
+.live-test__status i.is-missed {
+  background: var(--colors-feedback-warning);
   animation: none;
 }
 
@@ -105,8 +116,7 @@
   50% { box-shadow: 0 0 0 var(--ds-test-ring) color-mix(in srgb, var(--colors-accent-amber-solid) 0%, transparent); }
 }
 
-/* With motion switched off the states have to stay distinguishable by colour
-   alone — they are. */
+/* With motion switched off the words still say which state it is. */
 @media (prefers-reduced-motion: reduce) {
   .live-test__status i { animation: none; }
 }
@@ -114,31 +124,3 @@
 /* The only thing to do on this screen, so it takes the full width rather than
    sitting as a small target under a centred column. */
 ::deep .live-test__action { width: 100%; }
-
-/* The tick that lands when it comes back. It scales in once and stops — a
-   confirmation is a moment, not a state to sit in. */
-.live-test__tick {
-  display: grid;
-  place-items: center;
-  animation: live-test-confirm var(--ds-test-confirm) var(--ds-test-confirm-ease) both;
-}
-
-::deep .live-test__action.is-verified {
-  background: var(--colors-feedback-success);
-  color: var(--colors-text-on-primary);
-}
-
-.live-test__status i.is-verified {
-  background: var(--colors-feedback-success);
-  animation: none;
-}
-
-.live-test {
-  /* Gap in the token set: no motion scale. */
-  --ds-test-confirm: 260ms;
-  --ds-test-confirm-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-@keyframes live-test-confirm {
-  from { opacity: 0; transform: scale(0.4); }
-}

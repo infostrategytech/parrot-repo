@@ -8,6 +8,7 @@
 @inject AgentGate AgentGate
 @inject IAiOperationsFeed Feed
 @inject IBusinessKnowledge Knowledge
+@inject IAgentCapabilities AgentCapabilities
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
 @using Parrot.Web.Features.Dashboard.AiAgents
 @using Parrot.Web.Components.Pages.Dashboard.TeachAi
@@ -147,7 +148,7 @@ else
                         <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="operations-needs-title">@WaitingTitle</Typography>
                         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@WaitingLine</Typography>
                     </div>
-                    <Button Class="ds-no-shrink" @onclick="ReviewWaiting">Review</Button>
+                    <Button Class="ds-no-shrink" @onclick="ReviewWaiting">Answer</Button>
                 </section>
             }
 
@@ -290,7 +291,8 @@ else
             var core = _knowledge.Where(c => c.Topic != KnowledgeTopic.Notes).ToList();
             var covered = core.Count(c => c.Status == KnowledgeStatus.Confirmed && c.HasContent);
             var missing = core.Where(c => !(c.Status == KnowledgeStatus.Confirmed && c.HasContent))
-                .Select(c => TeachAiConversation.Name(c.Topic)).ToList();
+                // "Who I ask for help" is the agent speaking, in the chat; here it is a topic.
+                .Select(c => c.Topic == KnowledgeTopic.Handover ? "Handover" : TeachAiConversation.Name(c.Topic)).ToList();
             var line = $"{covered} of {core.Count} topics covered";
             if (missing.Count == 0) return $"{line}. Everything they need to answer your customers.";
             var names = missing.Count == 1 ? missing[0] : $"{string.Join(", ", missing[..^1])} and {missing[^1]}";
@@ -414,7 +416,10 @@ else
         if (saved.IsDraft)
         {
             _filter = AgentFilter.Draft;
-            Toasts.Show($"{saved.Name} is saved as a draft. Turn it on when you're ready.");
+            Toasts.Show(AgentCapabilities.CanReply ? $"{saved.Name} is saved as a draft. Turn it on when you're ready." : $"{saved.Name} is saved as a draft.");
+            // Called by setup, not an event of this page's own, so the list
+            // has to be drawn again here or setup stays on screen.
+            StateHasChanged();
             return null;
         }
         Nav.NavigateTo($"/ai-operations/{saved.Id}?live=1");

@@ -25,25 +25,7 @@
 
 /* A finished section offers a way back in. Outlined rather than filled, so it
    reads as secondary to whatever the open section is asking for. */
-.aside__reopen {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  height: var(--ds-aside-height);
-  padding: var(--spacing-none) var(--ds-aside-reopen-pad);
-  color: var(--colors-text-secondary);
-  background: transparent;
-  border: var(--ds-aside-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-full);
-  white-space: nowrap;
-  cursor: pointer;
-}
 
-.aside__reopen:hover {
-  color: var(--colors-text-primary);
-  background: var(--colors-interaction-hover);
-  border-color: var(--colors-text-muted);
-}
 
 .aside__reopen ::deep svg { flex: 0 0 auto; }
 

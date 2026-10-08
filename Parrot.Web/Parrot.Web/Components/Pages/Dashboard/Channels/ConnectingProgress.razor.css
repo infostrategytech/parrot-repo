@@ -51,6 +51,7 @@
 .channel-whatsapp .connecting__mark { background: #22a968; }
 .channel-instagram .connecting__mark { background: #c63886; }
 .channel-facebook .connecting__mark { background: #1877f2; }
+.channel-x .connecting__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
 
 .connecting__pulse i {
   position: absolute;

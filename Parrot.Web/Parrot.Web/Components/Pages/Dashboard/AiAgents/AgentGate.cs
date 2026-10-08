@@ -28,7 +28,7 @@ public sealed class AgentGate(ChannelStatusLoader loader, ChannelsState channels
             Changed?.Invoke();
             return;
         }
-        await teachAi.RequireAsync(then);
+        await teachAi.RequireAsync(then, setsUpAgent: true);
     }
 
     public void Dismiss()

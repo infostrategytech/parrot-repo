@@ -3,7 +3,8 @@
 
 @* Failure is the common case here, so it gets a real screen rather than a
    toast. It says what went wrong, what to check — in the route's own terms —
-   and offers the three things worth doing next, including the manual path. *@
+   and two ways on: try again (back to the choice of how to connect, where
+   WhatsApp's manual setup lives), or back to the channels. *@
 
 <section class="setup-failed">
     <span class="setup-failed__mark"><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Lg" /></span>
@@ -28,7 +29,6 @@
 
     <div class="setup-failed__actions">
         <Button @onclick="OnRetry">Try again</Button>
-        <Button Variant="ButtonVariant.Secondary" @onclick="OnUseManual">Set it up manually</Button>
         <Button Variant="ButtonVariant.Ghost" @onclick="OnBack">Back to channels</Button>
     </div>
 </section>
@@ -40,8 +40,6 @@
     [Parameter] public ChannelRoute? Route { get; set; }
 
     [Parameter] public EventCallback OnRetry { get; set; }
-
-    [Parameter] public EventCallback OnUseManual { get; set; }
 
     [Parameter] public EventCallback OnBack { get; set; }
 }

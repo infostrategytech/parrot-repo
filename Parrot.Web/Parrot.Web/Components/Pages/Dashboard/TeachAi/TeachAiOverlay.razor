@@ -71,15 +71,15 @@
             {
                 <div class="teach-ai__centre teach-ai__done" aria-live="polite">
                     <Typography TextStyle="TextStyle.HeadingH2Semibold" As="p">The business basics are ready</Typography>
-                    <Typography TextStyle="TextStyle.BodyLargeMedium" As="p" Prose>You can improve them anytime. Next, let's set up your AI.</Typography>
+                    <Typography TextStyle="TextStyle.BodyLargeMedium" As="p" Prose>@(State.SetsUpAgent ? "You can improve them anytime. Next, let's set up your agent." : "You can improve them anytime.")</Typography>
                 </div>
             }
             else if (_conversation.Step == TeachAiStep.Summary)
             {
                 <div class="teach-ai__summary">
                     <div class="teach-ai__summary-head">
-                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3">Here's what your AI will know</Typography>
-                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>Check it over. Your AI will only use what you approve here.</Typography>
+                        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3">Here's what your agent will know</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>Check it over. Your agent will only use what you approve here.</Typography>
                     </div>
 
                     <ul class="teach-ai__facts">
@@ -123,7 +123,7 @@
                                     }
                                     else
                                     {
-                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="teach-ai__fact-missing">Not added. Your AI will say it'll check with your team.</Typography>
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="teach-ai__fact-missing">Not added. Your agent will say it'll check with your team.</Typography>
                                     }
                                 </div>
                                 @if (_editing != card.Topic)
@@ -170,7 +170,7 @@
                             }
                             <div class="teach-ai__hello-copy">
                                 <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h3">Tell me about your business</Typography>
-                                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">A short chat · About 3 minutes</Typography>
+                                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">@(State.SetsUpAgent ? "A short chat · About 3 minutes · Then you'll set up your agent" : "A short chat · About 3 minutes")</Typography>
                             </div>
                             @MicHelp
                             <div class="teach-ai__hello-actions">
