@@ -4,6 +4,7 @@ using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Parrot.Application.Conversations;
 using Parrot.Domain.Entities.Messages;
+using Parrot.Domain.Enums;
 using Parrot.Domain.Exceptions;
 using Parrot.Infrastructure.Messaging;
 
@@ -43,7 +44,10 @@ public sealed class MongoConversationStore : IConversationStore
             MessageDocument d = BsonSerializer.Deserialize<MessageDocument>(row["latest"].AsBsonDocument);
             string name = row["name"].IsString ? row["name"].AsString : d.From;
             return new ConversationSummary(d.ConnectionId!.Value, d.From, name,
-                d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt);
+                d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt)
+            {
+                Channel = d.Platform == MessagingPlatform.Facebook ? "facebook" : "whatsapp",
+            };
         }).ToList();
     }
 
@@ -73,7 +77,7 @@ public sealed class MongoConversationStore : IConversationStore
     public async Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct) =>
         await _messages.Find(x => x.OwnerUserId == owner && x.MessageId == ConversationService.RequestKey(owner, request)).FirstOrDefaultAsync(ct);
 
-    public async Task<bool> ReserveAsync(WhatsAppMessageDocument message, CancellationToken ct)
+    public async Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct)
     {
         try { await _messages.InsertOneAsync(message, cancellationToken: ct); return true; }
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey) { return false; }

@@ -28,13 +28,150 @@ public class ConversationServiceTests
 
     private readonly IWhatsAppTokenProtector _protector = new WhatsAppTokenProtector(new EphemeralDataProtectionProvider());
 
+    // The Facebook Page a Messenger thread is on.
+    private const string PageId = "185860297939218";
+    private const string Psid = "6215837091842310";
+    private const string PageConversation = "facebook:185860297939218:6215837091842310";
+    private readonly FacebookConnection _page = new()
+    {
+        OwnerUserId = Owner, VerifyTokenEncrypted = "encrypted", PageId = PageId, PageName = "Oma's Kitchen",
+        WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "enc:page-token",
+    };
+    private readonly Mock<IFacebookConnectionRepository> _pages = new();
+    private readonly Mock<IFacebookSender> _facebookSender = new();
+
+    private sealed class PageProtector : IFacebookCredentialProtector
+    {
+        public string Protect(string value) => $"enc:{value}";
+        public string Unprotect(string protectedValue) => protectedValue[4..];
+    }
+
     public ConversationServiceTests() => _connection.AccessTokenEncrypted = _protector.Protect("connection-token");
 
     private ConversationService Create()
     {
         _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
+        _pages.Setup(x => x.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(_page);
         return new ConversationService(_store, _connections.Object, _sender.Object,
-            _protector, _sequence);
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector());
+    }
+
+    // The customer's Messenger message a reply answers, as the worker stores it.
+    private static MessageDocument PageIncoming(DateTime sentAt) => new FacebookMessageDocument
+    {
+        MessageId = "facebook:m_incoming", OwnerUserId = Owner, Platform = MessagingPlatform.Facebook,
+        ExternalAccountId = PageId, ChannelId = PageId, ChannelDisplayName = "", From = Psid,
+        Timestamp = "0", Type = "text", SentAt = sentAt, ReceivedAt = sentAt,
+        ConversationKey = PageConversation, Sequence = 1, Receiver = PageId,
+    };
+
+    [Fact]
+    public async Task AMessengerReply_GoesThroughThePage_AndJoinsTheConversation()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _facebookSender.Setup(x => x.SendAsync(PageId, "page-token", Psid, "We have it in stock", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("m_reply");
+
+        ConversationMessage sent = await Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "We have it in stock"), default);
+
+        Assert.Equal("accepted", sent.Status);
+        FacebookMessageDocument stored = Assert.IsType<FacebookMessageDocument>(_store.Messages[sent.Id]);
+        Assert.Equal(MessagingPlatform.Facebook, stored.Platform);
+        Assert.True(stored.Outgoing);
+        Assert.Equal(Psid, stored.From);
+        Assert.Equal(PageId, stored.Receiver);
+        Assert.Equal(PageId, stored.ChannelId);
+        Assert.Equal(PageConversation, stored.ConversationKey);
+        Assert.Equal(2, stored.Sequence);
+        Assert.Equal("m_reply", stored.ProviderMessageId);
+        _sender.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AMessengerReply_IsSentOnce_ForARepeatedRequest()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _facebookSender.Setup(x => x.SendAsync(PageId, "page-token", Psid, "Hello", It.IsAny<CancellationToken>())).ReturnsAsync("m_reply");
+        ConversationService service = Create();
+        SendReplyRequest request = new(Guid.NewGuid(), "Hello");
+
+        await service.SendAsync(Owner, _page.Id, Psid, request, default);
+        await service.SendAsync(Owner, _page.Id, Psid, request, default);
+
+        _facebookSender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Equal(1, _sequence.Calls);
+    }
+
+    [Fact]
+    public async Task AMessengerReply_MetaRefuses_IsStoredAsFailed()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _facebookSender.Setup(x => x.SendAsync(PageId, "page-token", Psid, "Hello", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new FacebookRejectedException("10"));
+
+        ConversationMessage sent = await Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "Hello"), default);
+
+        Assert.Equal("failed", sent.Status);
+        Assert.Equal("failed", _store.Messages[sent.Id].SendStatus);
+    }
+
+    [Fact]
+    public async Task AMessengerReply_TimingOut_IsUnknown_NotRetried()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _facebookSender.Setup(x => x.SendAsync(PageId, "page-token", Psid, "Hello", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new HttpRequestException("timeout"));
+
+        ConversationMessage sent = await Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "Hello"), default);
+
+        Assert.Equal("unknown", sent.Status);
+        _facebookSender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // Messenger's rule too: a free-form reply only within 24 hours of the customer's last message.
+    [Fact]
+    public async Task AMessengerReply_AfterTheWindow_IsRefusedBeforeSending()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow.AddHours(-25));
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "Hello"), default));
+        _facebookSender.VerifyNoOtherCalls();
+        Assert.Empty(_store.Messages);
+    }
+
+    [Fact]
+    public async Task AMessengerReply_LongerThanMessengerAllows_IsRefused()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), new string('a', 2001)), default));
+        _facebookSender.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AMessengerReply_FromADisconnectedOrTokenlessPage_IsRefused()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _page.AccessTokenEncrypted = null;
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "Hello"), default));
+
+        _page.AccessTokenEncrypted = "enc:page-token";
+        _page.DisabledAt = DateTime.UtcNow;
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "Hello"), default));
+        _facebookSender.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task AReplyOnAConnectionThatIsNotTheOwners_IsNotFound()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            Create().SendAsync(Owner, Guid.NewGuid(), Psid, new SendReplyRequest(Guid.NewGuid(), "Hello"), default));
+        _facebookSender.VerifyNoOtherCalls();
+        _sender.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -201,7 +338,7 @@ public class ConversationServiceTests
         public bool FailComplete { get; set; }
         public Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct) =>
             Task.FromResult(Messages.GetValueOrDefault(ConversationService.RequestKey(owner, request)));
-        public Task<bool> ReserveAsync(WhatsAppMessageDocument message, CancellationToken ct) => Task.FromResult(Messages.TryAdd(message.MessageId, message));
+        public Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct) => Task.FromResult(Messages.TryAdd(message.MessageId, message));
         public Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct)
         {
             if (FailComplete) throw new InvalidOperationException("Mongo unavailable");

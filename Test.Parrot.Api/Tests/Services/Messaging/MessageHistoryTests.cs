@@ -184,7 +184,8 @@ public class MessageHistoryTests : IAsyncLifetime
         Mock<IWhatsAppSender> sender = new();
         sender.Setup(s => s.SendAsync(It.IsAny<string>(), It.IsAny<string>(), "2348012345678", "Try 1234", It.IsAny<CancellationToken>()))
             .ReturnsAsync("wamid.reply");
-        ConversationService service = new(new MongoConversationStore(_client!, settings), connections.Object, sender.Object, protector, counter);
+        ConversationService service = new(new MongoConversationStore(_client!, settings), connections.Object, sender.Object, protector, counter,
+            Mock.Of<IFacebookConnectionRepository>(), Mock.Of<IFacebookSender>(), Mock.Of<IFacebookCredentialProtector>());
 
         await StoreIncoming("wamid.first", connection.Id, await counter.NextAsync(Ada), DateTime.UtcNow.AddMinutes(-2));
         await service.SendAsync(Owner, connection.Id, "2348012345678", new SendReplyRequest(Guid.NewGuid(), "Try 1234"), default);

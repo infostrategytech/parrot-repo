@@ -44,6 +44,9 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) : IFac
                 .SetProperty(c => c.UpdatedAt, verifiedAt), cancellationToken) == 1;
     }
 
+    public Task<bool> IsOwnedByAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default) =>
+        db.FacebookConnections.AnyAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, cancellationToken);
+
     public async Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt,
         CancellationToken cancellationToken = default) =>
         await db.FacebookConnections
