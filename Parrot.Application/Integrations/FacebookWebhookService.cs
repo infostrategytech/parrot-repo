@@ -1,5 +1,4 @@
 using System.Security.Cryptography;
-using System.Text;
 using Microsoft.Extensions.Options;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
@@ -18,50 +17,75 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
     private readonly IFacebookConnectionRepository _connections;
     private readonly InboundMessagePublisher _publisher;
     private readonly IAppLogger<FacebookWebhookService> _logger;
+    private readonly IFacebookCredentialProtector _protector;
 
     public FacebookWebhookService(
         IOptions<FacebookSettings> settings,
         IFacebookConnectionRepository connections,
         InboundMessagePublisher publisher,
-        IAppLogger<FacebookWebhookService> logger)
+        IAppLogger<FacebookWebhookService> logger,
+        IFacebookCredentialProtector protector)
     {
         _settings = settings.Value;
         _connections = connections;
         _publisher = publisher;
         _logger = logger;
+        _protector = protector;
     }
 
     public string GetWebhookUrl() =>
         $"{_settings.WebhookBaseUrl.TrimEnd('/')}/api/webhooks/facebook";
 
-    public bool IsValidSignature(string rawBody, string signatureHeader)
+    public async Task<bool> IsAuthenticAsync(string? identifier, string rawBody, string? signature,
+        CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_settings.AppSecret))
+        if (_settings.SignatureMode == WebhookSignatureMode.Off)
         {
-            _logger.LogError("Facebook webhook rejected because Facebook:AppSecret is not configured.");
-            return false;
+            return true;
         }
 
-        if (!signatureHeader.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
-            return false;
+        // A manual connection's webhooks come from the customer's own Meta app and are
+        // signed with its secret; everything else comes through Parrot's app.
+        FacebookConnection? connection = string.IsNullOrWhiteSpace(identifier)
+            ? null
+            : await _connections.GetActiveByIdentifierAsync(identifier, cancellationToken);
+        string source = connection?.AppSecretEncrypted is null ? "app" : "connection";
+        string? secret = source == "app" && !string.IsNullOrWhiteSpace(_settings.AppSecret) ? _settings.AppSecret : null;
+        string? reason = null;
 
-        string receivedHash = signatureHeader["sha256=".Length..];
-        if (receivedHash.Length != 64)
-            return false;
-
-        byte[] expected = HMACSHA256.HashData(
-            Encoding.UTF8.GetBytes(_settings.AppSecret),
-            Encoding.UTF8.GetBytes(rawBody));
-
-        try
+        if (source == "connection")
         {
-            return CryptographicOperations.FixedTimeEquals(Convert.FromHexString(receivedHash), expected);
+            try
+            {
+                secret = _protector.Unprotect(connection!.AppSecretEncrypted!);
+            }
+            catch (CryptographicException)
+            {
+                reason = "secret_unreadable";
+            }
         }
-        catch (FormatException)
+
+        reason ??= secret is null ? "no_app_secret"
+            : signature is null ? "missing_signature"
+            : WebhookSignature.Matches(rawBody, signature, secret) ? null
+            : "mismatch";
+        if (reason is null)
         {
-            _logger.LogWarning("Facebook webhook rejected because X-Hub-Signature-256 is not hexadecimal.");
-            return false;
+            return true;
         }
+
+        if (_settings.SignatureMode == WebhookSignatureMode.LogOnly)
+        {
+            _logger.LogWarning(
+                "Facebook webhook signature check failed; accepted because SignatureMode is LogOnly. Reason={Reason} SecretSource={SecretSource} ConnectionId={ConnectionId}",
+                reason, source, connection?.Id);
+            return true;
+        }
+
+        _logger.LogWarning(
+            "Facebook webhook rejected because its signature check failed. Reason={Reason} SecretSource={SecretSource} ConnectionId={ConnectionId}",
+            reason, source, connection?.Id);
+        return false;
     }
 
     public async Task<bool> ProcessConnectionEventAsync(

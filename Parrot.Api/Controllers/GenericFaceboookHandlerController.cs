@@ -42,7 +42,8 @@ public class FacebookWebhookController : ControllerBase
     }
 
     // Meta posts all page events here — messages, reactions, deliveries, postbacks, page changes.
-    // X-Hub-Signature-256 is validated before any processing to reject forged requests.
+    // X-Hub-Signature-256 is checked before any processing, with the connection's own App Secret
+    // (manual setup) or Parrot's (Embedded Signup); Facebook:SignatureMode decides what a failure does.
     [HttpPost]
     [EnableRateLimiting(RateLimitPolicies.FacebookWebhook)]
     [ProducesResponseType(StatusCodes.Status200OK)]
@@ -55,7 +56,7 @@ public class FacebookWebhookController : ControllerBase
     {
         string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
 
-        if (string.IsNullOrEmpty(signature) || !_facebookWebhookService.IsValidSignature(rawBody, signature))
+        if (!await _facebookWebhookService.IsAuthenticAsync(identifier, rawBody, signature, HttpContext.RequestAborted))
         {
             return Unauthorized();
         }

@@ -157,7 +157,7 @@ else
                             </span>
                             <div class="manual__titles">
                                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Your Page</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the Page customers message, and its access token.</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the Page customers message, its access token, and your app's App Secret.</Typography>
                             </div>
                             <ManualSectionAside Done="Reached > 1"
                                                 IsCurrent="Reached == 1"
@@ -194,6 +194,19 @@ else
                                         spellcheck="false"
                                         maxlength="8192"
                                         HelperText="@(_setup.HasAccessToken ? "A token is saved. Enter a new one only to replace it." : "Hidden as you type and cleared after saving. Never send this token in a chat or email.")">
+                                        <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                                    </Parrot.SharedComponents.DesignSystem.Input>
+
+                                    @* Meta signs every webhook with this app's secret, so Parrot
+                                       can tell a real message from a forged one. Write-only. *@
+                                    <Parrot.SharedComponents.DesignSystem.Input
+                                        FloatingLabel="App Secret"
+                                        @bind-Value="_appSecret"
+                                        type="password"
+                                        autocomplete="new-password"
+                                        spellcheck="false"
+                                        maxlength="64"
+                                        HelperText="@(_setup.HasAppSecret ? "An App Secret is saved. Enter a new one only to replace it." : "In your Meta app, open App settings → Basic and select Show next to App secret.")">
                                         <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
                                     </Parrot.SharedComponents.DesignSystem.Input>
                                 </div>
@@ -243,7 +256,7 @@ else
 
     private FacebookWebhookSetup? _setup;
     private string? _error;
-    private string? _pageId, _pageName, _accessToken;
+    private string? _pageId, _pageName, _accessToken, _appSecret;
     private bool _busy, _disposed, _testing, _checking, _missed, _connected;
     private Section _open = Section.Webhook;
     private DateTimeOffset _testStartedAt;
@@ -265,7 +278,8 @@ else
         _setup is { WebhookVerified: true }
         && !string.IsNullOrWhiteSpace(_pageId)
         && !string.IsNullOrWhiteSpace(_pageName)
-        && !string.IsNullOrWhiteSpace(_accessToken);
+        && !string.IsNullOrWhiteSpace(_accessToken)
+        && (!string.IsNullOrWhiteSpace(_appSecret) || _setup.HasAppSecret);
 
     private string? Token => AuthState.CurrentUser?.Token;
 
@@ -327,10 +341,23 @@ else
     private async Task SavePageAsync()
     {
         if (_busy || _setup is null || Token is not { Length: > 0 } token) return;
+        var appSecret = _appSecret?.Trim();
+        if (!string.IsNullOrEmpty(appSecret) && (appSecret.Length != 32 || !appSecret.All(char.IsAsciiHexDigit)))
+        {
+            _error = "Enter the App Secret from your Meta app's App settings → Basic: 32 letters and numbers.";
+            return;
+        }
+
         _busy = true;
         _error = null;
         try
         {
+            // The secret first: the Page's webhooks are only checked once it is saved.
+            if (!string.IsNullOrEmpty(appSecret))
+            {
+                await IntegrationsService.SaveFacebookAppSecretAsync(appSecret, token, _lifetime.Token);
+                _appSecret = null;
+            }
             await IntegrationsService.SaveFacebookPageAsync((_pageId ?? "").Trim(), (_pageName ?? "").Trim(), (_accessToken ?? "").Trim(), token, _lifetime.Token);
             _accessToken = null;
             _setup = await IntegrationsService.GetFacebookSetupAsync(token, _lifetime.Token);
@@ -391,6 +418,7 @@ else
     {
         _disposed = true;
         _accessToken = null;
+        _appSecret = null;
         _lifetime.Cancel();
         _lifetime.Dispose();
     }

@@ -83,6 +83,16 @@ public class WhatsAppConnectionRepository : IWhatsAppConnectionRepository
         if (count == 0) throw new ConflictException("This WhatsApp connection is unavailable.");
     }
 
+    public async Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret)
+    {
+        int count = await _db.WhatsAppConnections
+            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.AppSecretEncrypted, encryptedSecret)
+                .SetProperty(c => c.UpdatedAt, DateTime.UtcNow));
+        if (count == 0) throw new ConflictException("This WhatsApp connection is unavailable.");
+    }
+
     public async Task ConfigureAccountAsync(Guid id, string ownerUserId, string businessAccountId, string phoneNumberId)
     {
         try

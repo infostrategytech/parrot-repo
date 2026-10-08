@@ -58,6 +58,13 @@ public class WhatsAppConnectionsController : ControllerBase
         return NoContent();
     }
 
+    [HttpPut("{id:guid}/app-secret")]
+    public async Task<IActionResult> SaveAppSecret(Guid id, [FromBody] AppSecretRequest request)
+    {
+        await _service.SaveAppSecretAsync(GetUserId(), id, request);
+        return NoContent();
+    }
+
     private string GetUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? User.FindFirstValue("sub")

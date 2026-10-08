@@ -44,6 +44,17 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) : IFac
                 .SetProperty(c => c.UpdatedAt, verifiedAt), cancellationToken) == 1;
     }
 
+    public async Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret,
+        CancellationToken cancellationToken = default)
+    {
+        int updated = await db.FacebookConnections
+            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.AppSecretEncrypted, encryptedSecret)
+                .SetProperty(c => c.UpdatedAt, DateTime.UtcNow), cancellationToken);
+        if (updated == 0) throw new ConflictException("This Facebook connection is unavailable.");
+    }
+
     // Writes the Page and token in one statement; the WHERE clause enforces ownership and verification.
     public async Task SavePageAsync(Guid id, string ownerUserId, string pageId, string pageName,
         string encryptedAccessToken, CancellationToken cancellationToken = default)

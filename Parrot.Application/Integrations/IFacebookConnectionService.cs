@@ -13,4 +13,7 @@ public interface IFacebookConnectionService
 
     // Stores the Page ID, name and access token once Meta has verified the webhook.
     Task SavePageAsync(string ownerUserId, FacebookPageRequest request, CancellationToken cancellationToken = default);
+
+    // Manual setup: saves the App Secret the customer's own Meta app signs webhooks with.
+    Task SaveAppSecretAsync(string ownerUserId, AppSecretRequest request, CancellationToken cancellationToken = default);
 }

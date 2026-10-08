@@ -41,7 +41,8 @@ public sealed class FacebookConnectionService(
         return new FacebookSetupResponse(connection.Id,
             $"{baseUrl}/api/webhooks/facebook?ref={connection.WebhookIdentifier}", verifyToken,
             connection.WebhookVerifiedAt.HasValue, connection.PageId, connection.PageName,
-            !string.IsNullOrEmpty(connection.AccessTokenEncrypted));
+            !string.IsNullOrEmpty(connection.AccessTokenEncrypted),
+            !string.IsNullOrEmpty(connection.AppSecretEncrypted));
     }
 
     // Resolves the connection by ?ref= and compares the verify token in fixed time.
@@ -83,6 +84,20 @@ public sealed class FacebookConnectionService(
             throw new ValidationException("Enter a valid Page access token.");
         await repository.SavePageAsync(connection.Id, ownerUserId, request.PageId, request.PageName.Trim(),
             protector.Protect(token), cancellationToken);
+    }
+
+    // Manual setup: the customer's own Meta app signs this connection's webhooks with it. Allowed
+    // before verification, so it can be saved alongside the callback URL in one sitting.
+    public async Task SaveAppSecretAsync(string ownerUserId, AppSecretRequest request, CancellationToken cancellationToken = default)
+    {
+        FacebookConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+            ?? throw new NotFoundException("Start Facebook webhook setup before saving the App Secret.");
+        if (connection.DisabledAt.HasValue)
+            throw new ConflictException("This Facebook connection is disabled.");
+        string secret = request.AppSecret?.Trim() ?? string.Empty;
+        if (!WebhookSignature.IsAppSecret(secret))
+            throw new ValidationException("Enter the App Secret from your Meta app's App settings > Basic: 32 letters and numbers.");
+        await repository.SaveAppSecretAsync(connection.Id, ownerUserId, protector.Protect(secret), cancellationToken);
     }
 
     private static string NewCredential() =>

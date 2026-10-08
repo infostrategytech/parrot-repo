@@ -305,6 +305,9 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<string>("AccessTokenEncrypted")
                         .HasColumnType("text");
 
+                    b.Property<string>("AppSecretEncrypted")
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -388,6 +391,9 @@ namespace Parrot.Infrastructure.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<string>("AccessTokenEncrypted")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AppSecretEncrypted")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")

@@ -45,10 +45,12 @@ public class WhatsAppWebhookController : ControllerBase
         [FromBody] WhatsAppWebhookPayload payload)
     {
         string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
-        // if (string.IsNullOrEmpty(signature) || !_whatsAppWebhookService.IsValidSignature(rawBody, signature))
-        // {
-        //     return Unauthorized();
-        // }
+        // With the connection's own App Secret (manual setup) or Parrot's (Embedded Signup);
+        // WhatsApp:SignatureMode decides whether a failure is logged or rejected.
+        if (!await _whatsAppWebhookService.IsAuthenticAsync(identifier, rawBody, signature, HttpContext.RequestAborted))
+        {
+            return Unauthorized();
+        }
 
         if (Request.Query.ContainsKey("ref"))
         {
@@ -99,10 +101,12 @@ public class WhatsAppWebhookController : ControllerBase
         [FromBody] WhatsAppWebhookPayload payload)
     {
         string rawBody = (string?)HttpContext.Items["RawBody"] ?? string.Empty;
-        // if (string.IsNullOrEmpty(signature) || !_whatsAppWebhookService.IsValidSignature(rawBody, signature))
-        // {
-        //     return Unauthorized();
-        // }
+        // With the connection's own App Secret (manual setup) or Parrot's (Embedded Signup);
+        // WhatsApp:SignatureMode decides whether a failure is logged or rejected.
+        if (!await _whatsAppWebhookService.IsAuthenticAsync(identifier, rawBody, signature, HttpContext.RequestAborted))
+        {
+            return Unauthorized();
+        }
 
         if (Request.Query.ContainsKey("ref"))
         {

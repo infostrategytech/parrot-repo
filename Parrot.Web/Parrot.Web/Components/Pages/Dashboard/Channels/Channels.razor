@@ -134,9 +134,11 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                                       @bind-PhoneNumberId="_phoneNumberId"
                                       @bind-BusinessAccountId="_businessAccountId"
                                       @bind-AccessToken="_accessToken"
+                                      @bind-AppSecret="_appSecret"
                                       @bind-Permanent="_permanentToken"
                                       @bind-WebhookConfirmed="_webhookConfirmed"
                                       HasSavedToken="@(guided.Id == ChannelId.Whatsapp && ChannelsState.WhatsAppConnection?.HasAccessToken == true)"
+                                      HasSavedAppSecret="@(guided.Id == ChannelId.Whatsapp && ChannelsState.WhatsAppConnection?.HasAppSecret == true)"
                                       Busy="_busy"
                                       OnAdvance="AdvanceManualStageAsync"
                                       OnFinish="FinishManualConnectionAsync"
@@ -336,6 +338,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
     private string? _phoneNumberId;
     private string? _businessAccountId;
     private string? _accessToken;
+    private string? _appSecret;
     private bool _permanentToken = true;
     private bool _webhookConfirmed;
 
@@ -392,6 +395,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
     {
         if (_disposed) return;
         _accessToken = null;
+        _appSecret = null;
         CloseSetup();
         await LoadAsync();
         StateHasChanged();
@@ -517,6 +521,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
             _phoneNumberId = setup.PhoneNumberId;
             _businessAccountId = setup.BusinessAccountId;
             _accessToken = null;
+            _appSecret = null;
             _guidedStarted = setup.Step > 0;
             if (_step == GuidedSteps.TestStep) _testStartedAt ??= DateTimeOffset.UtcNow;
             _view = SetupView.Guided;
@@ -555,6 +560,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
         _chosenPath = null;
         _accepted = false;
         _accessToken = null;
+        _appSecret = null;
         _error = null;
         _missed = false;
         if (Resume is not null) Nav.NavigateTo("/dashboard/channels");
@@ -616,6 +622,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
         _phoneNumberId = seed.PhoneNumberId;
         _businessAccountId = seed.BusinessAccountId;
         _accessToken = null;
+        _appSecret = null;
         _permanentToken = true;
         _webhookConfirmed = seed.ManualStage == ManualSetupStage.Complete;
         _guidedStarted = false;
@@ -659,6 +666,13 @@ else if (Active is { } flow && _view == SetupView.Flow)
             }
 
             var token = _accessToken;
+            var appSecret = _appSecret?.Trim();
+            if (!string.IsNullOrEmpty(appSecret) && (appSecret.Length != 32 || !appSecret.All(char.IsAsciiHexDigit)))
+            {
+                _error = "Enter the App Secret from your Meta app's App settings → Basic: 32 letters and numbers.";
+                return;
+            }
+
             var ok = await RunAsync(async cancellation =>
             {
                 await IntegrationsService.ConfigureWhatsAppAccountAsync(setup.Connection.Id, businessAccountId, phoneNumberId, Token, cancellation);
@@ -666,11 +680,16 @@ else if (Active is { } flow && _view == SetupView.Flow)
                 {
                     await IntegrationsService.SaveWhatsAppAccessTokenAsync(setup.Connection.Id, token, Token, cancellation);
                 }
+                if (!string.IsNullOrEmpty(appSecret))
+                {
+                    await IntegrationsService.SaveWhatsAppAppSecretAsync(setup.Connection.Id, appSecret, Token, cancellation);
+                }
                 ChannelsState.SetWhatsApp(await IntegrationsService.GetWhatsAppStatusAsync(setup.Connection.Id, Token, cancellation));
             }, "We couldn't save those details. Check the IDs and try again.");
 
             if (!ok) return;
             _accessToken = null;
+            _appSecret = null;
             Toasts.Show("Connection details saved securely.");
         }
 
@@ -1029,6 +1048,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
     public void Dispose()
     {
         _accessToken = null;
+        _appSecret = null;
         _disposed = true;
         AuthState.OnChange -= AuthChanged;
         _lifetime.Cancel();

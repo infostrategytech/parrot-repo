@@ -176,6 +176,20 @@
                         HelperText="@(HasSavedToken ? "An access token is saved. Enter a new token to replace it." : "Hidden as you type and cleared after saving. Never send this token in a chat or email.")">
                         <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
                     </Parrot.SharedComponents.DesignSystem.Input>
+
+                    @* Meta signs every webhook with this app's secret, so Parrot
+                       can tell a real message from a forged one. Write-only. *@
+                    <Parrot.SharedComponents.DesignSystem.Input
+                        FloatingLabel="App Secret"
+                        Value="@AppSecret"
+                        ValueChanged="AppSecretChanged"
+                        type="password"
+                        autocomplete="off"
+                        spellcheck="false"
+                        maxlength="64"
+                        HelperText="@(HasSavedAppSecret ? "An App Secret is saved. Enter a new one only to replace it." : "In your Meta app, open App settings → Basic and select Show next to App secret.")">
+                        <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                    </Parrot.SharedComponents.DesignSystem.Input>
                 </div>
 
                 <Button disabled="@(!CredentialsReady || Busy)"
@@ -322,6 +336,12 @@
     [Parameter] public string? AccessToken { get; set; }
     [Parameter] public EventCallback<string?> AccessTokenChanged { get; set; }
 
+    [Parameter] public string? AppSecret { get; set; }
+    [Parameter] public EventCallback<string?> AppSecretChanged { get; set; }
+
+    /// <summary>Like the token, the secret is never sent back; this only says one is saved.</summary>
+    [Parameter] public bool HasSavedAppSecret { get; set; }
+
     [Parameter] public bool Permanent { get; set; } = true;
     [Parameter] public EventCallback<bool> PermanentChanged { get; set; }
 
@@ -351,7 +371,8 @@
     private bool CredentialsReady =>
         !string.IsNullOrWhiteSpace(PhoneNumberId) &&
         !string.IsNullOrWhiteSpace(BusinessAccountId) &&
-        (!string.IsNullOrWhiteSpace(AccessToken) || HasSavedToken);
+        (!string.IsNullOrWhiteSpace(AccessToken) || HasSavedToken) &&
+        (!string.IsNullOrWhiteSpace(AppSecret) || HasSavedAppSecret);
 
     private string SectionClass(int index, ManualSetupStage stage)
     {

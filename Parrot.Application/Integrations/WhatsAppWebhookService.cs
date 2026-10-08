@@ -19,6 +19,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
     private readonly IAppLogger<WhatsAppWebhookService> _logger;
     private readonly InboundMessagePublisher _publisher;
     private readonly IWhatsAppConnectionRepository _connections;
+    private readonly IWhatsAppTokenProtector _protector;
     private readonly IReplySendTimes? _sendTimes;
 
     public WhatsAppWebhookService(
@@ -26,12 +27,14 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         IAppLogger<WhatsAppWebhookService> logger,
         InboundMessagePublisher publisher,
         IWhatsAppConnectionRepository connections,
+        IWhatsAppTokenProtector protector,
         IReplySendTimes? sendTimes = null)
     {
         _settings = settings.Value;
         _logger = logger;
         _publisher = publisher;
         _connections = connections;
+        _protector = protector;
         _sendTimes = sendTimes;
     }
 
@@ -52,49 +55,59 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         return true;
     }
 
-    public bool IsValidSignature(string rawBody, string signatureHeader)
+    public async Task<bool> IsAuthenticAsync(string? identifier, string rawBody, string? signature,
+        CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_settings.AppSecret))
+        if (_settings.SignatureMode == WebhookSignatureMode.Off)
         {
-            _logger.LogError("WhatsApp webhook rejected because WhatsApp:AppSecret is not configured.");
-            return false;
+            return true;
         }
 
-        if (!signatureHeader.StartsWith("sha256=", StringComparison.OrdinalIgnoreCase))
-        {
-            _logger.LogWarning("WhatsApp webhook rejected because X-Hub-Signature-256 is malformed.");
-            return false;
-        }
+        // A manual connection's webhooks come from the customer's own Meta app and are
+        // signed with its secret; everything else comes through Parrot's app.
+        WhatsAppConnection? connection = string.IsNullOrWhiteSpace(identifier)
+            ? null
+            : await _connections.GetActiveByIdentifierAsync(identifier);
+        string source = connection?.AppSecretEncrypted is null ? "app" : "connection";
+        string? secret = source == "app" ? NullIfEmpty(_settings.AppSecret) : null;
+        string? reason = null;
 
-        string receivedHash = signatureHeader["sha256=".Length..];
-        if (receivedHash.Length != 64)
+        if (source == "connection")
         {
-            _logger.LogWarning("WhatsApp webhook rejected because X-Hub-Signature-256 has an invalid length.");
-            return false;
-        }
-
-        byte[] expected = HMACSHA256.HashData(
-            Encoding.UTF8.GetBytes(_settings.AppSecret),
-            Encoding.UTF8.GetBytes(rawBody));
-
-        try
-        {
-            byte[] received = Convert.FromHexString(receivedHash);
-            bool valid = CryptographicOperations.FixedTimeEquals(received, expected);
-            if (!valid)
+            try
             {
-                _logger.LogWarning("WhatsApp webhook rejected because its signature does not match the configured App Secret.");
+                secret = _protector.Unprotect(connection!.AppSecretEncrypted!);
             }
+            catch (CryptographicException)
+            {
+                reason = "secret_unreadable";
+            }
+        }
 
-            return valid;
-            
-        }
-        catch (FormatException)
+        reason ??= secret is null ? "no_app_secret"
+            : signature is null ? "missing_signature"
+            : WebhookSignature.Matches(rawBody, signature, secret) ? null
+            : "mismatch";
+        if (reason is null)
         {
-            _logger.LogWarning("WhatsApp webhook rejected because X-Hub-Signature-256 is not hexadecimal.");
-            return false;
+            return true;
         }
+
+        if (_settings.SignatureMode == WebhookSignatureMode.LogOnly)
+        {
+            _logger.LogWarning(
+                "WhatsApp webhook signature check failed; accepted because SignatureMode is LogOnly. Reason={Reason} SecretSource={SecretSource} ConnectionId={ConnectionId}",
+                reason, source, connection?.Id);
+            return true;
+        }
+
+        _logger.LogWarning(
+            "WhatsApp webhook rejected because its signature check failed. Reason={Reason} SecretSource={SecretSource} ConnectionId={ConnectionId}",
+            reason, source, connection?.Id);
+        return false;
     }
+
+    private static string? NullIfEmpty(string value) => string.IsNullOrWhiteSpace(value) ? null : value;
 
     public Task ProcessEventAsync(WhatsAppWebhookPayload payload, string rawBody, CancellationToken cancellationToken = default) =>
         ProcessEventAsync(payload, rawBody, null, null, cancellationToken);

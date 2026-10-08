@@ -41,6 +41,27 @@ Free-form replies require a recent incoming message within 24 hours. This implem
 
 `Accepted by WhatsApp` means Meta returned a message ID, not delivery/read confirmation. Delivery receipt reconciliation is not implemented; the pre-existing webhook logs statuses. Provider failures are displayed as failed/unknown, never represented as delivered.
 
+## Webhook signatures: manual setup and Embedded Signup
+
+Meta signs every webhook with the App Secret of the app that sends it (`X-Hub-Signature-256: sha256=<HMAC-SHA256 of the raw body>`). Parrot supports both ways a business connects:
+
+| Setup | Whose Meta app | Secret used to check webhooks |
+|---|---|---|
+| **Manual** | The business's own app | That connection's App Secret, entered in Channels setup (App settings → Basic in Meta) and stored encrypted |
+| **Embedded Signup** (Parrot's app) | Parrot's app | The app-level `WhatsApp__AppSecret` / `Facebook__AppSecret` |
+
+A connection with its own App Secret is always checked with it; one without falls back to the app-level secret. Responses only report `hasAppSecret`; the secret is never returned or logged.
+
+```http
+PUT /api/whatsapp/connections/{connectionId}/app-secret
+PUT /api/facebook/setup/app-secret
+Content-Type: application/json
+
+{"appSecret":"<32 hexadecimal characters>"}
+```
+
+`WhatsApp__SignatureMode` and `Facebook__SignatureMode` decide what a failed check does: `Off`, `LogOnly` (log `… signature check failed; accepted because SignatureMode is LogOnly` and accept), or `Enforce` (log and answer 401). WhatsApp starts at **LogOnly** so live connections keep working while they save their secret; set it to `Enforce` once no `Reason=no_app_secret` or `Reason=mismatch` warnings appear. Facebook stays at **Enforce**, as before.
+
 ## Duplicate protection and failure behavior
 
 - Incoming messages retain the existing unique Mongo `MessageId` index. Repeated webhook/Kafka deliveries insert one document. Cross-owner duplicate IDs are rejected.
@@ -90,6 +111,7 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 | File | Change |
 |---|---|
 | `Parrot.Api/Controllers/ConversationsController.cs` | Authenticated list, history and reply endpoints; ownership checks |
+| `Parrot.Application/Integrations/WebhookSignature.cs` | Signature check and App Secret format, shared by WhatsApp and Facebook |
 | `Parrot.Api/Controllers/MessageHistoryController.cs` | Owner-scoped recovery of messages after a sequence, in the live push's shape |
 | `Parrot.Api/Program.cs` | Mongo, conversation service and WhatsApp HTTP client registrations |
 | `Parrot.Application/Conversations/ConversationContracts.cs` | API models, repository/sender interfaces and provider rejection exception |
