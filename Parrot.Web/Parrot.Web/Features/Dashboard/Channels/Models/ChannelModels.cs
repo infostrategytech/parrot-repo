@@ -16,7 +16,9 @@ public enum ChannelId
     Instagram,
     Facebook,
     /// <summary>Parrot's fourth channel. It has no Aurora counterpart and no backend.</summary>
-    X
+    X,
+    /// <summary>Connected by hand, through the business's own TikTok app, like Facebook.</summary>
+    TikTok
 }
 
 public enum ChannelStatus

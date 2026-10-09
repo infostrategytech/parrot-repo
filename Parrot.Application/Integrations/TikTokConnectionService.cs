@@ -27,7 +27,8 @@ public sealed class TikTokConnectionService(
 
         TikTokConnection? connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken);
         return new TikTokSetupResponse(connection?.Id, RedirectUri(baseUrl), connection?.AppId,
-            connection?.TikTokOpenId is not null, connection?.DisplayName);
+            connection?.TikTokOpenId is not null, connection?.DisplayName,
+            connection is { TikTokOpenId: not null, RefreshTokenExpiresAt: { } refreshExpires } && refreshExpires <= DateTime.UtcNow);
     }
 
     public async Task SaveAppAsync(string ownerUserId, TikTokAppRequest request, CancellationToken cancellationToken = default)

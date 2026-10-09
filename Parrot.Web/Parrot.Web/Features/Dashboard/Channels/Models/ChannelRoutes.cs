@@ -336,6 +336,7 @@ public static class ChannelRoutes
         ChannelId.Whatsapp => new("Send a Message to your Number", "From another phone,", "your business number"),
         ChannelId.Instagram => new("Send a DM to your Account", "From another Instagram account,", "your Instagram account"),
         ChannelId.X => new("Send a DM to your Account", "From another X account,", "your X account"),
+        ChannelId.TikTok => new("Send a Message to your Account", "From another TikTok account,", "your TikTok business account"),
         _ => new("Send a Message to your Page", "From another Facebook account,", "your Facebook Page")
     };
 

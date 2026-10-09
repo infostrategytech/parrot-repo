@@ -26,17 +26,17 @@ public interface IChannelCapabilities
 }
 
 /// <summary>
-/// With the real backend today: WhatsApp and Facebook connect manually (the
+/// With the real backend today: WhatsApp, Facebook and TikTok connect manually (the
 /// API's webhook and credential calls). Meta's Embedded Signup needs Tech
 /// Provider approval, and there is no Facebook Login, Instagram or X
-/// connection yet, so those say "Coming soon". WhatsApp and Facebook have a
-/// disconnect call.
+/// connection yet, so those say "Coming soon". WhatsApp, Facebook and TikTok
+/// have a disconnect call.
 /// </summary>
 public sealed class LiveChannelCapabilities : IChannelCapabilities
 {
     public bool CanUseWindow(ChannelId channel) => false;
 
-    public bool CanSetUpManually(ChannelId channel) => channel is ChannelId.Whatsapp or ChannelId.Facebook;
+    public bool CanSetUpManually(ChannelId channel) => channel is ChannelId.Whatsapp or ChannelId.Facebook or ChannelId.TikTok;
 
-    public bool CanDisconnect(ChannelId channel) => channel is ChannelId.Whatsapp or ChannelId.Facebook;
+    public bool CanDisconnect(ChannelId channel) => channel is ChannelId.Whatsapp or ChannelId.Facebook or ChannelId.TikTok;
 }

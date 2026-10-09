@@ -98,7 +98,8 @@
 
     private string? _copied;
     private Parrot.Web.Services.InboxCustomerDto? Profile => Conversation.Customer;
-    private string? Phone => Profile?.Phone ?? Conversation.Sender;
+    // WhatsApp's sender is the customer's number; on TikTok and Facebook it is an opaque id, not a phone.
+    private string? Phone => Profile?.Phone ?? (Conversation.Channel == "whatsapp" ? Conversation.Sender : null);
     private ConvMessage? LatestInternalNote => Conversation.Messages
         .Where(message => message.Kind == MessageKind.Note)
         .OrderByDescending(message => message.ReceivedAt)
@@ -121,6 +122,7 @@
         "whatsapp" => "WhatsApp",
         "instagram" => "Instagram",
         "facebook" => "Facebook",
+        "tiktok" => "TikTok",
         "email" => "Email",
         "phone" => "Phone",
         _ => "Other"

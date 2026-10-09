@@ -43,7 +43,7 @@ public sealed class MongoConversationStore : IConversationStore
             MessageDocument d = BsonSerializer.Deserialize<MessageDocument>(row["latest"].AsBsonDocument);
             string name = row["name"].IsString ? row["name"].AsString : d.From;
             return new ConversationSummary(d.ConnectionId!.Value, d.From, name,
-                d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt);
+                d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt, d.Platform.ToString().ToLowerInvariant());
         }).ToList();
     }
 

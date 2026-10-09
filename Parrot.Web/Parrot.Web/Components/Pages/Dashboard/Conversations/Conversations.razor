@@ -368,8 +368,9 @@
         get
         {
             var channels = Loaded.Select(c => c.Channel).ToHashSet();
-            var social = new[] { "whatsapp", "instagram", "facebook" }.Where(c => c == "whatsapp" || channels.Contains(c)).ToList();
-            yield return (null, "All social", social.Count > 1 ? "WhatsApp, Instagram & Facebook" : "Every connected inbox");
+            var social = new[] { "whatsapp", "instagram", "facebook", "tiktok" }.Where(c => c == "whatsapp" || channels.Contains(c)).ToList();
+            var names = social.Select(ChannelName).ToList();
+            yield return (null, "All social", social.Count > 1 ? $"{string.Join(", ", names[..^1])} & {names[^1]}" : "Every connected inbox");
             foreach (var channel in social) yield return (channel, ChannelName(channel), $"{ChannelName(channel)} conversations");
         }
     }
@@ -746,6 +747,7 @@
         "whatsapp" => IconName.RiWhatsappFill,
         "instagram" => IconName.RiInstagramFill,
         "facebook" => IconName.RiFacebookCircleFill,
+        "tiktok" => IconName.RiTiktokFill,
         _ => IconName.RiChat3Fill
     };
 
@@ -754,6 +756,7 @@
         "whatsapp" => "WhatsApp",
         "instagram" => "Instagram",
         "facebook" => "Facebook",
+        "tiktok" => "TikTok",
         _ => channel
     };
 

@@ -10,7 +10,9 @@ public sealed record TikTokSetupResponse(
     string RedirectUri,
     string? AppId,
     bool Authorized,
-    string? DisplayName);
+    string? DisplayName,
+    // Authorized once, but the refresh token has lapsed too, so messages cannot be sent until the owner authorizes again.
+    bool NeedsReauthorization = false);
 
 // The customer's own TikTok app (My Apps > App Detail > Basic Information). Write-only: responses
 // never include the secret.

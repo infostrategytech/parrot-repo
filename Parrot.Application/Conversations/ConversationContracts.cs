@@ -2,7 +2,9 @@ using Parrot.Domain.Entities.Messages;
 
 namespace Parrot.Application.Conversations;
 
-public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt);
+public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt,
+    // "whatsapp", "facebook" or "tiktok": the platform of the conversation's latest message.
+    string Channel = "whatsapp");
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt);
 public record SendReplyRequest(Guid RequestId, string Text);
 public record MessagePage(IReadOnlyList<ConversationMessage> Messages, string? NextBefore);

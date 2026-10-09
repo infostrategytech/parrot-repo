@@ -157,6 +157,22 @@ public class TikTokSetupTests
         Assert.Equal("Parrot Test", setup.DisplayName);
     }
 
+    // Access that cannot be renewed any more: the setup says so, so the screen can ask for the consent again.
+    [Fact]
+    public async Task WhenTheRefreshTokenHasLapsed_TheSetupAsksToAuthorizeAgain()
+    {
+        TikTokConnectionService service = NewService();
+        await service.SaveAppAsync(Owner, App("7123456789", "secret"));
+        await service.CompleteAuthorizationAsync(await StateAsync(service), "auth-code");
+        Assert.False((await service.GetSetupAsync(Owner)).NeedsReauthorization);
+
+        _repository.Connection!.RefreshTokenExpiresAt = DateTime.UtcNow.AddMinutes(-1);
+
+        TikTokSetupResponse setup = await service.GetSetupAsync(Owner);
+        Assert.True(setup.Authorized);
+        Assert.True(setup.NeedsReauthorization);
+    }
+
     [Fact]
     public async Task AnAccountWithoutADisplayName_IsNamedByItsUsername()
     {

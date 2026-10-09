@@ -37,6 +37,12 @@
   background: var(--colors-accent-blue-subtle);
 }
 
+/* TikTok's mark follows the text colour, as ChannelIcon draws it. */
+.channel-glyph--tiktok {
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-muted);
+}
+
 /* Inline with a line of text: no edge, a smaller square. */
 .channel-glyph.is-compact {
   width: var(--ds-channel-compact);

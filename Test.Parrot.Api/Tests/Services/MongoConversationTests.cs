@@ -43,7 +43,8 @@ public class MongoConversationTests
             };
             await Task.WhenAll(Enumerable.Range(0, 10).Select(_ => incoming.InsertAsync(message)));
             Assert.Single((await store.ReadAsync("owner", connection, message.From, null, default)).Messages);
-            Assert.Single(await store.ListAsync("owner", 0, 50, default));
+            // The inbox needs to know which channel a conversation is on.
+            Assert.Equal("whatsapp", Assert.Single(await store.ListAsync("owner", 0, 50, default)).Channel);
             // Old incoming documents have neither direction nor send-state fields.
             await client.GetDatabase(database).GetCollection<MessageDocument>("messages")
                 .UpdateOneAsync(x => x.MessageId == message.MessageId,
