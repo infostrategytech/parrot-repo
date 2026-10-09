@@ -303,8 +303,13 @@ else
     protected override async Task OnInitializedAsync()
     {
         TeachAi.Changed += OnTeachAiChanged;
+        AiAgentsState.Changed += OnAgentsChanged;
         await Task.WhenAll(AiAgentsState.LoadAsync(), LoadKnowledgeAsync());
     }
+
+    // The agents or their figures changed, possibly off the circuit's thread
+    // (a push from the hub): draw again on it.
+    private void OnAgentsChanged() => _ = InvokeAsync(StateHasChanged);
 
     private async Task LoadKnowledgeAsync()
     {
@@ -334,7 +339,11 @@ else
         return TeachAi.RequireAsync(() => Task.CompletedTask);
     }
 
-    public void Dispose() => TeachAi.Changed -= OnTeachAiChanged;
+    public void Dispose()
+    {
+        TeachAi.Changed -= OnTeachAiChanged;
+        AiAgentsState.Changed -= OnAgentsChanged;
+    }
 
     // The questions wait in the inbox, where the agent asks them.
     private void ReviewWaiting() => Nav.NavigateTo("/dashboard/conversations");

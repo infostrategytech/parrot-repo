@@ -79,6 +79,7 @@ services:
         create messages.inbound 24
         create messages.inbound.dlq 3
         create messages.persisted 24
+        create agent.events 6
     restart: "no"
     networks: [parrot]
 
@@ -182,6 +183,10 @@ services:
       EmailSettings__FromName: Parrot Local
       EmailSettings__BaseUrl: http://localhost:5255
       FrontendSettings__BaseUrl: http://localhost:5255
+      # The AI orchestrator (Omni-AI). Off until one is running beside this
+      # stack; then agents answer customers and the AI Operations figures show.
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # The object store for image uploads. The app writes to MinIO over the
       # compose network; the URLs it hands back are read by the browser
       # through the published port, so the two bases are not the same host.
@@ -270,6 +275,8 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ApiSettings__BaseUrl: http://parrot-api:8080/
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
+      # Must match the API's: with it on, agents live in the API and can be turned on.
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
     ports:
       - "5255:8080"
     depends_on:
