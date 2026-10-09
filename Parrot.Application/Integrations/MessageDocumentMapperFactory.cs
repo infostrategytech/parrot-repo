@@ -89,6 +89,7 @@ public sealed class TikTokMessageDocumentMapper : IMessageDocumentMapper
 
     public MessageDocument ToDocument(IncomingMessage message) => new TikTokMessageDocument
     {
+        ConversationId = message.ExternalConversationId,
         ConnectionId = message.ConnectionId,
         OwnerUserId = message.OwnerUserId,
         MessageId = message.MessageId,

@@ -39,9 +39,10 @@ public class MessageDocumentMappingTests
     [Fact]
     public void TikTokMessagesMapToTheirOwnDocumentType()
     {
-        MessageDocument document = NewFactory().ToDocument(NewMessage(MessagingPlatform.TikTok));
+        MessageDocument document = NewFactory().ToDocument(NewMessage(MessagingPlatform.TikTok) with { ExternalConversationId = "conversation-1" });
 
         TikTokMessageDocument tiktok = Assert.IsType<TikTokMessageDocument>(document);
+        Assert.Equal("conversation-1", tiktok.ConversationId);
         Assert.Equal("channel", tiktok.ChannelId);
         Assert.Equal(MessagingPlatform.TikTok, tiktok.Platform);
     }

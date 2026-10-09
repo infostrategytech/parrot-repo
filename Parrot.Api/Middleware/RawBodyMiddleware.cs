@@ -47,8 +47,11 @@ public sealed class RawBodyMiddleware
                 context.Request.Method,
                 context.Request.Path.Value,
                 context.Response.Headers["X-Correlation-ID"].ToString(),
-                context.Request.Query.ContainsKey("ref"),
-                context.Request.Headers.ContainsKey("X-Hub-Signature-256"),
+                // Meta's callbacks carry ?ref=; TikTok's carry the reference as the last path segment.
+                platform == "TikTok"
+                    ? context.Request.Path.Value!.Length > "/api/webhooks/tiktok/".Length
+                    : context.Request.Query.ContainsKey("ref"),
+                context.Request.Headers.ContainsKey(platform == "TikTok" ? "TikTok-Signature" : "X-Hub-Signature-256"),
                 context.Request.ContentLength);
         }
 
@@ -97,5 +100,6 @@ public sealed class RawBodyMiddleware
     private static string? WebhookPlatform(PathString path) =>
         path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase) ? "WhatsApp"
         : path.StartsWithSegments("/api/webhooks/facebook", StringComparison.OrdinalIgnoreCase) ? "Facebook"
+        : path.StartsWithSegments("/api/webhooks/tiktok", StringComparison.OrdinalIgnoreCase) ? "TikTok"
         : null;
 }

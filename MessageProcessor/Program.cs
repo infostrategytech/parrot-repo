@@ -46,6 +46,7 @@ builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapp
 
 builder.Services.AddSingleton<IInboundMessageDecoder, WhatsAppInboundDecoder>();
 builder.Services.AddSingleton<IInboundMessageDecoder, FacebookInboundDecoder>();
+builder.Services.AddSingleton<IInboundMessageDecoder, TikTokInboundDecoder>();
 builder.Services.AddSingleton<InboundMessageDecoders>();
 
 // Its constructor creates the collection's indexes, including the unique

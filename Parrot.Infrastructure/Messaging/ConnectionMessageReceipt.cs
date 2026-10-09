@@ -30,6 +30,17 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
             return;
         }
 
+        if (message.Platform == MessagingPlatform.TikTok)
+        {
+            int tikTokUpdated = await db.TikTokConnections
+                .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
+                    && c.DisabledAt == null && c.TikTokOpenId == message.ChannelId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UpdatedAt, now), cancellationToken);
+            if (tikTokUpdated == 0)
+                throw new InvalidOperationException("TikTok message was stored, but its account connection did not match PostgreSQL.");
+            return;
+        }
+
         int updated = await db.WhatsAppConnections
             .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
                 && c.DisabledAt == null && c.WebhookVerifiedAt != null

@@ -27,7 +27,7 @@ public static class ConversationKey
     /// keeps only its digits, so "+234 801 234 5678" and "2348012345678" are
     /// one participant. Anything else, such as the business-scoped user id
     /// Meta sends for a customer who hides their number behind a username
-    /// ("NG.1A2B…"), is an opaque id and is kept exactly, as Facebook ids are.
+    /// ("NG.1A2B…"), is an opaque id and is kept exactly, as Facebook and TikTok ids are.
     /// </summary>
     public static string NormalizeParticipant(MessagingPlatform platform, string participant)
     {
@@ -35,7 +35,7 @@ public static class ConversationKey
         string normalized = platform switch
         {
             MessagingPlatform.WhatsApp when IsPhoneNumber(trimmed) => new string(trimmed.Where(char.IsAsciiDigit).ToArray()),
-            MessagingPlatform.WhatsApp or MessagingPlatform.Facebook => trimmed,
+            MessagingPlatform.WhatsApp or MessagingPlatform.Facebook or MessagingPlatform.TikTok => trimmed,
             _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "No conversation key rule for this platform."),
         };
 
@@ -53,6 +53,7 @@ public static class ConversationKey
     {
         MessagingPlatform.WhatsApp => "whatsapp",
         MessagingPlatform.Facebook => "facebook",
+        MessagingPlatform.TikTok => "tiktok",
         _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "No conversation key rule for this platform."),
     };
 }

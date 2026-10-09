@@ -291,6 +291,18 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
             }));
+
+    // 1000 TikTok webhook deliveries per IP per minute
+    options.AddPolicy(RateLimitPolicies.TikTokWebhook, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1000,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
 });
 
 // Monitoring: every request is timed and counted by MonitoringMiddleware;
@@ -350,6 +362,7 @@ builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepo
 builder.Services.AddScoped<ITikTokConnectionRepository, TikTokConnectionRepository>();
 builder.Services.AddScoped<IFacebookConnectionService, FacebookConnectionService>();
 builder.Services.AddScoped<ITikTokConnectionService, TikTokConnectionService>();
+builder.Services.AddScoped<ITikTokWebhookService, TikTokWebhookService>();
 builder.Services.AddHttpClient<ITikTokApiClient, TikTokApiClient>();
 builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<RequestContext>());
