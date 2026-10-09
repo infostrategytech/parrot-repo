@@ -69,6 +69,66 @@ public class TikTokApiClientTests
         Assert.Equal(new TikTokAccount("parrot_test", "Parrot Test"), account);
     }
 
+    [Fact]
+    public async Task Refreshing_PostsTheRefreshTokenAndReturnsTheRotatedPair()
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, """
+            {"code":0,"message":"OK","data":{"access_token":"new-access","expires_in":86400,
+             "refresh_token":"new-refresh","refresh_token_expires_in":2592000}}
+            """);
+
+        TikTokRefreshedTokens tokens = await Client(handler).RefreshTokensAsync("7123456789", "app-secret", "old-refresh", default);
+
+        Assert.Equal(HttpMethod.Post, handler.Method);
+        Assert.Equal("https://business-api.tiktok.com/open_api/v1.3/tt_user/oauth2/refresh_token/", handler.Url);
+        using JsonDocument body = JsonDocument.Parse(handler.Payload!);
+        Assert.Equal("7123456789", body.RootElement.GetProperty("client_id").GetString());
+        Assert.Equal("app-secret", body.RootElement.GetProperty("client_secret").GetString());
+        Assert.Equal("refresh_token", body.RootElement.GetProperty("grant_type").GetString());
+        Assert.Equal("old-refresh", body.RootElement.GetProperty("refresh_token").GetString());
+        Assert.Equal(new TikTokRefreshedTokens("new-access", TimeSpan.FromDays(1), "new-refresh", TimeSpan.FromDays(30)), tokens);
+    }
+
+    [Fact]
+    public async Task SendingText_PostsToTheConversationWithTheAccessTokenHeader_AndReturnsTikToksMessageId()
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, "{\"code\":0,\"message\":\"OK\",\"data\":{\"message\":{\"message_id\":\"tt-msg-9\"}}}");
+
+        string id = await Client(handler).SendTextAsync("biz-open-id", "access-token", "conversation-1", "Hello there", default);
+
+        Assert.Equal("tt-msg-9", id);
+        Assert.Equal(HttpMethod.Post, handler.Method);
+        Assert.Equal("https://business-api.tiktok.com/open_api/v1.3/business/message/send/", handler.Url);
+        Assert.Equal("access-token", handler.AccessToken);
+        using JsonDocument body = JsonDocument.Parse(handler.Payload!);
+        Assert.Equal("biz-open-id", body.RootElement.GetProperty("business_id").GetString());
+        Assert.Equal("CONVERSATION", body.RootElement.GetProperty("recipient_type").GetString());
+        Assert.Equal("conversation-1", body.RootElement.GetProperty("recipient").GetString());
+        Assert.Equal("TEXT", body.RootElement.GetProperty("message_type").GetString());
+        Assert.Equal("Hello there", body.RootElement.GetProperty("text").GetProperty("body").GetString());
+    }
+
+    // Accepted by TikTok but without an id: whether it went is not known, so the caller must not resend.
+    [Fact]
+    public async Task ASendResponseWithoutAMessageId_IsNotTreatedAsASuccess()
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, Ok);
+
+        await Assert.ThrowsAsync<JsonException>(
+            () => Client(handler).SendTextAsync("biz-open-id", "access-token", "conversation-1", "Hello", default));
+    }
+
+    [Fact]
+    public async Task ASendTikTokRefuses_IsARefusalWithItsCode()
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, "{\"code\":40100,\"message\":\"Access token is invalid.\",\"data\":{}}");
+
+        TikTokApiException error = await Assert.ThrowsAsync<TikTokApiException>(
+            () => Client(handler).SendTextAsync("biz-open-id", "bad", "conversation-1", "Hello", default));
+
+        Assert.Equal(40100, error.Code);
+    }
+
     // TikTok reports most refusals in the body of a 200.
     [Fact]
     public async Task ANonZeroCode_IsARefusalWithTikToksMessage()

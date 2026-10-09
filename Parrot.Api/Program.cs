@@ -387,6 +387,8 @@ builder.Services.AddSingleton<IConversationSequence, MongoConversationSequence>(
 
 // Registers every "_t" discriminator before the API reads anything from the collection.
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
+builder.Services.AddScoped<TikTokAccessTokens>();
+builder.Services.AddScoped<TikTokReplyService>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 

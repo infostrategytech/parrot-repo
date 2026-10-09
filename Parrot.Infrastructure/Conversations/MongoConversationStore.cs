@@ -73,7 +73,7 @@ public sealed class MongoConversationStore : IConversationStore
     public async Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct) =>
         await _messages.Find(x => x.OwnerUserId == owner && x.MessageId == ConversationService.RequestKey(owner, request)).FirstOrDefaultAsync(ct);
 
-    public async Task<bool> ReserveAsync(WhatsAppMessageDocument message, CancellationToken ct)
+    public async Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct)
     {
         try { await _messages.InsertOneAsync(message, cancellationToken: ct); return true; }
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey) { return false; }

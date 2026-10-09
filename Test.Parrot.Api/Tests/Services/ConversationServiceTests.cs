@@ -201,7 +201,7 @@ public class ConversationServiceTests
         public bool FailComplete { get; set; }
         public Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct) =>
             Task.FromResult(Messages.GetValueOrDefault(ConversationService.RequestKey(owner, request)));
-        public Task<bool> ReserveAsync(WhatsAppMessageDocument message, CancellationToken ct) => Task.FromResult(Messages.TryAdd(message.MessageId, message));
+        public Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct) => Task.FromResult(Messages.TryAdd(message.MessageId, message));
         public Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct)
         {
             if (FailComplete) throw new InvalidOperationException("Mongo unavailable");

@@ -17,6 +17,13 @@ public interface ITikTokConnectionRepository
     // Marks the owner's active connection disabled; its ?ref= stops routing webhooks at once.
     Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default);
 
+    // Replaces the tokens after a refresh, only if the stored refresh token is still the one that was used,
+    // so two sends refreshing together cannot overwrite each other's rotated token. False: it changed first.
+    Task<bool> SaveRefreshedTokensAsync(Guid id, string expectedEncryptedRefreshToken,
+        string encryptedAccessToken, DateTime accessTokenExpiresAt,
+        string encryptedRefreshToken, DateTime refreshTokenExpiresAt,
+        CancellationToken cancellationToken = default);
+
     // Saves the authorized TikTok Business Account and its encrypted tokens; throws ConflictException
     // if the connection is unavailable or the account is already connected elsewhere.
     Task SaveAccountAsync(Guid id, string ownerUserId, string tikTokOpenId, string displayName,

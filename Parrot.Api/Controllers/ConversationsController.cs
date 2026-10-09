@@ -14,7 +14,7 @@ namespace Parrot.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "conversations")]
 public sealed class ConversationsController(IConversationStore store, ConversationService service,
-    IWhatsAppConnectionRepository connections) : ControllerBase
+    IWhatsAppConnectionRepository connections, ITikTokConnectionRepository tikTokConnections) : ControllerBase
 {
     private string Owner => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? throw new UnauthorizedException("Sign in to continue.");
@@ -27,12 +27,13 @@ public sealed class ConversationsController(IConversationStore store, Conversati
     public async Task<IActionResult> Messages(Guid connectionId, [FromQuery] string sender,
         [FromQuery] string? before, CancellationToken cancellationToken)
     {
-        if (await connections.GetByOwnerAndIdAsync(Owner, connectionId) is null)
+        if (await connections.GetByOwnerAndIdAsync(Owner, connectionId) is null
+            && (await tikTokConnections.GetByOwnerAsync(Owner, cancellationToken))?.Id != connectionId)
             throw new NotFoundException("Connection not found.");
         return Ok(await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken));
     }
 
-    [Monitor("conversations.send", SlowMs = 3000)] // waits on the WhatsApp Cloud API
+    [Monitor("conversations.send", SlowMs = 3000)] // waits on the WhatsApp Cloud API or TikTok
     [HttpPost("{connectionId:guid}/messages")]
     public async Task<IActionResult> Send(Guid connectionId, [FromQuery] string sender,
         [FromBody] SendReplyRequest request, CancellationToken cancellationToken) =>

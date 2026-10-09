@@ -57,6 +57,43 @@ public sealed class TikTokApiClient(HttpClient http, IOptions<TikTokSettings> op
         return new TikTokAccount(RequiredString(data, "username"), OptionalString(data, "display_name"));
     }
 
+    public async Task<TikTokRefreshedTokens> RefreshTokensAsync(string appId, string appSecret, string refreshToken,
+        CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, Url("tt_user/oauth2/refresh_token/"))
+        {
+            Content = JsonContent.Create(new
+            {
+                client_id = appId, client_secret = appSecret, grant_type = "refresh_token", refresh_token = refreshToken,
+            }),
+        };
+        using JsonDocument json = await SendAsync(request, cancellationToken);
+        JsonElement data = Data(json);
+        return new TikTokRefreshedTokens(
+            RequiredString(data, "access_token"),
+            TimeSpan.FromSeconds(RequiredSeconds(data, "expires_in")),
+            RequiredString(data, "refresh_token"),
+            TimeSpan.FromSeconds(RequiredSeconds(data, "refresh_token_expires_in")));
+    }
+
+    public async Task<string> SendTextAsync(string businessId, string accessToken, string conversationId, string text,
+        CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, Url("business/message/send/"))
+        {
+            Content = JsonContent.Create(new
+            {
+                business_id = businessId, recipient_type = "CONVERSATION", recipient = conversationId,
+                message_type = "TEXT", text = new { body = text },
+            }),
+        };
+        request.Headers.Add("Access-Token", accessToken);
+        using JsonDocument json = await SendAsync(request, cancellationToken);
+        return Data(json).TryGetProperty("message", out JsonElement message) && message.ValueKind == JsonValueKind.Object
+            ? RequiredString(message, "message_id")
+            : throw new JsonException("TikTok returned no message.");
+    }
+
     private string Url(string path) =>
         $"https://business-api.tiktok.com/open_api/{Uri.EscapeDataString(options.Value.ApiVersion)}/{path}";
 

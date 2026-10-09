@@ -15,7 +15,7 @@ public interface IConversationStore
     // The customer's most recent message on this connection, or null when there is none.
     Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct);
     Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct);
-    Task<bool> ReserveAsync(WhatsAppMessageDocument message, CancellationToken ct);
+    Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct);
     Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct);
 }
 

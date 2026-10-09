@@ -13,12 +13,27 @@ public interface ITikTokApiClient
 
     // Reads the Business Account's username and display name.
     Task<TikTokAccount> GetAccountAsync(string businessId, string accessToken, CancellationToken cancellationToken);
+
+    // Trades a refresh token for a new access token; TikTok may also rotate the refresh token.
+    Task<TikTokRefreshedTokens> RefreshTokensAsync(string appId, string appSecret, string refreshToken,
+        CancellationToken cancellationToken);
+
+    // Sends a text reply into a conversation and returns TikTok's id for the message. A refusal is a
+    // TikTokApiException; a 5xx or no answer leaves it unknown whether the message went, so is not retried.
+    Task<string> SendTextAsync(string businessId, string accessToken, string conversationId, string text,
+        CancellationToken cancellationToken);
 }
 
 // TikTok's token response. The access token lasts about a day; the refresh token renews it until it expires too.
 public sealed record TikTokTokens(
     string OpenId,
     IReadOnlyList<string> Scopes,
+    string AccessToken,
+    TimeSpan AccessTokenLifetime,
+    string RefreshToken,
+    TimeSpan RefreshTokenLifetime);
+
+public sealed record TikTokRefreshedTokens(
     string AccessToken,
     TimeSpan AccessTokenLifetime,
     string RefreshToken,
