@@ -70,6 +70,7 @@ public class InboxUnreadStateTests
     [Theory]
     [InlineData(MessagingPlatform.WhatsApp)]
     [InlineData(MessagingPlatform.Facebook)]
+    [InlineData(MessagingPlatform.Instagram)]
     [InlineData(MessagingPlatform.TikTok)]
     public async Task ACustomersPushOnAnyChannelAddsOneAndAReplyAddsNothing(MessagingPlatform platform)
     {

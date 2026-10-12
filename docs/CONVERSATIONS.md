@@ -140,7 +140,7 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 
 ## Unread counts
 
-The inbox's rail badge and each row's badge count customer messages the signed-in user has not read, on every channel (WhatsApp, Facebook, TikTok, and any later channel stored in the same collection).
+The inbox's rail badge and each row's badge count customer messages the signed-in user has not read, on every channel (WhatsApp, Facebook, Instagram and TikTok: anything stored in the messages collection).
 
 - A user's position in a conversation is the newest message they have seen, kept in the `conversation_reads` collection (unique per user, connection and customer). Unread is the incoming messages after it. The agent's own replies never count. A position only moves forward.
 - Opening a conversation marks it read. The web app sends the id of the newest message its read returned, never "now", so a message that arrives mid-read stays unread. Marking is a separate `POST`, not a side effect of reading the thread: the open thread is re-read every 15 seconds. It is skipped while the browser tab is hidden, and the next poll marks it once the tab is back.
@@ -151,7 +151,7 @@ The inbox's rail badge and each row's badge count customer messages the signed-i
 
 ## Reply window and delivery receipts
 
-**Reply window.** A business may reply with free text only within a window of the customer's last message: 24 hours on WhatsApp and Messenger, 48 on TikTok. `ReplyWindow` is the one rule; the send paths enforce it and each `GET /api/conversations` row carries `lastCustomerMessageAt` and `replyWindowHours` so the inbox can show the time left. When it has closed, the conversation header says so and the reply box is disabled (a timed-out send waiting for its check can still be retried). The server's own check stays the authority.
+**Reply window.** A business may reply with free text only within a window of the customer's last message: 24 hours on WhatsApp, Messenger and Instagram, 48 on TikTok. `ReplyWindow` is the one rule; the send paths enforce it and each `GET /api/conversations` row carries `lastCustomerMessageAt` and `replyWindowHours` so the inbox can show the time left. When it has closed, the conversation header says so and the reply box is disabled (a timed-out send waiting for its check can still be retried). The server's own check stays the authority.
 
 **Delivery receipts (WhatsApp).** Meta reports each reply as `sent`, `delivered`, `read` or `failed` to the connection's webhook. Delivered, read and failed are recorded on the stored reply (`DeliveredAt`, `ReadAt`, or a failed send status) by `MongoDeliveryReceipts`, and the message's `status` in the API becomes `delivered` or `read` (a failed reply stays `failed`).
 
@@ -168,7 +168,7 @@ The inbox's rail badge and each row's badge count customer messages the signed-i
 - Delivery by id marks those replies delivered; a watermark marks every reply to that customer sent at or before it. A read does the same for read (and delivered).
 - Only replies Messenger accepted (those with Meta's message id) are touched, and only on that Page's connection.
 - Parrot compares its own send time with Meta's watermark, so clock skew of a few seconds between Parrot's server and Meta's could mislabel a reply sent right at the moment the customer read.
-- Instagram's `messaging_seen` names a message instead of a watermark, so it is ignored here until Instagram ingestion exists.
+- Instagram is not wired: its setup subscribes only to `messages`, and its `messaging_seen` event names a message instead of a watermark, so Instagram replies stay at Accepted. Doing it later means subscribing the connection to `messaging_seen` as well.
 
 ## Audit map
 

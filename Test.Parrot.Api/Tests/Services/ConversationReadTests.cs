@@ -53,6 +53,7 @@ public class ConversationReadTests
         MessageDocument document = platform switch
         {
             MessagingPlatform.Facebook => new FacebookMessageDocument { MessageId = messageId, Platform = platform, ExternalAccountId = "a", From = customer, Timestamp = timestamp, Type = "text", ChannelId = "a", ChannelDisplayName = "a" },
+            MessagingPlatform.Instagram => new InstagramMessageDocument { MessageId = messageId, Platform = platform, ExternalAccountId = "a", From = customer, Timestamp = timestamp, Type = "text", ChannelId = "a", ChannelDisplayName = "a" },
             MessagingPlatform.TikTok => new TikTokMessageDocument { MessageId = messageId, Platform = platform, ExternalAccountId = "a", From = customer, Timestamp = timestamp, Type = "text", ChannelId = "a", ChannelDisplayName = "a" },
             _ => new WhatsAppMessageDocument { MessageId = messageId, Platform = platform, ExternalAccountId = "a", From = customer, Timestamp = timestamp, Type = "text", ChannelId = "a", ChannelDisplayName = "a" },
         };
@@ -69,24 +70,28 @@ public class ConversationReadTests
     public async Task EveryChannelCountsAndTheAgentsOwnRepliesNeverDo()
     {
         await using Harness h = new();
-        Guid whatsApp = Guid.NewGuid(), facebook = Guid.NewGuid(), tikTok = Guid.NewGuid();
+        Guid whatsApp = Guid.NewGuid(), facebook = Guid.NewGuid(), instagram = Guid.NewGuid(), tikTok = Guid.NewGuid();
         await h.AddAsync(
             Message(MessagingPlatform.WhatsApp, whatsApp, "2348012345678"),
             Message(MessagingPlatform.WhatsApp, whatsApp, "2348012345678"),
             Message(MessagingPlatform.WhatsApp, whatsApp, "2348012345678", outgoing: true),
             Message(MessagingPlatform.Facebook, facebook, "psid-1"),
+            Message(MessagingPlatform.Instagram, instagram, "igsid-1"),
+            Message(MessagingPlatform.Instagram, instagram, "igsid-1"),
+            Message(MessagingPlatform.Instagram, instagram, "igsid-1", outgoing: true),
             Message(MessagingPlatform.TikTok, tikTok, "open-id-1"),
             Message(MessagingPlatform.TikTok, tikTok, "open-id-1"),
             Message(MessagingPlatform.TikTok, tikTok, "open-id-1"));
         MongoConversationReadStore store = h.Store();
 
         IReadOnlyDictionary<(Guid, string), int> counts = await store.CountUnreadAsync(Owner, Owner,
-            [(whatsApp, "2348012345678"), (facebook, "psid-1"), (tikTok, "open-id-1")], default);
+            [(whatsApp, "2348012345678"), (facebook, "psid-1"), (instagram, "igsid-1"), (tikTok, "open-id-1")], default);
 
         Assert.Equal(2, counts[(whatsApp, "2348012345678")]);
         Assert.Equal(1, counts[(facebook, "psid-1")]);
+        Assert.Equal(2, counts[(instagram, "igsid-1")]);
         Assert.Equal(3, counts[(tikTok, "open-id-1")]);
-        Assert.Equal(6, await store.TotalUnreadAsync(Owner, Owner, default));
+        Assert.Equal(8, await store.TotalUnreadAsync(Owner, Owner, default));
     }
 
     [MongoFact]
