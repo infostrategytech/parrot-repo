@@ -31,8 +31,9 @@ public class WhatsAppReceiptsTests
         PhoneNumberId = "phone-1", WebhookVerifiedAt = DateTime.UtcNow,
     };
     private readonly Mock<IDeliveryReceipts> _receipts = new();
+    private readonly Mock<IReceiptNotifier> _notifier = new();
 
-    private WhatsAppWebhookService Webhooks(IDeliveryReceipts? receipts)
+    private WhatsAppWebhookService Webhooks(IDeliveryReceipts? receipts, IReceiptNotifier? notifier = null)
     {
         Mock<IWhatsAppConnectionRepository> connections = new();
         connections.Setup(c => c.GetActiveByIdentifierAsync(It.IsAny<string>())).ReturnsAsync(_connection);
@@ -42,11 +43,11 @@ public class WhatsAppReceiptsTests
             new InboundMessagePublisher(Mock.Of<IMessageBus>(), Options.Create(new KafkaSettings()), Mock.Of<IAppLogger<InboundMessagePublisher>>()),
             connections.Object,
             Mock.Of<IWhatsAppTokenProtector>(),
-            receipts: receipts);
+            receipts: receipts, notifier: notifier);
     }
 
-    private Task<bool> ProcessAsync(string body, IDeliveryReceipts? receipts) =>
-        Webhooks(receipts).ProcessConnectionEventAsync("ref", JsonSerializer.Deserialize<WhatsAppWebhookPayload>(body)!, body);
+    private Task<bool> ProcessAsync(string body, IDeliveryReceipts? receipts, IReceiptNotifier? notifier = null) =>
+        Webhooks(receipts, notifier).ProcessConnectionEventAsync("ref", JsonSerializer.Deserialize<WhatsAppWebhookPayload>(body)!, body);
 
     [Fact]
     public async Task DeliveredReadAndFailedAreRecordedOnThisConnection_SentIsNot()
@@ -95,4 +96,41 @@ public class WhatsAppReceiptsTests
     [Fact]
     public async Task WithoutARecorderTheWebhookStillWorks() =>
         Assert.True(await ProcessAsync(Body(Status("wamid.1", "read")), receipts: null));
+
+    [Fact]
+    public async Task TheOwnersInboxIsToldWhichCustomersThreadChanged_NotForSent()
+    {
+        string body = Body(string.Join(",", Status("wamid.1", "sent"), Status("wamid.1", "read")));
+
+        await ProcessAsync(body, _receipts.Object, _notifier.Object);
+
+        _notifier.Verify(n => n.ReceiptsChangedAsync("owner-1", _connection.Id, "2348012345678", It.IsAny<CancellationToken>()), Times.Once);
+        _notifier.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task WithoutARecipientTheWholeConnectionIsNamed()
+    {
+        string body = Body("{\"id\":\"wamid.1\",\"status\":\"read\",\"timestamp\":\"1790589124\"}");
+
+        await ProcessAsync(body, _receipts.Object, _notifier.Object);
+
+        _notifier.Verify(n => n.ReceiptsChangedAsync("owner-1", _connection.Id, null, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ANotifierThatFailsOrHangsNeverFailsOrDelaysTheWebhook()
+    {
+        Mock<IReceiptNotifier> failing = new();
+        failing.Setup(n => n.ReceiptsChangedAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("redis down"));
+        Assert.True(await ProcessAsync(Body(Status("wamid.1", "read")), _receipts.Object, failing.Object));
+
+        Mock<IReceiptNotifier> hanging = new();
+        hanging.Setup(n => n.ReceiptsChangedAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .Returns<string, Guid, string?, CancellationToken>(async (_, _, _, ct) => { await Task.Delay(Timeout.Infinite, ct); });
+        System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+        Assert.True(await ProcessAsync(Body(Status("wamid.1", "read")), _receipts.Object, hanging.Object));
+        Assert.InRange(clock.Elapsed.TotalSeconds, 0, 3);
+    }
 }

@@ -20,6 +20,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
     private readonly IAppLogger<FacebookWebhookService> _logger;
     private readonly IFacebookCredentialProtector _protector;
     private readonly IDeliveryReceipts? _receipts;
+    private readonly IReceiptNotifier? _notifier;
 
     // How long recording receipts may hold up the 200 Messenger is waiting for.
     private static readonly TimeSpan ReceiptBudget = TimeSpan.FromSeconds(1);
@@ -30,7 +31,8 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         InboundMessagePublisher publisher,
         IAppLogger<FacebookWebhookService> logger,
         IFacebookCredentialProtector protector,
-        IDeliveryReceipts? receipts = null)
+        IDeliveryReceipts? receipts = null,
+        IReceiptNotifier? notifier = null)
     {
         _settings = settings.Value;
         _connections = connections;
@@ -38,6 +40,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         _logger = logger;
         _protector = protector;
         _receipts = receipts;
+        _notifier = notifier;
     }
 
     public string GetWebhookUrl() =>
@@ -232,6 +235,12 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
                 {
                     DateTime at = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp) ?? readUpTo;
                     await _receipts.RecordUpToAsync(registration.ConnectionId, customer, DeliveryState.Read, at, readUpTo, budget.Token);
+                }
+
+                // The open inbox re-reads the thread.
+                if (_notifier is not null)
+                {
+                    await _notifier.ReceiptsChangedAsync(registration.OwnerUserId, registration.ConnectionId, customer, budget.Token);
                 }
             }
             catch (Exception ex)

@@ -405,6 +405,7 @@ builder.Services.AddSignalR()
     // message and the history API's look identical to the client.
     .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
+builder.Services.AddSingleton<IReceiptNotifier, Parrot.Api.Realtime.HubReceiptNotifier>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
 
 // Controllers & OpenAPI

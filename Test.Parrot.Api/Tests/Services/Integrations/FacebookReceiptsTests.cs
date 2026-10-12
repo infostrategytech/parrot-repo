@@ -22,8 +22,9 @@ public class FacebookReceiptsTests
     private readonly Guid _connectionId = Guid.NewGuid();
     private readonly Mock<IDeliveryReceipts> _receipts = new();
     private readonly Mock<IMessageBus> _bus = new();
+    private readonly Mock<IReceiptNotifier> _notifier = new();
 
-    private FacebookWebhookService Webhooks(IDeliveryReceipts? receipts)
+    private FacebookWebhookService Webhooks(IDeliveryReceipts? receipts, IReceiptNotifier? notifier = null)
     {
         Mock<IFacebookConnectionRepository> connections = new();
         connections.Setup(c => c.GetActiveByIdentifierAsync("reference", It.IsAny<CancellationToken>())).ReturnsAsync(new FacebookConnection
@@ -37,14 +38,14 @@ public class FacebookReceiptsTests
             new InboundMessagePublisher(_bus.Object, Options.Create(new KafkaSettings()), Mock.Of<IAppLogger<InboundMessagePublisher>>()),
             Mock.Of<IAppLogger<FacebookWebhookService>>(),
             Mock.Of<IFacebookCredentialProtector>(),
-            receipts);
+            receipts, notifier);
     }
 
     private static string Event(string kind) => "{\"object\":\"page\",\"entry\":[{\"id\":\"" + PageId + "\",\"time\":1,\"messaging\":[{"
         + "\"sender\":{\"id\":\"" + Customer + "\"},\"recipient\":{\"id\":\"" + PageId + "\"},\"timestamp\":" + EventTime + "," + kind + "}]}]}";
 
-    private Task<bool> ProcessAsync(string body, IDeliveryReceipts? receipts) =>
-        Webhooks(receipts).ProcessConnectionEventAsync("reference", JsonSerializer.Deserialize<FacebookWebhookPayload>(body)!, body);
+    private Task<bool> ProcessAsync(string body, IDeliveryReceipts? receipts, IReceiptNotifier? notifier = null) =>
+        Webhooks(receipts, notifier).ProcessConnectionEventAsync("reference", JsonSerializer.Deserialize<FacebookWebhookPayload>(body)!, body);
 
     [Fact]
     public async Task ADeliveryNamesItsMessagesAndCoversEverythingBeforeItsWatermark()
@@ -115,4 +116,22 @@ public class FacebookReceiptsTests
     [Fact]
     public async Task WithoutARecorderTheWebhookStillWorks() =>
         Assert.True(await ProcessAsync(Event("\"read\":{\"watermark\":" + Watermark + "}"), receipts: null));
+
+    [Fact]
+    public async Task TheOwnersInboxIsToldWhichCustomersThreadChanged()
+    {
+        await ProcessAsync(Event("\"read\":{\"watermark\":" + Watermark + "}"), _receipts.Object, _notifier.Object);
+
+        _notifier.Verify(n => n.ReceiptsChangedAsync("owner-1", _connectionId, Customer, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ANotifierThatFailsNeverFailsTheWebhook()
+    {
+        Mock<IReceiptNotifier> failing = new();
+        failing.Setup(n => n.ReceiptsChangedAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("redis down"));
+
+        Assert.True(await ProcessAsync(Event("\"read\":{\"watermark\":" + Watermark + "}"), _receipts.Object, failing.Object));
+    }
 }

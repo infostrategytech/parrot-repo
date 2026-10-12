@@ -23,6 +23,9 @@ public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<Messaging
     /// <summary>The client method a persisted message is pushed to.</summary>
     public const string MessagePersistedMethod = "messagePersisted";
 
+    /// <summary>The client method pushed when a channel reports receipts for replies.</summary>
+    public const string ReceiptsChangedMethod = "receiptsChanged";
+
     public override async Task OnConnectedAsync()
     {
         await RegisterAsync("session.registered");

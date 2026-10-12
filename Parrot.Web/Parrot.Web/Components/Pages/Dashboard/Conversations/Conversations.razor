@@ -444,6 +444,7 @@
         ConversationsState.Clear();
         AuthState.OnChange += AuthChanged;
         Realtime.MessageReceived += OnMessagePushed;
+        Realtime.ReceiptsChanged += OnReceiptsChanged;
         Realtime.Reconnected += OnRealtimeReconnected;
     }
 
@@ -515,6 +516,14 @@
         StateHasChanged();
     });
 
+    // A channel reported delivered or read for replies. Only the open thread shows them, so only it is
+    // read again; if a read is already running, the next poll catches the change.
+    private Task OnReceiptsChanged(Parrot.Application.Messaging.ReceiptsChanged change) => InvokeAsync(async () =>
+    {
+        if (_disposed || _selected is not { } open || !change.Concerns(open.ConnectionId, open.Sender)) return;
+        await RunAsync(() => ReadSelectedAsync(false));
+    });
+
     // Pushes sent while the connection was down were missed. The thread read
     // pages back until it meets a message it already has, so it fills the gap.
     private Task OnRealtimeReconnected() => InvokeAsync(RefreshAsync);
@@ -530,7 +539,7 @@
 
     // Pushes carry new messages while the hub is connected, so polling is the
     // safety net: slow then, fast while pushes cannot arrive. Replies are not
-    // pushed yet, so the slow poll is also how another agent's reply shows.
+    // pushed, so the slow poll is also how another agent's reply shows.
     private static readonly TimeSpan ConnectedPoll = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DisconnectedPoll = TimeSpan.FromSeconds(5);
 
@@ -812,7 +821,7 @@
     public void Dispose()
     {
         _disposed = true; AuthState.OnChange -= AuthChanged;
-        Realtime.MessageReceived -= OnMessagePushed; Realtime.Reconnected -= OnRealtimeReconnected;
+        Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.Reconnected -= OnRealtimeReconnected;
         _lifetime.Cancel(); _lifetime.Dispose();
         if (_customerEscape is not null) _ = _customerEscape.DisposeAsync().AsTask().ContinueWith(_ => _self?.Dispose());
         else _self?.Dispose();

@@ -29,6 +29,9 @@ public sealed class RealtimeClient(AuthState auth, IConfiguration configuration,
     /// <summary>A newly persisted message for this user, once per message id.</summary>
     public event Func<StoredMessage, Task>? MessageReceived;
 
+    /// <summary>A channel reported receipts (delivered, read) for replies in a conversation.</summary>
+    public event Func<ReceiptsChanged, Task>? ReceiptsChanged;
+
     /// <summary>The connection is back after a drop; anything sent meanwhile was missed live.</summary>
     public event Func<Task>? Reconnected;
 
@@ -65,6 +68,11 @@ public sealed class RealtimeClient(AuthState auth, IConfiguration configuration,
         {
             if (!_seen.TryAdd(message.MessageId)) return;
             if (MessageReceived is { } handler) await handler(message);
+        });
+
+        connection.On<ReceiptsChanged>("receiptsChanged", async change =>
+        {
+            if (ReceiptsChanged is { } handler) await handler(change);
         });
 
         connection.Reconnected += async _ =>

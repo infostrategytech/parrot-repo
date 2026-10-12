@@ -71,3 +71,15 @@ public sealed record StoredMessage
 
     required public DateTime PersistedAt { get; init; }
 }
+
+/// <summary>
+/// Pushed to the owner's inbox when a channel reports receipts for replies in a conversation. It names the
+/// conversation, not the receipts: the inbox re-reads the thread it has open.
+/// </summary>
+/// <param name="Customer">Null when the channel did not say which customer, which means any on that connection.</param>
+public sealed record ReceiptsChanged(Guid ConnectionId, string? Customer)
+{
+    /// <summary>True when this is about the thread the inbox is showing.</summary>
+    public bool Concerns(Guid connection, string sender) =>
+        ConnectionId == connection && (Customer is null || Customer == sender);
+}

@@ -22,6 +22,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
     private readonly IWhatsAppTokenProtector _protector;
     private readonly IReplySendTimes? _sendTimes;
     private readonly IDeliveryReceipts? _receipts;
+    private readonly IReceiptNotifier? _notifier;
 
     public WhatsAppWebhookService(
         IOptions<WhatsAppSettings> settings,
@@ -30,7 +31,8 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         IWhatsAppConnectionRepository connections,
         IWhatsAppTokenProtector protector,
         IReplySendTimes? sendTimes = null,
-        IDeliveryReceipts? receipts = null)
+        IDeliveryReceipts? receipts = null,
+        IReceiptNotifier? notifier = null)
     {
         _settings = settings.Value;
         _logger = logger;
@@ -39,6 +41,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         _protector = protector;
         _sendTimes = sendTimes;
         _receipts = receipts;
+        _notifier = notifier;
     }
 
     public string GetWebhookUrl() =>
@@ -278,14 +281,14 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         budget.CancelAfter(StatusLookupBudget);
         foreach (WhatsAppMessageStatus status in statuses)
         {
-            await RecordStatusAsync(status, connectionId, budget.Token);
+            await RecordStatusAsync(status, connectionId, ownerUserId, budget.Token);
         }
     }
 
     // Counts the status, records it on the reply Parrot sent, and measures how long Meta took to
     // report it. Never fails or delays the webhook: once the lookup budget is spent the status is
     // still counted, only the rest is skipped.
-    private async Task RecordStatusAsync(WhatsAppMessageStatus status, Guid? connectionId, CancellationToken budget)
+    private async Task RecordStatusAsync(WhatsAppMessageStatus status, Guid? connectionId, string? ownerUserId, CancellationToken budget)
     {
         string label = status.Status is "sent" or "delivered" or "read" or "failed" ? status.Status : "other";
         KeyValuePair<string, object?> tag = new("status", label);
@@ -304,6 +307,15 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
             {
                 await _receipts.RecordAsync(connection, status.Id, state,
                     ProviderTimestamp.FromUnixSeconds(status.Timestamp) ?? DateTime.UtcNow, budget);
+
+                // The open inbox re-reads the thread. The customer is who the receipt names, as the thread's sender.
+                if (_notifier is not null && ownerUserId is not null)
+                {
+                    string? customer = string.IsNullOrWhiteSpace(status.RecipientId)
+                        ? null
+                        : ConversationKey.NormalizeParticipant(MessagingPlatform.WhatsApp, status.RecipientId);
+                    await _notifier.ReceiptsChangedAsync(ownerUserId, connection, customer, budget);
+                }
             }
             catch (Exception ex)
             {

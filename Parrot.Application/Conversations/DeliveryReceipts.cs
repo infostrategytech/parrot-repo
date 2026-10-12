@@ -37,3 +37,14 @@ public interface IDeliveryReceipts
     /// <summary>Applies any receipt that arrived before this reply's channel id was stored.</summary>
     Task ApplyParkedAsync(Guid connection, string providerMessageId, CancellationToken ct);
 }
+
+/// <summary>
+/// Tells the owner's open inbox that a reply's receipts changed, so it re-reads the thread. Best effort
+/// like every live push: it never throws (apart from cancellation), and an inbox that misses it shows
+/// the receipt on its next poll.
+/// </summary>
+public interface IReceiptNotifier
+{
+    /// <param name="customer">The customer the receipt is about, or null when the channel did not say.</param>
+    Task ReceiptsChangedAsync(string owner, Guid connection, string? customer, CancellationToken ct);
+}
