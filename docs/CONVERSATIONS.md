@@ -88,6 +88,16 @@ Content-Type: application/json
 {"requestId":"<new UUID for this send>","text":"Hello from Parrot"}
 ```
 
+```http
+GET /api/conversations/unread
+POST /api/conversations/{connectionId}/read?sender=2348012345678
+Content-Type: application/json
+
+{"upToMessageId":"<ConversationMessage.Id of the newest message the agent has seen>"}
+```
+
+`GET /api/conversations` rows carry `unreadCount`. `GET /api/conversations/unread` returns `{ "total": n }` over every conversation and channel, not just the loaded page. The `read` call returns `{ "conversationUnread": n, "total": n }`. See [Unread counts](#unread-counts).
+
 History pages contain at most 100 messages in chronological order and a `nextBefore` cursor. Outgoing records retain their stable application message ID; Meta's ID is stored separately as `ProviderMessageId`.
 
 ### Recovering missed live messages
@@ -107,6 +117,17 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 - Only the signed-in user's messages are returned; someone else's conversation reads as empty.
 - Sequences may skip numbers, and for a moment a later number can be stored before an earlier one (a reply and an incoming message landing together). Recover from a little below the highest sequence held, not from it exactly, and drop repeats by `messageId`.
 - Messages stored before sequences existed, and replies to them, are not returned.
+
+## Unread counts
+
+The inbox's rail badge and each row's badge count customer messages the signed-in user has not read, on every channel (WhatsApp, Facebook, TikTok, and any later channel stored in the same collection).
+
+- A user's position in a conversation is the newest message they have seen, kept in the `conversation_reads` collection (unique per user, connection and customer). Unread is the incoming messages after it. The agent's own replies never count. A position only moves forward.
+- Opening a conversation marks it read. The web app sends the id of the newest message its read returned, never "now", so a message that arrives mid-read stays unread. Marking is a separate `POST`, not a side effect of reading the thread: the open thread is re-read every 15 seconds. It is skipped while the browser tab is hidden, and the next poll marks it once the tab is back.
+- The rail total is kept by `InboxUnreadState` in the dashboard layout, so it is right on every page. It adds one on each live customer push, and takes the server's number on load, reconnect, every 15 seconds and after each mark.
+- Nothing opens by itself: the inbox starts on "Select a conversation".
+- **Baseline:** messages stored before the baseline count as read, so turning this on does not show a whole history as unread. The API saves its first start time as the baseline in the `inbox_state` collection (the `unread-baseline` document), so it is fixed at the deploy. `Inbox__UnreadBaseline` (an ISO date-time, UTC) overrides it. Never move it later once live: that would hide messages that really are unread.
+- Read state is per user, but messages are scoped by workspace owner today, and the Team page has no backend. There is one reader per workspace. Live pushes go to the owner's connections only, so teammates would also need push fan-out.
 
 ## Audit map
 
@@ -137,6 +158,11 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 | `Test.Parrot.Api/Tests/Services/ConversationStateTests.cs` | Repeated polling and send response deduplication |
 | `Test.Parrot.Api/Tests/Services/MongoConversationTests.cs` | Real Mongo concurrency, incoming deduplication, legacy documents, tenant isolation and pagination |
 | `Test.Parrot.Api/Tests/Services/WhatsAppSenderTests.cs` | Meta HTTP request and outcome handling |
+| `Parrot.Infrastructure/Conversations/MongoConversationReadStore.cs` | Per-user read positions, unread counts and the baseline |
+| `Parrot.Api/Realtime/UnreadBaselineInitializer.cs` | Creates the read store at startup so the baseline is the deploy time |
+| `Parrot.Web/Parrot.Web/Services/InboxUnreadState.cs` | The rail's unread total: live pushes plus the server's number |
+| `Test.Parrot.Api/Tests/Services/ConversationReadTests.cs` | Unread counting on a real MongoDB: channels, replies, per user, baseline, forged ids |
+| `Test.Parrot.Api/Tests/Services/InboxUnreadStateTests.cs` | The web app's unread total |
 | `docs/CONVERSATIONS.md` | This setup/audit guide |
 
 Webhook signature validation remains intentionally bypassed by the existing controller implementation. Tests cover processing accepted connections with missing or invalid signatures.
