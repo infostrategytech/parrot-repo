@@ -162,6 +162,7 @@ services:
       Facebook__WebhookBaseUrl: ${FACEBOOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
       Facebook__AppSecret: ${FACEBOOK_APP_SECRET:-your-facebook-app-secret}
       TikTok__WebhookBaseUrl: ${TIKTOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
+      Instagram__WebhookBaseUrl: ${INSTAGRAM_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
       MongoDB__ConnectionString: mongodb://mongodb:27017
       MongoDB__Database: parrot
       MongoDB__Collection: messages

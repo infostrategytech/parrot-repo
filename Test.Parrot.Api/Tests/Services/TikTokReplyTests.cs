@@ -181,7 +181,8 @@ public class TikTokReplyTests
         Mock<IWhatsAppConnectionRepository> whatsApp = new();
         ConversationService service = new(_store, whatsApp.Object, Mock.Of<IWhatsAppSender>(),
             new WhatsAppTokenProtector(new EphemeralDataProtectionProvider()), _sequence.Object,
-            Mock.Of<IFacebookConnectionRepository>(), Mock.Of<IFacebookSender>(), Mock.Of<IFacebookCredentialProtector>(), Service());
+            Mock.Of<IFacebookConnectionRepository>(), Mock.Of<IFacebookSender>(), Mock.Of<IFacebookCredentialProtector>(),
+            Mock.Of<IInstagramConnectionRepository>(), Mock.Of<IInstagramSender>(), Mock.Of<IInstagramCredentialProtector>(), Service());
 
         // Not a phone number: WhatsApp's checks would refuse it.
         Assert.Equal("accepted", (await service.SendAsync(Owner, _connection.Id, Customer, Request("Hello"), default)).Status);

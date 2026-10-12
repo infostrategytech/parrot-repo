@@ -10,7 +10,7 @@ namespace Test.Parrot.Api.Tests.Services.Integrations;
 public class MessageDocumentMappingTests
 {
     private static MessageDocumentMapperFactory NewFactory() =>
-        new([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
+        new([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]);
 
     private static IncomingMessage NewMessage(MessagingPlatform platform) => new()
     {

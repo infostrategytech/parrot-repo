@@ -30,7 +30,7 @@ public class MongoConversationTests
         try
         {
             var mappers = new MessageDocumentMapperFactory(
-                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
+                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]);
             var incoming = new MongoMessageRepository(client, settings, mappers);
             var store = new MongoConversationStore(client, settings);
             var connection = Guid.NewGuid();
@@ -87,7 +87,7 @@ public class MongoConversationTests
         try
         {
             var mappers = new MessageDocumentMapperFactory(
-                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
+                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]);
             var repository = new MongoMessageRepository(client, settings, mappers);
             var connection = Guid.NewGuid();
             await repository.InsertAsync(new IncomingMessage

@@ -11,12 +11,18 @@ namespace Parrot.Application.Conversations;
 public sealed class ConversationService(IConversationStore store, IWhatsAppConnectionRepository connections,
     IWhatsAppSender sender, IWhatsAppTokenProtector protector, IConversationSequence sequence,
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
-    IFacebookCredentialProtector facebookProtector, TikTokReplyService? tikTok = null, IDeliveryReceipts? receipts = null)
+    IFacebookCredentialProtector facebookProtector, IInstagramConnectionRepository instagramConnections,
+    IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector, TikTokReplyService? tikTok = null,
+    IDeliveryReceipts? receipts = null)
 {
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
 
-    // A reply goes out on whichever channel the thread is on: a WhatsApp number, a Facebook Page or TikTok.
+    // Instagram counts UTF-8 bytes, not characters.
+    private const int InstagramMaxBytes = 1000;
+
+    // A reply goes out on whichever channel the thread is on: a WhatsApp number, a Facebook Page,
+    // TikTok or an Instagram account.
     public async Task<ConversationMessage> SendAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
     {
@@ -42,6 +48,14 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             if (request.Text.Length > FacebookMaxText)
                 throw new ValidationException($"Messenger replies can be up to {FacebookMaxText} characters.");
             return await SendFacebookAsync(owner, page, recipient, request, ct);
+        }
+
+        InstagramConnection? account = await instagramConnections.GetByOwnerAsync(owner, ct);
+        if (account is not null && account.Id == connectionId)
+        {
+            if (System.Text.Encoding.UTF8.GetByteCount(request.Text) > InstagramMaxBytes)
+                throw new ValidationException("Instagram replies can be up to 1000 bytes, about 1000 letters or fewer with emoji.");
+            return await SendInstagramAsync(owner, account, recipient, request, ct);
         }
 
         throw new NotFoundException("Connection not found.");
@@ -122,6 +136,46 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
                 return (await facebookSender.SendAsync(page.PageId!, pageToken, recipient, request.Text, timeout), null);
             }
             catch (FacebookRejectedException ex)
+            {
+                return (null, ex.MetaErrorCode ?? "unknown");
+            }
+        }, ct);
+    }
+
+    private async Task<ConversationMessage> SendInstagramAsync(string owner, InstagramConnection account, string recipient,
+        SendReplyRequest request, CancellationToken ct)
+    {
+        if (account.DisabledAt.HasValue || account.WebhookVerifiedAt is null)
+            throw new ConflictException("This connection is disabled or unverified.");
+
+        MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
+        if (existing is not null) return Match(existing, account.Id, recipient, request.Text);
+
+        if (string.IsNullOrWhiteSpace(account.AccessTokenEncrypted) || string.IsNullOrWhiteSpace(account.AccountId))
+            throw new ConflictException("Save the access token in this Instagram connection's setup before sending.");
+        string accessToken = Unprotect(() => instagramProtector.Unprotect(account.AccessTokenEncrypted));
+        (MessageDocument latest, string? conversationKey, long? replySequence) = await PrepareAsync(owner, account.Id, recipient, ct);
+
+        DateTime now = DateTime.UtcNow;
+        InstagramMessageDocument doc = new InstagramMessageDocument
+        {
+            MessageId = RequestKey(owner, request.RequestId), OwnerUserId = owner, ConnectionId = account.Id,
+            Platform = MessagingPlatform.Instagram, ExternalAccountId = account.AccountId!,
+            ChannelId = account.AccountId!, ChannelDisplayName = account.Username ?? "",
+            // From is the customer for both directions, as the inbox groups by it. Instagram counts in milliseconds.
+            From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
+            Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
+            Outgoing = true, SendStatus = "pending",
+            ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? account.AccountId,
+        };
+
+        return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
+        {
+            try
+            {
+                return (await instagramSender.SendAsync(account.AccountId!, accessToken, recipient, request.Text, timeout), null);
+            }
+            catch (InstagramRejectedException ex)
             {
                 return (null, ex.MetaErrorCode ?? "unknown");
             }

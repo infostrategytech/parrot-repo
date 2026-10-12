@@ -37,6 +37,7 @@ public static class StoredMessageMapping
         {
             FacebookMessageDocument facebook => facebook.AttachmentUrls,
             TikTokMessageDocument tikTok => tikTok.AttachmentUrls,
+            InstagramMessageDocument instagram => instagram.AttachmentUrls,
             _ => null,
         },
         SentAt = document.SentAt,

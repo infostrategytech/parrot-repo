@@ -64,6 +64,26 @@ Content-Type: application/json
 
 `WhatsApp__SignatureMode` and `Facebook__SignatureMode` decide what a failed check does: `Off`, `LogOnly` (log `… signature check failed; accepted because SignatureMode is LogOnly` and accept), or `Enforce` (log and answer 401). WhatsApp starts at **LogOnly** so live connections keep working while they save their secret; set it to `Enforce` once no `Reason=no_app_secret` or `Reason=mismatch` warnings appear. Facebook stays at **Enforce**, as before.
 
+## Instagram (manual setup)
+
+Instagram DMs use the **Instagram API with Instagram Login** and the business's own Meta app. In Channels → Instagram:
+
+1. In the Meta app, add **Instagram** and open **API setup with Instagram login**. Under **Configure webhooks**, paste Parrot's callback URL (`/api/webhooks/instagram?ref=…`) and verify token, select **Verify and save**, and subscribe to **messages**.
+2. Under **Generate access tokens**, add the Instagram professional account and paste its token into Parrot, together with the **Instagram app secret** from the same page (**not** the App Secret under App settings → Basic; webhooks are signed with the Instagram one).
+
+When the token is saved, Parrot calls `GET graph.instagram.com/{v}/me?fields=user_id,username` to read the account (webhooks carry `user_id` in `entry.id`, which differs from the id a token exchange shows) and `POST /me/subscribed_apps?subscribed_fields=messages`; nothing is saved unless both succeed. Then the setup's test message step waits for a real DM.
+
+Webhooks have Messenger's shape (`object: "instagram"`); echoes of the business's own messages and read receipts are skipped. Conversations are keyed `instagram:{customer IGSID}:{account}`. Replies go to `POST graph.instagram.com/{v}/{account}/messages` with the account's token, within 24 hours of the customer's message (outside it Meta answers error 10, subcode 2534022), up to 1000 bytes of text.
+
+```http
+GET  /api/instagram/setup
+PUT  /api/instagram/setup/account       {"accessToken":"…"}
+PUT  /api/instagram/setup/app-secret    {"appSecret":"<32 hex>"}
+POST /api/instagram/setup/disable
+```
+
+Settings: `Instagram__WebhookBaseUrl` (public HTTPS base, required), `Instagram__SignatureMode` (`Enforce` by default), `Instagram__ApiVersion` (`v25.0`), `Instagram__AppSecret` (only for connections through Parrot's own app later).
+
 ## Duplicate protection and failure behavior
 
 - Incoming messages retain the existing unique Mongo `MessageId` index. Repeated webhook/Kafka deliveries insert one document. Cross-owner duplicate IDs are rejected.

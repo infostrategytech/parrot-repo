@@ -12,4 +12,5 @@ public static class RateLimitPolicies
     public const string WhatsAppWebhook = "webhooks:whatsapp";
     public const string FacebookWebhook = "webhooks:facebook";
     public const string TikTokWebhook = "webhooks:tiktok";
+    public const string InstagramWebhook = "webhooks:instagram";
 }

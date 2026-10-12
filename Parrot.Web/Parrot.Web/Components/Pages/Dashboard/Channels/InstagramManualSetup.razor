@@ -1,0 +1,420 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@using Parrot.Web.Features.Dashboard.Channels.State
+@implements IDisposable
+@inject ChannelsState ChannelsState
+@inject IIntegrationsService IntegrationsService
+@inject IMessageVerificationGrpcClient MessageVerification
+@inject AuthState AuthState
+@inject ToastService Toasts
+
+@* Instagram, set up by hand with the business's own Meta app (Instagram API
+   with Instagram Login), in Facebook's two sections: Meta verifies the
+   webhook, then the access token and the Instagram app secret are saved. The
+   API reads the account from the token and subscribes it to messages, so no
+   id is typed in. Then a test message: connected once a real DM arrives. *@
+
+@if (_connected)
+{
+    <ConnectionSuccess Channel="Shown" OnOpenInbox="OnOpenInbox" OnConnectAnother="OnExit" OnSetUpAgent="OnSetUpAgent" />
+}
+else if (_testing)
+{
+    <MessageTest Channel="Shown" Busy="_checking" Missed="_missed" OnCheck="CheckMessageAsync" />
+}
+else
+{
+    <section class="guided">
+        <header class="guided__header">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnExit">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Back to channels</ChildContent>
+            </Button>
+            <div class="guided__counter">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">Instagram setup</Typography>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">Step @(Reached + 1) of 3</Typography>
+            </div>
+        </header>
+
+        <div class="guided__progress" role="progressbar" aria-label="Instagram setup progress"
+             aria-valuenow="@(Reached + 1)" aria-valuemin="1" aria-valuemax="3">
+            <i style="width: @Percent%"></i>
+        </div>
+
+        <div class="guided__body">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Connect your Instagram account</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="guided__lede">
+                Two steps in Meta, then a test message. Your progress is saved after each step.
+            </Typography>
+
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" OnDismiss="() => _error = null" />
+            }
+
+            @if (_setup is null && _busy)
+            {
+                <LoadingState Glyph="IconName.RiInstagramFill"
+                              Title="Preparing your webhook details"
+                              Description="Getting the callback URL and verify token for your workspace." />
+            }
+            else if (_setup is null)
+            {
+                <EmptyState Glyph="IconName.RiInstagramFill"
+                            Size="EmptyStateSize.Panel"
+                            Title="We couldn't load your Instagram setup"
+                            Description="Check your connection and try again.">
+                    <Action>
+                        <Button Variant="ButtonVariant.Secondary" Busy="_busy" @onclick="LoadAsync">Try again</Button>
+                    </Action>
+                </EmptyState>
+            }
+            else
+            {
+                <ol class="guided__instructions">
+                    @for (var index = 0; index < Instructions.Length; index++)
+                    {
+                        var number = index + 1;
+                        var instruction = Instructions[index];
+                        <li>
+                            <Typography TextStyle="TextStyle.Small12Bold" As="span" Class="guided__marker">@number</Typography>
+                            <div class="guided__instruction">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    <Emphasis Text="@instruction" />
+                                </Typography>
+                                @if (index == 0)
+                                {
+                                    @* A link to Meta's own site, in a new tab. *@
+                                    <a class="guided__link @TextStyle.BodySmallSemibold.ToClassName()"
+                                       href="https://developers.facebook.com/apps/" target="_blank" rel="noopener noreferrer">
+                                        Open Meta for Developers
+                                        <Icon Name="IconName.RiExternalLinkLine" />
+                                    </a>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ol>
+
+                <div class="manual">
+                    @* ── 1: the webhook ───────────────────────────────────── *@
+                    <section class="manual__section @SectionClass(0, Section.Webhook)">
+                        <header class="manual__header">
+                            <span class="manual__marker">
+                                @if (Reached > 0)
+                                {
+                                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Bold" As="span">1</Typography>
+                                }
+                            </span>
+                            <div class="manual__titles">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Turn On Incoming Messages</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Connect Meta's webhook so new DMs reach your inbox.</Typography>
+                            </div>
+                            <ManualSectionAside Done="Reached > 0"
+                                                IsCurrent="Reached == 0"
+                                                IsOpen="_open == Section.Webhook"
+                                                OnReopen="() => _open = Section.Webhook" />
+                        </header>
+
+                        @if (_open == Section.Webhook)
+                        {
+                            <div class="manual__body">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    Open <strong>Instagram → API setup with Instagram login</strong>. Under <strong>Configure webhooks</strong>,
+                                    paste these, select <strong>Verify and save</strong>, then subscribe to <strong>messages</strong>.
+                                </Typography>
+                                <div class="manual__copy-values">
+                                    <CopyValue Label="Callback URL" Value="@_setup.WebhookUrl" OnCopy="@(label => Toasts.Show($"{label} copied."))" />
+                                    <CopyValue Label="Verify Token" Value="@_setup.VerifyToken" OnCopy="@(label => Toasts.Show($"{label} copied."))" />
+                                </div>
+                                <InlineError Tone="InlineErrorTone.Info"
+                                             Message="This verify token is not your access token. Meta uses it once, to confirm the callback." />
+                                <Button Busy="_busy" @onclick="CheckVerificationAsync">
+                                    <ChildContent>@(_setup.WebhookVerified ? "Continue to your account" : "I've verified it")</ChildContent>
+                                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                                </Button>
+                            </div>
+                        }
+                    </section>
+
+                    @* ── 2: the account ───────────────────────────────────── *@
+                    <section class="manual__section @SectionClass(1, Section.Account)">
+                        <header class="manual__header">
+                            <span class="manual__marker">
+                                @if (Reached > 1)
+                                {
+                                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Bold" As="span">2</Typography>
+                                }
+                            </span>
+                            <div class="manual__titles">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Your Account</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add your account's access token and your Instagram app secret.</Typography>
+                            </div>
+                            <ManualSectionAside Done="Reached > 1"
+                                                IsCurrent="Reached == 1"
+                                                IsOpen="_open == Section.Account"
+                                                OnReopen="() => _open = Section.Account" />
+                        </header>
+
+                        @if (_open == Section.Account)
+                        {
+                            <div class="manual__body">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    On the same page, under <strong>Generate access tokens</strong>, add your Instagram professional account and
+                                    copy its token. Parrot reads the account from it, so there is no ID to type.
+                                </Typography>
+
+                                <div class="manual__fields">
+                                    @* type=password, autocomplete off, and cleared after
+                                       saving: the API encrypts it before it is stored. *@
+                                    <Parrot.SharedComponents.DesignSystem.Input
+                                        FloatingLabel="Access token"
+                                        @bind-Value="_accessToken"
+                                        type="password"
+                                        autocomplete="new-password"
+                                        spellcheck="false"
+                                        maxlength="8192"
+                                        HelperText="@(_setup.HasAccessToken ? $"Connected as {AccountLabel}. Enter a new token only to replace it." : "Hidden as you type and cleared after saving. Never send this token in a chat or email.")">
+                                        <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                                    </Parrot.SharedComponents.DesignSystem.Input>
+
+                                    @* Meta signs every Instagram webhook with this secret, so Parrot
+                                       can tell a real message from a forged one. Write-only. *@
+                                    <Parrot.SharedComponents.DesignSystem.Input
+                                        FloatingLabel="Instagram app secret"
+                                        @bind-Value="_appSecret"
+                                        type="password"
+                                        autocomplete="new-password"
+                                        spellcheck="false"
+                                        maxlength="64"
+                                        HelperText="@(_setup.HasAppSecret ? "An Instagram app secret is saved. Enter a new one only to replace it." : "Shown on the same page, next to the Instagram app ID. Not the App Secret under App settings → Basic.")">
+                                        <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                                    </Parrot.SharedComponents.DesignSystem.Input>
+                                </div>
+
+                                <Button Busy="_busy" disabled="@(!AccountReady)" @onclick="SaveAccountAsync">
+                                    <ChildContent>Save and continue</ChildContent>
+                                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                                </Button>
+                            </div>
+                        }
+                    </section>
+                </div>
+            }
+        </div>
+
+        <footer class="guided__footer">
+            <Button Variant="ButtonVariant.Secondary" @onclick="OnExit">Save and exit</Button>
+        </footer>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    [Parameter] public EventCallback OnExit { get; set; }
+
+    [Parameter] public EventCallback OnOpenInbox { get; set; }
+
+    /// <summary>Set when the person came to connect a channel for an agent.</summary>
+    [Parameter] public EventCallback OnSetUpAgent { get; set; }
+
+    // As on Facebook's test: a floor under how long the check appears to take,
+    // and a few tries a couple of seconds apart.
+    private static readonly TimeSpan CheckPacing = TimeSpan.FromMilliseconds(2400);
+    private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(2);
+    private const int CheckAttempts = 10;
+
+    private static readonly string[] Instructions =
+    [
+        "Open your app in Meta for Developers and add **Instagram**, then open **API setup with Instagram login**.",
+        "Under **Configure webhooks**, paste the callback URL and verify token below, select **Verify and save**, and subscribe to **messages**.",
+        "Under **Generate access tokens**, add your Instagram professional account and copy its token.",
+        "Copy the **Instagram app secret** shown on that page. It is not the App Secret under App settings → Basic."
+    ];
+
+    private enum Section { Webhook, Account }
+
+    private InstagramWebhookSetup? _setup;
+    private string? _error;
+    private string? _accessToken, _appSecret;
+    private bool _busy, _disposed, _testing, _checking, _missed, _connected;
+    private Section _open = Section.Webhook;
+    private DateTimeOffset _testStartedAt;
+    private readonly CancellationTokenSource _lifetime = new();
+
+    /// <summary>
+    /// The furthest step finished, read off the API: a verified webhook finishes
+    /// the first, a saved account with its token the second.
+    /// </summary>
+    private int Reached =>
+        _setup is null ? 0
+        : _setup.WebhookVerified && _setup.HasAccessToken && !string.IsNullOrEmpty(_setup.AccountId) ? 2
+        : _setup.WebhookVerified ? 1
+        : 0;
+
+    private int Percent => (int)Math.Round((Reached + 1) / 3.0 * 100);
+
+    private bool AccountReady =>
+        _setup is { WebhookVerified: true }
+        && (!string.IsNullOrWhiteSpace(_accessToken) || _setup.HasAccessToken)
+        && (!string.IsNullOrWhiteSpace(_appSecret) || _setup.HasAppSecret)
+        && (!string.IsNullOrWhiteSpace(_accessToken) || !string.IsNullOrWhiteSpace(_appSecret));
+
+    private string AccountLabel => string.IsNullOrEmpty(_setup?.Username) ? "your account" : "@" + _setup.Username;
+
+    private string? Token => AuthState.CurrentUser?.Token;
+
+    /// <summary>The channel under the account's @username, so the test and its result name it.</summary>
+    private BusinessChannel Shown => _setup?.Username is { Length: > 0 } username ? Channel with { AccountName = "@" + username } : Channel;
+
+    private string SectionClass(int index, Section section)
+    {
+        var name = Reached > index ? "is-complete" : Reached == index ? "is-current" : "is-upcoming";
+        return _open == section ? name + " is-open" : name;
+    }
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        if (_busy || _disposed || Token is not { Length: > 0 } token) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var setup = await IntegrationsService.GetInstagramSetupAsync(token, _lifetime.Token);
+            if (_disposed) return;
+            _setup = setup;
+            ChannelsState.SetInstagram(setup);
+            _open = Reached >= 1 ? Section.Account : Section.Webhook;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable
+                ? "Instagram isn't set up on the server yet. Ask your administrator to add the Instagram webhook address."
+                : "We couldn't load your Instagram setup. Check your connection and try again.";
+        }
+        catch (OperationCanceledException) { _error = "That took too long. Try again."; }
+        catch (System.Text.Json.JsonException) { _error = "We couldn't read your Instagram setup. Try again."; }
+        finally { _busy = false; }
+    }
+
+    // The webhook only counts once Meta has called it, which the setup reports.
+    private async Task CheckVerificationAsync()
+    {
+        if (_setup is { WebhookVerified: true }) { _open = Section.Account; return; }
+        await LoadAsync();
+        if (_disposed || _setup is null) return;
+        if (_setup.WebhookVerified)
+        {
+            Toasts.Show("Webhook verified.");
+            _open = Section.Account;
+        }
+        else
+        {
+            _error ??= "Meta hasn't verified it yet. Select Verify and save in Meta, then try again.";
+        }
+    }
+
+    private async Task SaveAccountAsync()
+    {
+        if (_busy || _setup is null || Token is not { Length: > 0 } token) return;
+        var appSecret = _appSecret?.Trim();
+        if (!string.IsNullOrEmpty(appSecret) && (appSecret.Length != 32 || !appSecret.All(char.IsAsciiHexDigit)))
+        {
+            _error = "Enter the Instagram app secret from API setup with Instagram login: 32 letters and numbers. It is not the App Secret under App settings → Basic.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            // The secret first: the account's webhooks are only checked once it is saved.
+            if (!string.IsNullOrEmpty(appSecret))
+            {
+                await IntegrationsService.SaveInstagramAppSecretAsync(appSecret, token, _lifetime.Token);
+                _appSecret = null;
+            }
+            // Parrot reads the account from the token and subscribes it to messages before saving.
+            if (!string.IsNullOrWhiteSpace(_accessToken))
+            {
+                await IntegrationsService.SaveInstagramAccountAsync(_accessToken.Trim(), token, _lifetime.Token);
+                _accessToken = null;
+            }
+            _setup = await IntegrationsService.GetInstagramSetupAsync(token, _lifetime.Token);
+            ChannelsState.SetInstagram(_setup);
+            Toasts.Show($"Connected as {AccountLabel}.");
+            _testStartedAt = DateTimeOffset.UtcNow;
+            _testing = true;
+        }
+        catch (HttpRequestException ex)
+        {
+            // Instagram's own reason when there is one: an expired token, a missing permission.
+            _error = !string.IsNullOrWhiteSpace(ex.Message) && ex.StatusCode is System.Net.HttpStatusCode.BadRequest
+                ? ex.Message
+                : ex.StatusCode == System.Net.HttpStatusCode.Conflict
+                    ? "Verify the webhook in Meta first, or check whether this account is already connected."
+                    : "We couldn't save your account. Check the details and try again.";
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) { _error = "That took too long. Try again."; }
+        finally { _busy = false; }
+    }
+
+    // The API's message check, a few times a couple of seconds apart: a DM sent
+    // from a phone takes a moment to reach Meta and be relayed.
+    private async Task CheckMessageAsync()
+    {
+        if (_setup is null || Token is not { Length: > 0 } token || _checking) return;
+        _missed = false;
+        _checking = true;
+        await InvokeAsync(StateHasChanged);
+        var pacing = Task.Delay(CheckPacing);
+        var received = false;
+        var failed = false;
+        try
+        {
+            for (var attempt = 0; attempt < CheckAttempts && !received; attempt++)
+            {
+                var result = await MessageVerification.CheckForMessageAsync(
+                    _setup.ConnectionId.ToString(), _testStartedAt.ToUnixTimeSeconds(), "instagram", token, _lifetime.Token);
+                received = result.Received;
+                if (!received) await Task.Delay(CheckInterval, _lifetime.Token);
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+        catch (Exception exception) when (exception is HttpRequestException or global::Grpc.Core.RpcException or OperationCanceledException)
+        {
+            failed = true;
+            Toasts.ShowError("We couldn't check for your message. Try again.");
+        }
+        await pacing;
+        _checking = false;
+        // No message (not a failed call): the test says so and offers Check again.
+        if (!received) { _missed = !failed; await InvokeAsync(StateHasChanged); return; }
+
+        _connected = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _accessToken = null;
+        _appSecret = null;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
+}

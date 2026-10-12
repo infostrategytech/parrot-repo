@@ -102,5 +102,6 @@ public sealed class RawBodyMiddleware
         path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase) ? "WhatsApp"
         : path.StartsWithSegments("/api/webhooks/facebook", StringComparison.OrdinalIgnoreCase) ? "Facebook"
         : path.StartsWithSegments("/api/webhooks/tiktok", StringComparison.OrdinalIgnoreCase) ? "TikTok"
+        : path.StartsWithSegments("/api/webhooks/instagram", StringComparison.OrdinalIgnoreCase) ? "Instagram"
         : null;
 }

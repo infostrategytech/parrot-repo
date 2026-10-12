@@ -96,6 +96,7 @@ builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepo
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
 builder.Services.Configure<TikTokSettings>(builder.Configuration.GetSection(TikTokSettings.SectionName));
+builder.Services.Configure<InstagramSettings>(builder.Configuration.GetSection(InstagramSettings.SectionName));
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.Configure<BrightDataSettings>(builder.Configuration.GetSection(BrightDataSettings.SectionName));
 builder.Services.Configure<AnthropicSettings>(builder.Configuration.GetSection(AnthropicSettings.SectionName));
@@ -292,6 +293,18 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // 1000 Instagram webhook deliveries per IP per minute, as for Facebook
+    options.AddPolicy(RateLimitPolicies.InstagramWebhook, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1000,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
     // 1000 TikTok webhook deliveries per IP per minute
     options.AddPolicy(RateLimitPolicies.TikTokWebhook, ctx =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -364,6 +377,10 @@ builder.Services.AddScoped<IFacebookConnectionService, FacebookConnectionService
 builder.Services.AddScoped<ITikTokConnectionService, TikTokConnectionService>();
 builder.Services.AddScoped<ITikTokWebhookService, TikTokWebhookService>();
 builder.Services.AddHttpClient<ITikTokApiClient, TikTokApiClient>();
+builder.Services.AddScoped<IInstagramWebhookService, InstagramWebhookService>();
+builder.Services.AddScoped<IInstagramConnectionRepository, InstagramConnectionRepository>();
+builder.Services.AddScoped<IInstagramConnectionService, InstagramConnectionService>();
+builder.Services.AddHttpClient<IInstagramAccountApi, InstagramAccountApi>();
 builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<RequestContext>());
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(AppLogger<>));
@@ -377,6 +394,7 @@ builder.Services.AddSingleton<IMongoClient>(sp => new MongoClient(sp.GetRequired
 builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, InstagramMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
 builder.Services.Configure<InboxSettings>(builder.Configuration.GetSection(InboxSettings.SectionName));
@@ -397,6 +415,7 @@ builder.Services.AddScoped<TikTokReplyService>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
+builder.Services.AddHttpClient<IInstagramSender, InstagramSender>();
 
 // Realtime: Redis is only the registry of who is online, never a message store.
 builder.Services.AddRedis(builder.Configuration);
