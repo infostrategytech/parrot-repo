@@ -53,7 +53,16 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
     return new MongoClient(settings.ConnectionString);
 });
 
+// MongoMessageRepository maps documents by platform and refuses to start without a mapper for every
+// one; without these the message check could never be built, and the Channels test always failed.
+builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, InstagramMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IMessageRepository, MongoMessageRepository>();
+
+// Registers every "_t" discriminator before anything is read from the collection.
+Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 
 var app = builder.Build();
 

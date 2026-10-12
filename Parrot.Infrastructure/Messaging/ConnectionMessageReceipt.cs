@@ -19,6 +19,26 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
     {
         await using ApplicationDbContext db = await _contexts.CreateDbContextAsync(cancellationToken);
         DateTime now = DateTime.UtcNow;
+        if (message.Platform == MessagingPlatform.Instagram)
+        {
+            int instagramUpdated = await db.InstagramConnections
+                .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
+                    && c.DisabledAt == null && c.WebhookVerifiedAt != null && c.AccountId == message.ChannelId)
+                .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UpdatedAt, now), cancellationToken);
+            if (instagramUpdated > 0) return;
+
+            // As for Facebook: an account disconnected after the event was queued must not hold up the
+            // consumer; any other mismatch is a real fault and is retried.
+            var account = await db.InstagramConnections.AsNoTracking()
+                .Where(c => c.Id == message.ConnectionId)
+                .Select(c => new { c.OwnerUserId, c.AccountId, c.DisabledAt })
+                .SingleOrDefaultAsync(cancellationToken);
+            if (account is not null && account.DisabledAt.HasValue
+                && account.OwnerUserId == message.OwnerUserId && account.AccountId == message.ChannelId)
+                return;
+            throw new InvalidOperationException("Instagram message was stored, but its account connection did not match PostgreSQL.");
+        }
+
         if (message.Platform == MessagingPlatform.Facebook)
         {
             int facebookUpdated = await db.FacebookConnections

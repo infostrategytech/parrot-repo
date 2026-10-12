@@ -27,16 +27,19 @@ public class FacebookPipelineTests : IAsyncLifetime
     private const string Customer = "6215837091842310";
     private static readonly Guid ConnectionId = Guid.NewGuid();
 
+    // Now, so the customer's messages are always inside the 24-hour reply window.
+    private static readonly long Now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+
     // A text, an image, the Page's own reply echoed back, and a button tap.
     private static readonly string Body = $$$"""
-        {"object":"page","entry":[{"id":"{{{PageId}}}","time":1791447800000,"messaging":[
-          {"sender":{"id":"{{{Customer}}}"},"recipient":{"id":"{{{PageId}}}"},"timestamp":1791447800000,
+        {"object":"page","entry":[{"id":"{{{PageId}}}","time":{{{Now}}},"messaging":[
+          {"sender":{"id":"{{{Customer}}}"},"recipient":{"id":"{{{PageId}}}"},"timestamp":{{{Now}}},
            "message":{"mid":"m_text","text":"Hello, I want to know more about your products."}},
-          {"sender":{"id":"{{{Customer}}}"},"recipient":{"id":"{{{PageId}}}"},"timestamp":1791447801000,
+          {"sender":{"id":"{{{Customer}}}"},"recipient":{"id":"{{{PageId}}}"},"timestamp":{{{Now + 1000}}},
            "message":{"mid":"m_image","attachments":[{"type":"image","payload":{"url":"https://cdn.example/a.jpg"}}]}},
-          {"sender":{"id":"{{{PageId}}}"},"recipient":{"id":"{{{Customer}}}"},"timestamp":1791447802000,
+          {"sender":{"id":"{{{PageId}}}"},"recipient":{"id":"{{{Customer}}}"},"timestamp":{{{Now + 2000}}},
            "message":{"mid":"m_echo","text":"Thanks for writing!","is_echo":true}},
-          {"sender":{"id":"{{{Customer}}}"},"recipient":{"id":"{{{PageId}}}"},"timestamp":1791447803000,
+          {"sender":{"id":"{{{Customer}}}"},"recipient":{"id":"{{{PageId}}}"},"timestamp":{{{Now + 3000}}},
            "postback":{"mid":"m_postback","title":"See prices","payload":"SEE_PRICES"}}
         ]}]}
         """;
@@ -103,12 +106,12 @@ public class FacebookPipelineTests : IAsyncLifetime
     private InboundMessageProcessor Worker()
     {
         _ = new MongoMessageRepository(_client!, Settings,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]));
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
         return new InboundMessageProcessor(
             new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
             new MongoStoredMessageStore(_client!, Settings),
             new MongoConversationSequence(_client!, Settings),
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]),
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
             Mock.Of<IConnectionMessageReceipt>(),
             new Persisted(_persisted),
             NullLogger<InboundMessageProcessor>.Instance);
@@ -160,7 +163,7 @@ public class FacebookPipelineTests : IAsyncLifetime
         InboundMessageProcessor worker = Worker();
         foreach (InboundMessage message in await ReceiveWebhookAsync()) await worker.ProcessAsync(message, CancellationToken.None);
         MongoMessageRepository repository = new(_client!, Settings,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]));
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
 
         ReceivedMessageSummary? found = await repository.FindFirstAsync(ConnectionId, Owner, since);
 
@@ -176,7 +179,7 @@ public class FacebookPipelineTests : IAsyncLifetime
     {
         DateTime since = DateTime.UtcNow.AddSeconds(-5);
         MongoMessageRepository repository = new(_client!, Settings,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]));
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
         await Messages.InsertOneAsync(new FacebookMessageDocument
         {
             MessageId = "outgoing:reply", Platform = MessagingPlatform.Facebook, ExternalAccountId = PageId,
@@ -221,7 +224,8 @@ public class FacebookPipelineTests : IAsyncLifetime
             .ReturnsAsync("m_reply");
         ConversationService service = new(new MongoConversationStore(_client!, Settings), Mock.Of<IWhatsAppConnectionRepository>(),
             Mock.Of<IWhatsAppSender>(), Mock.Of<IWhatsAppTokenProtector>(), new MongoConversationSequence(_client!, Settings),
-            pages.Object, messenger.Object, protector.Object);
+            pages.Object, messenger.Object, protector.Object,
+            Mock.Of<IInstagramConnectionRepository>(), Mock.Of<IInstagramSender>(), Mock.Of<IInstagramCredentialProtector>());
 
         ConversationMessage reply = await service.SendAsync(Owner, ConnectionId, Customer,
             new SendReplyRequest(Guid.NewGuid(), "Yes, we deliver to Lekki."), CancellationToken.None);

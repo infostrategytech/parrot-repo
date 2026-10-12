@@ -8,4 +8,5 @@ public enum MessagingPlatform
 {
     [JsonStringEnumMemberName("whatsapp")] WhatsApp = 1,
     [JsonStringEnumMemberName("facebook")] Facebook = 2,
+    [JsonStringEnumMemberName("instagram")] Instagram = 3,
 }

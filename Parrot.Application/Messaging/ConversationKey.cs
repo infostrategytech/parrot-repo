@@ -35,7 +35,7 @@ public static class ConversationKey
         string normalized = platform switch
         {
             MessagingPlatform.WhatsApp when IsPhoneNumber(trimmed) => new string(trimmed.Where(char.IsAsciiDigit).ToArray()),
-            MessagingPlatform.WhatsApp or MessagingPlatform.Facebook => trimmed,
+            MessagingPlatform.WhatsApp or MessagingPlatform.Facebook or MessagingPlatform.Instagram => trimmed,
             _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "No conversation key rule for this platform."),
         };
 
@@ -53,6 +53,7 @@ public static class ConversationKey
     {
         MessagingPlatform.WhatsApp => "whatsapp",
         MessagingPlatform.Facebook => "facebook",
+        MessagingPlatform.Instagram => "instagram",
         _ => throw new ArgumentOutOfRangeException(nameof(platform), platform, "No conversation key rule for this platform."),
     };
 }

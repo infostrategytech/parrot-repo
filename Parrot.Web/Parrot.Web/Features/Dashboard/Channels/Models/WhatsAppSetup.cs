@@ -14,6 +14,17 @@ public sealed record WhatsAppConnectionInfo(
 public sealed record WhatsAppSetup(
     WhatsAppConnectionInfo Connection, string WebhookUrl, string VerifyToken);
 
+/// <summary>Instagram's manual setup as the API reports it; credentials only as "saved or not".</summary>
+public sealed record InstagramWebhookSetup(
+    Guid ConnectionId,
+    string WebhookUrl,
+    string VerifyToken,
+    bool WebhookVerified,
+    string? AccountId,
+    string? Username,
+    bool HasAccessToken,
+    bool HasAppSecret);
+
 public sealed record FacebookWebhookSetup(
     Guid ConnectionId,
     string WebhookUrl,

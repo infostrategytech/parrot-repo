@@ -11,6 +11,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<WhatsAppConnection> WhatsAppConnections => Set<WhatsAppConnection>();
     public DbSet<FacebookConnection> FacebookConnections => Set<FacebookConnection>();
+    public DbSet<InstagramConnection> InstagramConnections => Set<InstagramConnection>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
@@ -102,6 +103,26 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .HasFilter("\"DisabledAt\" IS NULL");
             entity.HasIndex(c => c.PageId).IsUnique()
                 .HasFilter("\"PageId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+        });
+
+        builder.Entity<InstagramConnection>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.OwnerUserId).IsRequired();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
+            entity.Property(c => c.VerifyTokenEncrypted).IsRequired();
+            entity.Property(c => c.AccountId).HasMaxLength(64);
+            entity.Property(c => c.Username).HasMaxLength(64);
+            entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
+            // One active Instagram connection per user, and one per Instagram account across Parrot.
+            entity.HasIndex(c => c.OwnerUserId).IsUnique()
+                .HasFilter("\"DisabledAt\" IS NULL");
+            entity.HasIndex(c => c.AccountId).IsUnique()
+                .HasFilter("\"AccountId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
         });
     }
 

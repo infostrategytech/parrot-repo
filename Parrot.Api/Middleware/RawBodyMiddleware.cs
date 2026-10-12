@@ -97,5 +97,6 @@ public sealed class RawBodyMiddleware
     private static string? WebhookPlatform(PathString path) =>
         path.StartsWithSegments("/api/webhooks/whatsapp", StringComparison.OrdinalIgnoreCase) ? "WhatsApp"
         : path.StartsWithSegments("/api/webhooks/facebook", StringComparison.OrdinalIgnoreCase) ? "Facebook"
+        : path.StartsWithSegments("/api/webhooks/instagram", StringComparison.OrdinalIgnoreCase) ? "Instagram"
         : null;
 }

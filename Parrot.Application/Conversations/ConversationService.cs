@@ -11,12 +11,17 @@ namespace Parrot.Application.Conversations;
 public sealed class ConversationService(IConversationStore store, IWhatsAppConnectionRepository connections,
     IWhatsAppSender sender, IWhatsAppTokenProtector protector, IConversationSequence sequence,
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
-    IFacebookCredentialProtector facebookProtector)
+    IFacebookCredentialProtector facebookProtector, IInstagramConnectionRepository instagramConnections,
+    IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector)
 {
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
 
-    // A reply goes out on whichever channel the thread is on: a WhatsApp number or a Facebook Page.
+    // Instagram counts UTF-8 bytes, not characters.
+    private const int InstagramMaxBytes = 1000;
+
+    // A reply goes out on whichever channel the thread is on: a WhatsApp number, a Facebook Page or
+    // an Instagram account.
     public async Task<ConversationMessage> SendAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
     {
@@ -38,6 +43,14 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             if (request.Text.Length > FacebookMaxText)
                 throw new ValidationException($"Messenger replies can be up to {FacebookMaxText} characters.");
             return await SendFacebookAsync(owner, page, recipient, request, ct);
+        }
+
+        InstagramConnection? account = await instagramConnections.GetByOwnerAsync(owner, ct);
+        if (account is not null && account.Id == connectionId)
+        {
+            if (System.Text.Encoding.UTF8.GetByteCount(request.Text) > InstagramMaxBytes)
+                throw new ValidationException("Instagram replies can be up to 1000 bytes, about 1000 letters or fewer with emoji.");
+            return await SendInstagramAsync(owner, account, recipient, request, ct);
         }
 
         throw new NotFoundException("Connection not found.");
@@ -124,8 +137,48 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         }, ct);
     }
 
-    // The customer's latest message: it must be within 24 hours (WhatsApp's and Messenger's rule
-    // for a free-form reply), and the reply joins its conversation. The reply takes that message's
+    private async Task<ConversationMessage> SendInstagramAsync(string owner, InstagramConnection account, string recipient,
+        SendReplyRequest request, CancellationToken ct)
+    {
+        if (account.DisabledAt.HasValue || account.WebhookVerifiedAt is null)
+            throw new ConflictException("This connection is disabled or unverified.");
+
+        MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
+        if (existing is not null) return Match(existing, account.Id, recipient, request.Text);
+
+        if (string.IsNullOrWhiteSpace(account.AccessTokenEncrypted) || string.IsNullOrWhiteSpace(account.AccountId))
+            throw new ConflictException("Save the access token in this Instagram connection's setup before sending.");
+        string accessToken = Unprotect(() => instagramProtector.Unprotect(account.AccessTokenEncrypted));
+        (MessageDocument latest, string? conversationKey, long? replySequence) = await PrepareAsync(owner, account.Id, recipient, ct);
+
+        DateTime now = DateTime.UtcNow;
+        InstagramMessageDocument doc = new InstagramMessageDocument
+        {
+            MessageId = RequestKey(owner, request.RequestId), OwnerUserId = owner, ConnectionId = account.Id,
+            Platform = MessagingPlatform.Instagram, ExternalAccountId = account.AccountId!,
+            ChannelId = account.AccountId!, ChannelDisplayName = account.Username ?? "",
+            // From is the customer for both directions, as the inbox groups by it. Instagram counts in milliseconds.
+            From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
+            Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
+            Outgoing = true, SendStatus = "pending",
+            ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? account.AccountId,
+        };
+
+        return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
+        {
+            try
+            {
+                return (await instagramSender.SendAsync(account.AccountId!, accessToken, recipient, request.Text, timeout), null);
+            }
+            catch (InstagramRejectedException ex)
+            {
+                return (null, ex.MetaErrorCode ?? "unknown");
+            }
+        }, ct);
+    }
+
+    // The customer's latest message: it must be within 24 hours (WhatsApp's, Messenger's and Instagram's
+    // rule for a free-form reply), and the reply joins its conversation. The reply takes that message's
     // key and business id rather than rebuilding them from the connection, whose number was typed
     // in at setup and may be written differently. A message stored before the worker has no key;
     // the reply then has none either.

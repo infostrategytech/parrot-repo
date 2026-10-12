@@ -142,7 +142,8 @@ public class FacebookSetupTests
     [Theory]
     [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.Whatsapp, true)]
     [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.Facebook, true)]
-    [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.Instagram, false)]
+    [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.Instagram, true)]
+    [InlineData(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId.X, false)]
     public void DisconnectIsOfferedWhereTheBackendCanDisable(global::Parrot.Web.Features.Dashboard.Channels.Models.ChannelId channel, bool expected) =>
         Assert.Equal(expected, new global::Parrot.Web.Features.Dashboard.Channels.Services.LiveChannelCapabilities().CanDisconnect(channel));
 

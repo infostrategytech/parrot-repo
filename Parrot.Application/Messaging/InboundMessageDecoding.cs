@@ -151,3 +151,58 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
         ReceivedAt = inbound.ReceivedAt,
     };
 }
+
+/// <summary>Instagram DMs have Messenger's shape; entry.id is the business's professional account.</summary>
+public sealed class InstagramInboundDecoder : IInboundMessageDecoder
+{
+    public MessagingPlatform Source => MessagingPlatform.Instagram;
+
+    public IncomingMessage Decode(InboundMessage inbound)
+    {
+        string mid = InboundMessageDecoders.ProviderId(inbound, "instagram");
+        FacebookWebhookPayload payload = InboundMessageDecoders.Parse<FacebookWebhookPayload>(inbound);
+
+        foreach (FacebookEntry entry in payload.Entry)
+        {
+            foreach (FacebookMessagingEvent evt in entry.Messaging ?? [])
+            {
+                if (evt.Message is { IsEcho: false } message && message.Mid == mid)
+                {
+                    List<string>? urls = message.Attachments?
+                        .Select(a => a.Payload?.Url)
+                        .Where(url => !string.IsNullOrWhiteSpace(url))
+                        .Select(url => url!)
+                        .ToList();
+                    string type = message.Attachments is { Count: > 0 } ? message.Attachments[0].Type : "text";
+                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null);
+                }
+
+                // Icebreakers and other button taps.
+                if (evt.Postback is { } postback && postback.Mid == mid)
+                    return ToIncoming(inbound, entry, evt, "postback", postback.Payload, null);
+            }
+        }
+
+        throw new UnprocessableMessageException("message_not_in_body");
+    }
+
+    private static IncomingMessage ToIncoming(
+        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls) => new()
+    {
+        ConnectionId = inbound.ConnectionId,
+        OwnerUserId = inbound.OwnerUserId,
+        MessageId = inbound.MessageId,
+        Platform = MessagingPlatform.Instagram,
+        ExternalAccountId = entry.Id,
+        From = evt.Sender.Id,
+        Timestamp = evt.Timestamp.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        SentAt = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp) ?? inbound.SentAt,
+        Type = type,
+        TextBody = text,
+        AttachmentUrls = urls,
+        ChannelId = entry.Id,
+        // The username comes from the connection, not the webhook body.
+        ChannelDisplayName = string.Empty,
+        ReceivedAt = inbound.ReceivedAt,
+    };
+}
