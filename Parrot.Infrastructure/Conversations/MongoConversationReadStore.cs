@@ -10,22 +10,6 @@ using Parrot.Infrastructure.Messaging;
 
 namespace Parrot.Infrastructure.Conversations;
 
-/// <summary>
-/// Where unread counting starts. Messages stored before it count as read, so turning
-/// the feature on does not show a user their whole history as unread.
-/// </summary>
-public sealed class InboxSettings
-{
-    public const string SectionName = "Inbox";
-
-    /// <summary>
-    /// Optional. When not set, the time the API first started with this feature is
-    /// saved in MongoDB and used from then on. It must never move later: that would
-    /// mark messages that really are unread as read.
-    /// </summary>
-    public DateTime? UnreadBaseline { get; set; }
-}
-
 public sealed class MongoConversationReadStore : IConversationReadStore
 {
     // Conditions per query: one OR branch per conversation.
@@ -47,7 +31,7 @@ public sealed class MongoConversationReadStore : IConversationReadStore
         _baseline = FloorOf(inbox.Value.UnreadBaseline?.ToUniversalTime() ?? FirstStart(database));
     }
 
-    public async Task MarkReadAsync(string owner, string reader, Guid connection, string sender, string upToMessageId, CancellationToken ct)
+    public async Task<ReadAdvance?> MarkReadAsync(string owner, string reader, Guid connection, string sender, string upToMessageId, CancellationToken ct)
     {
         // The id clients hold is the message's own (ConversationMessage.Id), not MongoDB's. It must be
         // a message of this conversation: an id from elsewhere could otherwise mark later messages read.
@@ -56,17 +40,30 @@ public sealed class MongoConversationReadStore : IConversationReadStore
         if (message is null) throw new NotFoundException("Message not found.");
 
         // Only a later position matches. When the stored one is already later nothing matches,
-        // the upsert then collides with the unique key, and that means there is nothing to do.
+        // the upsert then collides with the unique key, and that means nothing moved.
         FilterDefinition<ConversationReadMark> filter = Builders<ConversationReadMark>.Filter.Where(
             x => x.ReaderUserId == reader && x.ConnectionId == connection && x.Sender == sender);
+        UpdateResult result;
         try
         {
-            await _marks.UpdateOneAsync(
+            result = await _marks.UpdateOneAsync(
                 filter & Builders<ConversationReadMark>.Filter.Lt(x => x.LastReadMessageId, message.Id),
                 Builders<ConversationReadMark>.Update.Set(x => x.LastReadMessageId, message.Id).Set(x => x.UpdatedAt, DateTime.UtcNow),
                 new UpdateOptions { IsUpsert = true }, ct);
         }
-        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey) { }
+        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey)
+        {
+            return null;
+        }
+        if (result.UpsertedId is null && result.ModifiedCount == 0) return null;
+
+        // The customer's newest message at or before the one seen: what their channel is told was read.
+        MessageDocument? newest = await _messages
+            .Find(Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.ConnectionId == connection && x.From == sender)
+                & Builders<MessageDocument>.Filter.Ne(x => x.Outgoing, true)
+                & Builders<MessageDocument>.Filter.Lte(x => x.Id, message.Id))
+            .SortByDescending(x => x.Id).FirstOrDefaultAsync(ct);
+        return newest is null ? null : new ReadAdvance(connection, sender, newest.Platform, newest.MessageId);
     }
 
     public async Task<IReadOnlyDictionary<(Guid Connection, string Sender), int>> CountUnreadAsync(

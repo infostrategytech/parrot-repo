@@ -45,6 +45,17 @@ public sealed class WhatsAppSender(HttpClient http, IOptions<WhatsAppSettings> o
         return id.GetString()!;
     }
 
+    public async Task MarkReadAsync(string phoneNumberId, string accessToken, string messageId, CancellationToken ct)
+    {
+        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,
+            $"https://graph.facebook.com/{Uri.EscapeDataString(options.Value.ApiVersion)}/{Uri.EscapeDataString(phoneNumberId)}/messages");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = JsonContent.Create(new { messaging_product = "whatsapp", status = "read", message_id = messageId });
+        using HttpResponseMessage response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"WhatsApp refused to mark the message read (error {await ErrorCodeAsync(response, ct) ?? "unknown"}).");
+    }
+
     // Meta's {"error":{"code":131047,...}}: a fixed set of codes, safe as a metric label.
     private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response, CancellationToken ct)
     {

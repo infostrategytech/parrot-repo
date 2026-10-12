@@ -413,6 +413,7 @@ Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddScoped<TikTokAccessTokens>();
 builder.Services.AddScoped<TikTokReplyService>();
 builder.Services.AddScoped<ConversationService>();
+builder.Services.AddScoped<ChannelReadReceipts>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
 builder.Services.AddHttpClient<IInstagramSender, InstagramSender>();

@@ -13,7 +13,7 @@ namespace Parrot.Api.Controllers;
 [Route("api/conversations")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "conversations")]
-public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, ConversationService service,
+public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, ChannelReadReceipts channelReads, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram) : ControllerBase
 {
@@ -41,7 +41,10 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromBody] MarkReadRequest request, CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        await reads.MarkReadAsync(Owner, Owner, connectionId, sender, request.UpToMessageId, cancellationToken);
+        ReadAdvance? read = await reads.MarkReadAsync(Owner, Owner, connectionId, sender, request.UpToMessageId, cancellationToken);
+
+        // Only when this moved the position: a repeat must not tell the channel again.
+        if (read is not null) await channelReads.SendAsync(Owner, read, cancellationToken);
         IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Owner, [(connectionId, sender)], cancellationToken);
         return Ok(new MarkReadResult(unread.GetValueOrDefault((connectionId, sender)), await reads.TotalUnreadAsync(Owner, Owner, cancellationToken)));
     }

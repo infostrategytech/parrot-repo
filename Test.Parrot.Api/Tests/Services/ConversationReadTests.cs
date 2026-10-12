@@ -240,4 +240,41 @@ public class ConversationReadTests
         Assert.Equal(450, (await store.CountUnreadAsync(Owner, Owner,
             Enumerable.Range(0, 450).Select(i => (connection, $"psid-{i}")).ToList(), default)).Count);
     }
+
+    // What the customer's channel is told was read: only when the position moved, and the newest message of theirs seen.
+    [MongoFact]
+    public async Task OnlyAReadThatMovedThePositionReportsWhatWasNewlyRead()
+    {
+        await using Harness h = new();
+        Guid connection = Guid.NewGuid();
+        MessageDocument first = Message(MessagingPlatform.Facebook, connection, "psid-1");
+        MessageDocument reply = Message(MessagingPlatform.Facebook, connection, "psid-1", outgoing: true);
+        MessageDocument second = Message(MessagingPlatform.Facebook, connection, "psid-1");
+        await h.AddAsync(first, reply, second);
+        MongoConversationReadStore store = h.Store();
+
+        // Seen up to our own reply: the customer's newest message before it is what was read.
+        ReadAdvance? read = await store.MarkReadAsync(Owner, Owner, connection, "psid-1", reply.MessageId, default);
+        Assert.Equal(new ReadAdvance(connection, "psid-1", MessagingPlatform.Facebook, first.MessageId), read);
+
+        // The same again, or something older, moves nothing and tells the channel nothing.
+        Assert.Null(await store.MarkReadAsync(Owner, Owner, connection, "psid-1", reply.MessageId, default));
+        Assert.Null(await store.MarkReadAsync(Owner, Owner, connection, "psid-1", first.MessageId, default));
+
+        ReadAdvance? later = await store.MarkReadAsync(Owner, Owner, connection, "psid-1", second.MessageId, default);
+        Assert.Equal(second.MessageId, later!.MessageId);
+    }
+
+    [MongoFact]
+    public async Task AnotherUsersReadOfTheSameThreadReportsToo()
+    {
+        await using Harness h = new();
+        Guid connection = Guid.NewGuid();
+        MessageDocument message = Message(MessagingPlatform.WhatsApp, connection, "2348012345678");
+        await h.AddAsync(message);
+        MongoConversationReadStore store = h.Store();
+
+        Assert.NotNull(await store.MarkReadAsync(Owner, "agent-a", connection, "2348012345678", message.MessageId, default));
+        Assert.NotNull(await store.MarkReadAsync(Owner, "agent-b", connection, "2348012345678", message.MessageId, default));
+    }
 }

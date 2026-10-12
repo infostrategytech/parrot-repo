@@ -48,6 +48,17 @@ public sealed class FacebookSender(HttpClient http, IOptions<FacebookSettings> o
         return id.GetString()!;
     }
 
+    public async Task MarkSeenAsync(string pageId, string pageAccessToken, string recipient, CancellationToken ct)
+    {
+        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,
+            $"https://graph.facebook.com/{Uri.EscapeDataString(options.Value.ApiVersion)}/{Uri.EscapeDataString(pageId)}/messages");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pageAccessToken);
+        request.Content = JsonContent.Create(new { recipient = new { id = recipient }, sender_action = "mark_seen" });
+        using HttpResponseMessage response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Messenger refused to mark the message seen (error {await ErrorCodeAsync(response, ct) ?? "unknown"}).");
+    }
+
     // Meta's {"error":{"code":10,...}}: a fixed set of codes, safe as a metric label.
     private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response, CancellationToken ct)
     {

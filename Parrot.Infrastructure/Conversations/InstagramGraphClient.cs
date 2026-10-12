@@ -127,4 +127,14 @@ public sealed class InstagramSender(HttpClient http, IOptions<InstagramSettings>
             throw new JsonException("Instagram returned no message ID.");
         return id.GetString()!;
     }
+
+    public async Task MarkSeenAsync(string accountId, string accessToken, string recipient, CancellationToken ct)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, InstagramGraph.Url(options, $"{Uri.EscapeDataString(accountId)}/messages"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+        request.Content = JsonContent.Create(new { recipient = new { id = recipient }, sender_action = "mark_seen" });
+        using HttpResponseMessage response = await http.SendAsync(request, ct);
+        if (!response.IsSuccessStatusCode)
+            throw new HttpRequestException($"Instagram refused to mark the message seen (error {await InstagramGraph.ErrorCodeAsync(response, ct) ?? "unknown"}).");
+    }
 }
