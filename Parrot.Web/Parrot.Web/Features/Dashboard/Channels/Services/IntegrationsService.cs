@@ -77,6 +77,38 @@ public class IntegrationsService : IIntegrationsService
     public Task DisableTikTokAsync(string token, CancellationToken cancellationToken = default) =>
         SendCommandAsync(HttpMethod.Post, "api/tiktok/setup/disable", token, null, cancellationToken);
 
+    public Task<InstagramWebhookSetup> GetInstagramSetupAsync(string token, CancellationToken cancellationToken = default) =>
+        SendAsync<InstagramWebhookSetup>(HttpMethod.Get, "api/instagram/setup", token, null, cancellationToken);
+
+    // Instagram's own reason (an expired token, a missing permission) comes back as the error's message.
+    public Task SaveInstagramAccountAsync(string accessToken, string token, CancellationToken cancellationToken = default) =>
+        SendCommandWithReasonAsync(HttpMethod.Put, "api/instagram/setup/account", token, new { AccessToken = accessToken }, cancellationToken);
+
+    public Task SaveInstagramAppSecretAsync(string appSecret, string token, CancellationToken cancellationToken = default) =>
+        SendCommandWithReasonAsync(HttpMethod.Put, "api/instagram/setup/app-secret", token, new { AppSecret = appSecret }, cancellationToken);
+
+    public Task DisableInstagramAsync(string token, CancellationToken cancellationToken = default) =>
+        SendCommandAsync(HttpMethod.Post, "api/instagram/setup/disable", token, null, cancellationToken);
+
+    // Like SendCommandAsync, but a refusal carries the API's message, so the screen can say what to fix.
+    private async Task SendCommandWithReasonAsync(HttpMethod method, string path, string token, object? body, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(method, path);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        if (body is not null) request.Content = JsonContent.Create(body);
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.IsSuccessStatusCode) return;
+        string? reason = null;
+        try
+        {
+            using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            if (json.RootElement.TryGetProperty("message", out var message) && message.ValueKind == System.Text.Json.JsonValueKind.String)
+                reason = message.GetString();
+        }
+        catch (System.Text.Json.JsonException) { }
+        throw new HttpRequestException(reason, null, response.StatusCode);
+    }
+
     private async Task SendCommandAsync(HttpMethod method, string path, string token, object? body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);

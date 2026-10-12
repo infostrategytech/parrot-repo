@@ -175,6 +175,16 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     </div>
 }
 
+@if (Active is { } instagram && _view == SetupView.InstagramManual)
+{
+    <div class="channels channels--setup">
+        <InstagramManualSetup Channel="instagram"
+                              OnExit="CloseSetup"
+                              OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                              OnSetUpAgent="SetUpAgent" />
+    </div>
+}
+
 @if (Active is { } tikTok && _view == SetupView.TikTokManual)
 {
     <div class="channels channels--setup">
@@ -368,7 +378,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
     /// <summary>When the test step was reached, so the check only counts messages sent after it.</summary>
     private DateTimeOffset? _testStartedAt;
 
-    private enum SetupView { None, Choice, Preparation, Flow, Guided, FacebookManual, TikTokManual }
+    private enum SetupView { None, Choice, Preparation, Flow, Guided, FacebookManual, TikTokManual, InstagramManual }
 
     // The choice of how to connect shows whenever there is more than one way
     // in: several routes, or a route and a manual setup. With one way only,
@@ -443,6 +453,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
             ChannelsState.SetWhatsApp(null);
             ChannelsState.SetFacebook(null);
             ChannelsState.SetTikTok(null);
+            ChannelsState.SetInstagram(null);
             Refresh();
             _loading = false;
             return;
@@ -486,6 +497,18 @@ else if (Active is { } flow && _view == SetupView.Flow)
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
             catch (HttpRequestException) { _error ??= "We couldn't load TikTok. Try again."; }
             catch (System.Text.Json.JsonException) { _error ??= "We couldn't load TikTok. Try again."; }
+
+            try
+            {
+                var instagram = await IntegrationsService.GetInstagramSetupAsync(token, _lifetime.Token);
+                if (_disposed || AuthState.CurrentUser?.Token != token) return;
+                ChannelsState.SetInstagram(instagram);
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+            // Not configured on the API server yet: the card says so by being "Not connected".
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
+            catch (HttpRequestException) { _error ??= "We couldn't load Instagram. Try again."; }
+            catch (System.Text.Json.JsonException) { _error ??= "We couldn't load Instagram. Try again."; }
         }
         finally
         {
@@ -540,10 +563,10 @@ else if (Active is { } flow && _view == SetupView.Flow)
             return;
         }
 
-        // Facebook's manual setup reopens where it stopped (the API knows how far it got).
-        if (channel.Id == ChannelId.Facebook && channel.Setup.Mode == ChannelSetupMode.Guided)
+        // Facebook's and Instagram's manual setups reopen where they stopped (the API knows how far they got).
+        if (channel.Id is ChannelId.Facebook or ChannelId.Instagram && channel.Setup.Mode == ChannelSetupMode.Guided)
         {
-            _view = SetupView.FacebookManual;
+            _view = channel.Id == ChannelId.Facebook ? SetupView.FacebookManual : SetupView.InstagramManual;
             return;
         }
 
@@ -649,13 +672,18 @@ else if (Active is { } flow && _view == SetupView.Flow)
     //
     // This is where Parrot's connection is created (or the saved one picked
     // up): the manual path is the one Parrot's backend actually implements.
-    // WhatsApp's guided setup, or Facebook's own two sections; Instagram and
-    // X have none (designer's decision).
+    // WhatsApp's guided setup, or Facebook's and Instagram's own two sections;
+    // X has none (designer's decision).
     private async Task UseManualSetup()
     {
         if (Active is { Id: ChannelId.Facebook })
         {
             _view = SetupView.FacebookManual;
+            return;
+        }
+        if (Active is { Id: ChannelId.Instagram })
+        {
+            _view = SetupView.InstagramManual;
             return;
         }
         if (Active is not { Id: ChannelId.Whatsapp }) return;
@@ -1064,8 +1092,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
     }
 
     /// <summary>
-    /// WhatsApp, Facebook and TikTok are disabled on Parrot's backend, so their
-    /// webhooks stop at once; the others are disconnected in state.
+    /// WhatsApp, Facebook, TikTok and Instagram are disabled on Parrot's backend,
+    /// so their webhooks stop at once; the others are disconnected in state.
     /// </summary>
     private async Task DisconnectAsync()
     {
@@ -1076,7 +1104,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
         var whatsApp = channel.Id == ChannelId.Whatsapp ? ChannelsState.WhatsAppConnection : null;
         var facebook = channel.Id == ChannelId.Facebook && ChannelsState.FacebookSetup is not null;
         var tikTok = channel.Id == ChannelId.TikTok && ChannelsState.TikTokSetup is not null;
-        if (whatsApp is not null || facebook || tikTok)
+        var instagram = channel.Id == ChannelId.Instagram && ChannelsState.InstagramSetup is not null;
+        if (whatsApp is not null || facebook || tikTok || instagram)
         {
             if (_busy) return;
             _busy = true;
@@ -1087,6 +1116,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
                     await IntegrationsService.DisableWhatsAppAsync(whatsApp.Id, token, _lifetime.Token);
                 else if (tikTok)
                     await IntegrationsService.DisableTikTokAsync(token, _lifetime.Token);
+                else if (instagram)
+                    await IntegrationsService.DisableInstagramAsync(token, _lifetime.Token);
                 else
                     await IntegrationsService.DisableFacebookAsync(token, _lifetime.Token);
                 ChannelsState.DisconnectChannel(key);

@@ -4,7 +4,7 @@ namespace Parrot.Application.Conversations;
 
 public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
 {
-    /// <summary>whatsapp, facebook or tiktok: which channel the conversation is on.</summary>
+    /// <summary>whatsapp, facebook, tiktok or instagram: which channel the conversation is on.</summary>
     public string Channel { get; init; } = "whatsapp";
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt);
@@ -48,6 +48,22 @@ public sealed class FacebookRejectedException : Exception
         MetaErrorCode = metaErrorCode;
 
     // Meta's error.code (e.g. "10" with subcode 2018278 outside the 24-hour window, "551" when the person is unavailable).
+    public string? MetaErrorCode { get; }
+}
+
+// Instagram's Send API (graph.instagram.com/{account}/messages) with the account's token.
+public interface IInstagramSender
+{
+    Task<string> SendAsync(string accountId, string accessToken, string recipient, string text, CancellationToken ct);
+}
+
+public sealed class InstagramRejectedException : Exception
+{
+    public InstagramRejectedException(string? metaErrorCode = null)
+        : base("Instagram rejected the message. Check the access token and that the customer wrote within 24 hours.") =>
+        MetaErrorCode = metaErrorCode;
+
+    // Meta's error.code (e.g. "10" with subcode 2534022 outside the 24-hour window).
     public string? MetaErrorCode { get; }
 }
 

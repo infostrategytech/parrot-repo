@@ -76,6 +76,8 @@ public class ChannelsState
 
     public TikTokSetup? TikTokSetup { get; private set; }
 
+    public InstagramWebhookSetup? InstagramSetup { get; private set; }
+
     /// <summary>Instagram and X are connected in state only, exactly as before.</summary>
     private readonly Dictionary<ChannelId, (string Account, string Date)> _stateOnly = new();
 
@@ -117,6 +119,12 @@ public class ChannelsState
     {
         FacebookSetup = setup;
         if (setup is not null) _dismissed.Remove(ChannelId.Facebook);
+    }
+
+    public void SetInstagram(InstagramWebhookSetup? setup)
+    {
+        InstagramSetup = setup;
+        if (setup is not null) _dismissed.Remove(ChannelId.Instagram);
     }
 
     public void SetTikTok(TikTokSetup? setup)
@@ -177,6 +185,7 @@ public class ChannelsState
         ChannelId.Whatsapp => BuildWhatsApp(info),
         ChannelId.Facebook when FacebookSetup is not null && !_stateOnly.ContainsKey(ChannelId.Facebook) => BuildFacebook(info),
         ChannelId.TikTok => BuildTikTok(info),
+        ChannelId.Instagram when InstagramSetup is not null && !_stateOnly.ContainsKey(ChannelId.Instagram) => BuildInstagram(info),
         _ => BuildStateOnly(info)
     };
 
@@ -220,6 +229,25 @@ public class ChannelsState
             GuidedMinutes = info.GuidedMinutes,
             Status = connected ? ChannelStatus.Connected : ChannelStatus.NotConnected,
             AccountName = setup?.PageName,
+            Setup = connected ? new ChannelSetupState() : Setup(info.Id)
+        };
+    }
+
+    private BusinessChannel BuildInstagram(ChannelInfo info)
+    {
+        var setup = InstagramSetup;
+        var connected = setup is not null && setup.WebhookVerified && setup.HasAccessToken
+            && !string.IsNullOrEmpty(setup.AccountId) && !_dismissed.Contains(info.Id);
+
+        return new BusinessChannel
+        {
+            Id = info.Id,
+            Name = info.Name,
+            Description = info.Description,
+            Requirement = info.Requirement,
+            GuidedMinutes = info.GuidedMinutes,
+            Status = connected ? ChannelStatus.Connected : ChannelStatus.NotConnected,
+            AccountName = string.IsNullOrEmpty(setup?.Username) ? null : "@" + setup.Username,
             Setup = connected ? new ChannelSetupState() : Setup(info.Id)
         };
     }
@@ -284,6 +312,16 @@ public class ChannelsState
             {
                 Mode = ChannelSetupMode.Guided,
                 ManualStage = facebook.WebhookVerified ? ManualSetupStage.Credentials : ManualSetupStage.Number
+            };
+        }
+
+        if (id == ChannelId.Instagram && InstagramSetup is { } instagram
+            && (instagram.WebhookVerified || instagram.HasAccessToken))
+        {
+            return new ChannelSetupState
+            {
+                Mode = ChannelSetupMode.Guided,
+                ManualStage = instagram.WebhookVerified ? ManualSetupStage.Credentials : ManualSetupStage.Number
             };
         }
 

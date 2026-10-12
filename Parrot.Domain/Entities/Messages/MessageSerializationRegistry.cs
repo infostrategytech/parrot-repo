@@ -20,5 +20,6 @@ public static class MessageSerializationRegistry
         BsonClassMap.LookupClassMap(typeof(WhatsAppMessageDocument));
         BsonClassMap.LookupClassMap(typeof(FacebookMessageDocument));
         BsonClassMap.LookupClassMap(typeof(TikTokMessageDocument));
+        BsonClassMap.LookupClassMap(typeof(InstagramMessageDocument));
     }
 }

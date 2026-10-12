@@ -101,4 +101,49 @@ public class ConnectionMessageReceiptPostgresTests : IAsyncLifetime
         await Assert.ThrowsAsync<InvalidOperationException>(() =>
             new ConnectionMessageReceipt(new Contexts(_options!)).RecordAsync(Message(page, "999999999"), CancellationToken.None));
     }
+
+    private async Task<InstagramConnection> AccountAsync()
+    {
+        await using ApplicationDbContext db = new(_options!);
+        ApplicationUser user = new() { UserName = "ig@example.com", Email = "ig@example.com" };
+        db.Users.Add(user);
+        InstagramConnection account = new()
+        {
+            OwnerUserId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = "17841400000000000", Username = "omaskitchen",
+            WebhookVerifiedAt = DateTime.UtcNow,
+        };
+        db.InstagramConnections.Add(account);
+        await db.SaveChangesAsync();
+        return account;
+    }
+
+    private static IncomingMessage InstagramMessage(InstagramConnection account, string channelId = "17841400000000000") => new()
+    {
+        ConnectionId = account.Id, OwnerUserId = account.OwnerUserId, MessageId = "instagram:ig_1",
+        Platform = MessagingPlatform.Instagram, ExternalAccountId = channelId, From = "5834920000000000",
+        Timestamp = "1791447800000", Type = "text", ChannelId = channelId, ChannelDisplayName = "",
+        ReceivedAt = DateTime.UtcNow,
+    };
+
+    [PostgresFact]
+    public async Task Instagram_AMessageForAnActiveAccount_IsRecorded_AndADisconnectedOneDoesNotHoldUpTheWorker()
+    {
+        InstagramConnection account = await AccountAsync();
+        ConnectionMessageReceipt receipts = new(new Contexts(_options!));
+
+        await receipts.RecordAsync(InstagramMessage(account), CancellationToken.None);
+        await using (ApplicationDbContext db = new(_options!))
+            await db.InstagramConnections.Where(c => c.Id == account.Id)
+                .ExecuteUpdateAsync(s => s.SetProperty(c => c.DisabledAt, DateTime.UtcNow));
+        await receipts.RecordAsync(InstagramMessage(account), CancellationToken.None);
+    }
+
+    [PostgresFact]
+    public async Task Instagram_AMessageForAnotherAccount_IsAFault()
+    {
+        InstagramConnection account = await AccountAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new ConnectionMessageReceipt(new Contexts(_options!)).RecordAsync(InstagramMessage(account, "999"), CancellationToken.None));
+    }
 }

@@ -83,7 +83,7 @@ public class MessageMetricsTests : IDisposable
             new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
             store.Object,
             sequence.Object,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]),
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
             Mock.Of<IConnectionMessageReceipt>(),
             Mock.Of<IMessagePersistedPublisher>(),
             NullLogger<InboundMessageProcessor>.Instance);

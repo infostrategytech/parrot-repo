@@ -58,6 +58,7 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
 builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, InstagramMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddSingleton<IMessageRepository, MongoMessageRepository>();

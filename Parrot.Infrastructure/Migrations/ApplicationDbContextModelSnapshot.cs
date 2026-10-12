@@ -384,6 +384,71 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("FeatureFlags");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.InstagramConnection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccessTokenEncrypted")
+                        .HasColumnType("text");
+
+                    b.Property<string>("AccountId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("AppSecretEncrypted")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("DisabledAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("OwnerUserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Username")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("VerifyTokenEncrypted")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("WebhookIdentifier")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<DateTime?>("WebhookVerifiedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AccountId")
+                        .IsUnique()
+                        .HasFilter("\"AccountId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+
+                    b.HasIndex("OwnerUserId")
+                        .IsUnique()
+                        .HasFilter("\"DisabledAt\" IS NULL");
+
+                    b.HasIndex("WebhookIdentifier")
+                        .IsUnique();
+
+                    b.ToTable("InstagramConnections");
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.TikTokConnection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -584,6 +649,15 @@ namespace Parrot.Infrastructure.Migrations
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.FacebookConnection", b =>
+                {
+                    b.HasOne("Parrot.Application.Models.ApplicationUser", null)
+                        .WithMany()
+                        .HasForeignKey("OwnerUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.InstagramConnection", b =>
                 {
                     b.HasOne("Parrot.Application.Models.ApplicationUser", null)
                         .WithMany()

@@ -38,6 +38,14 @@ public class ConversationServiceTests
         WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "enc:page-token",
     };
     private readonly Mock<IFacebookConnectionRepository> _pages = new();
+    private readonly Mock<IInstagramConnectionRepository> _instagramAccounts = new();
+    private readonly Mock<IInstagramSender> _instagramSender = new();
+
+    private sealed class AccountProtector : IInstagramCredentialProtector
+    {
+        public string Protect(string value) => $"enc:{value}";
+        public string Unprotect(string protectedValue) => protectedValue[4..];
+    }
     private readonly Mock<IFacebookSender> _facebookSender = new();
 
     private sealed class PageProtector : IFacebookCredentialProtector
@@ -53,7 +61,8 @@ public class ConversationServiceTests
         _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
         _pages.Setup(x => x.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(_page);
         return new ConversationService(_store, _connections.Object, _sender.Object,
-            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector());
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector());
     }
 
     // The customer's Messenger message a reply answers, as the worker stores it.
