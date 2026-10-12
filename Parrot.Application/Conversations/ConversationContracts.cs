@@ -9,6 +9,12 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>Customer messages the signed-in user has not read. Zero for a read conversation.</summary>
     public int UnreadCount { get; init; }
+
+    /// <summary>When the customer last wrote, or null when they never have. Starts the reply window.</summary>
+    public DateTime? LastCustomerMessageAt { get; init; }
+
+    /// <summary>How long after the customer's last message the business may reply: 24 hours, or 48 on TikTok.</summary>
+    public int ReplyWindowHours { get; init; }
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt);
 public record SendReplyRequest(Guid RequestId, string Text);

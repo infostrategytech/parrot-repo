@@ -15,6 +15,10 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public string? Channel { get; init; }
     /// <summary>Customer messages the signed-in user has not read.</summary>
     public int? UnreadCount { get; init; }
+    /// <summary>When the customer last wrote. Starts the reply window.</summary>
+    public DateTime? LastCustomerMessageAt { get; init; }
+    /// <summary>How long after that the business may reply: 24 hours, 48 on TikTok. Null when the API does not say.</summary>
+    public int? ReplyWindowHours { get; init; }
     /// <summary>open, pending or resolved.</summary>
     public string? Status { get; init; }
     /// <summary>normal, high or urgent.</summary>

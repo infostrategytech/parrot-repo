@@ -16,9 +16,6 @@ public sealed class TikTokReplyService(
     IConversationSequence sequence,
     TimeProvider time)
 {
-    // TikTok only lets a business answer within this long of the customer's last message.
-    private static readonly TimeSpan ReplyWindow = TimeSpan.FromHours(48);
-
     public async Task<TikTokConnection?> FindConnectionAsync(string owner, Guid connectionId, CancellationToken ct)
     {
         TikTokConnection? connection = await connections.GetByOwnerAsync(owner, ct);
@@ -43,7 +40,7 @@ public sealed class TikTokReplyService(
         MessageDocument? latest = await store.LatestIncomingAsync(owner, connection.Id, recipient, ct);
         DateTime now = time.GetUtcNow().UtcDateTime;
         if (latest is not TikTokMessageDocument { ConversationId: { Length: > 0 } conversationId }
-            || (latest.SentAt ?? latest.ReceivedAt) < now - ReplyWindow)
+            || !ReplyWindow.IsOpen(MessagingPlatform.TikTok, latest.SentAt ?? latest.ReceivedAt, now))
             throw new ConflictException("Ask this customer to message your business first. TikTok replies require an incoming message within 48 hours.");
 
         // Before reserving, so a send that cannot be authorized leaves nothing pending.

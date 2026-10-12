@@ -36,6 +36,15 @@ public sealed class MongoConversationStore : IConversationStore
                 { "_id", new BsonDocument { { "connection", "$ConnectionId" }, { "sender", "$From" } } },
                 { "latest", new BsonDocument("$first", "$$ROOT") },
                 { "name", new BsonDocument("$max", "$ContactName") },
+
+                // The customer's own newest message (not the agent's reply), by the time the send check uses.
+                // $max skips the nulls the replies give.
+                { "lastIncoming", new BsonDocument("$max", new BsonDocument("$cond", new BsonArray
+                {
+                    new BsonDocument("$ne", new BsonArray { "$Outgoing", true }),
+                    new BsonDocument("$ifNull", new BsonArray { "$SentAt", "$ReceivedAt" }),
+                    BsonNull.Value,
+                })) },
             }))
             .AppendStage<BsonDocument>(new BsonDocument("$sort", new BsonDocument("latest._id", -1)))
             .Skip(skip).Limit(take).ToListAsync(ct);
@@ -47,6 +56,8 @@ public sealed class MongoConversationStore : IConversationStore
                 d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt)
             {
                 Channel = d.Platform.ToString().ToLowerInvariant(),
+                LastCustomerMessageAt = row["lastIncoming"].IsBsonNull ? null : row["lastIncoming"].ToUniversalTime(),
+                ReplyWindowHours = (int)ReplyWindow.For(d.Platform).TotalHours,
             };
         }).ToList();
     }

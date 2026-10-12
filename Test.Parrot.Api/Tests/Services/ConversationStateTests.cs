@@ -121,4 +121,67 @@ public class ConversationStateTests
 
         Assert.Equal("Latest", ada.LastMessage);
     }
+
+    [Fact]
+    public void TheReplyWindowComesFromTheListAndRunsFromTheCustomersLastMessage()
+    {
+        var state = new ConversationsState();
+        var wrote = DateTime.UtcNow.AddHours(-2);
+        state.Apply([new InboxConversationDto(Connection, "2348012345678", "Ada", "Hi", DateTime.UtcNow)
+            { LastCustomerMessageAt = wrote, ReplyWindowHours = 24 }]);
+
+        var item = state.Conversations[0];
+
+        Assert.Equal(wrote.AddHours(24), item.ReplyWindowEndsAt);
+        Assert.False(item.ReplyWindowClosed);
+    }
+
+    [Fact]
+    public void AWindowThatEndedClosesTheReply()
+    {
+        var item = new ConversationItem { LastCustomerMessageAt = DateTime.UtcNow.AddHours(-25), ReplyWindowHours = 24 };
+        Assert.True(item.ReplyWindowClosed);
+    }
+
+    [Fact]
+    public void WithoutAWindowFromTheApiNothingIsClosed()
+    {
+        var item = new ConversationItem { LastCustomerMessageAt = DateTime.UtcNow.AddDays(-30) };
+        Assert.Null(item.ReplyWindowEndsAt);
+        Assert.False(item.ReplyWindowClosed);
+    }
+
+    [Fact]
+    public void ACustomersPushOpensTheWindowAgainButAReplyAndAnOlderPushDoNot()
+    {
+        var state = StateWith("2348012345678");
+        var ada = state.Conversations[0];
+        ada.ReplyWindowHours = 24;
+        ada.LastCustomerMessageAt = DateTime.UtcNow.AddHours(-30);
+        Assert.True(ada.ReplyWindowClosed);
+
+        var now = DateTime.UtcNow;
+        state.Touch(ada, Pushed("in", at: now) with { SentAt = now });
+        Assert.Equal(now, ada.LastCustomerMessageAt);
+        Assert.False(ada.ReplyWindowClosed);
+
+        state.Touch(ada, Pushed("old", at: now.AddHours(-2)) with { SentAt = now.AddHours(-2) });
+        Assert.Equal(now, ada.LastCustomerMessageAt);
+
+        state.Touch(ada, Pushed("out", outgoing: true, at: now.AddMinutes(5)));
+        Assert.Equal(now, ada.LastCustomerMessageAt);
+    }
+
+    [Theory]
+    [InlineData(-5, "Reply window closed")]
+    [InlineData(0, "Reply window closed")]
+    [InlineData(30, "Under 1m left to reply")]
+    [InlineData(45 * 60, "45m left to reply")]
+    [InlineData(3 * 3600 + 12 * 60, "3h 12m left to reply")]
+    [InlineData(47 * 3600 + 59 * 60, "47h 59m left to reply")]
+    public void TheTimeLeftReadsAsAPersonWouldSayIt(int secondsLeft, string expected)
+    {
+        var now = new DateTime(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc);
+        Assert.Equal(expected, ReplyWindowLabel.Describe(now.AddSeconds(secondsLeft), now));
+    }
 }

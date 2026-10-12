@@ -139,7 +139,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         MessageDocument? latest = await store.LatestIncomingAsync(owner, connectionId, recipient, ct);
 
         // SentAt is absent on documents written before it existed; ReceivedAt is within seconds of it.
-        if (latest is null || (latest.SentAt ?? latest.ReceivedAt) < DateTime.UtcNow.AddHours(-24))
+        if (latest is null || !ReplyWindow.IsOpen(latest.Platform, latest.SentAt ?? latest.ReceivedAt, DateTime.UtcNow))
             throw new ConflictException("Ask this customer to message your business first. Text replies require an incoming message within 24 hours.");
 
         string? conversationKey = latest.ConversationKey;

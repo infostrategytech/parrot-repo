@@ -246,6 +246,11 @@
                             <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="inbox-conversation__meta">
                                 <ChannelGlyph Channel="@_selected.Channel" Tile Compact />
                                 @ChannelName(_selected.Channel)
+                                @if (_selected.ReplyWindowEndsAt is not null)
+                                {
+                                    <span aria-hidden="true">·</span>
+                                    <ReplyWindowChip Conversation="@_selected" />
+                                }
                                 @if (_selected.Status is { } status)
                                 {
                                     <span aria-hidden="true">·</span>

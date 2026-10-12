@@ -25,6 +25,8 @@ public class ConversationsState
             item.UpdatedAt = summary.UpdatedAt;
             item.Channel = summary.Channel ?? "whatsapp";
             item.UnreadCount = summary.UnreadCount;
+            item.LastCustomerMessageAt = summary.LastCustomerMessageAt;
+            item.ReplyWindowHours = summary.ReplyWindowHours;
             item.Status = Parse<ConversationStatus>(summary.Status);
             item.Priority = Parse<ConversationPriority>(summary.Priority);
             item.AiState = Parse<AiState>(summary.AiState);
@@ -83,6 +85,12 @@ public class ConversationsState
     /// </summary>
     public void Touch(ConversationItem item, StoredMessage message)
     {
+        // A customer's message opens the reply window again, whatever order pushes arrive in.
+        if (!message.Outgoing)
+        {
+            DateTime wrote = message.SentAt ?? message.PersistedAt;
+            if (item.LastCustomerMessageAt is not { } last || wrote > last) item.LastCustomerMessageAt = wrote;
+        }
         if (message.PersistedAt < item.UpdatedAt) return;
         item.LastMessage = message.Text ?? $"[{message.Type} message]";
         item.UpdatedAt = message.PersistedAt;

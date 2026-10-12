@@ -1,0 +1,4 @@
+.reply-window { font-weight: inherit; }
+.reply-window.is-open { color: var(--colors-accent-teal-text); }
+.reply-window.is-closing { color: var(--colors-feedback-warning-text); }
+.reply-window.is-closed { color: var(--colors-feedback-destructive-text); }
