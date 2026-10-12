@@ -38,12 +38,19 @@ public sealed record RecentConversation(string Customer, string Channel, Convers
 /// What AI Operations and an agent's page show about the agents' work:
 /// today's numbers (for every channel, or one), the last seven days, the
 /// latest conversations, and the questions waiting for the owner. Demo mode
-/// answers with sample figures; real mode has no operations feed yet, so the
-/// pages hide what they cannot show (see agents-backend-requests).
+/// answers with sample figures; with the orchestrator connected the figures
+/// come from the API's activity store (ApiAiOperationsFeed); without either,
+/// the pages hide what they cannot show.
 /// </summary>
 public interface IAiOperationsFeed
 {
     bool Available { get; }
+
+    /// <summary>The figures changed (a load finished, or an agent reported something); screens draw again.</summary>
+    event Action? Changed;
+
+    /// <summary>Reads the figures again. Never throws: a failed read keeps the last figures and says so in the log.</summary>
+    Task RefreshAsync(CancellationToken cancellationToken = default);
 
     /// <summary>Today, on every channel it answers, or on one (a channel key such as "instagram").</summary>
     AgentToday Today(AiAgent agent, string? channel = null);
@@ -61,6 +68,14 @@ public interface IAiOperationsFeed
 public sealed class UnavailableAiOperationsFeed : IAiOperationsFeed
 {
     public bool Available => false;
+
+    public event Action? Changed
+    {
+        add { }
+        remove { }
+    }
+
+    public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public AgentToday Today(AiAgent agent, string? channel = null) => new(agent.MessagesToday, 0, 0);
 

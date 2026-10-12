@@ -437,6 +437,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         TeachAi.Changed += KnowledgeChanged;
+        AiAgentsState.Changed += OnAgentsChanged;
         await AiAgentsState.LoadAsync();
         ResetIfNew();
         _cards = await Knowledge.GetDraftAsync();
@@ -474,7 +475,15 @@ else
         StateHasChanged();
     });
 
-    public void Dispose() => TeachAi.Changed -= KnowledgeChanged;
+    // The agent's figures changed, possibly off the circuit's thread (a push
+    // from the hub): draw again on it.
+    private void OnAgentsChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        TeachAi.Changed -= KnowledgeChanged;
+        AiAgentsState.Changed -= OnAgentsChanged;
+    }
 
     private string Business => AuthState.CurrentUser?.BusinessName ?? string.Empty;
 

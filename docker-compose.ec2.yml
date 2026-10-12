@@ -103,6 +103,7 @@ services:
         create messages.inbound 24
         create messages.inbound.dlq 3
         create messages.persisted 24
+        create agent.events 6
         create catalog.events 3
     restart: "no"
     logging: *logging
@@ -193,6 +194,10 @@ services:
       GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-not-configured.apps.googleusercontent.com}
       GoogleOAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-not-configured}
       Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
+      # The AI orchestrator (Omni-AI). Off until one is deployed; then agents
+      # answer customers and the AI Operations figures show.
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
       BrightData__ApiKey: ${BRIGHTDATA_API_KEY:-}
       BrightData__Zone: ${BRIGHTDATA_ZONE:-}
       EmailSettings__SmtpHost: ${SMTP_HOST:-smtp.example.com}
@@ -307,6 +312,8 @@ services:
       # nginx without leaving the box through the network alias on nginx below.
       ApiSettings__BaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}/
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
+      # Must match the API's: with it on, agents live in the API and can be turned on.
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
     depends_on:
       - parrot-api
       - parrot-grpc

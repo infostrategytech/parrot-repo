@@ -23,6 +23,16 @@ public class KafkaSettings
     public string RealtimeConsumerGroupId { get; set; } = "realtime-gateway";
 
     /// <summary>
+    /// Where the AI orchestrator reports what its agents did (turns, approvals,
+    /// escalations), keyed by tenant, and where the API announces a changed
+    /// agent configuration. Read by the API into the activity store.
+    /// </summary>
+    public string AgentEventsTopic { get; set; } = "agent.events";
+
+    /// <summary>The API's group on the agent events topic; it reads from the beginning, since every event is kept.</summary>
+    public string AgentEventsConsumerGroupId { get; set; } = "parrot-agent-events";
+
+    /// <summary>
     /// Use Google Application Default Credentials (SASL_SSL + OAuthBearer).
     /// Required for GCP Managed Service for Apache Kafka.
     /// </summary>

@@ -44,6 +44,32 @@ public class AgentController : ControllerBase
         return Ok(agent);
     }
 
+    /// <summary>Saves everything about the agent except whether it is on; that is the live switch below.</summary>
+    [HttpPut("{id:guid}")]
+    public async Task<IActionResult> UpdateAgent(Guid id, [FromBody] AgentInfo agentInfo)
+    {
+        string userId = GetUserId();
+        AgentResponse agent = await _agentService.UpdateAsync(userId, id, agentInfo);
+        return Ok(agent);
+    }
+
+    /// <summary>Turns the agent on or off. A draft turned on starts answering on its channels.</summary>
+    [HttpPatch("{id:guid}/live")]
+    public async Task<IActionResult> SetLive(Guid id, [FromBody] AgentLiveRequest request)
+    {
+        string userId = GetUserId();
+        AgentResponse agent = await _agentService.SetLiveAsync(userId, id, request.On);
+        return Ok(agent);
+    }
+
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> DeleteAgent(Guid id)
+    {
+        string userId = GetUserId();
+        await _agentService.DeleteAsync(userId, id);
+        return NoContent();
+    }
+
     private string GetUserId() =>
         User.FindFirstValue(ClaimTypes.NameIdentifier)
             ?? User.FindFirstValue("sub")
