@@ -180,7 +180,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     <div class="channels channels--setup">
         <TikTokManualSetup Channel="tikTok"
                            StartAtTest="_tikTokStartAtTest"
-                           InitialError="_tikTokError"
+                           InitialError="@_tikTokError"
                            OnExit="CloseSetup"
                            OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
                            OnSetUpAgent="SetUpAgent" />

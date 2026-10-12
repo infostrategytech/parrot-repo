@@ -9,7 +9,7 @@ public sealed class TikTokConnection
     public Guid Id { get; set; } = Guid.NewGuid();
     public required string OwnerUserId { get; set; }
 
-    // Per-connection webhook reference. The callback URL registered with TikTok carries it as ?ref=,
+    // Per-connection webhook reference. The callback URL registered with TikTok ends in it,
     // so events route by an indexed lookup before the signature is checked with this app's secret.
     public string WebhookIdentifier { get; set; } = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
 

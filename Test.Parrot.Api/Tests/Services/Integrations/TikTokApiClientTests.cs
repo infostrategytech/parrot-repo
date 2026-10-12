@@ -174,6 +174,34 @@ public class TikTokApiClientTests
             "https://api.example.com/api/tiktok/setup/callback", default));
     }
 
+    // Only a stand-in for TikTok in local development changes where its API is.
+    [Fact]
+    public async Task TheApiAddress_CanBePointedAtAStandIn()
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, Ok);
+        TikTokApiClient client = new(new HttpClient(handler),
+            Options.Create(new TikTokSettings { ApiBaseUrl = "http://localhost:5390/", ApiVersion = "v9" }));
+
+        await client.RegisterWebhookAsync("app", "secret", "https://api.example.com/x", default);
+
+        Assert.Equal("http://localhost:5390/open_api/v9/business/webhook/update/", handler.Url);
+    }
+
+    // App secrets and tokens go to this address, so it is never plain HTTP to another machine.
+    [Theory]
+    [InlineData("http://tiktok.example.com")]
+    [InlineData("not a url")]
+    public async Task AnInsecureApiAddress_IsRefusedBeforeAnythingIsSent(string address)
+    {
+        FakeHandler handler = new(HttpStatusCode.OK, Ok);
+        TikTokApiClient client = new(new HttpClient(handler), Options.Create(new TikTokSettings { ApiBaseUrl = address }));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            client.RegisterWebhookAsync("app", "secret", "https://api.example.com/x", default));
+
+        Assert.Null(handler.Url);
+    }
+
     private static TikTokApiClient Client(FakeHandler handler) =>
         new(new HttpClient(handler), Options.Create(new TikTokSettings()));
 

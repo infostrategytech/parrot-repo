@@ -6,7 +6,7 @@ using Parrot.Domain.Exceptions;
 
 namespace Parrot.Application.Integrations;
 
-// Setup orchestration for TikTok; the webhook endpoint and the send path are not wired up yet.
+// Setup orchestration for TikTok: the app, the webhook it is registered with, and the owner's consent.
 public sealed class TikTokConnectionService(
     ITikTokConnectionRepository repository,
     ITikTokCredentialProtector protector,
@@ -69,7 +69,7 @@ public sealed class TikTokConnectionService(
 
         // The connection id is fixed length, so the owner id after it needs no escaping.
         string state = protector.ProtectState($"{connection.Id:N}{ownerUserId}", AuthorizationLifetime);
-        string url = "https://www.tiktok.com/v2/auth/authorize/"
+        string url = TikTokSettings.RequireSecureUrl(options.Value.AuthorizeUrl, nameof(TikTokSettings.AuthorizeUrl))
             + $"?client_key={Uri.EscapeDataString(connection.AppId)}"
             + "&response_type=code"
             + $"&scope={Uri.EscapeDataString(string.Join(',', Scopes))}"
@@ -96,6 +96,10 @@ public sealed class TikTokConnectionService(
         string[] missing = Scopes.Except(tokens.Scopes, StringComparer.Ordinal).ToArray();
         if (missing.Length > 0)
             throw new ValidationException($"Allow every permission Parrot asks for on TikTok. Missing: {string.Join(", ", missing)}.");
+
+        // Webhooks and conversations are tied to the first account, so another one needs a new connection.
+        if (connection.TikTokOpenId is { } authorized && !string.Equals(authorized, tokens.OpenId, StringComparison.Ordinal))
+            throw new ConflictException("This TikTok app is already connected to a different account. Disconnect TikTok to use another account.");
 
         TikTokAccount account = await CallTikTokAsync(() => tikTok.GetAccountAsync(tokens.OpenId, tokens.AccessToken,
             cancellationToken), "TikTok did not return the account", cancellationToken);

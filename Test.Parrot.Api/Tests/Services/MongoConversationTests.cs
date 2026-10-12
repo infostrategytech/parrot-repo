@@ -75,4 +75,35 @@ public class MongoConversationTests
         }
         finally { await client.DropDatabaseAsync(database); }
     }
+
+    // The setup screens look for a test message by the connection's own id, but a stored message's ChannelId
+    // is the platform's id for the account, so a lookup by either has to find it.
+    [MongoFact]
+    public async Task ATestMessageIsFoundByItsConnectionOrItsChannel()
+    {
+        var client = new MongoClient(Environment.GetEnvironmentVariable("PARROT_TEST_MONGO"));
+        string database = "parrot_test_" + Guid.NewGuid().ToString("N");
+        var settings = Options.Create(new MongoDbSettings { Database = database, Collection = "messages" });
+        try
+        {
+            var mappers = new MessageDocumentMapperFactory(
+                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
+            var repository = new MongoMessageRepository(client, settings, mappers);
+            var connection = Guid.NewGuid();
+            await repository.InsertAsync(new IncomingMessage
+            {
+                MessageId = "tiktok.test", OwnerUserId = "owner", ConnectionId = connection,
+                Platform = MessagingPlatform.TikTok, ExternalAccountId = "business-open-id", ChannelId = "business-open-id",
+                ChannelDisplayName = string.Empty, From = "customer", Type = "text", TextBody = "Hello",
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ReceivedAt = DateTime.UtcNow,
+            });
+            DateTime since = DateTime.UtcNow.AddMinutes(-1);
+
+            Assert.NotNull(await repository.FindFirstAsync(connection.ToString(), since));
+            Assert.NotNull(await repository.FindFirstAsync("business-open-id", since));
+            Assert.Null(await repository.FindFirstAsync(Guid.NewGuid().ToString(), since));
+            Assert.Null(await repository.FindFirstAsync(connection.ToString(), DateTime.UtcNow.AddMinutes(1)));
+        }
+        finally { await client.DropDatabaseAsync(database); }
+    }
 }

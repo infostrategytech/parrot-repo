@@ -95,7 +95,7 @@ public sealed class TikTokApiClient(HttpClient http, IOptions<TikTokSettings> op
     }
 
     private string Url(string path) =>
-        $"https://business-api.tiktok.com/open_api/{Uri.EscapeDataString(options.Value.ApiVersion)}/{path}";
+        $"{TikTokSettings.RequireSecureUrl(options.Value.ApiBaseUrl, nameof(TikTokSettings.ApiBaseUrl)).TrimEnd('/')}/open_api/{Uri.EscapeDataString(options.Value.ApiVersion)}/{path}";
 
     // A 5xx or no answer is an HttpRequestException (worth a retry); a 4xx or non-zero code is a TikTokApiException.
     private async Task<JsonDocument> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

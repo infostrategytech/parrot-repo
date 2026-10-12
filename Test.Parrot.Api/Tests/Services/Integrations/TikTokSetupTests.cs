@@ -127,6 +127,28 @@ public class TikTokSetupTests
     }
 
     [Fact]
+    public async Task TheConsentScreenAddress_CanBePointedAtAStandIn()
+    {
+        TikTokConnectionService service = new(_repository, _protector, _tikTok,
+            Options.Create(new TikTokSettings { WebhookBaseUrl = "https://api.example.com", AuthorizeUrl = "http://localhost:5390/authorize/" }));
+        await service.SaveAppAsync(Owner, App("7123456789", "secret"));
+
+        Uri url = new((await service.GetAuthorizationAsync(Owner)).AuthorizationUrl);
+
+        Assert.Equal("http://localhost:5390/authorize/", url.GetLeftPart(UriPartial.Path));
+    }
+
+    [Fact]
+    public async Task AnInsecureConsentScreenAddress_IsRefused()
+    {
+        TikTokConnectionService service = new(_repository, _protector, _tikTok,
+            Options.Create(new TikTokSettings { WebhookBaseUrl = "https://api.example.com", AuthorizeUrl = "http://tiktok.example.com/authorize/" }));
+        await service.SaveAppAsync(Owner, App("7123456789", "secret"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetAuthorizationAsync(Owner));
+    }
+
+    [Fact]
     public async Task ConsentBeforeTheAppIsSaved_IsNotFound()
     {
         await Assert.ThrowsAsync<NotFoundException>(() => NewService().GetAuthorizationAsync(Owner));
@@ -171,6 +193,35 @@ public class TikTokSetupTests
         TikTokSetupResponse setup = await service.GetSetupAsync(Owner);
         Assert.True(setup.Authorized);
         Assert.True(setup.NeedsReauthorization);
+    }
+
+    // Authorizing again is for the same account (a lapsed token); another account would orphan the webhooks and
+    // conversations already tied to the first.
+    [Fact]
+    public async Task AuthorizingAgainAsAnotherAccount_IsRefused_AndTheFirstIsKept()
+    {
+        TikTokConnectionService service = NewService();
+        await service.SaveAppAsync(Owner, App("7123456789", "secret"));
+        await service.CompleteAuthorizationAsync(await StateAsync(service), "auth-code");
+        _tikTok.Tokens = _tikTok.Tokens with { OpenId = "another-open-id" };
+
+        await Assert.ThrowsAsync<ConflictException>(
+            async () => await service.CompleteAuthorizationAsync(await StateAsync(service), "auth-code"));
+
+        Assert.Equal("business-open-id", _repository.Connection!.TikTokOpenId);
+    }
+
+    [Fact]
+    public async Task AuthorizingAgainAsTheSameAccount_RenewsItsTokens()
+    {
+        TikTokConnectionService service = NewService();
+        await service.SaveAppAsync(Owner, App("7123456789", "secret"));
+        await service.CompleteAuthorizationAsync(await StateAsync(service), "auth-code");
+        _tikTok.Tokens = _tikTok.Tokens with { AccessToken = "renewed-token" };
+
+        await service.CompleteAuthorizationAsync(await StateAsync(service), "auth-code");
+
+        Assert.Equal("renewed-token", _protector.Unprotect(_repository.Connection!.AccessTokenEncrypted!));
     }
 
     [Fact]

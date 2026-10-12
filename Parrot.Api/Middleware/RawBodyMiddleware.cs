@@ -45,7 +45,8 @@ public sealed class RawBodyMiddleware
                 "{Platform} webhook received. Method={Method} Path={Path} CorrelationId={CorrelationId} HasConnectionReference={HasConnectionReference} HasSignature={HasSignature} ContentLength={ContentLength}",
                 platform,
                 context.Request.Method,
-                context.Request.Path.Value,
+                // TikTok's connection reference is the last path segment, so it stays out of the log.
+                platform == "TikTok" ? "/api/webhooks/tiktok" : context.Request.Path.Value,
                 context.Response.Headers["X-Correlation-ID"].ToString(),
                 // Meta's callbacks carry ?ref=; TikTok's carry the reference as the last path segment.
                 platform == "TikTok"

@@ -63,9 +63,17 @@ public sealed class MongoMessageRepository : IMessageRepository
         DateTime since,
         CancellationToken cancellationToken = default)
     {
-        // ChannelId now lives on the base document, so this no longer needs an untyped field name.
+        // The setup screens hold a connection's own id, while a stored message's ChannelId is the platform's
+        // id for the account (a phone number id, a page id, a business open id), so either one finds it.
+        FilterDefinition<MessageDocument> channel = Builders<MessageDocument>.Filter.Eq(x => x.ChannelId, channelId);
+        if (Guid.TryParse(channelId, out Guid connectionId))
+        {
+            channel = Builders<MessageDocument>.Filter.Or(
+                channel, Builders<MessageDocument>.Filter.Eq(x => x.ConnectionId, connectionId));
+        }
+
         FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.And(
-            Builders<MessageDocument>.Filter.Eq(x => x.ChannelId, channelId),
+            channel,
             Builders<MessageDocument>.Filter.Gte(x => x.ReceivedAt, since));
 
         MessageDocument? doc = await _collection
