@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
+using Parrot.Application.Conversations;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
 using Parrot.Application.Messaging;
@@ -18,19 +19,25 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
     private readonly InboundMessagePublisher _publisher;
     private readonly IAppLogger<FacebookWebhookService> _logger;
     private readonly IFacebookCredentialProtector _protector;
+    private readonly IDeliveryReceipts? _receipts;
+
+    // How long recording receipts may hold up the 200 Messenger is waiting for.
+    private static readonly TimeSpan ReceiptBudget = TimeSpan.FromSeconds(1);
 
     public FacebookWebhookService(
         IOptions<FacebookSettings> settings,
         IFacebookConnectionRepository connections,
         InboundMessagePublisher publisher,
         IAppLogger<FacebookWebhookService> logger,
-        IFacebookCredentialProtector protector)
+        IFacebookCredentialProtector protector,
+        IDeliveryReceipts? receipts = null)
     {
         _settings = settings.Value;
         _connections = connections;
         _publisher = publisher;
         _logger = logger;
         _protector = protector;
+        _receipts = receipts;
     }
 
     public string GetWebhookUrl() =>
@@ -143,6 +150,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         DateTime receivedAt = DateTime.UtcNow;
         List<InboundMessage> inbound = [];
         List<string> types = [];
+        List<FacebookMessagingEvent> receipts = [];
 
         foreach (FacebookEntry entry in payload.Entry)
         {
@@ -150,6 +158,9 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             {
                 foreach (FacebookMessagingEvent evt in messagingEvents)
                 {
+                    if (evt.Delivery is not null || evt.Read is not null)
+                        receipts.Add(evt);
+
                     if (ToInbound(registration, evt, rawBody, correlationId, receivedAt) is { } message)
                     {
                         inbound.Add(message);
@@ -173,7 +184,61 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             MessageMetrics.Received.Add(1, MessageMetrics.MessageType(type));
         }
 
+        await RecordReceiptsAsync(registration, receipts, cancellationToken);
         return true;
+    }
+
+    // Delivered and read reports for replies the Page sent. Delivery names message ids and a watermark;
+    // a read has only a watermark, so it covers every earlier reply to that customer. Never fails or
+    // delays the webhook: it has one short budget, and what it cannot record is simply not shown.
+    private async Task RecordReceiptsAsync(
+        FacebookPageRegistration registration, List<FacebookMessagingEvent> events, CancellationToken cancellationToken)
+    {
+        if (_receipts is null || events.Count == 0)
+        {
+            return;
+        }
+
+        using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(ReceiptBudget);
+        foreach (FacebookMessagingEvent evt in events)
+        {
+            if (budget.IsCancellationRequested)
+            {
+                return;
+            }
+
+            try
+            {
+                // On a delivery or read event the sender is the customer.
+                string customer = ConversationKey.NormalizeParticipant(MessagingPlatform.Facebook, evt.Sender.Id);
+                if (evt.Delivery is { } delivery)
+                {
+                    DateTime? upTo = ProviderTimestamp.FromUnixMilliseconds(delivery.Watermark);
+                    DateTime at = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp) ?? upTo ?? DateTime.UtcNow;
+                    foreach (string mid in delivery.Mids ?? [])
+                    {
+                        await _receipts.RecordAsync(registration.ConnectionId, mid, DeliveryState.Delivered, at, budget.Token);
+                    }
+
+                    if (upTo is { } deliveredUpTo)
+                    {
+                        await _receipts.RecordUpToAsync(registration.ConnectionId, customer, DeliveryState.Delivered, at, deliveredUpTo, budget.Token);
+                    }
+                }
+
+                // Instagram's equivalent carries a message id, not a watermark: nothing to read here.
+                if (evt.Read is { } read && ProviderTimestamp.FromUnixMilliseconds(read.Watermark) is { } readUpTo)
+                {
+                    DateTime at = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp) ?? readUpTo;
+                    await _receipts.RecordUpToAsync(registration.ConnectionId, customer, DeliveryState.Read, at, readUpTo, budget.Token);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("Facebook receipt not recorded. ConnectionId={ConnectionId} Reason={Reason}", registration.ConnectionId, ex.Message);
+            }
+        }
     }
 
     // A customer's message or postback becomes an InboundMessage; the body goes

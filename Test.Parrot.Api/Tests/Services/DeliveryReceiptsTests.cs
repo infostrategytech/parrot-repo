@@ -39,14 +39,15 @@ public class DeliveryReceiptsTests
         }
 
         // A reply Meta has accepted, stored the way a send stores it.
-        public async Task<string> ReplyAsync(string? providerId = "wamid.R1", Guid? connection = null, string status = "accepted")
+        public async Task<string> ReplyAsync(string? providerId = "wamid.R1", Guid? connection = null, string status = "accepted",
+            string customer = Customer, DateTime? sentAt = null)
         {
             WhatsAppMessageDocument doc = new()
             {
-                MessageId = "outgoing:" + Guid.NewGuid(), Platform = MessagingPlatform.WhatsApp, ExternalAccountId = "a", From = Customer,
+                MessageId = "outgoing:" + Guid.NewGuid(), Platform = MessagingPlatform.WhatsApp, ExternalAccountId = "a", From = customer,
                 Timestamp = "0", Type = "text", ChannelId = "a", ChannelDisplayName = "a", TextBody = "Hello",
                 OwnerUserId = Owner, ConnectionId = connection ?? Connection, Outgoing = true, SendStatus = status,
-                ProviderMessageId = providerId, ReceivedAt = DateTime.UtcNow,
+                ProviderMessageId = providerId, ReceivedAt = DateTime.UtcNow, SentAt = sentAt ?? DateTime.UtcNow,
             };
             await Messages.InsertOneAsync(doc);
             return doc.MessageId;
@@ -224,5 +225,57 @@ public class DeliveryReceiptsTests
         await h.Receipts.ApplyParkedAsync(Connection, "wamid.R1", default);
 
         Assert.Equal("accepted", await h.ShownAsync(id));
+    }
+
+    // Messenger's read receipt names no message: everything sent to that customer before the watermark was read.
+    [MongoFact]
+    public async Task AWatermarkReadsEveryEarlierReplyToThatCustomerAndNothingElse()
+    {
+        await using Harness h = new();
+        string early = await h.ReplyAsync("m_1", sentAt: At(-20));
+        string justBefore = await h.ReplyAsync("m_2", sentAt: At(-1));
+        string after = await h.ReplyAsync("m_3", sentAt: At(30));
+        string otherCustomer = await h.ReplyAsync("m_4", customer: "other-psid", sentAt: At(-20));
+        string otherConnection = await h.ReplyAsync("m_5", connection: Guid.NewGuid(), sentAt: At(-20));
+        string neverAccepted = await h.ReplyAsync(providerId: null, status: "pending", sentAt: At(-20));
+
+        await h.Receipts.RecordUpToAsync(Connection, Customer, DeliveryState.Read, At(10), upTo: At(0), default);
+
+        foreach (string read in new[] { early, justBefore })
+        {
+            MessageDocument stored = await h.GetAsync(read);
+            Assert.Equal(At(10), stored.ReadAt);
+            Assert.Equal(At(10), stored.DeliveredAt);
+        }
+        foreach (string untouched in new[] { after, otherCustomer, otherConnection, neverAccepted })
+        {
+            MessageDocument stored = await h.GetAsync(untouched);
+            Assert.Null(stored.ReadAt);
+            Assert.Null(stored.DeliveredAt);
+        }
+    }
+
+    [MongoFact]
+    public async Task ADeliveryWatermarkAndALaterReadKeepTheEarliestTimes()
+    {
+        await using Harness h = new();
+        string id = await h.ReplyAsync("m_1", sentAt: At(-5));
+
+        await h.Receipts.RecordUpToAsync(Connection, Customer, DeliveryState.Read, At(60), upTo: At(0), default);
+        await h.Receipts.RecordUpToAsync(Connection, Customer, DeliveryState.Delivered, At(3), upTo: At(0), default);
+        await h.Receipts.RecordUpToAsync(Connection, Customer, DeliveryState.Read, At(90), upTo: At(0), default);
+
+        MessageDocument stored = await h.GetAsync(id);
+        Assert.Equal(At(3), stored.DeliveredAt);
+        Assert.Equal(At(60), stored.ReadAt);
+    }
+
+    [MongoFact]
+    public async Task AWatermarkCannotReportAFailure()
+    {
+        await using Harness h = new();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+            h.Receipts.RecordUpToAsync(Connection, Customer, DeliveryState.Failed, At(0), At(0), default));
     }
 }

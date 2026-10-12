@@ -62,10 +62,35 @@ public sealed class MongoDeliveryReceipts(IMongoClient client, IOptions<MongoDbS
         }
     }
 
+    public async Task RecordUpToAsync(Guid connection, string customer, DeliveryState state, DateTime at, DateTime upTo, CancellationToken ct)
+    {
+        if (state == DeliveryState.Failed) throw new ArgumentOutOfRangeException(nameof(state), state, "A watermark cannot report a failure.");
+        try
+        {
+            // ProviderMessageId is only there once the channel accepted the reply; SentAt is our own clock.
+            await Messages.UpdateManyAsync(
+                Builders<MessageDocument>.Filter.Where(x => x.ConnectionId == connection && x.From == customer && x.Outgoing
+                    && x.ProviderMessageId != null && x.SentAt <= upTo),
+                ReceiptUpdate(state, at), cancellationToken: ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "receipt.record_up_to_failed State={State} ConnectionId={ConnectionId}", state, connection);
+        }
+    }
+
     // True when a reply on this connection has that channel id, whether or not the receipt changed it.
+    private async Task<bool> ApplyAsync(Guid connection, string providerMessageId, DeliveryState state, DateTime at, CancellationToken ct)
+    {
+        UpdateResult result = await Messages.UpdateOneAsync(
+            Builders<MessageDocument>.Filter.Where(x => x.ProviderMessageId == providerMessageId && x.ConnectionId == connection && x.Outgoing),
+            ReceiptUpdate(state, at), cancellationToken: ct);
+        return result.MatchedCount > 0;
+    }
+
     // Delivery is the earliest time reported, so a "delivered" that arrives after "read" lowers the time
     // the read had filled in. A failure never overturns a reply the customer's device has received.
-    private async Task<bool> ApplyAsync(Guid connection, string providerMessageId, DeliveryState state, DateTime at, CancellationToken ct)
+    private static UpdateDefinition<MessageDocument> ReceiptUpdate(DeliveryState state, DateTime at)
     {
         BsonDateTime when = new(at);
         BsonDocument set = state switch
@@ -79,13 +104,8 @@ public sealed class MongoDeliveryReceipts(IMongoClient client, IOptions<MongoDbS
                 "failed",
             })),
         };
-        UpdateDefinition<MessageDocument> update = Builders<MessageDocument>.Update.Pipeline(
+        return Builders<MessageDocument>.Update.Pipeline(
             new BsonDocumentStagePipelineDefinition<MessageDocument, MessageDocument>([new BsonDocument("$set", set)]));
-
-        UpdateResult result = await Messages.UpdateOneAsync(
-            Builders<MessageDocument>.Filter.Where(x => x.ProviderMessageId == providerMessageId && x.ConnectionId == connection && x.Outgoing),
-            update, cancellationToken: ct);
-        return result.MatchedCount > 0;
     }
 
     private static BsonDocument Earliest(string field, BsonDateTime when) =>

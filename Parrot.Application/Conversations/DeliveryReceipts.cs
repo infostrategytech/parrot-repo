@@ -27,6 +27,13 @@ public interface IDeliveryReceipts
     /// </summary>
     Task RecordAsync(Guid connection, string providerMessageId, DeliveryState state, DateTime at, CancellationToken ct);
 
+    /// <summary>
+    /// For a channel that reports a watermark instead of message ids (Messenger's read receipt): marks every
+    /// reply to this customer on this connection that was sent at or before <paramref name="upTo"/>.
+    /// Replies the channel never accepted are left alone. Not for <see cref="DeliveryState.Failed"/>.
+    /// </summary>
+    Task RecordUpToAsync(Guid connection, string customer, DeliveryState state, DateTime at, DateTime upTo, CancellationToken ct);
+
     /// <summary>Applies any receipt that arrived before this reply's channel id was stored.</summary>
     Task ApplyParkedAsync(Guid connection, string providerMessageId, CancellationToken ct);
 }

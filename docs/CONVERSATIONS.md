@@ -141,7 +141,14 @@ The inbox's rail badge and each row's badge count customer messages the signed-i
 - Recording runs inside the webhook's one-second budget and never fails the webhook.
 - The open thread picks receipts up on its next poll (up to 15 seconds); there is no live push for them yet.
 - **"Read" only appears when the channel sends it.** A customer can turn read receipts off, so a reply that shows Delivered may have been read. Only replies sent after this shipped have receipts.
-- Facebook (Messenger `message_deliveries` / `message_reads`) and TikTok are not wired yet. Receipts are not presence: they say the customer saw a reply, not that they are online.
+- TikTok is not wired yet: its read/seen event shape has not been confirmed against a real approved app. Receipts are not presence: they say the customer saw a reply, not that they are online.
+
+**Delivery receipts (Messenger).** In the Meta app's Messenger webhook settings, subscribe the Page to `message_deliveries` and `message_reads` (a setting in Meta, not in Parrot; without it Meta sends no receipts). A delivery event names the delivered message ids and a watermark; a read event carries only a watermark and the customer's id.
+
+- Delivery by id marks those replies delivered; a watermark marks every reply to that customer sent at or before it. A read does the same for read (and delivered).
+- Only replies Messenger accepted (those with Meta's message id) are touched, and only on that Page's connection.
+- Parrot compares its own send time with Meta's watermark, so clock skew of a few seconds between Parrot's server and Meta's could mislabel a reply sent right at the moment the customer read.
+- Instagram's `messaging_seen` names a message instead of a watermark, so it is ignored here until Instagram ingestion exists.
 
 ## Audit map
 
@@ -182,6 +189,7 @@ The inbox's rail badge and each row's badge count customer messages the signed-i
 | `Parrot.Infrastructure/Conversations/MongoDeliveryReceipts.cs` | Applies receipts to replies; parks ones that arrive early |
 | `Test.Parrot.Api/Tests/Services/DeliveryReceiptsTests.cs` | Receipts on a real MongoDB: order, repeats, isolation, early arrival |
 | `Test.Parrot.Api/Tests/Services/Integrations/WhatsAppReceiptsTests.cs` | The webhook hands receipts to the recorder and cannot be broken by it |
+| `Test.Parrot.Api/Tests/Services/Integrations/FacebookReceiptsTests.cs` | The Messenger webhook hands deliveries and reads to the recorder and cannot be broken by it |
 | `docs/CONVERSATIONS.md` | This setup/audit guide |
 
 Webhook signature validation remains intentionally bypassed by the existing controller implementation. Tests cover processing accepted connections with missing or invalid signatures.
