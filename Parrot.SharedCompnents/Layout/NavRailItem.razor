@@ -31,8 +31,8 @@ else
             <Typography TextStyle="TextStyle.Small10Semibold"
                         As="em"
                         Class="nav-item__count"
-                        aria-label="@($"{Badge} unread conversations")">
-                @(Badge > 99 ? "99+" : Badge.ToString())
+                        aria-label="@($"{Badge} unread messages")">
+                @Badge
             </Typography>
         }
     };

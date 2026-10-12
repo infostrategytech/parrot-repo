@@ -112,14 +112,14 @@ public class ConversationReadTests
         await h.AddAsync(first, second, third);
         MongoConversationReadStore store = h.Store();
 
-        await store.MarkReadAsync(Owner, Owner, connection, "2348012345678", second.Id, default);
+        await store.MarkReadAsync(Owner, Owner, connection, "2348012345678", second.MessageId, default);
         Assert.Equal(1, await store.TotalUnreadAsync(Owner, Owner, default));
 
         // A late or repeated mark of an older message does not bring a message back.
-        await store.MarkReadAsync(Owner, Owner, connection, "2348012345678", first.Id, default);
+        await store.MarkReadAsync(Owner, Owner, connection, "2348012345678", first.MessageId, default);
         Assert.Equal(1, await store.TotalUnreadAsync(Owner, Owner, default));
 
-        await store.MarkReadAsync(Owner, Owner, connection, "2348012345678", third.Id, default);
+        await store.MarkReadAsync(Owner, Owner, connection, "2348012345678", third.MessageId, default);
         Assert.Equal(0, await store.TotalUnreadAsync(Owner, Owner, default));
         Assert.Empty(await store.CountUnreadAsync(Owner, Owner, [(connection, "2348012345678")], default));
 
@@ -137,7 +137,7 @@ public class ConversationReadTests
         await h.AddAsync(seen, arrivedWhileReading);
         MongoConversationReadStore store = h.Store();
 
-        await store.MarkReadAsync(Owner, Owner, connection, "psid-1", seen.Id, default);
+        await store.MarkReadAsync(Owner, Owner, connection, "psid-1", seen.MessageId, default);
 
         Assert.Equal(1, (await store.CountUnreadAsync(Owner, Owner, [(connection, "psid-1")], default))[(connection, "psid-1")]);
     }
@@ -151,7 +151,7 @@ public class ConversationReadTests
         await h.AddAsync(message);
         MongoConversationReadStore store = h.Store();
 
-        await store.MarkReadAsync(Owner, "agent-a", connection, "open-id-1", message.Id, default);
+        await store.MarkReadAsync(Owner, "agent-a", connection, "open-id-1", message.MessageId, default);
 
         Assert.Equal(0, await store.TotalUnreadAsync(Owner, "agent-a", default));
         Assert.Equal(1, await store.TotalUnreadAsync(Owner, "agent-b", default));
@@ -164,7 +164,7 @@ public class ConversationReadTests
         Guid connection = Guid.NewGuid();
         MessageDocument read = Message(MessagingPlatform.WhatsApp, connection, "2348012345678");
         await h.AddAsync(read, Message(MessagingPlatform.WhatsApp, connection, "2348012345678"));
-        await h.Store().MarkReadAsync(Owner, Owner, connection, "2348012345678", read.Id, default);
+        await h.Store().MarkReadAsync(Owner, Owner, connection, "2348012345678", read.MessageId, default);
 
         // A new store is a new process: nothing is held in memory.
         Assert.Equal(1, await h.Store().TotalUnreadAsync(Owner, Owner, default));
@@ -215,11 +215,10 @@ public class ConversationReadTests
         await h.AddAsync(mine, otherCustomer, otherOwner);
         MongoConversationReadStore store = h.Store();
 
-        await Assert.ThrowsAsync<NotFoundException>(() => store.MarkReadAsync(Owner, Owner, connection, "2348012345678", otherCustomer.Id, default));
-        await Assert.ThrowsAsync<NotFoundException>(() => store.MarkReadAsync(Owner, Owner, connection, "2348012345678", otherOwner.Id, default));
-        // Nothing real is later than this, and it must not read what has not arrived.
-        await Assert.ThrowsAsync<NotFoundException>(() => store.MarkReadAsync(Owner, Owner, connection, "2348012345678", ObjectId.GenerateNewId(DateTime.UtcNow.AddYears(1)).ToString(), default));
-        await Assert.ThrowsAsync<ValidationException>(() => store.MarkReadAsync(Owner, Owner, connection, "2348012345678", "not-an-id", default));
+        await Assert.ThrowsAsync<NotFoundException>(() => store.MarkReadAsync(Owner, Owner, connection, "2348012345678", otherCustomer.MessageId, default));
+        await Assert.ThrowsAsync<NotFoundException>(() => store.MarkReadAsync(Owner, Owner, connection, "2348012345678", otherOwner.MessageId, default));
+        // An id that matches no message cannot read anything, now or for later arrivals.
+        await Assert.ThrowsAsync<NotFoundException>(() => store.MarkReadAsync(Owner, Owner, connection, "2348012345678", "no-such-message", default));
         // The failed marks changed nothing: both of this owner's customers are still unread.
         Assert.Equal(2, await store.TotalUnreadAsync(Owner, Owner, default));
     }

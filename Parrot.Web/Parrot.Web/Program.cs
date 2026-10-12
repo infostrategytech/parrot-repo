@@ -105,6 +105,7 @@ builder.Services.AddScoped<AuroraInterop>();
 builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddScoped<ConversationClient>();
+builder.Services.AddScoped<InboxUnreadState>();
 // The API has none of the extra inbox actions yet, so the inbox hides them.
 builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
 // Business knowledge and the AI Operations figures: no API for either yet, so

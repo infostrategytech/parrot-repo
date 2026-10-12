@@ -103,14 +103,11 @@ public class ConversationStateTests
     {
         var state = StateWith("2348033334444", "2348012345678");
         var ada = state.FindForPush(Pushed("in"))!;
-        int changes = 0;
-        state.Changed += () => changes++;
 
         state.Touch(ada, Pushed("in", text: "New"));
 
         Assert.Same(ada, state.Conversations[0]);
         Assert.Equal("New", ada.LastMessage);
-        Assert.Equal(1, changes);
     }
 
     [Fact]

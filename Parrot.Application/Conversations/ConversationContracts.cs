@@ -17,7 +17,7 @@ public record MessagePage(IReadOnlyList<ConversationMessage> Messages, string? N
 /// <summary>Unread customer messages across every conversation and channel.</summary>
 public record UnreadSummary(int Total);
 
-/// <summary>UpToMessageId is the newest message the agent has seen in the thread.</summary>
+/// <summary>UpToMessageId is the id (ConversationMessage.Id) of the newest message the agent has seen in the thread.</summary>
 public record MarkReadRequest(string UpToMessageId);
 
 /// <summary>What is still unread after a mark: in that conversation, and in total.</summary>
@@ -31,7 +31,7 @@ public record MarkReadResult(int ConversationUnread, int Total);
 public interface IConversationReadStore
 {
     /// <summary>
-    /// Moves the user's position forward to the given message of that conversation. A
+    /// Moves the user's position forward to the given message (by its ConversationMessage.Id) of that conversation. A
     /// position never moves back, so a late or repeated call cannot un-read anything.
     /// </summary>
     Task MarkReadAsync(string owner, string reader, Guid connection, string sender, string upToMessageId, CancellationToken ct);

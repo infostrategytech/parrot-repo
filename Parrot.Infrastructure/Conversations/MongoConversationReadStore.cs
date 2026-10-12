@@ -49,13 +49,11 @@ public sealed class MongoConversationReadStore : IConversationReadStore
 
     public async Task MarkReadAsync(string owner, string reader, Guid connection, string sender, string upToMessageId, CancellationToken ct)
     {
-        if (!ObjectId.TryParse(upToMessageId, out ObjectId upTo)) throw new ValidationException("Invalid message ID.");
-
-        // The message must be in this conversation. Otherwise an id from the future would
-        // mark every later message read before it arrived.
-        bool exists = await _messages.Find(x => x.Id == upToMessageId && x.OwnerUserId == owner
-            && x.ConnectionId == connection && x.From == sender).AnyAsync(ct);
-        if (!exists) throw new NotFoundException("Message not found.");
+        // The id clients hold is the message's own (ConversationMessage.Id), not MongoDB's. It must be
+        // a message of this conversation: an id from elsewhere could otherwise mark later messages read.
+        MessageDocument? message = await _messages.Find(x => x.MessageId == upToMessageId && x.OwnerUserId == owner
+            && x.ConnectionId == connection && x.From == sender).FirstOrDefaultAsync(ct);
+        if (message is null) throw new NotFoundException("Message not found.");
 
         // Only a later position matches. When the stored one is already later nothing matches,
         // the upsert then collides with the unique key, and that means there is nothing to do.
@@ -64,8 +62,8 @@ public sealed class MongoConversationReadStore : IConversationReadStore
         try
         {
             await _marks.UpdateOneAsync(
-                filter & Builders<ConversationReadMark>.Filter.Lt(x => x.LastReadMessageId, upToMessageId),
-                Builders<ConversationReadMark>.Update.Set(x => x.LastReadMessageId, upToMessageId).Set(x => x.UpdatedAt, DateTime.UtcNow),
+                filter & Builders<ConversationReadMark>.Filter.Lt(x => x.LastReadMessageId, message.Id),
+                Builders<ConversationReadMark>.Update.Set(x => x.LastReadMessageId, message.Id).Set(x => x.UpdatedAt, DateTime.UtcNow),
                 new UpdateOptions { IsUpsert = true }, ct);
         }
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey) { }

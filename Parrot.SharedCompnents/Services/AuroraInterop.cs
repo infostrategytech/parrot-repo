@@ -99,6 +99,13 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("ensureScript", url);
     }
 
+    /// <summary>Whether the page is on screen: false in a background tab or a minimised window.</summary>
+    public async Task<bool> IsPageVisibleAsync()
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<bool>("isPageVisible");
+    }
+
     /// <summary>Copies text to the clipboard. Silently does nothing if the browser refuses.</summary>
     public async Task CopyAsync(string value)
     {

@@ -16,6 +16,11 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
         RequestAsync<InboxMessagePageDto>(HttpMethod.Get, Path(connection, sender) + (before is null ? "" : $"&before={Uri.EscapeDataString(before)}"), null, ct);
     public Task<InboxMessageDto> SendAsync(Guid connection, string sender, InboxReplyDto request, CancellationToken ct) =>
         RequestAsync<InboxMessageDto>(HttpMethod.Post, Path(connection, sender), request, ct);
+    public Task<InboxUnreadDto> UnreadAsync(CancellationToken ct) =>
+        RequestAsync<InboxUnreadDto>(HttpMethod.Get, "api/conversations/unread", null, ct);
+    public Task<InboxMarkReadResultDto> MarkReadAsync(Guid connection, string sender, string upToMessageId, CancellationToken ct) =>
+        RequestAsync<InboxMarkReadResultDto>(HttpMethod.Post,
+            $"api/conversations/{connection}/read?sender={Uri.EscapeDataString(sender)}", new InboxMarkReadDto(upToMessageId), ct);
     private static string Path(Guid connection, string sender) => $"api/conversations/{connection}/messages?sender={Uri.EscapeDataString(sender)}";
     private static readonly JsonSerializerOptions WriteOptions = new(JsonSerializerDefaults.Web)
     {
