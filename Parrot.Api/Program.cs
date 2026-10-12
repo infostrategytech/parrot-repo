@@ -379,6 +379,10 @@ builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMap
 builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+builder.Services.Configure<InboxSettings>(builder.Configuration.GetSection(InboxSettings.SectionName));
+builder.Services.AddSingleton<IConversationReadStore, MongoConversationReadStore>();
+// Creating the store at startup is what fixes the unread baseline at the deploy, not at the first request.
+builder.Services.AddHostedService<Parrot.Api.Realtime.UnreadBaselineInitializer>();
 builder.Services.AddSingleton<IReplySendTimes, MongoReplySendTimes>();
 builder.Services.AddSingleton<IMessageHistory, MongoMessageHistory>();
 
