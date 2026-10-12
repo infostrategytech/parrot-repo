@@ -11,4 +11,5 @@ public static class RateLimitPolicies
     public const string ChangePassword = "auth:change-password";
     public const string WhatsAppWebhook = "webhooks:whatsapp";
     public const string FacebookWebhook = "webhooks:facebook";
+    public const string TikTokWebhook = "webhooks:tiktok";
 }

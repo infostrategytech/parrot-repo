@@ -4,7 +4,7 @@ namespace Parrot.Application.Conversations;
 
 public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
 {
-    /// <summary>whatsapp or facebook: which channel the conversation is on.</summary>
+    /// <summary>whatsapp, facebook or tiktok: which channel the conversation is on.</summary>
     public string Channel { get; init; } = "whatsapp";
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt);

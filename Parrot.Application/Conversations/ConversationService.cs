@@ -11,15 +11,19 @@ namespace Parrot.Application.Conversations;
 public sealed class ConversationService(IConversationStore store, IWhatsAppConnectionRepository connections,
     IWhatsAppSender sender, IWhatsAppTokenProtector protector, IConversationSequence sequence,
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
-    IFacebookCredentialProtector facebookProtector)
+    IFacebookCredentialProtector facebookProtector, TikTokReplyService? tikTok = null)
 {
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
 
-    // A reply goes out on whichever channel the thread is on: a WhatsApp number or a Facebook Page.
+    // A reply goes out on whichever channel the thread is on: a WhatsApp number, a Facebook Page or TikTok.
     public async Task<ConversationMessage> SendAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
     {
+        // A TikTok customer's id is not a phone number, so the reply is routed before WhatsApp's checks.
+        if (tikTok is not null && await tikTok.FindConnectionAsync(owner, connectionId, ct) is { } tikTokConnection)
+            return await tikTok.SendAsync(tikTokConnection, recipient, request, ct);
+
         if (request.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 4096
             || recipient.Length is < 1 or > 32 || !recipient.All(char.IsAsciiDigit))
             throw new ValidationException("Supply a request ID, a numeric recipient and text of 1–4096 characters.");
@@ -208,7 +212,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
         doc.TextBody ?? $"[{doc.Type} message]", doc.Outgoing, doc.SendStatus, doc.ReceivedAt);
 
-    private static ConversationMessage Match(MessageDocument doc, Guid connection, string recipient, string text)
+    internal static ConversationMessage Match(MessageDocument doc, Guid connection, string recipient, string text)
     {
         if (doc.ConnectionId != connection || doc.From != recipient || doc.TextBody != text)
             throw new ConflictException("This request ID has already been used for a different message.");

@@ -11,7 +11,7 @@ service MessageVerificationService {
 }
 
 message CheckForMessageRequest {
-  // Parrot's connection id (a GUID) for the WhatsApp or Facebook connection being
+  // Parrot's connection id (a GUID) for the WhatsApp, Facebook or TikTok connection being
   // set up. Only the signed-in owner's own connection is ever checked.
   string channel_id = 1;
   // Only consider messages received at or after this Unix timestamp (seconds).

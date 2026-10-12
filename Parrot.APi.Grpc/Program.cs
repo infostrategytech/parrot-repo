@@ -53,6 +53,13 @@ builder.Services.AddSingleton<IMongoClient>(sp =>
     return new MongoClient(settings.ConnectionString);
 });
 
+// The repository reads and writes every platform's message document, so it needs their mappers, and the
+// discriminators registered before anything is read from the collection (as the API does).
+builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
+Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddSingleton<IMessageRepository, MongoMessageRepository>();
 
 var app = builder.Build();

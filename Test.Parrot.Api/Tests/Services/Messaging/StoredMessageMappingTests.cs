@@ -24,4 +24,19 @@ public class StoredMessageMappingTests
         Assert.Equal(sender, message.Sender);
         Assert.Equal(receiver, message.Receiver);
     }
+
+    // A shared TikTok post's link is the only content the CRM has to show for it.
+    [Fact]
+    public void ATikTokMessage_KeepsItsAttachmentLinks()
+    {
+        StoredMessage message = new TikTokMessageDocument
+        {
+            MessageId = "tiktok:m1", Platform = MessagingPlatform.TikTok, ExternalAccountId = "biz", ChannelId = "biz",
+            ChannelDisplayName = string.Empty, From = "customer", Timestamp = "0", Type = "share_post", Receiver = "biz",
+            AttachmentUrls = ["https://www.tiktok.com/embed/1"],
+            ConversationKey = "tiktok:biz:customer", Sequence = 1,
+        }.ToStoredMessage();
+
+        Assert.Equal(["https://www.tiktok.com/embed/1"], message.AttachmentUrls);
+    }
 }

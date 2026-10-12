@@ -33,7 +33,12 @@ public static class StoredMessageMapping
         SenderName = document.ContactName,
         Type = document.Type,
         Text = document.TextBody,
-        AttachmentUrls = (document as FacebookMessageDocument)?.AttachmentUrls,
+        AttachmentUrls = document switch
+        {
+            FacebookMessageDocument facebook => facebook.AttachmentUrls,
+            TikTokMessageDocument tikTok => tikTok.AttachmentUrls,
+            _ => null,
+        },
         SentAt = document.SentAt,
         PersistedAt = document.StoredAt,
     };

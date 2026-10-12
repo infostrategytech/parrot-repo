@@ -95,6 +95,7 @@ builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
+builder.Services.Configure<TikTokSettings>(builder.Configuration.GetSection(TikTokSettings.SectionName));
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
 builder.Services.Configure<BrightDataSettings>(builder.Configuration.GetSection(BrightDataSettings.SectionName));
 builder.Services.Configure<AnthropicSettings>(builder.Configuration.GetSection(AnthropicSettings.SectionName));
@@ -290,6 +291,18 @@ builder.Services.AddRateLimiter(options =>
                 QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
                 QueueLimit = 0,
             }));
+
+    // 1000 TikTok webhook deliveries per IP per minute
+    options.AddPolicy(RateLimitPolicies.TikTokWebhook, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 1000,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
 });
 
 // Monitoring: every request is timed and counted by MonitoringMiddleware;
@@ -346,7 +359,11 @@ builder.Services.AddScoped<InboundMessagePublisher>();
 builder.Services.AddScoped<IWhatsAppWebhookService, WhatsAppWebhookService>();
 builder.Services.AddScoped<IFacebookWebhookService, FacebookWebhookService>();
 builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepository>();
+builder.Services.AddScoped<ITikTokConnectionRepository, TikTokConnectionRepository>();
 builder.Services.AddScoped<IFacebookConnectionService, FacebookConnectionService>();
+builder.Services.AddScoped<ITikTokConnectionService, TikTokConnectionService>();
+builder.Services.AddScoped<ITikTokWebhookService, TikTokWebhookService>();
+builder.Services.AddHttpClient<ITikTokApiClient, TikTokApiClient>();
 builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<RequestContext>());
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(AppLogger<>));
@@ -359,6 +376,7 @@ builder.Services.Configure<MongoDbSettings>(builder.Configuration.GetSection(Mon
 builder.Services.AddSingleton<IMongoClient>(sp => new MongoClient(sp.GetRequiredService<IOptions<MongoDbSettings>>().Value.ConnectionString));
 builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
+builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
 builder.Services.AddSingleton<IReplySendTimes, MongoReplySendTimes>();
@@ -369,6 +387,8 @@ builder.Services.AddSingleton<IConversationSequence, MongoConversationSequence>(
 
 // Registers every "_t" discriminator before the API reads anything from the collection.
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
+builder.Services.AddScoped<TikTokAccessTokens>();
+builder.Services.AddScoped<TikTokReplyService>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();

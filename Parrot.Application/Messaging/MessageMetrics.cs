@@ -83,11 +83,12 @@ public static class MessageMetrics
     public static readonly Histogram<double> DeliveryLatency = Meter.CreateHistogram<double>(
         "message_delivery_latency_seconds", description: "Time from a reply being sent to Meta reporting its status.", advice: Slow);
 
-    // Meta's message types (WhatsApp and Messenger). Anything else is "other".
+    // Meta's message types (WhatsApp and Messenger) and TikTok's. Anything else is "other".
     private static readonly HashSet<string> MessageTypes = new(StringComparer.Ordinal)
     {
         "text", "image", "audio", "video", "document", "sticker", "location", "contacts", "interactive", "button",
         "reaction", "order", "system", "unsupported", "postback", "file", "template", "fallback", "story_mention",
+        "share_post",
     };
 
     /// <summary>

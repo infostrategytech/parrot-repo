@@ -47,6 +47,17 @@ public class ConversationKeyTests
     }
 
     [Fact]
+    public void Create_TikTok_KeepsTheOpenIdsExactly_SortedUnderItsOwnPrefix()
+    {
+        Assert.Equal(
+            "tiktok:-000Abc:-000Zed",
+            ConversationKey.Create(MessagingPlatform.TikTok, " -000Zed ", "-000Abc"));
+        Assert.NotEqual(
+            ConversationKey.Create(MessagingPlatform.Facebook, Customer, Business),
+            ConversationKey.Create(MessagingPlatform.TikTok, Customer, Business));
+    }
+
+    [Fact]
     public void Create_TheSameIdsOnDifferentPlatforms_NameDifferentConversations()
     {
         Assert.NotEqual(

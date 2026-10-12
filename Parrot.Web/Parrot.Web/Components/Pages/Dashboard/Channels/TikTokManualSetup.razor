@@ -1,0 +1,448 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@using Parrot.Web.Features.Dashboard.Channels.State
+@implements IDisposable
+@inject ChannelsState ChannelsState
+@inject IIntegrationsService IntegrationsService
+@inject IMessageVerificationGrpcClient MessageVerification
+@inject AuthState AuthState
+@inject ToastService Toasts
+@inject NavigationManager Nav
+
+@* TikTok, set up by hand, as Facebook is: the business uses its own TikTok app.
+   Two steps through the API's own calls (the app's App ID and secret are saved
+   and the webhook registered with TikTok; then the owner approves the app in
+   TikTok), and then a test message, so the account counts as connected once a
+   real message arrives. TikTok sends the browser back to the Channels page
+   when the owner approves, which opens this again at the test. *@
+
+@if (_connected)
+{
+    <ConnectionSuccess Channel="Shown" OnOpenInbox="OnOpenInbox" OnConnectAnother="OnExit" OnSetUpAgent="OnSetUpAgent" />
+}
+else if (_testing)
+{
+    <MessageTest Channel="Shown" Busy="_checking" Missed="_missed" OnCheck="CheckMessageAsync" />
+}
+else
+{
+    <section class="guided">
+        <header class="guided__header">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnExit">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Back to channels</ChildContent>
+            </Button>
+            <div class="guided__counter">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">TikTok setup</Typography>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">Step @(Reached + 1) of 3</Typography>
+            </div>
+        </header>
+
+        <div class="guided__progress" role="progressbar" aria-label="TikTok setup progress"
+             aria-valuenow="@(Reached + 1)" aria-valuemin="1" aria-valuemax="3">
+            <i style="width: @Percent%"></i>
+        </div>
+
+        <div class="guided__body">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Connect your TikTok account</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="guided__lede">
+                Two steps with your TikTok app, then a test message. Your progress is saved after each step.
+            </Typography>
+
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" OnDismiss="() => _error = null" />
+            }
+
+            @if (_setup is null && _busy)
+            {
+                <LoadingState Glyph="IconName.RiTiktokFill"
+                              Title="Preparing your TikTok setup"
+                              Description="Getting the redirect address for your workspace." />
+            }
+            else if (_setup is null)
+            {
+                <EmptyState Glyph="IconName.RiTiktokFill"
+                            Size="EmptyStateSize.Panel"
+                            Title="We couldn't load your TikTok setup"
+                            Description="Check your connection and try again.">
+                    <Action>
+                        <Button Variant="ButtonVariant.Secondary" Busy="_busy" @onclick="LoadAsync">Try again</Button>
+                    </Action>
+                </EmptyState>
+            }
+            else
+            {
+                <ol class="guided__instructions">
+                    @for (var index = 0; index < Instructions.Length; index++)
+                    {
+                        var number = index + 1;
+                        var instruction = Instructions[index];
+                        <li>
+                            <Typography TextStyle="TextStyle.Small12Bold" As="span" Class="guided__marker">@number</Typography>
+                            <div class="guided__instruction">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    <Emphasis Text="@instruction" />
+                                </Typography>
+                                @if (index == 0)
+                                {
+                                    @* A link to TikTok's own site, in a new tab. *@
+                                    <a class="guided__link @TextStyle.BodySmallSemibold.ToClassName()"
+                                       href="https://business-api.tiktok.com/portal/apps" target="_blank" rel="noopener noreferrer">
+                                        Open TikTok for Business
+                                        <Icon Name="IconName.RiExternalLinkLine" />
+                                    </a>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ol>
+
+                <div class="manual">
+                    @* ── 1: the app ───────────────────────────────────────── *@
+                    <section class="manual__section @SectionClass(0, Section.App)">
+                        <header class="manual__header">
+                            <span class="manual__marker">
+                                @if (Reached > 0)
+                                {
+                                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Bold" As="span">1</Typography>
+                                }
+                            </span>
+                            <div class="manual__titles">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Add Your TikTok App</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Give Parrot the app's App ID and App Secret so new messages reach your inbox.</Typography>
+                            </div>
+                            <ManualSectionAside Done="Reached > 0"
+                                                IsCurrent="Reached == 0"
+                                                IsOpen="_open == Section.App"
+                                                OnReopen="() => _open = Section.App" />
+                        </header>
+
+                        @if (_open == Section.App)
+                        {
+                            <div class="manual__body">
+                                @if (_setup.ConnectionId is not null)
+                                {
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                        Your app <strong>@_setup.AppId</strong> is saved. To use a different app, disconnect TikTok from the
+                                        channels page and set it up again.
+                                    </Typography>
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                        In your TikTok app's settings, add this as a <strong>redirect URI</strong>. Then paste the app's
+                                        <strong>App ID</strong> and <strong>App Secret</strong>, found in its Basic Information.
+                                    </Typography>
+                                    <div class="manual__copy-values">
+                                        <CopyValue Label="Redirect URI" Value="@_setup.RedirectUri" OnCopy="@(label => Toasts.Show($"{label} copied."))" />
+                                    </div>
+
+                                    <div class="manual__fields">
+                                        <Input FloatingLabel="App ID"
+                                               @bind-Value="_appId"
+                                               maxlength="64"
+                                               spellcheck="false"
+                                               HelperText="Shown as the app's client key in TikTok." />
+
+                                        @* type=password, autocomplete off, and cleared after
+                                           saving: the API encrypts it before it is stored. *@
+                                        <Parrot.SharedComponents.DesignSystem.Input
+                                            FloatingLabel="App Secret"
+                                            @bind-Value="_appSecret"
+                                            type="password"
+                                            autocomplete="new-password"
+                                            spellcheck="false"
+                                            maxlength="128"
+                                            HelperText="Hidden as you type and cleared after saving. TikTok signs every message with it, so Parrot can tell a real one from a forged one.">
+                                            <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                                        </Parrot.SharedComponents.DesignSystem.Input>
+                                    </div>
+
+                                    <Button Busy="_busy" disabled="@(!AppReady)" @onclick="SaveAppAsync">
+                                        <ChildContent>Save and continue</ChildContent>
+                                        <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                                    </Button>
+                                }
+                            </div>
+                        }
+                    </section>
+
+                    @* ── 2: the account ───────────────────────────────────── *@
+                    <section class="manual__section @SectionClass(1, Section.Authorize)">
+                        <header class="manual__header">
+                            <span class="manual__marker">
+                                @if (Reached > 1)
+                                {
+                                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Bold" As="span">2</Typography>
+                                }
+                            </span>
+                            <div class="manual__titles">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Authorize Your Account</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Approve your app in TikTok with the business account customers message.</Typography>
+                            </div>
+                            <ManualSectionAside Done="Reached > 1"
+                                                IsCurrent="Reached == 1"
+                                                IsOpen="_open == Section.Authorize"
+                                                OnReopen="() => _open = Section.Authorize" />
+                        </header>
+
+                        @if (_open == Section.Authorize)
+                        {
+                            <div class="manual__body">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                                    Select <strong>Authorize with TikTok</strong>, sign in with your TikTok Business Account, and allow every
+                                    permission Parrot asks for. TikTok then brings you back here.
+                                </Typography>
+                                @if (_setup.NeedsReauthorization)
+                                {
+                                    <InlineError Tone="InlineErrorTone.Info"
+                                                 Message="TikTok access has expired. Authorize again to keep replying to customers." />
+                                }
+                                else if (_setup.Authorized)
+                                {
+                                    <InlineError Tone="InlineErrorTone.Info"
+                                                 Message="@($"{_setup.DisplayName} is authorized. You can authorize again if you need to.")" />
+                                }
+                                <Button Busy="_busy" disabled="@(_setup.ConnectionId is null)" @onclick="AuthorizeAsync">
+                                    <ChildContent>Authorize with TikTok</ChildContent>
+                                    <IconRight><Icon Name="IconName.RiExternalLinkLine" /></IconRight>
+                                </Button>
+                                @if (Reached > 1)
+                                {
+                                    <Button Variant="ButtonVariant.Secondary" @onclick="StartTest">Send a test message</Button>
+                                }
+                            </div>
+                        }
+                    </section>
+                </div>
+            }
+        </div>
+
+        <footer class="guided__footer">
+            <Button Variant="ButtonVariant.Secondary" @onclick="OnExit">Save and exit</Button>
+        </footer>
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public BusinessChannel Channel { get; set; } = default!;
+
+    [Parameter] public EventCallback OnExit { get; set; }
+
+    [Parameter] public EventCallback OnOpenInbox { get; set; }
+
+    /// <summary>Set when the person came to connect a channel for an agent.</summary>
+    [Parameter] public EventCallback OnSetUpAgent { get; set; }
+
+    /// <summary>TikTok has just sent the owner back after approving: go on to the test message.</summary>
+    [Parameter] public bool StartAtTest { get; set; }
+
+    /// <summary>What went wrong in TikTok, when it sent the owner back without connecting.</summary>
+    [Parameter] public string? InitialError { get; set; }
+
+    // As on Facebook's test: a floor under how long the check appears to take,
+    // and a few tries a couple of seconds apart.
+    private static readonly TimeSpan CheckPacing = TimeSpan.FromMilliseconds(2400);
+    private static readonly TimeSpan CheckInterval = TimeSpan.FromSeconds(2);
+    private const int CheckAttempts = 10;
+
+    private static readonly string[] Instructions =
+    [
+        "Open your app in **TikTok for Business** and make sure it has the **Business Messaging API**.",
+        "Add the **redirect URI** below to the app, then paste its **App ID** and **App Secret**.",
+        "Select **Authorize with TikTok** and sign in with the Business Account customers message.",
+        "Allow every permission Parrot asks for, so new messages reach your inbox and you can reply."
+    ];
+
+    private enum Section { App, Authorize }
+
+    private TikTokSetup? _setup;
+    private string? _error;
+    private string? _appId, _appSecret;
+    private bool _busy, _disposed, _testing, _checking, _missed, _connected;
+    private Section _open = Section.App;
+    private DateTimeOffset _testStartedAt;
+    private readonly CancellationTokenSource _lifetime = new();
+
+    /// <summary>
+    /// The furthest step finished, read off the API: a saved app finishes the
+    /// first, an authorized account whose access has not lapsed the second.
+    /// </summary>
+    private int Reached =>
+        _setup is null ? 0
+        : _setup.ConnectionId is null ? 0
+        : _setup.Authorized && !_setup.NeedsReauthorization ? 2
+        : 1;
+
+    private int Percent => (int)Math.Round((Reached + 1) / 3.0 * 100);
+
+    private bool AppReady =>
+        _setup is { ConnectionId: null }
+        && !string.IsNullOrWhiteSpace(_appId)
+        && !string.IsNullOrWhiteSpace(_appSecret);
+
+    private string? Token => AuthState.CurrentUser?.Token;
+
+    /// <summary>The channel under the account name saved here, so the test and its result name the account.</summary>
+    private BusinessChannel Shown => _setup?.DisplayName is { Length: > 0 } name ? Channel with { AccountName = name } : Channel;
+
+    private string SectionClass(int index, Section section)
+    {
+        var name = Reached > index ? "is-complete" : Reached == index ? "is-current" : "is-upcoming";
+        return _open == section ? name + " is-open" : name;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _error = InitialError;
+        await LoadAsync();
+        if (_disposed) return;
+
+        // Sent back by TikTok after approving: the account is saved, so only the test is left.
+        if (StartAtTest && Reached == 2) StartTest();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_busy || _disposed || Token is not { Length: > 0 } token) return;
+        _busy = true;
+        var keep = _error;
+        _error = null;
+        try
+        {
+            var setup = await IntegrationsService.GetTikTokSetupAsync(token, _lifetime.Token);
+            if (_disposed) return;
+            _setup = setup;
+            ChannelsState.SetTikTok(setup);
+            _error = keep;
+            _open = Reached >= 1 ? Section.Authorize : Section.App;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable
+                ? "TikTok isn't set up on the server yet. Ask your administrator to add the TikTok address."
+                : "We couldn't load your TikTok setup. Check your connection and try again.";
+        }
+        catch (OperationCanceledException) { _error = "That took too long. Try again."; }
+        catch (System.Text.Json.JsonException) { _error = "We couldn't read your TikTok setup. Try again."; }
+        finally { _busy = false; }
+    }
+
+    // Saving registers the webhook with TikTok, which checks the App ID and secret: a mistyped pair is refused
+    // there, and TikTok's own reason comes back in the message.
+    private async Task SaveAppAsync()
+    {
+        if (_busy || _setup is null || Token is not { Length: > 0 } token) return;
+        var appId = _appId?.Trim() ?? "";
+        var appSecret = _appSecret?.Trim() ?? "";
+        if (appId.Any(char.IsWhiteSpace) || appSecret.Any(char.IsWhiteSpace) || appId.Length == 0 || appSecret.Length == 0)
+        {
+            _error = "Enter the App ID and App Secret from your TikTok app, each as one piece with no spaces.";
+            return;
+        }
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            await IntegrationsService.SaveTikTokAppAsync(appId, appSecret, token, _lifetime.Token);
+            _appSecret = null;
+            _setup = await IntegrationsService.GetTikTokSetupAsync(token, _lifetime.Token);
+            ChannelsState.SetTikTok(_setup);
+            Toasts.Show("TikTok app saved securely.");
+            _open = Section.Authorize;
+        }
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict
+                ? ex.Message
+                : "We couldn't save your TikTok app. Check the details and try again.";
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) { _error = "That took too long. Try again."; }
+        finally { _busy = false; }
+    }
+
+    // TikTok's own consent screen, in this tab; it sends the browser back to the Channels page.
+    private async Task AuthorizeAsync()
+    {
+        if (_busy || _setup is null || Token is not { Length: > 0 } token) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var authorization = await IntegrationsService.GetTikTokAuthorizationAsync(token, _lifetime.Token);
+            Nav.NavigateTo(authorization.AuthorizationUrl, forceLoad: true);
+        }
+        catch (HttpRequestException)
+        {
+            _error = "We couldn't open TikTok. Check your connection and try again.";
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (OperationCanceledException) { _error = "That took too long. Try again."; }
+        catch (System.Text.Json.JsonException) { _error = "We couldn't read TikTok's answer. Try again."; }
+        finally { _busy = false; }
+    }
+
+    private void StartTest()
+    {
+        _testStartedAt = DateTimeOffset.UtcNow;
+        _testing = true;
+    }
+
+    // The API's message check, a few times a couple of seconds apart: a message
+    // sent from a phone takes a moment to reach TikTok and be relayed.
+    private async Task CheckMessageAsync()
+    {
+        if (_setup is not { ConnectionId: { } connectionId } || Token is not { Length: > 0 } token || _checking) return;
+        _missed = false;
+        _checking = true;
+        await InvokeAsync(StateHasChanged);
+        var pacing = Task.Delay(CheckPacing);
+        var received = false;
+        var failed = false;
+        try
+        {
+            for (var attempt = 0; attempt < CheckAttempts && !received; attempt++)
+            {
+                var result = await MessageVerification.CheckForMessageAsync(
+                    connectionId.ToString(), _testStartedAt.ToUnixTimeSeconds(), "tiktok", token, _lifetime.Token);
+                received = result.Received;
+                if (!received) await Task.Delay(CheckInterval, _lifetime.Token);
+            }
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+        catch (Exception exception) when (exception is HttpRequestException or global::Grpc.Core.RpcException or OperationCanceledException)
+        {
+            failed = true;
+            Toasts.ShowError("We couldn't check for your message. Try again.");
+        }
+        await pacing;
+        _checking = false;
+        // No message (not a failed call): the test says so and offers Check again.
+        if (!received) { _missed = !failed; await InvokeAsync(StateHasChanged); return; }
+
+        // The result replaces the test where it stands, as on Facebook's.
+        _connected = true;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        _disposed = true;
+        _appSecret = null;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
+}

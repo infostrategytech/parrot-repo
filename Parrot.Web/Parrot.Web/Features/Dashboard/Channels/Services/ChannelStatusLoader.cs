@@ -12,7 +12,7 @@ namespace Parrot.Web.Features.Dashboard.Channels.Services;
 public sealed class ChannelStatusLoader(IIntegrationsService integrations, ChannelsState channels)
 {
     /// <summary>
-    /// Refreshes WhatsApp and Facebook status. Returns false if either could
+    /// Refreshes WhatsApp, Facebook and TikTok status. Returns false if either could
     /// not be read. The state then keeps what it had, so a page treats an
     /// unreachable API as "nothing connected
     /// yet" unless a channel was connected earlier in this session.
@@ -34,6 +34,14 @@ public sealed class ChannelStatusLoader(IIntegrationsService integrations, Chann
         }
         // Not configured on the API server yet: nothing to show, which is the
         // same as "not connected".
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
+        catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { ok = false; }
+
+        try
+        {
+            channels.SetTikTok(await integrations.GetTikTokSetupAsync(token, cancellationToken));
+        }
+        // Not configured on the API server yet: nothing to show, as for Facebook.
         catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
         catch (Exception ex) when (ex is HttpRequestException or System.Text.Json.JsonException) { ok = false; }
 

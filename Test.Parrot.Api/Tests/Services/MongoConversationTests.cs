@@ -30,7 +30,7 @@ public class MongoConversationTests
         try
         {
             var mappers = new MessageDocumentMapperFactory(
-                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper()]);
+                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
             var incoming = new MongoMessageRepository(client, settings, mappers);
             var store = new MongoConversationStore(client, settings);
             var connection = Guid.NewGuid();
@@ -43,7 +43,8 @@ public class MongoConversationTests
             };
             await Task.WhenAll(Enumerable.Range(0, 10).Select(_ => incoming.InsertAsync(message)));
             Assert.Single((await store.ReadAsync("owner", connection, message.From, null, default)).Messages);
-            Assert.Single(await store.ListAsync("owner", 0, 50, default));
+            // The inbox needs to know which channel a conversation is on.
+            Assert.Equal("whatsapp", Assert.Single(await store.ListAsync("owner", 0, 50, default)).Channel);
             // Old incoming documents have neither direction nor send-state fields.
             await client.GetDatabase(database).GetCollection<MessageDocument>("messages")
                 .UpdateOneAsync(x => x.MessageId == message.MessageId,
@@ -71,6 +72,37 @@ public class MongoConversationTests
             Assert.Equal(100, firstPage.Messages.Count);
             Assert.Equal(7, secondPage.Messages.Count);
             Assert.Equal(107, firstPage.Messages.Concat(secondPage.Messages).Select(x => x.Id).Distinct().Count());
+        }
+        finally { await client.DropDatabaseAsync(database); }
+    }
+
+    // The setup test finds a TikTok customer's message by the connection and its owner, whatever the platform's own
+    // account id (here the business open id) is.
+    [MongoFact]
+    public async Task ATikTokTestMessageIsFoundByItsConnectionAndOwner()
+    {
+        var client = new MongoClient(Environment.GetEnvironmentVariable("PARROT_TEST_MONGO"));
+        string database = "parrot_test_" + Guid.NewGuid().ToString("N");
+        var settings = Options.Create(new MongoDbSettings { Database = database, Collection = "messages" });
+        try
+        {
+            var mappers = new MessageDocumentMapperFactory(
+                [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper()]);
+            var repository = new MongoMessageRepository(client, settings, mappers);
+            var connection = Guid.NewGuid();
+            await repository.InsertAsync(new IncomingMessage
+            {
+                MessageId = "tiktok.test", OwnerUserId = "owner", ConnectionId = connection,
+                Platform = MessagingPlatform.TikTok, ExternalAccountId = "business-open-id", ChannelId = "business-open-id",
+                ChannelDisplayName = string.Empty, From = "customer", Type = "text", TextBody = "Hello",
+                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), ReceivedAt = DateTime.UtcNow,
+            });
+            DateTime since = DateTime.UtcNow.AddMinutes(-1);
+
+            Assert.NotNull(await repository.FindFirstAsync(connection, "owner", since));
+            Assert.Null(await repository.FindFirstAsync(connection, "someone-else", since));
+            Assert.Null(await repository.FindFirstAsync(Guid.NewGuid(), "owner", since));
+            Assert.Null(await repository.FindFirstAsync(connection, "owner", DateTime.UtcNow.AddMinutes(1)));
         }
         finally { await client.DropDatabaseAsync(database); }
     }

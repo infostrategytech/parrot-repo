@@ -36,6 +36,9 @@ public class ChannelsState
     /// <summary>Parrot's copy for a WhatsApp connection the backend has switched off.</summary>
     public const string DisabledAttention = "This connection is disabled. Contact support to continue.";
 
+    /// <summary>Parrot's copy for a TikTok connection whose access has lapsed.</summary>
+    public const string TikTokReauthorizeAttention = "TikTok access has expired. Authorize TikTok again to keep replying.";
+
     public bool IsLoading { get; private set; }
 
     public IReadOnlyList<ChannelInfo> Channels { get; } =
@@ -53,6 +56,10 @@ public class ChannelsState
             "Manage messages sent to your Facebook Page.",
             "assets/images/icons/facebook.png",
             "Admin access to a Facebook Page", 8),
+        new(ChannelId.TikTok, "tiktok", "TikTok",
+            "Reply to the messages sent to your TikTok business account.",
+            "",
+            "A TikTok Business Account and your own TikTok developer app", 10),
         new(ChannelId.X, "twitter", "X",
             "Bring X DMs into your OmniAI inbox.",
             "",
@@ -66,6 +73,8 @@ public class ChannelsState
     public WhatsAppSetup? WhatsAppSetup { get; private set; }
 
     public FacebookWebhookSetup? FacebookSetup { get; private set; }
+
+    public TikTokSetup? TikTokSetup { get; private set; }
 
     /// <summary>Instagram and X are connected in state only, exactly as before.</summary>
     private readonly Dictionary<ChannelId, (string Account, string Date)> _stateOnly = new();
@@ -108,6 +117,12 @@ public class ChannelsState
     {
         FacebookSetup = setup;
         if (setup is not null) _dismissed.Remove(ChannelId.Facebook);
+    }
+
+    public void SetTikTok(TikTokSetup? setup)
+    {
+        TikTokSetup = setup;
+        if (setup is not null) _dismissed.Remove(ChannelId.TikTok);
     }
 
     public ChannelSetupState Setup(ChannelId id) =>
@@ -161,6 +176,7 @@ public class ChannelsState
     {
         ChannelId.Whatsapp => BuildWhatsApp(info),
         ChannelId.Facebook when FacebookSetup is not null && !_stateOnly.ContainsKey(ChannelId.Facebook) => BuildFacebook(info),
+        ChannelId.TikTok => BuildTikTok(info),
         _ => BuildStateOnly(info)
     };
 
@@ -205,6 +221,28 @@ public class ChannelsState
             Status = connected ? ChannelStatus.Connected : ChannelStatus.NotConnected,
             AccountName = setup?.PageName,
             Setup = connected ? new ChannelSetupState() : Setup(info.Id)
+        };
+    }
+
+    // TikTok is only ever what the API's setup says: connected once the owner has authorized the account,
+    // and needing attention when TikTok access has lapsed and they must authorize again.
+    private BusinessChannel BuildTikTok(ChannelInfo info)
+    {
+        var setup = TikTokSetup;
+        var authorized = setup is { Authorized: true } && !_dismissed.Contains(info.Id);
+        var lapsed = authorized && setup!.NeedsReauthorization;
+
+        return new BusinessChannel
+        {
+            Id = info.Id,
+            Name = info.Name,
+            Description = info.Description,
+            Requirement = info.Requirement,
+            GuidedMinutes = info.GuidedMinutes,
+            Status = lapsed ? ChannelStatus.NeedsAttention : authorized ? ChannelStatus.Connected : ChannelStatus.NotConnected,
+            AccountName = authorized ? setup!.DisplayName : null,
+            Attention = lapsed ? TikTokReauthorizeAttention : null,
+            Setup = authorized && !lapsed ? new ChannelSetupState() : Setup(info.Id)
         };
     }
 

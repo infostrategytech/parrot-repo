@@ -24,5 +24,8 @@ public record IncomingMessage
 
     // Messenger attachment payloads; null for platforms and message types that have none.
     public IReadOnlyList<string>? AttachmentUrls { get; init; }
+
+    // The provider's own id for the conversation, when replying needs it (TikTok does; the raw body is not kept).
+    public string? ExternalConversationId { get; init; }
     public DateTime ReceivedAt { get; init; }
 }
