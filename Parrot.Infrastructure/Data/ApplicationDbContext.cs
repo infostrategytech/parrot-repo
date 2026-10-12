@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Parrot.Application.Models;
 using Parrot.Domain.Entities;
 
@@ -64,6 +65,25 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(a => a.UserId).IsRequired();
             entity.Property(a => a.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(a => a.UserId);
+
+            // The channel keys as one comma-separated text column: a handful
+            // of short words per agent, read whole and matched in memory. The
+            // comparer tells the change tracker when the list changed in place.
+            entity.Property(a => a.Channels)
+                .HasConversion(
+                    channels => string.Join(',', channels),
+                    column => column.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+                    new ValueComparer<List<string>>(
+                        (left, right) => (left ?? new List<string>()).SequenceEqual(right ?? new List<string>()),
+                        channels => channels.Aggregate(0, (hash, channel) => HashCode.Combine(hash, channel.GetHashCode())),
+                        channels => channels.ToList()))
+                .HasColumnType("text")
+                .IsRequired();
+
+            // The settings as a JSON document, so the orchestrator's shape
+            // is stored as it is and the column can be queried if ever needed.
+            entity.Property(a => a.SettingsJson).HasColumnType("jsonb").IsRequired();
+            entity.Property(a => a.Version).HasDefaultValue(1);
         });
 
         builder.Entity<WhatsAppConnection>(entity =>

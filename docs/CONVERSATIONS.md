@@ -235,3 +235,7 @@ dotnet test Backend.slnx
 ```
 
 Automated tests use a fake Meta HTTP endpoint and a real temporary MongoDB. They do not send messages to real phones. A real delivery check requires your server credentials and the phone steps above.
+
+## AI orchestrator (Omni-AI) integration
+
+How agents, their settings and their activity reach the AI orchestrator and come back (the `agent.events` topic, the internal resolve endpoint, the AI Operations API and the web screens) is in [AI_INTEGRATION.md](AI_INTEGRATION.md), with its own audit map.

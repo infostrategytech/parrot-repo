@@ -108,19 +108,28 @@ builder.Services.AddScoped<ConversationClient>();
 builder.Services.AddScoped<InboxUnreadState>();
 // The API has none of the extra inbox actions yet, so the inbox hides them.
 builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
-// Business knowledge and the AI Operations figures: no API for either yet, so
-// the screens hide what they cannot show (see agents-backend-requests).
+// Business knowledge: no API for it yet, so the screens hide what they cannot show.
 builder.Services.AddSingleton<IBusinessKnowledge, UnavailableBusinessKnowledge>();
-builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.UnavailableAiOperationsFeed>();
-// An agent cannot reply yet, so agents are saved as drafts (see agents-backend-requests).
-builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.LiveAgentCapabilities>();
 // "Teach your AI" before the first agent, and the browser's voice for it.
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState>();
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentGate>();
 builder.Services.AddScoped<Parrot.SharedComponents.Services.VoiceInterop>();
-// Where agents are kept. Session-only until the agents API is connected:
-// replace this one registration with the API-backed store then.
-builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.SessionAgentStore>();
+// With the AI orchestrator connected (OmniAi:Enabled), agents live in the
+// API, the AI Operations figures come from the activity it reports, and a
+// turned-on agent really answers. Without it, agents are kept for the session
+// only and saved as drafts, and the figures stay hidden.
+if (builder.Configuration.GetValue<bool>("OmniAi:Enabled"))
+{
+    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.ApiAgentStore>();
+    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.ApiAiOperationsFeed>();
+    builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.OmniAiAgentCapabilities>();
+}
+else
+{
+    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.SessionAgentStore>();
+    builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.UnavailableAiOperationsFeed>();
+    builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.LiveAgentCapabilities>();
+}
 builder.Services.AddScoped<AiAgentsState>();
 builder.Services.AddScoped<CatalogState>();
 builder.Services.AddScoped<ChannelsState>();

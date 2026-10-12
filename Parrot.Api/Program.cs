@@ -41,6 +41,7 @@ using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Api.OpenApi;
 using Parrot.Api.Realtime;
+using Parrot.Api.Security;
 using Parrot.Api.Utils;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -98,6 +99,12 @@ builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(Fa
 builder.Services.Configure<TikTokSettings>(builder.Configuration.GetSection(TikTokSettings.SectionName));
 builder.Services.Configure<InstagramSettings>(builder.Configuration.GetSection(InstagramSettings.SectionName));
 builder.Services.Configure<KafkaSettings>(builder.Configuration.GetSection(KafkaSettings.SectionName));
+
+// The AI orchestrator. Off by default: then agents are saved as drafts and
+// nothing here calls out to it, but its events are still read if they arrive.
+builder.Services.Configure<OmniAiSettings>(builder.Configuration.GetSection(OmniAiSettings.SectionName));
+OmniAiSettings omniAiSettings = builder.Configuration.GetSection(OmniAiSettings.SectionName).Get<OmniAiSettings>()
+    ?? new OmniAiSettings();
 builder.Services.Configure<BrightDataSettings>(builder.Configuration.GetSection(BrightDataSettings.SectionName));
 builder.Services.Configure<AnthropicSettings>(builder.Configuration.GetSection(AnthropicSettings.SectionName));
 AnthropicSettings anthropicSettings = builder.Configuration.GetSection(AnthropicSettings.SectionName).Get<AnthropicSettings>()
@@ -179,6 +186,10 @@ builder.Services.AddAuthentication(options =>
     options.Scope.Add("email");
     options.Scope.Add("profile");
 });
+
+// The one policy only a service token satisfies (scope agent:service); every
+// other endpoint keeps its plain [Authorize].
+builder.Services.AddServiceScopePolicy();
 
 // nginx terminates TLS and is the only route to this port, so the last hop of
 // X-Forwarded-For is the client. Without this every request arrives from the
@@ -337,6 +348,19 @@ builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
+builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
+
+// Calls to the orchestrator carry a short-lived service token for the owner.
+// The base address is only set when it parses; the client refuses to call
+// out while the orchestrator is off, so a blank URL costs nothing at boot.
+builder.Services.AddScoped<IServiceTokenFactory, ServiceTokenFactory>();
+builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient>(client =>
+{
+    if (Uri.TryCreate(omniAiSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, omniAiSettings.TimeoutSeconds));
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+});
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 
@@ -427,6 +451,12 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
 builder.Services.AddSingleton<IReceiptNotifier, Parrot.Api.Realtime.HubReceiptNotifier>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
+
+// What the orchestrator's agents did, kept per event in MongoDB and pushed
+// to the owner's connections as it arrives; the AI Operations screens read it.
+builder.Services.AddSingleton<IAgentActivityStore, MongoAgentActivityStore>();
+builder.Services.AddSingleton<Parrot.Api.Realtime.AgentEventsRouter>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.AgentEventsConsumer>();
 
 // Controllers & OpenAPI
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>

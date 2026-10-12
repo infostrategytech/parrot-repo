@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.SignalR.Client;
+using Parrot.Application.Agents;
 using Parrot.Application.Messaging;
 using Parrot.Web.Features.Auth.State;
 
@@ -34,6 +35,9 @@ public sealed class RealtimeClient(AuthState auth, IConfiguration configuration,
 
     /// <summary>The connection is back after a drop; anything sent meanwhile was missed live.</summary>
     public event Func<Task>? Reconnected;
+
+    /// <summary>An agent of this user's reported something: a turn, an approval it needs, an escalation.</summary>
+    public event Func<AgentActivityEvent, Task>? AgentActivityReceived;
 
     public HubConnectionState State => _connection?.State ?? HubConnectionState.Disconnected;
 
@@ -73,6 +77,12 @@ public sealed class RealtimeClient(AuthState auth, IConfiguration configuration,
         connection.On<ReceiptsChanged>("receiptsChanged", async change =>
         {
             if (ReceiptsChanged is { } handler) await handler(change);
+        });
+
+        // Not deduplicated here: the screens re-read their figures on it rather than apply it.
+        connection.On<AgentActivityEvent>("agentActivity", async activity =>
+        {
+            if (AgentActivityReceived is { } handler) await handler(activity);
         });
 
         connection.Reconnected += async _ =>

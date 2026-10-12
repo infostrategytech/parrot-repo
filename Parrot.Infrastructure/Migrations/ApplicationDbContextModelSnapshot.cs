@@ -256,10 +256,17 @@ namespace Parrot.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Channels")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<DateTime>("CreatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -267,6 +274,9 @@ namespace Parrot.Infrastructure.Migrations
                         .HasColumnType("character varying(2000)");
 
                     b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDraft")
                         .HasColumnType("boolean");
 
                     b.Property<string>("MascotUrl")
@@ -279,6 +289,10 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<string>("SettingsJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
                     b.Property<bool>("SupportsHumanTakeover")
                         .HasColumnType("boolean");
 
@@ -288,6 +302,11 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<string>("UserId")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<int>("Version")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(1);
 
                     b.HasKey("Id");
 
