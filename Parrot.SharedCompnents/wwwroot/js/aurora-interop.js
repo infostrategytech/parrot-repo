@@ -405,6 +405,13 @@ export function clickElement(element) {
   element?.click();
 }
 
+// ── Page visibility ─────────────────────────────────────────────────────────
+// A background tab is not being read, so what arrives in it is still unread.
+
+export function isPageVisible() {
+  return document.visibilityState === "visible";
+}
+
 // ── Clipboard ───────────────────────────────────────────────────────────────
 // Guarded: the clipboard API throws without a secure context or a user
 // gesture, and failing to copy a webhook URL is not worth an unhandled error.

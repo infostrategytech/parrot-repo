@@ -9,14 +9,6 @@ public class ConversationsState
     public ConversationItem? GetConversation(string id) => Conversations.FirstOrDefault(x => x.Id == id);
     public void Clear() => Conversations.Clear();
 
-    /// <summary>Raised after the list is refreshed, so the rail's inbox badge can follow it.</summary>
-    public event Action? Changed;
-
-    /// <summary>Conversations with something unread, or null when the API does not say.</summary>
-    public int? UnreadConversations => Conversations.Any(c => c.UnreadCount is not null)
-        ? Conversations.Count(c => c.UnreadCount > 0)
-        : null;
-
     public void Apply(IEnumerable<InboxConversationDto> summaries)
     {
         foreach (var summary in summaries)
@@ -33,6 +25,8 @@ public class ConversationsState
             item.UpdatedAt = summary.UpdatedAt;
             item.Channel = summary.Channel ?? "whatsapp";
             item.UnreadCount = summary.UnreadCount;
+            item.LastCustomerMessageAt = summary.LastCustomerMessageAt;
+            item.ReplyWindowHours = summary.ReplyWindowHours;
             item.Status = Parse<ConversationStatus>(summary.Status);
             item.Priority = Parse<ConversationPriority>(summary.Priority);
             item.AiState = Parse<AiState>(summary.AiState);
@@ -43,7 +37,6 @@ public class ConversationsState
             item.Customer = summary.Customer;
         }
         Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
-        Changed?.Invoke();
     }
 
     public static void Merge(ConversationItem item, IEnumerable<InboxMessageDto> messages)
@@ -92,11 +85,16 @@ public class ConversationsState
     /// </summary>
     public void Touch(ConversationItem item, StoredMessage message)
     {
+        // A customer's message opens the reply window again, whatever order pushes arrive in.
+        if (!message.Outgoing)
+        {
+            DateTime wrote = message.SentAt ?? message.PersistedAt;
+            if (item.LastCustomerMessageAt is not { } last || wrote > last) item.LastCustomerMessageAt = wrote;
+        }
         if (message.PersistedAt < item.UpdatedAt) return;
         item.LastMessage = message.Text ?? $"[{message.Type} message]";
         item.UpdatedAt = message.PersistedAt;
         Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
-        Changed?.Invoke();
     }
 
     /// <summary>

@@ -25,6 +25,15 @@ public abstract class MessageDocument
     public string SendStatus { get; set; } = "received";
     public string? ProviderMessageId { get; set; }
 
+    // When the channel reported our reply delivered to the customer's device, and when the customer read
+    // it. Set from the channel's receipts, only on replies, and only ever to the earliest time reported.
+    // A customer who has turned read receipts off never gets a ReadAt: absent does not mean unread.
+    [BsonIgnoreIfNull]
+    public DateTime? DeliveredAt { get; set; }
+
+    [BsonIgnoreIfNull]
+    public DateTime? ReadAt { get; set; }
+
     public required string MessageId { get; set; }
     public required MessagingPlatform Platform { get; set; }
     public required string ExternalAccountId { get; set; }

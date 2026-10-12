@@ -31,6 +31,19 @@ public class ConversationItem
     /// <summary>whatsapp, instagram or facebook. Parrot connects WhatsApp only, so that is the default.</summary>
     public string Channel { get; set; } = "whatsapp";
     public int? UnreadCount { get; set; }
+
+    /// <summary>When the customer last wrote (UTC). The reply window runs from here.</summary>
+    public DateTime? LastCustomerMessageAt { get; set; }
+    public int? ReplyWindowHours { get; set; }
+
+    /// <summary>When a reply stops being allowed, or null when the API sent no window.</summary>
+    public DateTime? ReplyWindowEndsAt => LastCustomerMessageAt is { } last && ReplyWindowHours is { } hours ? last.AddHours(hours) : null;
+
+    /// <summary>
+    /// The window has ended, so the channel would refuse a reply. False when it is not known: the
+    /// server's own check decides then.
+    /// </summary>
+    public bool ReplyWindowClosed => ReplyWindowEndsAt is { } end && end <= DateTime.UtcNow;
     public ConversationStatus? Status { get; set; }
     public ConversationPriority? Priority { get; set; }
     public AiState? AiState { get; set; }

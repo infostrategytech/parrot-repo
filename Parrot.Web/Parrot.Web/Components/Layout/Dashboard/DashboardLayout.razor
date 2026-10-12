@@ -2,9 +2,7 @@
 @inject AuthState AuthState
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Nav
-@inject Parrot.Web.Components.Pages.Dashboard.Conversations.ConversationsState Conversations
-@inject Parrot.Web.Services.ConversationClient ConversationClient
-@inject Parrot.Web.Services.IInboxFeatures InboxFeatures
+@inject Parrot.Web.Services.InboxUnreadState Unread
 @implements IDisposable
 
 @* Aurora's shell, fed by Parrot's session. The rail, the workspace switcher
@@ -20,7 +18,7 @@
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
-          InboxUnread="@Conversations.UnreadConversations">
+          InboxUnread="@Unread.Total">
     <UserMenu>
         <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
         <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
@@ -64,24 +62,25 @@
     protected override void OnInitialized()
     {
         AuthState.OnChange += AuthChanged;
-        Conversations.Changed += InboxChanged;
+        Unread.Changed += UnreadChanged;
     }
 
-    // The rail's inbox badge counts conversations with something unread. The
-    // inbox page keeps the list fresh while it is open; on other pages the
-    // list is read once here. Only where the API sends unread counts, which
-    // today is demo mode: the real API has no unread field yet, so real mode
-    // makes no extra call for a badge it could not show.
+    // The rail's inbox badge is the number of unread customer messages. It is kept here, not by
+    // the inbox page, so it is right on every dashboard page and moves on live pushes.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender || !InboxFeatures.Available || !AuthState.IsAuthenticated || Conversations.Conversations.Count > 0) return;
-        try { Conversations.Apply(await ConversationClient.ListAsync(0, CancellationToken.None)); }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException) { }
+        if (firstRender) await Unread.StartAsync();
     }
 
-    private void InboxChanged() => _ = InvokeAsync(StateHasChanged);
+    private void UnreadChanged() => _ = InvokeAsync(StateHasChanged);
 
-    private void AuthChanged() => _ = InvokeAsync(StateHasChanged);
+    // Signing in starts the count; signing out clears it.
+    private void AuthChanged() => _ = InvokeAsync(async () =>
+    {
+        await Unread.StartAsync();
+        if (!AuthState.IsAuthenticated) Unread.Set(0);
+        StateHasChanged();
+    });
 
     private async Task LogoutAsync()
     {
@@ -109,6 +108,6 @@
     public void Dispose()
     {
         AuthState.OnChange -= AuthChanged;
-        Conversations.Changed -= InboxChanged;
+        Unread.Changed -= UnreadChanged;
     }
 }

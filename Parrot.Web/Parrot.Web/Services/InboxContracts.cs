@@ -11,9 +11,14 @@ namespace Parrot.Web.Services;
 /// <summary>One row of the conversation list.</summary>
 public sealed record InboxConversationDto(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
 {
-    /// <summary>whatsapp, instagram or facebook. Null reads as WhatsApp, the only channel Parrot connects today.</summary>
+    /// <summary>whatsapp, facebook or tiktok. Null reads as WhatsApp.</summary>
     public string? Channel { get; init; }
+    /// <summary>Customer messages the signed-in user has not read.</summary>
     public int? UnreadCount { get; init; }
+    /// <summary>When the customer last wrote. Starts the reply window.</summary>
+    public DateTime? LastCustomerMessageAt { get; init; }
+    /// <summary>How long after that the business may reply: 24 hours, 48 on TikTok. Null when the API does not say.</summary>
+    public int? ReplyWindowHours { get; init; }
     /// <summary>open, pending or resolved.</summary>
     public string? Status { get; init; }
     /// <summary>normal, high or urgent.</summary>
@@ -28,6 +33,15 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public bool? NeedsAnswer { get; init; }
     public InboxCustomerDto? Customer { get; init; }
 }
+
+/// <summary>Unread customer messages across every conversation and channel.</summary>
+public sealed record InboxUnreadDto(int Total);
+
+/// <summary>UpToMessageId is the id of the newest message the agent has seen in the thread.</summary>
+public sealed record InboxMarkReadDto(string UpToMessageId);
+
+/// <summary>What is still unread after a mark: in that conversation, and in total.</summary>
+public sealed record InboxMarkReadResultDto(int ConversationUnread, int Total);
 
 /// <summary>A teammate or an AI agent. IsMe marks the signed-in person, for the Mine tab.</summary>
 public sealed record InboxPersonDto(string Id, string Name)

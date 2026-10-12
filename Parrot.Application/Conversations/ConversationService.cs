@@ -12,7 +12,8 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     IWhatsAppSender sender, IWhatsAppTokenProtector protector, IConversationSequence sequence,
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
     IFacebookCredentialProtector facebookProtector, IInstagramConnectionRepository instagramConnections,
-    IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector, TikTokReplyService? tikTok = null)
+    IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector, TikTokReplyService? tikTok = null,
+    IDeliveryReceipts? receipts = null)
 {
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
@@ -192,7 +193,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         MessageDocument? latest = await store.LatestIncomingAsync(owner, connectionId, recipient, ct);
 
         // SentAt is absent on documents written before it existed; ReceivedAt is within seconds of it.
-        if (latest is null || (latest.SentAt ?? latest.ReceivedAt) < DateTime.UtcNow.AddHours(-24))
+        if (latest is null || !ReplyWindow.IsOpen(latest.Platform, latest.SentAt ?? latest.ReceivedAt, DateTime.UtcNow))
             throw new ConflictException("Ask this customer to message your business first. Text replies require an incoming message within 24 hours.");
 
         string? conversationKey = latest.ConversationKey;
@@ -245,6 +246,10 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         await store.CompleteAsync(doc.MessageId, status, providerId, persistTimeout.Token);
         doc.SendStatus = status;
         doc.ProviderMessageId = providerId;
+
+        // The channel can report delivered before we had its id to find this reply by.
+        if (receipts is not null && providerId is not null)
+            await receipts.ApplyParkedAsync(doc.ConnectionId!.Value, providerId, persistTimeout.Token);
         return ToMessage(doc);
     }
 
@@ -263,7 +268,15 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
     public static string RequestKey(string owner, Guid request) => $"outgoing:{owner}:{request:D}";
     public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
-        doc.TextBody ?? $"[{doc.Type} message]", doc.Outgoing, doc.SendStatus, doc.ReceivedAt);
+        doc.TextBody ?? $"[{doc.Type} message]", doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt);
+
+    // What the customer's channel has told us about a reply, over our own send state. A reply that
+    // failed stays failed.
+    public static string DisplayStatus(MessageDocument doc) =>
+        !doc.Outgoing || doc.SendStatus == "failed" ? doc.SendStatus
+        : doc.ReadAt is not null ? "read"
+        : doc.DeliveredAt is not null ? "delivered"
+        : doc.SendStatus;
 
     internal static ConversationMessage Match(MessageDocument doc, Guid connection, string recipient, string text)
     {

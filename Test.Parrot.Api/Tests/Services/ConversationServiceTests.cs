@@ -47,6 +47,7 @@ public class ConversationServiceTests
         public string Unprotect(string protectedValue) => protectedValue[4..];
     }
     private readonly Mock<IFacebookSender> _facebookSender = new();
+    private readonly Mock<IDeliveryReceipts> _receipts = new();
 
     private sealed class PageProtector : IFacebookCredentialProtector
     {
@@ -62,7 +63,7 @@ public class ConversationServiceTests
         _pages.Setup(x => x.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(_page);
         return new ConversationService(_store, _connections.Object, _sender.Object,
             _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
-            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector());
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(), receipts: _receipts.Object);
     }
 
     // The customer's Messenger message a reply answers, as the worker stores it.
@@ -73,6 +74,57 @@ public class ConversationServiceTests
         Timestamp = "0", Type = "text", SentAt = sentAt, ReceivedAt = sentAt,
         ConversationKey = PageConversation, Sequence = 1, Receiver = PageId,
     };
+
+    // Meta can report a reply delivered before the send has stored Meta's id for it.
+    [Fact]
+    public async Task AfterASend_ReceiptsThatArrivedEarlyAreApplied()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _facebookSender.Setup(x => x.SendAsync(PageId, "page-token", Psid, "Hi", It.IsAny<CancellationToken>())).ReturnsAsync("m_reply");
+
+        await Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "Hi"), default);
+
+        _receipts.Verify(x => x.ApplyParkedAsync(_page.Id, "m_reply", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task ARejectedSend_HasNoChannelIdToApplyReceiptsTo()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _facebookSender.Setup(x => x.SendAsync(PageId, "page-token", Psid, "Hi", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new FacebookRejectedException("10"));
+
+        await Create().SendAsync(Owner, _page.Id, Psid, new SendReplyRequest(Guid.NewGuid(), "Hi"), default);
+
+        _receipts.Verify(x => x.ApplyParkedAsync(It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("accepted", false, false, "accepted")]
+    [InlineData("accepted", true, false, "delivered")]
+    [InlineData("accepted", true, true, "read")]
+    [InlineData("accepted", false, true, "read")]
+    [InlineData("failed", true, true, "failed")]
+    [InlineData("unknown", false, false, "unknown")]
+    public void TheStatusShownIsTheFurthestTheChannelHasReported(string sent, bool delivered, bool read, string shown)
+    {
+        MessageDocument doc = PageIncoming(DateTime.UtcNow);
+        doc.Outgoing = true;
+        doc.SendStatus = sent;
+        doc.DeliveredAt = delivered ? DateTime.UtcNow : null;
+        doc.ReadAt = read ? DateTime.UtcNow : null;
+
+        Assert.Equal(shown, ConversationService.ToMessage(doc).Status);
+    }
+
+    [Fact]
+    public void ACustomersMessageNeverShowsAReceipt()
+    {
+        MessageDocument doc = PageIncoming(DateTime.UtcNow);
+        doc.ReadAt = DateTime.UtcNow;
+
+        Assert.Equal("received", ConversationService.ToMessage(doc).Status);
+    }
 
     [Fact]
     public async Task AMessengerReply_GoesThroughThePage_AndJoinsTheConversation()

@@ -124,7 +124,7 @@ else
                 <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
                 @if (Outbound)
                 {
-                    <span class="message-delivery @(IsFailed ? "is-failed" : null)">
+                    <span class="message-delivery @(IsFailed ? "is-failed" : IsRead ? "is-read" : null)" title="@DeliveryTitle">
                         <Icon Name="@DeliveryGlyph" />
                         <Typography TextStyle="TextStyle.Small10Regular" As="span">@DeliveryLabel</Typography>
                     </span>
@@ -199,6 +199,17 @@ else
     };
 
     private bool IsFailed => string.Equals(Message.Status, "failed", StringComparison.OrdinalIgnoreCase);
+    private bool IsRead => string.Equals(Message.Status, "read", StringComparison.OrdinalIgnoreCase);
+
+    // What the channel has told us. "Read" appears only when the customer's channel sent it: a customer
+    // can turn read receipts off, so a reply that shows Delivered may well have been read.
+    private string? DeliveryTitle => Message.Status.ToLowerInvariant() switch
+    {
+        "read" => "The customer has read this reply",
+        "delivered" => "Delivered to the customer's device",
+        "accepted" => "Accepted by the channel; no delivery report yet",
+        _ => null
+    };
     // "Read", "Sent", "Failed": React capitalises the delivery state.
     private string DeliveryLabel => Message.Status.Length == 0 ? "" : char.ToUpperInvariant(Message.Status[0]) + Message.Status[1..].ToLowerInvariant();
 
@@ -206,6 +217,7 @@ else
     {
         "failed" => IconName.RiErrorWarningFill,
         "pending" or "unknown" => IconName.RiTimeFill,
+        "accepted" => IconName.RiCheckFill,
         _ => IconName.RiCheckDoubleFill
     };
 

@@ -6,7 +6,7 @@
    Internal notes, attachments, saved replies and AI drafts have no endpoint
    yet: they are offered only when CanUseFeatures confirms API support, and
    otherwise drawn disabled (notes) or left out. *@
-<div class="conversation-composer @ModeClass @(ReplyLocked ? "is-reply-locked" : null)">
+<div class="conversation-composer @ModeClass @(ReplyLocked || WindowClosed ? "is-reply-locked" : null)">
     <header>
         <Tabs Label="Message type" Variant="TabsVariant.Flat">
             <Tab Selected="@(Mode == ComposerMode.Reply)" OnClick="() => ChangeModeAsync(ComposerMode.Reply)">Reply</Tab>
@@ -21,6 +21,15 @@
         <div class="conversation-composer__disclosure is-note">
             <Icon Name="IconName.RiLock2Fill" />
             <Typography TextStyle="TextStyle.Small10Medium" As="span">Only teammates can see this note. It will show your name and timestamp.</Typography>
+        </div>
+    }
+    else if (WindowClosed)
+    {
+        <div class="conversation-composer__disclosure is-note">
+            <Icon Name="IconName.RiTimeFill" />
+            <Typography TextStyle="TextStyle.Small10Medium" As="span">
+                The reply window has closed: @ChannelLabel only allows replies within @Conversation.ReplyWindowHours hours of the customer's last message. You can reply once they message you again.
+            </Typography>
         </div>
     }
     else if (!string.IsNullOrWhiteSpace(DraftedBy))
@@ -123,15 +132,22 @@
     private bool _focusPending;
 
     private bool ReplyLocked => Mode == ComposerMode.Reply && Conversation.ReplyLocked;
-    private bool InputDisabled => Sending || Retry || ReplyLocked;
-    private bool CanSend => !Sending && !ReplyLocked && !string.IsNullOrWhiteSpace(Text);
-    private bool CanDraft => CanUseFeatures && Mode == ComposerMode.Reply && Conversation.HasAiAgent && !ReplyLocked;
+
+    // The channel would refuse the reply, so the box says so rather than letting it be typed first.
+    // Not while a timed-out send waits for its check: the server answers that from the first request.
+    private bool WindowClosed => Mode == ComposerMode.Reply && !Retry && Conversation.ReplyWindowClosed;
+    private string ChannelLabel => Conversation.Channel switch { "facebook" => "Messenger", "tiktok" => "TikTok", "instagram" => "Instagram", _ => "WhatsApp" };
+    private bool InputDisabled => Sending || Retry || ReplyLocked || WindowClosed;
+    private bool CanSend => !Sending && !ReplyLocked && !WindowClosed && !string.IsNullOrWhiteSpace(Text);
+    private bool CanDraft => CanUseFeatures && Mode == ComposerMode.Reply && Conversation.HasAiAgent && !ReplyLocked && !WindowClosed;
     private string ModeClass => Mode == ComposerMode.Note ? "is-note" : "is-reply";
     private string Placeholder => Mode == ComposerMode.Note
         ? "Leave private context for your team..."
-        : ReplyLocked
-            ? $"{Conversation.AiAgent?.Name ?? "The AI agent"} currently controls customer replies"
-            : $"Reply to {Conversation.CustomerName}...";
+        : WindowClosed
+            ? "Reply window closed"
+            : ReplyLocked
+                ? $"{Conversation.AiAgent?.Name ?? "The AI agent"} currently controls customer replies"
+                : $"Reply to {Conversation.CustomerName}...";
     // "Send" holds while a send is in flight: the button's Busy state draws the
     // brand's relay dots in the icon slot rather than swapping the label.
     private string SendLabel => Retry ? "Check / retry" : Mode == ComposerMode.Note ? "Add note" : "Send";

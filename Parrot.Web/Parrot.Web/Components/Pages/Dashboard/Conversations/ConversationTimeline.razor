@@ -335,7 +335,7 @@
     private async Task SendReplyAsync()
     {
         var item = Conversation;
-        if (item.Sending || item.ReplyLocked || string.IsNullOrWhiteSpace(item.Draft)) return;
+        if (item.Sending || item.ReplyLocked || (item.ReplyWindowClosed && item.DraftRequestId is null) || string.IsNullOrWhiteSpace(item.Draft)) return;
         item.Sending = true;
         item.SendError = null;
         item.DraftRequestId ??= Guid.NewGuid();

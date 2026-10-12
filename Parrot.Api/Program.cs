@@ -421,7 +421,12 @@ builder.Services.AddSingleton<IMessageDocumentMapper, TikTokMessageDocumentMappe
 builder.Services.AddSingleton<IMessageDocumentMapper, InstagramMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapperFactory>();
 builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+builder.Services.Configure<InboxSettings>(builder.Configuration.GetSection(InboxSettings.SectionName));
+builder.Services.AddSingleton<IConversationReadStore, MongoConversationReadStore>();
+// Creating the store at startup is what fixes the unread baseline at the deploy, not at the first request.
+builder.Services.AddHostedService<Parrot.Api.Realtime.UnreadBaselineInitializer>();
 builder.Services.AddSingleton<IReplySendTimes, MongoReplySendTimes>();
+builder.Services.AddSingleton<IDeliveryReceipts, MongoDeliveryReceipts>();
 builder.Services.AddSingleton<IMessageHistory, MongoMessageHistory>();
 
 // Replies are numbered from the same per-conversation counter the worker uses.
@@ -432,6 +437,7 @@ Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddScoped<TikTokAccessTokens>();
 builder.Services.AddScoped<TikTokReplyService>();
 builder.Services.AddScoped<ConversationService>();
+builder.Services.AddScoped<ChannelReadReceipts>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
 builder.Services.AddHttpClient<IInstagramSender, InstagramSender>();
@@ -443,6 +449,7 @@ builder.Services.AddSignalR()
     // message and the history API's look identical to the client.
     .AddJsonProtocol(options => options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
+builder.Services.AddSingleton<IReceiptNotifier, Parrot.Api.Realtime.HubReceiptNotifier>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
 
 // What the orchestrator's agents did, kept per event in MongoDB and pushed

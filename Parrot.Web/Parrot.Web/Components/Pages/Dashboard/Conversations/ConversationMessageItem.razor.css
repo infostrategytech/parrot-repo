@@ -70,8 +70,9 @@
 .message-delivery,
 .message-learning { display: inline-flex; gap: var(--spacing-2xs); align-items: center; }
 .message-learning { color: var(--colors-accent-teal-text); }
-/* Parrot reports a WhatsApp send outcome; Aurora only has sent/delivered/read. */
+/* A send outcome, then what the channel reports: accepted, delivered, read. */
 .message-delivery.is-failed { color: var(--colors-feedback-destructive-text); }
+.message-delivery.is-read { color: var(--colors-accent-teal-text); }
 .message-correction { display: inline-flex; gap: var(--spacing-2xs); align-items: center; padding: var(--spacing-2xs) var(--spacing-xs); color: var(--colors-brand-primary); background: transparent; border: 0; border-radius: var(--radius-radius-full); cursor: pointer; }
 .message-correction:hover { background: var(--colors-interaction-hover); }
 

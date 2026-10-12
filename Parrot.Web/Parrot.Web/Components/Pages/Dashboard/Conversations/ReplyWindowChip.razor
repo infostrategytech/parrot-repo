@@ -1,0 +1,20 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* How long the customer can still be replied to. Drawn only when the API sent the
+   window; the page re-renders on its poll, so the time stays close to true. *@
+@if (Conversation.ReplyWindowEndsAt is { } endsAt)
+{
+    <strong class="reply-window @ToneClass(endsAt)" title="@Title">@ReplyWindowLabel.Describe(endsAt, DateTime.UtcNow)</strong>
+}
+
+@code {
+    [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
+
+    private string Title => $"Replies are allowed for {Conversation.ReplyWindowHours} hours after the customer's last message.";
+
+    private static string ToneClass(DateTime endsAt)
+    {
+        TimeSpan left = endsAt - DateTime.UtcNow;
+        return left <= TimeSpan.Zero ? "is-closed" : left < TimeSpan.FromHours(1) ? "is-closing" : "is-open";
+    }
+}

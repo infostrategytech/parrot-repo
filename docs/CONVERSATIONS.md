@@ -108,6 +108,16 @@ Content-Type: application/json
 {"requestId":"<new UUID for this send>","text":"Hello from Parrot"}
 ```
 
+```http
+GET /api/conversations/unread
+POST /api/conversations/{connectionId}/read?sender=2348012345678
+Content-Type: application/json
+
+{"upToMessageId":"<ConversationMessage.Id of the newest message the agent has seen>"}
+```
+
+`GET /api/conversations` rows carry `unreadCount`. `GET /api/conversations/unread` returns `{ "total": n }` over every conversation and channel, not just the loaded page. The `read` call returns `{ "conversationUnread": n, "total": n }`. See [Unread counts](#unread-counts).
+
 History pages contain at most 100 messages in chronological order and a `nextBefore` cursor. Outgoing records retain their stable application message ID; Meta's ID is stored separately as `ProviderMessageId`.
 
 ### Recovering missed live messages
@@ -127,6 +137,39 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 - Only the signed-in user's messages are returned; someone else's conversation reads as empty.
 - Sequences may skip numbers, and for a moment a later number can be stored before an earlier one (a reply and an incoming message landing together). Recover from a little below the highest sequence held, not from it exactly, and drop repeats by `messageId`.
 - Messages stored before sequences existed, and replies to them, are not returned.
+
+## Unread counts
+
+The inbox's rail badge and each row's badge count customer messages the signed-in user has not read, on every channel (WhatsApp, Facebook, Instagram and TikTok: anything stored in the messages collection).
+
+- A user's position in a conversation is the newest message they have seen, kept in the `conversation_reads` collection (unique per user, connection and customer). Unread is the incoming messages after it. The agent's own replies never count. A position only moves forward.
+- Opening a conversation marks it read. The web app sends the id of the newest message its read returned, never "now", so a message that arrives mid-read stays unread. Marking is a separate `POST`, not a side effect of reading the thread: the open thread is re-read every 15 seconds. It is skipped while the browser tab is hidden, and the next poll marks it once the tab is back.
+- The rail total is kept by `InboxUnreadState` in the dashboard layout, so it is right on every page. It adds one on each live customer push, and takes the server's number on load, reconnect, every 15 seconds and after each mark.
+- Nothing opens by itself: the inbox starts on "Select a conversation".
+- **The customer sees it too.** When a read moves the position forward, Parrot tells the customer's channel the business has read their newest message: WhatsApp's blue ticks (`status: read` on that message, which also covers earlier ones), "Seen" on Messenger and Instagram (`sender_action: mark_seen`). A message is read to the customer exactly when the agent has read it in Parrot, so a reply needs no separate step: it can only be written in an open thread, which is already read. It is best effort with a 3 second budget: a refusal is logged (`Read receipt not sent`) and the agent's read still succeeds. TikTok has no documented call for it yet. A repeat read does not tell the channel again. Set `Inbox__SendReadReceipts=false` to keep reads inside Parrot. Receipts sent to customers cannot be taken back, and WhatsApp accepts them only for messages from the last 30 days.
+- **Baseline:** messages stored before the baseline count as read, so turning this on does not show a whole history as unread. The API saves its first start time as the baseline in the `inbox_state` collection (the `unread-baseline` document), so it is fixed at the deploy. `Inbox__UnreadBaseline` (an ISO date-time, UTC) overrides it. Never move it later once live: that would hide messages that really are unread.
+- Read state is per user, but messages are scoped by workspace owner today, and the Team page has no backend. There is one reader per workspace. Live pushes go to the owner's connections only, so teammates would also need push fan-out.
+
+## Reply window and delivery receipts
+
+**Reply window.** A business may reply with free text only within a window of the customer's last message: 24 hours on WhatsApp, Messenger and Instagram, 48 on TikTok. `ReplyWindow` is the one rule; the send paths enforce it and each `GET /api/conversations` row carries `lastCustomerMessageAt` and `replyWindowHours` so the inbox can show the time left. When it has closed, the conversation header says so and the reply box is disabled (a timed-out send waiting for its check can still be retried). The server's own check stays the authority.
+
+**Delivery receipts (WhatsApp).** Meta reports each reply as `sent`, `delivered`, `read` or `failed` to the connection's webhook. Delivered, read and failed are recorded on the stored reply (`DeliveredAt`, `ReadAt`, or a failed send status) by `MongoDeliveryReceipts`, and the message's `status` in the API becomes `delivered` or `read` (a failed reply stays `failed`).
+
+- A receipt is matched by Meta's message id (`ProviderMessageId`) on that connection only, so one connection's webhook cannot touch another's replies.
+- Receipts only move a reply forward and keep the earliest time reported, so duplicates and out-of-order receipts are harmless. A late `failed` never overturns a reply already delivered.
+- Meta can report a reply before the send has stored Meta's id for it. Such a receipt is kept in `delivery_receipts_parked` (expires after 24 hours) and applied as soon as the send stores the id.
+- Recording runs inside the webhook's one-second budget and never fails the webhook.
+- The open thread picks receipts up on its next poll (up to 15 seconds); there is no live push for them yet.
+- **"Read" only appears when the channel sends it.** A customer can turn read receipts off, so a reply that shows Delivered may have been read. Only replies sent after this shipped have receipts.
+- TikTok is not wired yet: its read/seen event shape has not been confirmed against a real approved app. Receipts are not presence: they say the customer saw a reply, not that they are online.
+
+**Delivery receipts (Messenger).** In the Meta app's Messenger webhook settings, subscribe the Page to `message_deliveries` and `message_reads` (a setting in Meta, not in Parrot; without it Meta sends no receipts). A delivery event names the delivered message ids and a watermark; a read event carries only a watermark and the customer's id.
+
+- Delivery by id marks those replies delivered; a watermark marks every reply to that customer sent at or before it. A read does the same for read (and delivered).
+- Only replies Messenger accepted (those with Meta's message id) are touched, and only on that Page's connection.
+- Parrot compares its own send time with Meta's watermark, so clock skew of a few seconds between Parrot's server and Meta's could mislabel a reply sent right at the moment the customer read.
+- Instagram is not wired: its setup subscribes only to `messages`, and its `messaging_seen` event names a message instead of a watermark, so Instagram replies stay at Accepted. Doing it later means subscribing the connection to `messaging_seen` as well.
 
 ## Audit map
 
@@ -157,6 +200,19 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 | `Test.Parrot.Api/Tests/Services/ConversationStateTests.cs` | Repeated polling and send response deduplication |
 | `Test.Parrot.Api/Tests/Services/MongoConversationTests.cs` | Real Mongo concurrency, incoming deduplication, legacy documents, tenant isolation and pagination |
 | `Test.Parrot.Api/Tests/Services/WhatsAppSenderTests.cs` | Meta HTTP request and outcome handling |
+| `Parrot.Infrastructure/Conversations/MongoConversationReadStore.cs` | Per-user read positions, unread counts and the baseline |
+| `Parrot.Application/Conversations/ChannelReadReceipts.cs` | Tells the customer's channel the business has read their message (WhatsApp, Messenger, Instagram) |
+| `Test.Parrot.Api/Tests/Services/ChannelReadReceiptsTests.cs` | That service, and each sender's exact request |
+| `Parrot.Api/Realtime/UnreadBaselineInitializer.cs` | Creates the read store at startup so the baseline is the deploy time |
+| `Parrot.Web/Parrot.Web/Services/InboxUnreadState.cs` | The rail's unread total: live pushes plus the server's number |
+| `Test.Parrot.Api/Tests/Services/ConversationReadTests.cs` | Unread counting on a real MongoDB: channels, replies, per user, baseline, forged ids |
+| `Test.Parrot.Api/Tests/Services/InboxUnreadStateTests.cs` | The web app's unread total |
+| `Parrot.Application/Conversations/ReplyWindow.cs` | How long after a customer's message a reply is allowed, per channel |
+| `Parrot.Application/Conversations/DeliveryReceipts.cs` | The receipt contract and states |
+| `Parrot.Infrastructure/Conversations/MongoDeliveryReceipts.cs` | Applies receipts to replies; parks ones that arrive early |
+| `Test.Parrot.Api/Tests/Services/DeliveryReceiptsTests.cs` | Receipts on a real MongoDB: order, repeats, isolation, early arrival |
+| `Test.Parrot.Api/Tests/Services/Integrations/WhatsAppReceiptsTests.cs` | The webhook hands receipts to the recorder and cannot be broken by it |
+| `Test.Parrot.Api/Tests/Services/Integrations/FacebookReceiptsTests.cs` | The Messenger webhook hands deliveries and reads to the recorder and cannot be broken by it |
 | `docs/CONVERSATIONS.md` | This setup/audit guide |
 
 Webhook signature validation remains intentionally bypassed by the existing controller implementation. Tests cover processing accepted connections with missing or invalid signatures.

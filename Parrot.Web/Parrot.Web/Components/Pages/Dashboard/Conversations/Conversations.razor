@@ -12,6 +12,7 @@
 @inject ToastService Toasts
 @inject Parrot.Web.Services.FeedbackService Feedback
 @inject Parrot.Web.Services.Realtime.RealtimeClient Realtime
+@inject Parrot.Web.Services.InboxUnreadState Unread
 
 <PageTitle>Inbox · OmniAI</PageTitle>
 
@@ -22,7 +23,7 @@
    so the queue is searched, filtered and sorted over the loaded list.
 
    Parts of the design need data the API does not send yet (channels other
-   than WhatsApp, AI agents, assignment, status, unread counts). Each part is
+   than WhatsApp, AI agents, assignment, status). Each part is
    drawn only when its data is present, so the real app shows what the API
    supports. See InboxContracts. *@
 <div class="inbox-workspace">
@@ -245,6 +246,11 @@
                             <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="inbox-conversation__meta">
                                 <ChannelGlyph Channel="@_selected.Channel" Tile Compact />
                                 @ChannelName(_selected.Channel)
+                                @if (_selected.ReplyWindowEndsAt is not null)
+                                {
+                                    <span aria-hidden="true">·</span>
+                                    <ReplyWindowChip Conversation="@_selected" />
+                                }
                                 @if (_selected.Status is { } status)
                                 {
                                     <span aria-hidden="true">·</span>
@@ -340,7 +346,7 @@
     private bool _filtersOpen;
     private bool _customerOpen;
     private bool _initialLoad = true;
-    private bool _busy, _more, _disposed, _acting, _holdSelection;
+    private bool _busy, _more, _disposed, _acting;
     private int _loaded = 50;
     private DotNetObjectReference<Conversations>? _self;
     private IAsyncDisposable? _customerEscape;
@@ -438,14 +444,26 @@
         ConversationsState.Clear();
         AuthState.OnChange += AuthChanged;
         Realtime.MessageReceived += OnMessagePushed;
+        Realtime.ReceiptsChanged += OnReceiptsChanged;
         Realtime.Reconnected += OnRealtimeReconnected;
     }
 
     protected override async Task OnParametersSetAsync()
     {
+        // Inbox from the sidebar (no id in the route): nothing is open, the page shows "Select a conversation".
+        if (string.IsNullOrWhiteSpace(ConversationId))
+        {
+            if (_selected is not null)
+            {
+                await CloseCustomerDetailsAsync();
+                _selected = null;
+            }
+            return;
+        }
+
         // Deep link: /dashboard/conversations/{id}. The list may not be loaded
         // yet on first render; RefreshAsync honours the route then.
-        if (string.IsNullOrWhiteSpace(ConversationId) || ConversationId == _selected?.Id) return;
+        if (ConversationId == _selected?.Id) return;
         var item = ConversationsState.GetConversation(ConversationId);
         if (item is null) return;
         await CloseCustomerDetailsAsync();
@@ -485,9 +503,25 @@
             else if (ConversationsState.MergePushed(item, message))
             {
                 Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
+
+                // Counted, then read straight away if the agent is looking at it.
+                item.UnreadCount = (item.UnreadCount ?? 0) + 1;
+                await TryMarkReadAsync(item, message.MessageId);
             }
         }
+        else if (!message.Outgoing)
+        {
+            item.UnreadCount = (item.UnreadCount ?? 0) + 1;
+        }
         StateHasChanged();
+    });
+
+    // A channel reported delivered or read for replies. Only the open thread shows them, so only it is
+    // read again; if a read is already running, the next poll catches the change.
+    private Task OnReceiptsChanged(Parrot.Application.Messaging.ReceiptsChanged change) => InvokeAsync(async () =>
+    {
+        if (_disposed || _selected is not { } open || !change.Concerns(open.ConnectionId, open.Sender)) return;
+        await RunAsync(() => ReadSelectedAsync(false));
     });
 
     // Pushes sent while the connection was down were missed. The thread read
@@ -505,7 +539,7 @@
 
     // Pushes carry new messages while the hub is connected, so polling is the
     // safety net: slow then, fast while pushes cannot arrive. Replies are not
-    // pushed yet, so the slow poll is also how another agent's reply shows.
+    // pushed, so the slow poll is also how another agent's reply shows.
     private static readonly TimeSpan ConnectedPoll = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan DisconnectedPoll = TimeSpan.FromSeconds(5);
 
@@ -551,11 +585,8 @@
         ConversationsState.Apply(summaries);
         if (!_initialLoad && ConversationsState.Conversations.Any(c => !known.Contains(c.Id)))
             Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
-        // After "Mark as unread" nothing is opened for the person: opening it
-        // would read it straight away.
-        if (!_holdSelection)
-            _selected ??= (ConversationId is null ? null : ConversationsState.GetConversation(ConversationId))
-                          ?? ConversationsState.Conversations.FirstOrDefault();
+        // Nothing opens by itself: opening a conversation reads it, so only a click or a deep link does.
+        _selected ??= ConversationId is null ? null : ConversationsState.GetConversation(ConversationId);
         if (_selected is not null) await ReadSelectedAsync(false);
     });
 
@@ -564,7 +595,6 @@
         var item = ConversationsState.GetConversation(id);
         if (item is null) return;
         await CloseCustomerDetailsAsync();
-        _holdSelection = false;
         _selected = item;
         Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(id)}");
         // If a refresh is in flight the next poll reads the new selection.
@@ -603,8 +633,37 @@
             Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
         if (older || !item.HistoryLoaded) item.NextBefore = page.NextBefore;
         item.HistoryLoaded = true;
-        // Reading a thread reads its messages.
-        if (item.UnreadCount > 0) item.UnreadCount = 0;
+        // Reading a thread reads its messages, up to the newest this read returned.
+        if (!older && item.UnreadCount > 0 && page.Messages.LastOrDefault() is { } newest)
+            await TryMarkReadAsync(item, newest.Id);
+    }
+
+    // Tells the server the agent has seen the thread up to a message, so the count survives a refresh
+    // and a sign-in on another device. Only while the page is on screen: a message that arrives in a
+    // background tab stays unread, and the next poll marks it once the tab is back. The counts drop
+    // at once; the server's answer then replaces them. A failed call puts them back and the next
+    // poll tries again.
+    private async Task TryMarkReadAsync(ConversationItem item, string upToMessageId)
+    {
+        if (item != _selected || _disposed) return;
+        try { if (!await Interop.IsPageVisibleAsync()) return; }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException) { return; }
+
+        int before = item.UnreadCount ?? 0;
+        item.UnreadCount = 0;
+        Unread.Adjust(-before);
+        try
+        {
+            var result = await Client.MarkReadAsync(item.ConnectionId, item.Sender, upToMessageId, _lifetime.Token);
+            if (_disposed) return;
+            item.UnreadCount = result.ConversationUnread;
+            Unread.Set(result.Total);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
+        {
+            item.UnreadCount = before;
+            Unread.Adjust(before);
+        }
     }
 
     private async Task LoadMoreAsync() { _loaded += 50; await RefreshAsync(); }
@@ -631,7 +690,6 @@
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); return; }
         await CloseCustomerDetailsAsync();
         _selected = null;
-        _holdSelection = true;
         Nav.NavigateTo("/dashboard/conversations");
         await RefreshAsync();
     }
@@ -763,7 +821,7 @@
     public void Dispose()
     {
         _disposed = true; AuthState.OnChange -= AuthChanged;
-        Realtime.MessageReceived -= OnMessagePushed; Realtime.Reconnected -= OnRealtimeReconnected;
+        Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.Reconnected -= OnRealtimeReconnected;
         _lifetime.Cancel(); _lifetime.Dispose();
         if (_customerEscape is not null) _ = _customerEscape.DisposeAsync().AsTask().ContinueWith(_ => _self?.Dispose());
         else _self?.Dispose();
