@@ -11,7 +11,7 @@ namespace Parrot.Application.Conversations;
 public sealed class ConversationService(IConversationStore store, IWhatsAppConnectionRepository connections,
     IWhatsAppSender sender, IWhatsAppTokenProtector protector, IConversationSequence sequence,
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
-    IFacebookCredentialProtector facebookProtector, TikTokReplyService? tikTok = null)
+    IFacebookCredentialProtector facebookProtector, TikTokReplyService? tikTok = null, IDeliveryReceipts? receipts = null)
 {
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
@@ -192,6 +192,10 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         await store.CompleteAsync(doc.MessageId, status, providerId, persistTimeout.Token);
         doc.SendStatus = status;
         doc.ProviderMessageId = providerId;
+
+        // The channel can report delivered before we had its id to find this reply by.
+        if (receipts is not null && providerId is not null)
+            await receipts.ApplyParkedAsync(doc.ConnectionId!.Value, providerId, persistTimeout.Token);
         return ToMessage(doc);
     }
 
@@ -210,7 +214,15 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
     public static string RequestKey(string owner, Guid request) => $"outgoing:{owner}:{request:D}";
     public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
-        doc.TextBody ?? $"[{doc.Type} message]", doc.Outgoing, doc.SendStatus, doc.ReceivedAt);
+        doc.TextBody ?? $"[{doc.Type} message]", doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt);
+
+    // What the customer's channel has told us about a reply, over our own send state. A reply that
+    // failed stays failed.
+    public static string DisplayStatus(MessageDocument doc) =>
+        !doc.Outgoing || doc.SendStatus == "failed" ? doc.SendStatus
+        : doc.ReadAt is not null ? "read"
+        : doc.DeliveredAt is not null ? "delivered"
+        : doc.SendStatus;
 
     internal static ConversationMessage Match(MessageDocument doc, Guid connection, string recipient, string text)
     {

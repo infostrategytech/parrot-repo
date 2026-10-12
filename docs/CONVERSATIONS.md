@@ -129,6 +129,20 @@ The inbox's rail badge and each row's badge count customer messages the signed-i
 - **Baseline:** messages stored before the baseline count as read, so turning this on does not show a whole history as unread. The API saves its first start time as the baseline in the `inbox_state` collection (the `unread-baseline` document), so it is fixed at the deploy. `Inbox__UnreadBaseline` (an ISO date-time, UTC) overrides it. Never move it later once live: that would hide messages that really are unread.
 - Read state is per user, but messages are scoped by workspace owner today, and the Team page has no backend. There is one reader per workspace. Live pushes go to the owner's connections only, so teammates would also need push fan-out.
 
+## Reply window and delivery receipts
+
+**Reply window.** A business may reply with free text only within a window of the customer's last message: 24 hours on WhatsApp and Messenger, 48 on TikTok. `ReplyWindow` is the one rule; the send paths enforce it and each `GET /api/conversations` row carries `lastCustomerMessageAt` and `replyWindowHours` so the inbox can show the time left. When it has closed, the conversation header says so and the reply box is disabled (a timed-out send waiting for its check can still be retried). The server's own check stays the authority.
+
+**Delivery receipts (WhatsApp).** Meta reports each reply as `sent`, `delivered`, `read` or `failed` to the connection's webhook. Delivered, read and failed are recorded on the stored reply (`DeliveredAt`, `ReadAt`, or a failed send status) by `MongoDeliveryReceipts`, and the message's `status` in the API becomes `delivered` or `read` (a failed reply stays `failed`).
+
+- A receipt is matched by Meta's message id (`ProviderMessageId`) on that connection only, so one connection's webhook cannot touch another's replies.
+- Receipts only move a reply forward and keep the earliest time reported, so duplicates and out-of-order receipts are harmless. A late `failed` never overturns a reply already delivered.
+- Meta can report a reply before the send has stored Meta's id for it. Such a receipt is kept in `delivery_receipts_parked` (expires after 24 hours) and applied as soon as the send stores the id.
+- Recording runs inside the webhook's one-second budget and never fails the webhook.
+- The open thread picks receipts up on its next poll (up to 15 seconds); there is no live push for them yet.
+- **"Read" only appears when the channel sends it.** A customer can turn read receipts off, so a reply that shows Delivered may have been read. Only replies sent after this shipped have receipts.
+- Facebook (Messenger `message_deliveries` / `message_reads`) and TikTok are not wired yet. Receipts are not presence: they say the customer saw a reply, not that they are online.
+
 ## Audit map
 
 | File | Change |
@@ -163,6 +177,11 @@ The inbox's rail badge and each row's badge count customer messages the signed-i
 | `Parrot.Web/Parrot.Web/Services/InboxUnreadState.cs` | The rail's unread total: live pushes plus the server's number |
 | `Test.Parrot.Api/Tests/Services/ConversationReadTests.cs` | Unread counting on a real MongoDB: channels, replies, per user, baseline, forged ids |
 | `Test.Parrot.Api/Tests/Services/InboxUnreadStateTests.cs` | The web app's unread total |
+| `Parrot.Application/Conversations/ReplyWindow.cs` | How long after a customer's message a reply is allowed, per channel |
+| `Parrot.Application/Conversations/DeliveryReceipts.cs` | The receipt contract and states |
+| `Parrot.Infrastructure/Conversations/MongoDeliveryReceipts.cs` | Applies receipts to replies; parks ones that arrive early |
+| `Test.Parrot.Api/Tests/Services/DeliveryReceiptsTests.cs` | Receipts on a real MongoDB: order, repeats, isolation, early arrival |
+| `Test.Parrot.Api/Tests/Services/Integrations/WhatsAppReceiptsTests.cs` | The webhook hands receipts to the recorder and cannot be broken by it |
 | `docs/CONVERSATIONS.md` | This setup/audit guide |
 
 Webhook signature validation remains intentionally bypassed by the existing controller implementation. Tests cover processing accepted connections with missing or invalid signatures.

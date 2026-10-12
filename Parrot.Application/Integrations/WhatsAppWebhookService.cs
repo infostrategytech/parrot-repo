@@ -21,6 +21,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
     private readonly IWhatsAppConnectionRepository _connections;
     private readonly IWhatsAppTokenProtector _protector;
     private readonly IReplySendTimes? _sendTimes;
+    private readonly IDeliveryReceipts? _receipts;
 
     public WhatsAppWebhookService(
         IOptions<WhatsAppSettings> settings,
@@ -28,7 +29,8 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         InboundMessagePublisher publisher,
         IWhatsAppConnectionRepository connections,
         IWhatsAppTokenProtector protector,
-        IReplySendTimes? sendTimes = null)
+        IReplySendTimes? sendTimes = null,
+        IDeliveryReceipts? receipts = null)
     {
         _settings = settings.Value;
         _logger = logger;
@@ -36,6 +38,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         _connections = connections;
         _protector = protector;
         _sendTimes = sendTimes;
+        _receipts = receipts;
     }
 
     public string GetWebhookUrl() =>
@@ -275,18 +278,38 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
         budget.CancelAfter(StatusLookupBudget);
         foreach (WhatsAppMessageStatus status in statuses)
         {
-            await RecordStatusAsync(status, budget.Token);
+            await RecordStatusAsync(status, connectionId, budget.Token);
         }
     }
 
-    // Counts the status and, for a reply Parrot sent, how long Meta took to report
-    // it. Never fails or delays the webhook: once the lookup budget is spent the
-    // status is still counted, only its latency sample is skipped.
-    private async Task RecordStatusAsync(WhatsAppMessageStatus status, CancellationToken budget)
+    // Counts the status, records it on the reply Parrot sent, and measures how long Meta took to
+    // report it. Never fails or delays the webhook: once the lookup budget is spent the status is
+    // still counted, only the rest is skipped.
+    private async Task RecordStatusAsync(WhatsAppMessageStatus status, Guid? connectionId, CancellationToken budget)
     {
         string label = status.Status is "sent" or "delivered" or "read" or "failed" ? status.Status : "other";
         KeyValuePair<string, object?> tag = new("status", label);
         MessageMetrics.StatusUpdates.Add(1, tag);
+
+        if (budget.IsCancellationRequested)
+        {
+            return;
+        }
+
+        // Only a connection's own webhook can say which replies are its. "sent" is Meta accepting the
+        // message, which the send already recorded.
+        if (_receipts is not null && connectionId is { } connection && ReceiptState(status.Status) is { } state)
+        {
+            try
+            {
+                await _receipts.RecordAsync(connection, status.Id, state,
+                    ProviderTimestamp.FromUnixSeconds(status.Timestamp) ?? DateTime.UtcNow, budget);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning("WhatsApp receipt not recorded. Status={Status} Reason={Reason}", label, ex.Message);
+            }
+        }
 
         if (_sendTimes is null || budget.IsCancellationRequested)
         {
@@ -305,4 +328,12 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
             _logger.LogWarning("WhatsApp status latency not recorded. Status={Status} Reason={Reason}", label, ex.Message);
         }
     }
+
+    private static DeliveryState? ReceiptState(string status) => status switch
+    {
+        "delivered" => DeliveryState.Delivered,
+        "read" => DeliveryState.Read,
+        "failed" => DeliveryState.Failed,
+        _ => null,
+    };
 }

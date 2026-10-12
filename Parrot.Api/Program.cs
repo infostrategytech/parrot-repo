@@ -384,6 +384,7 @@ builder.Services.AddSingleton<IConversationReadStore, MongoConversationReadStore
 // Creating the store at startup is what fixes the unread baseline at the deploy, not at the first request.
 builder.Services.AddHostedService<Parrot.Api.Realtime.UnreadBaselineInitializer>();
 builder.Services.AddSingleton<IReplySendTimes, MongoReplySendTimes>();
+builder.Services.AddSingleton<IDeliveryReceipts, MongoDeliveryReceipts>();
 builder.Services.AddSingleton<IMessageHistory, MongoMessageHistory>();
 
 // Replies are numbered from the same per-conversation counter the worker uses.
