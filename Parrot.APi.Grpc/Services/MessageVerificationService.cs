@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
 using Parrot.Application.DTOs.Integrations;
@@ -17,15 +18,27 @@ public sealed class MessageVerificationGrpcService(
         ServerCallContext context)
     {
         DateTime since = DateTimeOffset.FromUnixTimeSeconds(request.SinceUnixSeconds).UtcDateTime;
+        ClaimsPrincipal user = context.GetHttpContext().User;
+        string? owner = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+        if (string.IsNullOrWhiteSpace(owner))
+            throw new RpcException(new Status(StatusCode.Unauthenticated, "Sign in to check for a message."));
+
+        // The setup screens send Parrot's connection id; anything else cannot be one of the caller's.
+        if (!Guid.TryParse(request.ChannelId, out Guid connectionId))
+        {
+            logger.LogWarning("Message check for a channel id that is not a connection id. Platform={Platform}", request.Platform);
+            return new CheckForMessageResponse { MessageReceived = false };
+        }
 
         logger.LogInformation(
-            "Checking for message on channel {ChannelId} (platform={Platform}) since {Since}",
-            request.ChannelId,
+            "Checking for message on connection {ConnectionId} (platform={Platform}) since {Since}",
+            connectionId,
             request.Platform,
             since);
 
         ReceivedMessageSummary? summary = await repository.FindFirstAsync(
-            request.ChannelId,
+            connectionId,
+            owner,
             since,
             context.CancellationToken);
 

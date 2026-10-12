@@ -12,6 +12,9 @@ public class FacebookSettings
     // App Secret — used to validate X-Hub-Signature-256 on every incoming event
     public string AppSecret { get; set; } = string.Empty;
 
+    // Graph API version for sending replies through the Messenger Send API.
+    public string ApiVersion { get; set; } = "v25.0";
+
     /// <summary>How webhook signatures are treated; Facebook has always enforced them.</summary>
     public WebhookSignatureMode SignatureMode { get; set; } = WebhookSignatureMode.Enforce;
 }

@@ -76,10 +76,10 @@ public class MongoConversationTests
         finally { await client.DropDatabaseAsync(database); }
     }
 
-    // The setup screens look for a test message by the connection's own id, but a stored message's ChannelId
-    // is the platform's id for the account, so a lookup by either has to find it.
+    // The setup test finds a TikTok customer's message by the connection and its owner, whatever the platform's own
+    // account id (here the business open id) is.
     [MongoFact]
-    public async Task ATestMessageIsFoundByItsConnectionOrItsChannel()
+    public async Task ATikTokTestMessageIsFoundByItsConnectionAndOwner()
     {
         var client = new MongoClient(Environment.GetEnvironmentVariable("PARROT_TEST_MONGO"));
         string database = "parrot_test_" + Guid.NewGuid().ToString("N");
@@ -99,10 +99,10 @@ public class MongoConversationTests
             });
             DateTime since = DateTime.UtcNow.AddMinutes(-1);
 
-            Assert.NotNull(await repository.FindFirstAsync(connection.ToString(), since));
-            Assert.NotNull(await repository.FindFirstAsync("business-open-id", since));
-            Assert.Null(await repository.FindFirstAsync(Guid.NewGuid().ToString(), since));
-            Assert.Null(await repository.FindFirstAsync(connection.ToString(), DateTime.UtcNow.AddMinutes(1)));
+            Assert.NotNull(await repository.FindFirstAsync(connection, "owner", since));
+            Assert.Null(await repository.FindFirstAsync(connection, "someone-else", since));
+            Assert.Null(await repository.FindFirstAsync(Guid.NewGuid(), "owner", since));
+            Assert.Null(await repository.FindFirstAsync(connection, "owner", DateTime.UtcNow.AddMinutes(1)));
         }
         finally { await client.DropDatabaseAsync(database); }
     }

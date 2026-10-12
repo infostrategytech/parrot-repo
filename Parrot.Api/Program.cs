@@ -391,6 +391,7 @@ builder.Services.AddScoped<TikTokAccessTokens>();
 builder.Services.AddScoped<TikTokReplyService>();
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
+builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
 
 // Realtime: Redis is only the registry of who is online, never a message store.
 builder.Services.AddRedis(builder.Configuration);

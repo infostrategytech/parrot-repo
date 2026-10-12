@@ -25,9 +25,18 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
                 .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
                     && c.DisabledAt == null && c.WebhookVerifiedAt != null && c.PageId == message.ChannelId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UpdatedAt, now), cancellationToken);
-            if (facebookUpdated == 0)
-                throw new InvalidOperationException("Facebook message was stored, but its Page connection did not match PostgreSQL.");
-            return;
+            if (facebookUpdated > 0) return;
+
+            // As for WhatsApp: a Page disconnected after the event was queued must not hold up the
+            // consumer; any other mismatch is a real fault and is retried, then dead-lettered.
+            var page = await db.FacebookConnections.AsNoTracking()
+                .Where(c => c.Id == message.ConnectionId)
+                .Select(c => new { c.OwnerUserId, c.PageId, c.DisabledAt })
+                .SingleOrDefaultAsync(cancellationToken);
+            if (page is not null && page.DisabledAt.HasValue
+                && page.OwnerUserId == message.OwnerUserId && page.PageId == message.ChannelId)
+                return;
+            throw new InvalidOperationException("Facebook message was stored, but its Page connection did not match PostgreSQL.");
         }
 
         if (message.Platform == MessagingPlatform.TikTok)

@@ -14,7 +14,8 @@ namespace Parrot.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "conversations")]
 public sealed class ConversationsController(IConversationStore store, ConversationService service,
-    IWhatsAppConnectionRepository connections, ITikTokConnectionRepository tikTokConnections) : ControllerBase
+    IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
+    ITikTokConnectionRepository tikTokConnections) : ControllerBase
 {
     private string Owner => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? throw new UnauthorizedException("Sign in to continue.");
@@ -27,7 +28,9 @@ public sealed class ConversationsController(IConversationStore store, Conversati
     public async Task<IActionResult> Messages(Guid connectionId, [FromQuery] string sender,
         [FromQuery] string? before, CancellationToken cancellationToken)
     {
+        // A thread can be on a WhatsApp number, a Facebook Page or the TikTok account.
         if (await connections.GetByOwnerAndIdAsync(Owner, connectionId) is null
+            && !await facebook.IsOwnedByAsync(connectionId, Owner, cancellationToken)
             && (await tikTokConnections.GetByOwnerAsync(Owner, cancellationToken))?.Id != connectionId)
             throw new NotFoundException("Connection not found.");
         return Ok(await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken));

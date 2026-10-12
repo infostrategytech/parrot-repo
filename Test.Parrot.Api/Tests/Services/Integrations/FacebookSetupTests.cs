@@ -203,6 +203,9 @@ public class FacebookSetupTests
         public Task<FacebookConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default) =>
             Task.FromResult(Connection?.OwnerUserId == ownerUserId && Connection.DisabledAt is null ? Connection : null);
 
+        public Task<bool> IsOwnedByAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Connection?.Id == id && Connection.OwnerUserId == ownerUserId);
+
         public Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default)
         {
             if (Connection?.Id != id || Connection.OwnerUserId != ownerUserId || Connection.DisabledAt is not null)

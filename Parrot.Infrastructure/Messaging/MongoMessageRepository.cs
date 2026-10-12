@@ -59,21 +59,18 @@ public sealed class MongoMessageRepository : IMessageRepository
     }
 
     public async Task<ReceivedMessageSummary?> FindFirstAsync(
-        string channelId,
+        Guid connectionId,
+        string ownerUserId,
         DateTime since,
         CancellationToken cancellationToken = default)
     {
-        // The setup screens hold a connection's own id, while a stored message's ChannelId is the platform's
-        // id for the account (a phone number id, a page id, a business open id), so either one finds it.
-        FilterDefinition<MessageDocument> channel = Builders<MessageDocument>.Filter.Eq(x => x.ChannelId, channelId);
-        if (Guid.TryParse(channelId, out Guid connectionId))
-        {
-            channel = Builders<MessageDocument>.Filter.Or(
-                channel, Builders<MessageDocument>.Filter.Eq(x => x.ConnectionId, connectionId));
-        }
-
+        // Parrot's connection id, not Meta's ChannelId (Page or phone number id): the setup
+        // screens only know the former, so matching on the latter never found anything.
+        // Replies sent during the test are not "a message arrived".
         FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.And(
-            channel,
+            Builders<MessageDocument>.Filter.Eq(x => x.OwnerUserId, ownerUserId),
+            Builders<MessageDocument>.Filter.Eq(x => x.ConnectionId, connectionId),
+            Builders<MessageDocument>.Filter.Ne(x => x.Outgoing, true),
             Builders<MessageDocument>.Filter.Gte(x => x.ReceivedAt, since));
 
         MessageDocument? doc = await _collection

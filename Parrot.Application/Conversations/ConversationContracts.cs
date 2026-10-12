@@ -2,9 +2,11 @@ using Parrot.Domain.Entities.Messages;
 
 namespace Parrot.Application.Conversations;
 
-public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt,
-    // "whatsapp", "facebook" or "tiktok": the platform of the conversation's latest message.
-    string Channel = "whatsapp");
+public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
+{
+    /// <summary>whatsapp, facebook or tiktok: which channel the conversation is on.</summary>
+    public string Channel { get; init; } = "whatsapp";
+}
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt);
 public record SendReplyRequest(Guid RequestId, string Text);
 public record MessagePage(IReadOnlyList<ConversationMessage> Messages, string? NextBefore);
@@ -31,6 +33,22 @@ public interface IReplySendTimes
 public interface IWhatsAppSender
 {
     Task<string> SendAsync(string phoneNumberId, string accessToken, string recipient, string text, CancellationToken ct);
+}
+
+// Messenger's Send API, with the Page access token saved in setup. Returns Meta's message id (m_…).
+public interface IFacebookSender
+{
+    Task<string> SendAsync(string pageId, string pageAccessToken, string recipient, string text, CancellationToken ct);
+}
+
+public sealed class FacebookRejectedException : Exception
+{
+    public FacebookRejectedException(string? metaErrorCode = null)
+        : base("Messenger rejected the message. Check the Page access token and that the customer wrote within 24 hours.") =>
+        MetaErrorCode = metaErrorCode;
+
+    // Meta's error.code (e.g. "10" with subcode 2018278 outside the 24-hour window, "551" when the person is unavailable).
+    public string? MetaErrorCode { get; }
 }
 
 public sealed class WhatsAppRejectedException : Exception
