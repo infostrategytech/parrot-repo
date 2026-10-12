@@ -23,6 +23,13 @@ public sealed class InstagramConnection
     // Instagram User access token with instagram_business_manage_messages; encrypted.
     public string? AccessTokenEncrypted { get; set; }
 
+    // Instagram User tokens last 60 days and can be renewed once a day old, each renewal giving
+    // another 60. Parrot renews them before they lapse; these say when it last did, when the token
+    // runs out, and when Instagram refused it (revoked, or it lapsed first), so a new one is needed.
+    public DateTime? AccessTokenRenewedAt { get; set; }
+    public DateTime? AccessTokenExpiresAt { get; set; }
+    public DateTime? AccessTokenRejectedAt { get; set; }
+
     // The Instagram app secret (Instagram > API setup with Instagram login), which signs this
     // connection's webhooks. Not the Meta App Secret under App settings > Basic. Encrypted.
     public string? AppSecretEncrypted { get; set; }

@@ -148,6 +148,144 @@ public class InstagramSetupTests
         Assert.Null(_repository.Connection);
     }
 
+    // ── Token renewal: tokens last 60 days; Parrot renews them at 30, and asks for a new one when it cannot.
+
+    private InstagramTokenRenewer Renewer() =>
+        new(_repository, new Protector(), _instagram, Moq.Mock.Of<global::Parrot.Application.Logging.IAppLogger<InstagramTokenRenewer>>());
+
+    private async Task<DateTime> ConnectedAsync()
+    {
+        await VerifiedAsync();
+        await Service().SaveAccountAsync("owner", new InstagramAccountRequest { AccessToken = "IGAAtoken" });
+        _instagram.Calls.Clear();
+        return _repository.Connection!.AccessTokenRenewedAt!.Value;
+    }
+
+    [Fact]
+    public async Task ASavedToken_CountsAsFresh_AndRunsOutIn60Days()
+    {
+        DateTime saved = await ConnectedAsync();
+
+        Assert.Equal(saved + TimeSpan.FromDays(60), _repository.Connection!.AccessTokenExpiresAt!.Value, TimeSpan.FromSeconds(5));
+        InstagramSetupResponse setup = await Service().GetSetupAsync("owner");
+        Assert.False(setup.NeedsNewToken);
+        Assert.NotNull(setup.AccessTokenExpiresAt);
+    }
+
+    [Fact]
+    public async Task ATokenUnder30DaysOld_IsLeftAlone()
+    {
+        DateTime saved = await ConnectedAsync();
+
+        InstagramTokenRenewer.Result result = await Renewer().RenewDueAsync(saved.AddDays(29), default);
+
+        Assert.Equal(new InstagramTokenRenewer.Result(0, 0, 0), result);
+        Assert.Empty(_instagram.Calls);
+    }
+
+    [Fact]
+    public async Task ATokenAt30Days_IsRenewed_AndTheNewOneSavedEncryptedFor60MoreDays()
+    {
+        DateTime saved = await ConnectedAsync();
+        DateTime now = saved.AddDays(30);
+
+        InstagramTokenRenewer.Result result = await Renewer().RenewDueAsync(now, default);
+
+        Assert.Equal(1, result.Renewed);
+        Assert.Equal(["renew:IGAAtoken"], _instagram.Calls);
+        Assert.Equal("enc:IGAArenewed", _repository.Connection!.AccessTokenEncrypted);
+        Assert.Equal(now, _repository.Connection.AccessTokenRenewedAt);
+        Assert.Equal(now.AddDays(60), _repository.Connection.AccessTokenExpiresAt);
+        // Renewed: not due again for another 30 days.
+        Assert.Equal(0, (await Renewer().RenewDueAsync(now.AddDays(29), default)).Renewed);
+    }
+
+    // Instagram says the token is no good (revoked, or the owner changed their password).
+    [Fact]
+    public async Task ATokenInstagramRefuses_IsMarked_SoTheCardAsksForANewOne()
+    {
+        DateTime saved = await ConnectedAsync();
+        _instagram.RenewalFails = new InstagramAccountException("expired", "190");
+
+        InstagramTokenRenewer.Result result = await Renewer().RenewDueAsync(saved.AddDays(31), default);
+
+        Assert.Equal(1, result.Rejected);
+        Assert.Equal("enc:IGAAtoken", _repository.Connection!.AccessTokenEncrypted);
+        Assert.True((await Service().GetSetupAsync("owner")).NeedsNewToken);
+        // Not tried again: only a new token can fix it.
+        _instagram.Calls.Clear();
+        await Renewer().RenewDueAsync(saved.AddDays(40), default);
+        Assert.Empty(_instagram.Calls);
+    }
+
+    // Instagram down for a while: nothing is lost, it is tried again next round.
+    [Fact]
+    public async Task APassingFailure_LeavesTheTokenAsItWas_AndIsTriedAgain()
+    {
+        DateTime saved = await ConnectedAsync();
+        _instagram.RenewalFails = new InstagramAccountException("Parrot could not reach Instagram.");
+
+        InstagramTokenRenewer.Result result = await Renewer().RenewDueAsync(saved.AddDays(31), default);
+
+        Assert.Equal(1, result.Failed);
+        Assert.Null(_repository.Connection!.AccessTokenRejectedAt);
+        Assert.False((await Service().GetSetupAsync("owner")).NeedsNewToken);
+        _instagram.RenewalFails = null;
+        Assert.Equal(1, (await Renewer().RenewDueAsync(saved.AddDays(31).AddHours(6), default)).Renewed);
+    }
+
+    // Lapsed before a renewal could run (Parrot was down for weeks): only a new token helps.
+    [Fact]
+    public async Task ATokenAlreadyExpired_IsMarkedWithoutAskingInstagram()
+    {
+        DateTime saved = await ConnectedAsync();
+
+        InstagramTokenRenewer.Result result = await Renewer().RenewDueAsync(saved.AddDays(61), default);
+
+        Assert.Equal(1, result.Rejected);
+        Assert.Empty(_instagram.Calls);
+    }
+
+    // Pasting a new token clears the warning and starts a fresh 60 days.
+    [Fact]
+    public async Task PastingANewToken_ClearsTheWarning()
+    {
+        DateTime saved = await ConnectedAsync();
+        _instagram.RenewalFails = new InstagramAccountException("expired", "190");
+        await Renewer().RenewDueAsync(saved.AddDays(31), default);
+
+        await Service().SaveAccountAsync("owner", new InstagramAccountRequest { AccessToken = "IGAAnew" });
+
+        InstagramSetupResponse setup = await Service().GetSetupAsync("owner");
+        Assert.False(setup.NeedsNewToken);
+        Assert.Equal("enc:IGAAnew", _repository.Connection!.AccessTokenEncrypted);
+    }
+
+    [Fact]
+    public async Task TheRenewalCall_UsesInstagramsRefreshEndpoint_AndReadsTheNewExpiry()
+    {
+        Handler handler = new(HttpStatusCode.OK, """{"access_token":"IGAAfresh","token_type":"bearer","expires_in":5183944}""");
+        InstagramAccountApi api = new(new HttpClient(handler), Options.Create(new InstagramSettings()));
+
+        // + and & would otherwise change what Instagram reads as the token.
+        InstagramRenewedToken renewed = await api.RenewTokenAsync("IGAA+old&token", default);
+
+        Assert.StartsWith("https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=", handler.Url);
+        Assert.EndsWith("access_token=IGAA%2Bold%26token", handler.Url);
+        Assert.Equal("IGAAfresh", renewed.AccessToken);
+        Assert.Equal(TimeSpan.FromSeconds(5183944), renewed.ExpiresIn);
+    }
+
+    [Fact]
+    public async Task ARefusedRenewal_CarriesInstagramsCode()
+    {
+        InstagramAccountApi api = new(new HttpClient(new Handler(HttpStatusCode.BadRequest, """{"error":{"code":190}}""")),
+            Options.Create(new InstagramSettings()));
+
+        InstagramAccountException error = await Assert.ThrowsAsync<InstagramAccountException>(() => api.RenewTokenAsync("old", default));
+        Assert.True(error.TokenRejected);
+    }
+
     // graph.instagram.com: the two setup calls and the Send API.
     [Theory]
     [InlineData("""{"user_id":17841400000000000,"username":"omaskitchen","id":"28747265801525964"}""")]
@@ -242,6 +380,17 @@ public class InstagramSetupTests
             Calls.Add($"subscribe:{accessToken}");
             return Task.CompletedTask;
         }
+
+        // What renewal does next: Throw it, or hand back RenewedTo good for 60 days.
+        public Exception? RenewalFails { get; set; }
+        public string RenewedTo { get; set; } = "IGAArenewed";
+
+        public Task<InstagramRenewedToken> RenewTokenAsync(string accessToken, CancellationToken cancellationToken)
+        {
+            Calls.Add($"renew:{accessToken}");
+            if (RenewalFails is not null) throw RenewalFails;
+            return Task.FromResult(new InstagramRenewedToken(RenewedTo, TimeSpan.FromDays(60)));
+        }
     }
 
     private sealed class Protector : IInstagramCredentialProtector
@@ -275,11 +424,36 @@ public class InstagramSetupTests
         }
 
         public Task SaveAccountAsync(Guid id, string ownerUserId, string accountId, string username, string encryptedAccessToken,
-            CancellationToken cancellationToken = default)
+            DateTime expiresAt, CancellationToken cancellationToken = default)
         {
             Connection!.AccountId = accountId;
             Connection.Username = username;
             Connection.AccessTokenEncrypted = encryptedAccessToken;
+            Connection.AccessTokenRenewedAt = DateTime.UtcNow;
+            Connection.AccessTokenExpiresAt = expiresAt;
+            Connection.AccessTokenRejectedAt = null;
+            return Task.CompletedTask;
+        }
+
+        public Task<IReadOnlyList<InstagramConnection>> GetDueForTokenRenewalAsync(DateTime renewBefore, int take,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<InstagramConnection>>(
+                Connection is { DisabledAt: null, AccessTokenEncrypted: not null, AccessTokenRejectedAt: null } c
+                && (c.AccessTokenRenewedAt ?? c.UpdatedAt) <= renewBefore ? [c] : []);
+
+        public Task<bool> SaveRenewedTokenAsync(Guid id, string previousEncryptedToken, string encryptedAccessToken, DateTime renewedAt,
+            DateTime expiresAt, CancellationToken cancellationToken = default)
+        {
+            if (Connection?.Id != id || Connection.AccessTokenEncrypted != previousEncryptedToken) return Task.FromResult(false);
+            Connection.AccessTokenEncrypted = encryptedAccessToken;
+            Connection.AccessTokenRenewedAt = renewedAt;
+            Connection.AccessTokenExpiresAt = expiresAt;
+            return Task.FromResult(true);
+        }
+
+        public Task MarkTokenRejectedAsync(Guid id, string encryptedAccessToken, DateTime rejectedAt, CancellationToken cancellationToken = default)
+        {
+            if (Connection?.Id == id && Connection.AccessTokenEncrypted == encryptedAccessToken) Connection.AccessTokenRejectedAt ??= rejectedAt;
             return Task.CompletedTask;
         }
 

@@ -404,7 +404,10 @@ builder.Services.AddHttpClient<ITikTokApiClient, TikTokApiClient>();
 builder.Services.AddScoped<IInstagramWebhookService, InstagramWebhookService>();
 builder.Services.AddScoped<IInstagramConnectionRepository, InstagramConnectionRepository>();
 builder.Services.AddScoped<IInstagramConnectionService, InstagramConnectionService>();
-builder.Services.AddHttpClient<IInstagramAccountApi, InstagramAccountApi>();
+// No request logging: the token renewal call carries the token in its URL.
+builder.Services.AddHttpClient<IInstagramAccountApi, InstagramAccountApi>().RemoveAllLoggers();
+builder.Services.AddScoped<InstagramTokenRenewer>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.InstagramTokenRenewalService>();
 builder.Services.AddScoped<RequestContext>();
 builder.Services.AddScoped<IRequestContext>(sp => sp.GetRequiredService<RequestContext>());
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(AppLogger<>));

@@ -183,7 +183,7 @@ else
                                         autocomplete="new-password"
                                         spellcheck="false"
                                         maxlength="8192"
-                                        HelperText="@(_setup.HasAccessToken ? $"Connected as {AccountLabel}. Enter a new token only to replace it." : "Hidden as you type and cleared after saving. Never send this token in a chat or email.")">
+                                        HelperText="@TokenHelp">
                                         <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
                                     </Parrot.SharedComponents.DesignSystem.Input>
 
@@ -258,6 +258,8 @@ else
     /// </summary>
     private int Reached =>
         _setup is null ? 0
+        // A token Instagram stopped accepting reopens the account step for a new one.
+        : _setup.NeedsNewToken ? 1
         : _setup.WebhookVerified && _setup.HasAccessToken && !string.IsNullOrEmpty(_setup.AccountId) ? 2
         : _setup.WebhookVerified ? 1
         : 0;
@@ -266,9 +268,16 @@ else
 
     private bool AccountReady =>
         _setup is { WebhookVerified: true }
-        && (!string.IsNullOrWhiteSpace(_accessToken) || _setup.HasAccessToken)
+        && (!string.IsNullOrWhiteSpace(_accessToken) || _setup is { HasAccessToken: true, NeedsNewToken: false })
         && (!string.IsNullOrWhiteSpace(_appSecret) || _setup.HasAppSecret)
         && (!string.IsNullOrWhiteSpace(_accessToken) || !string.IsNullOrWhiteSpace(_appSecret));
+
+    // Instagram tokens last 60 days; Parrot renews them, so the date only matters if renewal stops working.
+    private string TokenHelp =>
+        _setup is null ? ""
+        : _setup.NeedsNewToken ? $"Instagram stopped accepting the saved token for {AccountLabel}. Generate a new one in Meta and paste it here."
+        : _setup.HasAccessToken ? $"Connected as {AccountLabel}. Parrot renews this token automatically. Enter a new one only to replace it."
+        : "Hidden as you type and cleared after saving. Never send this token in a chat or email.";
 
     private string AccountLabel => string.IsNullOrEmpty(_setup?.Username) ? "your account" : "@" + _setup.Username;
 

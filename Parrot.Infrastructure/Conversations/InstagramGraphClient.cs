@@ -42,7 +42,10 @@ public sealed class InstagramAccountApi(HttpClient http, IOptions<InstagramSetti
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         using HttpResponseMessage response = await SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
-            throw new InstagramAccountException(Refused(await InstagramGraph.ErrorCodeAsync(response, cancellationToken)));
+        {
+            string? code = await InstagramGraph.ErrorCodeAsync(response, cancellationToken);
+            throw new InstagramAccountException(Refused(code), code);
+        }
 
         using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
         // user_id is the professional account webhooks name in entry.id; it can come back as a number or a string.
@@ -70,6 +73,30 @@ public sealed class InstagramAccountApi(HttpClient http, IOptions<InstagramSetti
             throw new InstagramAccountException(
                 "Instagram accepted the token but would not send this account's messages to Parrot. Check the token has instagram_business_manage_messages. "
                 + Refused(await InstagramGraph.ErrorCodeAsync(response, cancellationToken)));
+    }
+
+    // The one Instagram call that takes the token in the URL, as Meta documents it. The token is
+    // escaped, and this client's request logging is switched off where it is registered, so the
+    // URL never reaches the logs.
+    public async Task<InstagramRenewedToken> RenewTokenAsync(string accessToken, CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Get,
+            $"https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token={Uri.EscapeDataString(accessToken)}");
+        using HttpResponseMessage response = await SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            string? code = await InstagramGraph.ErrorCodeAsync(response, cancellationToken);
+            throw new InstagramAccountException(Refused(code), code);
+        }
+
+        using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+        if (!json.RootElement.TryGetProperty("access_token", out JsonElement token) || token.ValueKind != JsonValueKind.String
+            || string.IsNullOrEmpty(token.GetString()))
+            throw new InstagramAccountException("Instagram renewed the token but returned no token.");
+        // Seconds; 60 days when missing, which is what Instagram gives.
+        long seconds = json.RootElement.TryGetProperty("expires_in", out JsonElement expires) && expires.TryGetInt64(out long value) && value > 0
+            ? value : (long)TimeSpan.FromDays(60).TotalSeconds;
+        return new InstagramRenewedToken(token.GetString()!, TimeSpan.FromSeconds(seconds));
     }
 
     private async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

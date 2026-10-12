@@ -226,6 +226,35 @@ public class ConversationServiceTests
         _facebookSender.VerifyNoOtherCalls();
     }
 
+    // A reply refused with 190 means the token itself is no good: the Channels card should ask for a new one.
+    [Theory]
+    [InlineData("190", 1)]
+    [InlineData("10", 0)]
+    public async Task AnInstagramReply_RefusedFor190_FlagsTheToken(string code, int flagged)
+    {
+        InstagramConnection account = new()
+        {
+            OwnerUserId = Owner, VerifyTokenEncrypted = "enc:verify", AccountId = "17841400000000000", Username = "omaskitchen",
+            WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "enc:IGAAtoken",
+        };
+        _instagramAccounts.Setup(a => a.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(account);
+        _store.LastIncoming = new InstagramMessageDocument
+        {
+            MessageId = "instagram:ig_1", OwnerUserId = Owner, Platform = MessagingPlatform.Instagram,
+            ExternalAccountId = "17841400000000000", ChannelId = "17841400000000000", ChannelDisplayName = "", From = "5834920000000000",
+            Timestamp = "0", Type = "text", SentAt = DateTime.UtcNow, ReceivedAt = DateTime.UtcNow,
+            ConversationKey = "instagram:17841400000000000:5834920000000000", Sequence = 1, Receiver = "17841400000000000",
+        };
+        _instagramSender.Setup(s => s.SendAsync("17841400000000000", "IGAAtoken", "5834920000000000", "Hello", It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InstagramRejectedException(code));
+
+        ConversationMessage sent = await Create().SendAsync(Owner, account.Id, "5834920000000000", new SendReplyRequest(Guid.NewGuid(), "Hello"), default);
+
+        Assert.Equal("failed", sent.Status);
+        _instagramAccounts.Verify(a => a.MarkTokenRejectedAsync(account.Id, "enc:IGAAtoken", It.IsAny<DateTime>(), It.IsAny<CancellationToken>()),
+            Times.Exactly(flagged));
+    }
+
     [Fact]
     public async Task AReplyOnAConnectionThatIsNotTheOwners_IsNotFound()
     {

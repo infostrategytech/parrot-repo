@@ -412,6 +412,15 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<string>("AccessTokenEncrypted")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("AccessTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("AccessTokenRejectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("AccessTokenRenewedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("AccountId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");

@@ -36,8 +36,9 @@ public sealed class InstagramConnectionRepository(ApplicationDbContext db) : IIn
 
     // One statement; the WHERE clause enforces ownership and verification.
     public async Task SaveAccountAsync(Guid id, string ownerUserId, string accountId, string username, string encryptedAccessToken,
-        CancellationToken cancellationToken = default)
+        DateTime expiresAt, CancellationToken cancellationToken = default)
     {
+        DateTime now = DateTime.UtcNow;
         try
         {
             int updated = await db.InstagramConnections
@@ -46,7 +47,10 @@ public sealed class InstagramConnectionRepository(ApplicationDbContext db) : IIn
                     .SetProperty(c => c.AccountId, accountId)
                     .SetProperty(c => c.Username, username)
                     .SetProperty(c => c.AccessTokenEncrypted, encryptedAccessToken)
-                    .SetProperty(c => c.UpdatedAt, DateTime.UtcNow), cancellationToken);
+                    .SetProperty(c => c.AccessTokenRenewedAt, now)
+                    .SetProperty(c => c.AccessTokenExpiresAt, expiresAt)
+                    .SetProperty(c => c.AccessTokenRejectedAt, (DateTime?)null)
+                    .SetProperty(c => c.UpdatedAt, now), cancellationToken);
             if (updated == 0) throw new ConflictException("Instagram webhook verification is required before saving the account.");
         }
         catch (PostgresException ex) when (ex.SqlState == PostgresErrorCodes.UniqueViolation)
@@ -54,6 +58,33 @@ public sealed class InstagramConnectionRepository(ApplicationDbContext db) : IIn
             throw new ConflictException("This Instagram account is already connected to another Parrot account.");
         }
     }
+
+    public async Task<IReadOnlyList<InstagramConnection>> GetDueForTokenRenewalAsync(DateTime renewBefore, int take,
+        CancellationToken cancellationToken = default) =>
+        await db.InstagramConnections.AsNoTracking()
+            .Where(c => c.DisabledAt == null && c.AccessTokenEncrypted != null && c.AccessTokenRejectedAt == null
+                && (c.AccessTokenRenewedAt ?? c.UpdatedAt) <= renewBefore)
+            .OrderBy(c => c.AccessTokenRenewedAt ?? c.UpdatedAt)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
+    public async Task<bool> SaveRenewedTokenAsync(Guid id, string previousEncryptedToken, string encryptedAccessToken, DateTime renewedAt,
+        DateTime expiresAt, CancellationToken cancellationToken = default) =>
+        await db.InstagramConnections
+            .Where(c => c.Id == id && c.DisabledAt == null && c.AccessTokenEncrypted == previousEncryptedToken)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.AccessTokenEncrypted, encryptedAccessToken)
+                .SetProperty(c => c.AccessTokenRenewedAt, renewedAt)
+                .SetProperty(c => c.AccessTokenExpiresAt, expiresAt)
+                .SetProperty(c => c.UpdatedAt, renewedAt), cancellationToken) == 1;
+
+    // Only the token that was refused: one pasted meanwhile is not marked.
+    public async Task MarkTokenRejectedAsync(Guid id, string encryptedAccessToken, DateTime rejectedAt, CancellationToken cancellationToken = default) =>
+        await db.InstagramConnections
+            .Where(c => c.Id == id && c.AccessTokenEncrypted == encryptedAccessToken && c.AccessTokenRejectedAt == null)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(c => c.AccessTokenRejectedAt, rejectedAt)
+                .SetProperty(c => c.UpdatedAt, rejectedAt), cancellationToken);
 
     public async Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret, CancellationToken cancellationToken = default)
     {

@@ -82,6 +82,8 @@ PUT  /api/instagram/setup/app-secret    {"appSecret":"<32 hex>"}
 POST /api/instagram/setup/disable
 ```
 
+**Access tokens last 60 days.** Parrot renews each one when it is 30 days old (`GET graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token`, a background job in the API every 6 hours), which gives another 60. A token Instagram refuses (error 190: revoked, or it lapsed while Parrot was down) is marked, a reply refused with 190 marks it too, and the Instagram card shows **Needs attention** until the owner pastes a new token. The renewal call carries the token in its URL as Meta documents it, so that HTTP client logs no requests. No Instagram app ID is needed: renewal uses only the token.
+
 Settings: `Instagram__WebhookBaseUrl` (public HTTPS base, required), `Instagram__SignatureMode` (`Enforce` by default), `Instagram__ApiVersion` (`v25.0`), `Instagram__AppSecret` (only for connections through Parrot's own app later).
 
 ## Duplicate protection and failure behavior

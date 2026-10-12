@@ -37,6 +37,9 @@ public class ChannelsState
     public const string DisabledAttention = "This connection is disabled. Contact support to continue.";
 
     /// <summary>Parrot's copy for a TikTok connection whose access has lapsed.</summary>
+    /// <summary>Parrot's copy for an Instagram connection whose access token stopped working.</summary>
+    public const string InstagramNewTokenAttention = "Instagram stopped accepting the access token. Paste a new one to keep replying.";
+
     public const string TikTokReauthorizeAttention = "TikTok access has expired. Authorize TikTok again to keep replying.";
 
     public bool IsLoading { get; private set; }
@@ -238,6 +241,8 @@ public class ChannelsState
         var setup = InstagramSetup;
         var connected = setup is not null && setup.WebhookVerified && setup.HasAccessToken
             && !string.IsNullOrEmpty(setup.AccountId) && !_dismissed.Contains(info.Id);
+        // Messages still arrive, but replies fail until a new token is pasted.
+        var lapsed = connected && setup!.NeedsNewToken;
 
         return new BusinessChannel
         {
@@ -246,9 +251,10 @@ public class ChannelsState
             Description = info.Description,
             Requirement = info.Requirement,
             GuidedMinutes = info.GuidedMinutes,
-            Status = connected ? ChannelStatus.Connected : ChannelStatus.NotConnected,
+            Status = lapsed ? ChannelStatus.NeedsAttention : connected ? ChannelStatus.Connected : ChannelStatus.NotConnected,
             AccountName = string.IsNullOrEmpty(setup?.Username) ? null : "@" + setup.Username,
-            Setup = connected ? new ChannelSetupState() : Setup(info.Id)
+            Attention = lapsed ? InstagramNewTokenAttention : null,
+            Setup = connected && !lapsed ? new ChannelSetupState() : Setup(info.Id)
         };
     }
 
