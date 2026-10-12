@@ -106,12 +106,12 @@ public class FacebookPipelineTests : IAsyncLifetime
     private InboundMessageProcessor Worker()
     {
         _ = new MongoMessageRepository(_client!, Settings,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
         return new InboundMessageProcessor(
             new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
             new MongoStoredMessageStore(_client!, Settings),
             new MongoConversationSequence(_client!, Settings),
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
             Mock.Of<IConnectionMessageReceipt>(),
             new Persisted(_persisted),
             NullLogger<InboundMessageProcessor>.Instance);
@@ -163,7 +163,7 @@ public class FacebookPipelineTests : IAsyncLifetime
         InboundMessageProcessor worker = Worker();
         foreach (InboundMessage message in await ReceiveWebhookAsync()) await worker.ProcessAsync(message, CancellationToken.None);
         MongoMessageRepository repository = new(_client!, Settings,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
 
         ReceivedMessageSummary? found = await repository.FindFirstAsync(ConnectionId, Owner, since);
 
@@ -179,7 +179,7 @@ public class FacebookPipelineTests : IAsyncLifetime
     {
         DateTime since = DateTime.UtcNow.AddSeconds(-5);
         MongoMessageRepository repository = new(_client!, Settings,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
         await Messages.InsertOneAsync(new FacebookMessageDocument
         {
             MessageId = "outgoing:reply", Platform = MessagingPlatform.Facebook, ExternalAccountId = PageId,

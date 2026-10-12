@@ -43,6 +43,40 @@ public class IntegrationsService : IIntegrationsService
     public Task DisableFacebookAsync(string token, CancellationToken cancellationToken = default) =>
         SendCommandAsync(HttpMethod.Post, "api/facebook/setup/disable", token, null, cancellationToken);
 
+    public Task<TikTokSetup> GetTikTokSetupAsync(string token, CancellationToken cancellationToken = default) =>
+        SendAsync<TikTokSetup>(HttpMethod.Get, "api/tiktok/setup", token, null, cancellationToken);
+
+    // TikTok checks the App ID and secret when the webhook is registered, and the API passes its reason on in a
+    // 400. That reason is what the owner needs to fix a mistyped pair, so it is kept in the exception's message.
+    public async Task SaveTikTokAppAsync(string appId, string appSecret, string token, CancellationToken cancellationToken = default)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Put, "api/tiktok/setup/app");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = JsonContent.Create(new { AppId = appId, AppSecret = appSecret });
+        using var response = await _httpClient.SendAsync(request, cancellationToken);
+        if (response.IsSuccessStatusCode) return;
+
+        string? reason = null;
+        if ((int)response.StatusCode is >= 400 and < 500)
+        {
+            try
+            {
+                using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+                if (json.RootElement.TryGetProperty("message", out var message) && message.ValueKind == System.Text.Json.JsonValueKind.String)
+                    reason = message.GetString();
+            }
+            catch (System.Text.Json.JsonException) { }
+        }
+
+        throw new HttpRequestException(reason ?? "The request failed.", null, response.StatusCode);
+    }
+
+    public Task<TikTokAuthorization> GetTikTokAuthorizationAsync(string token, CancellationToken cancellationToken = default) =>
+        SendAsync<TikTokAuthorization>(HttpMethod.Get, "api/tiktok/setup/authorize", token, null, cancellationToken);
+
+    public Task DisableTikTokAsync(string token, CancellationToken cancellationToken = default) =>
+        SendCommandAsync(HttpMethod.Post, "api/tiktok/setup/disable", token, null, cancellationToken);
+
     public Task<InstagramWebhookSetup> GetInstagramSetupAsync(string token, CancellationToken cancellationToken = default) =>
         SendAsync<InstagramWebhookSetup>(HttpMethod.Get, "api/instagram/setup", token, null, cancellationToken);
 
@@ -68,7 +102,8 @@ public class IntegrationsService : IIntegrationsService
         try
         {
             using var json = System.Text.Json.JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
-            if (json.RootElement.TryGetProperty("message", out var message)) reason = message.GetString();
+            if (json.RootElement.TryGetProperty("message", out var message) && message.ValueKind == System.Text.Json.JsonValueKind.String)
+                reason = message.GetString();
         }
         catch (System.Text.Json.JsonException) { }
         throw new HttpRequestException(reason, null, response.StatusCode);

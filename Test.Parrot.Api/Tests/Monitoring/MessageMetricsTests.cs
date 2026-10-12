@@ -83,7 +83,7 @@ public class MessageMetricsTests : IDisposable
             new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
             store.Object,
             sequence.Object,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
             Mock.Of<IConnectionMessageReceipt>(),
             Mock.Of<IMessagePersistedPublisher>(),
             NullLogger<InboundMessageProcessor>.Instance);
@@ -120,8 +120,8 @@ public class MessageMetricsTests : IDisposable
     [Fact]
     public async Task A_message_already_stored_is_deduplicated_not_persisted()
     {
-        await Processor().ProcessAsync(Inbound(), CancellationToken.None);
-        await Processor().ProcessAsync(Inbound(), CancellationToken.None);
+        await Processor().ProcessAsync(Inbound() with { ReceivedAt = DateTime.UtcNow.AddSeconds(-2) }, CancellationToken.None);
+        await Processor().ProcessAsync(Inbound() with { ReceivedAt = DateTime.UtcNow }, CancellationToken.None);
 
         Assert.Equal(1, Sum("messages_persisted_total"));
         Assert.Equal(1, Sum("messages_deduplicated_total"));

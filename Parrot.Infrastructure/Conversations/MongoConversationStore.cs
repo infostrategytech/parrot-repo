@@ -46,12 +46,7 @@ public sealed class MongoConversationStore : IConversationStore
             return new ConversationSummary(d.ConnectionId!.Value, d.From, name,
                 d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt)
             {
-                Channel = d.Platform switch
-                {
-                    MessagingPlatform.Facebook => "facebook",
-                    MessagingPlatform.Instagram => "instagram",
-                    _ => "whatsapp",
-                },
+                Channel = d.Platform.ToString().ToLowerInvariant(),
             };
         }).ToList();
     }

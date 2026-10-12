@@ -15,7 +15,7 @@ namespace Parrot.Api.Controllers;
 [Monitor(Area = "conversations")]
 public sealed class ConversationsController(IConversationStore store, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
-    IInstagramConnectionRepository instagram) : ControllerBase
+    ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram) : ControllerBase
 {
     private string Owner => User.FindFirstValue(ClaimTypes.NameIdentifier)
         ?? throw new UnauthorizedException("Sign in to continue.");
@@ -28,15 +28,16 @@ public sealed class ConversationsController(IConversationStore store, Conversati
     public async Task<IActionResult> Messages(Guid connectionId, [FromQuery] string sender,
         [FromQuery] string? before, CancellationToken cancellationToken)
     {
-        // A thread can be on a WhatsApp number, a Facebook Page or an Instagram account.
+        // A thread can be on a WhatsApp number, a Facebook Page, the TikTok account or an Instagram account.
         if (await connections.GetByOwnerAndIdAsync(Owner, connectionId) is null
             && !await facebook.IsOwnedByAsync(connectionId, Owner, cancellationToken)
+            && (await tikTokConnections.GetByOwnerAsync(Owner, cancellationToken))?.Id != connectionId
             && !await instagram.IsOwnedByAsync(connectionId, Owner, cancellationToken))
             throw new NotFoundException("Connection not found.");
         return Ok(await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken));
     }
 
-    [Monitor("conversations.send", SlowMs = 3000)] // waits on the WhatsApp Cloud API
+    [Monitor("conversations.send", SlowMs = 3000)] // waits on the WhatsApp Cloud API or TikTok
     [HttpPost("{connectionId:guid}/messages")]
     public async Task<IActionResult> Send(Guid connectionId, [FromQuery] string sender,
         [FromBody] SendReplyRequest request, CancellationToken cancellationToken) =>

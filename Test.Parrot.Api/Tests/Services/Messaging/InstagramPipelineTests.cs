@@ -107,7 +107,7 @@ public class InstagramPipelineTests : IAsyncLifetime
 
     private InboundMessageProcessor Worker()
     {
-        MessageDocumentMapperFactory mappers = new([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]);
+        MessageDocumentMapperFactory mappers = new([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]);
         _ = new MongoMessageRepository(_client!, Settings, mappers);
         return new InboundMessageProcessor(
             new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder(), new InstagramInboundDecoder()]),
@@ -185,7 +185,7 @@ public class InstagramPipelineTests : IAsyncLifetime
         await DeliverAsync();
 
         MongoMessageRepository repository = new(_client!, Settings,
-            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
+            new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
         Assert.Equal("instagram:ig_text", (await repository.FindFirstAsync(ConnectionId, Owner, since))?.MessageId);
         ConversationSummary summary = Assert.Single(await new MongoConversationStore(_client!, Settings).ListAsync(Owner, 0, 50, CancellationToken.None));
         Assert.Equal("instagram", summary.Channel);

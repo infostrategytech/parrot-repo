@@ -12,7 +12,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     IWhatsAppSender sender, IWhatsAppTokenProtector protector, IConversationSequence sequence,
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
     IFacebookCredentialProtector facebookProtector, IInstagramConnectionRepository instagramConnections,
-    IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector)
+    IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector, TikTokReplyService? tikTok = null)
 {
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
@@ -20,11 +20,15 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     // Instagram counts UTF-8 bytes, not characters.
     private const int InstagramMaxBytes = 1000;
 
-    // A reply goes out on whichever channel the thread is on: a WhatsApp number, a Facebook Page or
-    // an Instagram account.
+    // A reply goes out on whichever channel the thread is on: a WhatsApp number, a Facebook Page,
+    // TikTok or an Instagram account.
     public async Task<ConversationMessage> SendAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
     {
+        // A TikTok customer's id is not a phone number, so the reply is routed before WhatsApp's checks.
+        if (tikTok is not null && await tikTok.FindConnectionAsync(owner, connectionId, ct) is { } tikTokConnection)
+            return await tikTok.SendAsync(tikTokConnection, recipient, request, ct);
+
         if (request.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 4096
             || recipient.Length is < 1 or > 32 || !recipient.All(char.IsAsciiDigit))
             throw new ValidationException("Supply a request ID, a numeric recipient and text of 1–4096 characters.");
@@ -177,8 +181,8 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         }, ct);
     }
 
-    // The customer's latest message: it must be within 24 hours (WhatsApp's, Messenger's and Instagram's
-    // rule for a free-form reply), and the reply joins its conversation. The reply takes that message's
+    // The customer's latest message: it must be within 24 hours (WhatsApp's and Messenger's rule
+    // for a free-form reply), and the reply joins its conversation. The reply takes that message's
     // key and business id rather than rebuilding them from the connection, whose number was typed
     // in at setup and may be written differently. A message stored before the worker has no key;
     // the reply then has none either.
@@ -261,7 +265,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
         doc.TextBody ?? $"[{doc.Type} message]", doc.Outgoing, doc.SendStatus, doc.ReceivedAt);
 
-    private static ConversationMessage Match(MessageDocument doc, Guid connection, string recipient, string text)
+    internal static ConversationMessage Match(MessageDocument doc, Guid connection, string recipient, string text)
     {
         if (doc.ConnectionId != connection || doc.From != recipient || doc.TextBody != text)
             throw new ConflictException("This request ID has already been used for a different message.");

@@ -76,7 +76,7 @@ public class ConversationSequenceTests : IAsyncLifetime
     {
         // The repository creates the indexes.
         _ = new MongoMessageRepository(_client!, Settings, new MessageDocumentMapperFactory(
-            [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
+            [new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]));
         return _client!.GetDatabase(_database).GetCollection<MessageDocument>("messages");
     }
 

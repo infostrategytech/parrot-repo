@@ -12,8 +12,8 @@ using Parrot.Infrastructure.Data;
 namespace Parrot.Infrastructure.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20261012100012_AddInstagramConnections")]
-    partial class AddInstagramConnections
+    [Migration("20261008142825_AddTikTokConnection")]
+    partial class AddTikTokConnection
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -387,7 +387,7 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("FeatureFlags");
                 });
 
-            modelBuilder.Entity("Parrot.Domain.Entities.InstagramConnection", b =>
+            modelBuilder.Entity("Parrot.Domain.Entities.TikTokConnection", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -396,11 +396,16 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<string>("AccessTokenEncrypted")
                         .HasColumnType("text");
 
-                    b.Property<string>("AccountId")
+                    b.Property<DateTime?>("AccessTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("AppId")
+                        .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
                     b.Property<string>("AppSecretEncrypted")
+                        .IsRequired()
                         .HasColumnType("text");
 
                     b.Property<DateTime>("CreatedAt")
@@ -411,45 +416,48 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("DisabledAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
                     b.Property<string>("OwnerUserId")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("RefreshTokenEncrypted")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("RefreshTokenExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("TikTokOpenId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
 
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
                         .HasDefaultValueSql("CURRENT_TIMESTAMP");
 
-                    b.Property<string>("Username")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("VerifyTokenEncrypted")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("WebhookIdentifier")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.Property<DateTime?>("WebhookVerifiedAt")
-                        .HasColumnType("timestamp with time zone");
-
                     b.HasKey("Id");
-
-                    b.HasIndex("AccountId")
-                        .IsUnique()
-                        .HasFilter("\"AccountId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
 
                     b.HasIndex("OwnerUserId")
                         .IsUnique()
                         .HasFilter("\"DisabledAt\" IS NULL");
 
+                    b.HasIndex("TikTokOpenId")
+                        .IsUnique()
+                        .HasFilter("\"TikTokOpenId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+
                     b.HasIndex("WebhookIdentifier")
                         .IsUnique();
 
-                    b.ToTable("InstagramConnections");
+                    b.ToTable("TikTokConnections");
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.WhatsAppConnection", b =>
@@ -587,7 +595,7 @@ namespace Parrot.Infrastructure.Migrations
                         .IsRequired();
                 });
 
-            modelBuilder.Entity("Parrot.Domain.Entities.InstagramConnection", b =>
+            modelBuilder.Entity("Parrot.Domain.Entities.TikTokConnection", b =>
                 {
                     b.HasOne("Parrot.Application.Models.ApplicationUser", null)
                         .WithMany()

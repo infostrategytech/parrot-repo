@@ -13,6 +13,10 @@ public interface IIntegrationsService
     Task ConfigureWhatsAppAccountAsync(Guid id, string businessAccountId, string phoneNumberId, string token, CancellationToken cancellationToken = default);
     Task DisableWhatsAppAsync(Guid id, string token, CancellationToken cancellationToken = default);
     Task DisableFacebookAsync(string token, CancellationToken cancellationToken = default);
+    Task<TikTokSetup> GetTikTokSetupAsync(string token, CancellationToken cancellationToken = default);
+    Task SaveTikTokAppAsync(string appId, string appSecret, string token, CancellationToken cancellationToken = default);
+    Task<TikTokAuthorization> GetTikTokAuthorizationAsync(string token, CancellationToken cancellationToken = default);
+    Task DisableTikTokAsync(string token, CancellationToken cancellationToken = default);
     Task<InstagramWebhookSetup> GetInstagramSetupAsync(string token, CancellationToken cancellationToken = default);
     Task SaveInstagramAccountAsync(string accessToken, string token, CancellationToken cancellationToken = default);
     Task SaveInstagramAppSecretAsync(string appSecret, string token, CancellationToken cancellationToken = default);

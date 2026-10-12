@@ -152,6 +152,46 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
     };
 }
 
+public sealed class TikTokInboundDecoder : IInboundMessageDecoder
+{
+    public MessagingPlatform Source => MessagingPlatform.TikTok;
+
+    public IncomingMessage Decode(InboundMessage inbound)
+    {
+        string messageId = InboundMessageDecoders.ProviderId(inbound, "tiktok");
+        if (string.IsNullOrWhiteSpace(inbound.Data)) throw new UnprocessableMessageException("empty_body");
+        TikTokWebhookEvent tikTokEvent = TikTokWebhookEvents.Parse(inbound.Data)
+            ?? throw new UnprocessableMessageException("body_not_json");
+
+        // The webhook publishes only im_receive_msg, each with the id it is stored under.
+        if (tikTokEvent.Name != "im_receive_msg" || tikTokEvent.BusinessOpenId is not { } business
+            || tikTokEvent.Message is not { } message || message.MessageId != messageId)
+            throw new UnprocessableMessageException("message_not_in_body");
+
+        return new IncomingMessage
+        {
+            ConnectionId = inbound.ConnectionId,
+            OwnerUserId = inbound.OwnerUserId,
+            MessageId = inbound.MessageId,
+            Platform = MessagingPlatform.TikTok,
+            ExternalAccountId = business,
+            From = message.SenderId,
+            Timestamp = message.Timestamp,
+            // TikTok sends milliseconds.
+            SentAt = message.SentAt ?? inbound.SentAt,
+            Type = message.Type,
+            TextBody = message.Text,
+            AttachmentUrls = message.ShareUrl is { Length: > 0 } url ? [url] : null,
+            ChannelId = business,
+            // The account's name comes from the connection, not the webhook body.
+            ChannelDisplayName = string.Empty,
+            ContactName = message.SenderName,
+            ExternalConversationId = message.ConversationId,
+            ReceivedAt = inbound.ReceivedAt,
+        };
+    }
+}
+
 /// <summary>Instagram DMs have Messenger's shape; entry.id is the business's professional account.</summary>
 public sealed class InstagramInboundDecoder : IInboundMessageDecoder
 {

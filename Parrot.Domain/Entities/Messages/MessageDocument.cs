@@ -10,7 +10,7 @@ namespace Parrot.Domain.Entities.Messages;
 // BsonIgnoreExtraElements is inherited so that an older process can still read documents written by a
 // newer one — the API and the message worker deploy independently and both read this collection.
 [BsonDiscriminator(Required = true)]
-[BsonKnownTypes(typeof(WhatsAppMessageDocument), typeof(FacebookMessageDocument), typeof(InstagramMessageDocument))]
+[BsonKnownTypes(typeof(WhatsAppMessageDocument), typeof(FacebookMessageDocument), typeof(TikTokMessageDocument), typeof(InstagramMessageDocument))]
 [BsonIgnoreExtraElements(Inherited = true)]
 public abstract class MessageDocument
 {

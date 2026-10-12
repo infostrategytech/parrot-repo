@@ -11,6 +11,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<WhatsAppConnection> WhatsAppConnections => Set<WhatsAppConnection>();
     public DbSet<FacebookConnection> FacebookConnections => Set<FacebookConnection>();
+    public DbSet<TikTokConnection> TikTokConnections => Set<TikTokConnection>();
     public DbSet<InstagramConnection> InstagramConnections => Set<InstagramConnection>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
 
@@ -103,6 +104,26 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .HasFilter("\"DisabledAt\" IS NULL");
             entity.HasIndex(c => c.PageId).IsUnique()
                 .HasFilter("\"PageId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+        });
+
+        builder.Entity<TikTokConnection>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.OwnerUserId).IsRequired();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
+            entity.Property(c => c.AppId).HasMaxLength(64).IsRequired();
+            entity.Property(c => c.AppSecretEncrypted).IsRequired();
+            entity.Property(c => c.TikTokOpenId).HasMaxLength(128);
+            entity.Property(c => c.DisplayName).HasMaxLength(128);
+            entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
+            entity.HasIndex(c => c.OwnerUserId).IsUnique()
+                .HasFilter("\"DisabledAt\" IS NULL");
+            entity.HasIndex(c => c.TikTokOpenId).IsUnique()
+                .HasFilter("\"TikTokOpenId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
         });
 
         builder.Entity<InstagramConnection>(entity =>

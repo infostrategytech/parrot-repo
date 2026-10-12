@@ -52,6 +52,20 @@ public class RawBodyMiddlewareTests
         Assert.Contains(logger.Messages, m => m.Contains("Facebook webhook completed"));
     }
 
+    // TikTok's connection reference is the last path segment, so the log line must not carry it.
+    [Fact]
+    public async Task ATikTokWebhookIsLoggedWithoutItsConnectionReference()
+    {
+        string reference = new('a', 64);
+
+        CapturingLogger logger = await RunAsync(CreateContext($"/api/webhooks/tiktok/{reference}"));
+
+        string line = Assert.Single(logger.Messages, m => m.Contains("TikTok webhook received"));
+        Assert.DoesNotContain(reference, line);
+        Assert.Contains("HasConnectionReference=True", line);
+        Assert.DoesNotContain(logger.Messages, m => m.Contains(reference));
+    }
+
     // Payloads carry what customers wrote, so they reach the logs only while
     // body logging is switched on to diagnose a provider.
     [Theory]

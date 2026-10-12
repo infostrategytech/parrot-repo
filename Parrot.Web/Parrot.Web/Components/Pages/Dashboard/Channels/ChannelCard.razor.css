@@ -45,8 +45,9 @@
 .channel-whatsapp .channel-card__mark { background: #22a968; }
 .channel-instagram .channel-card__mark { background: #c63886; }
 .channel-facebook .channel-card__mark { background: #1877f2; }
-/* X is black on white and white on black, so its disc follows the text colour. */
-.channel-x .channel-card__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
+/* X and TikTok follow the text colour, so their discs stay visible in dark and light mode. */
+.channel-x .channel-card__mark,
+.channel-tiktok .channel-card__mark { background: var(--colors-text-primary); color: var(--colors-surface-card); }
 
 .channel-card__copy {
   display: grid;

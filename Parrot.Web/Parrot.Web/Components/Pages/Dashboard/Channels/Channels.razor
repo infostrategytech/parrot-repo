@@ -53,7 +53,7 @@
             @foreach (var channel in _data.Channels)
             {
                 <ChannelCard Channel="channel"
-                             ActionDisabled="@(_busy || channel.Status == ChannelStatus.NeedsAttention)"
+                             ActionDisabled="@(_busy || (channel.Status == ChannelStatus.NeedsAttention && channel.Id != ChannelId.TikTok))"
                              OnOpen="() => OpenSetupAsync(channel)"
                              OnDisconnect="() => AskDisconnect(channel)"
                              OnStartOver="() => AskRestart(channel)" />
@@ -185,6 +185,18 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     </div>
 }
 
+@if (Active is { } tikTok && _view == SetupView.TikTokManual)
+{
+    <div class="channels channels--setup">
+        <TikTokManualSetup Channel="tikTok"
+                           StartAtTest="_tikTokStartAtTest"
+                           InitialError="@_tikTokError"
+                           OnExit="CloseSetup"
+                           OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                           OnSetUpAgent="SetUpAgent" />
+    </div>
+}
+
 @* The provider window sits outside the page wrapper, like the route choice:
    the wrapper eases in on arrival (app.css, page-enter), and a full-screen
    window inside a moving parent is drawn against that parent until the move
@@ -309,6 +321,17 @@ else if (Active is { } flow && _view == SetupView.Flow)
     /// </summary>
     [SupplyParameterFromQuery(Name = "for")] public string? For { get; set; }
 
+    /// <summary>
+    /// ?tiktok=connected, cancelled or failed (with ?reason=): TikTok sent the owner back from its consent screen.
+    /// The setup opens again where they left it, at the test message once connected.
+    /// </summary>
+    [SupplyParameterFromQuery(Name = "tiktok")] public string? TikTokOutcome { get; set; }
+
+    [SupplyParameterFromQuery(Name = "reason")] public string? TikTokReason { get; set; }
+
+    private bool _tikTokStartAtTest;
+    private string? _tikTokError;
+
     private EventCallback SetUpAgent => For == "agent"
         ? EventCallback.Factory.Create(this, () => Nav.NavigateTo("/ai-operations?new=1"))
         : default;
@@ -355,7 +378,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
     /// <summary>When the test step was reached, so the check only counts messages sent after it.</summary>
     private DateTimeOffset? _testStartedAt;
 
-    private enum SetupView { None, Choice, Preparation, Flow, Guided, FacebookManual, InstagramManual }
+    private enum SetupView { None, Choice, Preparation, Flow, Guided, FacebookManual, TikTokManual, InstagramManual }
 
     // The choice of how to connect shows whenever there is more than one way
     // in: several routes, or a route and a manual setup. With one way only,
@@ -398,6 +421,17 @@ else if (Active is { } flow && _view == SetupView.Flow)
         {
             await OpenSetupAsync(channel);
         }
+        else if (TikTokOutcome is { Length: > 0 } outcome && _data?.Channels.FirstOrDefault(c => c.Id == ChannelId.TikTok) is { } tikTokChannel)
+        {
+            _tikTokStartAtTest = outcome == "connected";
+            _tikTokError = outcome == "failed"
+                ? TikTokReason is { Length: > 0 } reason ? reason : "TikTok could not be connected. Try again."
+                : outcome == "cancelled" ? "TikTok was not authorized. Select Authorize with TikTok to try again." : null;
+            await OpenSetupAsync(tikTokChannel);
+
+            // The outcome has been read; keep a refresh from reading it again.
+            Nav.NavigateTo("/dashboard/channels", replace: true);
+        }
         StateHasChanged();
     }
 
@@ -418,6 +452,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
         {
             ChannelsState.SetWhatsApp(null);
             ChannelsState.SetFacebook(null);
+            ChannelsState.SetTikTok(null);
             ChannelsState.SetInstagram(null);
             Refresh();
             _loading = false;
@@ -450,6 +485,18 @@ else if (Active is { } flow && _view == SetupView.Flow)
             catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
             catch (HttpRequestException) { _error ??= "We couldn't load Facebook. Try again."; }
             catch (System.Text.Json.JsonException) { _error ??= "We couldn't load Facebook. Try again."; }
+
+            try
+            {
+                var tikTok = await IntegrationsService.GetTikTokSetupAsync(token, _lifetime.Token);
+                if (_disposed || AuthState.CurrentUser?.Token != token) return;
+                ChannelsState.SetTikTok(tikTok);
+            }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+            // Not configured on the API server yet: the card already says "Not connected".
+            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
+            catch (HttpRequestException) { _error ??= "We couldn't load TikTok. Try again."; }
+            catch (System.Text.Json.JsonException) { _error ??= "We couldn't load TikTok. Try again."; }
 
             try
             {
@@ -508,6 +555,13 @@ else if (Active is { } flow && _view == SetupView.Flow)
         _mode = channel.Setup.Mode;
         _stage = channel.Setup.Stage;
         _failure = channel.Setup.Failure;
+
+        // TikTok has only its own manual setup, which reopens where it stopped (the API knows how far it got).
+        if (channel.Id == ChannelId.TikTok)
+        {
+            _view = SetupView.TikTokManual;
+            return;
+        }
 
         // Facebook's and Instagram's manual setups reopen where they stopped (the API knows how far they got).
         if (channel.Id is ChannelId.Facebook or ChannelId.Instagram && channel.Setup.Mode == ChannelSetupMode.Guided)
@@ -586,6 +640,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
         _appSecret = null;
         _error = null;
         _missed = false;
+        _tikTokStartAtTest = false;
+        _tikTokError = null;
         if (Resume is not null) Nav.NavigateTo("/dashboard/channels");
     }
 
@@ -1036,8 +1092,8 @@ else if (Active is { } flow && _view == SetupView.Flow)
     }
 
     /// <summary>
-    /// WhatsApp, Facebook and Instagram are disabled on Parrot's backend, so
-    /// their webhooks stop at once; X is disconnected in state.
+    /// WhatsApp, Facebook, TikTok and Instagram are disabled on Parrot's backend,
+    /// so their webhooks stop at once; the others are disconnected in state.
     /// </summary>
     private async Task DisconnectAsync()
     {
@@ -1047,8 +1103,9 @@ else if (Active is { } flow && _view == SetupView.Flow)
 
         var whatsApp = channel.Id == ChannelId.Whatsapp ? ChannelsState.WhatsAppConnection : null;
         var facebook = channel.Id == ChannelId.Facebook && ChannelsState.FacebookSetup is not null;
+        var tikTok = channel.Id == ChannelId.TikTok && ChannelsState.TikTokSetup is not null;
         var instagram = channel.Id == ChannelId.Instagram && ChannelsState.InstagramSetup is not null;
-        if (whatsApp is not null || facebook || instagram)
+        if (whatsApp is not null || facebook || tikTok || instagram)
         {
             if (_busy) return;
             _busy = true;
@@ -1057,10 +1114,12 @@ else if (Active is { } flow && _view == SetupView.Flow)
                 var token = AuthState.CurrentUser?.Token ?? "";
                 if (whatsApp is not null)
                     await IntegrationsService.DisableWhatsAppAsync(whatsApp.Id, token, _lifetime.Token);
-                else if (facebook)
-                    await IntegrationsService.DisableFacebookAsync(token, _lifetime.Token);
-                else
+                else if (tikTok)
+                    await IntegrationsService.DisableTikTokAsync(token, _lifetime.Token);
+                else if (instagram)
                     await IntegrationsService.DisableInstagramAsync(token, _lifetime.Token);
+                else
+                    await IntegrationsService.DisableFacebookAsync(token, _lifetime.Token);
                 ChannelsState.DisconnectChannel(key);
                 _pendingDisconnect = null;
                 await LoadAsync();
