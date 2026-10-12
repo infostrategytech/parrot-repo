@@ -23,7 +23,14 @@ public sealed record InstagramWebhookSetup(
     string? AccountId,
     string? Username,
     bool HasAccessToken,
-    bool HasAppSecret);
+    bool HasAppSecret)
+{
+    /// <summary>When the saved token runs out; Parrot renews it well before then.</summary>
+    public DateTime? AccessTokenExpiresAt { get; init; }
+
+    /// <summary>Instagram refused the saved token, or it ran out: replies stop until a new one is pasted.</summary>
+    public bool NeedsNewToken { get; init; }
+}
 
 public sealed record FacebookWebhookSetup(
     Guid ConnectionId,

@@ -177,6 +177,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             }
             catch (InstagramRejectedException ex)
             {
+                // 190: the token itself is no good (revoked, or it lapsed). The Channels card asks for a new one.
+                if (ex.MetaErrorCode == "190")
+                    await instagramConnections.MarkTokenRejectedAsync(account.Id, account.AccessTokenEncrypted!, DateTime.UtcNow, timeout);
                 return (null, ex.MetaErrorCode ?? "unknown");
             }
         }, ct);

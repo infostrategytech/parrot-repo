@@ -44,7 +44,10 @@ public sealed class InstagramConnectionService(
             $"{baseUrl}/api/webhooks/instagram?ref={connection.WebhookIdentifier}", verifyToken,
             connection.WebhookVerifiedAt.HasValue, connection.AccountId, connection.Username,
             !string.IsNullOrEmpty(connection.AccessTokenEncrypted),
-            !string.IsNullOrEmpty(connection.AppSecretEncrypted));
+            !string.IsNullOrEmpty(connection.AppSecretEncrypted),
+            connection.AccessTokenExpiresAt,
+            NeedsNewToken: !string.IsNullOrEmpty(connection.AccessTokenEncrypted)
+                && (connection.AccessTokenRejectedAt is not null || connection.AccessTokenExpiresAt <= DateTime.UtcNow));
     }
 
     public async Task<bool> VerifyWebhookAsync(string identifier, string mode, string verifyToken,
@@ -97,8 +100,9 @@ public sealed class InstagramConnectionService(
             throw new ValidationException(ex.Message);
         }
 
+        // A token from the App Dashboard lasts 60 days; the renewer keeps it going from here.
         await repository.SaveAccountAsync(connection.Id, ownerUserId, account.AccountId, account.Username,
-            protector.Protect(token), cancellationToken);
+            protector.Protect(token), DateTime.UtcNow + InstagramTokenRenewer.Lifetime, cancellationToken);
     }
 
     // Allowed before verification, so it can be saved alongside the callback URL in one sitting.

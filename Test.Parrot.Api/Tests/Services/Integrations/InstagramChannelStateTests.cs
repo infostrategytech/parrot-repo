@@ -52,4 +52,19 @@ public class InstagramChannelStateTests
         state.SetInstagram(Setup());
         Assert.Equal(ChannelStatus.Connected, Card(state).Status);
     }
+
+    // Messages still arrive, but replies fail: the card says so, and its button reopens the token step.
+    [Fact]
+    public void ATokenInstagramStoppedAccepting_NeedsAttention_AndReopensAtTheTokenStep()
+    {
+        ChannelsState state = new();
+        state.SetInstagram(Setup() with { NeedsNewToken = true });
+
+        BusinessChannel card = Card(state);
+        Assert.Equal(ChannelStatus.NeedsAttention, card.Status);
+        Assert.Equal(ChannelsState.InstagramNewTokenAttention, card.Attention);
+        Assert.Equal("@omaskitchen", card.AccountName);
+        Assert.Equal(ChannelSetupMode.Guided, card.Setup.Mode);
+        Assert.Equal(ManualSetupStage.Credentials, card.Setup.ManualStage);
+    }
 }

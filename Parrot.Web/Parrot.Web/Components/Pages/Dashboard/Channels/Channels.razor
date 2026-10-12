@@ -53,7 +53,7 @@
             @foreach (var channel in _data.Channels)
             {
                 <ChannelCard Channel="channel"
-                             ActionDisabled="@(_busy || (channel.Status == ChannelStatus.NeedsAttention && channel.Id != ChannelId.TikTok))"
+                             ActionDisabled="@(_busy || (channel.Status == ChannelStatus.NeedsAttention && channel.Id is not (ChannelId.TikTok or ChannelId.Instagram)))"
                              OnOpen="() => OpenSetupAsync(channel)"
                              OnDisconnect="() => AskDisconnect(channel)"
                              OnStartOver="() => AskRestart(channel)" />

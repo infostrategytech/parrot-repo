@@ -12,7 +12,11 @@ public sealed record InstagramSetupResponse(
     string? AccountId,
     string? Username,
     bool HasAccessToken,
-    bool HasAppSecret);
+    bool HasAppSecret,
+    // When the saved token runs out; Parrot renews it well before then.
+    DateTime? AccessTokenExpiresAt = null,
+    // Instagram refused the saved token, or it ran out: replies stop until a new one is pasted.
+    bool NeedsNewToken = false);
 
 // The Instagram User access token from the business's own Meta app (Instagram > API setup with
 // Instagram login > Generate token). Parrot reads the account from it, so no id is typed in.
