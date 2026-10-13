@@ -24,13 +24,11 @@ public sealed class MessagePersistedRouter(
     {
         StoredMessage message = persisted.Data;
         long started = Stopwatch.GetTimestamp();
-        using IDisposable? scope = logger.BeginScope(new Dictionary<string, object?>
-        {
-            ["CorrelationId"] = persisted.CorrelationId,
-            ["MessageId"] = message.MessageId,
-            ["Source"] = persisted.Source,
-            ["ConnectionId"] = message.ConnectionId,
-        });
+        // A templated scope, not a dictionary: the console formatter prints a dictionary as its type name,
+        // which left every realtime line without the message it was about.
+        using IDisposable? scope = logger.BeginScope(
+            "MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} ConversationKey={ConversationKey} Sequence={Sequence} CorrelationId={CorrelationId}",
+            message.MessageId, persisted.Source, message.ConnectionId, message.ConversationKey, message.Sequence, persisted.CorrelationId);
 
         if (string.IsNullOrEmpty(message.OwnerUserId))
         {
@@ -51,8 +49,10 @@ public sealed class MessagePersistedRouter(
 
         if (connections.Count == 0)
         {
-            // Offline: nothing to do. The message waits in MongoDB, not in Redis.
-            logger.LogDebug("realtime.skipped Outcome=offline");
+            // Offline: nothing to do. The message waits in MongoDB, not in Redis. Information,
+            // not Debug: when the CRM is open and a message doesn't appear, this line says the
+            // API found no live session for the owner (see OwnerUserId), not that delivery failed.
+            logger.LogInformation("realtime.skipped Outcome=offline OwnerUserId={OwnerUserId}", message.OwnerUserId);
             return;
         }
 

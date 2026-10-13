@@ -15,6 +15,14 @@ namespace Parrot.Application.Messaging;
 /// happens after any failure (the offset isn't committed, so Kafka delivers
 /// it again): the stored copy is found and announced again, without taking
 /// a new sequence or writing a second document.
+///
+/// Every line it logs carries the message's id, conversation, connection and
+/// the webhook's trace id (scope), so one message can be followed from
+/// <c>message.published</c> to <c>message.persisted</c> by any of them:
+/// <c>message.consumed</c> (picked up), <c>message.stored</c> (MongoDB
+/// acknowledged the write), <c>message.persisted</c> (announced for realtime
+/// delivery: the last step) or, on the way, <c>message.unprocessable</c> and
+/// <c>message.process_failed</c> naming the stage that failed.
 /// </summary>
 public sealed class InboundMessageProcessor(
     InboundMessageDecoders decoders,
@@ -28,16 +36,27 @@ public sealed class InboundMessageProcessor(
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
         long started = Stopwatch.GetTimestamp();
+        // A templated scope, not a dictionary: the console formatter prints a dictionary as its type name.
+        using IDisposable? scope = logger.BeginScope(
+            "MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} ConversationKey={ConversationKey} CorrelationId={CorrelationId}",
+            inbound.MessageId, inbound.Source, inbound.ConnectionId, inbound.ConversationKey, inbound.CorrelationId);
 
         // ReceivedAt is stamped by the webhook just before it queues the message.
-        MessageMetrics.QueueWait.Record(
-            Math.Max(0, (DateTime.UtcNow - inbound.ReceivedAt).TotalSeconds),
-            new KeyValuePair<string, object?>("queue", MessageMetrics.InboundQueue));
+        double queueWaitSeconds = Math.Max(0, (DateTime.UtcNow - inbound.ReceivedAt).TotalSeconds);
+        MessageMetrics.QueueWait.Record(queueWaitSeconds, new KeyValuePair<string, object?>("queue", MessageMetrics.InboundQueue));
+        logger.LogInformation("message.consumed QueueWaitMs={QueueWaitMs}", (long)(queueWaitSeconds * 1000));
 
         try
         {
             IncomingMessage incoming = Timed("decode", () => decoders.Decode(inbound));
+
+            long persistStarted = Stopwatch.GetTimestamp();
             (MessageDocument stored, string outcome) = await TimedAsync("persist", () => StoreAsync(inbound, incoming, cancellationToken));
+
+            // The write is acknowledged by MongoDB (or already there from an earlier delivery).
+            logger.LogInformation(
+                "message.stored Outcome={Outcome} Sequence={Sequence} Type={Type} DurationMs={DurationMs}",
+                outcome, stored.Sequence, incoming.Type, (long)Stopwatch.GetElapsedTime(persistStarted).TotalMilliseconds);
 
             // A message id must not move between businesses; that is never a retry problem.
             if (stored.ConnectionId != inbound.ConnectionId || stored.OwnerUserId != inbound.OwnerUserId)
@@ -69,17 +88,22 @@ public sealed class InboundMessageProcessor(
         {
             // The bus moves it to the dead-letter topic. "unknown_source:sms" -> "unknown_source".
             Processed("dead_lettered", ex.Reason.Split(':')[0]);
+            logger.LogWarning("message.unprocessable Reason={Reason}; it goes to the dead-letter topic", ex.Reason);
             throw;
         }
         catch (StageFailedException ex)
         {
-            // The bus retries it.
+            // The bus retries it. The bus logs the stack; this says which message and which stage.
             Processed("failed", ex.Reason);
+            logger.LogWarning("message.process_failed Stage={Stage} Reason={Reason} Error={Error}; it is retried",
+                ex.Stage, ex.Reason, ex.InnerException!.GetType().Name);
             ExceptionDispatchInfo.Throw(ex.InnerException!);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Processed("failed", "other");
+            logger.LogWarning("message.process_failed Stage={Stage} Reason={Reason} Error={Error}; it is retried",
+                "process", "other", ex.GetType().Name);
             throw;
         }
     }
@@ -133,7 +157,7 @@ public sealed class InboundMessageProcessor(
         }
         catch (Exception ex) when (ex is not OperationCanceledException and not UnprocessableMessageException)
         {
-            throw new StageFailedException(failureReason, ex);
+            throw new StageFailedException(stage, failureReason, ex);
         }
         finally
         {
@@ -186,14 +210,16 @@ public sealed class InboundMessageProcessor(
         {
             string reason = MessageMetrics.Classify(ex);
             MessageMetrics.PersistFailed.Add(1, new KeyValuePair<string, object?>("reason", reason));
-            throw new StageFailedException(reason, ex);
+            throw new StageFailedException("persist", reason, ex);
         }
     }
 
     // Carries a failed stage's reason to the one place that counts it; the
     // original exception is rethrown unchanged, so the bus sees what it always did.
-    private sealed class StageFailedException(string reason, Exception inner) : Exception(inner.Message, inner)
+    private sealed class StageFailedException(string stage, string reason, Exception inner) : Exception(inner.Message, inner)
     {
+        public string Stage { get; } = stage;
+
         public string Reason { get; } = reason;
     }
 }

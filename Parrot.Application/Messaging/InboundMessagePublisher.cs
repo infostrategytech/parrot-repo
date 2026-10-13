@@ -46,20 +46,22 @@ public sealed class InboundMessagePublisher
                 // The reason only: the webhook middleware logs the stack trace
                 // once, with the 503 that wraps this.
                 _logger.LogError(
-                    "message.publish_failed MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} Reason={Reason}",
+                    "message.publish_failed MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} ConversationKey={ConversationKey} Reason={Reason}",
                     message.MessageId,
                     message.Source,
                     message.ConnectionId,
+                    message.ConversationKey,
                     ex.Message);
 
                 throw new ServiceUnavailableException("Messages can't be accepted right now. Try again.", ex);
             }
 
             _logger.LogInformation(
-                "message.published MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} DurationMs={DurationMs}",
+                "message.published MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} ConversationKey={ConversationKey} DurationMs={DurationMs}",
                 message.MessageId,
                 message.Source,
                 message.ConnectionId,
+                message.ConversationKey,
                 (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         }
     }

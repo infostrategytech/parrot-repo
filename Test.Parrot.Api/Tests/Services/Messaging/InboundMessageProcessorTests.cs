@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
@@ -84,16 +85,44 @@ public class InboundMessageProcessorTests
         }
     }
 
+    // Keeps each line with the scope values in force when it was written, as a log shipper sees them.
+    private sealed class CapturingLogger : ILogger<InboundMessageProcessor>
+    {
+        private readonly Stack<IReadOnlyDictionary<string, object?>> _scopes = new();
+
+        public List<(LogLevel Level, string Text, IReadOnlyDictionary<string, object?> Scope)> Entries { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull
+        {
+            _scopes.Push(state is IEnumerable<KeyValuePair<string, object?>> pairs
+                ? pairs.ToDictionary(p => p.Key, p => p.Value)
+                : new Dictionary<string, object?>());
+            return new Pop(_scopes);
+        }
+
+        public bool IsEnabled(LogLevel logLevel) => true;
+
+        public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Entries.Add((logLevel, formatter(state, exception), _scopes.Count > 0 ? _scopes.Peek() : new Dictionary<string, object?>()));
+
+        public IEnumerable<string> Texts => Entries.Select(e => e.Text);
+
+        private sealed class Pop(Stack<IReadOnlyDictionary<string, object?>> scopes) : IDisposable
+        {
+            public void Dispose() => scopes.Pop();
+        }
+    }
+
     private readonly FakeStore _store = new();
     private readonly FakeSequence _sequence = new();
     private readonly FakePublisher _publisher = new();
     private readonly FakeReceipts _receipts = new();
 
-    private InboundMessageProcessor Processor(IStoredMessageStore? store = null) => new(
+    private InboundMessageProcessor Processor(IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
-        _receipts, _publisher, NullLogger<InboundMessageProcessor>.Instance);
+        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance);
 
     private static InboundMessage Inbound(string messageId = "whatsapp:wamid.A", string body = Body, string? owner = "user-1") => new()
     {
@@ -232,6 +261,95 @@ public class InboundMessageProcessorTests
 
         Assert.Equal("message_id_owned_by_another_connection", ex.Reason);
         Assert.Single(_publisher.Published);
+    }
+
+    // The trail one message leaves: consumed, stored (MongoDB acknowledged), persisted (announced), in that order,
+    // every line carrying the ids a search starts from.
+    [Fact]
+    public async Task ANewMessageLeavesAConsumedStoredPersistedTrailKeyedByItsIds()
+    {
+        CapturingLogger logger = new();
+
+        await Processor(logger: logger).ProcessAsync(Inbound(), CancellationToken.None);
+
+        string[] events = logger.Texts.Select(t => t.Split(' ')[0]).ToArray();
+        Assert.Equal(["message.consumed", "message.stored", "message.persisted"], events);
+        Assert.Contains("Outcome=stored Sequence=1 Type=text", logger.Entries[1].Text);
+        Assert.All(logger.Entries, entry =>
+        {
+            Assert.Equal("whatsapp:wamid.A", entry.Scope["MessageId"]);
+            Assert.Equal("487b7279745d4c41675818ffee460c54", entry.Scope["CorrelationId"]);
+            Assert.Equal(Key, entry.Scope["ConversationKey"]);
+            Assert.Equal(Connection, entry.Scope["ConnectionId"]);
+            Assert.Equal(MessagingPlatform.WhatsApp, entry.Scope["Source"]);
+        });
+    }
+
+    [Fact]
+    public async Task ARedeliveredMessageIsLoggedAsAStoredDuplicate()
+    {
+        await Processor().ProcessAsync(Inbound(), CancellationToken.None);
+        CapturingLogger logger = new();
+
+        await Processor(logger: logger).ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Contains(logger.Texts, t => t.StartsWith("message.stored Outcome=duplicate Sequence=1"));
+        Assert.Contains(logger.Texts, t => t.StartsWith("message.persisted"));
+    }
+
+    // A failing stage is named with the message it failed for; before this only a metric moved.
+    [Fact]
+    public async Task AMongoFailureIsLoggedWithItsStageAndMessageAndNothingIsStoredOrAnnounced()
+    {
+        _store.Failure = new TimeoutException("MongoDB is down");
+        CapturingLogger logger = new();
+
+        await Assert.ThrowsAsync<TimeoutException>(() => Processor(logger: logger).ProcessAsync(Inbound(), CancellationToken.None));
+
+        (LogLevel level, string text, IReadOnlyDictionary<string, object?> scope) = Assert.Single(logger.Entries, e => e.Text.StartsWith("message.process_failed"));
+        Assert.Equal(LogLevel.Warning, level);
+        Assert.Contains("Stage=persist Reason=db_timeout Error=TimeoutException", text);
+        Assert.Equal("whatsapp:wamid.A", scope["MessageId"]);
+        Assert.DoesNotContain(logger.Texts, t => t.StartsWith("message.stored") || t.StartsWith("message.persisted"));
+    }
+
+    [Fact]
+    public async Task AReceiptFailureIsLoggedAfterTheMessageIsStored()
+    {
+        _receipts.FailuresLeft = 1;
+        CapturingLogger logger = new();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Processor(logger: logger).ProcessAsync(Inbound(), CancellationToken.None));
+
+        Assert.Contains(logger.Texts, t => t.StartsWith("message.stored Outcome=stored"));
+        Assert.Contains(logger.Texts, t => t.Contains("Stage=receipt Reason=receipt_failed"));
+        Assert.DoesNotContain(logger.Texts, t => t.StartsWith("message.persisted"));
+    }
+
+    [Fact]
+    public async Task APublishFailureIsLoggedAfterTheMessageIsStored()
+    {
+        _publisher.FailuresLeft = 1;
+        CapturingLogger logger = new();
+
+        await Assert.ThrowsAsync<IOException>(() => Processor(logger: logger).ProcessAsync(Inbound(), CancellationToken.None));
+
+        Assert.Contains(logger.Texts, t => t.StartsWith("message.stored Outcome=stored"));
+        Assert.Contains(logger.Texts, t => t.Contains("Stage=publish Reason=publish_failed"));
+    }
+
+    [Fact]
+    public async Task AnUnprocessableMessageIsLoggedWithItsReasonAndMessage()
+    {
+        CapturingLogger logger = new();
+
+        await Assert.ThrowsAsync<UnprocessableMessageException>(
+            () => Processor(logger: logger).ProcessAsync(Inbound(body: "not json"), CancellationToken.None));
+
+        (_, string text, IReadOnlyDictionary<string, object?> scope) = Assert.Single(logger.Entries, e => e.Text.StartsWith("message.unprocessable"));
+        Assert.Contains("Reason=body_not_json", text);
+        Assert.Equal("whatsapp:wamid.A", scope["MessageId"]);
+        Assert.DoesNotContain(logger.Texts, t => t.StartsWith("message.stored"));
     }
 
     // The same rules against a real MongoDB: the unique index turns a second insert into "return the stored one".

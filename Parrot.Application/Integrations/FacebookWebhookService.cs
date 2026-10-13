@@ -138,7 +138,12 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
         // For Messenger, entry.id is the Page ID. A mismatch means the ?ref= belongs to a different customer.
         if (payload.Entry.Count == 0 || payload.Entry.Any(entry => entry.Id != connection.PageId))
         {
-            _logger.LogWarning("Facebook webhook rejected because Page IDs do not match. ConnectionId={ConnectionId}", connection.Id);
+            _logger.LogWarning(
+                "Facebook webhook rejected because Page IDs do not match. ConnectionId={ConnectionId} Expected={Expected} Received={Received} DroppedEvents={DroppedEvents}",
+                connection.Id,
+                connection.PageId,
+                string.Join(',', payload.Entry.Select(entry => entry.Id)),
+                payload.Entry.Sum(entry => entry.Messaging?.Count ?? 0));
             return false;
         }
 

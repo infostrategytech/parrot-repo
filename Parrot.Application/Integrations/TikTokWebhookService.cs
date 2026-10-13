@@ -73,7 +73,9 @@ public sealed class TikTokWebhookService(
         // The event names the account it is about; a mismatch means this URL belongs to another customer.
         if (!string.Equals(tikTokEvent.BusinessOpenId, connection.TikTokOpenId, StringComparison.Ordinal))
         {
-            logger.LogWarning("TikTok webhook rejected because its account does not match. ConnectionId={ConnectionId}", connection.Id);
+            logger.LogWarning(
+                "TikTok webhook rejected because its account does not match. ConnectionId={ConnectionId} Event={Event} MessageId={MessageId}",
+                connection.Id, tikTokEvent.Name, tikTokEvent.Message?.MessageId);
             return false;
         }
 
