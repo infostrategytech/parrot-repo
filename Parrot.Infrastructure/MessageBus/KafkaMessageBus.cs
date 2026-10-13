@@ -169,10 +169,12 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
                 {
                     _logger.LogError(
                         ex,
-                        "Message handler failed; message will be redelivered. Topic={Topic} Partition={Partition} Offset={Offset}",
+                        "Message handler failed; message will be redelivered. Topic={Topic} Partition={Partition} Offset={Offset} Key={Key} TraceId={TraceId}",
                         topic,
                         result.Partition.Value,
-                        result.Offset.Value);
+                        result.Offset.Value,
+                        result.Message.Key,
+                        TraceIdOf(result));
 
                     // Rewind so the uncommitted message is consumed again.
                     consumer.Seek(result.TopicPartitionOffset);
@@ -233,8 +235,8 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
         }
 
         void OnRetry(BatchItem<ConsumeResult<string?, string>> item, int attempt, Exception ex) =>
-            _logger.LogWarning(ex, "message.retrying Topic={Topic} Partition={Partition} Offset={Offset} Attempt={Attempt}",
-                topic, item.Partition, item.Offset, attempt);
+            _logger.LogWarning(ex, "message.retrying Topic={Topic} Partition={Partition} Offset={Offset} Key={Key} TraceId={TraceId} Attempt={Attempt}",
+                topic, item.Partition, item.Offset, item.Key, TraceIdOf(item.Message), attempt);
 
         try
         {
@@ -363,8 +365,8 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
             Headers = headers,
         }, ct);
 
-        _logger.LogError("message.dead_lettered Topic={Topic} Partition={Partition} Offset={Offset} Reason={Reason}",
-            result.Topic, result.Partition.Value, result.Offset.Value, reason);
+        _logger.LogError("message.dead_lettered Topic={Topic} Partition={Partition} Offset={Offset} Key={Key} TraceId={TraceId} DeadLetterTopic={DeadLetterTopic} Reason={Reason}",
+            result.Topic, result.Partition.Value, result.Offset.Value, result.Message.Key, TraceIdOf(result), deadLetterTopic, reason);
     }
 
     // True once the batch's offsets are committed.
@@ -401,6 +403,15 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
             }
         }
     }
+
+    // The webhook's trace id, from the traceparent header ("00-{trace id}-{span id}-{flags}"):
+    // the id the API logs as TraceId and CorrelationId, so a retry or a dead letter
+    // can be matched to the webhook that brought the message in. Null when it had none.
+    private static string? TraceIdOf(ConsumeResult<string?, string> result) =>
+        result.Message.Headers?.TryGetLastBytes("traceparent", out byte[] traceparent) == true
+        && Encoding.ASCII.GetString(traceparent) is { Length: >= 35 } text && text[2] == '-' && text[35] == '-'
+            ? text.Substring(3, 32)
+            : null;
 
     // W3C trace context, so a consumer can continue the trace the publisher was
     // in. Only a W3C id is a valid traceparent; the older hierarchical format is not.

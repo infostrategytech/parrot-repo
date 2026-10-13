@@ -160,13 +160,26 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
             // entry[].id is the WABA ID: check the stored value is that, not the
             // Business Manager or phone number ID. Meta's dashboard test events
             // carry a placeholder ID and always mismatch.
+            // Customer messages in a rejected webhook are lost (answered 200, never queued): the ids say which.
+            List<WhatsAppMessage> dropped = payload.Entry
+                .SelectMany(entry => entry.Changes)
+                .Where(change => change.Field == "messages")
+                .SelectMany(change => change.Value.Messages ?? [])
+                .ToList();
+            int droppedStatuses = payload.Entry
+                .SelectMany(entry => entry.Changes)
+                .Where(change => change.Field == "messages")
+                .Sum(change => change.Value.Statuses?.Count ?? 0);
             _logger.LogWarning(
-                "WhatsApp webhook rejected: account ID mismatch. ConnectionId={ConnectionId} Expected={Expected} Received={Received} ExpectedPhoneNumberId={ExpectedPhoneNumberId} PhoneNumberId={PhoneNumberId}",
+                "WhatsApp webhook rejected: account ID mismatch. ConnectionId={ConnectionId} Expected={Expected} Received={Received} ExpectedPhoneNumberId={ExpectedPhoneNumberId} PhoneNumberId={PhoneNumberId} DroppedMessages={DroppedMessages} DroppedMessageIds={DroppedMessageIds} DroppedStatuses={DroppedStatuses}",
                 connection.Id,
                 connection.WhatsAppBusinessAccountId,
                 mismatch?.Id,
                 connection.PhoneNumberId,
-                mismatch?.Changes.FirstOrDefault(change => change.Field == "messages")?.Value.Metadata.PhoneNumberId);
+                mismatch?.Changes.FirstOrDefault(change => change.Field == "messages")?.Value.Metadata.PhoneNumberId,
+                dropped.Count,
+                string.Join(',', dropped.Select(message => $"whatsapp:{message.Id}")),
+                droppedStatuses);
             return Rejected("account_mismatch");
         }
 

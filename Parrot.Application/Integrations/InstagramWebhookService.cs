@@ -108,7 +108,12 @@ public sealed class InstagramWebhookService(
         // entry.id is the professional account. A mismatch means the ?ref= belongs to another account.
         if (payload.Entry.Count == 0 || payload.Entry.Any(entry => entry.Id != connection.AccountId))
         {
-            logger.LogWarning("Instagram webhook rejected because account IDs do not match. ConnectionId={ConnectionId}", connection.Id);
+            logger.LogWarning(
+                "Instagram webhook rejected because account IDs do not match. ConnectionId={ConnectionId} Expected={Expected} Received={Received} DroppedEvents={DroppedEvents}",
+                connection.Id,
+                connection.AccountId,
+                string.Join(',', payload.Entry.Select(entry => entry.Id)),
+                payload.Entry.Sum(entry => entry.Messaging?.Count ?? 0));
             return false;
         }
 
