@@ -31,7 +31,8 @@ public sealed class InboundMessageProcessor(
     IMessageDocumentMapperFactory mappers,
     IConnectionMessageReceipt receipts,
     IMessagePersistedPublisher publisher,
-    ILogger<InboundMessageProcessor> logger)
+    ILogger<InboundMessageProcessor> logger,
+    IContactNameLookup? contactNames = null)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -188,6 +189,14 @@ public sealed class InboundMessageProcessor(
             {
                 CountDuplicate(stored, inbound);
                 return (stored, "duplicate");
+            }
+
+            // Messenger and Instagram send only the customer's id; their name is asked for once, here,
+            // so the inbox can show it. A duplicate above has its name already.
+            if (incoming.ContactName is null && contactNames is not null)
+            {
+                string? name = await TimedAsync("contact_name", () => contactNames.FindAsync(incoming, cancellationToken));
+                incoming = incoming with { ContactName = name };
             }
 
             MessageDocument document = mappers.ToDocument(incoming);

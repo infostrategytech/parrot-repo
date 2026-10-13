@@ -258,6 +258,10 @@ services:
       MongoDB__ConnectionString: mongodb://mongodb:27017
       MongoDB__Database: parrot
       MongoDB__Collection: messages
+      # The API's key ring, read only, to look up Facebook and Instagram customers' names.
+      DataProtection__KeyRingPath: /app/data-protection-keys
+    volumes:
+      - api_data_protection_keys:/app/data-protection-keys:ro
     depends_on:
       mongodb:
         condition: service_healthy

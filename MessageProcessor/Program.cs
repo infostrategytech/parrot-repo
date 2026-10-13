@@ -6,9 +6,11 @@ using MessageProcessor.Monitoring;
 using OpenTelemetry.Metrics;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
+using Parrot.Infrastructure.Conversations;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.MessageBus;
 using Parrot.Infrastructure.Messaging;
+using Parrot.Infrastructure.SocialMediaIntegrations;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
@@ -38,6 +40,15 @@ string postgresConnection = builder.Configuration.GetConnectionString("DefaultCo
     : throw new InvalidOperationException("ConnectionStrings__DefaultConnection is required to record connection receipts. Use the same PostgreSQL database as the API.");
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseNpgsql(postgresConnection));
 builder.Services.AddSingleton<IConnectionMessageReceipt, ConnectionMessageReceipt>();
+
+// Messenger and Instagram webhooks name the customer only by id; the worker asks Meta for the name
+// with the connection's token, so it reads the API's key ring (never writing to it).
+builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
+builder.Services.Configure<InstagramSettings>(builder.Configuration.GetSection(InstagramSettings.SectionName));
+builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment(), readOnly: true);
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient(MetaContactNames.HttpClientName).RemoveAllLoggers();
+builder.Services.AddSingleton<IContactNameLookup, MetaContactNames>();
 
 builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();
