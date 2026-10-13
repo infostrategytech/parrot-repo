@@ -8,8 +8,10 @@ namespace Parrot.Infrastructure.SocialMediaIntegrations;
 
 public static class WhatsAppDataProtectionExtensions
 {
+    // readOnly is for services that only decrypt (the message worker): they share the API's key ring
+    // and must never write a key of their own into it.
     public static IServiceCollection AddWhatsAppCredentialProtection(
-        this IServiceCollection services, IConfiguration configuration, bool isDevelopment)
+        this IServiceCollection services, IConfiguration configuration, bool isDevelopment, bool readOnly = false)
     {
         string? keyRingPath = configuration["DataProtection:KeyRingPath"];
         string? certificatePath = configuration["DataProtection:CertificatePath"];
@@ -25,6 +27,10 @@ public static class WhatsAppDataProtectionExtensions
         IDataProtectionBuilder builder = services.AddDataProtection()
             .SetApplicationName("Parrot")
             .PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+        if (readOnly)
+        {
+            builder.DisableAutomaticKeyGeneration();
+        }
 
         try
         {

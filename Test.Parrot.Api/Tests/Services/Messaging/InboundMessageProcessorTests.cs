@@ -118,11 +118,36 @@ public class InboundMessageProcessorTests
     private readonly FakePublisher _publisher = new();
     private readonly FakeReceipts _receipts = new();
 
-    private InboundMessageProcessor Processor(IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null) => new(
+    private sealed class FakeContactNames(string? name) : IContactNameLookup
+    {
+        public List<string> AskedFor { get; } = new();
+
+        public Task<string?> FindAsync(IncomingMessage message, CancellationToken cancellationToken)
+        {
+            AskedFor.Add(message.From);
+            return Task.FromResult(name);
+        }
+    }
+
+    private InboundMessageProcessor Processor(
+        IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
-        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance);
+        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames);
+
+    private const string Psid = "6215837091842310";
+
+    private const string MessengerBody = $$$"""
+        {"object":"page","entry":[{"id":"185860297939218","time":1791447800000,"messaging":[
+          {"sender":{"id":"{{{Psid}}}"},"recipient":{"id":"185860297939218"},"timestamp":1791447800000,
+           "message":{"mid":"m_1","text":"Hello"}}]}]}
+        """;
+
+    private static InboundMessage MessengerInbound() => Inbound("facebook:m_1", MessengerBody) with
+    {
+        Source = MessagingPlatform.Facebook, Sender = Psid, ConversationKey = "facebook:" + Psid + ":185860297939218",
+    };
 
     private static InboundMessage Inbound(string messageId = "whatsapp:wamid.A", string body = Body, string? owner = "user-1") => new()
     {
@@ -163,6 +188,52 @@ public class InboundMessageProcessorTests
         Assert.Equal("Hello", published.Data.Text);
         Assert.False(published.Data.Outgoing);
         Assert.Equal(1, _receipts.Recorded);
+    }
+
+    // Messenger names the customer only by PSID; the name Meta gives for it is stored and announced.
+    [Fact]
+    public async Task AMessengerMessageIsStoredWithTheNameLookedUpForItsSender()
+    {
+        FakeContactNames names = new("Ada Obi");
+
+        await Processor(contactNames: names).ProcessAsync(MessengerInbound(), CancellationToken.None);
+
+        Assert.Equal([Psid], names.AskedFor);
+        Assert.Equal("Ada Obi", Assert.Single(_store.Documents).ContactName);
+        Assert.Equal("Ada Obi", Assert.Single(_publisher.Published).Data.SenderName);
+    }
+
+    [Fact]
+    public async Task AMessengerMessageWithNoNameFoundIsStillStored()
+    {
+        await Processor(contactNames: new FakeContactNames(null)).ProcessAsync(MessengerInbound(), CancellationToken.None);
+
+        Assert.Null(Assert.Single(_store.Documents).ContactName);
+        Assert.Single(_publisher.Published);
+    }
+
+    // A redelivery finds the stored copy, so Meta is not asked again.
+    [Fact]
+    public async Task ADuplicateDeliveryDoesNotLookTheNameUpAgain()
+    {
+        FakeContactNames names = new("Ada Obi");
+
+        await Processor(contactNames: names).ProcessAsync(MessengerInbound(), CancellationToken.None);
+        await Processor(contactNames: names).ProcessAsync(MessengerInbound(), CancellationToken.None);
+
+        Assert.Single(names.AskedFor);
+    }
+
+    // WhatsApp's webhook carries the name already.
+    [Fact]
+    public async Task AMessageThatCarriesItsNameIsNotLookedUp()
+    {
+        FakeContactNames names = new("Someone Else");
+
+        await Processor(contactNames: names).ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Empty(names.AskedFor);
+        Assert.Equal("Ada", Assert.Single(_store.Documents).ContactName);
     }
 
     [Fact]

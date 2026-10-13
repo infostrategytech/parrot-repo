@@ -286,6 +286,15 @@ services:
       MongoDB__ConnectionString: mongodb://mongodb:27017
       MongoDB__Database: parrot
       MongoDB__Collection: messages
+      # The API's key ring, read only: the worker decrypts the Facebook and
+      # Instagram tokens to look up each new customer's name.
+      DataProtection__KeyRingPath: /app/data-protection-keys
+      DataProtection__CertificatePath: /run/secrets/data_protection_cert
+      DataProtection__CertificatePassword: ${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}
+    volumes:
+      - api_data_protection_keys:/app/data-protection-keys:ro
+    secrets:
+      - data_protection_cert
     depends_on:
       mongodb:
         condition: service_healthy
