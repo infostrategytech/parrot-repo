@@ -34,19 +34,19 @@ public sealed class MetaContactNames(
 
     public const string HttpClientName = "meta-contact-names";
 
-    public async Task<string?> FindAsync(IncomingMessage message, CancellationToken cancellationToken)
+    public async Task<ContactProfile?> FindAsync(IncomingMessage message, CancellationToken cancellationToken)
     {
         if (message.Platform is not (MessagingPlatform.Facebook or MessagingPlatform.Instagram) || message.ConnectionId is not { } connection)
             return null;
 
         string key = $"contact-name:{connection}:{message.From}";
-        if (cache.TryGetValue(key, out string? cached)) return cached;
+        if (cache.TryGetValue(key, out ContactProfile? cached)) return cached;
 
         using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         budget.CancelAfter(Budget);
         try
         {
-            string? name = message.Platform == MessagingPlatform.Facebook
+            ContactProfile? name = message.Platform == MessagingPlatform.Facebook
                 ? await FacebookAsync(connection, message.From, budget.Token)
                 : await InstagramAsync(connection, message.From, budget.Token);
             cache.Set(key, name, name is null ? NotFound : Found);
@@ -57,12 +57,12 @@ public sealed class MetaContactNames(
             // Never the customer's id: it is personal data, and the scope already names the message.
             logger.LogWarning("contact_name.lookup_failed Platform={Platform} Error={Error} Reason={Reason}",
                 message.Platform, ex.GetType().Name, ex.Message);
-            cache.Set(key, (string?)null, NotFound);
+            cache.Set(key, (ContactProfile?)null, NotFound);
             return null;
         }
     }
 
-    private async Task<string?> FacebookAsync(Guid connection, string psid, CancellationToken ct)
+    private async Task<ContactProfile?> FacebookAsync(Guid connection, string psid, CancellationToken ct)
     {
         string? token = await TokenAsync(db => db.FacebookConnections
             .Where(c => c.Id == connection && c.DisabledAt == null).Select(c => c.AccessTokenEncrypted), ct);
@@ -75,10 +75,11 @@ public sealed class MetaContactNames(
 
         string? first = Text(profile, "first_name");
         string? last = Text(profile, "last_name");
-        return Text(profile, "name") ?? (first is null && last is null ? null : $"{first} {last}".Trim());
+        string? name = Text(profile, "name") ?? (first is null && last is null ? null : $"{first} {last}".Trim());
+        return name is null ? null : new ContactProfile(name, null);
     }
 
-    private async Task<string?> InstagramAsync(Guid connection, string igsid, CancellationToken ct)
+    private async Task<ContactProfile?> InstagramAsync(Guid connection, string igsid, CancellationToken ct)
     {
         string? token = await TokenAsync(db => db.InstagramConnections
             .Where(c => c.Id == connection && c.DisabledAt == null).Select(c => c.AccessTokenEncrypted), ct);
@@ -89,7 +90,10 @@ public sealed class MetaContactNames(
             instagramProtector.Unprotect(token), "instagram_profile", ct);
 
         // Many Instagram users leave their name empty; the handle is how the business knows them anyway.
-        return profile is null ? null : Text(profile, "name") ?? (Text(profile, "username") is { } username ? "@" + username : null);
+        if (profile is null) return null;
+        string? username = Text(profile, "username");
+        string? name = Text(profile, "name") ?? (username is null ? null : "@" + username);
+        return name is null ? null : new ContactProfile(name, username);
     }
 
     private async Task<string?> TokenAsync(Func<ApplicationDbContext, IQueryable<string?>> query, CancellationToken ct)

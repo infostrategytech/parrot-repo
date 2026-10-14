@@ -20,6 +20,9 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
     /// <summary>The business's account on that channel (the Facebook Page id, the WhatsApp business account...), from the latest message.</summary>
     public string? AccountId { get; init; }
 
+    /// <summary>The customer's handle on the channel without the @ (Instagram), when the channel gave one.</summary>
+    public string? Username { get; init; }
+
     /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
     public bool Pinned { get; init; }
 

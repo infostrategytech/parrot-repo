@@ -9,7 +9,9 @@
         <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>
             @(Link is null
                 ? "You can reply once they message you again."
-                : $"Continue this conversation in {Conversation.CustomerName}'s {Platform} DM.")
+                : Link.Kind == ChannelLinkKind.Profile
+                    ? $"Continue this conversation from {Conversation.CustomerName}'s {Platform} profile."
+                    : $"Continue this conversation in {Conversation.CustomerName}'s {Platform} DM.")
         </Typography>
         @if (Link is { } link)
         {

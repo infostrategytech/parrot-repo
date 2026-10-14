@@ -25,7 +25,7 @@
             <ChannelGlyph Channel="@Conversation.Channel" Compact />
             <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChannelLabel(Conversation.Channel)</Typography>
             <span aria-hidden="true">·</span>
-            <Typography TextStyle="TextStyle.Small12Regular" As="span">@Conversation.Sender</Typography>
+            <Typography TextStyle="TextStyle.Small12Regular" As="span">@(Conversation.Username is { Length: > 0 } ? "@" + Conversation.Username : Conversation.Sender)</Typography>
         </div>
     </section>
 
@@ -121,7 +121,7 @@
             }
             else
             {
-                <Tabs Label="Media type" Variant="TabsVariant.Segmented">
+                <Tabs Label="Media type" Variant="TabsVariant.Segmented" Class="customer-media-tabs">
                     <Tab Selected="@(_tab == MediaTab.Media)" Count="@Visuals.Count().ToString()" OnClick="() => _tab = MediaTab.Media">
                         <Typography TextStyle="TextStyle.Small12Semibold" As="span">Media</Typography>
                     </Tab>

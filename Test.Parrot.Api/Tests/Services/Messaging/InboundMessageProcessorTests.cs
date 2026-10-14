@@ -122,10 +122,10 @@ public class InboundMessageProcessorTests
     {
         public List<string> AskedFor { get; } = new();
 
-        public Task<string?> FindAsync(IncomingMessage message, CancellationToken cancellationToken)
+        public Task<ContactProfile?> FindAsync(IncomingMessage message, CancellationToken cancellationToken)
         {
             AskedFor.Add(message.From);
-            return Task.FromResult(name);
+            return Task.FromResult(name is null ? null : new ContactProfile(name, null));
         }
     }
 

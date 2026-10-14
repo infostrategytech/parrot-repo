@@ -123,7 +123,7 @@ public class MetaContactNamesTests : IAsyncLifetime
     {
         FakeMeta meta = new(HttpStatusCode.OK, """{"name":"Ada Obi","first_name":"Ada","last_name":"Obi","id":"6215837091842310"}""");
 
-        string? name = await Lookup(meta).FindAsync(Message(MessagingPlatform.Facebook, await PageAsync()), CancellationToken.None);
+        string? name = (await Lookup(meta).FindAsync(Message(MessagingPlatform.Facebook, await PageAsync()), CancellationToken.None))?.Name;
 
         Assert.Equal("Ada Obi", name);
         HttpRequestMessage request = Assert.Single(meta.Requests);
@@ -137,7 +137,7 @@ public class MetaContactNamesTests : IAsyncLifetime
     {
         FakeMeta meta = new(HttpStatusCode.OK, """{"first_name":"Ada","last_name":"Obi"}""");
 
-        Assert.Equal("Ada Obi", await Lookup(meta).FindAsync(Message(MessagingPlatform.Facebook, await PageAsync()), CancellationToken.None));
+        Assert.Equal("Ada Obi", (await Lookup(meta).FindAsync(Message(MessagingPlatform.Facebook, await PageAsync()), CancellationToken.None))?.Name);
     }
 
     // Instagram users often leave their name empty; the handle is what the business knows them by.
@@ -146,9 +146,10 @@ public class MetaContactNamesTests : IAsyncLifetime
     {
         FakeMeta meta = new(HttpStatusCode.OK, """{"username":"ada.obi","id":"6215837091842310"}""");
 
-        string? name = await Lookup(meta).FindAsync(Message(MessagingPlatform.Instagram, await AccountAsync()), CancellationToken.None);
+        Parrot.Application.Messaging.ContactProfile? profile = await Lookup(meta).FindAsync(Message(MessagingPlatform.Instagram, await AccountAsync()), CancellationToken.None);
 
-        Assert.Equal("@ada.obi", name);
+        Assert.Equal("@ada.obi", profile?.Name);
+        Assert.Equal("ada.obi", profile?.Username);
         Assert.Equal("graph.instagram.com", Assert.Single(meta.Requests).RequestUri!.Host);
     }
 
@@ -161,7 +162,7 @@ public class MetaContactNamesTests : IAsyncLifetime
         Guid page = await PageAsync();
 
         await lookup.FindAsync(Message(MessagingPlatform.Facebook, page), CancellationToken.None);
-        Assert.Equal("Ada Obi", await lookup.FindAsync(Message(MessagingPlatform.Facebook, page), CancellationToken.None));
+        Assert.Equal("Ada Obi", (await lookup.FindAsync(Message(MessagingPlatform.Facebook, page), CancellationToken.None))?.Name);
 
         Assert.Single(meta.Requests);
     }

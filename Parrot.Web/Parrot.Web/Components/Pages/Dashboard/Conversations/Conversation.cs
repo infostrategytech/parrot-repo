@@ -35,8 +35,11 @@ public class ConversationItem
     /// <summary>The business's account on the channel, for links into that channel's own inbox.</summary>
     public string? AccountId { get; set; }
 
+    /// <summary>The customer's handle on the channel without the @ (Instagram).</summary>
+    public string? Username { get; set; }
+
     /// <summary>The customer's chat on their own platform, or null when none can be built.</summary>
-    public ChannelLink? PlatformLink => ChannelLinks.For(Channel, Sender, AccountId);
+    public ChannelLink? PlatformLink => ChannelLinks.For(Channel, Sender, AccountId, Username);
 
     /// <summary>Pinned by the signed-in user: listed above every unpinned conversation.</summary>
     public bool Pinned { get; set; }

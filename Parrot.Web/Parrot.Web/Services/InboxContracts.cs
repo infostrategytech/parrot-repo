@@ -21,6 +21,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public int? ReplyWindowHours { get; init; }
     /// <summary>The business's account on that channel; the Facebook Page id is what its inbox link needs.</summary>
     public string? AccountId { get; init; }
+    /// <summary>The customer's handle on the channel without the @ (Instagram); their profile link is built from it.</summary>
+    public string? Username { get; init; }
     /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
     public bool Pinned { get; init; }
     /// <summary>The user marked it unread to return to it: the row shows "!" while no message is unread.</summary>

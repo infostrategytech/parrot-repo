@@ -55,5 +55,31 @@ public class ChannelLinkTests
     }
 
     [Fact]
+    public void MessengerOpensTheCustomersProfileFromTheirNumericId()
+    {
+        ChannelLink link = ChannelLinks.For("facebook", "6543210987654321", "1234567890")!;
+
+        Assert.Equal("https://www.facebook.com/6543210987654321", link.Url);
+        Assert.Equal(ChannelLinkKind.Profile, link.Kind);
+        Assert.Equal("Open profile on Messenger", link.ButtonLabel);
+    }
+
+    [Fact]
+    public void InstagramOpensTheCustomersProfileFromTheirHandle()
+    {
+        ChannelLink link = ChannelLinks.For("instagram", "1877343696564198", "acct", "ada.love_1")!;
+
+        Assert.Equal("https://www.instagram.com/ada.love_1/", link.Url);
+        Assert.Equal(ChannelLinkKind.Profile, link.Kind);
+    }
+
+    [Theory]
+    [InlineData("Ada Love")]
+    [InlineData(null)]
+    [InlineData("a/../b")]
+    public void InstagramWithoutAUsableHandleOpensTheInbox(string? name) =>
+        Assert.Equal(ChannelLinkKind.Inbox, ChannelLinks.For("instagram", "1877343696564198", "acct", name)!.Kind);
+
+    [Fact]
     public void AnUnknownChannelHasNoLink() => Assert.Null(ChannelLinks.For("email", "a@b.c", null));
 }

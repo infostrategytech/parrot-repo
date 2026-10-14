@@ -50,6 +50,7 @@ public sealed class MongoConversationStore : IConversationStore
                 { "_id", new BsonDocument { { "connection", "$ConnectionId" }, { "sender", "$From" } } },
                 { "latest", new BsonDocument("$first", "$$ROOT") },
                 { "name", new BsonDocument("$max", "$ContactName") },
+                { "username", new BsonDocument("$max", "$ContactUsername") },
 
                 // The customer's own newest message (not the agent's reply), by the time the send check uses.
                 // $max skips the nulls the replies give.
@@ -71,6 +72,7 @@ public sealed class MongoConversationStore : IConversationStore
             {
                 Channel = d.Platform.ToString().ToLowerInvariant(),
                 AccountId = d.ExternalAccountId,
+                Username = row["username"].IsString ? row["username"].AsString : null,
                 LastCustomerMessageAt = row["lastIncoming"].IsBsonNull ? null : row["lastIncoming"].ToUniversalTime(),
                 ReplyWindowHours = (int)ReplyWindow.For(d.Platform).TotalHours,
             };

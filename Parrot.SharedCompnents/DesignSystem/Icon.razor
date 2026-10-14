@@ -35,7 +35,11 @@ else
 
     [Parameter] public string? Class { get; set; }
 
-    private string Href => "_content/Parrot.SharedComponents/icons/aurora-icons.svg#" + Name.ToSymbolId();
+    // The sprite is not fingerprinted, so a browser that cached an older one never sees icons added since.
+    // The build id changes with every build, which makes each release fetch the sprite again.
+    private static readonly string SpriteVersion = typeof(Icon).Assembly.ManifestModule.ModuleVersionId.ToString("N")[..8];
+
+    private string Href => "_content/Parrot.SharedComponents/icons/aurora-icons.svg?v=" + SpriteVersion + "#" + Name.ToSymbolId();
 
     private string ClassName
     {

@@ -22,6 +22,9 @@ public record IncomingMessage
     public required string ChannelDisplayName { get; init; }
     public string? ContactName { get; init; }
 
+    // The customer's handle on the channel (Instagram), without the @; the link to their profile is built from it.
+    public string? ContactUsername { get; init; }
+
     // Messenger attachment payloads; null for platforms and message types that have none.
     public IReadOnlyList<string>? AttachmentUrls { get; init; }
 

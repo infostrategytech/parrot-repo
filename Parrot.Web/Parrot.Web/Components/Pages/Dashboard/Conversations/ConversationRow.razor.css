@@ -76,8 +76,5 @@
 /* The options button sits at the row's right edge; the row leaves room for it. It shows on hover and focus,
    and always on touch screens, which have no hover. */
 .conversation-row-host ::deep .conversation-row { padding-right: calc(var(--spacing-md) + var(--spacing-3xl)); }
-.conversation-row__menu { position: absolute; top: var(--spacing-md); right: var(--spacing-xs); z-index: 1; opacity: 0; }
-.conversation-row-host:hover .conversation-row__menu,
-.conversation-row__menu:focus-within { opacity: 1; }
-@media (hover: none) { .conversation-row__menu { opacity: 1; } }
+.conversation-row__menu { position: absolute; top: var(--spacing-md); right: var(--spacing-xs); z-index: 1; }
 .conversation-row__menu ::deep .ds-button { color: var(--colors-text-muted); background: transparent; border-color: transparent; box-shadow: none; }

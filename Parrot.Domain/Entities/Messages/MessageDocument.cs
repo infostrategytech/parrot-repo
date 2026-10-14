@@ -46,6 +46,7 @@ public abstract class MessageDocument
     public required string Type { get; set; }
     public string? TextBody { get; set; }
     public string? ContactName { get; set; }
+    public string? ContactUsername { get; set; }
     public DateTime ReceivedAt { get; set; }
     public DateTime StoredAt { get; set; }
 
