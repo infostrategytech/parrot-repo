@@ -90,7 +90,7 @@ public class OrientationClientTests
     [Theory]
     [InlineData(HttpStatusCode.BadGateway, """{"detail":"Voice provider unavailable"}""")]
     [InlineData(HttpStatusCode.OK, """{"signedUrl":"https://not-a-socket.example","dynamicVariables":{},"firstMessage":"","expiresIn":300}""")]
-    [InlineData(HttpStatusCode.OK, "<html>ngrok warning</html>")]
+    [InlineData(HttpStatusCode.OK, "<html>Not the API</html>")]
     [InlineData(HttpStatusCode.OK, """{"signedUrl":"wss://api.elevenlabs.io/x","dynamicVariables":{"tenant_id":"owner-1"},"firstMessage":"Hi","expiresIn":300}""")]
     [InlineData(HttpStatusCode.OK, """{"signedUrl":"wss://api.elevenlabs.io/x","dynamicVariables":{"tenant_id":"owner-1","secret__voice_session_token":"t"},"firstMessage":"","expiresIn":300}""")]
     [InlineData(HttpStatusCode.Unauthorized, """{"detail":"Invalid token"}""")]
