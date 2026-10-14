@@ -253,6 +253,18 @@ export function insertAtCaret(element, text) {
   return element.value;
 }
 
+/* Selects a piece of a field's text (a sentence to change, say), with the
+   focus, and brings it into view. False when the text isn't there. */
+export function selectText(element, text) {
+  if (!element || !text) return false;
+  const start = element.value.indexOf(text);
+  if (start < 0) return false;
+  element.focus();
+  element.setSelectionRange(start, start + text.length);
+  element.scrollIntoView({ block: "center", behavior: "smooth" });
+  return true;
+}
+
 // ── Scrolling ───────────────────────────────────────────────────────────────
 
 // A footer floating over a scrolling area (a chat's reply box over its

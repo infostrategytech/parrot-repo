@@ -365,3 +365,60 @@
   .agent-detail__settings { grid-template-columns: minmax(0, 1fr); }
 }
 
+
+/* ── Its configuration, one tab at a time ─────────────────────────────── */
+/* One column at a reading width, the setup rhythm between cards, and the
+   save bar under whichever tab is open. */
+
+.agent-detail__config {
+  /* Missing from the token set: the configuration's reading width. */
+  --ds-detail-config: 880px;
+
+  display: grid;
+  gap: var(--spacing-xl);
+  width: min(var(--ds-detail-config), 100%);
+  min-width: 0;
+}
+.agent-detail__config > * { min-width: 0; }
+.agent-detail__config > .agent-detail__card { margin-bottom: var(--spacing-none); }
+
+/* Its main job: one row, with Change. */
+.agent-detail__job-type {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-xl);
+}
+
+/* About the business: the kind of business, then the website and what it found. */
+.agent-detail__website {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-md) var(--spacing-xl) var(--spacing-xl);
+  border-top: var(--ds-detail-hairline) solid var(--colors-surface-border);
+}
+/* Level with the field, not its helper text. */
+.agent-detail__website > ::deep .ds-button { margin-top: var(--spacing-sm); }
+.agent-detail__found {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+  margin: var(--spacing-none) var(--spacing-xl) var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-accent-blue-text);
+  background: var(--colors-accent-blue-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+.agent-detail__found ::deep p { flex: 1; margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+/* Just created: the banner's two lines. */
+.agent-detail__created-text { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.agent-detail__created-text ::deep p { margin: var(--spacing-none); color: var(--colors-text-secondary); }
+
+@media (max-width: 1180px) {
+  .agent-detail__website { grid-template-columns: minmax(0, 1fr); }
+  .agent-detail__website > ::deep .ds-button { margin-top: var(--spacing-none); justify-self: start; }
+}

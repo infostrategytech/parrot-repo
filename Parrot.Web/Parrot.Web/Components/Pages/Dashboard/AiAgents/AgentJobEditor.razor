@@ -1,0 +1,789 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@implements IAsyncDisposable
+@using Parrot.SharedComponents.Services
+@using Parrot.Web.Features.Dashboard.AiAgents
+@inject IAgentBriefing Briefing
+@inject VoiceInterop Voice
+@inject AuroraInterop Interop
+
+@* An agent's job description, the way you would brief a new assistant
+   (designer, 13 October 2026). Two ways in: Talk, a conversation in turns
+   like Teach your AI (the agent asks, then listens, with a light along the
+   card's edges saying whose turn it is), or Type, where a voice note can be
+   recorded too (its words land in the box to check). When they're done, the
+   job description is written as one short text, appearing as it is written,
+   to read and edit before going on; Hear it reads it back.
+
+   Knowing they're done, without a hunt for a button: Done while they talk;
+   a pause, which shows a short countdown they can stop ("Keep talking"); or
+   saying "that's all". Typing is done with Done (or Enter). Not sure what to
+   say: a ready-made job description for the job. With one already there
+   (the agent's page), what they say is worked into it. Edits the brief in
+   place; the host saves it. *@
+
+<div class="job-editor">
+    @* Once its job description is written, that is what matters: talking to add more gets smaller. *@
+    <section class="@VoiceClass" aria-label="@($"Talk to {Name}")">
+        <VoiceAura @ref="_aura" State="AuraState" />
+        @* The orb has room to swell inside a stage of its own, so it never reaches the card's edge. *@
+        <div class="job-editor__stage">
+            <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__orb" />
+        </div>
+        <div class="job-editor__voice-text">
+            @* Said once per change of turn, not on every tick. *@
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p" role="status">@VoiceTitle</Typography>
+            @if (VoiceHint is { } hint)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="job-editor__muted">@hint</Typography>
+            }
+        </div>
+
+        @* What is being said: the agent's words as it says them, or the owner's as they talk (the last few lines). *@
+        @if (_phase == Phase.Speaking && !_reading && _agentLine is { } line)
+        {
+            <div class="job-editor__caption is-agent" @ref="_caption">
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                    @foreach (var (word, at) in Spoken(line))
+                    {
+                        <span data-at="@at">@(word + " ")</span>
+                    }
+                </Typography>
+            </div>
+        }
+        else if (_phase is Phase.Listening or Phase.Finishing && (_said.Length > 0 || _interim.Length > 0))
+        {
+            <div class="@($"job-editor__caption is-owner{(_said.Length + _interim.Length > LongCaption ? " is-long" : null)}")">
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                    @_said<span class="job-editor__interim">@(_said.Length > 0 && _interim.Length > 0 ? " " : null)@_interim</span>
+                </Typography>
+            </div>
+        }
+
+        @if (_phase is Phase.Typing or Phase.Note)
+        {
+            @* Typing, with a voice note in the same place: its words land in the box. *@
+            <div class="job-editor__compose">
+                @if (_recordingStarting || _recording is not null)
+                {
+                    <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" Recording="_recording"
+                                        OnDelete="CancelNoteAsync" OnSend="SendNoteAsync" Class="job-editor__recording" />
+                }
+                else
+                {
+                    <TextArea @ref="_typeBox" Value="@_typed" ValueChanged="value => _typed = value ?? string.Empty" AriaLabel="@($"Tell {Name} its job")"
+                              Placeholder="For example: Answer questions about our prices and delivery. Never give discounts. Bring me in if a customer is upset."
+                              Variant="TextAreaVariant.Plain" Rows="3" AutoGrow OnKeyDown="TypeKeyAsync" MaxLength="2000" />
+                    <div class="job-editor__compose-foot">
+                        @if (_canTalk)
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="TalkInsteadAsync">
+                                <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                                <ChildContent>Talk instead</ChildContent>
+                            </Button>
+                        }
+                        @if (_canRecord)
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="StartNote">
+                                <IconLeft><Icon Name="IconName.RiVoiceprintFill" /></IconLeft>
+                                <ChildContent>Voice note</ChildContent>
+                            </Button>
+                        }
+                        <span class="job-editor__compose-end">
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="CancelTyping">Cancel</Button>
+                            <Button Size="ButtonSize.Small" disabled="@(_typed.Trim().Length == 0)" @onclick="AddTypedAsync">@(HasSummary ? "Add" : "Done")</Button>
+                        </span>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="job-editor__ways">
+                @switch (_phase)
+                {
+                    case Phase.Listening:
+                        <div class="job-editor__start">
+                            <Button Size="ButtonSize.Large" @onclick="DoneAsync">
+                                <IconLeft><Icon Name="IconName.RiStopFill" /></IconLeft>
+                                <ChildContent>Done</ChildContent>
+                            </Button>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="TypeInsteadAsync">
+                                <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
+                                <ChildContent>Type instead</ChildContent>
+                            </Button>
+                        </div>
+                        break;
+                    case Phase.Finishing:
+                        <div class="job-editor__finishing">
+                            <Button Size="ButtonSize.Large" @onclick="DoneAsync">@(HasSummary ? "Add it now" : "Write it now")</Button>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="KeepTalking">
+                                <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                                <ChildContent>Keep talking</ChildContent>
+                            </Button>
+                        </div>
+                        @* The pause running out, as a bar rather than spoken numbers. *@
+                        <span class="job-editor__countdown" aria-hidden="true" @key="_pauseRun"><span></span></span>
+                        break;
+                    case Phase.Speaking:
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="SkipSpeechAsync">@(_reading ? "Stop" : "Skip")</Button>
+                        break;
+                    case Phase.Thinking:
+                        break;
+                    default:
+                        <div class="job-editor__start">
+                            <Button Size="ButtonSize.Large" disabled="@(!_canTalk)" @onclick="() => TalkAsync()">
+                                <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                                <ChildContent>@(HasSummary ? "Talk to add more" : $"Talk to {Name}")</ChildContent>
+                            </Button>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="StartTyping">
+                                <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
+                                <ChildContent>Type</ChildContent>
+                            </Button>
+                        </div>
+                        @if (!HasSummary)
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="job-editor__suggest" @onclick="SuggestAsync">Not sure what to say? Start from a ready-made job description</Button>
+                        }
+                        break;
+                }
+            </div>
+        }
+        @if (_voiceNotice is not null)
+        {
+            <InlineError Tone="InlineErrorTone.Warning" Message="@_voiceNotice" OnDismiss="() => _voiceNotice = null" />
+        }
+    </section>
+
+    @* Its job description: only once they've finished, appearing as it is written, to read before going on. *@
+    @if (HasSummary)
+    {
+        <section class="job-editor__brief" aria-labelledby="@($"{_id}-job")" aria-busy="@(_writing || _stream.Count > 0 ? "true" : "false")" tabindex="-1" @ref="_summarySection">
+            <div class="job-editor__brief-head">
+                <div class="job-editor__brief-title">
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-job")">@($"{Name}'s job description")</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="job-editor__muted">What it does, what it never does, and when it calls you. Read it through, and change anything that isn't right.</Typography>
+                </div>
+                @if (_canSpeak && !_writing && _stream.Count == 0)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-pressed="@(_reading ? "true" : "false")" disabled="@(Brief.IsEmpty || (_phase != Phase.Idle && !_reading))" @onclick="HearAsync">
+                        <IconLeft><Icon Name="@(_reading ? IconName.RiStopFill : IconName.RiPlayFill)" /></IconLeft>
+                        <ChildContent>@(_reading ? "Stop" : "Hear it")</ChildContent>
+                    </Button>
+                }
+            </div>
+            @if (_writing)
+            {
+                <div class="job-editor__writing">
+                    <Skeleton Width="100%" Order="0" />
+                    <Skeleton Width="94%" Order="1" />
+                    <Skeleton Width="88%" Order="2" />
+                    <Skeleton Width="56%" Order="3" />
+                </div>
+            }
+            else if (_stream.Count > 0)
+            {
+                <div class="job-editor__streaming">
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                        @foreach (var sentence in _stream)
+                        {
+                            <span>@(sentence + " ")</span>
+                        }
+                    </Typography>
+                </div>
+            }
+            else
+            {
+                <TextArea @ref="_summary" Value="@Brief.Summary" ValueChanged="SetSummaryAsync" AriaLabel="@($"{Name}'s job description")"
+                          TextStyle="TextStyle.BodyDefaultMedium" Rows="5" AutoGrow MaxLength="2000"
+                          Class="@(_fresh ? "is-new" : null)" />
+            }
+            @* What was just added: so a misheard sentence is one Undo away. *@
+            @if (_added.Count > 0)
+            {
+                <div class="job-editor__added" role="status">
+                    <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@AddedText</Typography>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="UndoAsync">Undo</Button>
+                </div>
+            }
+        </section>
+    }
+</div>
+
+@code {
+    /// <summary>The job description, changed in place. Empty until the owner has told it its job.</summary>
+    [Parameter, EditorRequired] public AgentBrief Brief { get; set; } = new();
+
+    /// <summary>The agent's name, as the owner talks to it ("Talk to Ada").</summary>
+    [Parameter] public string Name { get; set; } = "your agent";
+
+    // What its job description is written from, with what the owner says.
+    [Parameter] public string? UseCase { get; set; }
+    [Parameter] public string? CustomJob { get; set; }
+    [Parameter] public string? Industry { get; set; }
+    [Parameter] public string Business { get; set; } = string.Empty;
+
+    [Parameter] public EventCallback OnChange { get; set; }
+
+    private enum Phase { Idle, Speaking, Listening, Finishing, Thinking, Typing, Note }
+
+    // After a pause, how long before it writes (a bar they see, and can stop by talking).
+    private const int PauseSeconds = 3;
+
+    // Past this many characters, the owner's words show only their last lines.
+    private const int LongCaption = 160;
+
+    // How fast a written job description appears, sentence by sentence.
+    private const int StreamMs = 260;
+
+    private Phase _phase;
+    private string _said = string.Empty, _interim = string.Empty, _typed = string.Empty;
+    private string? _agentLine, _voiceNotice, _select;
+    private int _countdown, _pauseRun;
+    private bool _reading, _canTalk, _canRecord, _canSpeak, _shown, _fresh, _writing, _speakPending, _scrollToSummary, _focusType;
+    private readonly List<string> _stream = [];
+    private Func<Task>? _afterSpeech;
+    private CancellationTokenSource? _pause;
+
+    // The last thing added, and the job description before it (Undo).
+    private IReadOnlyList<string> _added = [];
+    private AgentBrief? _before;
+
+    private readonly string _id = "job-editor-" + Guid.NewGuid().ToString("N")[..8];
+    private TextArea? _summary, _typeBox;
+    private ElementReference _summarySection, _caption;
+
+    private VoiceOrb? _orb;
+    private VoiceAura? _aura;
+    private DotNetObjectReference<AgentJobEditor>? _self;
+    private IAsyncDisposable? _listen, _mic;
+    private VoiceSpeech? _speech;
+    private VoiceNoteRecording? _recorder;
+    private VoiceRecording? _recording;
+    private bool _recordingStarting;
+    private int _recordSeconds;
+    private CancellationTokenSource? _recordClock;
+
+    // It stays once it has been shown, even while its text is cleared to rewrite it.
+    private bool HasSummary => _shown || !Brief.IsEmpty;
+
+    private string VoiceClass =>
+        $"job-editor__voice is-{_phase.ToString().ToLowerInvariant()}"
+        + (HasSummary ? " is-compact" : null)
+        + (_phase is Phase.Typing or Phase.Note ? " is-composing" : null);
+
+    private IReadOnlyList<ElementReference> LevelTargets =>
+        _orb is null ? [] : _aura is null ? [_orb.Element] : [_orb.Element, _aura.Element];
+
+    private VoiceState OrbState => _phase switch
+    {
+        Phase.Speaking => VoiceState.Speaking,
+        Phase.Listening or Phase.Finishing => VoiceState.Listening,
+        Phase.Thinking => VoiceState.Thinking,
+        _ => VoiceState.Idle,
+    };
+
+    // The light along the card's edges: only while a voice turn is happening.
+    private VoiceState? AuraState => _phase is Phase.Speaking or Phase.Listening or Phase.Finishing or Phase.Thinking ? OrbState : null;
+
+    private string VoiceTitle => _phase switch
+    {
+        Phase.Speaking when _reading => $"{Name} is reading its job description",
+        Phase.Speaking => $"{Name} is talking",
+        Phase.Listening => $"{Name} is listening",
+        Phase.Finishing => "Got it. Anything else?",
+        Phase.Thinking => HasSummary && !_writing && _stream.Count == 0 ? "Adding it to the job description…" : $"Writing {Name}'s job description…",
+        Phase.Typing => HasSummary ? $"Tell {Name} more" : $"Tell {Name} its job",
+        Phase.Note => "Recording a voice note",
+        _ when !_canTalk => "Type, or record a voice note",
+        _ when HasSummary => "Want to add something?",
+        _ => $"Talk to {Name} like a new team member",
+    };
+
+    private string? VoiceHint => _phase switch
+    {
+        Phase.Listening => "Tap Done, or just pause, when you've finished.",
+        Phase.Finishing => "Keep talking if there's more, or say “that's all”.",
+        Phase.Typing => "Write it in your own words, or record a voice note.",
+        Phase.Note => "Pause if you need a moment. Its words go into the box for you to check.",
+        Phase.Speaking or Phase.Thinking => null,
+        _ when !_canTalk => "Talking works in Chrome or Edge.",
+        _ when HasSummary => "Talk or type, and it's added to the job description.",
+        _ => "Say what it should do, never do, and when to call you.",
+    };
+
+    private string AddedText => _added.Count == 1 ? $"Added to the job description: “{_added[0]}”" : $"Added {_added.Count} things to the job description.";
+
+    // Each word, with where it starts in the sentence: the voice shows it on reaching it.
+    private static IEnumerable<(string Word, int At)> Spoken(string line)
+    {
+        var at = 0;
+        foreach (var word in line.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var start = line.IndexOf(word, at, StringComparison.Ordinal);
+            yield return (word, start);
+            at = start + word.Length;
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _shown = !Brief.IsEmpty;
+        try
+        {
+            var can = await Voice.CapabilitiesAsync();
+            _canTalk = can.Listen;
+            _canRecord = can.Record;
+            _canSpeak = can.Speak;
+        }
+        catch (JSException) { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The words are on the page: now it can say them, revealing each in step.
+        if (_speakPending && _agentLine is { } line)
+        {
+            _speakPending = false;
+            _self ??= DotNetObjectReference.Create(this);
+            try { _speech = await Voice.SpeakAsync(LevelTargets, line, _self, nameof(SpokenAsync), _reading ? null : (ElementReference?)_caption); }
+            catch (JSException) { await SpokenAsync(); }
+        }
+        if (_recordingStarting && _recording is null && _recorder is not null)
+        {
+            try
+            {
+                _recording = await Voice.RecordNoteAsync(_recorder.Element);
+                StartClock();
+            }
+            catch (JSException) { Blocked(); }
+            finally
+            {
+                _recordingStarting = false;
+                StateHasChanged();
+            }
+        }
+        if (_scrollToSummary) { _scrollToSummary = false; try { await Interop.ScrollIntoViewAsync(_summarySection); } catch (JSException) { } }
+        if (_select is { } sentence && _summary is not null) { _select = null; if (!await _summary.SelectAsync(sentence)) await _summary.FocusAsync(); }
+        if (_focusType && _typeBox is not null) { _focusType = false; await _typeBox.FocusAsync(); }
+    }
+
+    /// <summary>Selects a sentence of the job description, to change it ("Change this", from a test chat).</summary>
+    public void Focus(string sentence)
+    {
+        _select = sentence;
+        StateHasChanged();
+    }
+
+    private async Task SetSummaryAsync(string? value)
+    {
+        Brief.Summary = value ?? string.Empty;
+        _added = [];
+        _fresh = false;
+        await OnChange.InvokeAsync();
+    }
+
+    // ── The agent speaking ─────────────────────────────────────────────────
+
+    private void Say(string line, Func<Task>? then, bool reading = false)
+    {
+        _agentLine = line;
+        _reading = reading;
+        _afterSpeech = then;
+        _phase = Phase.Speaking;
+        _speakPending = true;
+    }
+
+    [JSInvokable]
+    public async Task SpokenAsync()
+    {
+        if (_speech is not null) { await _speech.DisposeAsync(); _speech = null; }
+        if (_phase != Phase.Speaking) return;
+        _reading = false;
+        var then = _afterSpeech;
+        _afterSpeech = null;
+        // What comes next (listening) changes the phase itself, once it has started.
+        if (then is null) _phase = Phase.Idle;
+        else await then();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    // Skip the agent's words (its question) and go straight on; Stop ends a reading.
+    private async Task SkipSpeechAsync()
+    {
+        if (_speech is not null) { await _speech.DisposeAsync(); _speech = null; }
+        await SpokenAsync();
+    }
+
+    private async Task StopSpeakingAsync()
+    {
+        _afterSpeech = null;
+        if (_speech is not null) { await _speech.DisposeAsync(); _speech = null; }
+        if (_phase == Phase.Speaking) _phase = Phase.Idle;
+        _reading = false;
+    }
+
+    private async Task HearAsync()
+    {
+        if (_reading) { await StopSpeakingAsync(); return; }
+        if (Brief.IsEmpty) return;
+        Say(Brief.Summary, null, reading: true);
+    }
+
+    // ── Talking ────────────────────────────────────────────────────────────
+
+    // The microphone is asked for first, so a refusal is known before anyone
+    // waits for the agent; then the agent asks, then listens.
+    private async Task TalkAsync(string carried = "")
+    {
+        await StopSpeakingAsync();
+        _voiceNotice = null;
+        // From typing: what was typed so far carries over, and talking adds to it.
+        _said = carried.Trim().Length > 0 ? Sentence(carried) : string.Empty;
+        _interim = string.Empty;
+        var permission = "granted";
+        try { permission = await Voice.RequestMicAsync(); }
+        catch (JSException) { }
+        if (permission != "granted")
+        {
+            _voiceNotice = permission switch
+            {
+                "none" => "We couldn't find a microphone. You can type instead.",
+                "busy" => "Another app is using your microphone. Close it, or type instead.",
+                "system" => "Your computer is blocking the browser from the microphone. You can allow it in your system settings, or type instead.",
+                _ => "Your microphone is blocked. You can allow it from the icon at the left of the address bar, or type instead.",
+            };
+            return;
+        }
+        var ask = HasSummary ? "What would you like to add?" : $"Hi, I'm {Name}. Tell me about my job: what should I do, what should I never do, and when should I bring you in?";
+        if (_canSpeak) Say(ask, ListenTurnAsync);
+        else await ListenTurnAsync();
+    }
+
+    // "Listening" only once it is: words said before then would be lost.
+    private async Task ListenTurnAsync()
+    {
+        try { _mic = await Voice.MicLevelAsync(LevelTargets); }
+        catch (JSException) { Blocked(); await InvokeAsync(StateHasChanged); return; }
+        _phase = Phase.Listening;
+        await ListenAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ListenAsync()
+    {
+        _self ??= DotNetObjectReference.Create(this);
+        if (_listen is not null) await _listen.DisposeAsync();
+        try { _listen = await Voice.ListenAsync(_self, nameof(Heard), nameof(HeardAllAsync), nameof(NotHeardAsync)); }
+        catch (JSException) { await StopListeningAsync(); _phase = Phase.Idle; _voiceNotice = "We couldn't start listening. You can type instead."; }
+    }
+
+    [JSInvokable]
+    public Task Heard(string text)
+    {
+        if (_phase is not (Phase.Listening or Phase.Finishing)) return Task.CompletedTask;
+        _interim = text;
+        // Talking again: no countdown.
+        if (_phase == Phase.Finishing && text.Trim().Length > 0) { _pause?.Cancel(); _phase = Phase.Listening; }
+        return InvokeAsync(StateHasChanged);
+    }
+
+    // A sentence said. "That's all" ends it now; otherwise a pause starts the
+    // countdown, and it keeps listening in case there is more.
+    [JSInvokable]
+    public async Task HeardAllAsync(string text)
+    {
+        if (_phase is not (Phase.Listening or Phase.Finishing)) return;
+        _interim = string.Empty;
+        var words = text.Trim();
+        var closing = Closing.Match(words);
+        if (closing.Success) words = words[..closing.Index].Trim().TrimEnd(',', '.');
+        if (words.Length > 0) _said = _said.Length == 0 ? Sentence(words) : $"{_said} {Sentence(words)}";
+        if (closing.Success) { await FinishAsync(); return; }
+        if (_said.Length > 0) StartCountdown();
+        await InvokeAsync(StateHasChanged);
+        await ListenAsync();
+    }
+
+    [JSInvokable]
+    public async Task NotHeardAsync(string reason)
+    {
+        if (_phase is not (Phase.Listening or Phase.Finishing)) return;
+        if (reason is "not-allowed" or "service-not-allowed" or "audio-capture" or "network")
+        {
+            await StopListeningAsync();
+            if (reason == "network") { _phase = Phase.Idle; _voiceNotice = "Your connection is too slow for talking right now. You can type instead."; }
+            else Blocked();
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
+        // Silence, not the end: keep listening (the countdown, if any, carries on).
+        await ListenAsync();
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex Closing = new(@"(,?\s*\b(that's all|that is all|that's it|that is it|i'm done|i am done|nothing else|done)[.!]?)$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    private static string Sentence(string words)
+    {
+        var text = words.Trim();
+        if (text.Length == 0) return text;
+        if (char.IsLower(text[0])) text = char.ToUpperInvariant(text[0]) + text[1..];
+        if (!".!?".Contains(text[^1])) text += ".";
+        return text;
+    }
+
+    private void StartCountdown()
+    {
+        _pause?.Cancel();
+        _pause = new CancellationTokenSource();
+        _countdown = PauseSeconds;
+        _pauseRun++;
+        _phase = Phase.Finishing;
+        _ = CountdownAsync(_pause.Token);
+    }
+
+    private async Task CountdownAsync(CancellationToken token)
+    {
+        try
+        {
+            while (_countdown > 0)
+            {
+                await Task.Delay(1000, token);
+                _countdown--;
+            }
+            await InvokeAsync(FinishAsync);
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private void KeepTalking()
+    {
+        _pause?.Cancel();
+        _phase = Phase.Listening;
+    }
+
+    private async Task DoneAsync()
+    {
+        if (_interim.Trim().Length > 0) _said = _said.Length == 0 ? Sentence(_interim) : $"{_said} {Sentence(_interim)}";
+        _interim = string.Empty;
+        await FinishAsync();
+    }
+
+    private async Task FinishAsync()
+    {
+        if (_phase is not (Phase.Listening or Phase.Finishing)) return;
+        _pause?.Cancel();
+        await StopListeningAsync();
+        if (_said.Trim().Length == 0)
+        {
+            _phase = Phase.Idle;
+            _voiceNotice = "I didn't catch anything. Try again, or type instead.";
+            return;
+        }
+        await WriteAsync(_said);
+    }
+
+    private void Blocked()
+    {
+        _phase = Phase.Idle;
+        _voiceNotice = "Your microphone is blocked. You can allow it from the icon at the left of the address bar, or type instead.";
+    }
+
+    private async Task StopListeningAsync()
+    {
+        if (_listen is not null) { await _listen.DisposeAsync(); _listen = null; }
+        if (_mic is not null) { await _mic.DisposeAsync(); _mic = null; }
+    }
+
+    // ── Writing it ─────────────────────────────────────────────────────────
+
+    // The first time: written from what they said, appearing sentence by
+    // sentence as a real reply arrives. After that: what they said, worked in.
+    private async Task WriteAsync(string said)
+    {
+        var first = !HasSummary;
+        _phase = Phase.Thinking;
+        if (first)
+        {
+            _shown = true;
+            _writing = true;
+            _scrollToSummary = true;
+        }
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            if (first)
+            {
+                var written = await Briefing.DraftAsync(new(UseCase ?? AgentUseCase.Custom, CustomJob, Industry, Business, said));
+                _writing = false;
+                foreach (var sentence in written.Sentences())
+                {
+                    _stream.Add(sentence);
+                    await InvokeAsync(StateHasChanged);
+                    await Task.Delay(StreamMs);
+                }
+                _stream.Clear();
+                Brief.Summary = written.Summary;
+                _fresh = true;
+                _added = [];
+                await OnChange.InvokeAsync();
+                // It says so, and they read it.
+                if (_canSpeak) Say("Thanks! Here's my job description. Have a read, and change anything that isn't right.", null);
+                else _phase = Phase.Idle;
+            }
+            else
+            {
+                var before = Brief.Copy();
+                var update = await Briefing.UnderstandAsync(said, Brief);
+                Brief.Summary = update.Brief.Summary;
+                if (update.Added.Count > 0)
+                {
+                    _before = before;
+                    _added = update.Added;
+                    _fresh = true;
+                }
+                else _voiceNotice = "That's in the job description already.";
+                _phase = Phase.Idle;
+                await OnChange.InvokeAsync();
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            _writing = false;
+            _stream.Clear();
+            if (first && Brief.IsEmpty) _shown = false;
+            _phase = Phase.Idle;
+            _voiceNotice = "We couldn't write that just now. Try again.";
+        }
+        finally
+        {
+            _said = string.Empty;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private Task SuggestAsync() => WriteAsync(string.Empty);
+
+    private async Task UndoAsync()
+    {
+        if (_before is not { } before) return;
+        Brief.Summary = before.Summary;
+        _before = null;
+        _added = [];
+        await OnChange.InvokeAsync();
+    }
+
+    // ── Typing, with a voice note ──────────────────────────────────────────
+
+    // From talking to typing: what was said so far goes into the box.
+    private async Task TypeInsteadAsync()
+    {
+        _pause?.Cancel();
+        var said = _interim.Trim().Length > 0 ? $"{_said} {Sentence(_interim)}".Trim() : _said;
+        _said = string.Empty;
+        _interim = string.Empty;
+        await StopListeningAsync();
+        _typed = said;
+        _phase = Phase.Typing;
+        _focusType = true;
+    }
+
+    private async Task TalkInsteadAsync()
+    {
+        var typed = _typed;
+        _typed = string.Empty;
+        await TalkAsync(typed);
+    }
+
+    private async Task StartTyping()
+    {
+        await StopSpeakingAsync();
+        _voiceNotice = null;
+        _phase = Phase.Typing;
+        _focusType = true;
+    }
+
+    private void CancelTyping()
+    {
+        _typed = string.Empty;
+        _phase = Phase.Idle;
+    }
+
+    // Enter starts a new line in a long brief; Ctrl or Cmd + Enter is Done.
+    private async Task TypeKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && (args.CtrlKey || args.MetaKey)) await AddTypedAsync();
+    }
+
+    private async Task AddTypedAsync()
+    {
+        var said = _typed.Trim();
+        if (said.Length == 0) return;
+        _typed = string.Empty;
+        await WriteAsync(said);
+    }
+
+    private void StartNote()
+    {
+        _voiceNotice = null;
+        _phase = Phase.Note;
+        _recordSeconds = 0;
+        _recordingStarting = true;
+    }
+
+    private void StartClock()
+    {
+        _recordClock?.Cancel();
+        _recordClock = new CancellationTokenSource();
+        _ = TickAsync(_recordClock.Token);
+    }
+
+    private async Task TickAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(1000, token);
+                _recordSeconds++;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task CancelNoteAsync()
+    {
+        _recordClock?.Cancel();
+        _recordingStarting = false;
+        _phase = Phase.Typing;
+        var recording = _recording;
+        _recording = null;
+        if (recording is not null) await recording.CancelAsync();
+    }
+
+    // The note's words go into the box, to check before Done.
+    private async Task SendNoteAsync()
+    {
+        _recordClock?.Cancel();
+        var recording = _recording;
+        _recording = null;
+        _phase = Phase.Typing;
+        if (recording is null) return;
+        var note = await recording.StopAsync();
+        if (note.Transcript.Trim().Length == 0)
+            _voiceNotice = "We couldn't make out the words in that note. Try again, or type instead.";
+        else _typed = _typed.Trim().Length == 0 ? Sentence(note.Transcript) : $"{_typed.Trim()} {Sentence(note.Transcript)}";
+        _focusType = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _recordClock?.Cancel();
+        _pause?.Cancel();
+        await StopListeningAsync();
+        await StopSpeakingAsync();
+        if (_recording is not null) await _recording.CancelAsync();
+        _self?.Dispose();
+    }
+}

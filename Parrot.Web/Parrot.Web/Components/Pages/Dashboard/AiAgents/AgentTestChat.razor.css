@@ -1,0 +1,190 @@
+/* Test as a customer: a window over the page, like Teach your AI, holding
+   a chat. The agent in the soft brand tint on the left, the customer in
+   solid brand on the right (the Inbox's colours), and under each reply what
+   it came from. The composer stays at the foot. */
+
+.test-chat {
+  /* Missing from the token set: no overlay layer, window size, bubble
+     width or typing-dot motion. The layer and blur match Teach your AI. */
+  --ds-test-chat-layer: 100;
+  --ds-test-chat-panel: 760px;
+  --ds-test-chat-height: 880px;
+  --ds-test-chat-blur: 6px;
+  --ds-test-chat-avatar: 32px;
+  --ds-test-chat-bar-avatar: 44px;
+  --ds-test-chat-bubble: 80%;
+  --ds-test-chat-bubble-phone: 92%;
+  --ds-test-chat-dot: 6px;
+  --ds-test-chat-pulse: 1.2s;
+  --ds-test-chat-motion: 240ms;
+
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-test-chat-layer);
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-2xl);
+}
+.test-chat::before {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-test-chat-blur));
+}
+
+.test-chat__panel {
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(var(--ds-test-chat-panel), 100%);
+  height: min(var(--ds-test-chat-height), calc(100dvh - 2 * var(--spacing-2xl)));
+  overflow: hidden;
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-popover);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  outline: none;
+  box-shadow: 0 var(--spacing-xl) var(--spacing-4xl) var(--colors-surface-shadow);
+  animation: test-chat-rise var(--ds-test-chat-motion) var(--ds-motion-enter) both;
+}
+@keyframes test-chat-rise {
+  from { opacity: 0; transform: translateY(var(--spacing-md)); }
+}
+
+/* ── Top bar ─────────────────────────────────────────────────────────────── */
+
+.test-chat__bar {
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg) var(--spacing-2xl);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.test-chat__avatar {
+  flex: none;
+  width: var(--ds-test-chat-bar-avatar);
+  height: var(--ds-test-chat-bar-avatar);
+  object-fit: cover;
+  border-radius: var(--radius-radius-full);
+}
+.test-chat__heading { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.test-chat__heading ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.test-chat__heading ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.test-chat__bar-actions { display: flex; flex: none; gap: var(--spacing-xs); align-items: center; }
+
+/* ── The conversation ────────────────────────────────────────────────────── */
+
+.test-chat__thread {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  min-height: 0;
+  margin: var(--spacing-none);
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  list-style: none;
+  background: var(--colors-surface-background);
+}
+.test-chat__msg { display: flex; gap: var(--spacing-sm); align-items: flex-start; max-width: var(--ds-test-chat-bubble); animation: test-chat-rise var(--ds-test-chat-motion) var(--ds-motion-enter); }
+.test-chat__msg > img { flex: none; width: var(--ds-test-chat-avatar); height: var(--ds-test-chat-avatar); object-fit: cover; border-radius: var(--radius-radius-full); }
+.test-chat__msg.is-agent { align-self: flex-start; }
+.test-chat__msg.is-customer { align-self: flex-end; }
+.test-chat__reply { display: grid; gap: var(--spacing-sm); justify-items: start; min-width: 0; }
+
+.test-chat__bubble {
+  display: grid;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-radius-2xl);
+}
+.test-chat__bubble ::deep p { margin: var(--spacing-none); }
+.is-agent .test-chat__bubble {
+  color: var(--colors-text-secondary);
+  background: var(--colors-accent-brand-subtle);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-muted);
+  border-top-left-radius: var(--radius-radius-sm);
+}
+.is-customer .test-chat__bubble {
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border-top-right-radius: var(--radius-radius-sm);
+}
+.is-customer .test-chat__bubble ::deep .test-chat__transcript { opacity: 0.85; }
+
+/* What a reply came from: a quiet line, its icon in the source's colour. */
+.test-chat__why { display: flex; gap: var(--spacing-xs); align-items: flex-start; color: var(--colors-text-muted); }
+.test-chat__why ::deep .icon,
+.test-chat__why > ::deep svg { flex: none; }
+.test-chat__why.is-brief { color: var(--colors-text-muted); }
+.test-chat__why.is-knowledge { color: var(--colors-accent-blue-text); }
+.test-chat__why.is-unknown { color: var(--colors-feedback-warning-text); }
+.test-chat__why ::deep span { color: var(--colors-text-muted); }
+
+.test-chat__teach {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-end;
+  justify-self: stretch;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-border);
+  border-radius: var(--radius-radius-xl);
+}
+.test-chat__teach ::deep textarea { flex: 1; min-width: 0; }
+.test-chat__taught { display: flex; flex-wrap: wrap; gap: var(--spacing-xs) var(--spacing-sm); align-items: center; color: var(--colors-feedback-success-text); }
+.test-chat__taught ::deep span { color: var(--colors-text-secondary); }
+
+/* Typing: three dots. */
+.test-chat__bubble.is-typing { display: flex; gap: var(--spacing-2xs); padding-block: var(--spacing-md); }
+.test-chat__bubble.is-typing i {
+  width: var(--ds-test-chat-dot);
+  height: var(--ds-test-chat-dot);
+  background: var(--colors-icon-brand);
+  border-radius: var(--radius-radius-full);
+  animation: test-chat-typing var(--ds-test-chat-pulse) ease-in-out infinite;
+}
+.test-chat__bubble.is-typing i:nth-child(2) { animation-delay: calc(var(--ds-test-chat-pulse) / 6); }
+.test-chat__bubble.is-typing i:nth-child(3) { animation-delay: calc(var(--ds-test-chat-pulse) / 3); }
+@keyframes test-chat-typing {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+/* ── The composer ────────────────────────────────────────────────────────── */
+
+.test-chat__dock {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-2xl) var(--spacing-xl);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.test-chat__try { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+.test-chat__composer {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-end;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.test-chat__composer:focus-within { border-color: var(--colors-accent-brand-border); }
+.test-chat__composer ::deep textarea { flex: 1; min-width: 0; }
+
+/* A phone: the window fills the screen. */
+@media (max-width: 1180px) {
+  .test-chat { padding: var(--spacing-md); }
+  .test-chat__panel { height: calc(100dvh - 2 * var(--spacing-md)); }
+  .test-chat__bar { padding-inline: var(--spacing-lg) var(--spacing-md); }
+  .test-chat__thread,
+  .test-chat__dock { padding-inline: var(--spacing-lg); }
+  .test-chat__msg { max-width: var(--ds-test-chat-bubble-phone); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .test-chat__panel,
+  .test-chat__msg { animation: none; }
+}

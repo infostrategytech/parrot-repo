@@ -12,11 +12,17 @@
 @inject IAiOperationsFeed Feed
 @inject IAgentCapabilities Capabilities
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
+@inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
+@inject IAgentBriefing Briefing
 @implements IDisposable
 
 @* One agent: who it is and whether it is on, then its day (what it did,
-   what it needs from you, what it said), then how it is set up. Playbooks and
-   Settings are the other two tabs; the figures link to where the work is. *@
+   what it needs from you, what it said), then how it is set up, in one row
+   of tabs (designer, 13 October 2026): each a part of how it works (Job
+   description, Knowledge, Channels, Personality, Handover & safety), with
+   one save bar across them, and Test as a customer in the header once the
+   agents API can answer a test. A new draft opens on Job description. The
+   figures link to where the work is. *@
 
 @{
     var agent = AiAgentsState.GetAgent(AgentId);
@@ -73,7 +79,7 @@ else
                         <StatusBadge Tone="@StatusToneOf(agent)">@StatusOf(agent)</StatusBadge>
                     </div>
                     @* Its job and where it answers, as the channels' marks so any
-                       number of them stays one line; the description is in Settings. *@
+                       number of them stays one line; its job description has a tab of its own. *@
                     <div class="agent-detail__job">
                         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="agent-detail__lede">
                             @AgentRole.NameOf(agent.Settings) · @(agent.ChannelCount == 0 ? "Not answering anywhere yet" : "Answers on")
@@ -84,11 +90,14 @@ else
                         }
                     </div>
                 </div>
-                @* On or off is the one thing an owner does here most; Edit opens Settings. *@
+                @* On or off is the one thing an owner does here most. *@
                 <div class="agent-detail__actions">
-                    @if (_activeTab != "settings")
+                    @if (Briefing.CanTry)
                     {
-                        <Button Variant="ButtonVariant.Secondary" @onclick="@(() => _activeTab = "settings")">Edit</Button>
+                        <Button Variant="ButtonVariant.Secondary" @onclick="() => _testing = true">
+                            <IconLeft><Icon Name="IconName.RiChat3Fill" /></IconLeft>
+                            <ChildContent>Test as a customer</ChildContent>
+                        </Button>
                     }
                     @if (agent.IsActive && !agent.IsDraft)
                     {
@@ -97,7 +106,7 @@ else
                     else if (Capabilities.CanReply)
                     {
                         <Button disabled="@(agent.ChannelCount == 0)" Busy="_switching"
-                                title="@(agent.ChannelCount == 0 ? "Choose where it answers first, in Settings." : null)"
+                                title="@(agent.ChannelCount == 0 ? "Choose where it answers first, under Channels." : null)"
                                 @onclick="() => SetLiveAsync(agent, true)">Turn on</Button>
                     }
                 </div>
@@ -121,13 +130,30 @@ else
             </section>
         }
 
+        @if (Created == "1" && agent.IsDraft && !_createdDismissed)
+        {
+            <section class="agent-detail__live" aria-labelledby="agent-created-title">
+                <span class="agent-detail__live-icon"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
+                <div class="agent-detail__created-text">
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-created-title" Class="agent-detail__live-title">@($"{agent.Name} is ready, as a draft")</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@(Briefing.CanTry ? "Test it as a customer, check where it answers, then turn it on." : "Check where it answers, then turn it on.") It won't reply to anyone until you do.</Typography>
+                </div>
+                <div class="agent-detail__live-actions">
+                    <Button Size="ButtonSize.Small" @onclick="@(() => _activeTab = "channels")">Check where it answers</Button>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Dismiss" title="Dismiss" @onclick="() => _createdDismissed = true">
+                        <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                    </Button>
+                </div>
+            </section>
+        }
+
         <Tabs Label="Agent sections" Variant="TabsVariant.Floating" Class="agent-detail__tabs">
             @foreach (var tab in Tabs)
             {
                 var current = tab;
                 <Tab Selected="@(_activeTab == tab.Id)" OnClick="() => _activeTab = current.Id">
                     <Icon Name="@tab.Glyph" Size="IconSize.Sm" />
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">@tab.Label@(tab.Id == "settings" && Dirty ? " •" : null)</Typography>
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">@tab.Label</Typography>
                 </Tab>
             }
         </Tabs>
@@ -155,9 +181,9 @@ else
                     <span class="agent-detail__fact-icon"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
                     <div class="agent-detail__row-text">
                         <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@agent.Name isn't answering customers anywhere yet</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Choose where it answers in Settings.</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Choose where it answers, under Channels.</Typography>
                     </div>
-                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ds-no-shrink" @onclick="@(() => _activeTab = "settings")">Choose channels</Button>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ds-no-shrink" @onclick="@(() => _activeTab = "channels")">Choose channels</Button>
                 </section>
             }
             else
@@ -309,11 +335,11 @@ else
                 </div>
             }
 
-            @* What it is allowed to do, in a few lines; each Edit opens Settings. *@
+            @* What it is allowed to do, in a few lines; Edit opens its job description. *@
             <section class="agent-detail__card" aria-labelledby="agent-setup-title">
                 <header class="agent-detail__card-head">
                     <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-setup-title">How it's set up</Typography>
-                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="@(() => _activeTab = "settings")">Edit</Button>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="@(() => _activeTab = "job")">Edit</Button>
                 </header>
                 @* The marks, then the names spelled out: the one place they are. *@
                 <div class="agent-detail__row">
@@ -335,32 +361,93 @@ else
                 </div>
                 @Fact(IconName.RiUserSharedFill, "Hands customers to a person when it can't help", AgentBasics.HandoverDetail(agent.Settings))
                 @Fact(IconName.RiShieldCheckFill, AgentBasics.MoneyRule(agent.Settings), AgentBasics.MoneyDetailOf(agent.Settings))
-                @Fact(IconName.RiChatSmile3Fill, $"{ToneWord(agent.Settings.Tone)} tone, {LengthWord(agent.Settings.Length)} replies", "How it talks, under Advanced settings.")
+                @Fact(IconName.RiChatSmile3Fill, $"{ToneWord(agent.Settings.Tone)} tone, {LengthWord(agent.Settings.Length)} replies", "How it talks, under Personality.")
             </section>
         }
 
-        @if (_activeTab == "settings" && _form is not null)
+        @if (IsConfigTab(_activeTab) && _form is not null)
         {
-            <div class="agent-detail__settings">
-                <div class="agent-detail__settings-form">
-                    <AgentRolePicker Form="_form" Others="OthersThan(agent)" Tried="_tried" OnChange="StateHasChanged" />
-                    <AgentBasics Form="_form" Others="OthersThan(agent)" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" />
+            <div class="agent-detail__config">
+                @switch (_activeTab)
+                {
+                    case "job":
+                        <section class="agent-detail__card agent-detail__job-type" aria-label="Its main job">
+                            <span class="agent-detail__fact-icon"><Icon Name="@(AgentUseCase.Of(_form.Settings.UseCase)?.Icon ?? AgentRole.Of(_form.Settings.Role).Icon)" Size="IconSize.Md" /></span>
+                            <div class="agent-detail__row-text">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@_form.RoleName</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Its main job. Its job description below says how it does it.</Typography>
+                            </div>
+                            <FilterPopover Label="Change" Title="Its main job" AlignEnd Open="@(_menu == "job")" OpenChanged="JobMenu">
+                                @foreach (var useCase in AgentUseCase.All.Where(item => item.Id != AgentUseCase.Custom || _form.Settings.UseCase == AgentUseCase.Custom))
+                                {
+                                    var current = useCase;
+                                    <PopoverOption Label="@current.Name" Description="@current.Does" Active="@(_form.Settings.UseCase == current.Id)" OnSelect="() => ChooseUseCase(current)" />
+                                }
+                            </FilterPopover>
+                        </section>
+                        <AgentJobEditor @ref="_jobEditor" Brief="JobBrief" Name="@_form.DisplayName" OnChange="StateHasChanged"
+                                        UseCase="@_form.Settings.UseCase" CustomJob="@_form.Settings.CustomRole" Industry="@_form.Settings.Industry" Business="@Business" />
+                        <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Actions" />
+                        break;
+                    case "knowledge":
+                        <section class="agent-detail__card agent-detail__business" aria-labelledby="agent-business-title">
+                            <header class="agent-detail__card-head">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-business-title">@($"About {Business}")</Typography>
+                            </header>
+                            <div class="agent-detail__row">
+                                <span class="agent-detail__fact-icon"><Icon Name="IconName.RiStore2Fill" Size="IconSize.Md" /></span>
+                                <div class="agent-detail__row-text">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@(AgentIndustry.Of(_form.Settings.Industry)?.Name ?? "Kind of business not chosen")</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@(AgentIndustry.Of(_form.Settings.Industry)?.Careful is { } careful ? $"So it also follows: {careful}" : "It shapes how it talks and what it's careful about.")</Typography>
+                                </div>
+                                <FilterPopover Label="Change" Title="Kind of business" AlignEnd Open="@(_menu == "industry")" OpenChanged="IndustryMenu">
+                                    @foreach (var industry in AgentIndustry.All)
+                                    {
+                                        var current = industry;
+                                        <PopoverOption Label="@current.Name" Description="@current.Examples" Active="@(_form.Settings.Industry == current.Id)" OnSelect="() => ChooseIndustry(current)" />
+                                    }
+                                </FilterPopover>
+                            </div>
+                            <div class="agent-detail__website">
+                                <Input FloatingLabel="Website" Type="url" Value="@_form.Settings.Website" ValueChanged="value => _form.Settings.Website = value ?? string.Empty"
+                                       HelperText="@(Memory.Available ? "We read it for anything your agents should know. What we find waits for your review in Knowledge." : "Saved with this agent. Reading it for what your agents should know isn't available yet.")" maxlength="200" />
+                                @if (Memory.Available)
+                                {
+                                    <Button Variant="ButtonVariant.Secondary" Busy="_reading" disabled="@(_form.Settings.Website.Trim().Length == 0 || _reading)" @onclick="ReadWebsiteAsync">Read it now</Button>
+                                }
+                            </div>
+                            @if (_siteWaiting > 0)
+                            {
+                                <div class="agent-detail__found" role="status">
+                                    <Icon Name="IconName.RiSearchEyeFill" Size="IconSize.Md" />
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@($"{_siteWaiting} {(_siteWaiting == 1 ? "thing" : "things")} found on your website {(_siteWaiting == 1 ? "waits" : "wait")} for your review.")</Typography>
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="@(() => Nav.NavigateTo("/dashboard/knowledge"))">Review in Knowledge</Button>
+                                </div>
+                            }
+                        </section>
+                        <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Knowledge" />
+                        break;
+                    case "channels":
+                        <AgentBasics Form="_form" Others="OthersThan(agent)" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" ShowIdentity="false" ShowSafety="false" />
+                        break;
+                    case "personality":
+                        <AgentBasics Form="_form" Others="OthersThan(agent)" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" ShowChannels="false" ShowSafety="false" />
+                        <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Talk" />
+                        break;
+                    case "handover":
+                        <AgentBasics Form="_form" Others="OthersThan(agent)" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" ShowIdentity="false" ShowChannels="false" />
+                        <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Handoff" />
+                        break;
+                }
 
-                    <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" ShowCanvas />
-
-                    @if (Dirty)
-                    {
-                        @* A save that fails keeps every change, and says so in the bar,
-                           where the person is looking. *@
-                        <footer class="agent-detail__save">
-                            <Button Size="ButtonSize.Large" Busy="_saving" disabled="@(!_form.HasName || !_form.HasRoleName)" @onclick="() => SaveAsync(agent)">Save changes</Button>
-                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" disabled="@_saving" @onclick="() => Discard(agent)">Discard</Button>
-                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="@(_saveError is null ? null : "is-error")" aria-live="polite">@(_saveError ?? SaveNote(agent))</Typography>
-                        </footer>
-                    }
-                </div>
-
-                <AgentPreview Form="_form" Cards="_cards" Business="@Business" />
+                @if (Dirty)
+                {
+                    <footer class="agent-detail__save">
+                        <Button Size="ButtonSize.Large" Busy="_saving" disabled="@(!_form.HasName || !_form.HasRoleName)" @onclick="() => SaveAsync(agent)">Save changes</Button>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" disabled="@_saving" @onclick="() => Discard(agent)">Discard</Button>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="@(_saveError is null ? null : "is-error")" aria-live="polite">@(_saveError ?? SaveNote(agent))</Typography>
+                    </footer>
+                }
             </div>
         }
 
@@ -375,6 +462,15 @@ else
             </section>
         }
     </main>
+}
+
+@if (_form is not null && Briefing.CanTry)
+{
+    @* What is being edited is what is tested, saved or not. *@
+    <AgentTestChat Open="_testing" OnClose="() => _testing = false"
+                   Name="@_form.DisplayName" Mascot="@_form.Mascot" Business="@Business"
+                   Brief="JobBrief" UseCase="@_form.Settings.UseCase" Industry="@_form.Settings.Industry"
+                   OnChangeLine="ChangeLine" />
 }
 
 @* Leaving with unsaved changes asks first (tabs keep them): the rail, Back, or closing the tab. *@
@@ -399,8 +495,109 @@ else
     // ?live=1: just turned on from setup.
     [SupplyParameterFromQuery(Name = "live")] public string? Live { get; set; }
 
-    // ?tab=settings: sent here to change its settings (the card's menu).
+    // ?tab=settings: sent here to change its settings (the card's menu): its job description first.
     [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
+
+    // ?created=1: just created, as a draft.
+    [SupplyParameterFromQuery(Name = "created")] public string? Created { get; set; }
+
+    // ── How it works, a tab each ────────────────────────────────────────────
+
+    private static readonly Tab[] Tabs =
+    [
+        new("overview", "Overview", IconName.RiHome5Fill),
+        new("job", "Job description", IconName.RiFileTextFill),
+        new("knowledge", "Knowledge", IconName.RiBookOpenFill),
+        new("channels", "Channels", IconName.RiChat3Fill),
+        new("personality", "Personality", IconName.RiChatSmile3Fill),
+        new("handover", "Handover & safety", IconName.RiUserSharedFill),
+        new("playbooks", "Playbooks", IconName.RiFileList3Fill),
+    ];
+
+
+    private static bool IsConfigTab(string id) => id is "job" or "knowledge" or "channels" or "personality" or "handover";
+
+    private bool _testing, _createdDismissed, _reading, _openedOnJob;
+    private string? _menu;
+    private void JobMenu(bool open) => _menu = open ? "job" : null;
+    private void IndustryMenu(bool open) => _menu = open ? "industry" : null;
+    private int _siteWaiting;
+    private AgentJobEditor? _jobEditor;
+    private string? _focusLine;
+
+    // Every agent has a job description here; one set up before there were job descriptions starts from its description.
+    private AgentBrief JobBrief => _form?.Settings.Brief ?? new();
+
+    private void ChooseUseCase(AgentUseCase useCase)
+    {
+        if (_form is null) return;
+        _form.Settings.UseCase = useCase.Id;
+        _form.Settings.Role = useCase.Role;
+        if (useCase.Role == AgentRoleTemplate.Custom && useCase.Id != AgentUseCase.Custom) _form.Settings.CustomRole = useCase.Name;
+        _menu = null;
+    }
+
+    private async Task ChooseIndustry(AgentIndustry industry)
+    {
+        if (_form is null) return;
+        _form.Settings.Industry = industry.Id;
+        _menu = null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ReadWebsiteAsync()
+    {
+        if (_form is null || _reading) return;
+        _reading = true;
+        try
+        {
+            await Memory.ReadWebsiteAsync(_form.Settings.Website);
+            await CountSiteAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or NotSupportedException)
+        {
+            Toasts.ShowError("We couldn't read that website. Check the address and try again.");
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    // What was found on the website, still waiting for a yes.
+    private async Task CountSiteAsync()
+    {
+        if (_form is null || !Memory.Available) return;
+        var site = System.Text.RegularExpressions.Regex.Replace(_form.Settings.Website.Trim(), @"^(https?://)?(www\.)?", string.Empty).TrimEnd('/');
+        if (site.Length == 0) { _siteWaiting = 0; return; }
+        var snapshot = await Memory.ListAsync();
+        _siteWaiting = snapshot.Facts.Count(fact => fact.Source == site && fact.State == Parrot.Web.Features.Dashboard.Knowledge.FactState.ToConfirm);
+    }
+
+    // "Change this", from the test chat: its sentence, on Job description.
+    private void ChangeLine(string target)
+    {
+        _testing = false;
+        _activeTab = "job";
+        _focusLine = target;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusLine is { } line && _jobEditor is not null)
+        {
+            _focusLine = null;
+            _jobEditor.Focus(line);
+        }
+        if (_activeTab == "knowledge" && _countedFor != _formFor)
+        {
+            _countedFor = _formFor;
+            await CountSiteAsync();
+            StateHasChanged();
+        }
+    }
+
+    private string? _countedFor;
 
     private bool _liveDismissed;
     private string? _appliedTab;
@@ -427,12 +624,6 @@ else
     private string? _channel;
     private bool _channelMenu;
 
-    private static readonly Tab[] Tabs =
-    [
-        new("overview", "Overview", IconName.RiHome5Fill),
-        new("playbooks", "Playbooks", IconName.RiBookOpenFill),
-        new("settings", "Settings", IconName.RiSettings4Fill)
-    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -461,9 +652,17 @@ else
         if (TabQuery != _appliedTab)
         {
             _appliedTab = TabQuery;
-            if (Tabs.Any(t => t.Id == TabQuery)) _activeTab = TabQuery!;
+            // Its settings start at the job description.
+            var asked = TabQuery == "settings" ? "job" : TabQuery;
+            if (Tabs.Any(t => t.Id == asked)) _activeTab = asked!;
         }
         ResetIfNew();
+        // A new draft opens on its job description.
+        if (!_openedOnJob && TabQuery is null && AiAgentsState.GetAgent(AgentId) is { IsDraft: true })
+        {
+            _openedOnJob = true;
+            _activeTab = "job";
+        }
     }
 
     // "Teach more" closed: read the knowledge again, so the preview answers
@@ -501,6 +700,8 @@ else
     {
         _form = AgentForm.From(agent);
         _formFor = agent.Id;
+        // A job description to edit, even for an agent set up without one: its description to start.
+        _form.Settings.Brief ??= new() { Summary = agent.Description };
         _saved = _form.Snapshot();
         _tried = false;
     }
@@ -622,7 +823,7 @@ else
             : agent.IsDraft ? "A draft: it answers no one until you turn it on."
             : agent.IsActive ? "On now." : "Off: it answers no one until you turn it on.";
         // With nowhere to answer, "On now" would contradict the line above it.
-        return agent.ChannelCount == 0 ? "Choose where it answers in Settings." : $"{AgentBuilderCopy.ChannelList(agent)}. {status}";
+        return agent.ChannelCount == 0 ? "Choose where it answers, under Channels." : $"{AgentBuilderCopy.ChannelList(agent)}. {status}";
     }
 
     private static StatusTone OutcomeTone(ConversationOutcome outcome) => outcome switch

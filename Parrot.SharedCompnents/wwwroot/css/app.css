@@ -64,9 +64,10 @@ body {
 
 /* Except the sign-in pages. They are the public way in, often opened on a
    small laptop or a phone from a shared link, and lay themselves out to any
-   width. The floor protects the app shell, which these pages do not use. */
-html:has(.account-access-page, .account-panel-page, .legal-page),
-html:has(.account-access-page, .account-panel-page, .legal-page) body {
+   width. The floor protects the app shell, which these pages do not use;
+   nor does creating an agent (a full-screen flow of its own). */
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create),
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create) body {
   min-width: 0;
 }
 

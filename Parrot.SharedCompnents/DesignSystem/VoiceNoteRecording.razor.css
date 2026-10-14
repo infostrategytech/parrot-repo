@@ -58,3 +58,7 @@
   .ds-voice-recording__dot { animation: none; }
   .ds-voice-recording__bars i { transition: none; }
 }
+
+/* Paused: the dot stops and dims; the bars rest, as there is no voice. */
+.ds-voice-recording.is-paused .ds-voice-recording__dot { animation: none; opacity: 0.4; }
+.ds-voice-recording.is-paused .ds-voice-recording__bars { --level: 0; }

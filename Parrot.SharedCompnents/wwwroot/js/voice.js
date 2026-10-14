@@ -307,6 +307,7 @@ globalThis.auroraVoiceHear = (text) => { if (!activeListener) return false; acti
  * until the API takes uploads) and its words are transcribed at the same
  * time. stop() resolves with the transcript, the length in seconds, the
  * audio's URL and its waveform (peaks, 0 to 1); cancel() throws it away.
+ * pause() and resume() hold the recording, its words and its clock.
  */
 export async function recordNote(element) {
   const mic = await micLevel(element);
@@ -321,8 +322,11 @@ export async function recordNote(element) {
   } catch { recorder = null; }
   // The waveform: the level, sampled as it records.
   const levels = [];
-  const sampler = setInterval(() => levels.push(Number.parseFloat(element?.style?.getPropertyValue("--level")) || 0), 100);
-  let transcript = "";
+  let paused = false, pausedAt = 0, pausedFor = 0;
+  const sampler = setInterval(() => { if (!paused) levels.push(Number.parseFloat(element?.style?.getPropertyValue("--level")) || 0); }, 100);
+  // The words: the browser listens in sessions (it stops after a silence and
+  // is started again); what earlier sessions heard is kept, not replaced.
+  let transcript = "", kept = "";
   let recognition = null;
   if (Recognition) {
     recognition = new Recognition();
@@ -332,16 +336,31 @@ export async function recordNote(element) {
     recognition.onresult = (event) => {
       let text = "";
       for (const result of event.results) text += result[0].transcript;
-      transcript = text.trim();
+      transcript = `${kept} ${text.trim()}`.trim();
     };
-    recognition.onend = () => { if (recognition) try { recognition.start(); } catch { /* stopped */ } };
+    recognition.onend = () => { kept = transcript; if (recognition && !paused) try { recognition.start(); } catch { /* stopped */ } };
     try { recognition.start(); } catch { recognition = null; }
   }
   let injected = null;
   const note = {
     inject(text) { injected = text; },
+    pause() {
+      if (paused) return;
+      paused = true;
+      pausedAt = performance.now();
+      try { if (recorder?.state === "recording") recorder.pause(); } catch { /* not supported */ }
+      try { recognition?.stop(); } catch { /* not listening */ }
+    },
+    resume() {
+      if (!paused) return;
+      paused = false;
+      pausedFor += performance.now() - pausedAt;
+      try { if (recorder?.state === "paused") recorder.resume(); } catch { /* not supported */ }
+      try { recognition?.start(); } catch { /* already listening */ }
+    },
     async stop() {
-      const seconds = Math.max(1, Math.round((performance.now() - started) / 1000));
+      if (paused) { pausedFor += performance.now() - pausedAt; paused = false; }
+      const seconds = Math.max(1, Math.round((performance.now() - started - pausedFor) / 1000));
       clearInterval(sampler);
       const r = recognition; recognition = null;
       if (r) { r.onend = null; r.stop(); await new Promise((ok) => setTimeout(ok, 350)); }

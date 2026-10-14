@@ -107,6 +107,9 @@
     private ElementReference _input;
     private IAsyncDisposable? _autofillBinding;
 
+    /// <summary>Moves focus into the field (an edit opened in place, a table cell).</summary>
+    public ValueTask FocusAsync() => _input.FocusAsync();
+
     // The text the field already shows (last typed or last pushed), and text
     // waiting to be pushed to it after the next render.
     private string _shown = "";

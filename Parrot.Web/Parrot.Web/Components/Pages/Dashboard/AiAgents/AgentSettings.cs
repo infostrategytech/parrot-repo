@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Parrot.Web.Features.Dashboard.AiAgents;
 using Parrot.Web.Services;
 
 namespace Parrot.Web.Components.Pages.Dashboard.AiAgents;
@@ -30,6 +31,20 @@ public sealed class AgentSettings
 
     public bool CanOfferDiscounts { get; set; }
     public bool CanApproveRefunds { get; set; }
+
+    // ── Its job description ─────────────────────────────────────────────────
+
+    /// <summary>The job it was created for (AgentUseCase.Id); null for agents set up before there were jobs to choose.</summary>
+    public string? UseCase { get; set; }
+
+    /// <summary>The kind of business (AgentIndustry.Id), which shaped its first draft.</summary>
+    public string? Industry { get; set; }
+
+    /// <summary>The business's website, read for knowledge the owner then reviews.</summary>
+    public string Website { get; set; } = string.Empty;
+
+    /// <summary>Its job description, in the owner's words: its job, what it does, never does, and when it brings them in.</summary>
+    public AgentBrief? Brief { get; set; }
 
     // ── How it talks ────────────────────────────────────────────────────────
 
@@ -77,6 +92,8 @@ public sealed class AgentSettings
         var copy = (AgentSettings)MemberwiseClone();
         copy.NoteFiles = [.. NoteFiles];
         copy.LeftOut = [.. LeftOut];
+        copy.AvoidPhrases = [.. AvoidPhrases];
+        copy.Brief = Brief?.Copy();
         return copy;
     }
 
@@ -131,7 +148,7 @@ public sealed class AgentForm
     public AgentRole Role => AgentRole.Of(Settings.Role);
 
     /// <summary>The job as owners read it: the role's name, or the owner's own for Build my own.</summary>
-    public string RoleName => AgentRole.NameOf(Settings);
+    public string RoleName => AgentUseCase.NameOf(Settings);
 
     /// <summary>Build my own needs its job named; the others are named already.</summary>
     public bool HasRoleName => Settings.Role != AgentRoleTemplate.Custom || !string.IsNullOrWhiteSpace(Settings.CustomRole);
@@ -216,6 +233,12 @@ public sealed class AgentForm
         agent.Name = Name.Trim();
         agent.Mascot = Mascot;
         agent.Description = Settings.Role == AgentRoleTemplate.Custom && job.Length > 0 ? job : Role.Description;
+        // Created from a job description: the whole of it, in the owner's
+        // words. The agents API keeps the description (up to 2,000
+        // characters, as the job description box) but not the job
+        // description yet, so this is how it survives a reload and reaches
+        // the AI (a backend request).
+        if (Settings.Brief is { IsEmpty: false } brief) agent.Description = brief.Summary.Trim();
         agent.Settings = Settings.Copy();
         foreach (var channel in agent.Channels)
             channel.IsEnabled = Channels.Contains(channel.Key);

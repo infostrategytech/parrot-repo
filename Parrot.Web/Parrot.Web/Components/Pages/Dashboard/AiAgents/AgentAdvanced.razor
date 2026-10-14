@@ -12,235 +12,262 @@
    in the basics, so they are not repeated here. Edits update the preview at
    once. *@
 
-<section class="agent-advanced" @ref="_root">
-    <RowButton Class="@($"agent-advanced__toggle{(_open ? " is-open" : null)}")"
-               OnClick="ToggleOpen"
-               aria-expanded="@(_open ? "true" : "false")"
-               aria-controls="@($"{_id}-groups")">
-        <span class="agent-advanced__icon is-quiet"><Icon Name="IconName.RiSettings4Fill" Size="IconSize.Md" /></span>
-        <span class="agent-advanced__text">
-            <span class="agent-advanced__title">
-                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">Advanced settings</Typography>
-                <StatusBadge Tone="StatusTone.Neutral">Optional</StatusBadge>
+<section class="@($"agent-advanced{(Only is null ? null : " is-only")}")" @ref="_root">
+    @if (Only is null)
+    {
+        <RowButton Class="@($"agent-advanced__toggle{(_open ? " is-open" : null)}")"
+                   OnClick="ToggleOpen"
+                   aria-expanded="@(_open ? "true" : "false")"
+                   aria-controls="@($"{_id}-groups")">
+            <span class="agent-advanced__icon is-quiet"><Icon Name="IconName.RiSettings4Fill" Size="IconSize.Md" /></span>
+            <span class="agent-advanced__text">
+                <span class="agent-advanced__title">
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">Advanced settings</Typography>
+                    <StatusBadge Tone="StatusTone.Neutral">Optional</StatusBadge>
+                </span>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">Tone, extra permissions and when it hands over. Not needed to turn it on.</Typography>
             </span>
-            <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">Tone, extra permissions and when it hands over. Not needed to turn it on.</Typography>
-        </span>
-        <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
-    </RowButton>
+            <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
+        </RowButton>
+    }
 
     @if (_open)
     {
         <div class="agent-advanced__groups" id="@($"{_id}-groups")">
-            <section class="agent-advanced__group @(_section == AgentTopic.Talk ? "is-open" : null)" aria-labelledby="@($"{_id}-talk")" @ref="_groups[AgentTopic.Talk]">
-                <RowButton Class="agent-advanced__head"
-                           OnClick="() => ToggleSection(AgentTopic.Talk)"
-                           aria-expanded="@(_section == AgentTopic.Talk ? "true" : "false")"
-                           aria-controls="@($"{_id}-talk-content")">
-                    <span class="agent-advanced__icon"><Icon Name="IconName.RiChatSmile3Fill" Size="IconSize.Md" /></span>
-                    <span class="agent-advanced__text">
-                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-talk")">How it talks</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">Tone, reply length and first message.</Typography>
-                    </span>
-                    <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
-                </RowButton>
-                @if (_section == AgentTopic.Talk)
-                {
-                    <div class="agent-advanced__content" id="@($"{_id}-talk-content")">
-                        <div class="agent-advanced__row">
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Tone</Typography>
-                            <SegmentedControl TValue="AgentVoicePreset" Label="Tone" Options="Tones" Value="@Form.Settings.Tone" ValueChanged="v => SetAsync(() => Form.Settings.Tone = v)" />
-                        </div>
-                        <div class="agent-advanced__row">
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Reply length</Typography>
-                            <SegmentedControl TValue="AgentResponseLength" Label="Reply length" Options="Lengths" Value="@Form.Settings.Length" ValueChanged="v => SetAsync(() => Form.Settings.Length = v)" />
-                        </div>
-                        <div class="agent-advanced__row">
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Emoji</Typography>
-                            <SegmentedControl TValue="AgentEmojiUsage" Label="Emoji" Options="Emojis" Value="@Form.Settings.Emoji" ValueChanged="v => SetAsync(() => Form.Settings.Emoji = v)" />
-                        </div>
-                        <div class="agent-advanced__field">
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">First message</Typography>
-                            <TextArea Value="@Form.Settings.Greeting" ValueChanged="v => SetAsync(() => Form.Settings.Greeting = v ?? string.Empty)" AriaLabel="First message"
-                                      Placeholder="Leave empty to use one written for its job, in its tone."
-                                      Rows="2" MaxLength="300" AutoGrow />
-                        </div>
-                        <div class="agent-advanced__field">
-                            <TagInput Label="Phrases it should never say" Optional
-                                      Values="@Form.Settings.AvoidPhrases"
-                                      ValuesChanged="v => SetAsync(() => Form.Settings.AvoidPhrases = v.ToList())"
-                                      Placeholder="Type a phrase and press Enter"
-                                      HelperText="Language that feels wrong for your brand. Press Enter or type a comma to add one."
-                                      Suggestions="AvoidSuggestions" />
-                        </div>
-                    </div>
-                }
-            </section>
-
-            <section class="agent-advanced__group @(_section == AgentTopic.Actions ? "is-open" : null)" aria-labelledby="@($"{_id}-can")" @ref="_groups[AgentTopic.Actions]">
-                <RowButton Class="agent-advanced__head"
-                           OnClick="() => ToggleSection(AgentTopic.Actions)"
-                           aria-expanded="@(_section == AgentTopic.Actions ? "true" : "false")"
-                           aria-controls="@($"{_id}-can-content")">
-                    <span class="agent-advanced__icon"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
-                    <span class="agent-advanced__text">
-                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-can")">What it can do</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">Recommending, order status and taking details.</Typography>
-                    </span>
-                    <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
-                </RowButton>
-                @if (_section == AgentTopic.Actions)
-                {
-                    <div class="agent-advanced__content" id="@($"{_id}-can-content")">
-                        <div class="agent-advanced__row">
+            @if (Only is null || Only == AgentTopic.Talk)
+            {
+                <section class="agent-advanced__group @(_section == AgentTopic.Talk ? "is-open" : null)" aria-labelledby="@($"{_id}-talk")" @ref="_groups[AgentTopic.Talk]">
+                    @if (Only is null)
+                    {
+                        <RowButton Class="agent-advanced__head"
+                                   OnClick="() => ToggleSection(AgentTopic.Talk)"
+                                   aria-expanded="@(_section == AgentTopic.Talk ? "true" : "false")"
+                                   aria-controls="@($"{_id}-talk-content")">
+                            <span class="agent-advanced__icon"><Icon Name="IconName.RiChatSmile3Fill" Size="IconSize.Md" /></span>
                             <span class="agent-advanced__text">
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Answers questions</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">From what you taught it.</Typography>
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-talk")">How it talks</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">Tone, reply length and first message.</Typography>
                             </span>
-                            <StatusBadge Tone="StatusTone.Neutral">Always</StatusBadge>
-                        </div>
-                        @Switch("Recommends products", "Suggests what to buy, from what you sell.", Form.Settings.CanRecommend, v => Form.Settings.CanRecommend = v)
-                        @Switch("Checks order status", "Tells customers where their order is.", Form.Settings.CanCheckOrders, v => Form.Settings.CanCheckOrders = v)
-                        @Switch("Takes customer details", "Asks for a name and phone number before handing over.", Form.Settings.CanTakeDetails, v => Form.Settings.CanTakeDetails = v)
-                    </div>
-                }
-            </section>
-
-            <section class="agent-advanced__group @(_section == AgentTopic.Handoff ? "is-open" : null)" aria-labelledby="@($"{_id}-hand")" @ref="_groups[AgentTopic.Handoff]">
-                <RowButton Class="agent-advanced__head"
-                           OnClick="() => ToggleSection(AgentTopic.Handoff)"
-                           aria-expanded="@(_section == AgentTopic.Handoff ? "true" : "false")"
-                           aria-controls="@($"{_id}-hand-content")">
-                    <span class="agent-advanced__icon"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
-                    <span class="agent-advanced__text">
-                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-hand")">When it hands over</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">To @(string.IsNullOrWhiteSpace(Form.Settings.HandoverTo) ? "you, in the Inbox" : Form.Settings.HandoverTo.Trim()).</Typography>
-                    </span>
-                    <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
-                </RowButton>
-                @if (_section == AgentTopic.Handoff)
-                {
-                    <div class="agent-advanced__content" id="@($"{_id}-hand-content")">
-                        <div class="agent-advanced__row">
-                            <span class="agent-advanced__text">
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">A customer asks for a person</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">The agent stops and hands over immediately.</Typography>
-                            </span>
-                            <StatusBadge Tone="StatusTone.Neutral">Always</StatusBadge>
-                        </div>
-                        @Switch("A customer seems upset", "Complaints and frustration go straight to a person.", Form.Settings.HandOverWhenUpset, v => Form.Settings.HandOverWhenUpset = v)
-                        @Switch("It can't answer twice in a row", "So no one gets stuck going round in circles.", Form.Settings.HandOverAfterMisses, v => Form.Settings.HandOverAfterMisses = v)
-                        @Switch("A big order comes in", "A person closes large orders.", Form.Settings.HandOverBigOrders, v => Form.Settings.HandOverBigOrders = v)
-                        @if (Form.Settings.HandOverBigOrders)
-                        {
-                            <div class="agent-advanced__field is-indented">
-                                <Input FloatingLabel="Orders over"
-                                       PrefixText="₦"
-                                       Type="number"
-                                       Value="@Form.Settings.BigOrderNaira.ToString(CultureInfo.InvariantCulture)"
-                                       ValueChanged="SetBigOrderAsync"
-                                       min="1000"
-                                       step="1000" />
+                            <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
+                        </RowButton>
+                    }
+                    @if (_section == AgentTopic.Talk)
+                    {
+                        <div class="agent-advanced__content" id="@($"{_id}-talk-content")">
+                            <div class="agent-advanced__row">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Tone</Typography>
+                                <SegmentedControl TValue="AgentVoicePreset" Label="Tone" Options="Tones" Value="@Form.Settings.Tone" ValueChanged="v => SetAsync(() => Form.Settings.Tone = v)" />
                             </div>
-                        }
-                    </div>
-                }
-            </section>
-
-            <section class="agent-advanced__group @(_section == AgentTopic.Knowledge ? "is-open" : null)" aria-labelledby="@($"{_id}-knows")" @ref="_groups[AgentTopic.Knowledge]">
-                <RowButton Class="agent-advanced__head"
-                           OnClick="() => ToggleSection(AgentTopic.Knowledge)"
-                           aria-expanded="@(_section == AgentTopic.Knowledge ? "true" : "false")"
-                           aria-controls="@($"{_id}-knows-content")">
-                    <span class="agent-advanced__icon is-knowledge"><Icon Name="IconName.RiBookOpenFill" Size="IconSize.Md" /></span>
-                    <span class="agent-advanced__text">
-                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-knows")">What else it knows</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">What it uses of your business knowledge, and notes only for it.</Typography>
-                    </span>
-                    <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
-                </RowButton>
-                @if (_section == AgentTopic.Knowledge)
-                {
-                    <div class="agent-advanced__content" id="@($"{_id}-knows-content")">
-                        @* What it answers from: every taught topic, on by default; switch
-                           one off to leave it out for this agent. Who takes over is a
-                           safety rule, set above, so it is not listed. *@
-                        <div class="agent-advanced__field">
-                            <span class="agent-advanced__text">
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">What it uses</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">All of it, unless you switch a topic off.</Typography>
-                            </span>
-                            <div class="agent-advanced__topics" role="group" aria-label="What it uses">
-                                @foreach (var card in Cards.Where(c => c.Topic is not (KnowledgeTopic.Notes or KnowledgeTopic.Handover)))
-                                {
-                                    var topic = card.Topic;
-                                    var taught = card.Status == KnowledgeStatus.Confirmed && card.HasContent;
-                                    var on = taught && Form.Settings.Uses(topic);
-                                    <RowButton Class="@($"agent-advanced__topic{(on ? " is-on" : null)}")"
-                                               Disabled="@(!taught)"
-                                               OnClick="() => ToggleTopicAsync(topic)"
-                                               aria-pressed="@(on ? "true" : "false")"
-                                               title="@(taught ? null : "Not taught yet")">
-                                        <Icon Name="@(on ? IconName.RiCheckboxCircleFill : taught ? IconName.RiCloseFill : IconName.RiInformationFill)" Size="IconSize.Sm" />
-                                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(topic)@(taught ? null : " · not taught yet")</Typography>
-                                    </RowButton>
-                                }
+                            <div class="agent-advanced__row">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Reply length</Typography>
+                                <SegmentedControl TValue="AgentResponseLength" Label="Reply length" Options="Lengths" Value="@Form.Settings.Length" ValueChanged="v => SetAsync(() => Form.Settings.Length = v)" />
+                            </div>
+                            <div class="agent-advanced__row">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Emoji</Typography>
+                                <SegmentedControl TValue="AgentEmojiUsage" Label="Emoji" Options="Emojis" Value="@Form.Settings.Emoji" ValueChanged="v => SetAsync(() => Form.Settings.Emoji = v)" />
+                            </div>
+                            <div class="agent-advanced__field">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">First message</Typography>
+                                <TextArea Value="@Form.Settings.Greeting" ValueChanged="v => SetAsync(() => Form.Settings.Greeting = v ?? string.Empty)" AriaLabel="First message"
+                                          Placeholder="Leave empty to use one written for its job, in its tone."
+                                          Rows="2" MaxLength="300" AutoGrow />
+                            </div>
+                            <div class="agent-advanced__field">
+                                <TagInput Label="Phrases it should never say" Optional
+                                          Values="@Form.Settings.AvoidPhrases"
+                                          ValuesChanged="v => SetAsync(() => Form.Settings.AvoidPhrases = v.ToList())"
+                                          Placeholder="Type a phrase and press Enter"
+                                          HelperText="Language that feels wrong for your brand. Press Enter or type a comma to add one."
+                                          Suggestions="AvoidSuggestions" />
                             </div>
                         </div>
-                        @* Typed, attached, or said: a voice note becomes words in the box. *@
-                        <div class="agent-advanced__field">
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Only for @Form.DisplayName</Typography>
-                            <TextArea Value="@Form.Settings.Notes" ValueChanged="v => SetAsync(() => Form.Settings.Notes = v ?? string.Empty)" AriaLabel="@($"Only for {Form.DisplayName}")"
-                                      Placeholder="Anything only this agent should know, like “Mention free gift wrapping on orders over ₦30,000.”"
-                                      Rows="3" MaxLength="1000" AutoGrow />
-                            @if (Form.Settings.NoteFiles.Count > 0)
+                    }
+                </section>
+            }
+
+            @if (Only is null || Only == AgentTopic.Actions)
+            {
+                <section class="agent-advanced__group @(_section == AgentTopic.Actions ? "is-open" : null)" aria-labelledby="@($"{_id}-can")" @ref="_groups[AgentTopic.Actions]">
+                    @if (Only is null)
+                    {
+                        <RowButton Class="agent-advanced__head"
+                                   OnClick="() => ToggleSection(AgentTopic.Actions)"
+                                   aria-expanded="@(_section == AgentTopic.Actions ? "true" : "false")"
+                                   aria-controls="@($"{_id}-can-content")">
+                            <span class="agent-advanced__icon"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
+                            <span class="agent-advanced__text">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-can")">What it can do</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">Recommending, order status and taking details.</Typography>
+                            </span>
+                            <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
+                        </RowButton>
+                    }
+                    @if (_section == AgentTopic.Actions)
+                    {
+                        <div class="agent-advanced__content" id="@($"{_id}-can-content")">
+                            <div class="agent-advanced__row">
+                                <span class="agent-advanced__text">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Answers questions</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">From what you taught it.</Typography>
+                                </span>
+                                <StatusBadge Tone="StatusTone.Neutral">Always</StatusBadge>
+                            </div>
+                            @Switch("Recommends products", "Suggests what to buy, from what you sell.", Form.Settings.CanRecommend, v => Form.Settings.CanRecommend = v)
+                            @Switch("Checks order status", "Tells customers where their order is.", Form.Settings.CanCheckOrders, v => Form.Settings.CanCheckOrders = v)
+                            @Switch("Takes customer details", "Asks for a name and phone number before handing over.", Form.Settings.CanTakeDetails, v => Form.Settings.CanTakeDetails = v)
+                        </div>
+                    }
+                </section>
+            }
+
+            @if (Only is null || Only == AgentTopic.Handoff)
+            {
+                <section class="agent-advanced__group @(_section == AgentTopic.Handoff ? "is-open" : null)" aria-labelledby="@($"{_id}-hand")" @ref="_groups[AgentTopic.Handoff]">
+                    @if (Only is null)
+                    {
+                        <RowButton Class="agent-advanced__head"
+                                   OnClick="() => ToggleSection(AgentTopic.Handoff)"
+                                   aria-expanded="@(_section == AgentTopic.Handoff ? "true" : "false")"
+                                   aria-controls="@($"{_id}-hand-content")">
+                            <span class="agent-advanced__icon"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
+                            <span class="agent-advanced__text">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-hand")">When it hands over</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">To @(string.IsNullOrWhiteSpace(Form.Settings.HandoverTo) ? "you, in the Inbox" : Form.Settings.HandoverTo.Trim()).</Typography>
+                            </span>
+                            <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
+                        </RowButton>
+                    }
+                    @if (_section == AgentTopic.Handoff)
+                    {
+                        <div class="agent-advanced__content" id="@($"{_id}-hand-content")">
+                            <div class="agent-advanced__row">
+                                <span class="agent-advanced__text">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">A customer asks for a person</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">The agent stops and hands over immediately.</Typography>
+                                </span>
+                                <StatusBadge Tone="StatusTone.Neutral">Always</StatusBadge>
+                            </div>
+                            @Switch("A customer seems upset", "Complaints and frustration go straight to a person.", Form.Settings.HandOverWhenUpset, v => Form.Settings.HandOverWhenUpset = v)
+                            @Switch("It can't answer twice in a row", "So no one gets stuck going round in circles.", Form.Settings.HandOverAfterMisses, v => Form.Settings.HandOverAfterMisses = v)
+                            @Switch("A big order comes in", "A person closes large orders.", Form.Settings.HandOverBigOrders, v => Form.Settings.HandOverBigOrders = v)
+                            @if (Form.Settings.HandOverBigOrders)
                             {
-                                <ul class="agent-advanced__files" aria-label="Files">
-                                    @foreach (var file in Form.Settings.NoteFiles)
-                                    {
-                                        var name = file;
-                                        <li>
-                                            <Icon Name="IconName.RiFileTextFill" Size="IconSize.Sm" />
-                                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@name</Typography>
-                                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {name}")" title="Remove" @onclick="() => RemoveFileAsync(name)">
-                                                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
-                                            </Button>
-                                        </li>
-                                    }
-                                </ul>
-                            }
-                            @if (_recording is not null || _recordingStarting)
-                            {
-                                <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" OnDelete="CancelNoteAsync" OnSend="KeepNoteAsync" />
-                            }
-                            else
-                            {
-                                <div class="agent-advanced__note-tools">
-                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="PickFilesAsync">
-                                        <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
-                                        <ChildContent>Add a file</ChildContent>
-                                    </Button>
-                                    @if (CanRecord)
-                                    {
-                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="RecordNote">
-                                            <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
-                                            <ChildContent>Voice note</ChildContent>
-                                        </Button>
-                                    }
+                                <div class="agent-advanced__field is-indented">
+                                    <Input FloatingLabel="Orders over"
+                                           PrefixText="₦"
+                                           Type="number"
+                                           Value="@Form.Settings.BigOrderNaira.ToString(CultureInfo.InvariantCulture)"
+                                           ValueChanged="SetBigOrderAsync"
+                                           min="1000"
+                                           step="1000" />
                                 </div>
                             }
-                            @if (_noteNotice is not null)
-                            {
-                                <InlineError Message="@_noteNotice" />
-                            }
-                            @* A file input cannot be styled; the button above opens it. *@
-                            <InputFile @ref="_picker" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="@AcceptedFiles" OnChange="OnFilesPickedAsync" />
                         </div>
-                    </div>
-                }
-            </section>
+                    }
+                </section>
+            }
+
+            @if (Only is null || Only == AgentTopic.Knowledge)
+            {
+                <section class="agent-advanced__group @(_section == AgentTopic.Knowledge ? "is-open" : null)" aria-labelledby="@($"{_id}-knows")" @ref="_groups[AgentTopic.Knowledge]">
+                    @if (Only is null)
+                    {
+                        <RowButton Class="agent-advanced__head"
+                                   OnClick="() => ToggleSection(AgentTopic.Knowledge)"
+                                   aria-expanded="@(_section == AgentTopic.Knowledge ? "true" : "false")"
+                                   aria-controls="@($"{_id}-knows-content")">
+                            <span class="agent-advanced__icon is-knowledge"><Icon Name="IconName.RiBookOpenFill" Size="IconSize.Md" /></span>
+                            <span class="agent-advanced__text">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-knows")">What else it knows</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">What it uses of your business knowledge, and notes only for it.</Typography>
+                            </span>
+                            <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
+                        </RowButton>
+                    }
+                    @if (_section == AgentTopic.Knowledge)
+                    {
+                        <div class="agent-advanced__content" id="@($"{_id}-knows-content")">
+                            @* What it answers from: every taught topic, on by default; switch
+                               one off to leave it out for this agent. Who takes over is a
+                               safety rule, set above, so it is not listed. *@
+                            <div class="agent-advanced__field">
+                                <span class="agent-advanced__text">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">What it uses</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">All of it, unless you switch a topic off.</Typography>
+                                </span>
+                                <div class="agent-advanced__topics" role="group" aria-label="What it uses">
+                                    @foreach (var card in Cards.Where(c => c.Topic is not (KnowledgeTopic.Notes or KnowledgeTopic.Handover)))
+                                    {
+                                        var topic = card.Topic;
+                                        var taught = card.Status == KnowledgeStatus.Confirmed && card.HasContent;
+                                        var on = taught && Form.Settings.Uses(topic);
+                                        <RowButton Class="@($"agent-advanced__topic{(on ? " is-on" : null)}")"
+                                                   Disabled="@(!taught)"
+                                                   OnClick="() => ToggleTopicAsync(topic)"
+                                                   aria-pressed="@(on ? "true" : "false")"
+                                                   title="@(taught ? null : "Not taught yet")">
+                                            <Icon Name="@(on ? IconName.RiCheckboxCircleFill : taught ? IconName.RiCloseFill : IconName.RiInformationFill)" Size="IconSize.Sm" />
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(topic)@(taught ? null : " · not taught yet")</Typography>
+                                        </RowButton>
+                                    }
+                                </div>
+                            </div>
+                            @* Typed, attached, or said: a voice note becomes words in the box. *@
+                            <div class="agent-advanced__field">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Only for @Form.DisplayName</Typography>
+                                <TextArea Value="@Form.Settings.Notes" ValueChanged="v => SetAsync(() => Form.Settings.Notes = v ?? string.Empty)" AriaLabel="@($"Only for {Form.DisplayName}")"
+                                          Placeholder="Anything only this agent should know, like “Mention free gift wrapping on orders over ₦30,000.”"
+                                          Rows="3" MaxLength="1000" AutoGrow />
+                                @if (Form.Settings.NoteFiles.Count > 0)
+                                {
+                                    <ul class="agent-advanced__files" aria-label="Files">
+                                        @foreach (var file in Form.Settings.NoteFiles)
+                                        {
+                                            var name = file;
+                                            <li>
+                                                <Icon Name="IconName.RiFileTextFill" Size="IconSize.Sm" />
+                                                <Typography TextStyle="TextStyle.Small12Medium" As="span">@name</Typography>
+                                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {name}")" title="Remove" @onclick="() => RemoveFileAsync(name)">
+                                                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                                                </Button>
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                                @if (_recording is not null || _recordingStarting)
+                                {
+                                    <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" Recording="_recording" OnDelete="CancelNoteAsync" OnSend="KeepNoteAsync" />
+                                }
+                                else
+                                {
+                                    <div class="agent-advanced__note-tools">
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="PickFilesAsync">
+                                            <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                                            <ChildContent>Add a file</ChildContent>
+                                        </Button>
+                                        @if (CanRecord)
+                                        {
+                                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="RecordNote">
+                                                <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                                                <ChildContent>Voice note</ChildContent>
+                                            </Button>
+                                        }
+                                    </div>
+                                }
+                                @if (_noteNotice is not null)
+                                {
+                                    <InlineError Message="@_noteNotice" />
+                                }
+                                @* A file input cannot be styled; the button above opens it. *@
+                                <InputFile @ref="_picker" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="@AcceptedFiles" OnChange="OnFilesPickedAsync" />
+                            </div>
+                        </div>
+                    }
+                </section>
+            }
 
             @* Coming soon (designer's decision): the canvas is not designed yet. *@
-            @if (ShowCanvas)
+            @if (ShowCanvas && Only is null)
             {
                 <section class="agent-advanced__group">
                     <div class="agent-advanced__row agent-advanced__canvas">
@@ -269,6 +296,18 @@
     [Parameter] public EventCallback OnChange { get; set; }
     /// <summary>Shows the builder canvas row, marked Coming soon (an existing agent's Settings).</summary>
     [Parameter] public bool ShowCanvas { get; set; }
+
+    /// <summary>Just this topic, open, with no fold or heading: a tab of the agent's page.</summary>
+    [Parameter] public AgentTopic? Only { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (Only is { } only)
+        {
+            _open = true;
+            _section = only;
+        }
+    }
 
 
     private static readonly IReadOnlyList<SegmentedOption<AgentVoicePreset>> Tones =

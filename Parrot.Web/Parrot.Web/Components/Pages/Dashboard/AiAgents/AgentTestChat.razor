@@ -1,0 +1,424 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@implements IAsyncDisposable
+@using Parrot.SharedComponents.Services
+@using Parrot.Web.Features.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.Knowledge
+@inject IAgentBriefing Briefing
+@inject IKnowledgeMemory Knowledge
+@inject VoiceInterop Voice
+@inject AuroraInterop Interop
+
+@* Testing an agent as a customer would meet it (designer, 13 October
+   2026): a chat in a window over the page, like Teach your AI, but on the
+   customer's side. Type or send a voice note, as customers do. Under each
+   reply, what it came from: a sentence of its job description (Change this),
+   the business's knowledge, its products, orders or calendar. When it
+   doesn't know, Teach it the answer saves one to Knowledge and asks again.
+   Nothing here reaches a customer. *@
+
+@if (Open)
+{
+    <div class="test-chat">
+        <section class="test-chat__panel" role="dialog" aria-modal="true" aria-labelledby="test-chat-title" tabindex="-1" @ref="_root">
+            <header class="test-chat__bar">
+                <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" class="test-chat__avatar" />
+                <div class="test-chat__heading">
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="test-chat-title">Test as a customer</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Chat with @Name the way a customer would. No customer sees this.</Typography>
+                </div>
+                <div class="test-chat__bar-actions">
+                    @if (_chat.Count > 0)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_waiting" @onclick="StartOver">
+                            <IconLeft><Icon Name="IconName.RiRefreshFill" /></IconLeft>
+                            <ChildContent>Start over</ChildContent>
+                        </Button>
+                    }
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Close" title="Close (Esc)" @onclick="CloseAsync">
+                        <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                    </Button>
+                </div>
+            </header>
+
+            <ol class="test-chat__thread" aria-label="Test conversation" aria-live="polite" @ref="_thread">
+                <li class="test-chat__msg is-agent">
+                    <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                    <div class="test-chat__bubble">
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@($"Hi! I'm {Name} from {Business}. How can I help you today?")</Typography>
+                    </div>
+                </li>
+                @for (var index = 0; index < _chat.Count; index++)
+                {
+                    var line = _chat[index];
+                    var at = index;
+                    if (line.FromCustomer)
+                    {
+                        <li class="test-chat__msg is-customer">
+                            <div class="test-chat__bubble">
+                                @if (line.Note is { } note)
+                                {
+                                    <VoiceNotePlayer Url="@note.Url" Seconds="note.Seconds" Peaks="note.Peaks" Class="test-chat__note" />
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="test-chat__transcript">@line.Text</Typography>
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@line.Text</Typography>
+                                }
+                            </div>
+                        </li>
+                    }
+                    else if (line.Reply is { } reply)
+                    {
+                        <li class="test-chat__msg is-agent">
+                            <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                            <div class="test-chat__reply">
+                                <div class="test-chat__bubble">
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@reply.Reply</Typography>
+                                </div>
+                                <div class="@($"test-chat__why is-{reply.Basis.ToString().ToLowerInvariant()}")">
+                                    <Icon Name="@WhyIcon(reply.Basis)" Size="IconSize.Sm" />
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@reply.Why</Typography>
+                                </div>
+                                @if (reply.Sentence is { } sentence && OnChangeLine.HasDelegate)
+                                {
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="test-chat__act" @onclick="() => ChangeLineAsync(sentence)">
+                                        <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                                        <ChildContent>Change this</ChildContent>
+                                    </Button>
+                                }
+                                @if (reply.Basis == AgentTryBasis.Unknown && Knowledge.Available)
+                                {
+                                    @if (_teaching == at)
+                                    {
+                                        <div class="test-chat__teach">
+                                            <TextArea @ref="_teachBox" Value="@_answer" ValueChanged="value => _answer = value ?? string.Empty"
+                                                      AriaLabel="How should it answer?" Placeholder="Write the answer, like you'd tell a new team member"
+                                                      Variant="TextAreaVariant.Plain" Rows="1" AutoGrow MaxLength="500" />
+                                            <Button Size="ButtonSize.Small" Busy="_saving" disabled="@(_answer.Trim().Length == 0 || _saving)" @onclick="() => SaveAnswerAsync(at)">Save to Knowledge</Button>
+                                        </div>
+                                    }
+                                    else if (line.Taught is null)
+                                    {
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="test-chat__act" @onclick="() => StartTeaching(at)">
+                                            <IconLeft><Icon Name="IconName.RiBookOpenFill" /></IconLeft>
+                                            <ChildContent>Teach it the answer</ChildContent>
+                                        </Button>
+                                    }
+                                }
+                                @if (line.Taught is { } taught)
+                                {
+                                    <div class="test-chat__taught" role="status">
+                                        <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@($"Saved to Knowledge under {taught}. {Name} can answer it now.")</Typography>
+                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_waiting" @onclick="() => AskAgainAsync(at)">Ask again</Button>
+                                    </div>
+                                }
+                            </div>
+                        </li>
+                    }
+                }
+                @if (_waiting)
+                {
+                    <li class="test-chat__msg is-agent" aria-label="@($"{Name} is typing")">
+                        <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                        <div class="test-chat__bubble is-typing"><i></i><i></i><i></i></div>
+                    </li>
+                }
+            </ol>
+
+            <footer class="test-chat__dock">
+                @if (_chat.Count == 0)
+                {
+                    <div class="test-chat__try" role="group" aria-label="Try one of these">
+                        @foreach (var question in TryWith)
+                        {
+                            var current = question;
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_waiting" @onclick="() => SendAsync(current)">@current</Button>
+                        }
+                    </div>
+                }
+                @if (_notice is not null)
+                {
+                    <InlineError Tone="InlineErrorTone.Warning" Message="@_notice" OnDismiss="() => _notice = null" />
+                }
+                @if (_recordingStarting || _recording is not null)
+                {
+                    <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" Recording="_recording" OnDelete="CancelNoteAsync" OnSend="SendNoteAsync" />
+                }
+                else
+                {
+                    <div class="test-chat__composer">
+                        <TextArea @ref="_box" Value="@_text" ValueChanged="value => _text = value ?? string.Empty" AriaLabel="Write as a customer"
+                                  Placeholder="Write as a customer…" Variant="TextAreaVariant.Plain" Rows="1" AutoGrow SubmitOnEnter OnKeyDown="KeyAsync" MaxLength="500" />
+                        @if (_canRecord)
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Send a voice note" title="Send a voice note" disabled="@_waiting" @onclick="StartNote">
+                                <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                            </Button>
+                        }
+                        <Button Size="ButtonSize.Small" aria-label="Send" title="Send" disabled="@(_text.Trim().Length == 0 || _waiting)" @onclick="() => SendAsync(_text)">
+                            <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                        </Button>
+                    </div>
+                }
+            </footer>
+        </section>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Parameter] public string Name { get; set; } = "your agent";
+    [Parameter] public string Mascot { get; set; } = "Nova";
+    [Parameter] public string Business { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public AgentBrief Brief { get; set; } = new();
+    [Parameter] public string? UseCase { get; set; }
+    [Parameter] public string? Industry { get; set; }
+
+    /// <summary>"Change this": the host closes this and selects that sentence of the job summary.</summary>
+    [Parameter] public EventCallback<string> OnChangeLine { get; set; }
+
+    private sealed class ChatLine
+    {
+        public bool FromCustomer { get; init; }
+        public string Text { get; init; } = string.Empty;
+        public VoiceNote? Note { get; init; }
+        public AgentTryReply? Reply { get; set; }
+        public string? Question { get; init; }
+        public string? Taught { get; set; }
+    }
+
+    private readonly List<ChatLine> _chat = [];
+    private string _text = string.Empty, _answer = string.Empty;
+    private bool _waiting, _saving, _canRecord, _wasOpen, _scroll, _focusBox, _focusTeach;
+    private int? _teaching;
+    private string? _notice;
+
+    private ElementReference _root, _thread;
+    private TextArea? _box, _teachBox;
+    private IAsyncDisposable? _trap;
+    private DotNetObjectReference<AgentTestChat>? _self;
+
+    private VoiceNoteRecording? _recorder;
+    private VoiceRecording? _recording;
+    private bool _recordingStarting;
+    private int _recordSeconds;
+    private CancellationTokenSource? _recordClock;
+
+    // The job's questions first, then the kind of business's own.
+    private IEnumerable<string> TryWith =>
+        (AgentUseCase.Of(UseCase)?.TryWith ?? []).Concat(AgentIndustry.Of(Industry)?.TryWith ?? []).Distinct().Take(5);
+
+    private static IconName WhyIcon(AgentTryBasis basis) => basis switch
+    {
+        AgentTryBasis.Knowledge => IconName.RiBookOpenFill,
+        AgentTryBasis.Products => IconName.RiShoppingBag3Fill,
+        AgentTryBasis.Orders => IconName.RiTruckFill,
+        AgentTryBasis.Calendar => IconName.RiCalendarCheckFill,
+        AgentTryBasis.Unknown => IconName.RiQuestionFill,
+        _ => IconName.RiFileTextFill,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try { _canRecord = (await Voice.CapabilitiesAsync()).Record; }
+        catch (JSException) { }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            _self ??= DotNetObjectReference.Create(this);
+            try { _trap = await Interop.TrapFocusAsync(_root, _self, nameof(EscapeAsync)); } catch (JSException) { }
+            _focusBox = true;
+        }
+        else if (!Open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseAsync();
+        }
+        if (_recordingStarting && _recording is null && _recorder is not null)
+        {
+            try
+            {
+                _recording = await Voice.RecordNoteAsync(_recorder.Element);
+                _recordClock = new CancellationTokenSource();
+                _ = TickAsync(_recordClock.Token);
+            }
+            catch (JSException) { _notice = "Your microphone is blocked. You can allow it from the icon at the left of the address bar."; }
+            finally
+            {
+                _recordingStarting = false;
+                StateHasChanged();
+            }
+        }
+        if (_scroll) { _scroll = false; try { await Interop.ScrollToBottomAsync(_thread); } catch (JSException) { } }
+        if (_focusTeach && _teachBox is not null) { _focusTeach = false; await _teachBox.FocusAsync(); }
+        if (_focusBox && _box is not null) { _focusBox = false; await _box.FocusAsync(); }
+    }
+
+    [JSInvokable]
+    public Task EscapeAsync() => InvokeAsync(CloseAsync);
+
+    // The focus goes back where it was before the host moves it anywhere else.
+    private async Task CloseAsync()
+    {
+        await CancelNoteAsync();
+        await ReleaseAsync();
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task ReleaseAsync()
+    {
+        if (_trap is not null) { await _trap.DisposeAsync(); _trap = null; }
+    }
+
+    private void StartOver()
+    {
+        _chat.Clear();
+        _teaching = null;
+        _notice = null;
+        _focusBox = true;
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey) await SendAsync(_text);
+    }
+
+    private async Task SendAsync(string message, VoiceNote? note = null)
+    {
+        var said = message.Trim();
+        if (said.Length == 0 || _waiting) return;
+        _text = string.Empty;
+        _teaching = null;
+        _chat.Add(new() { FromCustomer = true, Text = said, Note = note });
+        await ReplyAsync(said);
+    }
+
+    private async Task ReplyAsync(string message)
+    {
+        _waiting = true;
+        _scroll = true;
+        StateHasChanged();
+        try
+        {
+            var history = _chat.Select(line => new AgentTryTurn(line.FromCustomer, line.FromCustomer ? line.Text : line.Reply?.Reply ?? string.Empty)).ToList();
+            var reply = await Briefing.TryAsync(new(Brief, Name, UseCase, Industry, Business, history, message));
+            _chat.Add(new() { FromCustomer = false, Reply = reply, Question = message });
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            _notice = $"{Name} couldn't reply just now. Try again.";
+        }
+        finally
+        {
+            _waiting = false;
+            _scroll = true;
+            _focusBox = true;
+        }
+    }
+
+    private async Task ChangeLineAsync(string sentence)
+    {
+        await CancelNoteAsync();
+        await ReleaseAsync();
+        await OnChangeLine.InvokeAsync(sentence);
+    }
+
+    // ── Teaching it the answer ─────────────────────────────────────────────
+
+    private void StartTeaching(int at)
+    {
+        _teaching = at;
+        _answer = string.Empty;
+        _focusTeach = true;
+    }
+
+    private async Task SaveAnswerAsync(int at)
+    {
+        if (_answer.Trim().Length == 0 || _saving) return;
+        _saving = true;
+        try
+        {
+            var saved = await Knowledge.AddAsync(_answer.Trim());
+            _chat[at].Taught = saved.FirstOrDefault()?.Label ?? "Other";
+            _teaching = null;
+            _answer = string.Empty;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            _notice = "We couldn't save that to Knowledge. Try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task AskAgainAsync(int at)
+    {
+        if (_chat[at].Question is not { } question || _waiting) return;
+        _chat.Add(new() { FromCustomer = true, Text = question });
+        await ReplyAsync(question);
+    }
+
+    // ── A voice note, as a customer sends one ──────────────────────────────
+
+    private void StartNote()
+    {
+        _notice = null;
+        _recordSeconds = 0;
+        _recordingStarting = true;
+    }
+
+    private async Task TickAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(1000, token);
+                _recordSeconds++;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task CancelNoteAsync()
+    {
+        _recordClock?.Cancel();
+        _recordingStarting = false;
+        var recording = _recording;
+        _recording = null;
+        if (recording is not null) await recording.CancelAsync();
+    }
+
+    private async Task SendNoteAsync()
+    {
+        _recordClock?.Cancel();
+        var recording = _recording;
+        _recording = null;
+        if (recording is null) return;
+        var note = await recording.StopAsync();
+        if (note.Transcript.Trim().Length == 0)
+        {
+            _notice = "We couldn't make out the words in that note. Try again, or type it.";
+            return;
+        }
+        await SendAsync(note.Transcript, note);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _recordClock?.Cancel();
+        await ReleaseAsync();
+        if (_recording is not null) await _recording.CancelAsync();
+        _self?.Dispose();
+    }
+}

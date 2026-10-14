@@ -165,6 +165,21 @@ public sealed class VoiceRecording(IJSObjectReference reference) : IAsyncDisposa
 {
     private bool _done;
 
+    /// <summary>Holds the recording, its words and its clock.</summary>
+    public async Task PauseAsync()
+    {
+        if (_done) return;
+        try { await reference.InvokeVoidAsync("pause"); }
+        catch (JSDisconnectedException) { }
+    }
+
+    public async Task ResumeAsync()
+    {
+        if (_done) return;
+        try { await reference.InvokeVoidAsync("resume"); }
+        catch (JSDisconnectedException) { }
+    }
+
     public async Task<VoiceNote> StopAsync()
     {
         _done = true;

@@ -16,7 +16,7 @@
    Size it with --ds-voice-orb-size (what it measures on screen). A parent can
    set --ds-voice-orb-wake to 1 (on hover, say) to wake it. The filter id is
    made per instance. Decorative unless Label is set. *@
-<span class="ds-voice-orb @(Still ? "is-still" : null) @Class" data-state="@State.ToString().ToLowerInvariant()" @ref="Element"
+<span class="ds-voice-orb @(Still ? "is-still" : null) @(Round ? "is-round" : null) @Class" data-state="@State.ToString().ToLowerInvariant()" @ref="Element"
       role="@(Label is null ? null : "img")" aria-label="@Label" aria-hidden="@(Label is null ? "true" : null)">
     <span class="ds-voice-orb__body">
         @if (ShowMic)
@@ -55,6 +55,15 @@
 
     /// <summary>Drawn once and never moving: for an avatar, where many may show at once.</summary>
     [Parameter] public bool Still { get; set; }
+
+    /// <summary>
+    /// Keeps its round shape: the ball and its glowing core, without the rings
+    /// that melt into it as they turn, and with the core kept inside the ball
+    /// (its speaking flare reaches past the edge). For a small surface (a
+    /// card), where that melting reads as a lumpy, egg-like shape; it still
+    /// swells with the voice, and its core pulses when speaking.
+    /// </summary>
+    [Parameter] public bool Round { get; set; }
 
     [Parameter] public string? Class { get; set; }
 
