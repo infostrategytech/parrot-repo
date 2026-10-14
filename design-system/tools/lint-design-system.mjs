@@ -31,7 +31,8 @@ const BRAND_LITERALS = JSON.parse(
 ).map((entry) => entry.value.toLowerCase());
 
 // The sanctioned breakpoint scale. React had ten ad-hoc widths and no scale.
-const BREAKPOINTS = [1180, 1280, 1360, 1520];
+// 760 is the phone breakpoint: the inbox shows one pane at a time below it.
+const BREAKPOINTS = [760, 1180, 1280, 1360, 1520];
 
 // Values that carry no design decision, so tokenising them would be noise.
 const NEUTRAL = new Set([

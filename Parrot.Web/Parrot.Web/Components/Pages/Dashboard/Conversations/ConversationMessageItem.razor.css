@@ -246,3 +246,8 @@
 }
 .message-system__event ::deep time { flex: 0 0 auto; color: var(--colors-text-subtle); white-space: nowrap; }
 .message-system__event ::deep time::before { content: "·"; margin-right: var(--spacing-xs); }
+
+/* Narrow screens: bubbles may use more of the row. */
+@media (max-width: 760px) {
+  .message-bubble { --ds-message-measure: 92%; }
+}
