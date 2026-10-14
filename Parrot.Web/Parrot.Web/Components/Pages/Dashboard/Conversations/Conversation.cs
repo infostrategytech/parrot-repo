@@ -24,6 +24,8 @@ public class ConversationItem
     public bool HistoryLoaded { get; set; }
     public string Draft { get; set; } = "";
     public Guid? DraftRequestId { get; set; }
+    /// <summary>A picture or file chosen to send with the draft. Kept with it, so a retry after switching threads still carries the file.</summary>
+    public Parrot.Web.Services.InboxPendingFile? PendingFile { get; set; }
     public bool Sending { get; set; }
     public string? SendError { get; set; }
     public List<ConvMessage> Messages { get; set; } = new();

@@ -159,6 +159,19 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromBody] SendReplyRequest request, CancellationToken cancellationToken) =>
         Ok(await service.SendAsync(Owner, connectionId, sender, request, cancellationToken));
 
+    // A picture or document for the customer, with an optional caption. The same request id makes a retry safe.
+    [Monitor("conversations.send_file", SlowMs = 5000)]
+    [HttpPost("{connectionId:guid}/attachments")]
+    [RequestSizeLimit(ConversationService.MaxDocumentBytes + 1024 * 1024)]
+    public async Task<IActionResult> SendFile(Guid connectionId, [FromQuery] string sender, [FromForm] SendFileForm form,
+        CancellationToken cancellationToken)
+    {
+        if (form.File is not { } upload) throw new ValidationException("Attach a file to send.");
+        ConversationMessage sent = await service.SendFileAsync(Owner, connectionId, sender, form.RequestId, form.Caption,
+            new OutgoingFile(upload.FileName, upload.ContentType, upload.Length, upload.OpenReadStream), cancellationToken);
+        return Ok(mediaLinks.Sign(sent));
+    }
+
     // A thread can be on a WhatsApp number, a Facebook Page, the TikTok account or an Instagram account.
     private async Task EnsureConnectionOwnedAsync(Guid connectionId, CancellationToken cancellationToken)
     {
@@ -168,4 +181,12 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             && !await instagram.IsOwnedByAsync(connectionId, Owner, cancellationToken))
             throw new NotFoundException("Connection not found.");
     }
+}
+
+/// <summary>The multipart body of a file reply.</summary>
+public sealed class SendFileForm
+{
+    public Guid RequestId { get; set; }
+    public string? Caption { get; set; }
+    public IFormFile? File { get; set; }
 }

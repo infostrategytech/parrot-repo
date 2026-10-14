@@ -5,6 +5,7 @@ using Moq;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
+using Parrot.Application.Storage;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
@@ -440,5 +441,123 @@ public class ConversationServiceTests
         public Task<IReadOnlyList<ConversationSummary>> FindAsync(string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct) => throw new NotImplementedException();
         public Task<MessagePage> ReadAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct) => throw new NotImplementedException();
         public Task<MediaPage> ListMediaAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct) => throw new NotImplementedException();
+    }
+
+    // --- Files the business attaches ---
+
+    private readonly Mock<IPrivateObjectStorage> _media = new();
+
+    private ConversationService CreateWithStorage()
+    {
+        _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
+        _pages.Setup(x => x.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(_page);
+        return new ConversationService(_store, _connections.Object, _sender.Object,
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(), receipts: _receipts.Object, mediaStorage: _media.Object);
+    }
+
+    private static OutgoingFile File(string name, params byte[] bytes) => new(name, "ignored/by-server", bytes.Length, () => new MemoryStream(bytes));
+
+    private static readonly byte[] Png = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 1, 2, 3];
+
+    [Fact]
+    public async Task APictureForAWhatsAppCustomer_IsKept_SentWithItsCaption_AndShownInTheThread()
+    {
+        _sender.Setup(x => x.SendMediaAsync("123", "connection-token", Recipient, "image", "image/png", "menu.png",
+            It.IsAny<Stream>(), "Today's menu", It.IsAny<CancellationToken>())).ReturnsAsync("wamid.file");
+
+        ConversationMessage sent = await CreateWithStorage().SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), " Today's menu ", File("menu.png", Png), default);
+
+        Assert.Equal("accepted", sent.Status);
+        Assert.Equal("Today's menu", sent.Text);
+        MessageAttachment kept = Assert.Single(_store.Messages[sent.Id].Attachments!);
+        Assert.Equal("image", kept.Kind);
+        Assert.StartsWith($"business-media/{Owner}/", kept.StorageKey);
+        _media.Verify(x => x.PutAsync(kept.StorageKey!, It.IsAny<Stream>(), "image/png", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task AFileWhoseBytesAreNotWhatItsNameSays_IsRefusedBeforeAnythingIsSent()
+    {
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            CreateWithStorage().SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("virus.png", 0x4D, 0x5A, 0x90), default));
+
+        _sender.Verify(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Theory]
+    [InlineData("setup.exe")]
+    [InlineData("noextension")]
+    [InlineData("page.html")]
+    public async Task OnlyPicturesAndDocumentsMayBeAttached(string name) =>
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            CreateWithStorage().SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File(name, 1, 2, 3), default));
+
+    [Fact]
+    public async Task APictureOverFiveMegabytes_IsRefused()
+    {
+        OutgoingFile big = new("big.png", "image/png", 5 * 1024 * 1024 + 1, () => new MemoryStream(Png));
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            CreateWithStorage().SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, big, default));
+    }
+
+    [Fact]
+    public async Task ARetryWithTheSameRequestId_DoesNotSendTheFileTwice()
+    {
+        _sender.Setup(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.file");
+        ConversationService service = CreateWithStorage();
+        Guid request = Guid.NewGuid();
+
+        ConversationMessage first = await service.SendFileAsync(Owner, _connection.Id, Recipient, request, "Hi", File("a.png", Png), default);
+        ConversationMessage again = await service.SendFileAsync(Owner, _connection.Id, Recipient, request, "Hi", File("a.png", Png), default);
+
+        Assert.Equal(first.Id, again.Id);
+        _sender.Verify(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    [Fact]
+    public async Task APictureForAMessengerCustomer_GoesThroughThePage_AndTakesNoCaption()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        _facebookSender.Setup(x => x.SendMediaAsync(PageId, "page-token", Psid, "file", "application/pdf", "invoice.pdf",
+            It.IsAny<Stream>(), It.IsAny<CancellationToken>())).ReturnsAsync("m_file");
+        ConversationService service = CreateWithStorage();
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            service.SendFileAsync(Owner, _page.Id, Psid, Guid.NewGuid(), "see attached", File("invoice.pdf", 0x25, 0x50, 0x44, 0x46, 0x2D), default));
+        ConversationMessage sent = await service.SendFileAsync(Owner, _page.Id, Psid, Guid.NewGuid(), null, File("invoice.pdf", 0x25, 0x50, 0x44, 0x46, 0x2D), default);
+
+        Assert.Equal("accepted", sent.Status);
+        Assert.Equal("document", Assert.Single(sent.Attachments!).Kind);
+    }
+
+    [Fact]
+    public async Task TheSameRequestIdWithAnotherFile_IsAMistakeNotARetry()
+    {
+        _sender.Setup(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.file");
+        ConversationService service = CreateWithStorage();
+        Guid request = Guid.NewGuid();
+        await service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("a.png", Png), default);
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("b.png", Png), default));
+    }
+
+    [Fact]
+    public async Task WhenTheCopyCannotBeKept_NothingIsSentToTheCustomer()
+    {
+        _media.Setup(x => x.PutAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new IOException("bucket unavailable"));
+
+        ConversationMessage sent = await CreateWithStorage().SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("a.png", Png), default);
+
+        Assert.Equal("failed", sent.Status);
+        _sender.Verify(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 }

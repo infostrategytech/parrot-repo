@@ -46,6 +46,8 @@ public abstract class MessageDocument
     public required string Type { get; set; }
     public string? TextBody { get; set; }
     public string? ContactName { get; set; }
+    // Left out when the channel gave none, so a message without one stores the fields it always did.
+    [BsonIgnoreIfNull]
     public string? ContactUsername { get; set; }
     public DateTime ReceivedAt { get; set; }
     public DateTime StoredAt { get; set; }

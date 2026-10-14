@@ -51,6 +51,9 @@ public record MediaItem(string MessageId, DateTime ReceivedAt, MessageMedia Medi
 
 public record MediaPage(IReadOnlyList<MediaItem> Items, string? NextBefore);
 public record SendReplyRequest(Guid RequestId, string Text);
+
+/// <summary>A file a teammate attached to a reply. <see cref="Open"/> reads it from the start each time it is called.</summary>
+public sealed record OutgoingFile(string FileName, string ContentType, long Length, Func<Stream> Open);
 public record MessagePage(IReadOnlyList<ConversationMessage> Messages, string? NextBefore);
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>
@@ -142,6 +145,10 @@ public interface IWhatsAppSender
 {
     Task<string> SendAsync(string phoneNumberId, string accessToken, string recipient, string text, CancellationToken ct);
 
+    /// <summary>Uploads the file to WhatsApp and sends it as an image or document, with the caption when there is one.</summary>
+    Task<string> SendMediaAsync(string phoneNumberId, string accessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string? caption, CancellationToken ct);
+
     /// <summary>Tells WhatsApp the business has read this incoming message (the customer sees blue ticks), and every earlier one.</summary>
     Task MarkReadAsync(string phoneNumberId, string accessToken, string messageId, CancellationToken ct);
 }
@@ -150,6 +157,10 @@ public interface IWhatsAppSender
 public interface IFacebookSender
 {
     Task<string> SendAsync(string pageId, string pageAccessToken, string recipient, string text, CancellationToken ct);
+
+    /// <summary>Uploads the file with the message and sends it as an image or file. Messenger has no caption.</summary>
+    Task<string> SendMediaAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, CancellationToken ct);
 
     /// <summary>Shows the customer the Page has seen their latest message.</summary>
     Task MarkSeenAsync(string pageId, string pageAccessToken, string recipient, CancellationToken ct);

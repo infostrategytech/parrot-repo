@@ -48,6 +48,44 @@ public sealed class FacebookSender(HttpClient http, IOptions<FacebookSettings> o
         return id.GetString()!;
     }
 
+    public async Task<string> SendMediaAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, CancellationToken ct)
+    {
+        using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,
+            $"https://graph.facebook.com/{Uri.EscapeDataString(options.Value.ApiVersion)}/{Uri.EscapeDataString(pageId)}/messages");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pageAccessToken);
+        StreamContent file = new(content);
+        file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        request.Content = new MultipartFormDataContent
+        {
+            { new StringContent(JsonSerializer.Serialize(new { id = recipient })), "recipient" },
+            { new StringContent("RESPONSE"), "messaging_type" },
+            { new StringContent(JsonSerializer.Serialize(new { attachment = new { type = kind == "image" ? "image" : "file", payload = new { is_reusable = false } } })), "message" },
+            { file, "filedata", fileName },
+        };
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.SendAsync(request, ct);
+        }
+        finally
+        {
+            MessageMetrics.MetaApiDuration.Record(
+                System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalSeconds,
+                new KeyValuePair<string, object?>("endpoint", "page_messages"));
+        }
+
+        using HttpResponseMessage disposeResponse = response;
+        if ((int)response.StatusCode >= 500) throw new HttpRequestException("Messenger send outcome is uncertain.");
+        if (!response.IsSuccessStatusCode) throw new FacebookRejectedException(await ErrorCodeAsync(response, ct));
+        using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
+        if (!json.RootElement.TryGetProperty("message_id", out JsonElement id) || id.ValueKind != JsonValueKind.String
+            || string.IsNullOrEmpty(id.GetString()))
+            throw new JsonException("Messenger returned no message ID.");
+        return id.GetString()!;
+    }
+
     public async Task MarkSeenAsync(string pageId, string pageAccessToken, string recipient, CancellationToken ct)
     {
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,

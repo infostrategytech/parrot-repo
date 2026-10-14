@@ -146,7 +146,7 @@ public class MetaContactNamesTests : IAsyncLifetime
     {
         FakeMeta meta = new(HttpStatusCode.OK, """{"username":"ada.obi","id":"6215837091842310"}""");
 
-        Parrot.Application.Messaging.ContactProfile? profile = await Lookup(meta).FindAsync(Message(MessagingPlatform.Instagram, await AccountAsync()), CancellationToken.None);
+        global::Parrot.Application.Messaging.ContactProfile? profile = await Lookup(meta).FindAsync(Message(MessagingPlatform.Instagram, await AccountAsync()), CancellationToken.None);
 
         Assert.Equal("@ada.obi", profile?.Name);
         Assert.Equal("ada.obi", profile?.Username);

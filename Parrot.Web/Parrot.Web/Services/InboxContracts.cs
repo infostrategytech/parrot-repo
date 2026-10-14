@@ -108,6 +108,13 @@ public sealed record InboxReplyDto(Guid RequestId, string Text)
     public string? AttachmentName { get; init; }
 }
 
+/// <summary>A picture or file chosen to send, read into memory so a retry sends the same bytes.</summary>
+public sealed record InboxPendingFile(string Name, string ContentType, byte[] Bytes)
+{
+    /// <summary>The server's limits: 5 MB for a picture, 16 MB for any other file.</summary>
+    public const long MaxBytes = 16 * 1024 * 1024;
+}
+
 /// <summary>Customer 360: who the customer is, beyond the conversation.</summary>
 public sealed record InboxCustomerDto
 {

@@ -16,6 +16,7 @@ public class ComposerWindowRenderTests
     {
         ServiceCollection services = new();
         services.AddSingleton(new AuroraInterop(Mock.Of<IJSRuntime>()));
+        services.AddSingleton(Mock.Of<IJSRuntime>());
         await using ServiceProvider provider = services.BuildServiceProvider();
         await using HtmlRenderer renderer = new(provider, NullLoggerFactory.Instance);
         return await renderer.Dispatcher.InvokeAsync(async () =>

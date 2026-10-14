@@ -45,8 +45,9 @@ server {
     listen 443 ssl;
     server_name ${API_DOMAIN};
 
-    # Image uploads are capped at 5 MB by the API; nginx's own default is 1 MB.
-    client_max_body_size 10m;
+    # Profile images are capped at 5 MB and files sent to customers at 16 MB (5 MB for pictures) by the API;
+    # nginx's own default is 1 MB. 20m leaves room for the form around the file.
+    client_max_body_size 20m;
 
     # Uploaded images, read straight from the bucket in the minio container.
     location /media/ {
