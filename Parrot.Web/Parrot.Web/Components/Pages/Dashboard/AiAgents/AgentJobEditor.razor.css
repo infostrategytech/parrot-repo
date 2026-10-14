@@ -1,0 +1,218 @@
+/* An agent's job description: talking to it on top (the orb in a stage of
+   its own, Talk as the one main button, Type quieter beside it, and Teach
+   your AI's light along the card's edges while a turn is happening, kept
+   soft for a card this size), then, once they're done, its job description
+   to read and edit, with Hear it. White cards on the muted page. */
+
+.job-editor {
+  /* Missing from the token set: the orb's size and the stage around it (room
+     for it to swell when loud), the talking card's height (so it doesn't
+     jump between turns), the captions' measure and visible lines, and the
+     motion of a just-written job description. */
+  --ds-job-editor-orb: 96px;
+  --ds-job-editor-stage: 136px;
+  --ds-job-editor-orb-small: 56px;
+  --ds-job-editor-stage-small: 72px;
+  --ds-job-editor-voice: 412px;
+  --ds-job-editor-measure: 560px;
+  --ds-job-editor-caption: 84px;
+  --ds-job-editor-new: 2400ms;
+  --ds-job-editor-word: 180ms;
+  --ds-job-editor-unsaid: 0.28;
+  --ds-job-editor-pause: 3s;
+  --ds-job-editor-bar: 160px;
+  --ds-job-editor-aura: 0.6;
+
+  display: grid;
+  gap: var(--spacing-lg);
+  min-width: 0;
+}
+.job-editor > * { min-width: 0; }
+::deep .job-editor__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+/* ── Talking ─────────────────────────────────────────────────────────────── */
+
+/* The card is the light's frame (VoiceAura, its first child). Before the
+   job description exists it keeps one height whatever the turn, and its
+   content starts from the top, so the orb stays put as captions come and go. */
+.job-editor__voice {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  min-height: var(--ds-job-editor-voice);
+  padding: var(--spacing-3xl) var(--spacing-xl) var(--spacing-xl);
+  overflow: hidden;
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.job-editor__voice > :not(.ds-voice-aura) { position: relative; z-index: 1; }
+/* Room between the parts, so they spread through the card rather than
+   bunching at the top: the orb, 24px, what is happening, 12px, what is
+   being said, 24px, the ways in (and 20px to the link under them). */
+.job-editor__voice > .job-editor__voice-text,
+.job-editor__voice > .job-editor__ways,
+.job-editor__voice > .job-editor__compose { margin-top: var(--spacing-2xl); }
+.job-editor__voice > .job-editor__caption { margin-top: var(--spacing-md); }
+.job-editor__voice > ::deep .inline-error { margin-top: var(--spacing-lg); }
+/* Once there is a job description (being written, or written): the way to
+   add more, not the main thing. */
+.job-editor__voice.is-compact {
+  --ds-job-editor-orb: var(--ds-job-editor-orb-small);
+  --ds-job-editor-stage: var(--ds-job-editor-stage-small);
+  min-height: 0;
+  padding-top: var(--spacing-xl);
+}
+.job-editor__voice.is-compact > .job-editor__voice-text { margin-top: var(--spacing-md); }
+.job-editor__voice.is-compact > .job-editor__ways { margin-top: var(--spacing-xl); }
+/* Typing: the orb steps back; the box is the thing, at its own height. */
+.job-editor__voice.is-composing {
+  --ds-job-editor-orb: var(--ds-job-editor-orb-small);
+  --ds-job-editor-stage: var(--ds-job-editor-stage-small);
+  min-height: 0;
+}
+
+/* The light, kept soft for a card this size. */
+.job-editor .job-editor__voice ::deep .ds-voice-aura {
+  /* Missing from the token set: the light's bands for a small card,
+     thinner than for Teach your AI's large panel. */
+  --ds-voice-aura-tight: 2px;
+  --ds-voice-aura-tight-blur: 6px;
+  --ds-voice-aura-wide: 6px;
+  --ds-voice-aura-wide-blur: 16px;
+  opacity: var(--ds-job-editor-aura);
+}
+
+/* The orb in its stage: room to swell, never near the edge. */
+.job-editor__stage {
+  display: grid;
+  place-items: center;
+  width: var(--ds-job-editor-stage);
+  height: var(--ds-job-editor-stage);
+}
+.job-editor__voice ::deep .ds-voice-orb.job-editor__orb { --ds-voice-orb-size: var(--ds-job-editor-orb); }
+.job-editor__voice-text { display: grid; gap: var(--spacing-xs); justify-items: center; max-width: var(--ds-job-editor-measure); }
+.job-editor__voice-text ::deep p { margin: var(--spacing-none); }
+.job-editor__voice-text ::deep p:first-child { color: var(--colors-text-primary); }
+
+/* What is being said: the agent's words appear as it says them; the
+   owner's arrive as they talk, the unfinished part quieter, and only the
+   last lines once there are many. */
+.job-editor__caption { max-width: var(--ds-job-editor-measure); }
+.job-editor__caption ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.job-editor__caption.is-agent ::deep span { transition: opacity var(--ds-job-editor-word) ease-out; }
+.job-editor__caption.is-agent ::deep span:not([data-on]) { opacity: var(--ds-job-editor-unsaid); }
+.job-editor__caption.is-owner ::deep .job-editor__interim { color: var(--colors-text-muted); }
+.job-editor__caption.is-long {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  max-height: var(--ds-job-editor-caption);
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, transparent, var(--colors-text-primary) 40%);
+}
+
+.job-editor__ways { display: grid; gap: var(--spacing-xl); justify-items: center; }
+.job-editor__start,
+.job-editor__finishing { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; justify-content: center; }
+.job-editor__voice > ::deep .inline-error { justify-self: stretch; text-align: start; }
+
+/* The pause running out: a thin bar that fills, then it writes. */
+.job-editor__countdown {
+  display: block;
+  width: var(--ds-job-editor-bar);
+  height: var(--spacing-2xs);
+  overflow: hidden;
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.job-editor__countdown > span {
+  display: block;
+  height: 100%;
+  background: var(--colors-brand-primary);
+  border-radius: inherit;
+  animation: job-editor-countdown var(--ds-job-editor-pause) linear forwards;
+}
+@keyframes job-editor-countdown {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* Typing: a box with room to write, and its tools under it (a voice note
+   on the left, Cancel and Done on the right). A voice note takes the box's
+   place while it records. */
+.job-editor__compose {
+  display: grid;
+  gap: var(--spacing-xs);
+  justify-self: stretch;
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-lg);
+  text-align: start;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.job-editor__compose:focus-within { border-color: var(--colors-accent-brand-border); }
+.job-editor__compose-foot { display: flex; gap: var(--spacing-sm); align-items: center; }
+.job-editor__compose-foot > ::deep .ds-button:first-child { margin-inline-start: calc(-1 * var(--spacing-sm)); }
+.job-editor__compose-end { display: flex; gap: var(--spacing-sm); align-items: center; margin-inline-start: auto; }
+
+/* ── Its job description, with Hear it ──────────────────────────────────── */
+
+.job-editor__brief {
+  display: grid;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  outline: none;
+  animation: job-editor-in var(--ds-motion-base) var(--ds-motion-enter);
+}
+@keyframes job-editor-in {
+  from { opacity: 0; transform: translateY(var(--spacing-sm)); }
+}
+.job-editor__brief-head { display: flex; gap: var(--spacing-lg); align-items: flex-start; justify-content: space-between; }
+.job-editor__brief-title { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.job-editor__brief-title ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.job-editor__brief-head > ::deep .ds-button { flex: none; }
+
+/* Being written: placeholder lines, then the text arriving sentence by sentence. */
+.job-editor__writing,
+.job-editor__streaming {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--ds-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+}
+.job-editor__streaming ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.job-editor__streaming ::deep span { animation: job-editor-in var(--ds-motion-base) var(--ds-motion-enter); }
+
+/* Just written: the box is marked for a moment. */
+.job-editor__brief ::deep .ds-text-area.is-new { animation: job-editor-new var(--ds-job-editor-new) ease-out; }
+@keyframes job-editor-new {
+  from { background: var(--colors-accent-brand-subtle); border-color: var(--colors-accent-brand-border); }
+}
+
+/* What was just added: one quiet line, with Undo. */
+.job-editor__added {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-lg);
+  color: var(--colors-feedback-success-text);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+.job-editor__added ::deep p { flex: 1; margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+@media (prefers-reduced-motion: reduce) {
+  .job-editor__brief,
+  .job-editor__streaming ::deep span,
+  .job-editor__brief ::deep .ds-text-area.is-new { animation: none; }
+  .job-editor__caption.is-agent ::deep span:not([data-on]) { opacity: 1; }
+  .job-editor__countdown > span { animation: none; width: 100%; }
+}

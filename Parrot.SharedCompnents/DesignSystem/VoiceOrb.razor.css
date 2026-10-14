@@ -199,6 +199,20 @@
 .ds-voice-orb.is-still .ds-voice-orb__rings::after { animation: none; }
 .ds-voice-orb.is-still .ds-voice-orb__rings::after { transform: rotateY(60deg) rotateX(30deg); }
 
+/* Round: the ball keeps its shape at any size. No rings melting in, and
+   the core stays inside the ball: its speaking flare reaches past the ball's
+   edge, and the gooey blur melts that into an egg shape. Speaking, the core
+   pulses within instead. */
+.ds-voice-orb.is-round .ds-voice-orb__rings { display: none; }
+.ds-voice-orb.is-round .ds-voice-orb__lines { clip-path: circle(24%); }
+.ds-voice-orb.is-round[data-state="speaking"] .ds-voice-orb__lines {
+  animation: ds-voice-orb-core var(--ds-voice-orb-think) ease-in-out infinite;
+}
+@keyframes ds-voice-orb-core {
+  0%, 100% { scale: 1; }
+  50% { scale: 1.12; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .ds-voice-orb__ball,
   .ds-voice-orb__lines,

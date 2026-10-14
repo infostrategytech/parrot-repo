@@ -131,6 +131,12 @@ else
     builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.LiveAgentCapabilities>();
 }
 builder.Services.AddScoped<AiAgentsState>();
+// Writing an agent's job description: until the agents API writes them, the
+// basic writer keeps the owner's words as they said them, and a test as a
+// customer stays hidden (it needs the agent to answer).
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentBriefing, Parrot.Web.Features.Dashboard.AiAgents.BasicAgentBriefing>();
+// The business's knowledge as facts (what an agent uses): no API for it yet.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory, Parrot.Web.Features.Dashboard.Knowledge.UnavailableKnowledgeMemory>();
 builder.Services.AddScoped<CatalogState>();
 builder.Services.AddScoped<ChannelsState>();
 builder.Services.AddScoped<ContactsState>();

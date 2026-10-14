@@ -4,19 +4,26 @@
    explaining: delete on the left, the red dot and the time, the voice as
    moving bars, send on the right. It takes the place of the text box while it
    records. The voice module writes the live level onto Element as --level
-   (0 to 1), so the bars move with no re-render. *@
-<div class="ds-voice-recording @Class" @ref="Element">
+   (0 to 1), so the bars move with no re-render. Pause and Resume are part of
+   it, everywhere it is used: given its Recording, it holds the recording,
+   its words and the time shown (the dot stops, the bars rest). *@
+<div class="@($"ds-voice-recording{(_paused ? " is-paused" : null)} {Class}")" @ref="Element">
     <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Delete voice note" title="Delete" @onclick="OnDelete">
         <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
     </Button>
     <span class="ds-voice-recording__dot" aria-hidden="true"></span>
-    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="ds-voice-recording__time" role="timer" aria-label="@($"Recording, {Clock}")">@Clock</Typography>
+    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="ds-voice-recording__time" role="timer" aria-label="@($"{(_paused ? "Paused" : "Recording")}, {Clock}")">@Clock</Typography>
     <span class="ds-voice-recording__bars" aria-hidden="true">
         @for (var i = 0; i < Bars; i++)
         {
             <i style="--bar: @i"></i>
         }
     </span>
+    @* Ready once the recording has started (a moment after this appears). *@
+    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-label="@(_paused ? "Resume recording" : "Pause recording")" title="@(_paused ? "Resume" : "Pause")"
+            disabled="@(Recording is null || _switching)" @onclick="TogglePauseAsync">
+        <IconLeft><Icon Name="@(_paused ? IconName.RiMicFill : IconName.RiPauseFill)" /></IconLeft>
+    </Button>
     <Button Size="ButtonSize.Small" aria-label="Send voice note" title="Send" @onclick="OnSend">
         <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
     </Button>
@@ -25,8 +32,56 @@
 @code {
     private const int Bars = 32;
 
-    /// <summary>How long it has been recording.</summary>
+    /// <summary>How long since it started (the host's clock); the time shown leaves out any pauses.</summary>
     [Parameter] public int Seconds { get; set; }
+
+    /// <summary>The recording in progress (VoiceInterop.RecordNoteAsync), for Pause and Resume.</summary>
+    [Parameter] public VoiceRecording? Recording { get; set; }
+
+    /// <summary>Told when it pauses (true) or resumes (false), for a host that says so elsewhere.</summary>
+    [Parameter] public EventCallback<bool> PausedChanged { get; set; }
+
+    private bool _paused, _switching;
+    // Seconds spent paused, and the time shown when it paused.
+    private int _pausedFor, _heldAt;
+
+    private int Shown => _paused ? _heldAt : Math.Max(0, Seconds - _pausedFor);
+
+    private async Task TogglePauseAsync()
+    {
+        if (Recording is null || _switching) return;
+        _switching = true;
+        try
+        {
+            if (_paused)
+            {
+                await Recording.ResumeAsync();
+                _pausedFor = Seconds - _heldAt;
+                _paused = false;
+            }
+            else
+            {
+                await Recording.PauseAsync();
+                _heldAt = Shown;
+                _paused = true;
+            }
+            await PausedChanged.InvokeAsync(_paused);
+        }
+        finally
+        {
+            _switching = false;
+        }
+    }
+
+    // A new recording (the host started another): not paused.
+    private VoiceRecording? _for;
+    protected override void OnParametersSet()
+    {
+        if (ReferenceEquals(Recording, _for)) return;
+        _for = Recording;
+        _paused = false;
+        _pausedFor = 0;
+    }
 
     [Parameter] public EventCallback OnDelete { get; set; }
     [Parameter] public EventCallback OnSend { get; set; }
@@ -35,5 +90,5 @@
     /// <summary>The bar's element, for the voice module to write the live level onto.</summary>
     public ElementReference Element { get; private set; }
 
-    private string Clock => $"{Seconds / 60}:{Seconds % 60:00}";
+    private string Clock => $"{Shown / 60}:{Shown % 60:00}";
 }

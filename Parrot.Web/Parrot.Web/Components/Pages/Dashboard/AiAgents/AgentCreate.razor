@@ -1,0 +1,400 @@
+@page "/ai-operations/new-agent"
+@layout Parrot.Web.Components.Layout.BareLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.AiAgents
+@inject AiAgentsState AiAgentsState
+@inject AgentGate Gate
+@inject IAgentBriefing Briefing
+@inject AuthState AuthState
+@inject NavigationManager Nav
+
+@* Creating an agent (designer, 13 October 2026), after the
+   business has taught its AI: a page of its own with no navigation, asking
+   the first things first, one question a step, the way ElevenLabs creates an
+   agent. What should it do (one job), what kind of business, its name (and
+   where it answers), then its job: they tell it, by voice first, and once
+   they're done it writes a short summary for them to read and edit. Create saves it as
+   a draft, never turned on, and opens its page to configure, test and turn
+   on. The agent never suggests its own name. *@
+
+<PageTitle>Create an agent · AI Operations · OmniAI</PageTitle>
+
+<NavigationLock OnBeforeInternalNavigation="OnNavigating" ConfirmExternalNavigation="@(HasProgress && !_done)" />
+
+<div class="agent-create">
+    <header class="agent-create__bar">
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span" Class="agent-create__brand">Create an agent</Typography>
+        <div class="agent-create__progress" aria-label="@($"Step {_step} of {Steps}")">
+            <div class="agent-create__segments" aria-hidden="true">
+                @for (var index = 1; index <= Steps; index++)
+                {
+                    <span class="@($"agent-create__segment{(index < _step ? " is-done" : index == _step ? " is-current" : null)}")"></span>
+                }
+            </div>
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="agent-create__count">@($"Step {_step} of {Steps}")</Typography>
+        </div>
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Close" title="Close" @onclick="RequestLeaveAsync">
+            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+        </Button>
+    </header>
+
+    @* Each question sits in the middle of the window, with the way on right
+       under it (designer, 13 October: nothing to look up to, nothing to reach
+       across the screen for). A long step starts at the top and scrolls. *@
+    <main class="@($"agent-create__main is-step-{_step}")">
+        <div class="agent-create__step" @key="_step">
+            @if (_step > 1)
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="agent-create__back" @onclick="Back">
+                    <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                    <ChildContent>Back</ChildContent>
+                </Button>
+            }
+            @switch (_step)
+            {
+                case 1:
+                    <div class="agent-create__question" tabindex="-1" @ref="_question">
+                        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">What should your agent do?</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-create__lede">Pick its main job. You'll tell it the details in a moment.</Typography>
+                    </div>
+                    @* The job cards: compact, two to a row, a colour each. *@
+                    <div class="agent-create__jobs" role="group" aria-label="Its main job">
+                        @foreach (var useCase in AgentUseCase.All)
+                        {
+                            var current = useCase;
+                            var chosen = _useCase == current.Id;
+                            var doneBy = DoneBy(current);
+                            <RowButton Class="@($"agent-create__job is-{current.Id}{(chosen ? " is-chosen" : null)}")" OnClick="() => PickJob(current)"
+                                       aria-pressed="@(chosen ? "true" : "false")">
+                                <span class="agent-create__job-icon"><Icon Name="@current.Icon" Size="IconSize.Sm" /></span>
+                                <span class="agent-create__job-text">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@current.Name</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="@(doneBy is null ? null : "agent-create__done-by")">@(doneBy is null ? current.Does : $"{doneBy} does this already")</Typography>
+                                </span>
+                                <span class="agent-create__tick" aria-hidden="true"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
+                            </RowButton>
+                        }
+                    </div>
+                    @if (_useCase == AgentUseCase.Custom)
+                    {
+                        <div class="agent-create__card agent-create__custom">
+                            <Input @ref="_customBox" FloatingLabel="What's the job?" Value="@_customJob" ValueChanged="value => _customJob = value ?? string.Empty"
+                                   HelperText="In a few words, like “Event planning” or “Questions about admissions”." maxlength="60" />
+                        </div>
+                    }
+                    break;
+
+                case 2:
+                    <div class="agent-create__question" tabindex="-1" @ref="_question">
+                        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">What industry is your business in?</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-create__lede">So your agent talks the way your customers expect, and knows what to be careful about.</Typography>
+                    </div>
+                    <div class="agent-create__industries" role="group" aria-label="Industry">
+                        @foreach (var industry in AgentIndustry.All)
+                        {
+                            var current = industry;
+                            var chosen = _industry == current.Id;
+                            <RowButton Class="@($"agent-create__industry{(chosen ? " is-chosen" : null)}")" OnClick="() => _industry = current.Id"
+                                       aria-pressed="@(chosen ? "true" : "false")">
+                                <span class="agent-create__industry-name">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@current.Name</Typography>
+                                    @if (_suggested == current.Id)
+                                    {
+                                        <StatusBadge Tone="StatusTone.Info" Glyph="IconName.RiSparkling2Fill">Suggested</StatusBadge>
+                                    }
+                                </span>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@current.Examples</Typography>
+                            </RowButton>
+                        }
+                    </div>
+                    @* What the industry adds, as information (the info semantic, not the brand). *@
+                    @if (AgentIndustry.Of(_industry) is { Careful: { } careful } chosenIndustry)
+                    {
+                        <InlineError Tone="InlineErrorTone.Info" Message="@($"For {Lower(chosenIndustry.Name)}, it will also follow this rule: {careful}")" />
+                    }
+                    break;
+
+                case 3:
+                    <div class="agent-create__question" tabindex="-1" @ref="_question">
+                        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Name it, and choose where it answers</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-create__lede">Customers see its name and look when it replies.</Typography>
+                    </div>
+                    <div class="agent-create__card agent-create__identity">
+                        @* How customers will see it: the look, its name under it as it is typed. *@
+                        <div class="agent-create__preview" aria-hidden="true">
+                            <img src="@AgentBuilderCopy.MascotImage(_form.Mascot)" alt="" />
+                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong" Class="@(_form.HasName ? null : "is-empty")">@(_form.HasName ? _form.Name.Trim() : "Your agent")</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{JobName} · {Business}")</Typography>
+                        </div>
+                        <div class="agent-create__looks" role="group" aria-label="Its look">
+                            @foreach (var mascot in AgentBuilderCopy.Mascots)
+                            {
+                                var current = mascot;
+                                var chosen = _form.Mascot == current;
+                                <RowButton Class="@($"agent-create__look{(chosen ? " is-chosen" : null)}")" OnClick="() => _form.ChooseAvatar(current)"
+                                           aria-pressed="@(chosen ? "true" : "false")" aria-label="@($"Look {AgentBuilderCopy.Mascots.ToList().IndexOf(current) + 1}")">
+                                    <img src="@AgentBuilderCopy.MascotImage(current)" alt="" />
+                                </RowButton>
+                            }
+                        </div>
+                        <Input Id="agent-create-name" FloatingLabel="Name" Value="@_form.Name" ValueChanged="value => _form.Name = value ?? string.Empty"
+                               HelperText="@NameHelp" Error="@(_tried && !_form.HasName)" maxlength="40" />
+                    </div>
+                    <AgentBasics Form="_form" Others="AiAgentsState.Agents" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" ShowIdentity="false" ShowSafety="false" />
+                    break;
+
+                default:
+                    <div class="agent-create__question" tabindex="-1" @ref="_question">
+                        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@($"Tell {_form.DisplayName} its job")</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-create__lede">@($"Brief {_form.DisplayName} the way you'd brief a new team member.")</Typography>
+                    </div>
+                    @if (_stale)
+                    {
+                        <InlineError Tone="InlineErrorTone.Info" Message="@($"You changed {_form.DisplayName}'s job since its job description was written.")">
+                            <Action>
+                                <span class="agent-create__stale">
+                                    <Button Size="ButtonSize.Small" @onclick="StartAgain">@($"Start again for {JobName}")</Button>
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="KeepBrief">Keep it</Button>
+                                </span>
+                            </Action>
+                        </InlineError>
+                    }
+                    @if (_brief is not null)
+                    {
+                        <AgentJobEditor @key="_briefVersion" @ref="_editor" Brief="_brief" Name="@_form.DisplayName" OnChange="BriefChanged"
+                                        UseCase="@_useCase" CustomJob="@_customJob" Industry="@_industry" Business="@Business" />
+                    }
+                    break;
+            }
+
+            @* The way on, right under the question. *@
+            @if (_step < Steps || _brief is { IsEmpty: false })
+            {
+            <div class="agent-create__actions">
+                @if (_step < Steps)
+                {
+                    <Button Size="ButtonSize.Large" disabled="@(!CanContinue)" @onclick="ContinueAsync">
+                        <ChildContent>Continue</ChildContent>
+                        <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                    </Button>
+                }
+                else
+                {
+                    @if (Briefing.CanTry)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" disabled="@_creating" @onclick="() => _testing = true">
+                            <IconLeft><Icon Name="IconName.RiChat3Fill" /></IconLeft>
+                            <ChildContent>Test it first</ChildContent>
+                        </Button>
+                    }
+                    <Button Size="ButtonSize.Large" Busy="_creating" disabled="@(_brief is null || _brief.Job.Trim().Length == 0 || _creating)" @onclick="CreateAsync">@($"Create {_form.DisplayName}")</Button>
+                }
+            </div>
+            }
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" OnDismiss="() => _error = null" />
+            }
+        </div>
+    </main>
+</div>
+
+@if (_brief is { IsEmpty: false })
+{
+    <AgentTestChat Open="_testing" OnClose="() => _testing = false"
+                   Name="@_form.DisplayName" Mascot="@_form.Mascot" Business="@Business"
+                   Brief="_brief" UseCase="@_useCase" Industry="@_industry"
+                   OnChangeLine="ChangeLine" />
+}
+
+<Dialog Open="_confirmingLeave"
+        Type="DialogType.Destructive"
+        Title="Leave without creating it?"
+        ConfirmLabel="Leave"
+        CancelLabel="Keep going"
+        OnCancel="Stay"
+        OnConfirm="LeaveAsync">
+    <GlyphContent><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>What you've chosen so far isn't saved.</p>
+    </Body>
+</Dialog>
+
+@code {
+    private const int Steps = 4;
+
+    private int _step = 1;
+    private string? _useCase, _industry, _suggested;
+    private string _customJob = string.Empty;
+    private AgentForm _form = new();
+    private AgentBrief? _brief;
+    private bool _tried, _creating, _testing, _done, _confirmingLeave;
+    private string? _error, _leaveTo;
+    private Input? _customBox;
+    private bool _focusCustom, _focusQuestion, _stale;
+    private ElementReference _question;
+
+    // What its job description was written for (job, own job's name, industry), to notice a change.
+    private string? _briefFor;
+    private int _briefVersion;
+    private string DraftKey => $"{_useCase}|{_customJob.Trim()}|{_industry}";
+    private AgentJobEditor? _editor;
+    private IReadOnlyList<AgentChannelChoice> _channels = [];
+
+    private string Business => AuthState.CurrentUser?.BusinessName is { Length: > 0 } name ? name : "your business";
+
+    private bool HasProgress => _useCase is not null;
+
+    private bool CanContinue => _step switch
+    {
+        1 => _useCase is not null && (_useCase != AgentUseCase.Custom || _customJob.Trim().Length > 0),
+        2 => _industry is not null,
+        3 => _form.HasName,
+        _ => false,
+    };
+
+    private string JobName => _useCase == AgentUseCase.Custom && _customJob.Trim().Length > 0 ? _customJob.Trim() : AgentUseCase.Of(_useCase)?.Name ?? "Your agent";
+
+    private string NameHelp =>
+        _tried && !_form.HasName ? "Give it a name to carry on."
+        : AiAgentsState.Agents.Any(agent => string.Equals(agent.Name.Trim(), _form.Name.Trim(), StringComparison.OrdinalIgnoreCase))
+            ? "Another agent has this name. Customers might mix them up."
+            : "Any name you like. It won't suggest one.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await AiAgentsState.LoadAsync();
+        _channels = await Gate.ConnectedAsync();
+        // A connected channel comes first (the gate on AI Operations says so).
+        if (_channels.Count == 0)
+        {
+            _done = true;
+            Nav.NavigateTo("/ai-operations?new=1", replace: true);
+            return;
+        }
+        // A look no other agent wears, the channels no live agent answers yet, and no name.
+        _form = AgentForm.Suggested(AiAgentsState.Agents, _channels.Select(channel => channel.Key));
+        _suggested = await Briefing.SuggestIndustryAsync();
+        _industry = _suggested;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusCustom && _customBox is not null) { _focusCustom = false; await _customBox.FocusAsync(); }
+        else if (_focusQuestion) { _focusQuestion = false; try { await _question.FocusAsync(); } catch (JSException) { } }
+    }
+
+    private string? DoneBy(AgentUseCase useCase) =>
+        AiAgentsState.Agents.FirstOrDefault(agent => agent.Settings.UseCase == useCase.Id && useCase.Id != AgentUseCase.Custom)?.Name;
+
+    private void PickJob(AgentUseCase useCase)
+    {
+        _useCase = useCase.Id;
+        if (useCase.Id == AgentUseCase.Custom) _focusCustom = true;
+    }
+
+    private static string Lower(string text) => text.Length > 0 ? char.ToLowerInvariant(text[0]) + text[1..] : text;
+
+    // ── Moving through ─────────────────────────────────────────────────────
+
+    private async Task ContinueAsync()
+    {
+        _tried = true;
+        if (!CanContinue) return;
+        _tried = false;
+        _step++;
+        _focusQuestion = true;
+        if (_step == Steps)
+        {
+            _brief ??= new();
+            _stale = _brief is { IsEmpty: false } && _briefFor is not null && _briefFor != DraftKey;
+        }
+    }
+
+    private void Back()
+    {
+        if (_step <= 1) return;
+        _step--;
+        _focusQuestion = true;
+    }
+
+    private void BriefChanged()
+    {
+        if (_brief is { IsEmpty: false } && _briefFor is null) _briefFor = DraftKey;
+        StateHasChanged();
+    }
+
+    // A fresh start for the new job: the talking card again, nothing written.
+    private void StartAgain()
+    {
+        _brief = new();
+        _briefFor = null;
+        _briefVersion++;
+        _stale = false;
+    }
+
+    private void KeepBrief()
+    {
+        _stale = false;
+        _briefFor = DraftKey;
+    }
+
+    private void ChangeLine(string sentence)
+    {
+        _testing = false;
+        _editor?.Focus(sentence);
+    }
+
+    // ── Creating it ────────────────────────────────────────────────────────
+
+    private async Task CreateAsync()
+    {
+        if (_brief is null || _creating || !_form.HasName) return;
+        _creating = true;
+        _error = null;
+        var useCase = AgentUseCase.Of(_useCase) ?? AgentUseCase.All[0];
+        AgentBriefDefaults.Apply(_form, useCase, _customJob, _industry, string.Empty, _brief);
+        try
+        {
+            var saved = await AiAgentsState.CreateAsync(_form.ToAgent(live: false));
+            _done = true;
+            Nav.NavigateTo($"/ai-operations/{saved.Id}?created=1");
+        }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception))
+        {
+            _error = $"We couldn't create {_form.DisplayName}. Check your connection and try again.";
+        }
+        finally
+        {
+            _creating = false;
+        }
+    }
+
+    // ── Leaving ────────────────────────────────────────────────────────────
+
+    private async Task RequestLeaveAsync()
+    {
+        if (!HasProgress) { _done = true; Nav.NavigateTo("/ai-operations"); return; }
+        _leaveTo = "/ai-operations";
+        _confirmingLeave = true;
+        await Task.CompletedTask;
+    }
+
+    private void OnNavigating(LocationChangingContext context)
+    {
+        if (!HasProgress || _done) return;
+        context.PreventNavigation();
+        _leaveTo = context.TargetLocation;
+        _confirmingLeave = true;
+    }
+
+    private void LeaveAsync()
+    {
+        _confirmingLeave = false;
+        _done = true;
+        Nav.NavigateTo(_leaveTo ?? "/ai-operations");
+    }
+
+    private void Stay() => _confirmingLeave = false;
+
+}

@@ -100,6 +100,9 @@
     /// <summary>Moves the keyboard focus to the field.</summary>
     public ValueTask FocusAsync() => _element.FocusAsync();
 
+    /// <summary>Selects a piece of its text (a sentence to change), with the focus; false when it isn't there.</summary>
+    public Task<bool> SelectAsync(string text) => Interop.SelectTextAsync(_element, text);
+
     /// <summary>Inserts text where the person's caret is, as typing it would (an emoji, say).</summary>
     public async Task InsertAsync(string text)
     {

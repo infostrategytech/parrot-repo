@@ -1258,7 +1258,7 @@
             }
             @if (_recording is not null || _recordingStarting)
             {
-                <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" OnDelete="CancelNoteAsync" OnSend="SendNoteAsync" Class="teach-ai__recording" />
+                <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" Recording="_recording" OnDelete="CancelNoteAsync" OnSend="SendNoteAsync" Class="teach-ai__recording" />
             }
             else
             {

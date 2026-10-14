@@ -158,6 +158,13 @@ public sealed class AuroraInterop : IAsyncDisposable
         return await module.InvokeAsync<string?>("insertAtCaret", element, text);
     }
 
+    /// <summary>Selects a piece of a field's text, with the focus; false when the text isn't in it.</summary>
+    public async Task<bool> SelectTextAsync(ElementReference element, string text)
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<bool>("selectText", element, text);
+    }
+
     public async Task SetValueAsync(ElementReference element, string value, bool focus = false)
     {
         var module = await _module.Value;

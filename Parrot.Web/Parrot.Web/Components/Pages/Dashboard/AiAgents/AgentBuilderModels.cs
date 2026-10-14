@@ -210,6 +210,7 @@ public sealed record AgentRole(
 
     /// <summary>A job as owners read it: the role's name, or the owner's own name for Build my own.</summary>
     public static string NameOf(AgentSettings settings) =>
-        settings.Role != AgentRoleTemplate.Custom ? Of(settings.Role).Name
+        settings.UseCase is not null ? AgentUseCase.NameOf(settings)
+        : settings.Role != AgentRoleTemplate.Custom ? Of(settings.Role).Name
         : string.IsNullOrWhiteSpace(settings.CustomRole) ? "Your own job" : settings.CustomRole.Trim();
 }
