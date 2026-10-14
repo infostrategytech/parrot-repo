@@ -156,6 +156,18 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 - Sequences may skip numbers, and for a moment a later number can be stored before an earlier one (a reply and an incoming message landing together). Recover from a little below the highest sequence held, not from it exactly, and drop repeats by `messageId`.
 - Messages stored before sequences existed, and replies to them, are not returned.
 
+### Internal notes
+
+A note is private context for the team on one conversation (not on the customer across channels). Notes are stored in `conversation_notes`, apart from the messages: a note is never sent to the customer's channel, never counts as an unread message and never moves the conversation up the list. The composer's **Internal note** tab saves one; the thread's **Internal notes** tab lists them, and the customer panel shows the latest.
+
+```http
+GET    /api/conversations/{connectionId}/notes?sender=2348012345678
+POST   /api/conversations/{connectionId}/notes?sender=2348012345678   {"text":"Prefers delivery after 5pm"}
+DELETE /api/conversations/{connectionId}/notes/{noteId}?sender=2348012345678
+```
+
+Notes are scoped to the workspace owner and are returned oldest first with the author (`authorName` is the author's email, as the token carries no display name). Text is trimmed, must not be empty and is at most 4096 characters. The inbox reads the notes with the thread (so a note added on another device appears on the next 15-second read). Deleting asks for a second click in the UI.
+
 ## Unread counts
 
 The inbox's rail badge and each row's badge count customer messages the signed-in user has not read, on every channel (WhatsApp, Facebook, Instagram and TikTok: anything stored in the messages collection).

@@ -641,10 +641,23 @@
             Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
         if (older || !item.HistoryLoaded) item.NextBefore = page.NextBefore;
         item.HistoryLoaded = true;
+        if (!older) await LoadNotesAsync(item);
         if (!older) await ClearMarkedUnreadAsync(item);
         // Reading a thread reads its messages, up to the newest this read returned.
         if (!older && item.UnreadCount > 0 && page.Messages.LastOrDefault() is { } newest)
             await TryMarkReadAsync(item, newest.Id);
+    }
+
+    // The notes come with the thread and are read again with it, so a note added on another device appears.
+    // They are not messages: a failed read leaves the notes shown as they were and never blocks the thread.
+    private async Task LoadNotesAsync(ConversationItem item)
+    {
+        try
+        {
+            var notes = await Client.NotesAsync(item.ConnectionId, item.Sender, _lifetime.Token);
+            if (!_disposed) ConversationsState.ApplyNotes(item, notes);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException) { }
     }
 
     // Tells the server the agent has seen the thread up to a message, so the count survives a refresh

@@ -27,6 +27,13 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
     public Task<InboxUnreadDto> SetMarkedUnreadAsync(Guid connection, string sender, bool markedUnread, CancellationToken ct) =>
         RequestAsync<InboxUnreadDto>(HttpMethod.Put,
             $"api/conversations/{connection}/marked-unread?sender={Uri.EscapeDataString(sender)}", new InboxMarkedUnreadDto(markedUnread), ct);
+    public Task<List<InboxNoteDto>> NotesAsync(Guid connection, string sender, CancellationToken ct) =>
+        RequestAsync<List<InboxNoteDto>>(HttpMethod.Get, NotesPath(connection, sender), null, ct);
+    public Task<InboxNoteDto> AddNoteAsync(Guid connection, string sender, string text, CancellationToken ct) =>
+        RequestAsync<InboxNoteDto>(HttpMethod.Post, NotesPath(connection, sender), new InboxAddNoteDto(text), ct);
+    public async Task DeleteNoteAsync(Guid connection, string sender, string noteId, CancellationToken ct) =>
+        await SendAsync(HttpMethod.Delete, $"api/conversations/{connection}/notes/{Uri.EscapeDataString(noteId)}?sender={Uri.EscapeDataString(sender)}", null, ct);
+    private static string NotesPath(Guid connection, string sender) => $"api/conversations/{connection}/notes?sender={Uri.EscapeDataString(sender)}";
     private static string Path(Guid connection, string sender) => $"api/conversations/{connection}/messages?sender={Uri.EscapeDataString(sender)}";
     private static readonly JsonSerializerOptions WriteOptions = new(JsonSerializerDefaults.Web)
     {
@@ -35,13 +42,22 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
 
     private async Task<T> RequestAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
     {
+        using var response = await SendAsync(method, path, body, ct);
+        return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct)
+            ?? throw new HttpRequestException("The server returned an empty response.");
+    }
+
+    // The response, once it is known to have succeeded; a failure becomes an HttpRequestException carrying the API's message.
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    {
         var token = auth.IsAuthenticated ? auth.CurrentUser!.Token : throw new InvalidOperationException("Sign in to load messages.");
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         // Null optional fields are left out, so the API sees the body it expects.
         if (body is not null) request.Content = JsonContent.Create(body, options: WriteOptions);
-        using var response = await http.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
+        var response = await http.SendAsync(request, ct);
+        if (response.IsSuccessStatusCode) return response;
+        using (response)
         {
             var text = "Could not complete the request. Check your connection and try again.";
             try
@@ -52,7 +68,5 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
             catch (JsonException) { }
             throw new HttpRequestException(text, null, response.StatusCode);
         }
-        return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct)
-            ?? throw new HttpRequestException("The server returned an empty response.");
     }
 }

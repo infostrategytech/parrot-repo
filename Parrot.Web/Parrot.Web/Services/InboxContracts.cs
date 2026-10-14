@@ -43,6 +43,11 @@ public sealed record InboxUnreadDto(int Total);
 
 public sealed record InboxPinDto(bool Pinned);
 
+/// <summary>A private note on a conversation. The customer never receives it.</summary>
+public sealed record InboxNoteDto(string Id, string Text, string AuthorId, string AuthorName, DateTime CreatedAt);
+
+public sealed record InboxAddNoteDto(string Text);
+
 public sealed record InboxMarkedUnreadDto(bool MarkedUnread);
 
 /// <summary>UpToMessageId is the id of the newest message the agent has seen in the thread.</summary>

@@ -427,6 +427,7 @@ builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
 builder.Services.Configure<InboxSettings>(builder.Configuration.GetSection(InboxSettings.SectionName));
 builder.Services.AddSingleton<IConversationReadStore, MongoConversationReadStore>();
 builder.Services.AddSingleton<IConversationFlagStore, MongoConversationFlagStore>();
+builder.Services.AddSingleton<IConversationNoteStore, MongoConversationNoteStore>();
 // Creating the store at startup is what fixes the unread baseline at the deploy, not at the first request.
 builder.Services.AddHostedService<Parrot.Api.Realtime.UnreadBaselineInitializer>();
 builder.Services.AddSingleton<IReplySendTimes, MongoReplySendTimes>();

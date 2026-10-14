@@ -3,15 +3,15 @@
 
 @* React's composer. A reply goes through Parrot's send (SendReplyRequest:
    RequestId + Text), with the same request id kept for a safe retry.
-   Internal notes, attachments, saved replies and AI drafts have no endpoint
-   yet: they are offered only when CanUseFeatures confirms API support, and
-   otherwise drawn disabled (notes) or left out. *@
+   Attachments, saved replies and AI drafts have no endpoint yet: they are
+   offered only when CanUseFeatures confirms API support, and otherwise left
+   out. Internal notes have their own endpoints (CanAddNotes). *@
 <div class="conversation-composer @ModeClass @(ReplyLocked || WindowClosed ? "is-reply-locked" : null)">
     <header>
         <Tabs Label="Message type" Variant="TabsVariant.Flat">
             <Tab Selected="@(Mode == ComposerMode.Reply)" OnClick="() => ChangeModeAsync(ComposerMode.Reply)">Reply</Tab>
-            <Tab Selected="@(Mode == ComposerMode.Note)" Disabled="@(!CanUseFeatures)"
-                 Title="@(CanUseFeatures ? null : "Internal notes are not available yet")"
+            <Tab Selected="@(Mode == ComposerMode.Note)" Disabled="@(!CanAddNotes)"
+                 Title="@(CanAddNotes ? null : "Internal notes are not available")"
                  OnClick="() => ChangeModeAsync(ComposerMode.Note)">Internal note</Tab>
         </Tabs>
     </header>
@@ -20,7 +20,7 @@
     {
         <div class="conversation-composer__disclosure is-note">
             <Icon Name="IconName.RiLock2Fill" />
-            <Typography TextStyle="TextStyle.Small10Medium" As="span">Only teammates can see this note. It will show your name and timestamp.</Typography>
+            <Typography TextStyle="TextStyle.Small10Medium" As="span">Only your team can see this note. It is saved here and is never sent to the customer.</Typography>
         </div>
     }
     else if (WindowClosed)
@@ -113,8 +113,10 @@
     [Parameter] public bool Sending { get; set; }
     /// <summary>A previous send did not confirm: the same text and request id are kept for a safe retry.</summary>
     [Parameter] public bool Retry { get; set; }
-    /// <summary>Notes, attachments, saved replies and AI drafts can be used.</summary>
+    /// <summary>Attachments, saved replies and AI drafts can be used.</summary>
     [Parameter] public bool CanUseFeatures { get; set; }
+    /// <summary>Internal notes can be saved. They need no AI features: only the notes endpoints.</summary>
+    [Parameter] public bool CanAddNotes { get; set; }
     [Parameter] public string? AttachmentName { get; set; }
     [Parameter] public EventCallback<string?> OnAttachmentChanged { get; set; }
     [Parameter] public string? DraftedBy { get; set; }

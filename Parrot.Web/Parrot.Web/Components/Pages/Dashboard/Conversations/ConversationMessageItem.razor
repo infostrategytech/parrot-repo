@@ -62,7 +62,21 @@ else if (Message.Kind == MessageKind.Note)
                     <Icon Name="IconName.RiLock2Fill" />
                     <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline">Private</Typography>
                 </span>
-                <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
+                <Typography TextStyle="TextStyle.Small10Regular" As="time">@NoteTimeLabel</Typography>
+                @if (_confirmingDelete)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="message-note__delete is-confirming"
+                            @onclick="DeleteNoteAsync">Delete note?</Button>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="message-note__delete"
+                            @onclick="() => _confirmingDelete = false">Keep</Button>
+                }
+                else
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="message-note__delete"
+                            aria-label="Delete note" title="Delete note" @onclick="() => _confirmingDelete = true">
+                        <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                    </Button>
+                }
             </header>
             <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="message-note__body">@Message.Text</Typography>
         </div>
@@ -161,6 +175,7 @@ else
     [Parameter] public bool CanTeach { get; set; }
     [Parameter] public EventCallback<ConvMessage> OnCorrect { get; set; }
     [Parameter] public EventCallback<ConvMessage> OnAnswer { get; set; }
+    [Parameter] public EventCallback<ConvMessage> OnDeleteNote { get; set; }
     [Parameter] public EventCallback OnCustomerDetails { get; set; }
     /// <summary>This message's image was chosen: the thread opens it full screen.</summary>
     [Parameter] public EventCallback<ConvMessage> OnPreviewImage { get; set; }
@@ -184,6 +199,16 @@ else
     private string AvatarInitials => Message.Kind == MessageKind.Customer && CustomerInitials is { } initials
         ? initials
         : Initials.From(AuthorLabel);
+    private bool _confirmingDelete;
+
+    private async Task DeleteNoteAsync()
+    {
+        _confirmingDelete = false;
+        await OnDeleteNote.InvokeAsync(Message);
+    }
+
+    // The notes list has no day dividers, so each note carries its date.
+    private string NoteTimeLabel => Message.ReceivedAt.ToLocalTime().ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture);
     private string TimeLabel => Message.ReceivedAt.ToLocalTime().ToString("h:mm tt", CultureInfo.InvariantCulture);
 
     // The kind of event, read from what happened: AI hand-offs, a teammate

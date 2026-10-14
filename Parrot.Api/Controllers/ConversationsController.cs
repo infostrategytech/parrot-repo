@@ -13,7 +13,7 @@ namespace Parrot.Api.Controllers;
 [Route("api/conversations")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "conversations")]
-public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, ChannelReadReceipts channelReads, ConversationService service,
+public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram) : ControllerBase
 {
@@ -93,6 +93,35 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
         await flags.SetPinnedAsync(Owner, connectionId, sender, request.Pinned, cancellationToken);
         return Ok(new SetPinnedRequest(request.Pinned));
+    }
+
+    // Internal notes: for the team only. They are not messages, so nothing here reaches the customer's channel.
+    [HttpGet("{connectionId:guid}/notes")]
+    public async Task<IActionResult> Notes(Guid connectionId, [FromQuery] string sender, CancellationToken cancellationToken)
+    {
+        await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
+        return Ok(await notes.ListAsync(Owner, connectionId, sender, cancellationToken));
+    }
+
+    [HttpPost("{connectionId:guid}/notes")]
+    public async Task<IActionResult> AddNote(Guid connectionId, [FromQuery] string sender,
+        [FromBody] AddNoteRequest request, CancellationToken cancellationToken)
+    {
+        await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
+        string text = request.Text?.Trim() ?? "";
+        if (text.Length == 0) throw new ValidationException("Write something to save as a note.");
+        if (text.Length > IConversationNoteStore.MaxLength)
+            throw new ValidationException($"A note can be at most {IConversationNoteStore.MaxLength} characters.");
+        string author = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email") ?? "Team member";
+        return Ok(await notes.AddAsync(Owner, connectionId, sender, text, Owner, author, cancellationToken));
+    }
+
+    [HttpDelete("{connectionId:guid}/notes/{noteId}")]
+    public async Task<IActionResult> DeleteNote(Guid connectionId, string noteId, [FromQuery] string sender, CancellationToken cancellationToken)
+    {
+        await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
+        if (!await notes.DeleteAsync(Owner, connectionId, sender, noteId, cancellationToken)) throw new NotFoundException("Note not found.");
+        return NoContent();
     }
 
     // Unread customer messages, plus one for each conversation marked unread that has none of its own:

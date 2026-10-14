@@ -251,3 +251,6 @@
 @media (max-width: 760px) {
   .message-bubble { --ds-message-measure: 92%; }
 }
+
+.message-note__card > header ::deep .message-note__delete { flex: 0 0 auto; color: var(--colors-feedback-warning-text); }
+.message-note__card > header ::deep .message-note__delete.is-confirming { color: var(--colors-feedback-destructive-text); }

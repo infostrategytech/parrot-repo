@@ -45,6 +45,20 @@ public class ConversationsState
     public void Resort() => Conversations.Sort((a, b) =>
         a.Pinned != b.Pinned ? (a.Pinned ? -1 : 1) : b.UpdatedAt.CompareTo(a.UpdatedAt));
 
+    /// <summary>Puts the conversation's notes (as the server has them) among its messages, replacing any it held, so a note deleted elsewhere goes too.</summary>
+    public static void ApplyNotes(ConversationItem item, IEnumerable<InboxNoteDto> notes)
+    {
+        var merged = item.Messages.Where(m => m.Kind != MessageKind.Note).ToList();
+        merged.AddRange(notes.Select(ToMessage));
+        item.Messages = merged.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
+    }
+
+    public static ConvMessage ToMessage(InboxNoteDto note) => new()
+    {
+        Id = note.Id, Text = note.Text, Kind = MessageKind.Note, IsOutgoing = true, Status = "note",
+        ReceivedAt = note.CreatedAt, Author = new InboxPersonDto(note.AuthorId, note.AuthorName),
+    };
+
     public static void Merge(ConversationItem item, IEnumerable<InboxMessageDto> messages)
     {
         var unique = item.Messages.ToDictionary(m => m.Id);

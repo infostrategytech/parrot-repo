@@ -80,6 +80,7 @@
                                              CustomerInitials="@Conversation.CustomerInitials"
                                              AuthorName="@AuthorName" AuthorSeed="@AuthorSeed"
                                              CanTeach="@Features.Available"
+                                             OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection" OnAnswer="OpenAnswer"
                                              OnCustomerDetails="OnCustomerDetails"
                                              OnPreviewImage="OpenMedia" />
@@ -121,7 +122,7 @@
                                   Mode="@_composerMode" ModeChanged="ChangeComposerMode"
                                   Text="@Conversation.Draft" TextChanged="OnComposerTextChanged"
                                   Sending="@Conversation.Sending" Retry="@Conversation.DraftRequestId.HasValue"
-                                  CanUseFeatures="@Features.Available"
+                                  CanUseFeatures="@Features.Available" CanAddNotes
                                   AttachmentName="@_attachment" OnAttachmentChanged="name => _attachment = name"
                                   DraftedBy="@_draftedBy" Drafting="@_drafting"
                                   OnSend="SendAsync" OnDraft="DraftAsync" />
@@ -381,13 +382,29 @@
         _actionError = null;
         try
         {
-            await Features.AddNoteAsync(item.ConnectionId, item.Sender, item.Draft);
+            // Saved on its own, not sent: the customer never receives a note.
+            var note = await Client.AddNoteAsync(item.ConnectionId, item.Sender, item.Draft, CancellationToken.None);
+            ConversationsState.ApplyNotes(item, item.Messages.Where(m => m.Kind == MessageKind.Note).Select(m => new Parrot.Web.Services.InboxNoteDto(
+                m.Id, m.Text, m.Author?.Id ?? "", m.Author?.Name ?? "", m.ReceivedAt)).Append(note));
             item.Draft = "";
             _scrollPending = true;
-            await OnChanged.InvokeAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _actionError = ex.Message; }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
+        { _actionError = ex is HttpRequestException ? ex.Message : "Could not save this note. Try again."; }
         finally { item.Sending = false; }
+    }
+
+    private async Task DeleteNoteAsync(ConvMessage note)
+    {
+        var item = Conversation;
+        _actionError = null;
+        try
+        {
+            await Client.DeleteNoteAsync(item.ConnectionId, item.Sender, note.Id, CancellationToken.None);
+            item.Messages = item.Messages.Where(m => m.Id != note.Id).ToList();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException)
+        { _actionError = ex is HttpRequestException ? ex.Message : "Could not delete this note. Try again."; }
     }
 
     private async Task DraftAsync()
