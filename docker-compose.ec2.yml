@@ -198,6 +198,8 @@ services:
       # answer customers and the AI Operations figures show.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
+      # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
+      OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
       BrightData__ApiKey: ${BRIGHTDATA_API_KEY:-}
       BrightData__Zone: ${BRIGHTDATA_ZONE:-}
       EmailSettings__SmtpHost: ${SMTP_HOST:-smtp.example.com}
@@ -323,6 +325,7 @@ services:
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
       # Must match the API's: with it on, agents live in the API and can be turned on.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
     depends_on:
       - parrot-api
       - parrot-grpc
