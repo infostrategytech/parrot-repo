@@ -38,7 +38,7 @@
 
         @* How far along: a segment per topic (each one goes back to it), and where
            you are in words. *@
-        @if (_conversation is not null && !_approved && _conversation.Step != TeachAiStep.Welcome)
+        @if (_conversation is not null && !_approved && _conversation.Step != TeachAiStep.Welcome && !AiVoice)
         {
             <nav class="teach-ai__topics" aria-label="Business knowledge topics">
                 <div class="teach-ai__steps">
@@ -181,10 +181,13 @@
                                         <ChildContent>Talk</ChildContent>
                                     </Button>
                                 }
+                                @if (!AiVoice)
+                                {
                                 <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="TypeInsteadAsync">
                                     <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
                                     <ChildContent>Type</ChildContent>
                                 </Button>
+                                }
                             </div>
                             @if (StartNote is { } note)
                             {
@@ -230,7 +233,7 @@
                                             @* As in ChatGPT and Claude: point at your message to edit it.
                                                The button sits beside it, so it takes no room of its own. *@
                                             <div class="teach-ai__sent">
-                                                @if (_conversation.CanEdit(sent) && _phase != Phase.Thinking)
+                                                @if (_conversation.CanEdit(sent) && _phase != Phase.Thinking && !AiVoice)
                                                 {
                                                     <div class="teach-ai__message-actions">
                                                         <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Edit message" title="Edit" @onclick="() => EditMessage(sent)">
@@ -253,7 +256,7 @@
 
                         @* The suggested replies sit on top of the bar in both modes; a
                            question with its own answers to pick carries its own Skip. *@
-                        @if (_conversation.Choices is { Count: > 0 } choices && !AsksToPick)
+                        @if (_conversation.Choices is { Count: > 0 } choices && !AsksToPick && !AiVoice)
                         {
                             // Their room is kept for the whole question, and they show once
                             // it has been said (or typed out), so they never arrive before
@@ -322,27 +325,40 @@
                                                 <ChildContent>Done</ChildContent>
                                             </Button>
                                         }
+                                        @if (!AiVoice)
+                                        {
                                         <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" title="Share a picture or document"
                                                 disabled="@(_phase == Phase.Thinking)" @onclick="PickFilesAsync">
                                             <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
                                             <ChildContent>Add a file</ChildContent>
                                         </Button>
+                                        }
                                         @* Labelled: in a call, mute is the control that matters most. *@
                                         <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="@(_muted ? "teach-ai__mute is-on" : "teach-ai__mute")"
                                                 aria-pressed="@(_muted ? "true" : "false")" title="@($"{MuteLabel} (Ctrl/⌘ + D)")" @onclick="ToggleMuteAsync">
                                             <IconLeft><Icon Name="@(_muted ? IconName.RiMicOffFill : IconName.RiMicFill)" /></IconLeft>
                                             <ChildContent>@MuteLabel</ChildContent>
                                         </Button>
+                                        @if (AiVoice)
+                                        {
+                                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" title="End the voice chat" @onclick="EndVoiceAsync">
+                                                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                                                <ChildContent>End</ChildContent>
+                                            </Button>
+                                        }
+                                        else
+                                        {
                                         <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" title="Type instead: the conversation carries on" @onclick="EndVoiceAsync">
                                             <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
                                             <ChildContent>Type</ChildContent>
                                         </Button>
+                                        }
                                     </div>
                                 </div>
                             }
                             else
                             {
-                                @Composer
+                                @(AiVoice ? AiVoiceAgain : Composer)
                             }
                         </section>
                         }
@@ -429,7 +445,8 @@
 
 
     private string Business => string.IsNullOrWhiteSpace(Auth.CurrentUser?.BusinessName) ? "your business" : Auth.CurrentUser!.BusinessName!;
-    private bool CanTalk => _caps is { Speak: true, Listen: true, Microphone: true };
+    // With the AI, ElevenLabs does the speaking and hearing: only a microphone is needed.
+    private bool CanTalk => AiVoice ? _caps is { Microphone: true } : _caps is { Speak: true, Listen: true, Microphone: true };
     private KnowledgeCard? Current => _conversation?.Current;
     private IReadOnlyList<KnowledgeCard> Tiles => _conversation?.Core.ToList() ?? Placeholder;
 
@@ -469,6 +486,7 @@
 
     private string StatusText =>
         _approved ? "All set"
+        : _aiStarting ? "Connecting"
         : _pausedAway ? "Paused"
         : _muted && _phase is not (Phase.Speaking or Phase.Thinking) && _mode == Mode.Voice ? "Muted"
         : _conversation is null ? (_loadError is null ? "Reading" : "")
@@ -611,6 +629,7 @@
         _focusVoiceBar = true;
         try { _muteShortcut ??= await Voice.BindMuteShortcutAsync(_self!, nameof(MutePressedAsync)); }
         catch (JSException) { }
+        if (AiVoice) { await StartAiVoiceAsync(); return; }
         if (_conversation.Step == TeachAiStep.Welcome) await BeginAsync(Mode.Voice);
         else await SwitchModeAsync(Mode.Voice);
     }
@@ -638,6 +657,7 @@
     [JSInvokable]
     public async Task VisibilityChanged(bool visible)
     {
+        if (_aiCall is not null) { await AiVisibilityChangedAsync(visible); return; }
         if (!visible)
         {
             if (_mode == Mode.Voice && !_muted && _phase is Phase.Listening or Phase.Speaking or Phase.Idle)
@@ -936,6 +956,7 @@
     // stopping it talking; unmute picks up where the turn is.
     private async Task ToggleMuteAsync()
     {
+        if (_aiCall is not null) { await ToggleAiMuteAsync(); return; }
         _voiceNotice = null;
         if (!_muted && _phase == Phase.Paused)
         {
@@ -1009,6 +1030,7 @@
 
     private async Task StopVoiceAsync()
     {
+        await EndAiVoiceAsync();
         await StopSpeechAsync();
         await StopListeningAsync();
         if (_phase is Phase.Speaking or Phase.Listening) _phase = Phase.Idle;
@@ -1745,6 +1767,22 @@
         _phase = Phase.Idle;
         await State.CompleteAsync();
     }
+
+    // With the AI, between voice chats: talking is the way in for now (typing to it comes later).
+    private RenderFragment AiVoiceAgain => __builder =>
+    {
+        <div class="teach-ai__composer">
+            <footer class="teach-ai__composer-footer">
+                <div class="teach-ai__composer-tools">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Typing to the AI is coming soon.</Typography>
+                </div>
+                <Button Size="ButtonSize.Small" Busy="@(_askingMic || _aiStarting)" disabled="@(!CanTalk)" @onclick="TalkAsync">
+                    <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                    <ChildContent>Talk</ChildContent>
+                </Button>
+            </footer>
+        </div>
+    };
 
     // ── Closing ─────────────────────────────────────────────────────────────
 

@@ -176,6 +176,9 @@ public sealed partial class TeachAiConversation(string business, IReadOnlyList<K
     private const string SkipLabel = "Skip for now";
     private const string SomethingElse = "Something else";
 
+    /// <summary>A conversation the AI leads (by voice): no scripted opening; its lines are added as they are said.</summary>
+    public void StartLive() => Step = TeachAiStep.Topics;
+
     /// <summary>Says what this is for, then reads back everything that was found and asks what is wrong.</summary>
     public TeachAiLine Start()
     {
