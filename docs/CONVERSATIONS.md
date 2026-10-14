@@ -118,6 +118,22 @@ Content-Type: application/json
 {"upToMessageId":"<ConversationMessage.Id of the newest message the agent has seen>"}
 ```
 
+### Pin and mark as unread
+
+Both are the signed-in user's own marks (stored per user in `conversation_flags`, so they survive a reload and follow the user to another device) and are never shown to teammates or the customer. The row's "…" menu and the conversation header menu offer them.
+
+```http
+PUT /api/conversations/{connectionId}/pin?sender=2348012345678
+{"pinned":true}                       -> {"pinned":true}
+
+PUT /api/conversations/{connectionId}/marked-unread?sender=2348012345678
+{"markedUnread":true}                 -> {"total":14}
+```
+
+- `GET /api/conversations` rows carry `pinned` and `markedUnread`. Pinned conversations lead the list (then newest first), and the first page includes every pin even when it is older than the page, so a pin is never missing from the loaded list.
+- A conversation marked unread shows **!** in place of the count while it has no unread messages of its own; with unread messages it shows the count. Each such conversation adds one to the inbox total (`GET /api/conversations/unread` and the rail badge).
+- Opening the conversation lifts the mark (the page calls `marked-unread` with `false`, and `POST …/read` clears it too). The 15-second poll only reads the flag; it never sets or clears it. Marking the open conversation unread closes it, so it is not read straight back.
+
 `GET /api/conversations` rows carry `unreadCount`. `GET /api/conversations/unread` returns `{ "total": n }` over every conversation and channel, not just the loaded page. The `read` call returns `{ "conversationUnread": n, "total": n }`. See [Unread counts](#unread-counts).
 
 History pages contain at most 100 messages in chronological order and a `nextBefore` cursor. Outgoing records retain their stable application message ID; Meta's ID is stored separately as `ProviderMessageId`.

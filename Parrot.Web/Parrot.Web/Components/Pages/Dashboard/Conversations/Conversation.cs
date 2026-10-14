@@ -32,6 +32,12 @@ public class ConversationItem
     public string Channel { get; set; } = "whatsapp";
     public int? UnreadCount { get; set; }
 
+    /// <summary>Pinned by the signed-in user: listed above every unpinned conversation.</summary>
+    public bool Pinned { get; set; }
+
+    /// <summary>Marked unread by the user to return to it. Shown as "!" while there are no unread messages.</summary>
+    public bool MarkedUnread { get; set; }
+
     /// <summary>When the customer last wrote (UTC). The reply window runs from here.</summary>
     public DateTime? LastCustomerMessageAt { get; set; }
     public int? ReplyWindowHours { get; set; }

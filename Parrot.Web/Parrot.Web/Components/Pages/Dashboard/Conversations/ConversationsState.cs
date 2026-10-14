@@ -25,6 +25,8 @@ public class ConversationsState
             item.UpdatedAt = summary.UpdatedAt;
             item.Channel = summary.Channel ?? "whatsapp";
             item.UnreadCount = summary.UnreadCount;
+            item.Pinned = summary.Pinned;
+            item.MarkedUnread = summary.MarkedUnread;
             item.LastCustomerMessageAt = summary.LastCustomerMessageAt;
             item.ReplyWindowHours = summary.ReplyWindowHours;
             item.Status = Parse<ConversationStatus>(summary.Status);
@@ -36,8 +38,12 @@ public class ConversationsState
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
             item.Customer = summary.Customer;
         }
-        Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
+        Resort();
     }
+
+    /// <summary>Pinned conversations first, then newest first within each group, so new messages land below the pins.</summary>
+    public void Resort() => Conversations.Sort((a, b) =>
+        a.Pinned != b.Pinned ? (a.Pinned ? -1 : 1) : b.UpdatedAt.CompareTo(a.UpdatedAt));
 
     public static void Merge(ConversationItem item, IEnumerable<InboxMessageDto> messages)
     {
@@ -94,7 +100,7 @@ public class ConversationsState
         if (message.PersistedAt < item.UpdatedAt) return;
         item.LastMessage = message.Text ?? $"[{message.Type} message]";
         item.UpdatedAt = message.PersistedAt;
-        Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
+        Resort();
     }
 
     /// <summary>

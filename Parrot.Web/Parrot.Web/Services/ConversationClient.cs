@@ -21,6 +21,12 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
     public Task<InboxMarkReadResultDto> MarkReadAsync(Guid connection, string sender, string upToMessageId, CancellationToken ct) =>
         RequestAsync<InboxMarkReadResultDto>(HttpMethod.Post,
             $"api/conversations/{connection}/read?sender={Uri.EscapeDataString(sender)}", new InboxMarkReadDto(upToMessageId), ct);
+    public async Task SetPinnedAsync(Guid connection, string sender, bool pinned, CancellationToken ct) =>
+        await RequestAsync<InboxPinDto>(HttpMethod.Put, $"api/conversations/{connection}/pin?sender={Uri.EscapeDataString(sender)}", new InboxPinDto(pinned), ct);
+    /// <summary>Returns the inbox total, which counts a conversation marked unread.</summary>
+    public Task<InboxUnreadDto> SetMarkedUnreadAsync(Guid connection, string sender, bool markedUnread, CancellationToken ct) =>
+        RequestAsync<InboxUnreadDto>(HttpMethod.Put,
+            $"api/conversations/{connection}/marked-unread?sender={Uri.EscapeDataString(sender)}", new InboxMarkedUnreadDto(markedUnread), ct);
     private static string Path(Guid connection, string sender) => $"api/conversations/{connection}/messages?sender={Uri.EscapeDataString(sender)}";
     private static readonly JsonSerializerOptions WriteOptions = new(JsonSerializerDefaults.Web)
     {

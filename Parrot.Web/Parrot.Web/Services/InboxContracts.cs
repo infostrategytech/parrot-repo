@@ -19,6 +19,10 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public DateTime? LastCustomerMessageAt { get; init; }
     /// <summary>How long after that the business may reply: 24 hours, 48 on TikTok. Null when the API does not say.</summary>
     public int? ReplyWindowHours { get; init; }
+    /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
+    public bool Pinned { get; init; }
+    /// <summary>The user marked it unread to return to it: the row shows "!" while no message is unread.</summary>
+    public bool MarkedUnread { get; init; }
     /// <summary>open, pending or resolved.</summary>
     public string? Status { get; init; }
     /// <summary>normal, high or urgent.</summary>
@@ -36,6 +40,10 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>
 public sealed record InboxUnreadDto(int Total);
+
+public sealed record InboxPinDto(bool Pinned);
+
+public sealed record InboxMarkedUnreadDto(bool MarkedUnread);
 
 /// <summary>UpToMessageId is the id of the newest message the agent has seen in the thread.</summary>
 public sealed record InboxMarkReadDto(string UpToMessageId);

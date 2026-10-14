@@ -16,6 +16,12 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>How long after the customer's last message the business may reply: 24 hours, or 48 on TikTok.</summary>
     public int ReplyWindowHours { get; init; }
+
+    /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
+    public bool Pinned { get; init; }
+
+    /// <summary>The signed-in user marked it unread to come back to: the inbox shows "!" when no message is unread.</summary>
+    public bool MarkedUnread { get; init; }
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt);
 public record SendReplyRequest(Guid RequestId, string Text);
@@ -58,9 +64,35 @@ public interface IConversationReadStore
     Task<int> TotalUnreadAsync(string owner, string reader, CancellationToken ct);
 }
 
+/// <summary>Sets or clears one of the per-user conversation flags.</summary>
+public record SetPinnedRequest(bool Pinned);
+
+/// <summary>Sets or clears one of the per-user conversation flags.</summary>
+public record SetMarkedUnreadRequest(bool MarkedUnread);
+
+/// <summary>A user's own marks on a conversation. They are not shared with teammates or the customer.</summary>
+public sealed record ConversationFlags(bool Pinned, DateTime? PinnedAt, bool MarkedUnread);
+
+/// <summary>
+/// What a user has pinned or marked unread. Stored per user and conversation, so a pin survives
+/// reloads and follows the user to another device.
+/// </summary>
+public interface IConversationFlagStore
+{
+    /// <summary>Every conversation the user has pinned or marked unread. Conversations with neither are absent.</summary>
+    Task<IReadOnlyDictionary<(Guid Connection, string Sender), ConversationFlags>> ListAsync(string reader, CancellationToken ct);
+
+    Task SetPinnedAsync(string reader, Guid connection, string sender, bool pinned, CancellationToken ct);
+
+    Task SetMarkedUnreadAsync(string reader, Guid connection, string sender, bool markedUnread, CancellationToken ct);
+}
+
 public interface IConversationStore
 {
     Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct);
+
+    /// <summary>The summaries of just these conversations (those with no messages are absent), newest first.</summary>
+    Task<IReadOnlyList<ConversationSummary>> FindAsync(string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct);
     Task<MessagePage> ReadAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct);
 
     // The customer's most recent message on this connection, or null when there is none.

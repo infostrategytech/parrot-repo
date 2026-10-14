@@ -26,10 +26,23 @@ public sealed class MongoConversationStore : IConversationStore
             Builders<MessageDocument>.IndexKeys.Ascending(x => x.ProviderMessageId), new CreateIndexOptions { Sparse = true }));
     }
 
-    public async Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct)
+    public Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct) =>
+        SummariesAsync(Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.ConnectionId != null), skip, take, ct);
+
+    public async Task<IReadOnlyList<ConversationSummary>> FindAsync(
+        string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct)
+    {
+        if (conversations.Count == 0) return [];
+        FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner)
+            & Builders<MessageDocument>.Filter.Or(conversations.Select(c =>
+                Builders<MessageDocument>.Filter.Where(x => x.ConnectionId == c.Connection && x.From == c.Sender)));
+        return await SummariesAsync(filter, 0, conversations.Count, ct);
+    }
+
+    private async Task<IReadOnlyList<ConversationSummary>> SummariesAsync(FilterDefinition<MessageDocument> match, int skip, int take, CancellationToken ct)
     {
         List<BsonDocument> rows = await _messages.Aggregate()
-            .Match(x => x.OwnerUserId == owner && x.ConnectionId != null)
+            .Match(match)
             .SortByDescending(x => x.Id)
             .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
             {
