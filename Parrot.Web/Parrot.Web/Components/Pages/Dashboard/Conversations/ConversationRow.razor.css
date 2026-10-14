@@ -73,9 +73,6 @@
 .conversation-row__name { display: flex; gap: var(--spacing-xs); align-items: center; min-width: 0; }
 .conversation-row__name ::deep .conversation-row__pin { flex: 0 0 auto; color: var(--colors-brand-primary); }
 
-/* The count's badge, as "!" when the agent marked the chat unread to return to it. */
-::deep .conversation-row__unread.is-marked { color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); border: var(--ds-hairline) solid var(--colors-accent-brand-border); }
-
 /* The options button sits at the row's right edge; the row leaves room for it. It shows on hover and focus,
    and always on touch screens, which have no hover. */
 .conversation-row-host ::deep .conversation-row { padding-right: calc(var(--spacing-md) + var(--spacing-3xl)); }

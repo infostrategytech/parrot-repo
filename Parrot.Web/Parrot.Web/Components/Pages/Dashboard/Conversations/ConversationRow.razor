@@ -37,8 +37,8 @@
     }
     else if (Conversation.MarkedUnread)
     {
-        @* Kept as unread by the agent: a mark to come back to, not a count. *@
-        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="conversation-row__unread is-marked"
+        @* Kept as unread by the agent: a mark to come back to, not a count: the same solid badge, with a bold "!". *@
+        <Typography TextStyle="TextStyle.BodySmallBold" As="span" Class="conversation-row__unread is-marked"
                     aria-label="Marked as unread">!</Typography>
     }
 </RowButton>
