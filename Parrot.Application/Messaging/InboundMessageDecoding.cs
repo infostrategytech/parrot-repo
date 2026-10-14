@@ -85,7 +85,9 @@ public sealed class WhatsAppInboundDecoder : IInboundMessageDecoder
                     // WhatsApp sends whole seconds.
                     SentAt = ProviderTimestamp.FromUnixSeconds(message.Timestamp) ?? inbound.SentAt,
                     Type = message.Type,
-                    TextBody = message.Text?.Body,
+                    // A picture or file's caption is the text the inbox shows with it.
+                    TextBody = message.Text?.Body ?? Media(message)?.Caption,
+                    Media = Media(message) is { Id.Length: > 0 } media ? [ToMedia(message.Type, media)] : null,
                     ChannelId = change.Value.Metadata.PhoneNumberId,
                     ChannelDisplayName = change.Value.Metadata.DisplayPhoneNumber,
                     ContactName = change.Value.Contacts?.FirstOrDefault(c => c.WaId == message.From)?.Profile?.Name,
@@ -96,6 +98,32 @@ public sealed class WhatsAppInboundDecoder : IInboundMessageDecoder
 
         throw new UnprocessableMessageException("message_not_in_body");
     }
+
+    private static WhatsAppMedia? Media(WhatsAppMessage message) => message.Type switch
+    {
+        "image" => message.Image,
+        "video" => message.Video,
+        "audio" => message.Audio,
+        "document" => message.Document,
+        "sticker" => message.Sticker,
+        _ => null,
+    };
+
+    private static IncomingMedia ToMedia(string type, WhatsAppMedia media) => new()
+    {
+        Kind = MediaKinds.Refine(type switch
+        {
+            "image" => MediaKinds.Image,
+            "video" => MediaKinds.Video,
+            "audio" when media.Voice => MediaKinds.Voice,
+            "audio" => MediaKinds.Audio,
+            "sticker" => MediaKinds.Sticker,
+            _ => MediaKinds.Document,
+        }, media.MimeType),
+        ContentType = media.MimeType,
+        FileName = media.Filename,
+        ProviderMediaId = media.Id,
+    };
 }
 
 public sealed class FacebookInboundDecoder : IInboundMessageDecoder
@@ -119,11 +147,11 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
                         .Select(url => url!)
                         .ToList();
                     string type = message.Attachments is { Count: > 0 } ? message.Attachments[0].Type : "text";
-                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null);
+                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null, MediaKinds.FromMeta(message.Attachments));
                 }
 
                 if (evt.Postback is { } postback && postback.Mid == mid)
-                    return ToIncoming(inbound, entry, evt, "postback", postback.Payload, null);
+                    return ToIncoming(inbound, entry, evt, "postback", postback.Payload, null, null);
             }
         }
 
@@ -131,7 +159,7 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
     }
 
     private static IncomingMessage ToIncoming(
-        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls) => new()
+        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls, IReadOnlyList<IncomingMedia>? media) => new()
     {
         ConnectionId = inbound.ConnectionId,
         OwnerUserId = inbound.OwnerUserId,
@@ -145,6 +173,7 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
         Type = type,
         TextBody = text,
         AttachmentUrls = urls,
+        Media = media,
         ChannelId = entry.Id,
         // The Page's name comes from the connection, not the webhook body.
         ChannelDisplayName = string.Empty,
@@ -182,6 +211,8 @@ public sealed class TikTokInboundDecoder : IInboundMessageDecoder
             Type = message.Type,
             TextBody = message.Text,
             AttachmentUrls = message.ShareUrl is { Length: > 0 } url ? [url] : null,
+            // A shared post is a link to open; TikTok's image and sticker payloads are not read yet.
+            Media = message.ShareUrl is { Length: > 0 } share ? [new IncomingMedia { Kind = MediaKinds.Link, SourceUrl = share }] : null,
             ChannelId = business,
             // The account's name comes from the connection, not the webhook body.
             ChannelDisplayName = string.Empty,
@@ -214,12 +245,12 @@ public sealed class InstagramInboundDecoder : IInboundMessageDecoder
                         .Select(url => url!)
                         .ToList();
                     string type = message.Attachments is { Count: > 0 } ? message.Attachments[0].Type : "text";
-                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null);
+                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null, MediaKinds.FromMeta(message.Attachments));
                 }
 
                 // Icebreakers and other button taps.
                 if (evt.Postback is { } postback && postback.Mid == mid)
-                    return ToIncoming(inbound, entry, evt, "postback", postback.Payload, null);
+                    return ToIncoming(inbound, entry, evt, "postback", postback.Payload, null, null);
             }
         }
 
@@ -227,7 +258,7 @@ public sealed class InstagramInboundDecoder : IInboundMessageDecoder
     }
 
     private static IncomingMessage ToIncoming(
-        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls) => new()
+        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls, IReadOnlyList<IncomingMedia>? media) => new()
     {
         ConnectionId = inbound.ConnectionId,
         OwnerUserId = inbound.OwnerUserId,
@@ -240,6 +271,7 @@ public sealed class InstagramInboundDecoder : IInboundMessageDecoder
         Type = type,
         TextBody = text,
         AttachmentUrls = urls,
+        Media = media,
         ChannelId = entry.Id,
         // The username comes from the connection, not the webhook body.
         ChannelDisplayName = string.Empty,

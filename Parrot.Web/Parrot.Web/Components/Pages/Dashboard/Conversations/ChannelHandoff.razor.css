@@ -1,0 +1,19 @@
+.channel-handoff { display: flex; gap: var(--spacing-md); align-items: flex-start; padding: var(--spacing-xs); color: var(--colors-text-secondary); }
+.channel-handoff__icon { display: grid; flex: 0 0 auto; place-items: center; width: var(--spacing-3xl); height: var(--spacing-3xl); color: var(--colors-feedback-warning-text); background: var(--colors-feedback-warning-subtle); border-radius: var(--radius-radius-full); }
+.channel-handoff__copy { display: grid; gap: var(--spacing-xs); justify-items: start; min-width: 0; }
+.channel-handoff__copy ::deep strong { color: var(--colors-text-primary); }
+.channel-handoff__copy ::deep p,
+.channel-handoff__copy ::deep small { color: var(--colors-text-muted); }
+
+.channel-handoff__open {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  color: var(--colors-brand-primary-foreground);
+  text-decoration: none;
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+}
+.channel-handoff__open:hover { background: var(--colors-brand-primary-hover); }
+.channel-handoff__open:focus-visible { outline: var(--ds-hairline) solid var(--colors-brand-primary); outline-offset: var(--spacing-2xs); }

@@ -32,7 +32,8 @@ public sealed class InboundMessageProcessor(
     IConnectionMessageReceipt receipts,
     IMessagePersistedPublisher publisher,
     ILogger<InboundMessageProcessor> logger,
-    IContactNameLookup? contactNames = null)
+    IContactNameLookup? contactNames = null,
+    IInboundMediaStore? mediaStore = null)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -197,6 +198,14 @@ public sealed class InboundMessageProcessor(
             {
                 string? name = await TimedAsync("contact_name", () => contactNames.FindAsync(incoming, cancellationToken));
                 incoming = incoming with { ContactName = name };
+            }
+
+            // Copied before the sequence is taken, and only for a message not stored yet, so a duplicate
+            // never downloads twice. The platform's links expire, which is why it happens here.
+            if (incoming.Media is { Count: > 0 } && mediaStore is not null)
+            {
+                IReadOnlyList<IncomingMedia> saved = await TimedAsync("media", () => mediaStore.SaveAsync(incoming, cancellationToken));
+                incoming = incoming with { Media = saved };
             }
 
             MessageDocument document = mappers.ToDocument(incoming);

@@ -25,6 +25,9 @@ public class ConversationsState
             item.UpdatedAt = summary.UpdatedAt;
             item.Channel = summary.Channel ?? "whatsapp";
             item.UnreadCount = summary.UnreadCount;
+            item.AccountId = summary.AccountId;
+            item.Pinned = summary.Pinned;
+            item.MarkedUnread = summary.MarkedUnread;
             item.LastCustomerMessageAt = summary.LastCustomerMessageAt;
             item.ReplyWindowHours = summary.ReplyWindowHours;
             item.Status = Parse<ConversationStatus>(summary.Status);
@@ -36,8 +39,26 @@ public class ConversationsState
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
             item.Customer = summary.Customer;
         }
-        Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
+        Resort();
     }
+
+    /// <summary>Pinned conversations first, then newest first within each group, so new messages land below the pins.</summary>
+    public void Resort() => Conversations.Sort((a, b) =>
+        a.Pinned != b.Pinned ? (a.Pinned ? -1 : 1) : b.UpdatedAt.CompareTo(a.UpdatedAt));
+
+    /// <summary>Puts the conversation's notes (as the server has them) among its messages, replacing any it held, so a note deleted elsewhere goes too.</summary>
+    public static void ApplyNotes(ConversationItem item, IEnumerable<InboxNoteDto> notes)
+    {
+        var merged = item.Messages.Where(m => m.Kind != MessageKind.Note).ToList();
+        merged.AddRange(notes.Select(ToMessage));
+        item.Messages = merged.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
+    }
+
+    public static ConvMessage ToMessage(InboxNoteDto note) => new()
+    {
+        Id = note.Id, Text = note.Text, Kind = MessageKind.Note, IsOutgoing = true, Status = "note",
+        ReceivedAt = note.CreatedAt, Author = new InboxPersonDto(note.AuthorId, note.AuthorName),
+    };
 
     public static void Merge(ConversationItem item, IEnumerable<InboxMessageDto> messages)
     {
@@ -61,6 +82,7 @@ public class ConversationsState
                 },
                 Author = message.Author,
                 Attachment = message.Attachment,
+                Attachments = message.Attachments ?? [],
                 KnowledgeUpdated = message.LearningStatus == "knowledge_updated",
                 Answered = message.RequestStatus == "answered",
                 Answer = message.Answer,
@@ -92,9 +114,9 @@ public class ConversationsState
             if (item.LastCustomerMessageAt is not { } last || wrote > last) item.LastCustomerMessageAt = wrote;
         }
         if (message.PersistedAt < item.UpdatedAt) return;
-        item.LastMessage = message.Text ?? $"[{message.Type} message]";
+        item.LastMessage = PushedText(message);
         item.UpdatedAt = message.PersistedAt;
-        Conversations.Sort((a, b) => b.UpdatedAt.CompareTo(a.UpdatedAt));
+        Resort();
     }
 
     /// <summary>
@@ -110,9 +132,18 @@ public class ConversationsState
         // As the read API sends an incoming message ("received" is the stored
         // default). PersistedAt is a moment after the webhook's ReceivedAt,
         // which the next read puts in its place.
-        Merge(item, [new InboxMessageDto(message.MessageId, message.Text ?? $"[{message.Type} message]", false, "received", message.PersistedAt)]);
+        Merge(item, [new InboxMessageDto(message.MessageId, message.Text ?? (message.Attachments is { Count: > 0 } ? "" : $"[{message.Type} message]"), false, "received", message.PersistedAt)
+        {
+            // Described without addresses: the files are readable only through the API, which a read of the
+            // thread signs. The thread is read again for a message that carries any.
+            Attachments = message.Attachments?.Select(a => new InboxMediaDto(a.Kind, a.ContentType, a.FileName, a.SizeBytes, null)).ToList(),
+        }]);
         return true;
     }
+
+    /// <summary>What the list row shows for a pushed message: its text, or what kind of file it is.</summary>
+    public static string PushedText(StoredMessage message) =>
+        message.Text ?? (message.Attachments is { Count: > 0 } files ? MediaKinds.PreviewLabel(files[0].Kind) : $"[{message.Type} message]");
 
     // Unknown values from a newer API read as "not provided" rather than failing.
     private static T? Parse<T>(string? value) where T : struct, Enum =>

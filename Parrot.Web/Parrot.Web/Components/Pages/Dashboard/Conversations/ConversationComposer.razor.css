@@ -49,3 +49,9 @@
 @media (prefers-reduced-motion: reduce) {
   .conversation-composer { transition: none; }
 }
+
+/* Narrow screens: the keyboard-shortcut hint means nothing on a touch keyboard. */
+@media (max-width: 760px) {
+  .conversation-composer__hint kbd { display: none; }
+  .conversation-composer { border-radius: var(--radius-radius-xl); }
+}

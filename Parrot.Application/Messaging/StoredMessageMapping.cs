@@ -40,6 +40,10 @@ public static class StoredMessageMapping
             InstagramMessageDocument instagram => instagram.AttachmentUrls,
             _ => null,
         },
+        Attachments = document.Attachments is { Count: > 0 } attachments
+            ? [.. attachments.Select(a => new StoredAttachment(
+                a.Kind, a.ContentType, a.FileName, a.SizeBytes, a.StorageKey is not null || a.Kind == MediaKinds.Link))]
+            : null,
         SentAt = document.SentAt,
         PersistedAt = document.StoredAt,
     };

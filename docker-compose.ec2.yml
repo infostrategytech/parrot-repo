@@ -154,6 +154,8 @@ services:
         until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done;
         mc mb --ignore-existing local/parrot;
         mc anonymous set download local/parrot;
+        # Customers' pictures and files: no anonymous access. The API is the only reader.
+        mc mb --ignore-existing local/parrot-private;
     networks: [parrot]
 
   # ---- Parrot ---------------------------------------------------------------
@@ -225,6 +227,8 @@ services:
       Storage__PublicBaseUrl: ${STORAGE_PUBLIC_BASE_URL:-${PUBLIC_SCHEME:-https}://${API_DOMAIN}/media}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
+      # Customers' pictures and files. Never public: with a real S3 bucket, block all public access on it.
+      Storage__MediaBucket: ${STORAGE_MEDIA_BUCKET:-parrot-private}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys
     secrets:
@@ -293,6 +297,13 @@ services:
       DataProtection__KeyRingPath: /app/data-protection-keys
       DataProtection__CertificatePath: /run/secrets/data_protection_cert
       DataProtection__CertificatePassword: ${DATA_PROTECTION_CERTIFICATE_PASSWORD:-}
+      # Customers' pictures and files are copied here as their messages arrive.
+      Storage__Provider: S3
+      Storage__MediaBucket: ${STORAGE_MEDIA_BUCKET:-parrot-private}
+      Storage__Region: ${STORAGE_REGION:-us-east-1}
+      Storage__ServiceUrl: ${STORAGE_SERVICE_URL-http://minio:9000}
+      Storage__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
+      Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     secrets:
@@ -300,6 +311,8 @@ services:
     depends_on:
       mongodb:
         condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
       # It records receipts in tables the API's migrations create.
       parrot-api:
         condition: service_healthy

@@ -6,11 +6,13 @@ using MessageProcessor.Monitoring;
 using OpenTelemetry.Metrics;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
+using Parrot.Application.Storage;
 using Parrot.Infrastructure.Conversations;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.MessageBus;
 using Parrot.Infrastructure.Messaging;
 using Parrot.Infrastructure.SocialMediaIntegrations;
+using Parrot.Infrastructure.Storage;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
@@ -49,6 +51,14 @@ builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient(MetaContactNames.HttpClientName).RemoveAllLoggers();
 builder.Services.AddSingleton<IContactNameLookup, MetaContactNames>();
+
+// Customers' pictures and files are copied to private storage as the message arrives, because
+// WhatsApp's media links expire within minutes and need the connection's token.
+builder.Services.Configure<StorageSettings>(builder.Configuration.GetSection(StorageSettings.SectionName));
+builder.Services.AddSingleton<IPrivateObjectStorage, S3PrivateObjectStorage>();
+builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
+builder.Services.AddHttpClient(MetaMediaDownloader.HttpClientName).RemoveAllLoggers();
+builder.Services.AddSingleton<IInboundMediaStore, MetaMediaDownloader>();
 
 builder.Services.AddSingleton<IMessageDocumentMapper, WhatsAppMessageDocumentMapper>();
 builder.Services.AddSingleton<IMessageDocumentMapper, FacebookMessageDocumentMapper>();

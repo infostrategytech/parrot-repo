@@ -67,10 +67,17 @@ public sealed record StoredMessage
 
     public IReadOnlyList<string>? AttachmentUrls { get; init; }
 
+    /// <summary>The files the customer sent. Describes them only: the inbox reads each one through the API, which checks who is asking.</summary>
+    public IReadOnlyList<StoredAttachment>? Attachments { get; init; }
+
     public DateTime? SentAt { get; init; }
 
     required public DateTime PersistedAt { get; init; }
 }
+
+/// <param name="Kind">See <see cref="MediaKinds"/>.</param>
+/// <param name="Available">False when the file could not be saved (too large, or the platform refused it).</param>
+public sealed record StoredAttachment(string Kind, string? ContentType, string? FileName, long? SizeBytes, bool Available);
 
 /// <summary>
 /// Pushed to the owner's inbox when a channel reports receipts for replies in a conversation. It names the

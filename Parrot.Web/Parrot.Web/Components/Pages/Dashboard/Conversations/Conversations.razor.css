@@ -205,3 +205,42 @@
 .inbox-filters ::deep .filter-popover__leading { background: transparent; }
 
 .inbox-workspace { --ds-inbox-mark: 24px; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+.inbox-workspace { height: 100vh; height: 100dvh; }
+.inbox-conversation__header ::deep .ds-button.inbox-back { display: none; flex: 0 0 auto; }
+
+/* Tablets: a slimmer queue, and the customer drawer takes more of the thread. */
+@media (max-width: 1180px) {
+  /* Gap in the token set: a slimmer queue width for tablets. */
+  .inbox-workspace { --ds-inbox-queue: 340px; }
+  .inbox-queue__header,
+  .inbox-conversation__header { padding-inline: var(--spacing-md); }
+  .inbox-search-wrap { margin-inline: var(--spacing-md); }
+  .inbox-scope-row,
+  .inbox-filters { padding-inline: var(--spacing-md); }
+  .inbox-queue__summary { padding-inline: var(--spacing-md); }
+  .inbox-customer { width: min(var(--ds-inbox-customer), calc(100% - var(--spacing-md))); }
+  .inbox-conversation__actions { gap: var(--spacing-xs); }
+}
+
+/* Phones: one pane at a time. The list is the default; opening a conversation
+   shows the thread with a back button. */
+@media (max-width: 760px) {
+  .inbox-workspace { grid-template-columns: minmax(0, 1fr); }
+  .inbox-workspace.is-thread-open .inbox-queue,
+  .inbox-workspace:not(.is-thread-open) .inbox-conversation { display: none; }
+  .inbox-queue { border-right: 0; box-shadow: none; }
+  .inbox-conversation__header ::deep .ds-button.inbox-back { display: inline-flex; }
+  .inbox-conversation__header { gap: var(--spacing-xs); padding-inline: var(--spacing-sm); }
+  .inbox-conversation__header ::deep .ds-button.inbox-customer-trigger { flex: 1 1 auto; min-width: 0; }
+  .inbox-conversation__actions { flex: 0 0 auto; }
+  /* The AI and owner chips would crowd the name; they are in the customer drawer's reach on desktop. */
+  .inbox-conversation__actions > .inbox-agent-presence,
+  .inbox-conversation__actions > .inbox-ownership { display: none; }
+  .inbox-filters { grid-template-columns: minmax(0, 1fr); }
+  .inbox-filters ::deep .inbox-filter-sort { grid-column: auto; }
+  /* The customer panel covers the thread edge to edge. */
+  .inbox-customer { inset: 0; width: 100%; border: 0; border-radius: 0; }
+  .inbox-stage { padding: var(--spacing-2xl); }
+}

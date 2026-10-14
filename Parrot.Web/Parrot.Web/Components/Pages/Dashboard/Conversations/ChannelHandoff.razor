@@ -1,0 +1,33 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* Shown in place of the reply box once the channel's reply window has closed: the channel would refuse a
+   reply, so the business is pointed to the customer's own platform to continue. *@
+<div class="channel-handoff" role="status">
+    <span class="channel-handoff__icon"><Icon Name="IconName.RiTimeFill" /></span>
+    <div class="channel-handoff__copy">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Reply window closed</Typography>
+        <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>
+            @(Link is null
+                ? "You can reply once they message you again."
+                : $"Continue this conversation in {Conversation.CustomerName}'s {Platform} DM.")
+        </Typography>
+        @if (Link is { } link)
+        {
+            <a class="channel-handoff__open @TextStyle.BodySmallMedium.ToClassName()" href="@link.Url" target="_blank" rel="noopener noreferrer">
+                @link.ButtonLabel
+                <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
+            </a>
+            @if (!link.OpensChat)
+            {
+                <Typography TextStyle="TextStyle.Small10Regular" As="small">@link.Hint(Conversation.CustomerName)</Typography>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
+
+    private ChannelLink? Link => Conversation.PlatformLink;
+    private string Platform => ChannelLinks.PlatformName(Conversation.Channel);
+}

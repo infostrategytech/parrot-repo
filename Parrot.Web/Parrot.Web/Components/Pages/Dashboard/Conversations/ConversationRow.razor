@@ -8,7 +8,13 @@
 
     <span class="conversation-row__copy">
         <span class="conversation-row__heading">
-            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Conversation.CustomerName</Typography>
+            <span class="conversation-row__name">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Conversation.CustomerName</Typography>
+                @if (Conversation.Pinned)
+                {
+                    <Icon Name="IconName.RiPushpin2Fill" Size="IconSize.Sm" Label="Pinned" Class="conversation-row__pin" />
+                }
+            </span>
             <Typography TextStyle="TextStyle.Small12Medium" As="time">@RelativeTime</Typography>
         </span>
 
@@ -29,15 +35,39 @@
             @Conversation.UnreadCount
         </Typography>
     }
+    else if (Conversation.MarkedUnread)
+    {
+        @* Kept as unread by the agent: a mark to come back to, not a count: the same solid badge, with a bold "!". *@
+        <Typography TextStyle="TextStyle.BodySmallBold" As="span" Class="conversation-row__unread is-marked"
+                    aria-label="Marked as unread">!</Typography>
+    }
 </RowButton>
+
+@* A sibling of the row, not inside it: a menu button cannot sit within another button. *@
+<div class="conversation-row__menu">
+    <ActionMenu Label="@($"Options for {Conversation.CustomerName}")" Glyph="IconName.RiMore2Fill">
+        <ActionMenuItem Label="@(Conversation.Pinned ? "Unpin" : "Pin to top")" Glyph="IconName.RiPushpin2Fill"
+                        OnClick="OnTogglePin" />
+        @if (Conversation.MarkedUnread)
+        {
+            <ActionMenuItem Label="Clear unread mark" Glyph="IconName.RiCheckFill" OnClick="OnToggleUnread" />
+        }
+        else
+        {
+            <ActionMenuItem Label="Mark as unread" Glyph="IconName.RiMailFill" OnClick="OnToggleUnread" />
+        }
+    </ActionMenu>
+</div>
 </div>
 
 @code {
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
     [Parameter] public bool Selected { get; set; }
     [Parameter] public EventCallback OnSelect { get; set; }
+    [Parameter] public EventCallback OnTogglePin { get; set; }
+    [Parameter] public EventCallback OnToggleUnread { get; set; }
 
-    private string ClassName => $"conversation-row{(Selected ? " is-selected" : "")}{(Conversation.UnreadCount > 0 ? " has-unread" : "")}";
+    private string ClassName => $"conversation-row{(Selected ? " is-selected" : "")}{(Conversation.UnreadCount > 0 || Conversation.MarkedUnread ? " has-unread" : "")}";
 
     private string RelativeTime
     {

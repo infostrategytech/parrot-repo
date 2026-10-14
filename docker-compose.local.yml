@@ -145,6 +145,8 @@ services:
         until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done;
         mc mb --ignore-existing local/parrot;
         mc anonymous set download local/parrot;
+        # Customers' pictures and files: no anonymous access. The API is the only reader.
+        mc mb --ignore-existing local/parrot-private;
     networks: [parrot]
 
   parrot-api:
@@ -201,6 +203,7 @@ services:
       Storage__PublicBaseUrl: http://localhost:9000/parrot
       Storage__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
+      Storage__MediaBucket: parrot-private
       # The verification code every sign-up on this stack accepts, so no
       # mailbox is needed to finish one; the API refuses to start with it set
       # outside Development. The breach lookup is off to keep the stack offline.
@@ -262,6 +265,13 @@ services:
       MongoDB__Collection: messages
       # The API's key ring, read only, to look up Facebook and Instagram customers' names.
       DataProtection__KeyRingPath: /app/data-protection-keys
+      # Where customers' pictures and files are copied to as their messages arrive.
+      Storage__Provider: S3
+      Storage__MediaBucket: parrot-private
+      Storage__Region: us-east-1
+      Storage__ServiceUrl: http://minio:9000
+      Storage__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
+      Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     depends_on:
@@ -270,6 +280,8 @@ services:
       postgres:
         condition: service_healthy
       kafka-topic-init:
+        condition: service_completed_successfully
+      minio-init:
         condition: service_completed_successfully
     networks: [parrot]
 

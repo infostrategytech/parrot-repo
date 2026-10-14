@@ -271,7 +271,14 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
     public static string RequestKey(string owner, Guid request) => $"outgoing:{owner}:{request:D}";
     public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
-        doc.TextBody ?? $"[{doc.Type} message]", doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt);
+        doc.TextBody ?? (doc.Attachments is { Count: > 0 } ? "" : $"[{doc.Type} message]"), doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt)
+    {
+        Attachments = doc.Attachments is { Count: > 0 } attachments ? [.. attachments.Select(ToMedia)] : null,
+    };
+
+    /// <summary>The unsigned form: a stored copy carries its key, a link its address. The API signs the key before it answers.</summary>
+    public static MessageMedia ToMedia(MessageAttachment a) => new(a.Kind, a.ContentType, a.FileName, a.SizeBytes,
+        a.Kind == MediaKinds.Link ? a.SourceUrl : null) { StorageKey = a.StorageKey };
 
     // What the customer's channel has told us about a reply, over our own send state. A reply that
     // failed stays failed.

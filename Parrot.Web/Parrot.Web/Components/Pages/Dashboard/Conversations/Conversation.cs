@@ -32,6 +32,18 @@ public class ConversationItem
     public string Channel { get; set; } = "whatsapp";
     public int? UnreadCount { get; set; }
 
+    /// <summary>The business's account on the channel, for links into that channel's own inbox.</summary>
+    public string? AccountId { get; set; }
+
+    /// <summary>The customer's chat on their own platform, or null when none can be built.</summary>
+    public ChannelLink? PlatformLink => ChannelLinks.For(Channel, Sender, AccountId);
+
+    /// <summary>Pinned by the signed-in user: listed above every unpinned conversation.</summary>
+    public bool Pinned { get; set; }
+
+    /// <summary>Marked unread by the user to return to it. Shown as "!" while there are no unread messages.</summary>
+    public bool MarkedUnread { get; set; }
+
     /// <summary>When the customer last wrote (UTC). The reply window runs from here.</summary>
     public DateTime? LastCustomerMessageAt { get; set; }
     public int? ReplyWindowHours { get; set; }
@@ -73,6 +85,7 @@ public class ConvMessage
     public MessageKind Kind { get; set; } = MessageKind.Customer;
     public InboxPersonDto? Author { get; set; }
     public InboxAttachmentDto? Attachment { get; set; }
+    public IReadOnlyList<InboxMediaDto> Attachments { get; set; } = [];
     public bool KnowledgeUpdated { get; set; }
     public bool Answered { get; set; }
     public string? Answer { get; set; }

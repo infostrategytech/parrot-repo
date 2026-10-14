@@ -91,6 +91,47 @@ public record WhatsAppMessage
 
     [JsonPropertyName("text")]
     public WhatsAppTextBody? Text { get; init; }
+
+    // One of these is present for the matching Type. Every field of each is optional (see WhatsAppMedia).
+    [JsonPropertyName("image")]
+    public WhatsAppMedia? Image { get; init; }
+
+    [JsonPropertyName("video")]
+    public WhatsAppMedia? Video { get; init; }
+
+    [JsonPropertyName("audio")]
+    public WhatsAppMedia? Audio { get; init; }
+
+    [JsonPropertyName("document")]
+    public WhatsAppMedia? Document { get; init; }
+
+    [JsonPropertyName("sticker")]
+    public WhatsAppMedia? Sticker { get; init; }
+}
+
+// A media object as WhatsApp sends it: an id to download with the connection's token, not a link. Optional
+// throughout, so a field Meta adds or drops can never fail the payload's model binding and lose the batch.
+public record WhatsAppMedia
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
+
+    [JsonPropertyName("mime_type")]
+    public string? MimeType { get; init; }
+
+    [JsonPropertyName("caption")]
+    public string? Caption { get; init; }
+
+    [JsonPropertyName("filename")]
+    public string? Filename { get; init; }
+
+    /// <summary>True for an animated sticker.</summary>
+    [JsonPropertyName("animated")]
+    public bool Animated { get; init; }
+
+    /// <summary>True for audio recorded in the app (a voice note) rather than an audio file.</summary>
+    [JsonPropertyName("voice")]
+    public bool Voice { get; init; }
 }
 
 public record WhatsAppTextBody

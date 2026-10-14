@@ -3,6 +3,7 @@ using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
 using Parrot.Application.Conversations;
+using Parrot.Application.Messaging;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
 using Parrot.Domain.Exceptions;
@@ -26,10 +27,23 @@ public sealed class MongoConversationStore : IConversationStore
             Builders<MessageDocument>.IndexKeys.Ascending(x => x.ProviderMessageId), new CreateIndexOptions { Sparse = true }));
     }
 
-    public async Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct)
+    public Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct) =>
+        SummariesAsync(Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.ConnectionId != null), skip, take, ct);
+
+    public async Task<IReadOnlyList<ConversationSummary>> FindAsync(
+        string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct)
+    {
+        if (conversations.Count == 0) return [];
+        FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner)
+            & Builders<MessageDocument>.Filter.Or(conversations.Select(c =>
+                Builders<MessageDocument>.Filter.Where(x => x.ConnectionId == c.Connection && x.From == c.Sender)));
+        return await SummariesAsync(filter, 0, conversations.Count, ct);
+    }
+
+    private async Task<IReadOnlyList<ConversationSummary>> SummariesAsync(FilterDefinition<MessageDocument> match, int skip, int take, CancellationToken ct)
     {
         List<BsonDocument> rows = await _messages.Aggregate()
-            .Match(x => x.OwnerUserId == owner && x.ConnectionId != null)
+            .Match(match)
             .SortByDescending(x => x.Id)
             .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
             {
@@ -53,9 +67,10 @@ public sealed class MongoConversationStore : IConversationStore
             MessageDocument d = BsonSerializer.Deserialize<MessageDocument>(row["latest"].AsBsonDocument);
             string name = row["name"].IsString ? row["name"].AsString : d.From;
             return new ConversationSummary(d.ConnectionId!.Value, d.From, name,
-                d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt)
+                d.TextBody ?? (d.Attachments is { Count: > 0 } ? MediaKinds.PreviewLabel(d.Attachments[0].Kind) : $"[{d.Type} message]"), d.ReceivedAt)
             {
                 Channel = d.Platform.ToString().ToLowerInvariant(),
+                AccountId = d.ExternalAccountId,
                 LastCustomerMessageAt = row["lastIncoming"].IsBsonNull ? null : row["lastIncoming"].ToUniversalTime(),
                 ReplyWindowHours = (int)ReplyWindow.For(d.Platform).TotalHours,
             };
@@ -74,6 +89,25 @@ public sealed class MongoConversationStore : IConversationStore
         List<MessageDocument> page = docs.Take(100).ToList();
         return new MessagePage(page.AsEnumerable().Reverse().Select(ConversationService.ToMessage).ToList(),
             docs.Count > 100 ? page[^1].Id : null);
+    }
+
+    public async Task<MediaPage> ListMediaAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct)
+    {
+        const int pageSize = 60;
+        FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.ConnectionId == connection && x.From == sender)
+            & Builders<MessageDocument>.Filter.Exists(x => x.Attachments);
+        if (before is not null)
+        {
+            if (!ObjectId.TryParse(before, out ObjectId id)) throw new ValidationException("Invalid media cursor.");
+            filter &= new BsonDocument("_id", new BsonDocument("$lt", id));
+        }
+
+        // A page is whole messages, so the cursor never splits one message's files across two pages.
+        List<MessageDocument> docs = await _messages.Find(filter).SortByDescending(x => x.Id).Limit(pageSize + 1).ToListAsync(ct);
+        List<MessageDocument> page = docs.Take(pageSize).ToList();
+        return new MediaPage(
+            page.SelectMany(d => d.Attachments!.Select(a => new MediaItem(d.MessageId, d.ReceivedAt, ConversationService.ToMedia(a)))).ToList(),
+            docs.Count > pageSize ? page[^1].Id : null);
     }
 
     public async Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct)

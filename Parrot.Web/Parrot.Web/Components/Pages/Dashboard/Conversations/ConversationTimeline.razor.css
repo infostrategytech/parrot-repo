@@ -139,3 +139,14 @@
   border-color: transparent;
 }
 .learning-dialog-host ::deep .learning-dialog__source .ds-overline { color: var(--colors-text-subtle); }
+
+/* Narrow screens: tighter gutters, and a shorter reserve under the last message
+   now that the composer is smaller. */
+@media (max-width: 760px) {
+  /* Gap in the token set: the composer reserve on phones. */
+  .conversation-timeline { --ds-timeline-composer-reserve: 260px; }
+  .conversation-timeline__messages { gap: var(--spacing-lg); padding-inline: var(--spacing-md); }
+  .conversation-timeline__tabs { padding-inline: var(--spacing-md); }
+  .conversation-timeline__composer { padding-inline: var(--spacing-sm); }
+  .conversation-timeline__loading { padding-inline: var(--spacing-md); }
+}

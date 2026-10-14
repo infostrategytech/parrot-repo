@@ -252,6 +252,9 @@ public enum IconName
     HiPlus,
     /// <summary>lucide-react/Plus</summary>
     LucidePlus,
+
+    /// <summary>react-icons/ri/RiPushpin2Fill (added by hand: the generator is not in this repo)</summary>
+    RiPushpin2Fill,
 }
 
 public static class IconNameExtensions
@@ -379,6 +382,7 @@ public static class IconNameExtensions
         "hi-magnifying-glass",
         "hi-plus",
         "lucide-plus",
+        "ri-pushpin2-fill",
     };
 
     /// <summary>The symbol id inside wwwroot/icons/aurora-icons.svg.</summary>

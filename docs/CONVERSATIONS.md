@@ -118,6 +118,22 @@ Content-Type: application/json
 {"upToMessageId":"<ConversationMessage.Id of the newest message the agent has seen>"}
 ```
 
+### Pin and mark as unread
+
+Both are the signed-in user's own marks (stored per user in `conversation_flags`, so they survive a reload and follow the user to another device) and are never shown to teammates or the customer. The row's "…" menu and the conversation header menu offer them.
+
+```http
+PUT /api/conversations/{connectionId}/pin?sender=2348012345678
+{"pinned":true}                       -> {"pinned":true}
+
+PUT /api/conversations/{connectionId}/marked-unread?sender=2348012345678
+{"markedUnread":true}                 -> {"total":14}
+```
+
+- `GET /api/conversations` rows carry `pinned` and `markedUnread`. Pinned conversations lead the list (then newest first), and the first page includes every pin even when it is older than the page, so a pin is never missing from the loaded list.
+- A conversation marked unread shows **!** in place of the count while it has no unread messages of its own; with unread messages it shows the count. Each such conversation adds one to the inbox total (`GET /api/conversations/unread` and the rail badge).
+- Opening the conversation lifts the mark (the page calls `marked-unread` with `false`, and `POST …/read` clears it too). The 15-second poll only reads the flag; it never sets or clears it. Marking the open conversation unread closes it, so it is not read straight back.
+
 `GET /api/conversations` rows carry `unreadCount`. `GET /api/conversations/unread` returns `{ "total": n }` over every conversation and channel, not just the loaded page. The `read` call returns `{ "conversationUnread": n, "total": n }`. See [Unread counts](#unread-counts).
 
 History pages contain at most 100 messages in chronological order and a `nextBefore` cursor. Outgoing records retain their stable application message ID; Meta's ID is stored separately as `ProviderMessageId`.
@@ -139,6 +155,31 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 - Only the signed-in user's messages are returned; someone else's conversation reads as empty.
 - Sequences may skip numbers, and for a moment a later number can be stored before an earlier one (a reply and an incoming message landing together). Recover from a little below the highest sequence held, not from it exactly, and drop repeats by `messageId`.
 - Messages stored before sequences existed, and replies to them, are not returned.
+
+### Reply window closed: continue on the customer's platform
+
+Once the channel's reply window has closed (24 hours; 48 on TikTok) the inbox shows a **Reply window closed** panel instead of the reply box, with a button to continue on the customer's own platform. The same link is in the customer details panel (**Chat on their platform**). The **Internal note** tab stays available. `GET /api/conversations` rows carry `accountId` (the business's account on the channel, from the latest message) for the Messenger link. The links are built in `Parrot.Web/Services/ChannelLinks.cs`:
+
+| Channel | Opens | Why |
+|---|---|---|
+| WhatsApp | `https://wa.me/{customer number}`: the customer's chat | the sender is the customer's phone number |
+| Messenger | `https://business.facebook.com/latest/inbox/messenger?asset_id={page id}`: the Page's inbox | the sender is a page-scoped id; Meta publishes no link to one thread |
+| Instagram | `https://www.instagram.com/direct/inbox/`: the account's inbox | the sender is an opaque IGSID, not a username |
+| TikTok | `https://www.tiktok.com/messages`: the inbox | the sender is an opaque open id |
+
+Only the WhatsApp link opens the customer's chat; for the others the button says "Open … inbox" and the panel tells the business to find the customer there. The Messenger, Instagram and TikTok addresses are not documented by those platforms, so check them when a connection is next tested.
+
+### Internal notes
+
+A note is private context for the team on one conversation (not on the customer across channels). Notes are stored in `conversation_notes`, apart from the messages: a note is never sent to the customer's channel, never counts as an unread message and never moves the conversation up the list. The composer's **Internal note** tab saves one; the thread's **Internal notes** tab lists them, and the customer panel shows the latest.
+
+```http
+GET    /api/conversations/{connectionId}/notes?sender=2348012345678
+POST   /api/conversations/{connectionId}/notes?sender=2348012345678   {"text":"Prefers delivery after 5pm"}
+DELETE /api/conversations/{connectionId}/notes/{noteId}?sender=2348012345678
+```
+
+Notes are scoped to the workspace owner and are returned oldest first with the author (`authorName` is the author's email, as the token carries no display name). Text is trimmed, must not be empty and is at most 4096 characters. The inbox reads the notes with the thread (so a note added on another device appears on the next 15-second read). Deleting asks for a second click in the UI.
 
 ## Unread counts
 
@@ -237,6 +278,16 @@ dotnet test Backend.slnx
 ```
 
 Automated tests use a fake Meta HTTP endpoint and a real temporary MongoDB. They do not send messages to real phones. A real delivery check requires your server credentials and the phone steps above.
+
+## Customer media (pictures, files, stickers, GIFs, voice notes, video)
+
+The message worker copies each file a customer sends into a **private** bucket (`Storage__MediaBucket`, default `parrot-private`) as the message arrives, because Meta's links expire (WhatsApp's within minutes, and only with the connection's token). The bucket must never allow anonymous reads; the public `Storage__Bucket` is for profile images only. In production, block all public access on it.
+
+- Files are stored on the message (`Attachments`) with a kind: image, gif, sticker, video, audio, voice, document or link (a shared post, never downloaded).
+- Messenger and Instagram addresses are fetched only from Meta's own hosts; anything else in a webhook body is ignored. Files over `Storage__MaxInboundMediaBytes` (25 MB) are not kept.
+- A file that cannot be saved does not hold up the message: the thread shows it as "could not be loaded". There is no retry.
+- The inbox gets a signed link (12 hours) for each saved file from the conversation endpoints; `GET api/media/{token}` serves it. Only image, video and audio types open in the browser; everything else downloads. `GET api/conversations/{connectionId}/media?sender=` lists all of a customer's files for the customer details panel.
+- TikTok: only shared-post links are read; its image and sticker payloads are not parsed yet.
 
 ## AI orchestrator (Omni-AI) integration
 

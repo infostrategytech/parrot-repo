@@ -3,105 +3,104 @@
 
 @* React's composer. A reply goes through Parrot's send (SendReplyRequest:
    RequestId + Text), with the same request id kept for a safe retry.
-   Internal notes, attachments, saved replies and AI drafts have no endpoint
-   yet: they are offered only when CanUseFeatures confirms API support, and
-   otherwise drawn disabled (notes) or left out. *@
+   Attachments, saved replies and AI drafts have no endpoint yet: they are
+   offered only when CanUseFeatures confirms API support, and otherwise left
+   out. Internal notes have their own endpoints (CanAddNotes). *@
 <div class="conversation-composer @ModeClass @(ReplyLocked || WindowClosed ? "is-reply-locked" : null)">
     <header>
         <Tabs Label="Message type" Variant="TabsVariant.Flat">
             <Tab Selected="@(Mode == ComposerMode.Reply)" OnClick="() => ChangeModeAsync(ComposerMode.Reply)">Reply</Tab>
-            <Tab Selected="@(Mode == ComposerMode.Note)" Disabled="@(!CanUseFeatures)"
-                 Title="@(CanUseFeatures ? null : "Internal notes are not available yet")"
+            <Tab Selected="@(Mode == ComposerMode.Note)" Disabled="@(!CanAddNotes)"
+                 Title="@(CanAddNotes ? null : "Internal notes are not available")"
                  OnClick="() => ChangeModeAsync(ComposerMode.Note)">Internal note</Tab>
         </Tabs>
     </header>
 
-    @if (Mode == ComposerMode.Note)
+    @if (WindowClosed)
     {
-        <div class="conversation-composer__disclosure is-note">
-            <Icon Name="IconName.RiLock2Fill" />
-            <Typography TextStyle="TextStyle.Small10Medium" As="span">Only teammates can see this note. It will show your name and timestamp.</Typography>
-        </div>
+        @* The channel would refuse a reply, so there is no reply box: the conversation continues on the customer's own platform. *@
+        <ChannelHandoff Conversation="@Conversation" />
     }
-    else if (WindowClosed)
+    else
     {
-        <div class="conversation-composer__disclosure is-note">
-            <Icon Name="IconName.RiTimeFill" />
-            <Typography TextStyle="TextStyle.Small10Medium" As="span">
-                The reply window has closed: @ChannelLabel only allows replies within @Conversation.ReplyWindowHours hours of the customer's last message. You can reply once they message you again.
-            </Typography>
-        </div>
-    }
-    else if (!string.IsNullOrWhiteSpace(DraftedBy))
-    {
-        <div class="conversation-composer__disclosure">
-            <Icon Name="IconName.RiRobot3Fill" />
-            <Typography TextStyle="TextStyle.Small10Medium" As="span">Drafted by @DraftedBy. Review before sending.</Typography>
-        </div>
-    }
-
-    @if (!string.IsNullOrWhiteSpace(AttachmentName))
-    {
-        <div class="conversation-composer__attachment">
-            <Icon Name="IconName.RiAttachment2" />
-            <Typography TextStyle="TextStyle.Small10Medium" As="span">@AttachmentName</Typography>
-            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove attachment"
-                    @onclick="() => OnAttachmentChanged.InvokeAsync(null)">
-                <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
-            </Button>
-        </div>
-    }
-
-    <TextArea @ref="_field"
-              Value="@Text"
-              ValueChanged="OnTextChanged"
-              OnKeyDown="OnKeyDown"
-              Variant="TextAreaVariant.Plain"
-              AriaLabel="@(Mode == ComposerMode.Note ? "Internal note" : "Reply")"
-              Disabled="@InputDisabled"
-              Placeholder="@Placeholder"
-              MaxLength="4096"
-              Rows="3"
-              AutoGrow
-              SubmitOnEnter
-              FocusOnPush />
-
-    <footer>
-        <div class="conversation-composer__tools">
-            @if (CanUseFeatures)
-            {
-                @* The browser opens its file picker only for a click on a real
-                   file input, so the button forwards one to this hidden input. *@
-                <InputFile @ref="_file" class="sr-only" tabindex="-1" aria-hidden="true" OnChange="OnFileSelected" />
-                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool"
-                        aria-label="Attach a file" title="Attach a file" disabled="@InputDisabled" @onclick="PickFileAsync">
-                    <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
-                </Button>
-                <SavedRepliesMenu Disabled="@(InputDisabled || Mode == ComposerMode.Note)" OnSelect="SelectSavedReplyAsync" />
-            }
-            <EmojiPicker Class="conversation-composer__tool" Disabled="@InputDisabled" OnPick="InsertEmojiAsync" />
-        </div>
-
-        @if (CanDraft)
+        @if (Mode == ComposerMode.Note)
         {
-            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="@Drafting" disabled="@Drafting" @onclick="OnDraft">
-                <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
-                <ChildContent>@(Drafting ? "Drafting" : $"Draft with {Conversation.AiAgent!.Name}")</ChildContent>
-            </Button>
+            <div class="conversation-composer__disclosure is-note">
+                <Icon Name="IconName.RiLock2Fill" />
+                <Typography TextStyle="TextStyle.Small10Medium" As="span">Only your team can see this note. It is saved here and is never sent to the customer.</Typography>
+            </div>
+        }
+        else if (!string.IsNullOrWhiteSpace(DraftedBy))
+        {
+            <div class="conversation-composer__disclosure">
+                <Icon Name="IconName.RiRobot3Fill" />
+                <Typography TextStyle="TextStyle.Small10Medium" As="span">Drafted by @DraftedBy. Review before sending.</Typography>
+            </div>
         }
 
-        <span class="conversation-composer__hint">
-            <Typography TextStyle="TextStyle.Small10Regular" As="span">@(Text.Length > 0 ? $"{Text.Length} characters" : "")</Typography>
-            @* As WhatsApp Web: Enter sends, so only the less obvious key is shown. *@
-            <kbd class="@TextStyle.Small10Semibold.ToClassName()">Shift</kbd><kbd class="@TextStyle.Small10Semibold.ToClassName()">Enter</kbd>
-            <Typography TextStyle="TextStyle.Small10Regular" As="span">new line</Typography>
-        </span>
+        @if (!string.IsNullOrWhiteSpace(AttachmentName))
+        {
+            <div class="conversation-composer__attachment">
+                <Icon Name="IconName.RiAttachment2" />
+                <Typography TextStyle="TextStyle.Small10Medium" As="span">@AttachmentName</Typography>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove attachment"
+                        @onclick="() => OnAttachmentChanged.InvokeAsync(null)">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </div>
+        }
 
-        <Button Size="ButtonSize.Small" Busy="@Sending" disabled="@(!CanSend)" @onclick="OnSend">
-            <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
-            <ChildContent>@SendLabel</ChildContent>
-        </Button>
-    </footer>
+        <TextArea @ref="_field"
+                  Value="@Text"
+                  ValueChanged="OnTextChanged"
+                  OnKeyDown="OnKeyDown"
+                  Variant="TextAreaVariant.Plain"
+                  AriaLabel="@(Mode == ComposerMode.Note ? "Internal note" : "Reply")"
+                  Disabled="@InputDisabled"
+                  Placeholder="@Placeholder"
+                  MaxLength="4096"
+                  Rows="3"
+                  AutoGrow
+                  SubmitOnEnter
+                  FocusOnPush />
+
+        <footer>
+            <div class="conversation-composer__tools">
+                @if (CanUseFeatures)
+                {
+                    @* The browser opens its file picker only for a click on a real
+                       file input, so the button forwards one to this hidden input. *@
+                    <InputFile @ref="_file" class="sr-only" tabindex="-1" aria-hidden="true" OnChange="OnFileSelected" />
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool"
+                            aria-label="Attach a file" title="Attach a file" disabled="@InputDisabled" @onclick="PickFileAsync">
+                        <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                    </Button>
+                    <SavedRepliesMenu Disabled="@(InputDisabled || Mode == ComposerMode.Note)" OnSelect="SelectSavedReplyAsync" />
+                }
+                <EmojiPicker Class="conversation-composer__tool" Disabled="@InputDisabled" OnPick="InsertEmojiAsync" />
+            </div>
+
+            @if (CanDraft)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="@Drafting" disabled="@Drafting" @onclick="OnDraft">
+                    <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
+                    <ChildContent>@(Drafting ? "Drafting" : $"Draft with {Conversation.AiAgent!.Name}")</ChildContent>
+                </Button>
+            }
+
+            <span class="conversation-composer__hint">
+                <Typography TextStyle="TextStyle.Small10Regular" As="span">@(Text.Length > 0 ? $"{Text.Length} characters" : "")</Typography>
+                @* As WhatsApp Web: Enter sends, so only the less obvious key is shown. *@
+                <kbd class="@TextStyle.Small10Semibold.ToClassName()">Shift</kbd><kbd class="@TextStyle.Small10Semibold.ToClassName()">Enter</kbd>
+                <Typography TextStyle="TextStyle.Small10Regular" As="span">new line</Typography>
+            </span>
+
+            <Button Size="ButtonSize.Small" Busy="@Sending" disabled="@(!CanSend)" @onclick="OnSend">
+                <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                <ChildContent>@SendLabel</ChildContent>
+            </Button>
+        </footer>
+    }
 </div>
 
 @code {
@@ -113,8 +112,10 @@
     [Parameter] public bool Sending { get; set; }
     /// <summary>A previous send did not confirm: the same text and request id are kept for a safe retry.</summary>
     [Parameter] public bool Retry { get; set; }
-    /// <summary>Notes, attachments, saved replies and AI drafts can be used.</summary>
+    /// <summary>Attachments, saved replies and AI drafts can be used.</summary>
     [Parameter] public bool CanUseFeatures { get; set; }
+    /// <summary>Internal notes can be saved. They need no AI features: only the notes endpoints.</summary>
+    [Parameter] public bool CanAddNotes { get; set; }
     [Parameter] public string? AttachmentName { get; set; }
     [Parameter] public EventCallback<string?> OnAttachmentChanged { get; set; }
     [Parameter] public string? DraftedBy { get; set; }

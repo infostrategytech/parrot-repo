@@ -26,7 +26,7 @@
    than WhatsApp, AI agents, assignment, status). Each part is
    drawn only when its data is present, so the real app shows what the API
    supports. See InboxContracts. *@
-<div class="inbox-workspace">
+<div class="@($"inbox-workspace {(_selected is not null ? "is-thread-open" : "")}")">
     <section class="inbox-queue" aria-label="Unified inbox">
         <header class="inbox-queue__header">
             <div>
@@ -205,7 +205,9 @@
                         <ConversationRow @key="conversation.Id"
                                          Conversation="conversation"
                                          Selected="@(conversation.Id == _selected?.Id)"
-                                         OnSelect="() => SelectConversationAsync(conversation.Id)" />
+                                         OnSelect="() => SelectConversationAsync(conversation.Id)"
+                                         OnTogglePin="() => TogglePinAsync(conversation)"
+                                         OnToggleUnread="() => ToggleMarkedUnreadAsync(conversation)" />
                     }
 
                     @if (_more)
@@ -235,6 +237,11 @@
         else
         {
             <header class="inbox-conversation__header">
+                @* Phones show one pane at a time; this returns to the list. Hidden on wider screens. *@
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="inbox-back"
+                        aria-label="Back to inbox" title="Back to inbox" @onclick="BackToList">
+                    <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                </Button>
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="inbox-customer-trigger"
                         aria-label="View customer details" title="View customer details"
                         aria-controls="customer-details-panel" aria-expanded="@_customerOpen"
@@ -304,10 +311,9 @@
                                                 OnClick="() => ActAsync(conversation => Features.PauseAiAsync(conversation.ConnectionId, conversation.Sender))" />
                             }
                         }
-                        @if (Features.Available && _selected.UnreadCount is not null)
-                        {
-                            <ActionMenuItem Label="Mark as unread" Glyph="IconName.RiMailFill" OnClick="MarkUnreadAsync" />
-                        }
+                        <ActionMenuItem Label="@(_selected.Pinned ? "Unpin" : "Pin to top")" Glyph="IconName.RiPushpin2Fill"
+                                        OnClick="() => TogglePinAsync(_selected)" />
+                        <ActionMenuItem Label="Mark as unread" Glyph="IconName.RiMailFill" OnClick="MarkSelectedUnreadAsync" />
                         <ActionMenuItem Label="Copy conversation ID" Glyph="IconName.RiFileCopyFill" OnClick="CopyConversationIdAsync" />
                     </ActionMenu>
                 </div>
@@ -328,12 +334,16 @@
                 <div id="customer-details-panel"
                      class="@($"inbox-customer {(_customerOpen ? "is-open" : "")}")"
                      aria-hidden="@(!_customerOpen)" inert="@(!_customerOpen)">
-                    <CustomerPanel Conversation="@_selected" OnClose="CloseCustomerDetailsAsync" />
+                    <CustomerPanel Conversation="@_selected" Open="@_customerOpen" OnClose="CloseCustomerDetailsAsync"
+                                   OnPreview="item => _panelMedia = item" />
                 </div>
             </div>
         }
     </section>
 </div>
+
+@* Outside the drawer: it scrolls and slides, and would confine a full-screen viewer to itself. *@
+<MediaViewer Item="_panelMedia" OnClose="() => _panelMedia = null" />
 
 @code {
     [Parameter] public string? ConversationId { get; set; }
@@ -341,6 +351,7 @@
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConversationFilters _filters = new();
     private ConversationItem? _selected;
+    private MediaViewerItem? _panelMedia;
     private string? _error;
     private string? _openFilter;
     private bool _filtersOpen;
@@ -507,6 +518,9 @@
                 // Counted, then read straight away if the agent is looking at it.
                 item.UnreadCount = (item.UnreadCount ?? 0) + 1;
                 await TryMarkReadAsync(item, message.MessageId);
+
+                // Its files are readable only by an address the API signs when it reads the thread.
+                if (message.Attachments is { Count: > 0 }) await RunAsync(() => ReadSelectedAsync(false));
             }
         }
         else if (!message.Outgoing)
@@ -575,7 +589,7 @@
         for (int skip = 0; skip < _loaded; skip += 50)
         {
             var page = await Client.ListAsync(skip, _lifetime.Token);
-            summaries.AddRange(page); _more = page.Count == 50;
+            summaries.AddRange(page); _more = page.Count >= 50; // the first page also carries pins older than it
             if (!_more) break;
         }
         if (token != AuthState.CurrentUser?.Token || _disposed) return;
@@ -600,6 +614,8 @@
         // If a refresh is in flight the next poll reads the new selection.
         await RunAsync(() => ReadSelectedAsync(false));
     }
+
+    private void BackToList() => Nav.NavigateTo("/dashboard/conversations");
 
     private Task LoadOlderAsync() => RunAsync(() => ReadSelectedAsync(true));
 
@@ -633,9 +649,23 @@
             Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);
         if (older || !item.HistoryLoaded) item.NextBefore = page.NextBefore;
         item.HistoryLoaded = true;
+        if (!older) await LoadNotesAsync(item);
+        if (!older) await ClearMarkedUnreadAsync(item);
         // Reading a thread reads its messages, up to the newest this read returned.
         if (!older && item.UnreadCount > 0 && page.Messages.LastOrDefault() is { } newest)
             await TryMarkReadAsync(item, newest.Id);
+    }
+
+    // The notes come with the thread and are read again with it, so a note added on another device appears.
+    // They are not messages: a failed read leaves the notes shown as they were and never blocks the thread.
+    private async Task LoadNotesAsync(ConversationItem item)
+    {
+        try
+        {
+            var notes = await Client.NotesAsync(item.ConnectionId, item.Sender, _lifetime.Token);
+            if (!_disposed) ConversationsState.ApplyNotes(item, notes);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException) { }
     }
 
     // Tells the server the agent has seen the thread up to a message, so the count survives a refresh
@@ -679,19 +709,71 @@
         await RefreshAsync();
     }
 
-    /// <summary>
-    /// Marks it unread and closes it, as mail and WhatsApp do: kept open, the
-    /// next read would mark it read again. The row keeps its unread badge.
-    /// </summary>
-    private async Task MarkUnreadAsync()
+    // Pins are stored on the server per user, so they survive a reload and follow the user to another
+    // device. The row moves at once; a failed save puts it back.
+    private async Task TogglePinAsync(ConversationItem item)
     {
-        if (_selected is not { } conversation) return;
-        try { await Features.MarkUnreadAsync(conversation.ConnectionId, conversation.Sender); }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); return; }
-        await CloseCustomerDetailsAsync();
-        _selected = null;
-        Nav.NavigateTo("/dashboard/conversations");
-        await RefreshAsync();
+        bool pinned = !item.Pinned;
+        item.Pinned = pinned;
+        ConversationsState.Resort();
+        try { await Client.SetPinnedAsync(item.ConnectionId, item.Sender, pinned, _lifetime.Token); }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
+        {
+            item.Pinned = !pinned;
+            ConversationsState.Resort();
+            Toasts.ShowError(pinned ? "Could not pin this conversation. Try again." : "Could not unpin this conversation. Try again.");
+        }
+    }
+
+    private Task MarkSelectedUnreadAsync() => _selected is { } item && !item.MarkedUnread ? ToggleMarkedUnreadAsync(item) : Task.CompletedTask;
+
+    /// <summary>
+    /// Marks a conversation unread to come back to (the row then shows "!" in place of the count), or clears
+    /// the mark. The open conversation is closed once marked: kept open, the next read would clear it again.
+    /// </summary>
+    private async Task ToggleMarkedUnreadAsync(ConversationItem item)
+    {
+        bool marked = !item.MarkedUnread;
+        item.MarkedUnread = marked;
+        try
+        {
+            var result = await Client.SetMarkedUnreadAsync(item.ConnectionId, item.Sender, marked, _lifetime.Token);
+            if (_disposed) return;
+            Unread.Set(result.Total);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
+        {
+            item.MarkedUnread = !marked;
+            Toasts.ShowError("Could not update this conversation. Try again.");
+            return;
+        }
+
+        if (marked && item == _selected)
+        {
+            await CloseCustomerDetailsAsync();
+            _selected = null;
+            Nav.NavigateTo("/dashboard/conversations");
+        }
+    }
+
+    // Opening a conversation the agent marked unread is looking at it: the mark lifts. Only while the page is
+    // on screen, like a read, and the poll never sets the mark, only this clears it.
+    private async Task ClearMarkedUnreadAsync(ConversationItem item)
+    {
+        if (item != _selected || !item.MarkedUnread || _disposed) return;
+        try { if (!await Interop.IsPageVisibleAsync()) return; }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException) { return; }
+
+        item.MarkedUnread = false;
+        try
+        {
+            var result = await Client.SetMarkedUnreadAsync(item.ConnectionId, item.Sender, false, _lifetime.Token);
+            if (!_disposed) Unread.Set(result.Total);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
+        {
+            item.MarkedUnread = true;
+        }
     }
 
     private async Task CopyConversationIdAsync()

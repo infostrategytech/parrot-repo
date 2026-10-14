@@ -19,6 +19,12 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public DateTime? LastCustomerMessageAt { get; init; }
     /// <summary>How long after that the business may reply: 24 hours, 48 on TikTok. Null when the API does not say.</summary>
     public int? ReplyWindowHours { get; init; }
+    /// <summary>The business's account on that channel; the Facebook Page id is what its inbox link needs.</summary>
+    public string? AccountId { get; init; }
+    /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
+    public bool Pinned { get; init; }
+    /// <summary>The user marked it unread to return to it: the row shows "!" while no message is unread.</summary>
+    public bool MarkedUnread { get; init; }
     /// <summary>open, pending or resolved.</summary>
     public string? Status { get; init; }
     /// <summary>normal, high or urgent.</summary>
@@ -36,6 +42,15 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>
 public sealed record InboxUnreadDto(int Total);
+
+public sealed record InboxPinDto(bool Pinned);
+
+/// <summary>A private note on a conversation. The customer never receives it.</summary>
+public sealed record InboxNoteDto(string Id, string Text, string AuthorId, string AuthorName, DateTime CreatedAt);
+
+public sealed record InboxAddNoteDto(string Text);
+
+public sealed record InboxMarkedUnreadDto(bool MarkedUnread);
 
 /// <summary>UpToMessageId is the id of the newest message the agent has seen in the thread.</summary>
 public sealed record InboxMarkReadDto(string UpToMessageId);
@@ -57,12 +72,30 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
     public string? Kind { get; init; }
     public InboxPersonDto? Author { get; init; }
     public InboxAttachmentDto? Attachment { get; init; }
+    /// <summary>The files the customer sent with this message: pictures, stickers, GIFs, video, audio and documents.</summary>
+    public IReadOnlyList<InboxMediaDto>? Attachments { get; init; }
     /// <summary>knowledge_updated once a correction or answer has been saved as knowledge.</summary>
     public string? LearningStatus { get; init; }
     /// <summary>open or answered, for an AI question.</summary>
     public string? RequestStatus { get; init; }
     public string? Answer { get; init; }
 }
+
+/// <summary>
+/// One file a customer sent. Kind is image, gif, sticker, video, audio, voice, document or link. Url is a
+/// short-lived address to load it from (the page to open, for a link); null when the file could not be saved.
+/// </summary>
+public sealed record InboxMediaDto(string Kind, string? ContentType, string? FileName, long? SizeBytes, string? Url)
+{
+    public bool Available => Url is not null;
+    public bool IsVisual => Kind is "image" or "gif" or "sticker" or "video";
+    public bool IsLink => Kind == "link";
+}
+
+/// <summary>A file in the customer's media list, with the message that carried it.</summary>
+public sealed record InboxMediaItemDto(string MessageId, DateTime ReceivedAt, InboxMediaDto Media);
+
+public sealed record InboxMediaPageDto(IReadOnlyList<InboxMediaItemDto> Items, string? NextBefore);
 
 /// <summary>Type is image or file; Url is null when there is nothing to preview.</summary>
 public sealed record InboxAttachmentDto(string Name, string? Type, string? Url);

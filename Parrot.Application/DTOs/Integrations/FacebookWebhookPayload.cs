@@ -92,6 +92,10 @@ public record FacebookAttachmentPayload
 {
     [JsonPropertyName("url")]
     public string? Url { get; init; }
+
+    /// <summary>Present when the "image" is a sticker.</summary>
+    [JsonPropertyName("sticker_id")]
+    public long? StickerId { get; init; }
 }
 
 public record FacebookReplyTo
