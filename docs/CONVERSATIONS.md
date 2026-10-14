@@ -156,6 +156,19 @@ GET /api/conversations/history?key=whatsapp:2348012345678:2349011112222&after=0&
 - Sequences may skip numbers, and for a moment a later number can be stored before an earlier one (a reply and an incoming message landing together). Recover from a little below the highest sequence held, not from it exactly, and drop repeats by `messageId`.
 - Messages stored before sequences existed, and replies to them, are not returned.
 
+### Reply window closed: continue on the customer's platform
+
+Once the channel's reply window has closed (24 hours; 48 on TikTok) the inbox shows a **Reply window closed** panel instead of the reply box, with a button to continue on the customer's own platform. The same link is in the customer details panel (**Chat on their platform**). The **Internal note** tab stays available. `GET /api/conversations` rows carry `accountId` (the business's account on the channel, from the latest message) for the Messenger link. The links are built in `Parrot.Web/Services/ChannelLinks.cs`:
+
+| Channel | Opens | Why |
+|---|---|---|
+| WhatsApp | `https://wa.me/{customer number}`: the customer's chat | the sender is the customer's phone number |
+| Messenger | `https://business.facebook.com/latest/inbox/messenger?asset_id={page id}`: the Page's inbox | the sender is a page-scoped id; Meta publishes no link to one thread |
+| Instagram | `https://www.instagram.com/direct/inbox/`: the account's inbox | the sender is an opaque IGSID, not a username |
+| TikTok | `https://www.tiktok.com/messages`: the inbox | the sender is an opaque open id |
+
+Only the WhatsApp link opens the customer's chat; for the others the button says "Open … inbox" and the panel tells the business to find the customer there. The Messenger, Instagram and TikTok addresses are not documented by those platforms, so check them when a connection is next tested.
+
 ### Internal notes
 
 A note is private context for the team on one conversation (not on the customer across channels). Notes are stored in `conversation_notes`, apart from the messages: a note is never sent to the customer's channel, never counts as an unread message and never moves the conversation up the list. The composer's **Internal note** tab saves one; the thread's **Internal notes** tab lists them, and the customer panel shows the latest.

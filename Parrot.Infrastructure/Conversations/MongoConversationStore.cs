@@ -69,6 +69,7 @@ public sealed class MongoConversationStore : IConversationStore
                 d.TextBody ?? $"[{d.Type} message]", d.ReceivedAt)
             {
                 Channel = d.Platform.ToString().ToLowerInvariant(),
+                AccountId = d.ExternalAccountId,
                 LastCustomerMessageAt = row["lastIncoming"].IsBsonNull ? null : row["lastIncoming"].ToUniversalTime(),
                 ReplyWindowHours = (int)ReplyWindow.For(d.Platform).TotalHours,
             };

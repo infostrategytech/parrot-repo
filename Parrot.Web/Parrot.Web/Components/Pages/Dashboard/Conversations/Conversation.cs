@@ -32,6 +32,12 @@ public class ConversationItem
     public string Channel { get; set; } = "whatsapp";
     public int? UnreadCount { get; set; }
 
+    /// <summary>The business's account on the channel, for links into that channel's own inbox.</summary>
+    public string? AccountId { get; set; }
+
+    /// <summary>The customer's chat on their own platform, or null when none can be built.</summary>
+    public ChannelLink? PlatformLink => ChannelLinks.For(Channel, Sender, AccountId);
+
     /// <summary>Pinned by the signed-in user: listed above every unpinned conversation.</summary>
     public bool Pinned { get; set; }
 

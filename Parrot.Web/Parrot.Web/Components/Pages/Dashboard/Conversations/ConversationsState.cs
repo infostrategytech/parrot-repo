@@ -25,6 +25,7 @@ public class ConversationsState
             item.UpdatedAt = summary.UpdatedAt;
             item.Channel = summary.Channel ?? "whatsapp";
             item.UnreadCount = summary.UnreadCount;
+            item.AccountId = summary.AccountId;
             item.Pinned = summary.Pinned;
             item.MarkedUnread = summary.MarkedUnread;
             item.LastCustomerMessageAt = summary.LastCustomerMessageAt;

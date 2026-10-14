@@ -57,6 +57,22 @@
             </div>
         </CustomerSection>
 
+        @if (Conversation.PlatformLink is { } link)
+        {
+            <CustomerSection Title="Chat on their platform">
+                <div class="customer-tasks">
+                    <a href="@link.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"{link.ButtonLabel} (opens in a new tab)")">
+                        <span><ChannelGlyph Channel="@Conversation.Channel" Compact /></span>
+                        <span>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@link.ButtonLabel</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="small">@link.Hint(Conversation.CustomerName)</Typography>
+                        </span>
+                        <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
+                    </a>
+                </div>
+            </CustomerSection>
+        }
+
         @if (LatestInternalNote is { } note)
         {
             <CustomerSection Title="Latest internal note">

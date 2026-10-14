@@ -19,6 +19,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public DateTime? LastCustomerMessageAt { get; init; }
     /// <summary>How long after that the business may reply: 24 hours, 48 on TikTok. Null when the API does not say.</summary>
     public int? ReplyWindowHours { get; init; }
+    /// <summary>The business's account on that channel; the Facebook Page id is what its inbox link needs.</summary>
+    public string? AccountId { get; init; }
     /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
     public bool Pinned { get; init; }
     /// <summary>The user marked it unread to return to it: the row shows "!" while no message is unread.</summary>

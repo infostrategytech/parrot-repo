@@ -17,6 +17,9 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
     /// <summary>How long after the customer's last message the business may reply: 24 hours, or 48 on TikTok.</summary>
     public int ReplyWindowHours { get; init; }
 
+    /// <summary>The business's account on that channel (the Facebook Page id, the WhatsApp business account...), from the latest message.</summary>
+    public string? AccountId { get; init; }
+
     /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
     public bool Pinned { get; init; }
 
