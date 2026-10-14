@@ -56,6 +56,20 @@ public class ConversationFlagTests
     }
 
     [MongoFact]
+    public async Task APinCanBeSetAgainAfterItWasLifted()
+    {
+        await using Harness h = new();
+        MongoConversationFlagStore flags = h.Flags();
+        Guid connection = Guid.NewGuid();
+
+        await flags.SetPinnedAsync("ade", connection, "c", true, default);
+        await flags.SetPinnedAsync("ade", connection, "c", false, default);
+        await flags.SetPinnedAsync("ade", connection, "c", true, default);
+
+        Assert.True((await flags.ListAsync("ade", default))[(connection, "c")].Pinned);
+    }
+
+    [MongoFact]
     public async Task PinningAgainKeepsTheFirstPinTime()
     {
         await using Harness h = new();

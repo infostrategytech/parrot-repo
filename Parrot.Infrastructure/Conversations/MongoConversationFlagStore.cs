@@ -31,7 +31,8 @@ public sealed class MongoConversationFlagStore : IConversationFlagStore
     public Task SetPinnedAsync(string reader, Guid connection, string sender, bool pinned, CancellationToken ct) =>
         UpsertAsync(reader, connection, sender, pinned
             ? Builders<ConversationFlagDocument>.Update.Min(x => x.PinnedAt, DateTime.UtcNow)
-            : Builders<ConversationFlagDocument>.Update.Set(x => x.PinnedAt, null), ct);
+            // Removed, not set to null: $min keeps a stored null (it sorts below any date), so a later pin would be ignored.
+            : Builders<ConversationFlagDocument>.Update.Unset(x => x.PinnedAt), ct);
 
     public Task SetMarkedUnreadAsync(string reader, Guid connection, string sender, bool markedUnread, CancellationToken ct) =>
         UpsertAsync(reader, connection, sender, Builders<ConversationFlagDocument>.Update.Set(x => x.MarkedUnread, markedUnread), ct);
