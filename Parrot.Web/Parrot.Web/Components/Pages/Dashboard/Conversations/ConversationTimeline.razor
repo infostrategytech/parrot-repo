@@ -311,11 +311,10 @@
         }
     }
 
-    private void SetView(ThreadView view)
-    {
-        _view = view;
-        _scrollPending = true;
-    }
+    // The tabs above the thread and the composer's own tabs are one choice: Messages is Reply, Internal notes
+    // is Internal note. Either one moves the other, so the box below always matches what is shown above.
+    private void SetView(ThreadView view) =>
+        ChangeComposerMode(view == ThreadView.Notes ? ComposerMode.Note : ComposerMode.Reply);
 
     private void ChangeComposerMode(ComposerMode mode)
     {

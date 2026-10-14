@@ -7,8 +7,9 @@
     <div class="channel-handoff__copy">
         <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Reply window closed</Typography>
         <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>
-            @Platform only lets you reply here within @Conversation.ReplyWindowHours hours of @Conversation.CustomerName's last message.
-            @(Link is null ? "You can reply once they message you again." : $"Continue this chat on {Platform} instead.")
+            @(Link is null
+                ? "You can reply once they message you again."
+                : $"Continue this conversation in {Conversation.CustomerName}'s {Platform} DM.")
         </Typography>
         @if (Link is { } link)
         {
