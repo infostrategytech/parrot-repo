@@ -71,4 +71,9 @@ public abstract class MessageDocument
     // an incoming WhatsApp message, the Page id for Messenger.
     [BsonIgnoreIfNull]
     public string? Receiver { get; set; }
+
+    // The files the customer sent with this message, on any platform. Left out when there are none, so
+    // the sparse index the media listing uses only holds messages that have some.
+    [BsonIgnoreIfNull]
+    public List<MessageAttachment>? Attachments { get; set; }
 }

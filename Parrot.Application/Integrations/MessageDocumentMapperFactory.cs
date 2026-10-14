@@ -35,6 +35,22 @@ public sealed class WhatsAppMessageDocumentMapper : IMessageDocumentMapper
 {
     public MessagingPlatform Platform => MessagingPlatform.WhatsApp;
 
+    // Shared by every mapper: the files the customer sent, with the private copies the worker made.
+    internal static List<MessageAttachment>? Attachments(IncomingMessage message) =>
+        message.Media is { Count: > 0 } media
+            ? [.. media.Select(m => new MessageAttachment
+            {
+                Kind = m.Kind,
+                ContentType = m.ContentType,
+                FileName = m.FileName,
+                SizeBytes = m.SizeBytes,
+                Caption = m.Caption,
+                StorageKey = m.StorageKey,
+                ProviderMediaId = m.ProviderMediaId,
+                SourceUrl = m.SourceUrl,
+            })]
+            : null;
+
     // The base fields are set by object initializer rather than a shared helper so that adding a
     // required field to MessageDocument is a compile error in every mapper, not a silent omission.
     public MessageDocument ToDocument(IncomingMessage message) => new WhatsAppMessageDocument
@@ -54,6 +70,7 @@ public sealed class WhatsAppMessageDocumentMapper : IMessageDocumentMapper
         StoredAt = DateTime.UtcNow,
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
+        Attachments = Attachments(message),
     };
 }
 
@@ -80,6 +97,7 @@ public sealed class FacebookMessageDocumentMapper : IMessageDocumentMapper
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
         AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
+        Attachments = WhatsAppMessageDocumentMapper.Attachments(message),
     };
 }
 
@@ -106,6 +124,7 @@ public sealed class TikTokMessageDocumentMapper : IMessageDocumentMapper
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
         AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
+        Attachments = WhatsAppMessageDocumentMapper.Attachments(message),
     };
 }
 
@@ -131,5 +150,6 @@ public sealed class InstagramMessageDocumentMapper : IMessageDocumentMapper
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
         AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
+        Attachments = WhatsAppMessageDocumentMapper.Attachments(message),
     };
 }

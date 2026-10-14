@@ -83,7 +83,7 @@
                                              OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection" OnAnswer="OpenAnswer"
                                              OnCustomerDetails="OnCustomerDetails"
-                                             OnPreviewImage="OpenMedia" />
+                                             OnPreviewImage="OpenMedia" OnPreviewMedia="OpenFile" />
                 }
 
                 @if (_view == ThreadView.Notes && NoteCount == 0)
@@ -253,6 +253,14 @@
             message.Kind == MessageKind.Customer ? Conversation.Id : message.Author?.Id ?? AuthorSeed,
             message.Kind == MessageKind.Customer ? Conversation.CustomerInitials : Initials.From(sender),
             SentLabel(message.ReceivedAt));
+    }
+
+    // A picture, GIF or sticker the customer sent.
+    private void OpenFile(MediaPreview preview)
+    {
+        if (preview.Media.Url is not { } url) return;
+        _media = new MediaViewerItem(url, MediaLabels.Name(preview.Media), Conversation.CustomerName, Conversation.Id,
+            Conversation.CustomerInitials, SentLabel(preview.Message.ReceivedAt));
     }
 
     // "Today at 3:00 PM", as WhatsApp labels a viewed image.

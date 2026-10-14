@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Exceptions;
+using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Controllers;
@@ -13,7 +14,7 @@ namespace Parrot.Api.Controllers;
 [Route("api/conversations")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "conversations")]
-public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, ConversationService service,
+public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram) : ControllerBase
 {
@@ -140,7 +141,16 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromQuery] string? before, CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        return Ok(await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken));
+        return Ok(mediaLinks.Sign(await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken)));
+    }
+
+    // Every file this customer has sent, newest first, for the customer details panel.
+    [HttpGet("{connectionId:guid}/media")]
+    public async Task<IActionResult> Media(Guid connectionId, [FromQuery] string sender,
+        [FromQuery] string? before, CancellationToken cancellationToken)
+    {
+        await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
+        return Ok(mediaLinks.Sign(await store.ListMediaAsync(Owner, connectionId, sender, before, cancellationToken)));
     }
 
     [Monitor("conversations.send", SlowMs = 3000)] // waits on the WhatsApp Cloud API or TikTok

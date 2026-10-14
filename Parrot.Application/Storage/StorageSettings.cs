@@ -30,6 +30,15 @@ public class StorageSettings
     /// </summary>
     public string PublicBaseUrl { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The bucket customers' pictures and files are copied into. It must NOT allow anonymous reads (unlike
+    /// <see cref="Bucket"/>): the API is the only reader.
+    /// </summary>
+    public string MediaBucket { get; init; } = "parrot-private";
+
+    /// <summary>Largest file the message worker saves from a customer. A bigger one is kept as a note that it was sent.</summary>
+    public long MaxInboundMediaBytes { get; init; } = 25 * 1024 * 1024;
+
     /// <summary>Largest image the upload endpoint accepts.</summary>
     public int MaxImageBytes { get; init; } = 5 * 1024 * 1024;
 }

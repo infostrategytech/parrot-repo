@@ -85,6 +85,7 @@ public class ConvMessage
     public MessageKind Kind { get; set; } = MessageKind.Customer;
     public InboxPersonDto? Author { get; set; }
     public InboxAttachmentDto? Attachment { get; set; }
+    public IReadOnlyList<InboxMediaDto> Attachments { get; set; } = [];
     public bool KnowledgeUpdated { get; set; }
     public bool Answered { get; set; }
     public string? Answer { get; set; }

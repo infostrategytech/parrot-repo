@@ -12,8 +12,23 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
 {
     public Task<List<InboxConversationDto>> ListAsync(int skip, CancellationToken ct) =>
         RequestAsync<List<InboxConversationDto>>(HttpMethod.Get, $"api/conversations?skip={skip}&take=50", null, ct);
-    public Task<InboxMessagePageDto> ReadAsync(Guid connection, string sender, string? before, CancellationToken ct) =>
-        RequestAsync<InboxMessagePageDto>(HttpMethod.Get, Path(connection, sender) + (before is null ? "" : $"&before={Uri.EscapeDataString(before)}"), null, ct);
+    public async Task<InboxMessagePageDto> ReadAsync(Guid connection, string sender, string? before, CancellationToken ct)
+    {
+        var page = await RequestAsync<InboxMessagePageDto>(HttpMethod.Get, Path(connection, sender) + (before is null ? "" : $"&before={Uri.EscapeDataString(before)}"), null, ct);
+        return page with { Messages = [.. page.Messages.Select(m => m.Attachments is { Count: > 0 } files ? m with { Attachments = [.. files.Select(Resolve)] } : m)] };
+    }
+    /// <summary>Every file the customer sent, newest first. Pass the last page's NextBefore for the next one.</summary>
+    public async Task<InboxMediaPageDto> MediaAsync(Guid connection, string sender, string? before, CancellationToken ct)
+    {
+        var page = await RequestAsync<InboxMediaPageDto>(HttpMethod.Get,
+            $"api/conversations/{connection}/media?sender={Uri.EscapeDataString(sender)}" + (before is null ? "" : $"&before={Uri.EscapeDataString(before)}"), null, ct);
+        return page with { Items = [.. page.Items.Select(i => i with { Media = Resolve(i.Media) })] };
+    }
+    // The API sends a file's address relative to itself; the browser needs the whole address, since the inbox is another site.
+    private InboxMediaDto Resolve(InboxMediaDto media) =>
+        media.Url is { } url && !media.IsLink && http.BaseAddress is { } api && !Uri.IsWellFormedUriString(url, UriKind.Absolute)
+            ? media with { Url = new Uri(api, url).ToString() }
+            : media;
     public Task<InboxMessageDto> SendAsync(Guid connection, string sender, InboxReplyDto request, CancellationToken ct) =>
         RequestAsync<InboxMessageDto>(HttpMethod.Post, Path(connection, sender), request, ct);
     public Task<InboxUnreadDto> UnreadAsync(CancellationToken ct) =>

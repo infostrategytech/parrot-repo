@@ -26,7 +26,27 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
     /// <summary>The signed-in user marked it unread to come back to: the inbox shows "!" when no message is unread.</summary>
     public bool MarkedUnread { get; init; }
 }
-public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt);
+public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt)
+{
+    /// <summary>The files the customer sent with it, or null when it had none.</summary>
+    public IReadOnlyList<MessageMedia>? Attachments { get; init; }
+}
+
+/// <summary>
+/// One file of a message as the inbox reads it. <see cref="Url"/> is a short-lived signed address the browser
+/// can load directly (or, for a link, the page to open); null when the file could not be saved.
+/// </summary>
+public record MessageMedia(string Kind, string? ContentType, string? FileName, long? SizeBytes, string? Url)
+{
+    /// <summary>Where the private copy lives. Server side only: swapped for <see cref="Url"/> before it leaves the API.</summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public string? StorageKey { get; init; }
+}
+
+/// <summary>A file in the customer's media list, with the message that carried it.</summary>
+public record MediaItem(string MessageId, DateTime ReceivedAt, MessageMedia Media);
+
+public record MediaPage(IReadOnlyList<MediaItem> Items, string? NextBefore);
 public record SendReplyRequest(Guid RequestId, string Text);
 public record MessagePage(IReadOnlyList<ConversationMessage> Messages, string? NextBefore);
 
@@ -97,6 +117,9 @@ public interface IConversationStore
     /// <summary>The summaries of just these conversations (those with no messages are absent), newest first.</summary>
     Task<IReadOnlyList<ConversationSummary>> FindAsync(string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct);
     Task<MessagePage> ReadAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct);
+
+    /// <summary>The files this customer sent, newest first, a page at a time. Pass the previous page's NextBefore for the next.</summary>
+    Task<MediaPage> ListMediaAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct);
 
     // The customer's most recent message on this connection, or null when there is none.
     Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct);

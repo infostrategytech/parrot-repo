@@ -111,7 +111,10 @@ else
                 }
             </header>
 
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="message-bubble__body">@Message.Text</Typography>
+            @if (Message.Text.Length > 0)
+            {
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="message-bubble__body">@Message.Text</Typography>
+            }
 
             @if (Message.Attachment is { } attachment)
             {
@@ -132,6 +135,57 @@ else
                         <Typography TextStyle="TextStyle.Small10Medium" As="span">@attachment.Name</Typography>
                     </div>
                 }
+            }
+
+            @if (Message.Attachments.Count > 0)
+            {
+                <div class="message-files">
+                    @foreach (var file in Message.Attachments)
+                    {
+                        @if (file.IsLink)
+                        {
+                            @* A shared post is an address to open, never media to load here. *@
+                            <a class="message-file" href="@file.Url" target="_blank" rel="noopener noreferrer">
+                                <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
+                                <span><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Shared post</Typography>
+                                      <Typography TextStyle="TextStyle.Small10Medium" As="small">Opens in a new tab</Typography></span>
+                            </a>
+                        }
+                        else if (!file.Available)
+                        {
+                            <div class="message-file is-unavailable">
+                                <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
+                                <span><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
+                                      <Typography TextStyle="TextStyle.Small10Medium" As="small">Could not be loaded here. Open it on the customer's platform.</Typography></span>
+                            </div>
+                        }
+                        else if (file.Kind is "image" or "gif" or "sticker")
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                                    Class="@($"message-media {(file.Kind == "sticker" ? "is-sticker" : null)}")"
+                                    aria-label="@($"Open {MediaLabels.Name(file)}")" @onclick="() => OnPreviewMedia.InvokeAsync(new MediaPreview(Message, file))">
+                                <ChildContent><img src="@file.Url" alt="@MediaLabels.Name(file)" loading="lazy" /></ChildContent>
+                            </Button>
+                        }
+                        else if (file.Kind == "video")
+                        {
+                            <video class="message-video" controls preload="metadata" src="@file.Url" aria-label="@MediaLabels.Name(file)"></video>
+                        }
+                        else if (file.Kind is "audio" or "voice")
+                        {
+                            <audio class="message-audio" controls preload="none" src="@file.Url" aria-label="@MediaLabels.Name(file)"></audio>
+                        }
+                        else
+                        {
+                            <a class="message-file" href="@(file.Url + "?download=true")" download="@MediaLabels.Name(file)">
+                                <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
+                                <span><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
+                                      <Typography TextStyle="TextStyle.Small10Medium" As="small">@FileDetail(file)</Typography></span>
+                                <Icon Name="IconName.RiDownload2Fill" Size="IconSize.Sm" />
+                            </a>
+                        }
+                    }
+                </div>
             }
 
             <footer>
@@ -179,6 +233,11 @@ else
     [Parameter] public EventCallback OnCustomerDetails { get; set; }
     /// <summary>This message's image was chosen: the thread opens it full screen.</summary>
     [Parameter] public EventCallback<ConvMessage> OnPreviewImage { get; set; }
+    /// <summary>A picture, GIF or sticker the customer sent was chosen: the thread opens it full screen.</summary>
+    [Parameter] public EventCallback<MediaPreview> OnPreviewMedia { get; set; }
+
+    private static string FileDetail(InboxMediaDto file) =>
+        string.Join(" · ", new[] { MediaLabels.Type(file), MediaLabels.Size(file.SizeBytes) }.Where(part => part.Length > 0));
 
 
     private bool Outbound => Message.Kind is MessageKind.Ai or MessageKind.Human;

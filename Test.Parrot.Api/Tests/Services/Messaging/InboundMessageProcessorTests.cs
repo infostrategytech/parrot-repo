@@ -129,12 +129,24 @@ public class InboundMessageProcessorTests
         }
     }
 
+    private sealed class FakeMedia : IInboundMediaStore
+    {
+        public int Saved { get; private set; }
+
+        public Task<IReadOnlyList<IncomingMedia>> SaveAsync(IncomingMessage message, CancellationToken cancellationToken)
+        {
+            Saved++;
+            return Task.FromResult<IReadOnlyList<IncomingMedia>>([.. message.Media!.Select(m => m with { StorageKey = "customer-media/user-1/copy-0.jpg", SizeBytes = 3 })]);
+        }
+    }
+
     private InboundMessageProcessor Processor(
-        IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null) => new(
+        IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null,
+        IInboundMediaStore? media = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
-        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames);
+        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media);
 
     private const string Psid = "6215837091842310";
 
@@ -188,6 +200,37 @@ public class InboundMessageProcessorTests
         Assert.Equal("Hello", published.Data.Text);
         Assert.False(published.Data.Outgoing);
         Assert.Equal(1, _receipts.Recorded);
+    }
+
+    private const string ImageBody = """
+        {"object":"whatsapp_business_account","entry":[{"id":"waba-1","changes":[{"field":"messages","value":{
+          "messaging_product":"whatsapp",
+          "metadata":{"display_phone_number":"+234 901 111 2222","phone_number_id":"phone-1"},
+          "messages":[{"from":"2348012345678","id":"wamid.IMG","timestamp":"1790589123","type":"image","image":{"id":"media-1","mime_type":"image/jpeg"}}]}}]}]}
+        """;
+
+    [Fact]
+    public async Task AMessageWithAPictureIsStoredAndAnnouncedWithTheCopyOfIt_AndAReplayDoesNotDownloadAgain()
+    {
+        FakeMedia media = new();
+        InboundMessage inbound = Inbound("whatsapp:wamid.IMG", ImageBody);
+
+        await Processor(media: media).ProcessAsync(inbound, CancellationToken.None);
+        await Processor(media: media).ProcessAsync(inbound, CancellationToken.None);
+
+        MessageAttachment saved = Assert.Single(Assert.Single(_store.Documents).Attachments!);
+        Assert.Equal("customer-media/user-1/copy-0.jpg", saved.StorageKey);
+        Assert.Equal("media-1", saved.ProviderMediaId);
+        Assert.Equal(1, media.Saved);
+        Assert.All(_publisher.Published, p => Assert.True(Assert.Single(p.Data.Attachments!).Available));
+    }
+
+    [Fact]
+    public async Task AMessageWithAPictureIsStillStoredWhenNoMediaStoreIsWired()
+    {
+        await Processor().ProcessAsync(Inbound("whatsapp:wamid.IMG", ImageBody), CancellationToken.None);
+
+        Assert.False(Assert.Single(Assert.Single(_publisher.Published).Data.Attachments!).Available);
     }
 
     // Messenger names the customer only by PSID; the name Meta gives for it is stored and announced.

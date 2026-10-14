@@ -72,12 +72,30 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
     public string? Kind { get; init; }
     public InboxPersonDto? Author { get; init; }
     public InboxAttachmentDto? Attachment { get; init; }
+    /// <summary>The files the customer sent with this message: pictures, stickers, GIFs, video, audio and documents.</summary>
+    public IReadOnlyList<InboxMediaDto>? Attachments { get; init; }
     /// <summary>knowledge_updated once a correction or answer has been saved as knowledge.</summary>
     public string? LearningStatus { get; init; }
     /// <summary>open or answered, for an AI question.</summary>
     public string? RequestStatus { get; init; }
     public string? Answer { get; init; }
 }
+
+/// <summary>
+/// One file a customer sent. Kind is image, gif, sticker, video, audio, voice, document or link. Url is a
+/// short-lived address to load it from (the page to open, for a link); null when the file could not be saved.
+/// </summary>
+public sealed record InboxMediaDto(string Kind, string? ContentType, string? FileName, long? SizeBytes, string? Url)
+{
+    public bool Available => Url is not null;
+    public bool IsVisual => Kind is "image" or "gif" or "sticker" or "video";
+    public bool IsLink => Kind == "link";
+}
+
+/// <summary>A file in the customer's media list, with the message that carried it.</summary>
+public sealed record InboxMediaItemDto(string MessageId, DateTime ReceivedAt, InboxMediaDto Media);
+
+public sealed record InboxMediaPageDto(IReadOnlyList<InboxMediaItemDto> Items, string? NextBefore);
 
 /// <summary>Type is image or file; Url is null when there is nothing to preview.</summary>
 public sealed record InboxAttachmentDto(string Name, string? Type, string? Url);

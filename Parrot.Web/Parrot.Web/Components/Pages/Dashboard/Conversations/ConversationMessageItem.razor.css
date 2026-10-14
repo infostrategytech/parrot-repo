@@ -130,6 +130,50 @@
 
 
 
+.message-files { display: grid; gap: var(--spacing-xs); justify-items: start; margin-top: var(--spacing-xs); }
+.message-bubble.is-outbound .message-files { justify-items: end; }
+
+.message-bubble__content ::deep .message-media {
+  display: grid;
+  width: var(--ds-message-media);
+  max-width: 100%;
+  height: auto;
+  min-height: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--colors-surface-muted);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.message-bubble__content ::deep .message-media .ds-button__label { display: grid; width: 100%; padding: 0; overflow: visible; line-height: normal; }
+.message-bubble__content ::deep .message-media:hover:not(:disabled) { border-color: var(--colors-accent-brand-border); }
+.message-media img { display: block; width: 100%; max-height: var(--ds-message-media-height); object-fit: cover; }
+/* A sticker is drawn on the thread itself, as the customer's app does, not in a framed card. */
+.message-bubble__content ::deep .message-media.is-sticker { width: var(--ds-message-sticker); background: transparent; border-color: transparent; }
+.message-media.is-sticker img { object-fit: contain; }
+
+.message-video { display: block; width: var(--ds-message-media); max-width: 100%; max-height: var(--ds-message-media-height); background: var(--colors-surface-muted); border-radius: var(--radius-radius-lg); }
+.message-audio { display: block; width: var(--ds-message-media); max-width: 100%; }
+
+.message-file {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: var(--ds-message-media);
+  max-width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  text-decoration: none;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-md);
+}
+a.message-file:hover { background: var(--colors-interaction-hover); border-color: var(--colors-accent-brand-border); }
+.message-file > span { display: grid; flex: 1 1 auto; gap: var(--spacing-2xs); min-width: 0; }
+.message-file ::deep strong { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.message-file ::deep small { color: var(--colors-text-muted); }
+.message-file.is-unavailable { color: var(--colors-text-muted); border-style: dashed; }
+
 .message-note {
   display: flex;
   gap: var(--spacing-sm);
@@ -182,6 +226,9 @@
   --ds-message-attachment: 240px;
   --ds-message-image: 184px;
   --ds-message-image-height: 128px;
+  --ds-message-media: 240px;
+  --ds-message-media-height: 240px;
+  --ds-message-sticker: 144px;
 }
 
 /* React's note card: amber, with a PRIVATE pill and the time in amber. */

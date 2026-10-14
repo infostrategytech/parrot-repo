@@ -279,6 +279,16 @@ dotnet test Backend.slnx
 
 Automated tests use a fake Meta HTTP endpoint and a real temporary MongoDB. They do not send messages to real phones. A real delivery check requires your server credentials and the phone steps above.
 
+## Customer media (pictures, files, stickers, GIFs, voice notes, video)
+
+The message worker copies each file a customer sends into a **private** bucket (`Storage__MediaBucket`, default `parrot-private`) as the message arrives, because Meta's links expire (WhatsApp's within minutes, and only with the connection's token). The bucket must never allow anonymous reads; the public `Storage__Bucket` is for profile images only. In production, block all public access on it.
+
+- Files are stored on the message (`Attachments`) with a kind: image, gif, sticker, video, audio, voice, document or link (a shared post, never downloaded).
+- Messenger and Instagram addresses are fetched only from Meta's own hosts; anything else in a webhook body is ignored. Files over `Storage__MaxInboundMediaBytes` (25 MB) are not kept.
+- A file that cannot be saved does not hold up the message: the thread shows it as "could not be loaded". There is no retry.
+- The inbox gets a signed link (12 hours) for each saved file from the conversation endpoints; `GET api/media/{token}` serves it. Only image, video and audio types open in the browser; everything else downloads. `GET api/conversations/{connectionId}/media?sender=` lists all of a customer's files for the customer details panel.
+- TikTok: only shared-post links are read; its image and sticker payloads are not parsed yet.
+
 ## AI orchestrator (Omni-AI) integration
 
 How agents, their settings and their activity reach the AI orchestrator and come back (the `agent.events` topic, the internal resolve endpoint, the AI Operations API and the web screens) is in [AI_INTEGRATION.md](AI_INTEGRATION.md), with its own audit map.

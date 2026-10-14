@@ -82,6 +82,7 @@ public class ConversationsState
                 },
                 Author = message.Author,
                 Attachment = message.Attachment,
+                Attachments = message.Attachments ?? [],
                 KnowledgeUpdated = message.LearningStatus == "knowledge_updated",
                 Answered = message.RequestStatus == "answered",
                 Answer = message.Answer,
@@ -113,7 +114,7 @@ public class ConversationsState
             if (item.LastCustomerMessageAt is not { } last || wrote > last) item.LastCustomerMessageAt = wrote;
         }
         if (message.PersistedAt < item.UpdatedAt) return;
-        item.LastMessage = message.Text ?? $"[{message.Type} message]";
+        item.LastMessage = PushedText(message);
         item.UpdatedAt = message.PersistedAt;
         Resort();
     }
@@ -131,9 +132,18 @@ public class ConversationsState
         // As the read API sends an incoming message ("received" is the stored
         // default). PersistedAt is a moment after the webhook's ReceivedAt,
         // which the next read puts in its place.
-        Merge(item, [new InboxMessageDto(message.MessageId, message.Text ?? $"[{message.Type} message]", false, "received", message.PersistedAt)]);
+        Merge(item, [new InboxMessageDto(message.MessageId, message.Text ?? (message.Attachments is { Count: > 0 } ? "" : $"[{message.Type} message]"), false, "received", message.PersistedAt)
+        {
+            // Described without addresses: the files are readable only through the API, which a read of the
+            // thread signs. The thread is read again for a message that carries any.
+            Attachments = message.Attachments?.Select(a => new InboxMediaDto(a.Kind, a.ContentType, a.FileName, a.SizeBytes, null)).ToList(),
+        }]);
         return true;
     }
+
+    /// <summary>What the list row shows for a pushed message: its text, or what kind of file it is.</summary>
+    public static string PushedText(StoredMessage message) =>
+        message.Text ?? (message.Attachments is { Count: > 0 } files ? MediaKinds.PreviewLabel(files[0].Kind) : $"[{message.Type} message]");
 
     // Unknown values from a newer API read as "not provided" rather than failing.
     private static T? Parse<T>(string? value) where T : struct, Enum =>

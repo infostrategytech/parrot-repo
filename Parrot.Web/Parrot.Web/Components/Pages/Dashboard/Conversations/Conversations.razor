@@ -334,12 +334,16 @@
                 <div id="customer-details-panel"
                      class="@($"inbox-customer {(_customerOpen ? "is-open" : "")}")"
                      aria-hidden="@(!_customerOpen)" inert="@(!_customerOpen)">
-                    <CustomerPanel Conversation="@_selected" OnClose="CloseCustomerDetailsAsync" />
+                    <CustomerPanel Conversation="@_selected" Open="@_customerOpen" OnClose="CloseCustomerDetailsAsync"
+                                   OnPreview="item => _panelMedia = item" />
                 </div>
             </div>
         }
     </section>
 </div>
+
+@* Outside the drawer: it scrolls and slides, and would confine a full-screen viewer to itself. *@
+<MediaViewer Item="_panelMedia" OnClose="() => _panelMedia = null" />
 
 @code {
     [Parameter] public string? ConversationId { get; set; }
@@ -347,6 +351,7 @@
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConversationFilters _filters = new();
     private ConversationItem? _selected;
+    private MediaViewerItem? _panelMedia;
     private string? _error;
     private string? _openFilter;
     private bool _filtersOpen;
@@ -513,6 +518,9 @@
                 // Counted, then read straight away if the agent is looking at it.
                 item.UnreadCount = (item.UnreadCount ?? 0) + 1;
                 await TryMarkReadAsync(item, message.MessageId);
+
+                // Its files are readable only by an address the API signs when it reads the thread.
+                if (message.Attachments is { Count: > 0 }) await RunAsync(() => ReadSelectedAsync(false));
             }
         }
         else if (!message.Outgoing)
