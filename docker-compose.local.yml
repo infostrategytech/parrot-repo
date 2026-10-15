@@ -196,6 +196,8 @@ services:
       # stack; then agents answer customers and the AI Operations figures show.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
+      # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
+      OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
       # The object store for image uploads. The app writes to MinIO over the
       # compose network; the URLs it hands back are read by the browser
       # through the published port, so the two bases are not the same host.
@@ -317,6 +319,7 @@ services:
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
       # Must match the API's: with it on, agents live in the API and can be turned on.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
     ports:
       - "5255:8080"
     depends_on:

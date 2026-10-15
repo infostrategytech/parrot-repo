@@ -45,6 +45,10 @@ public interface IStoredMessageStore
 
     /// <summary>Records how a claimed send ended (accepted, failed or unknown). Applies only while it is "sending"; false when it did not.</summary>
     Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default);
+
+    /// <summary>Our reply on this connection that the channel knows by <paramref name="providerMessageId"/>, or null.</summary>
+    Task<MessageDocument?> FindByProviderIdAsync(Guid connectionId, string providerMessageId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<MessageDocument?>(null);
 }
 
 /// <summary>Announces a stored message on the persisted topic, keyed by conversation.</summary>

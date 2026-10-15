@@ -59,7 +59,10 @@ public sealed class OutboundFileDispatcher(
                 content.Position = 0;
                 try
                 {
-                    string id = await whatsApp.SendMediaAsync(connection.PhoneNumberId, token, reply.From, file.Kind, contentType, fileName, content, reply.TextBody, cancellationToken);
+                    // The message the agent quoted travels with the reply, as it does when the API sends it itself.
+                    string id = reply.ReplyTo is { } quote
+                        ? await whatsApp.SendMediaReplyAsync(connection.PhoneNumberId, token, reply.From, file.Kind, contentType, fileName, content, reply.TextBody, quote.ProviderMessageId, cancellationToken)
+                        : await whatsApp.SendMediaAsync(connection.PhoneNumberId, token, reply.From, file.Kind, contentType, fileName, content, reply.TextBody, cancellationToken);
                     return new FileDispatchResult(id, null);
                 }
                 catch (WhatsAppRejectedException ex)
@@ -79,7 +82,9 @@ public sealed class OutboundFileDispatcher(
                 content.Position = 0;
                 try
                 {
-                    string id = await facebook.SendMediaAsync(page.PageId, token, reply.From, file.Kind, contentType, fileName, content, cancellationToken);
+                    string id = reply.ReplyTo is { } quote
+                        ? await facebook.SendMediaReplyAsync(page.PageId, token, reply.From, file.Kind, contentType, fileName, content, quote.ProviderMessageId, cancellationToken)
+                        : await facebook.SendMediaAsync(page.PageId, token, reply.From, file.Kind, contentType, fileName, content, cancellationToken);
                     return new FileDispatchResult(id, null);
                 }
                 catch (FacebookRejectedException ex)

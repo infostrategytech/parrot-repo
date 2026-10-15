@@ -32,10 +32,12 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
     public Task<InboxMessageDto> SendAsync(Guid connection, string sender, InboxReplyDto request, CancellationToken ct) =>
         RequestAsync<InboxMessageDto>(HttpMethod.Post, Path(connection, sender), request, ct);
     /// <summary>Sends a picture or document, with the typed text as its caption. The same request id makes a retry safe.</summary>
-    public async Task<InboxMessageDto> SendFileAsync(Guid connection, string sender, Guid requestId, string? caption, InboxPendingFile file, CancellationToken ct)
+    public async Task<InboxMessageDto> SendFileAsync(Guid connection, string sender, Guid requestId, string? caption, InboxPendingFile file, CancellationToken ct,
+        string? replyToMessageId = null)
     {
         var form = new MultipartFormDataContent { { new StringContent(requestId.ToString()), "RequestId" } };
         if (!string.IsNullOrWhiteSpace(caption)) form.Add(new StringContent(caption), "Caption");
+        if (replyToMessageId is not null) form.Add(new StringContent(replyToMessageId), "ReplyToMessageId");
         form.Add(new ByteArrayContent(file.Bytes), "File", file.Name);
         using var response = await SendAsync(HttpMethod.Post,
             $"api/conversations/{connection}/attachments?sender={Uri.EscapeDataString(sender)}", form, ct);

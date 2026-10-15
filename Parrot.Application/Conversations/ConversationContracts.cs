@@ -33,7 +33,17 @@ public record ConversationMessage(string Id, string Text, bool Outgoing, string 
 {
     /// <summary>The files the customer sent with it, or null when it had none.</summary>
     public IReadOnlyList<MessageMedia>? Attachments { get; init; }
+
+    /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
+    public MessageQuote? ReplyTo { get; init; }
 }
+
+/// <summary>
+/// A quoted message, as shown above a reply. <see cref="Id"/> is the quoted message's
+/// <see cref="ConversationMessage.Id"/>, null when it is not in the inbox (older than it, or unknown).
+/// <see cref="Type"/> says what it was when it has no text ("image", "document", …).
+/// </summary>
+public record MessageQuote(string? Id, bool Outgoing, string? Text, string? Type);
 
 /// <summary>
 /// One file of a message as the inbox reads it. <see cref="Url"/> is a short-lived signed address the browser
@@ -53,7 +63,11 @@ public record MessageMedia(string Kind, string? ContentType, string? FileName, l
 public record MediaItem(string MessageId, DateTime ReceivedAt, MessageMedia Media);
 
 public record MediaPage(IReadOnlyList<MediaItem> Items, string? NextBefore);
-public record SendReplyRequest(Guid RequestId, string Text);
+public record SendReplyRequest(Guid RequestId, string Text)
+{
+    /// <summary>The <see cref="ConversationMessage.Id"/> of the message this replies to, quoting it; null for a plain reply.</summary>
+    public string? ReplyToMessageId { get; init; }
+}
 
 /// <summary>A file a teammate attached to a reply. <see cref="Open"/> reads it from the start each time it is called.</summary>
 public sealed record OutgoingFile(string FileName, string ContentType, long Length, Func<Stream> Open);
@@ -133,6 +147,10 @@ public interface IConversationStore
     // The customer's most recent message on this connection, or null when there is none.
     Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct);
     Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct);
+
+    /// <summary>One message of this conversation by its <see cref="ConversationMessage.Id"/>, or null.</summary>
+    Task<MessageDocument?> FindMessageAsync(string owner, Guid connection, string sender, string messageId, CancellationToken ct) =>
+        Task.FromResult<MessageDocument?>(null);
     Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct);
     Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct);
 
@@ -158,6 +176,13 @@ public interface IWhatsAppSender
     Task<string> SendMediaAsync(string phoneNumberId, string accessToken, string recipient, string kind, string contentType,
         string fileName, Stream content, string? caption, CancellationToken ct);
 
+    /// <summary>As <see cref="SendAsync"/>, quoting the message WhatsApp knows by <paramref name="replyTo"/> (its wamid).</summary>
+    Task<string> SendReplyAsync(string phoneNumberId, string accessToken, string recipient, string text, string replyTo, CancellationToken ct);
+
+    /// <summary>As <see cref="SendMediaAsync"/>, quoting the message WhatsApp knows by <paramref name="replyTo"/>.</summary>
+    Task<string> SendMediaReplyAsync(string phoneNumberId, string accessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string? caption, string replyTo, CancellationToken ct);
+
     /// <summary>Tells WhatsApp the business has read this incoming message (the customer sees blue ticks), and every earlier one.</summary>
     Task MarkReadAsync(string phoneNumberId, string accessToken, string messageId, CancellationToken ct);
 }
@@ -170,6 +195,13 @@ public interface IFacebookSender
     /// <summary>Uploads the file with the message and sends it as an image or file. Messenger has no caption.</summary>
     Task<string> SendMediaAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
         string fileName, Stream content, CancellationToken ct);
+
+    /// <summary>As <see cref="SendAsync"/>, quoting the message Messenger knows by <paramref name="replyTo"/> (its mid).</summary>
+    Task<string> SendReplyAsync(string pageId, string pageAccessToken, string recipient, string text, string replyTo, CancellationToken ct);
+
+    /// <summary>As <see cref="SendMediaAsync"/>, quoting the message Messenger knows by <paramref name="replyTo"/>.</summary>
+    Task<string> SendMediaReplyAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string replyTo, CancellationToken ct);
 
     /// <summary>Shows the customer the Page has seen their latest message.</summary>
     Task MarkSeenAsync(string pageId, string pageAccessToken, string recipient, CancellationToken ct);
@@ -189,6 +221,9 @@ public sealed class FacebookRejectedException : Exception
 public interface IInstagramSender
 {
     Task<string> SendAsync(string accountId, string accessToken, string recipient, string text, CancellationToken ct);
+
+    /// <summary>As <see cref="SendAsync"/>, quoting the message Instagram knows by <paramref name="replyTo"/> (its mid).</summary>
+    Task<string> SendReplyAsync(string accountId, string accessToken, string recipient, string text, string replyTo, CancellationToken ct);
 
     /// <summary>Shows the customer the account has seen their latest message.</summary>
     Task MarkSeenAsync(string accountId, string accessToken, string recipient, CancellationToken ct);

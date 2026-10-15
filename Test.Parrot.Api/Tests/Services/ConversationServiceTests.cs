@@ -422,6 +422,113 @@ public class ConversationServiceTests
         }
     }
 
+    // --- Replying to a message (quoting it) ---
+
+    // A message of this WhatsApp thread, stored as the worker or a send stores it.
+    private WhatsAppMessageDocument Stored(string messageId, bool outgoing, string? providerId = null, string text = "Do you deliver to Yaba?") => new()
+    {
+        MessageId = messageId, OwnerUserId = Owner, ConnectionId = _connection.Id, Platform = MessagingPlatform.WhatsApp,
+        ExternalAccountId = "456", ChannelId = "123", ChannelDisplayName = "", From = Recipient, Timestamp = "0",
+        Type = "text", TextBody = text, ReceivedAt = DateTime.UtcNow, Outgoing = outgoing, ProviderMessageId = providerId,
+        SendStatus = outgoing ? "accepted" : "received",
+    };
+
+    [Fact]
+    public async Task ReplyingToACustomersMessage_QuotesItOnWhatsApp_AndKeepsTheQuoteWithTheReply()
+    {
+        _store.Messages["whatsapp:wamid.question"] = Stored("whatsapp:wamid.question", outgoing: false);
+        _sender.Setup(x => x.SendReplyAsync("123", "connection-token", Recipient, "Yes, we do", "wamid.question", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("wamid.answer");
+
+        ConversationMessage sent = await Create().SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "Yes, we do") { ReplyToMessageId = "whatsapp:wamid.question" }, default);
+
+        Assert.Equal("accepted", sent.Status);
+        Assert.Equal(new MessageQuote("whatsapp:wamid.question", false, "Do you deliver to Yaba?", "text"), sent.ReplyTo);
+        MessageReplyTo kept = _store.Messages[sent.Id].ReplyTo!;
+        Assert.Equal("wamid.question", kept.ProviderMessageId);
+        _sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task ReplyingToOurOwnReply_QuotesItByTheIdTheChannelGaveIt()
+    {
+        _store.Messages["outgoing:owner:earlier"] = Stored("outgoing:owner:earlier", outgoing: true, providerId: "wamid.earlier", text: "Our menu is attached");
+        _sender.Setup(x => x.SendReplyAsync("123", "connection-token", Recipient, "Prices changed", "wamid.earlier", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("wamid.answer");
+
+        ConversationMessage sent = await Create().SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "Prices changed") { ReplyToMessageId = "outgoing:owner:earlier" }, default);
+
+        Assert.True(sent.ReplyTo!.Outgoing);
+        Assert.Equal("Our menu is attached", sent.ReplyTo.Text);
+    }
+
+    [Fact]
+    public async Task OnMessenger_TheQuoteGoesAsReplyTo()
+    {
+        MessageDocument incoming = PageIncoming(DateTime.UtcNow);
+        incoming.ConnectionId = _page.Id;
+        incoming.TextBody = "Is it spicy?";
+        _store.LastIncoming = incoming;
+        _store.Messages[incoming.MessageId] = incoming;
+        _facebookSender.Setup(x => x.SendReplyAsync(PageId, "page-token", Psid, "A little", "m_incoming", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("m_answer");
+
+        ConversationMessage sent = await Create().SendAsync(Owner, _page.Id, Psid,
+            new SendReplyRequest(Guid.NewGuid(), "A little") { ReplyToMessageId = "facebook:m_incoming" }, default);
+
+        Assert.Equal("accepted", sent.Status);
+        Assert.Equal("Is it spicy?", sent.ReplyTo!.Text);
+    }
+
+    [Fact]
+    public async Task AQuoteFromAnotherConversation_IsNotFound_AndNothingIsSent()
+    {
+        WhatsAppMessageDocument elsewhere = Stored("whatsapp:wamid.other", outgoing: false);
+        elsewhere.From = "2348099999999";
+        _store.Messages[elsewhere.MessageId] = elsewhere;
+
+        await Assert.ThrowsAsync<NotFoundException>(() => Create().SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "Hi") { ReplyToMessageId = "whatsapp:wamid.other" }, default));
+
+        Assert.DoesNotContain(_store.Messages.Values, m => m.Outgoing);
+    }
+
+    [Fact]
+    public async Task AReplyThatNeverReachedTheChannel_CannotBeQuoted()
+    {
+        _store.Messages["outgoing:owner:failed"] = Stored("outgoing:owner:failed", outgoing: true, providerId: null);
+
+        await Assert.ThrowsAsync<ConflictException>(() => Create().SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "Hi") { ReplyToMessageId = "outgoing:owner:failed" }, default));
+    }
+
+    [Fact]
+    public async Task APlainReply_StillGoesThroughThePlainSend()
+    {
+        _sender.Setup(x => x.SendAsync("123", "connection-token", Recipient, "Hello", It.IsAny<CancellationToken>())).ReturnsAsync("wamid.plain");
+
+        ConversationMessage sent = await Create().SendAsync(Owner, _connection.Id, Recipient, new SendReplyRequest(Guid.NewGuid(), "Hello"), default);
+
+        Assert.Null(sent.ReplyTo);
+        _sender.Verify(x => x.SendReplyAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AFileCanReplyToAMessageToo()
+    {
+        _store.Messages["whatsapp:wamid.question"] = Stored("whatsapp:wamid.question", outgoing: false);
+        _sender.Setup(x => x.SendMediaReplyAsync("123", "connection-token", Recipient, "image", "image/png", "menu.png",
+            It.IsAny<Stream>(), null, "wamid.question", It.IsAny<CancellationToken>())).ReturnsAsync("wamid.file");
+
+        ConversationMessage sent = await CreateWithStorage().SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null,
+            File("menu.png", Png), default, "whatsapp:wamid.question");
+
+        Assert.Equal("accepted", sent.Status);
+        Assert.Equal("whatsapp:wamid.question", sent.ReplyTo!.Id);
+    }
+
     private sealed class MemoryStore : IConversationStore
     {
         public ConcurrentDictionary<string, MessageDocument> Messages { get; } = new();
@@ -443,6 +550,9 @@ public class ConversationServiceTests
             Messages[id].SendStatus = "failed";
             return Task.FromResult(true);
         }
+        public Task<MessageDocument?> FindMessageAsync(string owner, Guid connection, string sender, string messageId, CancellationToken ct) =>
+            Task.FromResult(Messages.TryGetValue(messageId, out MessageDocument? found)
+                && found.OwnerUserId == owner && found.ConnectionId == connection && found.From == sender ? found : null);
         public Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<ConversationSummary>> FindAsync(string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct) => throw new NotImplementedException();
         public Task<MessagePage> ReadAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct) => throw new NotImplementedException();
@@ -708,6 +818,21 @@ public class ConversationServiceTests
 
         Assert.Equal("pending", sent.Status);
         Assert.Equal("sending", _store.Messages[sent.Id].SendStatus);
+    }
+
+    [Fact]
+    public async Task WhenQueued_APictureThatQuotesAMessage_KeepsTheQuoteOnTheReplySoTheWorkerCanSendIt()
+    {
+        _store.Messages["whatsapp:wamid.question"] = Stored("whatsapp:wamid.question", outgoing: false);
+        Jobs jobs = new();
+
+        ConversationMessage sent = await CreateQueued(jobs).SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("menu.png", Png), default,
+            replyToMessageId: "whatsapp:wamid.question");
+
+        Assert.Equal("pending", sent.Status);
+        Assert.Equal("wamid.question", _store.Messages[sent.Id].ReplyTo!.ProviderMessageId);
+        Assert.Single(jobs.Published);
+        VerifyNothingSent();
     }
 
     [Fact]

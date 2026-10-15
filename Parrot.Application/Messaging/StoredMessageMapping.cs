@@ -46,5 +46,6 @@ public static class StoredMessageMapping
             : null,
         SentAt = document.SentAt,
         PersistedAt = document.StoredAt,
+        ReplyTo = Parrot.Application.Conversations.ConversationService.ToQuote(document.ReplyTo),
     };
 }

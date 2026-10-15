@@ -73,6 +73,9 @@ public sealed record StoredMessage
     public DateTime? SentAt { get; init; }
 
     required public DateTime PersistedAt { get; init; }
+
+    /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
+    public Parrot.Application.Conversations.MessageQuote? ReplyTo { get; init; }
 }
 
 /// <param name="Kind">See <see cref="MediaKinds"/>.</param>

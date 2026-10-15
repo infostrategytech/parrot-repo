@@ -108,8 +108,14 @@ builder.Services.AddScoped<ConversationClient>();
 builder.Services.AddScoped<InboxUnreadState>();
 // The API has none of the extra inbox actions yet, so the inbox hides them.
 builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
-// Business knowledge: no API for it yet, so the screens hide what they cannot show.
-builder.Services.AddSingleton<IBusinessKnowledge, UnavailableBusinessKnowledge>();
+// Business knowledge: no API for it yet, so the screens hide what they cannot show. With voice
+// orientation on, "Teach your AI" is a voice conversation with the AI instead (it keeps what it learns).
+if (builder.Configuration.GetValue<bool>("OmniAi:OrientationVoice"))
+    builder.Services.AddSingleton<IBusinessKnowledge, OrientationBusinessKnowledge>();
+else
+    builder.Services.AddSingleton<IBusinessKnowledge, UnavailableBusinessKnowledge>();
+builder.Services.AddScoped<OrientationApi>();
+builder.Services.AddScoped<Parrot.SharedComponents.Services.AiVoiceInterop>();
 // "Teach your AI" before the first agent, and the browser's voice for it.
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState>();
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentGate>();

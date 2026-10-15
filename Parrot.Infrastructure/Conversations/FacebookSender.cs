@@ -13,18 +13,33 @@ namespace Parrot.Infrastructure.Conversations;
 // unknown, and sending again could deliver twice.
 public sealed class FacebookSender(HttpClient http, IOptions<FacebookSettings> options) : IFacebookSender
 {
-    public async Task<string> SendAsync(string pageId, string pageAccessToken, string recipient, string text, CancellationToken ct)
+    public Task<string> SendAsync(string pageId, string pageAccessToken, string recipient, string text, CancellationToken ct) =>
+        SendTextAsync(pageId, pageAccessToken, recipient, text, null, ct);
+
+    public Task<string> SendReplyAsync(string pageId, string pageAccessToken, string recipient, string text, string replyTo, CancellationToken ct) =>
+        SendTextAsync(pageId, pageAccessToken, recipient, text, replyTo, ct);
+
+    public Task<string> SendMediaAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, CancellationToken ct) =>
+        SendFileAsync(pageId, pageAccessToken, recipient, kind, contentType, fileName, content, null, ct);
+
+    public Task<string> SendMediaReplyAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string replyTo, CancellationToken ct) =>
+        SendFileAsync(pageId, pageAccessToken, recipient, kind, contentType, fileName, content, replyTo, ct);
+
+    // A reply that quotes a message carries reply_to.mid at the top level (either side's message).
+    private async Task<string> SendTextAsync(string pageId, string pageAccessToken, string recipient, string text, string? replyTo, CancellationToken ct)
     {
         FacebookSettings settings = options.Value;
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,
             $"https://graph.facebook.com/{Uri.EscapeDataString(settings.ApiVersion)}/{Uri.EscapeDataString(pageId)}/messages");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pageAccessToken);
-        request.Content = JsonContent.Create(new
+        request.Content = JsonContent.Create(new Dictionary<string, object?>
         {
-            recipient = new { id = recipient },
-            messaging_type = "RESPONSE",
-            message = new { text },
-        });
+            ["recipient"] = new { id = recipient },
+            ["messaging_type"] = "RESPONSE",
+            ["message"] = new { text },
+        }.Quoting(replyTo));
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         HttpResponseMessage response;
         try
@@ -48,21 +63,23 @@ public sealed class FacebookSender(HttpClient http, IOptions<FacebookSettings> o
         return id.GetString()!;
     }
 
-    public async Task<string> SendMediaAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
-        string fileName, Stream content, CancellationToken ct)
+    private async Task<string> SendFileAsync(string pageId, string pageAccessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string? replyTo, CancellationToken ct)
     {
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,
             $"https://graph.facebook.com/{Uri.EscapeDataString(options.Value.ApiVersion)}/{Uri.EscapeDataString(pageId)}/messages");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", pageAccessToken);
         StreamContent file = new(content);
         file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
-        request.Content = new MultipartFormDataContent
+        MultipartFormDataContent form = new()
         {
             { new StringContent(JsonSerializer.Serialize(new { id = recipient })), "recipient" },
             { new StringContent("RESPONSE"), "messaging_type" },
             { new StringContent(JsonSerializer.Serialize(new { attachment = new { type = kind == "image" ? "image" : "file", payload = new { is_reusable = false } } })), "message" },
-            { file, "filedata", fileName },
         };
+        if (replyTo is not null) form.Add(new StringContent(JsonSerializer.Serialize(new { mid = replyTo })), "reply_to");
+        form.Add(file, "filedata", fileName);
+        request.Content = form;
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         HttpResponseMessage response;
         try

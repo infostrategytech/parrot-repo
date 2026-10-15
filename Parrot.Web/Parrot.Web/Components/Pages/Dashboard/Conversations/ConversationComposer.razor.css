@@ -26,6 +26,22 @@
 .conversation-composer.is-note ::deep .ds-tab.is-active { color: var(--colors-feedback-warning-text); background: var(--colors-accent-amber-subtle); }
 .conversation-composer__attachment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-xs); align-items: center; width: fit-content; max-width: 100%; padding: var(--spacing-xs) var(--spacing-sm); color: var(--colors-text-muted); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
 .conversation-composer__attachment button { display: grid; place-items: center; padding: 0; color: inherit; background: transparent; border: 0; cursor: pointer; }
+/* The message a reply quotes, above the box: its edge in the quoted side's colour, as in the thread. */
+.conversation-composer__quote {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-sm);
+  background: var(--colors-accent-brand-subtle);
+  border-inline-start: var(--spacing-2xs) solid var(--colors-brand-primary);
+  border-radius: var(--radius-radius-sm);
+}
+.conversation-composer__quote.is-own { border-inline-start-color: var(--colors-accent-teal-text); }
+.conversation-composer__quote-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.conversation-composer__quote-text ::deep strong { color: var(--colors-brand-primary); }
+.conversation-composer__quote.is-own .conversation-composer__quote-text ::deep strong { color: var(--colors-accent-teal-text); }
+.conversation-composer__quote-text ::deep span { overflow: hidden; color: var(--colors-text-secondary); text-overflow: ellipsis; white-space: nowrap; }
 
 .conversation-composer > footer { display: flex; gap: var(--spacing-sm); align-items: center; }
 .conversation-composer__tools { display: flex; gap: var(--spacing-xs); align-items: center; }

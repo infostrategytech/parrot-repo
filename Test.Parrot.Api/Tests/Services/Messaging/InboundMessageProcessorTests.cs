@@ -36,6 +36,9 @@ public class InboundMessageProcessorTests
             return Task.FromResult(Documents.FirstOrDefault(d => d.MessageId == messageId));
         }
 
+        public Task<MessageDocument?> FindByProviderIdAsync(Guid connectionId, string providerMessageId, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Documents.FirstOrDefault(d => d.ProviderMessageId == providerMessageId && d.ConnectionId == connectionId));
+
         public Task<MessageDocument> InsertOrGetAsync(MessageDocument document, CancellationToken cancellationToken = default)
         {
             if (Failure is not null) throw Failure;
@@ -574,5 +577,54 @@ public class InboundMessageProcessorTests
         {
             await client.DropDatabaseAsync(database);
         }
+    }
+
+    // --- A customer replying to (quoting) a message ---
+
+    private static string QuotingBody(string quoted) => Body.Replace(
+        "\"type\":\"text\",\"text\":{\"body\":\"Hello\"}",
+        "\"type\":\"text\",\"text\":{\"body\":\"Hello\"},\"context\":{\"from\":\"2349011112222\",\"id\":\"" + quoted + "\"}");
+
+    private static WhatsAppMessageDocument Earlier(string messageId, bool outgoing, string? providerId, string text) => new()
+    {
+        MessageId = messageId, OwnerUserId = "user-1", ConnectionId = Connection, Platform = MessagingPlatform.WhatsApp,
+        ExternalAccountId = "waba-1", ChannelId = "phone-1", ChannelDisplayName = "", From = "2348012345678", Timestamp = "0",
+        Type = "text", TextBody = text, ReceivedAt = DateTime.UtcNow, Outgoing = outgoing, ProviderMessageId = providerId,
+    };
+
+    [Fact]
+    public async Task ACustomerQuotingTheirOwnEarlierMessage_IsStoredWithTheQuote()
+    {
+        _store.Documents.Add(Earlier("whatsapp:wamid.OLD", outgoing: false, null, "Do you deliver?"));
+
+        await Processor().ProcessAsync(Inbound(body: QuotingBody("wamid.OLD")), CancellationToken.None);
+
+        MessageReplyTo quote = _store.Documents.Single(d => d.MessageId == "whatsapp:wamid.A").ReplyTo!;
+        Assert.Equal("whatsapp:wamid.OLD", quote.MessageId);
+        Assert.False(quote.Outgoing);
+        Assert.Equal("Do you deliver?", quote.Text);
+        Assert.Equal("Do you deliver?", _publisher.Published.Single().Data.ReplyTo!.Text);
+    }
+
+    [Fact]
+    public async Task ACustomerQuotingOurReply_IsMatchedByTheIdTheChannelGaveIt()
+    {
+        _store.Documents.Add(Earlier("outgoing:user-1:abc", outgoing: true, "wamid.OURS", "We open at 9"));
+
+        await Processor().ProcessAsync(Inbound(body: QuotingBody("wamid.OURS")), CancellationToken.None);
+
+        MessageReplyTo quote = _store.Documents.Single(d => d.MessageId == "whatsapp:wamid.A").ReplyTo!;
+        Assert.Equal("outgoing:user-1:abc", quote.MessageId);
+        Assert.True(quote.Outgoing);
+    }
+
+    [Fact]
+    public async Task AQuoteOfAMessageTheInboxNeverHad_KeepsOnlyTheChannelsId()
+    {
+        await Processor().ProcessAsync(Inbound(body: QuotingBody("wamid.UNKNOWN")), CancellationToken.None);
+
+        MessageReplyTo quote = _store.Documents.Single(d => d.MessageId == "whatsapp:wamid.A").ReplyTo!;
+        Assert.Equal("wamid.UNKNOWN", quote.ProviderMessageId);
+        Assert.Null(quote.MessageId);
     }
 }

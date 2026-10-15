@@ -34,6 +34,9 @@ public record IncomingMessage
 
     // The provider's own id for the conversation, when replying needs it (TikTok does; the raw body is not kept).
     public string? ExternalConversationId { get; init; }
+
+    // The channel's id for the message the customer replied to (swiped to quote), when they did.
+    public string? ReplyToProviderId { get; init; }
     public DateTime ReceivedAt { get; init; }
 }
 

@@ -184,4 +184,32 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
         Assert.Equal("file", (await Dispatcher().DispatchAsync(Reply(live.Id), default)).RejectedCode);
         _whatsApp.VerifyNoOtherCalls();
     }
+
+    [PostgresFact]
+    public async Task A_quoted_WhatsApp_reply_is_sent_quoting_the_message_the_agent_chose()
+    {
+        WhatsAppConnection connection = await WhatsAppAsync();
+        MessageDocument reply = Reply(connection.Id);
+        reply.ReplyTo = new MessageReplyTo { ProviderMessageId = "wamid.QUOTED" };
+        _whatsApp.Setup(w => w.SendMediaReplyAsync("phone-1", "wa-token", "2348012345678", "image", "image/png", "menu.png", It.IsAny<Stream>(), "Menu", "wamid.QUOTED", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("wamid.file");
+
+        FileDispatchResult result = await Dispatcher().DispatchAsync(reply, default);
+
+        Assert.Equal("wamid.file", result.ProviderId);
+        _whatsApp.Verify(w => w.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [PostgresFact]
+    public async Task A_quoted_Messenger_reply_is_sent_quoting_the_message_the_agent_chose()
+    {
+        FacebookConnection page = await PageAsync();
+        MessageDocument reply = Reply(page.Id, MessagingPlatform.Facebook);
+        reply.ReplyTo = new MessageReplyTo { ProviderMessageId = "m_QUOTED" };
+        _facebook.Setup(f => f.SendMediaReplyAsync("page-1", "page-token", "2348012345678", "image", "image/png", "menu.png", It.IsAny<Stream>(), "m_QUOTED", It.IsAny<CancellationToken>()))
+            .ReturnsAsync("m_file");
+
+        Assert.Equal("m_file", (await Dispatcher().DispatchAsync(reply, default)).ProviderId);
+    }
 }

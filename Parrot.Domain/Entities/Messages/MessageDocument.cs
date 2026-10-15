@@ -84,4 +84,8 @@ public abstract class MessageDocument
     // the sparse index the media listing uses only holds messages that have some.
     [BsonIgnoreIfNull]
     public List<MessageAttachment>? Attachments { get; set; }
+
+    // The message this one replies to, in either direction. Left out when it quotes nothing.
+    [BsonIgnoreIfNull]
+    public MessageReplyTo? ReplyTo { get; set; }
 }

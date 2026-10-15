@@ -91,6 +91,7 @@ public sealed class WhatsAppInboundDecoder : IInboundMessageDecoder
                     ChannelId = change.Value.Metadata.PhoneNumberId,
                     ChannelDisplayName = change.Value.Metadata.DisplayPhoneNumber,
                     ContactName = change.Value.Contacts?.FirstOrDefault(c => c.WaId == message.From)?.Profile?.Name,
+                    ReplyToProviderId = message.Context?.Id is { Length: > 0 } quoted ? quoted : null,
                     ReceivedAt = inbound.ReceivedAt,
                 };
             }
@@ -147,7 +148,8 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
                         .Select(url => url!)
                         .ToList();
                     string type = message.Attachments is { Count: > 0 } ? message.Attachments[0].Type : "text";
-                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null, MediaKinds.FromMeta(message.Attachments));
+                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null, MediaKinds.FromMeta(message.Attachments),
+                        message.ReplyTo?.Mid is { Length: > 0 } quoted ? quoted : null);
                 }
 
                 if (evt.Postback is { } postback && postback.Mid == mid)
@@ -159,7 +161,8 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
     }
 
     private static IncomingMessage ToIncoming(
-        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls, IReadOnlyList<IncomingMedia>? media) => new()
+        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls, IReadOnlyList<IncomingMedia>? media,
+        string? replyTo = null) => new()
     {
         ConnectionId = inbound.ConnectionId,
         OwnerUserId = inbound.OwnerUserId,
@@ -177,6 +180,7 @@ public sealed class FacebookInboundDecoder : IInboundMessageDecoder
         ChannelId = entry.Id,
         // The Page's name comes from the connection, not the webhook body.
         ChannelDisplayName = string.Empty,
+        ReplyToProviderId = replyTo,
         ReceivedAt = inbound.ReceivedAt,
     };
 }
@@ -245,7 +249,8 @@ public sealed class InstagramInboundDecoder : IInboundMessageDecoder
                         .Select(url => url!)
                         .ToList();
                     string type = message.Attachments is { Count: > 0 } ? message.Attachments[0].Type : "text";
-                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null, MediaKinds.FromMeta(message.Attachments));
+                    return ToIncoming(inbound, entry, evt, type, message.Text, urls is { Count: > 0 } ? urls : null, MediaKinds.FromMeta(message.Attachments),
+                        message.ReplyTo?.Mid is { Length: > 0 } quoted ? quoted : null);
                 }
 
                 // Icebreakers and other button taps.
@@ -258,7 +263,8 @@ public sealed class InstagramInboundDecoder : IInboundMessageDecoder
     }
 
     private static IncomingMessage ToIncoming(
-        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls, IReadOnlyList<IncomingMedia>? media) => new()
+        InboundMessage inbound, FacebookEntry entry, FacebookMessagingEvent evt, string type, string? text, IReadOnlyList<string>? urls, IReadOnlyList<IncomingMedia>? media,
+        string? replyTo = null) => new()
     {
         ConnectionId = inbound.ConnectionId,
         OwnerUserId = inbound.OwnerUserId,
@@ -275,6 +281,7 @@ public sealed class InstagramInboundDecoder : IInboundMessageDecoder
         ChannelId = entry.Id,
         // The username comes from the connection, not the webhook body.
         ChannelDisplayName = string.Empty,
+        ReplyToProviderId = replyTo,
         ReceivedAt = inbound.ReceivedAt,
     };
 }

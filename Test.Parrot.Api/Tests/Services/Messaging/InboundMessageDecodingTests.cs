@@ -181,4 +181,33 @@ public class InboundMessageDecodingTests
         Assert.Equal("Hi", message.TextBody);
         Assert.Null(message.ContactName);
     }
+
+    // A customer who swipes to reply quotes one of the conversation's messages; the decoder keeps the channel's id for it.
+    [Fact]
+    public void AMessengerReply_KeepsTheQuotedMid()
+    {
+        const string body = """
+            {"object":"page","entry":[{"id":"185860297939218","time":1790589123000,"messaging":[{
+              "sender":{"id":"6215837091842310"},"recipient":{"id":"185860297939218"},"timestamp":1790589123000,
+              "message":{"mid":"m_answer","text":"That one","reply_to":{"mid":"m_question"}}}]}]}
+            """;
+
+        IncomingMessage decoded = Decoders.Decode(Inbound(MessagingPlatform.Facebook, "facebook:m_answer", body));
+
+        Assert.Equal("m_question", decoded.ReplyToProviderId);
+    }
+
+    [Fact]
+    public void AnInstagramReply_KeepsTheQuotedMid()
+    {
+        const string body = """
+            {"object":"instagram","entry":[{"id":"17841477240262647","time":1790589123000,"messaging":[{
+              "sender":{"id":"2570078863417225"},"recipient":{"id":"17841477240262647"},"timestamp":1790589123000,
+              "message":{"mid":"ig_answer","text":"Yes","reply_to":{"mid":"ig_question"}}}]}]}
+            """;
+
+        IncomingMessage decoded = new InstagramInboundDecoder().Decode(Inbound(MessagingPlatform.Instagram, "instagram:ig_answer", body));
+
+        Assert.Equal("ig_question", decoded.ReplyToProviderId);
+    }
 }
