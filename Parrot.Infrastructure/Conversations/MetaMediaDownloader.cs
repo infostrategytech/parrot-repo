@@ -86,32 +86,34 @@ public sealed class MetaMediaDownloader(
         if (response.Content.Headers.ContentLength > limit)
             return TooLarge(media, response.Content.Headers.ContentLength);
 
-        // Buffered: S3 needs the length up front, and the cap bounds the memory.
-        await using MemoryStream bytes = new();
-        await using (Stream body = await response.Content.ReadAsStreamAsync(ct))
-        {
-            byte[] chunk = new byte[81920];
-            int read;
-            while ((read = await body.ReadAsync(chunk, ct)) > 0)
-            {
-                if (bytes.Length + read > limit) return TooLarge(media, null);
-                bytes.Write(chunk, 0, read);
-            }
-        }
-        if (bytes.Length == 0) return Failed(media, MediaFailure.Empty);
-
         string contentType = media.ContentType
             ?? response.Content.Headers.ContentType?.MediaType
             ?? "application/octet-stream";
-        bytes.Position = 0;
         string key = Key(message, index, contentType, media.FileName);
-        await storage.PutAsync(key, bytes, contentType, ct);
+
+        // Streamed from Meta into storage, never held whole in memory. The first chunk is read before the upload
+        // starts so an empty body is told apart without storing an empty object; the cap stops a body that is
+        // bigger than it said, or that said nothing, part way (storage then discards the half-sent upload).
+        await using Stream body = await response.Content.ReadAsStreamAsync(ct);
+        byte[] first = new byte[81920];
+        int firstRead = await body.ReadAsync(first, ct);
+        if (firstRead == 0) return Failed(media, MediaFailure.Empty);
+
+        CappedStream capped = new(body, first, firstRead, limit);
+        try
+        {
+            await storage.PutAsync(key, capped, contentType, ct);
+        }
+        catch (Exception) when (capped.Exceeded)
+        {
+            return TooLarge(media, null);
+        }
 
         return media with
         {
             Kind = MediaKinds.Refine(media.Kind, contentType),
             ContentType = contentType,
-            SizeBytes = bytes.Length,
+            SizeBytes = capped.BytesRead,
             StorageKey = key,
             Status = MediaStatus.Ready,
             FailureReason = null,
@@ -205,5 +207,73 @@ public sealed class MetaMediaDownloader(
         // An extension the customer's file name carries, kept only if it is plain letters and digits.
         string ext = Path.GetExtension(fileName ?? "");
         return ext.Length is > 1 and <= 8 && ext[1..].All(char.IsAsciiLetterOrDigit) ? ext.ToLowerInvariant() : "";
+    }
+
+    /// <summary>
+    /// A read-once view of a download that starts with the bytes already read from it, counts what passes, and
+    /// refuses to pass more than the limit. <see cref="Exceeded"/> tells the caller why the upload failed, since a
+    /// storage client may wrap the exception.
+    /// </summary>
+    private sealed class CappedStream(Stream inner, byte[] head, int headLength, long limit) : Stream
+    {
+        private int _headRead;
+
+        public long BytesRead { get; private set; }
+
+        public bool Exceeded { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            int read;
+            if (_headRead < headLength)
+            {
+                read = Math.Min(buffer.Length, headLength - _headRead);
+                head.AsMemory(_headRead, read).CopyTo(buffer);
+                _headRead += read;
+            }
+            else
+            {
+                read = await inner.ReadAsync(buffer, cancellationToken);
+            }
+
+            BytesRead += read;
+            if (BytesRead > limit)
+            {
+                Exceeded = true;
+                throw new IOException("The file is larger than the limit.");
+            }
+
+            return read;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Net.Http.Headers;
 using Parrot.Api.Media;
 using Parrot.Application.Storage;
 
@@ -27,15 +28,13 @@ public sealed class MediaController(MediaLinks links, IPrivateObjectStorage stor
     {
         if (!links.TryRead(token, out string key, out string? fileName)) return NotFound();
 
-        // Buffered so the browser can seek in a video: a range request needs a seekable stream, and files are capped.
-        using StoredObject? stored = await storage.GetAsync(key, cancellationToken);
-        if (stored is null) return NotFound();
-        MemoryStream bytes = new();
-        await stored.Content.CopyToAsync(bytes, cancellationToken);
-        bytes.Position = 0;
+        // Only the size and type are read here; the bytes are streamed from storage as they are sent, so a large
+        // video never sits in the API's memory and a seek in it fetches only the part asked for.
+        StoredObjectInfo? info = await storage.StatAsync(key, cancellationToken);
+        if (info is null) return NotFound();
 
         // The type stored is the one the platform declared; trusted only for the list above.
-        string contentType = stored.ContentType.Split(';')[0].Trim().ToLowerInvariant();
+        string contentType = info.ContentType.Split(';')[0].Trim().ToLowerInvariant();
         bool inline = !download && Inline.Contains(contentType);
 
         Response.Headers["X-Content-Type-Options"] = "nosniff";
@@ -44,7 +43,48 @@ public sealed class MediaController(MediaLinks links, IPrivateObjectStorage stor
         Response.Headers["Cross-Origin-Resource-Policy"] = "cross-site";
         Response.Headers.CacheControl = $"private, max-age={(int)MediaLinks.Lifetime.TotalSeconds / 2}";
 
-        FileStreamResult result = File(bytes, inline ? contentType : "application/octet-stream", enableRangeProcessing: true);
+        Response.Headers.AcceptRanges = "bytes";
+
+        // One range, as a browser's player asks for. A range that cannot be met is answered 416; anything more
+        // elaborate is served whole, which HTTP allows.
+        long start = 0, end = info.Length - 1;
+        bool partial = false;
+        RangeHeaderValue? requested = Request.GetTypedHeaders().Range;
+        if (requested is not null && requested.Unit == "bytes" && requested.Ranges.Count == 1)
+        {
+            RangeItemHeaderValue item = requested.Ranges.Single();
+            bool suffix = item.From is null;
+            bool unsatisfiable = info.Length == 0 || (suffix ? item.To is null or 0 : item.From >= info.Length);
+            if (unsatisfiable)
+            {
+                Response.Headers.ContentRange = $"bytes */{info.Length}";
+                return StatusCode(StatusCodes.Status416RangeNotSatisfiable);
+            }
+
+            // A first byte after the last ("5-2") is not a range at all and is ignored.
+            if (suffix || item.To is null || item.To >= item.From)
+            {
+                partial = true;
+                start = suffix ? Math.Max(0, info.Length - item.To!.Value) : item.From!.Value;
+                end = suffix ? end : Math.Min(item.To ?? end, info.Length - 1);
+            }
+        }
+
+        StoredObject? stored = partial
+            ? await storage.GetRangeAsync(key, start, end, cancellationToken)
+            : await storage.GetAsync(key, cancellationToken);
+        if (stored is null) return NotFound();
+
+        if (partial)
+        {
+            Response.StatusCode = StatusCodes.Status206PartialContent;
+            Response.Headers.ContentRange = $"bytes {start}-{end}/{info.Length}";
+        }
+
+        Response.ContentLength = partial ? end - start + 1 : info.Length;
+
+        // The result disposes the stream once it has been sent.
+        FileStreamResult result = File(stored.Content, inline ? contentType : "application/octet-stream");
         result.FileDownloadName = inline ? null : SafeName(fileName, key);
         if (inline)
         {

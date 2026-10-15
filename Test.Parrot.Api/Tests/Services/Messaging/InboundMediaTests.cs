@@ -161,12 +161,24 @@ public class InboundMediaTests
     {
         public Dictionary<string, (byte[] Bytes, string ContentType)> Objects { get; } = new();
 
+        /// <summary>Whether each stream handed over could seek: a download passed straight through cannot.</summary>
+        public List<bool> Seekable { get; } = new();
+
         public async Task PutAsync(string key, Stream content, string contentType, CancellationToken cancellationToken = default)
         {
+            Seekable.Add(content.CanSeek);
             using MemoryStream copy = new();
             await content.CopyToAsync(copy, cancellationToken);
             Objects[key] = (copy.ToArray(), contentType);
         }
+
+        public Task<StoredObjectInfo?> StatAsync(string key, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Objects.TryGetValue(key, out var o) ? new StoredObjectInfo(o.ContentType, o.Bytes.Length) : null);
+
+        public Task<StoredObject?> GetRangeAsync(string key, long start, long end, CancellationToken cancellationToken = default) =>
+            Task.FromResult(Objects.TryGetValue(key, out var o)
+                ? new StoredObject(new MemoryStream(o.Bytes[(int)start..((int)end + 1)]), o.ContentType, end - start + 1)
+                : null);
 
         public Task<StoredObject?> GetAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult<StoredObject?>(null);
     }
@@ -246,6 +258,72 @@ public class InboundMediaTests
         Assert.Null(saved.StorageKey);
         Assert.Empty(storage.Objects);
         Assert.Equal(MediaStatus.TooLarge, saved.Status);
+    }
+
+    // A body with no length, so only the cap can stop it: it is cut off part way and nothing is stored.
+    private sealed class Unsized(byte[] bytes) : Stream
+    {
+        private int _position;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            int n = Math.Min(count, bytes.Length - _position);
+            Array.Copy(bytes, _position, buffer, offset, n);
+            _position += n;
+            return n;
+        }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    [Fact]
+    public async Task A_body_with_no_length_that_runs_past_the_limit_is_cut_off_and_nothing_is_stored()
+    {
+        FakePrivateStorage storage = new();
+        FakeHttp http = new(_ => new HttpResponseMessage { Content = new StreamContent(new Unsized(new byte[300_000])) });
+
+        IncomingMedia saved = Assert.Single(await Downloader(http, storage, maxBytes: 200_000).SaveAsync(
+            Facebook(new IncomingMedia { Kind = MediaKinds.Document, SourceUrl = "https://cdn.fbsbx.com/a.pdf" }), default));
+
+        Assert.Equal(MediaStatus.TooLarge, saved.Status);
+        Assert.Null(saved.StorageKey);
+        Assert.Empty(storage.Objects);
+    }
+
+    [Fact]
+    public async Task A_download_is_handed_to_storage_as_a_stream_and_arrives_whole_even_past_the_first_chunk()
+    {
+        FakePrivateStorage storage = new();
+        byte[] body = Enumerable.Range(0, 250_000).Select(i => (byte)(i % 251)).ToArray();
+        FakeHttp http = new(_ => new HttpResponseMessage { Content = new StreamContent(new Unsized(body)) { Headers = { ContentType = new("video/mp4") } } });
+
+        IncomingMedia saved = Assert.Single(await Downloader(http, storage, maxBytes: 1_000_000).SaveAsync(
+            Facebook(new IncomingMedia { Kind = MediaKinds.Video, SourceUrl = "https://cdn.fbsbx.com/a.mp4" }), default));
+
+        Assert.False(Assert.Single(storage.Seekable));
+        Assert.Equal(body, storage.Objects[saved.StorageKey!].Bytes);
+        Assert.Equal(250_000, saved.SizeBytes);
+        Assert.Equal(MediaStatus.Ready, saved.Status);
+    }
+
+    [Fact]
+    public async Task An_empty_download_is_a_failure_and_stores_no_object()
+    {
+        FakePrivateStorage storage = new();
+        FakeHttp http = new(_ => new HttpResponseMessage { Content = new ByteArrayContent([]) });
+
+        IncomingMedia saved = Assert.Single(await Downloader(http, storage).SaveAsync(
+            Facebook(new IncomingMedia { Kind = MediaKinds.Image, SourceUrl = "https://scontent.xx.fbcdn.net/a.jpg" }), default));
+
+        Assert.Equal(MediaStatus.Failed, saved.Status);
+        Assert.Equal(MediaFailure.Empty, saved.FailureReason);
+        Assert.Empty(storage.Objects);
     }
 
     [Fact]
