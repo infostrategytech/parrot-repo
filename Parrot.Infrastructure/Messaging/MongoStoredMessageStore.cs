@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
+using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Domain.Entities.Messages;
 
@@ -17,6 +18,26 @@ public sealed class MongoStoredMessageStore(IMongoClient client, IOptions<MongoD
 
     public async Task<MessageDocument?> FindAsync(string messageId, CancellationToken cancellationToken = default) =>
         await _messages.Find(d => d.MessageId == messageId).FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<bool> CompleteMediaAsync(string messageId, int index, IncomingMedia outcome, CancellationToken cancellationToken = default)
+    {
+        FilterDefinitionBuilder<MessageDocument> filter = Builders<MessageDocument>.Filter;
+        UpdateDefinitionBuilder<MessageDocument> update = Builders<MessageDocument>.Update;
+
+        // The status in the filter makes this a compare-and-set: of two workers finishing one file, one wins.
+        UpdateResult result = await _messages.UpdateOneAsync(
+            filter.Eq(d => d.MessageId, messageId) & filter.Eq(d => d.Attachments![index].Status, MediaStatus.Pending),
+            update.Combine(
+                update.Set(d => d.Attachments![index].Status, outcome.Status),
+                update.Set(d => d.Attachments![index].FailureReason, outcome.FailureReason),
+                update.Set(d => d.Attachments![index].StorageKey, outcome.StorageKey),
+                update.Set(d => d.Attachments![index].Kind, outcome.Kind),
+                update.Set(d => d.Attachments![index].ContentType, outcome.ContentType),
+                update.Set(d => d.Attachments![index].SizeBytes, outcome.SizeBytes),
+                update.Set(d => d.Attachments![index].SourceUrl, null)),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
 
     public async Task<MessageDocument> InsertOrGetAsync(MessageDocument document, CancellationToken cancellationToken = default)
     {

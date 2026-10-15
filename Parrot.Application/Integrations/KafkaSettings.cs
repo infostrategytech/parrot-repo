@@ -16,6 +16,15 @@ public class KafkaSettings
     /// <summary>Where the message worker puts inbound messages it can never process, with the reason in a header.</summary>
     public string InboundDeadLetterTopic { get; set; } = "messages.inbound.dlq";
 
+    /// <summary>Where the message worker queues one job per customer file to copy into private storage, keyed by message.</summary>
+    public string MediaTopic { get; set; } = "messages.media";
+
+    /// <summary>Media jobs that can never succeed (the message is gone, the file's position is wrong), with the reason in a header.</summary>
+    public string MediaDeadLetterTopic { get; set; } = "messages.media.dlq";
+
+    /// <summary>The media workers' consumer group. Every worker instance shares it, so the jobs are split between them.</summary>
+    public string MediaConsumerGroupId { get; set; } = "media-worker";
+
     /// <summary>The message worker's consumer group on the inbound topic.</summary>
     public string ProcessorConsumerGroupId { get; set; } = "message-processor";
 

@@ -103,6 +103,8 @@ services:
         create messages.inbound 24
         create messages.inbound.dlq 3
         create messages.persisted 24
+        create messages.media 24
+        create messages.media.dlq 3
         create agent.events 6
         create catalog.events 3
     restart: "no"
@@ -308,6 +310,9 @@ services:
       Storage__ServiceUrl: ${STORAGE_SERVICE_URL-http://minio:9000}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
+      # true: store a message at once with its files loading and copy them from the messages.media topic.
+      # Leave false until the inbox refreshes a thread when a file finishes.
+      Storage__DeferInboundMedia: ${DEFER_INBOUND_MEDIA:-false}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     secrets:

@@ -44,6 +44,9 @@ public class InboundMessageProcessorTests
             Documents.Add(document);
             return Task.FromResult(document);
         }
+
+        public Task<bool> CompleteMediaAsync(string messageId, int index, IncomingMedia outcome, CancellationToken cancellationToken = default) =>
+            Task.FromResult(MediaTestStore.Complete(Documents.FirstOrDefault(d => d.MessageId == messageId), index, outcome));
     }
 
     private sealed class FakeSequence : IConversationSequence
@@ -138,15 +141,34 @@ public class InboundMessageProcessorTests
             Saved++;
             return Task.FromResult<IReadOnlyList<IncomingMedia>>([.. message.Media!.Select(m => m with { StorageKey = "customer-media/user-1/copy-0.jpg", SizeBytes = 3 })]);
         }
+
+        public Task<IncomingMedia> SaveFileAsync(IncomingMessage message, int index, CancellationToken cancellationToken)
+        {
+            Saved++;
+            return Task.FromResult(message.Media![index] with { StorageKey = "customer-media/user-1/copy-0.jpg", SizeBytes = 3 });
+        }
+    }
+
+    private sealed class FakeJobs : IMediaJobPublisher
+    {
+        public List<MediaJob> Published { get; } = new();
+        public int FailuresLeft { get; set; }
+
+        public Task PublishAsync(MediaJob job, CancellationToken cancellationToken = default)
+        {
+            if (FailuresLeft-- > 0) throw new IOException("Kafka is down");
+            Published.Add(job);
+            return Task.CompletedTask;
+        }
     }
 
     private InboundMessageProcessor Processor(
         IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null,
-        IInboundMediaStore? media = null) => new(
+        IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
-        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media);
+        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia);
 
     private const string Psid = "6215837091842310";
 
@@ -223,6 +245,56 @@ public class InboundMessageProcessorTests
         Assert.Equal("media-1", saved.ProviderMediaId);
         Assert.Equal(1, media.Saved);
         Assert.All(_publisher.Published, p => Assert.True(Assert.Single(p.Data.Attachments!).Available));
+    }
+
+    [Fact]
+    public async Task WhenDeferredAPictureIsStoredPendingWithoutBeingDownloaded_AndOneJobIsQueuedForIt()
+    {
+        FakeMedia media = new();
+        FakeJobs jobs = new();
+
+        await Processor(media: media, jobs: jobs, deferMedia: true).ProcessAsync(Inbound("whatsapp:wamid.IMG", ImageBody), CancellationToken.None);
+
+        MessageAttachment stored = Assert.Single(Assert.Single(_store.Documents).Attachments!);
+        Assert.Equal(MediaStatus.Pending, stored.Status);
+        Assert.Null(stored.StorageKey);
+        Assert.Equal("media-1", stored.ProviderMediaId);
+        Assert.Equal(0, media.Saved);
+        MediaJob job = Assert.Single(jobs.Published);
+        Assert.Equal("whatsapp:wamid.IMG", job.MessageId);
+        Assert.Equal(0, job.Index);
+        Assert.Equal("487b7279745d4c41675818ffee460c54", job.CorrelationId);
+        StoredAttachment announced = Assert.Single(Assert.Single(_publisher.Published).Data.Attachments!);
+        Assert.Equal(MediaStatus.Pending, announced.Status);
+        Assert.False(announced.Available);
+    }
+
+    [Fact]
+    public async Task WhenDeferredAFailedJobPublishIsRetriedAndTheReplayQueuesTheFileAgain_WithoutStoringTwice()
+    {
+        FakeJobs jobs = new() { FailuresLeft = 1 };
+        InboundMessage inbound = Inbound("whatsapp:wamid.IMG", ImageBody);
+
+        await Assert.ThrowsAsync<IOException>(() => Processor(jobs: jobs, deferMedia: true).ProcessAsync(inbound, CancellationToken.None));
+        Assert.Empty(_publisher.Published);
+
+        await Processor(jobs: jobs, deferMedia: true).ProcessAsync(inbound, CancellationToken.None);
+
+        Assert.Single(_store.Documents);
+        Assert.Single(jobs.Published);
+        Assert.Single(_publisher.Published);
+    }
+
+    [Fact]
+    public async Task WithoutADeferredSettingTheFilesAreStillCopiedBeforeTheMessageIsStoredAndNoJobIsQueued()
+    {
+        FakeMedia media = new();
+        FakeJobs jobs = new();
+
+        await Processor(media: media, jobs: jobs).ProcessAsync(Inbound("whatsapp:wamid.IMG", ImageBody), CancellationToken.None);
+
+        Assert.Equal(1, media.Saved);
+        Assert.Empty(jobs.Published);
     }
 
     [Fact]

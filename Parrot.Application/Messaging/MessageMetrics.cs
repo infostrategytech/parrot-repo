@@ -66,6 +66,16 @@ public static class MessageMetrics
     public static readonly Histogram<double> ProcessingDuration = Meter.CreateHistogram<double>(
         "message_processing_duration_seconds", description: "Time spent in each processing stage.", advice: Fast);
 
+    // Customer files copied to private storage by the media worker. outcome: ready, failed, too_large, skipped.
+    public static readonly Counter<long> MediaProcessed = Meter.CreateCounter<long>(
+        "media_jobs_total", description: "Media jobs finished, by outcome and reason.");
+
+    public static readonly Histogram<double> MediaDuration = Meter.CreateHistogram<double>(
+        "media_job_duration_seconds", description: "Time to copy one customer file, retries included.", advice: Fast);
+
+    public static readonly Histogram<double> MediaQueueWait = Meter.CreateHistogram<double>(
+        "media_job_queue_wait_seconds", description: "Time from a media job being queued to a worker picking it up.", advice: Fast);
+
     // Stage 5: replies to the Meta API. status: accepted, failed, unknown.
     public static readonly Counter<long> Sent = Meter.CreateCounter<long>(
         "messages_sent_total", description: "Replies sent to the Meta API, by status and meta_error_code.");

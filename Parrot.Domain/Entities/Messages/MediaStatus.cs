@@ -25,3 +25,24 @@ public static class MediaStatus
     public static string Of(MessageAttachment attachment) =>
         attachment.Status ?? (attachment.StorageKey is not null || attachment.Kind == "link" ? Ready : Failed);
 }
+
+/// <summary>The reason codes kept in <see cref="MessageAttachment.FailureReason"/>.</summary>
+public static class MediaFailure
+{
+    /// <summary>The platform said no (expired, not allowed). Asking again will not change it.</summary>
+    public const string Refused = "refused";
+
+    /// <summary>The platform was busy or failing (5xx, 429). A later try may work.</summary>
+    public const string Unavailable = "unavailable";
+
+    public const string Timeout = "timeout";
+
+    /// <summary>The file arrived with no bytes.</summary>
+    public const string Empty = "empty";
+
+    /// <summary>Anything else: no token, no address, storage down.</summary>
+    public const string Error = "error";
+
+    /// <summary>Whether another try could change the outcome.</summary>
+    public static bool IsWorthRetrying(string? reason) => reason is Unavailable or Timeout or Error;
+}

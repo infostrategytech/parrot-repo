@@ -12,4 +12,11 @@ public interface IInboundMediaStore
 {
     /// <summary>The message's media with ContentType, SizeBytes, FileName and StorageKey filled in for every file that was saved.</summary>
     Task<IReadOnlyList<IncomingMedia>> SaveAsync(IncomingMessage message, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Saves the file at <paramref name="index"/> of the message's media, with the same guarantees: it comes back
+    /// ready, failed (with a reason) or too large, and never throws other than for cancellation. The storage key
+    /// depends only on the message and the index, so saving it again overwrites the same object.
+    /// </summary>
+    Task<IncomingMedia> SaveFileAsync(IncomingMessage message, int index, CancellationToken cancellationToken);
 }

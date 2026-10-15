@@ -79,6 +79,8 @@ services:
         create messages.inbound 24
         create messages.inbound.dlq 3
         create messages.persisted 24
+        create messages.media 24
+        create messages.media.dlq 3
         create agent.events 6
     restart: "no"
     networks: [parrot]

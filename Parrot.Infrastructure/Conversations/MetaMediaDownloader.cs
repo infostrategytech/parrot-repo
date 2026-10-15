@@ -45,26 +45,31 @@ public sealed class MetaMediaDownloader(
         List<IncomingMedia> saved = [];
         for (int index = 0; index < (message.Media?.Count ?? 0); index++)
         {
-            IncomingMedia media = message.Media![index];
-            if (media.Kind == MediaKinds.Link) { saved.Add(media); continue; }
-
-            using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(Budget);
-            try
-            {
-                saved.Add(await SaveOneAsync(message, media, index, budget.Token) ?? media);
-            }
-            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                // Never the address: it is signed and names the customer's file. The reason is what tells a missing
-                // bucket or credential from a Meta refusal, so it is kept.
-                logger.LogWarning("media.download_failed Kind={Kind} Platform={Platform} Error={Error} Reason={Reason}",
-                    media.Kind, message.Platform, ex.GetType().Name, ex.Message);
-                saved.Add(Failed(media, ex is OperationCanceledException ? "timeout" : "error"));
-            }
+            saved.Add(await SaveFileAsync(message, index, cancellationToken));
         }
 
         return saved;
+    }
+
+    public async Task<IncomingMedia> SaveFileAsync(IncomingMessage message, int index, CancellationToken cancellationToken)
+    {
+        IncomingMedia media = message.Media![index];
+        if (media.Kind == MediaKinds.Link) return media;
+
+        using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(Budget);
+        try
+        {
+            return await SaveOneAsync(message, media, index, budget.Token) ?? media;
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Never the address: it is signed and names the customer's file. The reason is what tells a missing
+            // bucket or credential from a Meta refusal, so it is kept.
+            logger.LogWarning("media.download_failed Kind={Kind} Platform={Platform} Error={Error} Reason={Reason}",
+                media.Kind, message.Platform, ex.GetType().Name, ex.Message);
+            return Failed(media, ex is OperationCanceledException ? MediaFailure.Timeout : MediaFailure.Error);
+        }
     }
 
     private async Task<IncomingMedia?> SaveOneAsync(IncomingMessage message, IncomingMedia media, int index, CancellationToken ct)
@@ -73,7 +78,8 @@ public sealed class MetaMediaDownloader(
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning("media.refused Kind={Kind} Platform={Platform} Status={Status}", media.Kind, message.Platform, (int)response.StatusCode);
-            return Failed(media, "refused");
+            // A busy or failing platform may answer next time; a refusal (expired, not allowed) will not change.
+            return Failed(media, (int)response.StatusCode is >= 500 or 429 ? MediaFailure.Unavailable : MediaFailure.Refused);
         }
 
         long limit = storageSettings.Value.MaxInboundMediaBytes;
@@ -92,7 +98,7 @@ public sealed class MetaMediaDownloader(
                 bytes.Write(chunk, 0, read);
             }
         }
-        if (bytes.Length == 0) return Failed(media, "empty");
+        if (bytes.Length == 0) return Failed(media, MediaFailure.Empty);
 
         string contentType = media.ContentType
             ?? response.Content.Headers.ContentType?.MediaType
