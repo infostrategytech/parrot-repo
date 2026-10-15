@@ -76,6 +76,16 @@ public static class MessageMetrics
     public static readonly Histogram<double> MediaQueueWait = Meter.CreateHistogram<double>(
         "media_job_queue_wait_seconds", description: "Time from a media job being queued to a worker picking it up.", advice: Fast);
 
+    // Replies the send worker hands to a channel. outcome: accepted, failed, unknown, skipped.
+    public static readonly Counter<long> OutboundProcessed = Meter.CreateCounter<long>(
+        "outbound_jobs_total", description: "Outbound send jobs finished, by outcome and reason.");
+
+    public static readonly Histogram<double> OutboundDuration = Meter.CreateHistogram<double>(
+        "outbound_job_duration_seconds", description: "Time to hand one reply to its channel, retries included.", advice: Fast);
+
+    public static readonly Histogram<double> OutboundQueueWait = Meter.CreateHistogram<double>(
+        "outbound_job_queue_wait_seconds", description: "Time from a reply being queued to the send worker picking it up.", advice: Fast);
+
     // Stage 5: replies to the Meta API. status: accepted, failed, unknown.
     public static readonly Counter<long> Sent = Meter.CreateCounter<long>(
         "messages_sent_total", description: "Replies sent to the Meta API, by status and meta_error_code.");

@@ -36,6 +36,10 @@ public class MediaJobProcessorTests
             if (applied) Completed++;
             return Task.FromResult(applied);
         }
+
+        public Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     // Answers with each outcome in turn, then repeats the last.

@@ -135,6 +135,12 @@ public interface IConversationStore
     Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct);
     Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct);
     Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct);
+
+    /// <summary>
+    /// Marks a reply failed only while it is still pending: false when the send worker has already taken it, in
+    /// which case its outcome is the worker's to record and must not be overwritten.
+    /// </summary>
+    Task<bool> FailPendingAsync(string id, CancellationToken ct);
 }
 
 // When a reply was sent, found by the wamid Meta gave it: for delivery latency

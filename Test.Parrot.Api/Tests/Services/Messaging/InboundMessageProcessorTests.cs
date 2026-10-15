@@ -47,6 +47,10 @@ public class InboundMessageProcessorTests
 
         public Task<bool> CompleteMediaAsync(string messageId, int index, IncomingMedia outcome, CancellationToken cancellationToken = default) =>
             Task.FromResult(MediaTestStore.Complete(Documents.FirstOrDefault(d => d.MessageId == messageId), index, outcome));
+
+        public Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     private sealed class FakeSequence : IConversationSequence

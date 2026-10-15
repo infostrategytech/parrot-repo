@@ -34,6 +34,21 @@ public class KafkaSettings
     /// <summary>The media workers' consumer group. Every worker instance shares it, so the jobs are split between them.</summary>
     public string MediaConsumerGroupId { get; set; } = "media-worker";
 
+    /// <summary>Where the API queues a reply (today a picture or file) for the send worker, keyed by thread so one thread's replies keep their order.</summary>
+    public string OutboundTopic { get; set; } = "messages.outbound";
+
+    /// <summary>Outbound jobs that can never succeed (the message is gone, it is not a file), with the reason in a header.</summary>
+    public string OutboundDeadLetterTopic { get; set; } = "messages.outbound.dlq";
+
+    /// <summary>The send workers' consumer group. Every worker instance shares it, so the jobs are split between them.</summary>
+    public string OutboundConsumerGroupId { get; set; } = "outbound-worker";
+
+    /// <summary>Where the send worker announces that a queued reply has been sent or has failed, for the open inbox to refresh.</summary>
+    public string OutboundSettledTopic { get; set; } = "messages.outbound.settled";
+
+    /// <summary>The API's group on the outbound settled topic. Each API instance appends its own name (see <see cref="MediaSettledConsumerGroupId"/>).</summary>
+    public string OutboundSettledConsumerGroupId { get; set; } = "realtime-gateway-outbound";
+
     /// <summary>The message worker's consumer group on the inbound topic.</summary>
     public string ProcessorConsumerGroupId { get; set; } = "message-processor";
 

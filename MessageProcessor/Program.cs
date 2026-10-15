@@ -4,6 +4,7 @@ using MongoDB.Driver;
 using MessageProcessor;
 using MessageProcessor.Monitoring;
 using OpenTelemetry.Metrics;
+using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
@@ -85,8 +86,15 @@ builder.Services.AddSingleton<IMediaSettledPublisher, KafkaMediaSettledPublisher
 builder.Services.AddSingleton(sp => ActivatorUtilities.CreateInstance<InboundMessageProcessor>(
     sp, sp.GetRequiredService<IOptions<StorageSettings>>().Value.DeferInboundMedia));
 builder.Services.AddSingleton<MediaJobProcessor>(sp => ActivatorUtilities.CreateInstance<MediaJobProcessor>(sp));
+builder.Services.AddSingleton<IOutboundSettledPublisher, KafkaOutboundSettledPublisher>();
+builder.Services.AddSingleton<IDeliveryReceipts, MongoDeliveryReceipts>();
+builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
+builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
+builder.Services.AddSingleton<IOutboundFileDispatcher>(sp => ActivatorUtilities.CreateInstance<OutboundFileDispatcher>(sp));
+builder.Services.AddSingleton<OutboundFileProcessor>(sp => ActivatorUtilities.CreateInstance<OutboundFileProcessor>(sp));
 builder.Services.AddHostedService<Worker>();
 builder.Services.AddHostedService<MediaWorker>();
+builder.Services.AddHostedService<OutboundWorker>();
 
 // The Parrot.Messaging meter on http://<host>:<Monitoring:MetricsPort>/metrics for
 // Prometheus. The worker has no web server, so the exporter brings its own

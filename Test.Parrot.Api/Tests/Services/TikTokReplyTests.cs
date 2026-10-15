@@ -365,6 +365,7 @@ public class TikTokReplyTests
             Messages[id].ProviderMessageId = providerId;
             return Task.CompletedTask;
         }
+        public Task<bool> FailPendingAsync(string id, CancellationToken ct) => throw new NotSupportedException();
         public Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct) => Task.FromResult(LastIncoming);
         public Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct) => throw new NotImplementedException();
         public Task<IReadOnlyList<ConversationSummary>> FindAsync(string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct) => throw new NotImplementedException();

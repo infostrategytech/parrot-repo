@@ -479,6 +479,10 @@ builder.Services.AddSingleton<IReceiptNotifier, Parrot.Api.Realtime.HubReceiptNo
 builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
 builder.Services.AddSingleton<Parrot.Api.Realtime.MediaSettledRouter>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.MediaSettledDeliveryService>();
+builder.Services.AddSingleton<Parrot.Api.Realtime.OutboundSettledRouter>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.OutboundSettledDeliveryService>();
+builder.Services.Configure<Parrot.Application.Conversations.OutboundSettings>(builder.Configuration.GetSection(Parrot.Application.Conversations.OutboundSettings.SectionName));
+builder.Services.AddSingleton<IOutboundJobPublisher, Parrot.Infrastructure.MessageBus.KafkaOutboundJobPublisher>();
 
 // What the orchestrator's agents did, kept per event in MongoDB and pushed
 // to the owner's connections as it arrives; the AI Operations screens read it.

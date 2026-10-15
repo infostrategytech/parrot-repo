@@ -39,6 +39,24 @@ public sealed class MongoStoredMessageStore(IMongoClient client, IOptions<MongoD
         return result.ModifiedCount > 0;
     }
 
+    public async Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default)
+    {
+        UpdateResult result = await _messages.UpdateOneAsync(
+            d => d.MessageId == messageId && d.Outgoing && d.SendStatus == "pending",
+            Builders<MessageDocument>.Update.Set(d => d.SendStatus, "sending").Set(d => d.SendClaimedAt, claimedAt),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
+
+    public async Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default)
+    {
+        UpdateResult result = await _messages.UpdateOneAsync(
+            d => d.MessageId == messageId && d.SendStatus == "sending",
+            Builders<MessageDocument>.Update.Set(d => d.SendStatus, status).Set(d => d.ProviderMessageId, providerId),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
+
     public async Task<MessageDocument> InsertOrGetAsync(MessageDocument document, CancellationToken cancellationToken = default)
     {
         try

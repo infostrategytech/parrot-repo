@@ -106,6 +106,9 @@ services:
         create messages.media 24
         create messages.media.dlq 3
         create messages.media.settled 6
+        create messages.outbound 24
+        create messages.outbound.dlq 3
+        create messages.outbound.settled 6
         create agent.events 6
         create catalog.events 3
     restart: "no"
@@ -311,6 +314,9 @@ services:
       Storage__ServiceUrl: ${STORAGE_SERVICE_URL-http://minio:9000}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
+      # true: a picture or file an agent sends is queued for the message-processor's send worker and the request
+      # answers "pending" at once. Leave false until that worker runs in this deployment.
+      Outbound__DeferFileSends: ${DEFER_FILE_SENDS:-false}
       # true: store a message at once with its files loading and copy them from the messages.media topic.
       # Leave false until the inbox refreshes a thread when a file finishes.
       Storage__DeferInboundMedia: ${DEFER_INBOUND_MEDIA:-false}
