@@ -40,6 +40,11 @@ public class MediaJobProcessorTests
         public Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
 
         public Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingMediaAsync(DateTime storedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingSendsAsync(DateTime storedBefore, DateTime claimedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<bool> FailPendingSendAsync(string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     // Answers with each outcome in turn, then repeats the last.
@@ -72,19 +77,22 @@ public class MediaJobProcessorTests
 
     private static MediaJob Job(int index = 0) => new() { MessageId = "whatsapp:wamid.IMG", Index = index, CorrelationId = "c", EnqueuedAt = DateTime.UtcNow };
 
-    private sealed class Announcements : IMediaSettledPublisher
+    private sealed class Announcements : IMessageSettledPublisher
     {
-        public List<MediaSettled> Published { get; } = new();
+        private readonly List<MessageSettled> _published = new();
 
-        public Task PublishAsync(MediaSettled settled, CancellationToken cancellationToken = default)
+        // Jobs run at once in the storm tests, so adding is locked.
+        public List<MessageSettled> Published { get { lock (_published) return [.. _published]; } }
+
+        public Task PublishAsync(MessageSettled settled, CancellationToken cancellationToken = default)
         {
-            Published.Add(settled);
+            lock (_published) _published.Add(settled);
             return Task.CompletedTask;
         }
     }
 
     private static MediaJobProcessor Processor(IStoredMessageStore store, IInboundMediaStore media, List<TimeSpan>? waits = null, Announcements? announce = null) =>
-        new(store, media, NullLogger<MediaJobProcessor>.Instance, announce, (wait, _) => { waits?.Add(wait); return Task.CompletedTask; });
+        new(store, media, NullLogger<MediaJobProcessor>.Instance, announce, (wait, _) => { waits?.Add(wait); return Task.CompletedTask; }, jitter: () => 0.5);
 
     [Fact]
     public async Task A_settled_file_is_announced_once_to_its_owner_with_the_customer_and_outcome()
@@ -95,7 +103,8 @@ public class MediaJobProcessorTests
 
         await Processor(new Store(document), new Media(Ready), announce: announce).ProcessAsync(Job(), default);
 
-        MediaSettled settled = Assert.Single(announce.Published);
+        MessageSettled settled = Assert.Single(announce.Published);
+        Assert.Equal(SettledKinds.Media, settled.Kind);
         Assert.Equal("whatsapp:wamid.IMG", settled.MessageId);
         Assert.Equal("user-1", settled.OwnerUserId);
         Assert.Equal(document.ConnectionId, settled.ConnectionId);
@@ -196,18 +205,39 @@ public class MediaJobProcessorTests
     }
 
     [Fact]
-    public async Task A_platform_that_keeps_failing_ends_with_the_file_marked_failed_after_three_tries()
+    public async Task A_platform_that_keeps_failing_ends_with_the_file_marked_failed_after_three_tries_and_the_job_dead_lettered()
     {
         MessageDocument document = Document(Pending());
         Media media = new(Failed(MediaFailure.Unavailable));
 
-        await Processor(new Store(document), media).ProcessAsync(Job(), default);
+        UnprocessableMessageException ex = await Assert.ThrowsAsync<UnprocessableMessageException>(
+            () => Processor(new Store(document), media).ProcessAsync(Job(), default));
 
+        Assert.Equal("media_retries_exhausted:unavailable", ex.Reason);
         Assert.Equal(3, media.Calls.Count);
         MessageAttachment a = document.Attachments![0];
         Assert.Equal(MediaStatus.Failed, a.Status);
         Assert.Equal(MediaFailure.Unavailable, a.FailureReason);
     }
+
+    [Fact]
+    public async Task A_failed_file_is_announced_before_the_exhausted_job_is_dead_lettered_so_the_inbox_stops_saying_loading()
+    {
+        Announcements announce = new();
+
+        await Assert.ThrowsAsync<UnprocessableMessageException>(
+            () => Processor(new Store(Document(Pending())), new Media(Failed(MediaFailure.Timeout)), announce: announce).ProcessAsync(Job(), default));
+
+        Assert.Equal(MediaStatus.Failed, Assert.Single(announce.Published).Status);
+    }
+
+    [Theory]
+    [InlineData(0.0, 1500)]
+    [InlineData(0.5, 2000)]
+    [InlineData(1.0, 2500)]
+    [InlineData(7.0, 2500)]
+    public void A_retry_wait_is_spread_by_up_to_a_quarter_either_way(double sample, int expectedMs) =>
+        Assert.Equal(expectedMs, (int)Backoff.Jitter(TimeSpan.FromSeconds(2), sample).TotalMilliseconds);
 
     [Fact]
     public async Task A_refusal_is_recorded_at_once_without_asking_again()
@@ -250,5 +280,98 @@ public class MediaJobProcessorTests
         UnprocessableMessageException ex = await Assert.ThrowsAsync<UnprocessableMessageException>(
             () => Processor(new Store(Document(Pending())), new Media(Ready)).ProcessAsync(Job(index), default));
         Assert.Equal("media_attachment_not_found", ex.Reason);
+    }
+
+    // ---- Storm: many files, every job delivered several times at once, with failures injected ----
+
+    private sealed class Shelf(IEnumerable<MessageDocument> documents) : IStoredMessageStore
+    {
+        private readonly Dictionary<string, MessageDocument> _all = documents.ToDictionary(d => d.MessageId);
+        private readonly object _gate = new();
+        public int Applied;
+
+        public MessageDocument Get(string id) { lock (_gate) return _all[id]; }
+
+        public Task<MessageDocument?> FindAsync(string messageId, CancellationToken cancellationToken = default)
+        {
+            lock (_gate) return Task.FromResult<MessageDocument?>(_all.GetValueOrDefault(messageId));
+        }
+
+        public Task<bool> CompleteMediaAsync(string messageId, int index, IncomingMedia outcome, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                bool applied = MediaTestStore.Complete(_all[messageId], index, outcome);
+                if (applied) Interlocked.Increment(ref Applied);
+                return Task.FromResult(applied);
+            }
+        }
+
+        public Task<MessageDocument> InsertOrGetAsync(MessageDocument d, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingMediaAsync(DateTime storedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingSendsAsync(DateTime storedBefore, DateTime claimedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> FailPendingSendAsync(string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    // By file number: 0 ready at once, 1 busy for the first two calls then ready (so any job's three tries include a good one), 2 always busy, 3 refused, 4 too large.
+    private sealed class Flaky : IInboundMediaStore
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _calls = new();
+
+        public Task<IReadOnlyList<IncomingMedia>> SaveAsync(IncomingMessage message, CancellationToken cancellationToken) => throw new NotSupportedException();
+
+        public async Task<IncomingMedia> SaveFileAsync(IncomingMessage message, int index, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            int n = int.Parse(message.MessageId.Split('.')[^1]);
+            int call = _calls.AddOrUpdate(message.MessageId, 1, (_, c) => c + 1);
+            return (n % 5) switch
+            {
+                0 => Ready,
+                1 => call >= 3 ? Ready : Failed(MediaFailure.Unavailable),
+                2 => Failed(MediaFailure.Unavailable),
+                3 => Failed(MediaFailure.Refused),
+                _ => new IncomingMedia { Kind = "image", Status = MediaStatus.TooLarge },
+            };
+        }
+    }
+
+    [Fact]
+    public async Task Of_150_files_each_delivered_as_three_simultaneous_jobs_with_failures_every_file_is_settled_once_and_announced_once()
+    {
+        const int files = 150, duplicates = 3;
+        Shelf shelf = new(Enumerable.Range(0, files).Select(n =>
+        {
+            MessageDocument d = Document(Pending());
+            d.MessageId = $"whatsapp:wamid.{n}";
+            return d;
+        }));
+        Announcements announce = new();
+        MediaJobProcessor processor = Processor(shelf, new Flaky(), announce: announce);
+        int deadLettered = 0;
+
+        await Task.WhenAll(Enumerable.Range(0, files * duplicates).Select(async k =>
+        {
+            MediaJob job = new() { MessageId = $"whatsapp:wamid.{k % files}", Index = 0, CorrelationId = "c", EnqueuedAt = DateTime.UtcNow };
+            try { await processor.ProcessAsync(job, default); }
+            catch (UnprocessableMessageException) { Interlocked.Increment(ref deadLettered); }
+        }));
+
+        for (int n = 0; n < files; n++)
+        {
+            MessageAttachment a = shelf.Get($"whatsapp:wamid.{n}").Attachments![0];
+            Assert.NotEqual(MediaStatus.Pending, a.Status);
+            Assert.Equal((n % 5) switch { 0 or 1 => MediaStatus.Ready, 2 or 3 => MediaStatus.Failed, _ => MediaStatus.TooLarge }, a.Status);
+        }
+
+        // Settled exactly once each, and announced exactly once each, however many jobs raced.
+        Assert.Equal(files, shelf.Applied);
+        Assert.Equal(files, announce.Published.Count);
+        Assert.Equal(files, announce.Published.Select(p => p.MessageId).Distinct().Count());
+
+        // Only the files that kept failing for a reason that can pass were dead-lettered (the winning job of each).
+        Assert.Equal(files / 5, deadLettered);
     }
 }

@@ -28,6 +28,21 @@ public interface IStoredMessageStore
     /// </summary>
     Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Messages stored before <paramref name="storedBefore"/> with at least one file still pending, oldest first, at most
+    /// <paramref name="limit"/>. For the sweeper that finds media jobs that were lost or are stuck.
+    /// </summary>
+    Task<IReadOnlyList<StaleMessage>> FindStalePendingMediaAsync(DateTime storedBefore, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Replies with a file stored before <paramref name="storedBefore"/> that are still "pending", and replies "sending"
+    /// since before <paramref name="claimedBefore"/> (a worker that died mid-send), oldest first, at most <paramref name="limit"/>.
+    /// </summary>
+    Task<IReadOnlyList<StaleMessage>> FindStalePendingSendsAsync(DateTime storedBefore, DateTime claimedBefore, int limit, CancellationToken cancellationToken = default);
+
+    /// <summary>Marks a reply failed only while it is still "pending"; false when a worker has taken it (its outcome is then the worker's).</summary>
+    Task<bool> FailPendingSendAsync(string messageId, CancellationToken cancellationToken = default);
+
     /// <summary>Records how a claimed send ended (accepted, failed or unknown). Applies only while it is "sending"; false when it did not.</summary>
     Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default);
 }
@@ -37,3 +52,8 @@ public interface IMessagePersistedPublisher
 {
     Task PublishAsync(MessagePersisted persisted, CancellationToken cancellationToken = default);
 }
+
+/// <summary>A stored message the sweeper found waiting too long, with what it needs to queue the work again.</summary>
+/// <param name="PendingMedia">The positions of the files still pending (empty for a reply).</param>
+public sealed record StaleMessage(
+    string MessageId, string? OwnerUserId, Guid? ConnectionId, string Recipient, DateTime StoredAt, string SendStatus, IReadOnlyList<int> PendingMedia);

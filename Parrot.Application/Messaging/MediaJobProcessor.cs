@@ -21,15 +21,30 @@ public sealed class MediaJobProcessor(
     IStoredMessageStore store,
     IInboundMediaStore mediaStore,
     ILogger<MediaJobProcessor> logger,
-    IMediaSettledPublisher? settled = null,
-    Func<TimeSpan, CancellationToken, Task>? delay = null)
+    IMessageSettledPublisher? settled = null,
+    Func<TimeSpan, CancellationToken, Task>? delay = null,
+    Func<double>? jitter = null)
 {
     /// <summary>The waits before the second and third try. Short: WhatsApp's links last only minutes.</summary>
     public static readonly TimeSpan[] RetryDelays = [TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(10)];
 
     private readonly Func<TimeSpan, CancellationToken, Task> _delay = delay ?? Task.Delay;
+    private readonly Func<double> _jitter = jitter ?? Random.Shared.NextDouble;
 
     public async Task ProcessAsync(MediaJob job, CancellationToken cancellationToken)
+    {
+        MessageMetrics.MediaActive.Add(1);
+        try
+        {
+            await RunAsync(job, cancellationToken);
+        }
+        finally
+        {
+            MessageMetrics.MediaActive.Add(-1);
+        }
+    }
+
+    private async Task RunAsync(MediaJob job, CancellationToken cancellationToken)
     {
         long started = Stopwatch.GetTimestamp();
         using IDisposable? scope = logger.BeginScope(
@@ -64,7 +79,7 @@ public sealed class MediaJobProcessor(
             if (outcome.Status != MediaStatus.Failed || !MediaFailure.IsWorthRetrying(outcome.FailureReason) || attempt >= RetryDelays.Length) break;
 
             logger.LogInformation("media.retry Attempt={Attempt} Reason={Reason}", attempt + 1, outcome.FailureReason);
-            await _delay(RetryDelays[attempt], cancellationToken);
+            await _delay(Backoff.Jitter(RetryDelays[attempt], _jitter()), cancellationToken);
         }
 
         // A job that raced another to the same file finds it already settled: the first outcome stands.
@@ -75,10 +90,10 @@ public sealed class MediaJobProcessor(
         if (applied && settled is not null && document.OwnerUserId is { Length: > 0 } owner && document.ConnectionId is { } connection)
         {
             await settled.PublishAsync(
-                new MediaSettled
+                new MessageSettled
                 {
-                    MessageId = document.MessageId, OwnerUserId = owner, ConnectionId = connection, Customer = document.From,
-                    Status = status, CorrelationId = job.CorrelationId,
+                    Kind = SettledKinds.Media, MessageId = document.MessageId, OwnerUserId = owner, ConnectionId = connection,
+                    Customer = document.From, Status = status, CorrelationId = job.CorrelationId,
                 },
                 cancellationToken);
         }
@@ -86,6 +101,12 @@ public sealed class MediaJobProcessor(
         Finished(applied ? status : "skipped", outcome.FailureReason ?? "none", started);
         logger.LogInformation("media.finished Status={Status} Reason={Reason} Applied={Applied} DurationMs={DurationMs}",
             status, outcome.FailureReason ?? "none", applied, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);
+
+        // Tried every time and still failing for a reason that can pass (the platform busy or slow, storage down): the
+        // file is recorded failed above, and the job goes to the dead-letter topic for someone to look at. A refusal or
+        // an empty file is a permanent outcome, not an incident, and is not dead-lettered.
+        if (applied && status == MediaStatus.Failed && MediaFailure.IsWorthRetrying(outcome.FailureReason))
+            throw new UnprocessableMessageException("media_retries_exhausted:" + outcome.FailureReason);
     }
 
     // Only the file being saved is looked at; the others are kept in position so its index and key stay the same.

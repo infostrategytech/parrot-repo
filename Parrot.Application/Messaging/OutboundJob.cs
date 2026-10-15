@@ -33,33 +33,6 @@ public interface IOutboundJobPublisher
     Task PublishAsync(OutboundJob job, CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-/// Published once the send worker has settled a queued reply, so the owner's open inbox shows how it went. A signal:
-/// the inbox re-reads the thread. Best effort, like every live push.
-/// </summary>
-public sealed record OutboundSettled
-{
-    public int SchemaVersion { get; init; } = 1;
-
-    required public string MessageId { get; init; }
-
-    required public string OwnerUserId { get; init; }
-
-    required public Guid ConnectionId { get; init; }
-
-    /// <summary>The customer the reply is to, as the inbox groups threads.</summary>
-    required public string Customer { get; init; }
-
-    /// <summary>accepted, failed or unknown.</summary>
-    required public string Status { get; init; }
-}
-
-/// <summary>Announces an <see cref="OutboundSettled"/>. Never throws other than for cancellation: the reply is already settled.</summary>
-public interface IOutboundSettledPublisher
-{
-    Task PublishAsync(OutboundSettled settled, CancellationToken cancellationToken = default);
-}
-
 /// <summary>What handing a stored reply to its channel came to.</summary>
 /// <param name="ProviderId">The channel's id for the message when it accepted it.</param>
 /// <param name="RejectedCode">The channel's error code, or one of ours (file, connection, token, channel), when nothing was sent.</param>

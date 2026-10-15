@@ -20,9 +20,10 @@ public sealed class OutboundFileProcessor(
     IStoredMessageStore store,
     IOutboundFileDispatcher dispatcher,
     ILogger<OutboundFileProcessor> logger,
-    IOutboundSettledPublisher? settled = null,
+    IMessageSettledPublisher? settled = null,
     IDeliveryReceipts? receipts = null,
-    Func<TimeSpan, CancellationToken, Task>? delay = null)
+    Func<TimeSpan, CancellationToken, Task>? delay = null,
+    Func<double>? jitter = null)
 {
     /// <summary>How long one try may take: the upload to the channel, then the send.</summary>
     public static readonly TimeSpan AttemptBudget = TimeSpan.FromSeconds(60);
@@ -34,8 +35,22 @@ public sealed class OutboundFileProcessor(
     public static readonly TimeSpan Lease = TimeSpan.FromMinutes(5);
 
     private readonly Func<TimeSpan, CancellationToken, Task> _delay = delay ?? Task.Delay;
+    private readonly Func<double> _jitter = jitter ?? Random.Shared.NextDouble;
 
     public async Task ProcessAsync(OutboundJob job, CancellationToken cancellationToken)
+    {
+        MessageMetrics.OutboundActive.Add(1);
+        try
+        {
+            await RunAsync(job, cancellationToken);
+        }
+        finally
+        {
+            MessageMetrics.OutboundActive.Add(-1);
+        }
+    }
+
+    private async Task RunAsync(OutboundJob job, CancellationToken cancellationToken)
     {
         long started = Stopwatch.GetTimestamp();
         using IDisposable? scope = logger.BeginScope("MessageId={MessageId} CorrelationId={CorrelationId}", job.MessageId, job.CorrelationId);
@@ -104,7 +119,7 @@ public sealed class OutboundFileProcessor(
                 if (!result.IsSafeToRetry || attempt >= RetryDelays.Length) return ("failed", null, result.RejectedCode);
 
                 logger.LogInformation("outbound.retry Attempt={Attempt} Reason={Reason}", attempt + 1, result.RejectedCode);
-                await _delay(RetryDelays[attempt], stopping);
+                await _delay(Backoff.Jitter(RetryDelays[attempt], _jitter()), stopping);
             }
             catch (OperationCanceledException) when (stopping.IsCancellationRequested)
             {
@@ -138,7 +153,7 @@ public sealed class OutboundFileProcessor(
     {
         if (settled is null || reply.OwnerUserId is not { Length: > 0 } owner || reply.ConnectionId is not { } connection) return;
         await settled.PublishAsync(
-            new OutboundSettled { MessageId = reply.MessageId, OwnerUserId = owner, ConnectionId = connection, Customer = reply.From, Status = status },
+            new MessageSettled { Kind = SettledKinds.Send, MessageId = reply.MessageId, OwnerUserId = owner, ConnectionId = connection, Customer = reply.From, Status = status },
             cancellationToken);
     }
 

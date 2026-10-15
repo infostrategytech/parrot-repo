@@ -31,8 +31,11 @@ public sealed class OutboundFileDispatcher(
         if (file.StorageKey is null || reply.ConnectionId is not { } connectionId || reply.OwnerUserId is null)
             return new FileDispatchResult(null, "file");
 
-        // Held in memory: a file is at most 16 MB, and the channel's upload wants a body of known length.
-        using MemoryStream content = new();
+        // The channel's upload wants a body of known length, so the file is spooled to a temporary file (deleted when
+        // closed) rather than held in memory: with several sends at once, whole files in memory add up.
+        await using FileStream content = new(
+            Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None,
+            bufferSize: 81920, FileOptions.DeleteOnClose | FileOptions.Asynchronous);
         using (StoredObject? stored = await storage.GetAsync(file.StorageKey, cancellationToken))
         {
             if (stored is null) return new FileDispatchResult(null, "file");

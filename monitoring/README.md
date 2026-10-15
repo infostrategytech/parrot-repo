@@ -39,6 +39,12 @@ Everything is on one meter, `Parrot.Messaging` (`Parrot.Application/Messaging/Me
 | `message_delivery_latency_seconds` | histogram | `status` |
 | `message_end_to_end_seconds` | histogram | — |
 | `message_dead_letter_depth` | gauge | `queue` (dead letters not yet reviewed) |
+| `media_jobs_total` | counter | `outcome` (ready, failed, too_large, skipped), `reason` |
+| `media_jobs_active` / `outbound_jobs_active` | gauge | jobs being worked on now, per worker instance |
+| `media_job_duration_seconds` / `media_job_queue_wait_seconds` | histogram | time to copy one file; time from queued to picked up |
+| `outbound_jobs_total` | counter | `outcome` (accepted, failed, unknown, skipped), `reason` |
+| `outbound_job_duration_seconds` / `outbound_job_queue_wait_seconds` | histogram | as above, for sends |
+| `pending_sweeps_total` | counter | `kind` (media, send), `action` (requeued, expired): work the sweeper found waiting too long |
 
 ### Where this differs from the guide, and why
 
@@ -72,6 +78,10 @@ The exact answer is the reconciliation job, which is not built yet (see below).
 kafka-consumer-groups.sh --bootstrap-server <broker> --group message-processor-dlq-reviewed \
   --topic messages.inbound.dlq --reset-offsets --to-latest --execute
 ```
+
+The media and send workers have dead-letter topics of their own (`messages.media.dlq`, `messages.outbound.dlq`), reported as `message_dead_letter_depth{queue=...}` with the same review group; mark them reviewed the same way, with `--topic` set to theirs. A media dead letter is a file that kept failing for a reason that can pass (the platform busy, storage down) or a job for a message that is gone; its `dlq.reason` header says which. Replaying one is safe: a job for a file that is already settled is skipped.
+
+The media and send workers report their queue's `message_queue_depth` (the queue's lag) from their own instance, so graph it per `queue`. A rising `media_job_queue_wait_seconds`, or `message_queue_depth{queue="messages.media"}` that does not fall, is the signal to add media-worker replicas (up to the topic's 24 partitions); `media_jobs_active` near 8 per instance means each instance is saturated. A non-zero `pending_sweeps_total{action="requeued"}` means a job was lost or stuck and the sweeper recovered it; `{action="expired"}` means work was given up on.
 
 **While MessageProcessor is down**, `message_queue_depth` and `message_dead_letter_depth` have no data, because the processor reports them. "Messages unaccounted" is the alert that catches this case.
 

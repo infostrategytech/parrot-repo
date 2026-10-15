@@ -477,10 +477,8 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
 builder.Services.AddSingleton<IReceiptNotifier, Parrot.Api.Realtime.HubReceiptNotifier>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
-builder.Services.AddSingleton<Parrot.Api.Realtime.MediaSettledRouter>();
-builder.Services.AddHostedService<Parrot.Api.Realtime.MediaSettledDeliveryService>();
-builder.Services.AddSingleton<Parrot.Api.Realtime.OutboundSettledRouter>();
-builder.Services.AddHostedService<Parrot.Api.Realtime.OutboundSettledDeliveryService>();
+builder.Services.AddSingleton<Parrot.Api.Realtime.MessageSettledRouter>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.MessageSettledDeliveryService>();
 builder.Services.Configure<Parrot.Application.Conversations.OutboundSettings>(builder.Configuration.GetSection(Parrot.Application.Conversations.OutboundSettings.SectionName));
 builder.Services.AddSingleton<IOutboundJobPublisher, Parrot.Infrastructure.MessageBus.KafkaOutboundJobPublisher>();
 

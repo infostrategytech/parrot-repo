@@ -11,9 +11,11 @@ scrape_configs:
     static_configs:
       - targets: ["parrot-api:8080"]
 
-  # Persistence, queue, processing (stages 2-4) and the queue / dead-letter gauges.
-  # Its own port: the worker has no web server. Internal network only.
+  # Persistence, queue, processing (stages 2-4) and the queue / dead-letter gauges. The message processor, the
+  # media worker and the send worker are one program with different Worker__Roles, so they share a job and are told
+  # apart by instance; each reports the queues of its own role only (the `queue` label), so their series never overlap.
+  # Their own port: the workers have no web server. Internal network only.
   - job_name: message-processor
     metrics_path: /metrics
     static_configs:
-      - targets: ["message-processor:9464"]
+      - targets: ["message-processor:9464", "media-worker:9464", "outbound-worker:9464"]

@@ -12,7 +12,7 @@ namespace MessageProcessor.Monitoring;
 /// so a scrape never waits on the broker. While Kafka can't be asked, the
 /// gauges report nothing rather than a stale number.
 /// </summary>
-public sealed class QueueGauges(IMessageBus bus, IOptions<KafkaSettings> kafka, ILogger<QueueGauges> logger) : BackgroundService
+public sealed class QueueGauges(IMessageBus bus, IOptions<KafkaSettings> kafka, WorkerRoles roles, ILogger<QueueGauges> logger) : BackgroundService
 {
     /// <summary>
     /// The consumer group whose committed offset marks the dead letters someone has
@@ -24,9 +24,15 @@ public sealed class QueueGauges(IMessageBus bus, IOptions<KafkaSettings> kafka, 
 
     public static readonly TimeSpan Interval = TimeSpan.FromSeconds(15);
 
-    // -1 while Kafka can't be asked.
-    private long _depth = -1;
-    private long _deadLetters = -1;
+    // One entry per queue this process works on. -1 while Kafka can't be asked.
+    private sealed class Watched(string topic, string group, string deadLetterTopic)
+    {
+        public string Topic { get; } = topic;
+        public string Group { get; } = group;
+        public string DeadLetterTopic { get; } = deadLetterTopic;
+        public long Depth = -1;
+        public long DeadLetters = -1;
+    }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
@@ -36,22 +42,30 @@ public sealed class QueueGauges(IMessageBus bus, IOptions<KafkaSettings> kafka, 
         if (bus is not KafkaMessageBus kafkaBus) return;
 
         KafkaSettings settings = kafka.Value;
-        MessageMetrics.RegisterQueueGauges(settings.InboundTopic, settings.InboundDeadLetterTopic,
-            () => Known(Interlocked.Read(ref _depth)), () => Known(Interlocked.Read(ref _deadLetters)));
+        List<Watched> watched = [];
+        if (roles.HasFlag(WorkerRoles.Messages)) watched.Add(new(settings.InboundTopic, settings.ProcessorConsumerGroupId, settings.InboundDeadLetterTopic));
+        if (roles.HasFlag(WorkerRoles.Media)) watched.Add(new(settings.MediaTopic, settings.MediaConsumerGroupId, settings.MediaDeadLetterTopic));
+        if (roles.HasFlag(WorkerRoles.Outbound)) watched.Add(new(settings.OutboundTopic, settings.OutboundConsumerGroupId, settings.OutboundDeadLetterTopic));
+
+        MessageMetrics.RegisterQueueGauges([.. watched.Select(w => new MessageMetrics.QueueProbe(
+            w.Topic, w.DeadLetterTopic, () => Known(Interlocked.Read(ref w.Depth)), () => Known(Interlocked.Read(ref w.DeadLetters))))]);
 
         using PeriodicTimer timer = new PeriodicTimer(Interval);
         do
         {
-            try
+            foreach (Watched w in watched)
             {
-                Interlocked.Exchange(ref _depth, await kafkaBus.ConsumerLagAsync(settings.InboundTopic, settings.ProcessorConsumerGroupId, Interval));
-                Interlocked.Exchange(ref _deadLetters, await kafkaBus.ConsumerLagAsync(settings.InboundDeadLetterTopic, DeadLetterReviewGroup, Interval));
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                Interlocked.Exchange(ref _depth, -1);
-                Interlocked.Exchange(ref _deadLetters, -1);
-                logger.LogWarning("Queue gauges not refreshed. Reason={Reason}", ex.Message);
+                try
+                {
+                    Interlocked.Exchange(ref w.Depth, await kafkaBus.ConsumerLagAsync(w.Topic, w.Group, Interval));
+                    Interlocked.Exchange(ref w.DeadLetters, await kafkaBus.ConsumerLagAsync(w.DeadLetterTopic, DeadLetterReviewGroup, Interval));
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    Interlocked.Exchange(ref w.Depth, -1);
+                    Interlocked.Exchange(ref w.DeadLetters, -1);
+                    logger.LogWarning("Queue gauges not refreshed for {Topic}. Reason={Reason}", w.Topic, ex.Message);
+                }
             }
         }
         while (await timer.WaitForNextTickAsync(stoppingToken));

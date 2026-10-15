@@ -40,6 +40,11 @@ public class OutboundFileProcessorTests
             reply.ProviderMessageId = providerId;
             return Task.FromResult(true);
         }
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingMediaAsync(DateTime storedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingSendsAsync(DateTime storedBefore, DateTime claimedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+
+        public Task<bool> FailPendingSendAsync(string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     }
 
     // Answers with each result in turn, then repeats the last; a result that is an exception is thrown.
@@ -55,13 +60,16 @@ public class OutboundFileProcessorTests
         }
     }
 
-    private sealed class Announcements : IOutboundSettledPublisher
+    private sealed class Announcements : IMessageSettledPublisher
     {
-        public List<OutboundSettled> Published { get; } = new();
+        private readonly List<MessageSettled> _published = new();
 
-        public Task PublishAsync(OutboundSettled settled, CancellationToken cancellationToken = default)
+        // Jobs run at once in the storm tests, so adding is locked.
+        public List<MessageSettled> Published { get { lock (_published) return [.. _published]; } }
+
+        public Task PublishAsync(MessageSettled settled, CancellationToken cancellationToken = default)
         {
-            Published.Add(settled);
+            lock (_published) _published.Add(settled);
             return Task.CompletedTask;
         }
     }
@@ -82,7 +90,7 @@ public class OutboundFileProcessorTests
 
     private static OutboundFileProcessor Processor(IStoredMessageStore store, IOutboundFileDispatcher dispatcher, Announcements? announce = null,
         List<TimeSpan>? waits = null, IDeliveryReceipts? receipts = null) =>
-        new(store, dispatcher, NullLogger<OutboundFileProcessor>.Instance, announce, receipts, (wait, _) => { waits?.Add(wait); return Task.CompletedTask; });
+        new(store, dispatcher, NullLogger<OutboundFileProcessor>.Instance, announce, receipts, (wait, _) => { waits?.Add(wait); return Task.CompletedTask; }, jitter: () => 0.5);
 
     [Fact]
     public async Task A_pending_reply_is_claimed_sent_and_recorded_accepted_with_its_channel_id_and_announced()
@@ -96,8 +104,8 @@ public class OutboundFileProcessorTests
         Assert.Equal("accepted", reply.SendStatus);
         Assert.Equal("wamid.file", reply.ProviderMessageId);
         Assert.Equal(1, dispatcher.Calls);
-        OutboundSettled settled = Assert.Single(announce.Published);
-        Assert.Equal(("user-1", Connection, "2348012345678", "accepted"), (settled.OwnerUserId, settled.ConnectionId, settled.Customer, settled.Status));
+        MessageSettled settled = Assert.Single(announce.Published);
+        Assert.Equal((SettledKinds.Send, "user-1", Connection, "2348012345678", "accepted"), (settled.Kind, settled.OwnerUserId, settled.ConnectionId, settled.Customer, settled.Status));
     }
 
     [Fact]
@@ -281,5 +289,108 @@ public class OutboundFileProcessorTests
         Assert.Equal("pending", ConversationService.DisplayStatus(Reply("sending")));
         Assert.Equal("pending", ConversationService.DisplayStatus(Reply("pending")));
         Assert.Equal("failed", ConversationService.DisplayStatus(Reply("failed")));
+    }
+
+    // ---- Storm: many replies, every job delivered several times at once, with failures injected ----
+
+    // Thread-safe, many replies: each compare-and-set is atomic, as MongoDB's single-document updates are.
+    private sealed class Shelf(IEnumerable<MessageDocument> replies) : IStoredMessageStore
+    {
+        private readonly Dictionary<string, MessageDocument> _all = replies.ToDictionary(r => r.MessageId);
+        private readonly object _gate = new();
+
+        public MessageDocument Get(string id) { lock (_gate) return _all[id]; }
+
+        public Task<MessageDocument?> FindAsync(string messageId, CancellationToken cancellationToken = default)
+        {
+            lock (_gate) return Task.FromResult<MessageDocument?>(_all.GetValueOrDefault(messageId));
+        }
+
+        public Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                MessageDocument reply = _all[messageId];
+                if (reply.SendStatus != "pending") return Task.FromResult(false);
+                reply.SendStatus = "sending";
+                reply.SendClaimedAt = claimedAt;
+                return Task.FromResult(true);
+            }
+        }
+
+        public Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default)
+        {
+            lock (_gate)
+            {
+                MessageDocument reply = _all[messageId];
+                if (reply.SendStatus != "sending") return Task.FromResult(false);
+                reply.SendStatus = status;
+                reply.ProviderMessageId = providerId;
+                return Task.FromResult(true);
+            }
+        }
+
+        public Task<MessageDocument> InsertOrGetAsync(MessageDocument d, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> CompleteMediaAsync(string messageId, int index, IncomingMedia outcome, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingMediaAsync(DateTime storedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<IReadOnlyList<StaleMessage>> FindStalePendingSendsAsync(DateTime storedBefore, DateTime claimedBefore, int limit, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<bool> FailPendingSendAsync(string messageId, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    }
+
+    private sealed class Chaos : IOutboundFileDispatcher
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _calls = new();
+
+        public int CallsFor(string id) => _calls.GetValueOrDefault(id);
+
+        // What this reply's channel does is fixed by its number, so the expected outcome is known.
+        public static string Expected(int n) => (n % 4) switch { 0 => "accepted", 1 => "failed", 2 => "unknown", _ => "accepted" };
+
+        public async Task<FileDispatchResult> DispatchAsync(MessageDocument reply, CancellationToken cancellationToken)
+        {
+            _calls.AddOrUpdate(reply.MessageId, 1, (_, n) => n + 1);
+            await Task.Yield();
+            int n = int.Parse(reply.MessageId.Split(':')[^1]);
+            return (n % 4) switch
+            {
+                0 or 3 => new FileDispatchResult("wamid." + n, null),
+                1 => Refused("131047"),
+                _ => throw new HttpRequestException("reset"),
+            };
+        }
+    }
+
+    [Fact]
+    public async Task Of_200_replies_each_delivered_as_five_simultaneous_jobs_with_failures_every_reply_reaches_the_channel_exactly_once()
+    {
+        const int replies = 200, duplicates = 5;
+        Shelf shelf = new(Enumerable.Range(0, replies).Select(n =>
+        {
+            MessageDocument r = Reply();
+            r.MessageId = $"outgoing:user-1:{n}";
+            return r;
+        }));
+        Chaos channel = new();
+        Announcements announce = new();
+        OutboundFileProcessor processor = Processor(shelf, channel, announce);
+
+        await Task.WhenAll(Enumerable.Range(0, replies * duplicates).Select(async k =>
+        {
+            int n = k % replies;
+            OutboundJob job = new() { MessageId = $"outgoing:user-1:{n}", ThreadKey = "t", EnqueuedAt = DateTime.UtcNow };
+            try { await processor.ProcessAsync(job, default); }
+            catch (InvalidOperationException) { /* "sending" inside its lease: the bus retries it later */ }
+        }));
+
+        for (int n = 0; n < replies; n++)
+        {
+            string id = $"outgoing:user-1:{n}";
+            Assert.Equal(1, channel.CallsFor(id));
+            Assert.Equal(Chaos.Expected(n), shelf.Get(id).SendStatus);
+        }
+
+        // One announcement per reply, however many jobs raced.
+        Assert.Equal(replies, announce.Published.Count);
+        Assert.Equal(replies, announce.Published.Select(a => a.MessageId).Distinct().Count());
     }
 }

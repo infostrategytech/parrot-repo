@@ -37,6 +37,9 @@ public static class MediaFailure
 
     public const string Timeout = "timeout";
 
+    /// <summary>It stayed pending until the platform's link was long dead, and the sweeper gave up.</summary>
+    public const string Expired = "expired";
+
     /// <summary>The file arrived with no bytes.</summary>
     public const string Empty = "empty";
 

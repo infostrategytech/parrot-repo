@@ -105,10 +105,9 @@ services:
         create messages.persisted 24
         create messages.media 24
         create messages.media.dlq 3
-        create messages.media.settled 6
+        create messages.settled 6
         create messages.outbound 24
         create messages.outbound.dlq 3
-        create messages.outbound.settled 6
         create agent.events 6
         create catalog.events 3
     restart: "no"
@@ -287,16 +286,20 @@ services:
         condition: service_healthy
     networks: [parrot]
 
-  # The message worker, the only thing that stores incoming messages:
-  # messages.inbound -> MongoDB -> messages.persisted.
-  message-processor:
+  # One program, three jobs, each its own service so each scales on its own backlog (Worker__Roles):
+  #   message-processor: messages.inbound -> MongoDB -> messages.persisted, the only thing that stores incoming messages.
+  #   media-worker: copies customers' pictures and files into private storage (messages.media).
+  #   outbound-worker: hands agents' pictures and files to WhatsApp or Messenger (messages.outbound).
+  # The media and outbound workers idle until Storage__DeferInboundMedia / Outbound__DeferFileSends are turned on.
+  message-processor: &message-worker
     build:
       context: .
       dockerfile: MessageProcessor/Dockerfile
     restart: unless-stopped
     logging: *logging
-    environment:
+    environment: &message-worker-env
       DOTNET_ENVIRONMENT: Production
+      Worker__Roles: messages
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD}
       Kafka__BootstrapServers: kafka:9092
       MongoDB__ConnectionString: mongodb://mongodb:27017
@@ -335,6 +338,19 @@ services:
       kafka-topic-init:
         condition: service_completed_successfully
     networks: [parrot]
+
+
+  media-worker:
+    <<: *message-worker
+    environment:
+      <<: *message-worker-env
+      Worker__Roles: media
+
+  outbound-worker:
+    <<: *message-worker
+    environment:
+      <<: *message-worker-env
+      Worker__Roles: outbound
 
   parrot-web:
     build:

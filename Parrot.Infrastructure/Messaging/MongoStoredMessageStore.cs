@@ -39,6 +39,38 @@ public sealed class MongoStoredMessageStore(IMongoClient client, IOptions<MongoD
         return result.ModifiedCount > 0;
     }
 
+    public async Task<IReadOnlyList<StaleMessage>> FindStalePendingMediaAsync(DateTime storedBefore, int limit, CancellationToken cancellationToken = default)
+    {
+        FilterDefinitionBuilder<MessageDocument> filter = Builders<MessageDocument>.Filter;
+        List<MessageDocument> found = await _messages
+            .Find(filter.ElemMatch(d => d.Attachments, a => a.Status == MediaStatus.Pending) & filter.Lt(d => d.StoredAt, storedBefore))
+            .SortBy(d => d.StoredAt).Limit(limit).ToListAsync(cancellationToken);
+        return [.. found.Select(d => new StaleMessage(
+            d.MessageId, d.OwnerUserId, d.ConnectionId, d.From, d.StoredAt, d.SendStatus,
+            [.. d.Attachments!.Select((a, i) => (a, i)).Where(x => x.a.Status == MediaStatus.Pending).Select(x => x.i)]))];
+    }
+
+    public async Task<IReadOnlyList<StaleMessage>> FindStalePendingSendsAsync(
+        DateTime storedBefore, DateTime claimedBefore, int limit, CancellationToken cancellationToken = default)
+    {
+        FilterDefinitionBuilder<MessageDocument> filter = Builders<MessageDocument>.Filter;
+        List<MessageDocument> found = await _messages
+            .Find(filter.Eq(d => d.Outgoing, true) & filter.Exists(d => d.Attachments) & (
+                (filter.Eq(d => d.SendStatus, "pending") & filter.Lt(d => d.StoredAt, storedBefore))
+                | (filter.Eq(d => d.SendStatus, "sending") & filter.Lt(d => d.SendClaimedAt, claimedBefore))))
+            .SortBy(d => d.StoredAt).Limit(limit).ToListAsync(cancellationToken);
+        return [.. found.Select(d => new StaleMessage(d.MessageId, d.OwnerUserId, d.ConnectionId, d.From, d.StoredAt, d.SendStatus, []))];
+    }
+
+    public async Task<bool> FailPendingSendAsync(string messageId, CancellationToken cancellationToken = default)
+    {
+        UpdateResult result = await _messages.UpdateOneAsync(
+            d => d.MessageId == messageId && d.Outgoing && d.SendStatus == "pending",
+            Builders<MessageDocument>.Update.Set(d => d.SendStatus, "failed"),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
+
     public async Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default)
     {
         UpdateResult result = await _messages.UpdateOneAsync(

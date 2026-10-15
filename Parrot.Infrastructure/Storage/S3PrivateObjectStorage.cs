@@ -51,7 +51,7 @@ public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
 
         // A stream of unknown length (a download in flight): sent in parts, so memory stays at one part at a
         // time. If the stream fails part way the upload is aborted and nothing is left under the key.
-        using TransferUtility transfer = new(_client);
+        using TransferUtility transfer = new(_client, new TransferUtilityConfig { ConcurrentServiceRequests = 2 });
         await transfer.UploadAsync(
             new TransferUtilityUploadRequest
             {

@@ -153,4 +153,86 @@ public class MediaControllerTests
         Assert.StartsWith("attachment", http.Response.Headers.ContentDisposition.ToString());
         Assert.Equal("nosniff", http.Response.Headers["X-Content-Type-Options"]);
     }
+
+    // ---- Memory under load: many large files at once must not be held in memory ----
+
+    // Produces its bytes on demand, so no test ever holds a large file either.
+    private sealed class Generated(long length) : Stream
+    {
+        private long _position;
+        public override bool CanRead => true;
+        public override bool CanSeek => false;
+        public override bool CanWrite => false;
+        public override long Length => length;
+        public override long Position { get => _position; set => throw new NotSupportedException(); }
+        public override int Read(byte[] buffer, int offset, int count)
+        {
+            int n = (int)Math.Min(count, length - _position);
+            Array.Fill(buffer, (byte)7, offset, n);
+            _position += n;
+            return n;
+        }
+        public override void Flush() { }
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+    }
+
+    private sealed class HugeStorage(long size) : IPrivateObjectStorage
+    {
+        public Task PutAsync(string key, Stream content, string type, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+        public Task<StoredObjectInfo?> StatAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult<StoredObjectInfo?>(new("video/mp4", size));
+        public Task<StoredObject?> GetAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult<StoredObject?>(new(new Generated(size), "video/mp4", size));
+        public Task<StoredObject?> GetRangeAsync(string key, long start, long end, CancellationToken cancellationToken = default) =>
+            Task.FromResult<StoredObject?>(new(new Generated(end - start + 1), "video/mp4", end - start + 1));
+    }
+
+    [Fact]
+    public async Task Fifty_concurrent_downloads_of_a_100_MB_file_move_5_GB_through_without_allocating_anything_like_it()
+    {
+        const long size = 100L * 1024 * 1024;
+        const int concurrent = 50;
+        string token = Token();
+        long sent = 0;
+        GC.Collect();
+        long before = GC.GetTotalAllocatedBytes(precise: true);
+
+        await Task.WhenAll(Enumerable.Range(0, concurrent).Select(async _ =>
+        {
+            MediaController controller = new(Links, new HugeStorage(size));
+            ServiceCollection services = new();
+            services.AddLogging();
+            services.AddControllers();
+            DefaultHttpContext http = new() { RequestServices = services.BuildServiceProvider() };
+            CountingSink sink = new();
+            http.Response.Body = sink;
+            controller.ControllerContext = new ControllerContext(new ActionContext(http, new RouteData(), new ControllerActionDescriptor()));
+            IActionResult result = await controller.Get(token, false, default);
+            await result.ExecuteResultAsync(controller.ControllerContext);
+            Interlocked.Add(ref sent, sink.Written);
+        }));
+
+        long allocated = GC.GetTotalAllocatedBytes(precise: true) - before;
+        Assert.Equal(size * concurrent, sent);
+        // Buffering would allocate at least the 5 GB; streaming allocates buffers and request objects only.
+        Assert.True(allocated < 200L * 1024 * 1024, $"allocated {allocated / 1024 / 1024} MB moving {sent / 1024 / 1024} MB");
+    }
+
+    private sealed class CountingSink : Stream
+    {
+        public long Written { get; private set; }
+        public override bool CanRead => false;
+        public override bool CanSeek => false;
+        public override bool CanWrite => true;
+        public override long Length => throw new NotSupportedException();
+        public override long Position { get => throw new NotSupportedException(); set => throw new NotSupportedException(); }
+        public override void Write(byte[] buffer, int offset, int count) => Written += count;
+        public override void Write(ReadOnlySpan<byte> buffer) => Written += buffer.Length;
+        public override ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = default) { Written += buffer.Length; return ValueTask.CompletedTask; }
+        public override Task WriteAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) { Written += count; return Task.CompletedTask; }
+        public override void Flush() { }
+        public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override void SetLength(long value) => throw new NotSupportedException();
+    }
 }
