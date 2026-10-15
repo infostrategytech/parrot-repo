@@ -168,7 +168,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     {
         if (form.File is not { } upload) throw new ValidationException("Attach a file to send.");
         ConversationMessage sent = await service.SendFileAsync(Owner, connectionId, sender, form.RequestId, form.Caption,
-            new OutgoingFile(upload.FileName, upload.ContentType, upload.Length, upload.OpenReadStream), cancellationToken);
+            new OutgoingFile(upload.FileName, upload.ContentType, upload.Length, upload.OpenReadStream), cancellationToken, form.ReplyToMessageId);
         return Ok(mediaLinks.Sign(sent));
     }
 
@@ -189,4 +189,7 @@ public sealed class SendFileForm
     public Guid RequestId { get; set; }
     public string? Caption { get; set; }
     public IFormFile? File { get; set; }
+
+    /// <summary>The id of the message this file replies to (quotes); empty for a plain reply.</summary>
+    public string? ReplyToMessageId { get; set; }
 }

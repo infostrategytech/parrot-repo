@@ -29,7 +29,12 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     {
         // A TikTok customer's id is not a phone number, so the reply is routed before WhatsApp's checks.
         if (tikTok is not null && await tikTok.FindConnectionAsync(owner, connectionId, ct) is { } tikTokConnection)
+        {
+            // TikTok's API has no way to quote a message, so the customer would not see what this answers.
+            if (request.ReplyToMessageId is not null)
+                throw new ValidationException("TikTok can't show which message you're replying to. Send it without the quote.");
             return await tikTok.SendAsync(tikTokConnection, recipient, request, ct);
+        }
 
         if (request.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 4096
             || recipient.Length is < 1 or > 32 || !recipient.All(char.IsAsciiDigit))
@@ -86,7 +91,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     // A picture or file goes out on WhatsApp or Messenger. Instagram's API takes only a public address and TikTok's
     // no files at all, so those say so rather than failing at the channel.
     public async Task<ConversationMessage> SendFileAsync(string owner, Guid connectionId, string recipient,
-        Guid requestId, string? caption, OutgoingFile file, CancellationToken ct)
+        Guid requestId, string? caption, OutgoingFile file, CancellationToken ct, string? replyToMessageId = null)
     {
         caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
         if (requestId == Guid.Empty || recipient.Length is < 1 or > 32 || !recipient.All(char.IsAsciiDigit))
@@ -105,7 +110,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         if (fileName.Length > 120) fileName = fileName[^120..];
         OutgoingFile safe = file with { FileName = fileName, ContentType = allowed.ContentType };
 
-        SendReplyRequest request = new(requestId, caption ?? "");
+        SendReplyRequest request = new(requestId, caption ?? "") { ReplyToMessageId = replyToMessageId };
         WhatsAppConnection? whatsApp = await connections.GetByOwnerAndIdAsync(owner, connectionId);
         if (whatsApp is not null)
         {
@@ -191,6 +196,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
         if (existing is not null) return MatchFile(existing, connection.Id, recipient, request.Text, file);
+        MessageReplyTo? quote = await QuoteAsync(owner, connection.Id, recipient, request.ReplyToMessageId, ct);
 
         if (string.IsNullOrWhiteSpace(connection.AccessTokenEncrypted)
             || string.IsNullOrWhiteSpace(connection.PhoneNumberId) || string.IsNullOrWhiteSpace(connection.WhatsAppBusinessAccountId))
@@ -207,7 +213,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             ChannelId = connection.PhoneNumberId!, ChannelDisplayName = connection.DisplayPhoneNumber ?? "",
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), SentAt = now,
             Type = kind, TextBody = caption, Attachments = [attachment], ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending",
+            Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
         };
 
@@ -218,7 +224,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
                 // After the reserve, so a lost race or a refused request never leaves a stored file behind.
                 if (!await KeepAsync(attachment, file, timeout)) return (null, "storage");
                 await using Stream content = file.Open();
-                return (await sender.SendMediaAsync(connection.PhoneNumberId!, accessToken, recipient, kind, file.ContentType, file.FileName, content, caption, timeout), null);
+                return (quote is null
+                    ? await sender.SendMediaAsync(connection.PhoneNumberId!, accessToken, recipient, kind, file.ContentType, file.FileName, content, caption, timeout)
+                    : await sender.SendMediaReplyAsync(connection.PhoneNumberId!, accessToken, recipient, kind, file.ContentType, file.FileName, content, caption, quote.ProviderMessageId, timeout), null);
             }
             catch (WhatsAppRejectedException ex)
             {
@@ -235,6 +243,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
         if (existing is not null) return MatchFile(existing, page.Id, recipient, request.Text, file);
+        MessageReplyTo? quote = await QuoteAsync(owner, page.Id, recipient, request.ReplyToMessageId, ct);
 
         if (string.IsNullOrWhiteSpace(page.AccessTokenEncrypted) || string.IsNullOrWhiteSpace(page.PageId))
             throw new ConflictException("Save the Page and its access token in this Facebook connection's setup before sending.");
@@ -250,7 +259,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             ChannelId = page.PageId!, ChannelDisplayName = page.PageName ?? "",
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
             Type = kind, Attachments = [attachment], ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending",
+            Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? page.PageId,
         };
 
@@ -260,7 +269,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             {
                 if (!await KeepAsync(attachment, file, timeout)) return (null, "storage");
                 await using Stream content = file.Open();
-                return (await facebookSender.SendMediaAsync(page.PageId!, pageToken, recipient, kind, file.ContentType, file.FileName, content, timeout), null);
+                return (quote is null
+                    ? await facebookSender.SendMediaAsync(page.PageId!, pageToken, recipient, kind, file.ContentType, file.FileName, content, timeout)
+                    : await facebookSender.SendMediaReplyAsync(page.PageId!, pageToken, recipient, kind, file.ContentType, file.FileName, content, quote.ProviderMessageId, timeout), null);
             }
             catch (FacebookRejectedException ex)
             {
@@ -277,6 +288,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
         if (existing is not null) return Match(existing, connection.Id, recipient, request.Text);
+        MessageReplyTo? quote = await QuoteAsync(owner, connection.Id, recipient, request.ReplyToMessageId, ct);
 
         if (string.IsNullOrWhiteSpace(connection.AccessTokenEncrypted)
             || string.IsNullOrWhiteSpace(connection.PhoneNumberId) || string.IsNullOrWhiteSpace(connection.WhatsAppBusinessAccountId))
@@ -293,7 +305,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             // Outgoing replies never pass through a webhook, so SentAt is our own clock.
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), SentAt = now,
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending",
+            Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
         };
 
@@ -301,7 +313,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         {
             try
             {
-                return (await sender.SendAsync(connection.PhoneNumberId!, accessToken, recipient, request.Text, timeout), null);
+                return (quote is null
+                    ? await sender.SendAsync(connection.PhoneNumberId!, accessToken, recipient, request.Text, timeout)
+                    : await sender.SendReplyAsync(connection.PhoneNumberId!, accessToken, recipient, request.Text, quote.ProviderMessageId, timeout), null);
             }
             catch (WhatsAppRejectedException ex)
             {
@@ -318,6 +332,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
         if (existing is not null) return Match(existing, page.Id, recipient, request.Text);
+        MessageReplyTo? quote = await QuoteAsync(owner, page.Id, recipient, request.ReplyToMessageId, ct);
 
         if (string.IsNullOrWhiteSpace(page.AccessTokenEncrypted) || string.IsNullOrWhiteSpace(page.PageId))
             throw new ConflictException("Save the Page and its access token in this Facebook connection's setup before sending.");
@@ -333,7 +348,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             // From is the customer for both directions, as the inbox groups by it. Messenger counts in milliseconds.
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending",
+            Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? page.PageId,
         };
 
@@ -341,7 +356,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         {
             try
             {
-                return (await facebookSender.SendAsync(page.PageId!, pageToken, recipient, request.Text, timeout), null);
+                return (quote is null
+                    ? await facebookSender.SendAsync(page.PageId!, pageToken, recipient, request.Text, timeout)
+                    : await facebookSender.SendReplyAsync(page.PageId!, pageToken, recipient, request.Text, quote.ProviderMessageId, timeout), null);
             }
             catch (FacebookRejectedException ex)
             {
@@ -358,6 +375,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
         if (existing is not null) return Match(existing, account.Id, recipient, request.Text);
+        MessageReplyTo? quote = await QuoteAsync(owner, account.Id, recipient, request.ReplyToMessageId, ct);
 
         if (string.IsNullOrWhiteSpace(account.AccessTokenEncrypted) || string.IsNullOrWhiteSpace(account.AccountId))
             throw new ConflictException("Save the access token in this Instagram connection's setup before sending.");
@@ -373,7 +391,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             // From is the customer for both directions, as the inbox groups by it. Instagram counts in milliseconds.
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending",
+            Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? account.AccountId,
         };
 
@@ -381,7 +399,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         {
             try
             {
-                return (await instagramSender.SendAsync(account.AccountId!, accessToken, recipient, request.Text, timeout), null);
+                return (quote is null
+                    ? await instagramSender.SendAsync(account.AccountId!, accessToken, recipient, request.Text, timeout)
+                    : await instagramSender.SendReplyAsync(account.AccountId!, accessToken, recipient, request.Text, quote.ProviderMessageId, timeout), null);
             }
             catch (InstagramRejectedException ex)
             {
@@ -391,6 +411,20 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
                 return (null, ex.MetaErrorCode ?? "unknown");
             }
         }, ct);
+    }
+
+    // The message a reply quotes: one of this conversation's, which the channel knows by an id. A reply of ours
+    // that never reached the channel has none, so it cannot be quoted.
+    private async Task<MessageReplyTo?> QuoteAsync(string owner, Guid connection, string recipient, string? replyToMessageId, CancellationToken ct)
+    {
+        if (replyToMessageId is null) return null;
+        if (string.IsNullOrWhiteSpace(replyToMessageId) || replyToMessageId.Length > 512)
+            throw new ValidationException("Choose the message you're replying to again.");
+        MessageDocument quoted = await store.FindMessageAsync(owner, connection, recipient, replyToMessageId, ct)
+            ?? throw new NotFoundException("The message you're replying to isn't in this conversation.");
+        string providerId = MessageReplies.ProviderIdOf(quoted)
+            ?? throw new ConflictException("That message didn't reach the customer, so it can't be quoted. Send your reply without the quote.");
+        return MessageReplies.Quote(quoted, providerId);
     }
 
     // The customer's latest message: it must be within 24 hours (WhatsApp's and Messenger's rule
@@ -482,7 +516,11 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         doc.TextBody ?? (doc.Attachments is { Count: > 0 } ? "" : $"[{doc.Type} message]"), doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt)
     {
         Attachments = doc.Attachments is { Count: > 0 } attachments ? [.. attachments.Select(ToMedia)] : null,
+        ReplyTo = ToQuote(doc.ReplyTo),
     };
+
+    public static MessageQuote? ToQuote(MessageReplyTo? reply) =>
+        reply is null ? null : new MessageQuote(reply.MessageId, reply.Outgoing, reply.Text, reply.Type);
 
     /// <summary>The unsigned form: a stored copy carries its key, a link its address. The API signs the key before it answers.</summary>
     public static MessageMedia ToMedia(MessageAttachment a) => new(a.Kind, a.ContentType, a.FileName, a.SizeBytes,

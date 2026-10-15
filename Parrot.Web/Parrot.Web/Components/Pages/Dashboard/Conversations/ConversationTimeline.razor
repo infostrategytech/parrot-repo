@@ -75,7 +75,7 @@
                         renderedDate = messageDate;
                     }
 
-                    <ConversationMessageItem @key="message.Id" Message="message"
+                    <ConversationMessageItem @key="message.Id" @ref="_items[message.Id]" Message="message"
                                              CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
                                              CustomerInitials="@Conversation.CustomerInitials"
                                              AuthorName="@AuthorName" AuthorSeed="@AuthorSeed"
@@ -83,7 +83,8 @@
                                              OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection" OnAnswer="OpenAnswer"
                                              OnCustomerDetails="OnCustomerDetails"
-                                             OnPreviewImage="OpenMedia" OnPreviewMedia="OpenFile" />
+                                             OnPreviewImage="OpenMedia" OnPreviewMedia="OpenFile"
+                                             CanReply="@CanQuoteReplies" OnReply="ReplyTo" OnJumpTo="JumpToAsync" />
                 }
 
                 @if (_view == ThreadView.Notes && NoteCount == 0)
@@ -118,14 +119,16 @@
                                  Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" />
             }
 
-            <ConversationComposer Conversation="@Conversation"
+            <ConversationComposer @ref="_composer" Conversation="@Conversation"
                                   Mode="@_composerMode" ModeChanged="ChangeComposerMode"
                                   Text="@Conversation.Draft" TextChanged="OnComposerTextChanged"
                                   Sending="@Conversation.Sending" Retry="@Conversation.DraftRequestId.HasValue"
                                   CanUseFeatures="@Features.Available" CanAddNotes
                                   AttachmentName="@Conversation.PendingFile?.Name" OnAttachmentChanged="OnAttachmentChosen" OnAttachmentRejected="message => Conversation.SendError = message"
                                   DraftedBy="@_draftedBy" Drafting="@_drafting"
-                                  OnSend="SendAsync" OnDraft="DraftAsync" />
+                                  OnSend="SendAsync" OnDraft="DraftAsync"
+                                  ReplyingTo="@(Conversation.ReplyingTo is { } replying ? QuoteLabels.From(replying) : null)"
+                                  OnCancelReply="CancelReply" />
         </footer>
     }
 </div>
@@ -347,6 +350,40 @@
 
     private Task SendAsync() => _composerMode == ComposerMode.Note ? AddNoteAsync() : SendReplyAsync();
 
+    // Replying to a message, as WhatsApp Web: the composer quotes it and takes the cursor.
+    private readonly Dictionary<string, ConversationMessageItem> _items = new();
+    private ConversationComposer? _composer;
+
+    // Reply is offered only when a reply can be typed: not while the AI agent is answering, after the window
+    // closes, once resolved, or on TikTok (which cannot show a quote).
+    private bool CanQuoteReplies => Conversation.Channel != "tiktok" && !Conversation.ReplyWindowClosed
+        && !Conversation.ReplyLocked && Conversation.Status != ConversationStatus.Resolved;
+
+    private void ReplyTo(ConvMessage message)
+    {
+        if (!CanQuoteReplies) return;
+        if (_composerMode != ComposerMode.Reply) ChangeComposerMode(ComposerMode.Reply);
+        // A different quote is a different message: a pending retry's request id does not carry over.
+        if (Conversation.ReplyingTo?.Id != message.Id) Conversation.DraftRequestId = null;
+        Conversation.ReplyingTo = message;
+        Conversation.SendError = null;
+        _composer?.Focus();
+    }
+
+    private void CancelReply()
+    {
+        if (Conversation.ReplyingTo is null) return;
+        Conversation.ReplyingTo = null;
+        Conversation.DraftRequestId = null;
+        _composer?.Focus();
+    }
+
+    // The quoted message, when the thread has it loaded.
+    private async Task JumpToAsync(string messageId)
+    {
+        if (_items.TryGetValue(messageId, out var item) && VisibleMessages.Any(m => m.Id == messageId)) await item.ShowAsync();
+    }
+
     private async Task SendReplyAsync()
     {
         var item = Conversation;
@@ -359,10 +396,11 @@
         {
             // Messenger cannot carry text with a file: the file goes alone and the text stays to be sent next.
             var keepText = item.PendingFile is not null && item.Channel == "facebook";
+            var replyTo = item.ReplyingTo?.Id;
             var result = item.PendingFile is { } file
-                ? await Client.SendFileAsync(item.ConnectionId, item.Sender, item.DraftRequestId.Value, keepText ? null : item.Draft, file, CancellationToken.None)
+                ? await Client.SendFileAsync(item.ConnectionId, item.Sender, item.DraftRequestId.Value, keepText ? null : item.Draft, file, CancellationToken.None, replyTo)
                 : await Client.SendAsync(item.ConnectionId, item.Sender,
-                    new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft), CancellationToken.None);
+                    new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft) { ReplyToMessageId = replyTo }, CancellationToken.None);
             ConversationsState.Merge(item, new[] { result });
             item.SendError = result.Status switch
             {
@@ -374,6 +412,8 @@
             if (!keepText) item.Draft = "";
             item.DraftRequestId = null;
             item.PendingFile = null;
+            // Messenger's file goes alone and its text after it: the quote stays for the text.
+            if (!keepText) item.ReplyingTo = null;
             _draftedBy = null;
             _scrollPending = true;
             await OnSent.InvokeAsync();

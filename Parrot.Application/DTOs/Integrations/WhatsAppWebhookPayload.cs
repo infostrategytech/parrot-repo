@@ -107,6 +107,19 @@ public record WhatsAppMessage
 
     [JsonPropertyName("sticker")]
     public WhatsAppMedia? Sticker { get; init; }
+
+    // Present when the customer replied to a particular message: context.id is that message's wamid.
+    [JsonPropertyName("context")]
+    public WhatsAppContext? Context { get; init; }
+}
+
+public record WhatsAppContext
+{
+    [JsonPropertyName("id")]
+    public string? Id { get; init; }
+
+    [JsonPropertyName("from")]
+    public string? From { get; init; }
 }
 
 // A media object as WhatsApp sends it: an id to download with the connection's token, not a link. Optional

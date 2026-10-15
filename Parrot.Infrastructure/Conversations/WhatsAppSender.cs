@@ -10,17 +10,39 @@ namespace Parrot.Infrastructure.Conversations;
 
 public sealed class WhatsAppSender(HttpClient http, IOptions<WhatsAppSettings> options) : IWhatsAppSender
 {
-    public async Task<string> SendAsync(string phoneNumberId, string accessToken, string recipient, string text, CancellationToken ct)
+    public Task<string> SendAsync(string phoneNumberId, string accessToken, string recipient, string text, CancellationToken ct) =>
+        SendTextAsync(phoneNumberId, accessToken, recipient, text, null, ct);
+
+    public Task<string> SendReplyAsync(string phoneNumberId, string accessToken, string recipient, string text, string replyTo, CancellationToken ct) =>
+        SendTextAsync(phoneNumberId, accessToken, recipient, text, replyTo, ct);
+
+    public Task<string> SendMediaAsync(string phoneNumberId, string accessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string? caption, CancellationToken ct) =>
+        SendFileAsync(phoneNumberId, accessToken, recipient, kind, contentType, fileName, content, caption, null, ct);
+
+    public Task<string> SendMediaReplyAsync(string phoneNumberId, string accessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string? caption, string replyTo, CancellationToken ct) =>
+        SendFileAsync(phoneNumberId, accessToken, recipient, kind, contentType, fileName, content, caption, replyTo, ct);
+
+    // A reply that quotes a message carries context.message_id: the customer sees the quote above it. Added
+    // only then: the serializer's ignore-nulls setting does not apply to a dictionary's entries.
+    private static Dictionary<string, object?> Quoting(Dictionary<string, object?> body, string? replyTo)
+    {
+        if (replyTo is not null) body["context"] = new { message_id = replyTo };
+        return body;
+    }
+
+    private async Task<string> SendTextAsync(string phoneNumberId, string accessToken, string recipient, string text, string? replyTo, CancellationToken ct)
     {
         WhatsAppSettings settings = options.Value;
         using HttpRequestMessage request = new HttpRequestMessage(HttpMethod.Post,
             $"https://graph.facebook.com/{Uri.EscapeDataString(settings.ApiVersion)}/{Uri.EscapeDataString(phoneNumberId)}/messages");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Content = JsonContent.Create(new
+        request.Content = JsonContent.Create(Quoting(new Dictionary<string, object?>
         {
-            messaging_product = "whatsapp", recipient_type = "individual", to = recipient,
-            type = "text", text = new { body = text },
-        });
+            ["messaging_product"] = "whatsapp", ["recipient_type"] = "individual", ["to"] = recipient,
+            ["type"] = "text", ["text"] = new { body = text },
+        }, replyTo), options: IgnoreNulls);
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         HttpResponseMessage response;
         try
@@ -45,8 +67,11 @@ public sealed class WhatsAppSender(HttpClient http, IOptions<WhatsAppSettings> o
         return id.GetString()!;
     }
 
-    public async Task<string> SendMediaAsync(string phoneNumberId, string accessToken, string recipient, string kind, string contentType,
-        string fileName, Stream content, string? caption, CancellationToken ct)
+    private static readonly JsonSerializerOptions IgnoreNulls =
+        new() { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull };
+
+    private async Task<string> SendFileAsync(string phoneNumberId, string accessToken, string recipient, string kind, string contentType,
+        string fileName, Stream content, string? caption, string? replyTo, CancellationToken ct)
     {
         string version = Uri.EscapeDataString(options.Value.ApiVersion);
         string messages = $"https://graph.facebook.com/{version}/{Uri.EscapeDataString(phoneNumberId)}/messages";
@@ -86,11 +111,11 @@ public sealed class WhatsAppSender(HttpClient http, IOptions<WhatsAppSettings> o
             : new { id = mediaId, caption, filename = fileName };
         using HttpRequestMessage send = new(HttpMethod.Post, messages);
         send.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        send.Content = JsonContent.Create(new Dictionary<string, object?>
+        send.Content = JsonContent.Create(Quoting(new Dictionary<string, object?>
         {
             ["messaging_product"] = "whatsapp", ["recipient_type"] = "individual", ["to"] = recipient,
             ["type"] = image ? "image" : "document", [image ? "image" : "document"] = media,
-        }, options: new JsonSerializerOptions { DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+        }, replyTo), options: IgnoreNulls);
         using HttpResponseMessage response = await SendTimedAsync(send, "messages", ct);
         if ((int)response.StatusCode >= 500) throw new HttpRequestException("WhatsApp send outcome is uncertain.");
         if (!response.IsSuccessStatusCode) throw new WhatsAppRejectedException(await ErrorCodeAsync(response, ct));

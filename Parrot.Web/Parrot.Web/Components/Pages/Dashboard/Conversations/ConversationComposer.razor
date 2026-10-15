@@ -70,6 +70,21 @@
             </div>
         }
 
+        @if (Mode == ComposerMode.Reply && ReplyingTo is { } quote)
+        {
+            @* The message this reply quotes, as WhatsApp Web shows it above the box. ✕ or Esc sends a plain reply instead. *@
+            <div class="@($"conversation-composer__quote {(quote.Outgoing ? "is-own" : null)}")" role="status">
+                <div class="conversation-composer__quote-text">
+                    <Typography TextStyle="TextStyle.Small10Semibold" As="strong">Replying to @QuoteLabels.Author(quote, Conversation.CustomerName)</Typography>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="span">@QuoteLabels.Text(quote)</Typography>
+                </div>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Cancel reply" title="Cancel reply (Esc)"
+                        disabled="@Sending" @onclick="OnCancelReply">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </div>
+        }
+
         <TextArea @ref="_field"
                   Value="@Text"
                   ValueChanged="OnTextChanged"
@@ -137,6 +152,17 @@
     [Parameter] public string? DraftedBy { get; set; }
     [Parameter] public bool Drafting { get; set; }
     [Parameter] public EventCallback OnSend { get; set; }
+    /// <summary>The message the reply quotes, or null for a plain reply.</summary>
+    [Parameter] public InboxQuoteDto? ReplyingTo { get; set; }
+    /// <summary>The quote was dismissed (✕ or Esc): the reply goes out without it.</summary>
+    [Parameter] public EventCallback OnCancelReply { get; set; }
+
+    /// <summary>Puts the cursor in the box, as choosing Reply on a message does.</summary>
+    public void Focus()
+    {
+        _focusPending = true;
+        StateHasChanged();
+    }
     [Parameter] public EventCallback OnDraft { get; set; }
 
     private InputFile? _file;
@@ -195,6 +221,7 @@
         // Enter sends and Shift+Enter breaks the line (the TextArea keeps Enter
         // from adding a newline). Enter that confirms an IME composition is ignored.
         if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing && CanSend) await OnSend.InvokeAsync();
+        else if (args.Key == "Escape" && ReplyingTo is not null && !Sending) await OnCancelReply.InvokeAsync();
     }
 
     private async Task ChangeModeAsync(ComposerMode mode)

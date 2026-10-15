@@ -18,6 +18,9 @@ public sealed class MongoStoredMessageStore(IMongoClient client, IOptions<MongoD
     public async Task<MessageDocument?> FindAsync(string messageId, CancellationToken cancellationToken = default) =>
         await _messages.Find(d => d.MessageId == messageId).FirstOrDefaultAsync(cancellationToken);
 
+    public async Task<MessageDocument?> FindByProviderIdAsync(Guid connectionId, string providerMessageId, CancellationToken cancellationToken = default) =>
+        await _messages.Find(d => d.ProviderMessageId == providerMessageId && d.ConnectionId == connectionId).FirstOrDefaultAsync(cancellationToken);
+
     public async Task<MessageDocument> InsertOrGetAsync(MessageDocument document, CancellationToken cancellationToken = default)
     {
         try

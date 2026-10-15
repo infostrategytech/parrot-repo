@@ -1,5 +1,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @using System.Globalization
+@inject AuroraInterop Interop
+@inject ToastService Toasts
 
 @* The React inbox's message kinds. Today's API sends the customer's messages
    and replies from the business's number only, so real mode draws the first
@@ -84,7 +86,7 @@ else if (Message.Kind == MessageKind.Note)
 }
 else
 {
-    <article class="message-bubble @DirectionClass @KindClass">
+    <article class="message-bubble @DirectionClass @KindClass @(_highlighted ? "is-highlighted" : null)" @ref="_element">
         @if (Message.Kind == MessageKind.Ai)
         {
             <span class="message-bubble__ai-avatar"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></span>
@@ -102,14 +104,46 @@ else
             <PetalAvatar Seed="@AvatarSeed" Initials="@AvatarInitials" Size="AvatarSize.Md" />
         }
 
-        <div class="message-bubble__content">
+        @* As WhatsApp Web: double-click a message (or use its menu) to reply to it. *@
+        <div class="message-bubble__content" @ondblclick="ReplyAsync">
             <header>
                 <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@AuthorLabel</Typography>
                 @if (Message.Kind == MessageKind.Ai)
                 {
                     <Typography TextStyle="TextStyle.Small10Semibold" As="span">AI agent</Typography>
                 }
+                @* The dropdown button: right-aligned at the end of the name line, level with the name, as WhatsApp
+                   places its chevron. It shows on hover or keyboard focus (always, on a touch screen). *@
+                @if (Replyable || Message.Text.Length > 0)
+                {
+                    <div class="message-actions">
+                        <ActionMenu Label="Message options" Glyph="IconName.RiArrowDownSLine">
+                            @if (Replyable)
+                            {
+                                <ActionMenuItem Label="Reply" OnClick="ReplyAsync" />
+                            }
+                            @if (Message.Text.Length > 0)
+                            {
+                                <ActionMenuItem Label="Copy" OnClick="CopyAsync" />
+                            }
+                        </ActionMenu>
+                    </div>
+                }
             </header>
+
+            @if (Message.ReplyTo is { } quote)
+            {
+                @* The message this replies to; choosing it scrolls to the original when the thread has it. *@
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="@($"message-quote {(quote.Outgoing ? "is-own" : null)}")"
+                        disabled="@(quote.Id is null)" aria-label="@($"Replying to {QuoteLabels.Author(quote, CustomerName)}: {QuoteLabels.Text(quote)}")"
+                        title="@(quote.Id is null ? null : "Go to the original message")"
+                        @onclick="() => OnJumpTo.InvokeAsync(quote.Id!)">
+                    <ChildContent>
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="strong">@QuoteLabels.Author(quote, CustomerName)</Typography>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="span">@QuoteLabels.Text(quote)</Typography>
+                    </ChildContent>
+                </Button>
+            }
 
             @if (Message.Text.Length > 0)
             {
@@ -188,6 +222,7 @@ else
                 </div>
             }
 
+
             <footer>
                 <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
                 @if (Outbound)
@@ -235,6 +270,38 @@ else
     [Parameter] public EventCallback<ConvMessage> OnPreviewImage { get; set; }
     /// <summary>A picture, GIF or sticker the customer sent was chosen: the thread opens it full screen.</summary>
     [Parameter] public EventCallback<MediaPreview> OnPreviewMedia { get; set; }
+    /// <summary>The thread can send a quoting reply here (the channel supports it and the reply window is open).</summary>
+    [Parameter] public bool CanReply { get; set; }
+    /// <summary>Reply to this message: the composer quotes it.</summary>
+    [Parameter] public EventCallback<ConvMessage> OnReply { get; set; }
+    /// <summary>A quote was chosen: the thread scrolls to the quoted message, by its id.</summary>
+    [Parameter] public EventCallback<string> OnJumpTo { get; set; }
+
+    private ElementReference _element;
+    private bool _highlighted;
+
+    private bool Replyable => CanReply && QuoteLabels.CanQuote(Message);
+
+    private Task ReplyAsync() => Replyable ? OnReply.InvokeAsync(Message) : Task.CompletedTask;
+
+    private async Task CopyAsync()
+    {
+        await Interop.CopyAsync(Message.Text);
+        Toasts.Show("Message copied");
+    }
+
+    /// <summary>Brings this message into view and marks it for a moment, as WhatsApp does when a quote is chosen.</summary>
+    public async Task ShowAsync()
+    {
+        await Interop.ScrollIntoViewAsync(_element);
+        _highlighted = true;
+        StateHasChanged();
+        await Task.Delay(1600);
+        _highlighted = false;
+        // The thread may have moved on (another conversation) in the meantime.
+        try { StateHasChanged(); }
+        catch (ObjectDisposedException) { }
+    }
 
     private static string FileDetail(InboxMediaDto file) =>
         string.Join(" · ", new[] { MediaLabels.Type(file), MediaLabels.Size(file.SizeBytes) }.Where(part => part.Length > 0));

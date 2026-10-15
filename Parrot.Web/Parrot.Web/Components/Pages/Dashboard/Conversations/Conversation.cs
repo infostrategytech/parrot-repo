@@ -26,6 +26,8 @@ public class ConversationItem
     public Guid? DraftRequestId { get; set; }
     /// <summary>A picture or file chosen to send with the draft. Kept with it, so a retry after switching threads still carries the file.</summary>
     public Parrot.Web.Services.InboxPendingFile? PendingFile { get; set; }
+    /// <summary>The message the draft replies to (quotes), as WhatsApp Web keeps it per chat; null for a plain reply.</summary>
+    public ConvMessage? ReplyingTo { get; set; }
     public bool Sending { get; set; }
     public string? SendError { get; set; }
     public List<ConvMessage> Messages { get; set; } = new();
@@ -96,4 +98,6 @@ public class ConvMessage
     public bool KnowledgeUpdated { get; set; }
     public bool Answered { get; set; }
     public string? Answer { get; set; }
+    /// <summary>The message this one replies to (quotes), or null.</summary>
+    public InboxQuoteDto? ReplyTo { get; set; }
 }
