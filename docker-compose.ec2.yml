@@ -105,6 +105,7 @@ services:
         create messages.persisted 24
         create messages.media 24
         create messages.media.dlq 3
+        create messages.media.settled 6
         create agent.events 6
         create catalog.events 3
     restart: "no"

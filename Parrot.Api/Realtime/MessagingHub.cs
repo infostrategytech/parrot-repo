@@ -26,6 +26,9 @@ public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<Messaging
     /// <summary>The client method pushed when a channel reports receipts for replies.</summary>
     public const string ReceiptsChangedMethod = "receiptsChanged";
 
+    /// <summary>The client method pushed when one of a customer's files has finished loading.</summary>
+    public const string MediaChangedMethod = "mediaChanged";
+
     /// <summary>The client method an agent's activity (a turn, an approval asked for, an escalation) is pushed to.</summary>
     public const string AgentActivityMethod = "agentActivity";
 

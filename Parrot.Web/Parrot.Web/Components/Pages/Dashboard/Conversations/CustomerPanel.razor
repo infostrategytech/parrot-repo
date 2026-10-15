@@ -324,7 +324,8 @@
     protected override async Task OnParametersSetAsync()
     {
         if (!Open) return;
-        var key = $"{Conversation.Id}:{Conversation.Messages.Count(m => m.Attachments.Count > 0)}";
+        // Files that finish loading change the list without changing how many messages carry files.
+        var key = $"{Conversation.Id}:{Conversation.Messages.Count(m => m.Attachments.Count > 0)}:{Conversation.Messages.Sum(m => m.Attachments.Count(a => a.Status == "ready"))}";
         if (key == _loadedFor) return;
         var sameCustomer = _loadedFor?.StartsWith(Conversation.Id + ":", StringComparison.Ordinal) == true;
         _loadedFor = key;

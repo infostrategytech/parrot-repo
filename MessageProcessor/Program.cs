@@ -81,6 +81,7 @@ builder.Services.AddSingleton<IConversationSequence, MongoConversationSequence>(
 builder.Services.AddSingleton<IMessageBus, KafkaMessageBus>();
 builder.Services.AddSingleton<IMessagePersistedPublisher, KafkaMessagePersistedPublisher>();
 builder.Services.AddSingleton<IMediaJobPublisher, KafkaMediaJobPublisher>();
+builder.Services.AddSingleton<IMediaSettledPublisher, KafkaMediaSettledPublisher>();
 builder.Services.AddSingleton(sp => ActivatorUtilities.CreateInstance<InboundMessageProcessor>(
     sp, sp.GetRequiredService<IOptions<StorageSettings>>().Value.DeferInboundMedia));
 builder.Services.AddSingleton<MediaJobProcessor>(sp => ActivatorUtilities.CreateInstance<MediaJobProcessor>(sp));

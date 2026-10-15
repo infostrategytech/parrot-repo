@@ -477,6 +477,8 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
 builder.Services.AddSingleton<IReceiptNotifier, Parrot.Api.Realtime.HubReceiptNotifier>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
+builder.Services.AddSingleton<Parrot.Api.Realtime.MediaSettledRouter>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.MediaSettledDeliveryService>();
 
 // What the orchestrator's agents did, kept per event in MongoDB and pushed
 // to the owner's connections as it arrives; the AI Operations screens read it.

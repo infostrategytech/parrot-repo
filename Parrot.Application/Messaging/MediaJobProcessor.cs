@@ -21,6 +21,7 @@ public sealed class MediaJobProcessor(
     IStoredMessageStore store,
     IInboundMediaStore mediaStore,
     ILogger<MediaJobProcessor> logger,
+    IMediaSettledPublisher? settled = null,
     Func<TimeSpan, CancellationToken, Task>? delay = null)
 {
     /// <summary>The waits before the second and third try. Short: WhatsApp's links last only minutes.</summary>
@@ -69,6 +70,19 @@ public sealed class MediaJobProcessor(
         // A job that raced another to the same file finds it already settled: the first outcome stands.
         bool applied = await store.CompleteMediaAsync(job.MessageId, job.Index, outcome, cancellationToken);
         string status = outcome.Status ?? MediaStatus.Failed;
+
+        // Only the call that settled it tells the inbox; a skipped one found it settled and was announced already.
+        if (applied && settled is not null && document.OwnerUserId is { Length: > 0 } owner && document.ConnectionId is { } connection)
+        {
+            await settled.PublishAsync(
+                new MediaSettled
+                {
+                    MessageId = document.MessageId, OwnerUserId = owner, ConnectionId = connection, Customer = document.From,
+                    Status = status, CorrelationId = job.CorrelationId,
+                },
+                cancellationToken);
+        }
+
         Finished(applied ? status : "skipped", outcome.FailureReason ?? "none", started);
         logger.LogInformation("media.finished Status={Status} Reason={Reason} Applied={Applied} DurationMs={DurationMs}",
             status, outcome.FailureReason ?? "none", applied, (long)Stopwatch.GetElapsedTime(started).TotalMilliseconds);

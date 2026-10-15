@@ -22,6 +22,15 @@ public class KafkaSettings
     /// <summary>Media jobs that can never succeed (the message is gone, the file's position is wrong), with the reason in a header.</summary>
     public string MediaDeadLetterTopic { get; set; } = "messages.media.dlq";
 
+    /// <summary>Where the media worker announces that a customer file has finished (ready, failed or too large), for the open inbox to refresh.</summary>
+    public string MediaSettledTopic { get; set; } = "messages.media.settled";
+
+    /// <summary>
+    /// The API's group on the media settled topic. Each API instance appends its own name, so every instance
+    /// reads every event: a push can only reach the browsers connected to the instance that sends it.
+    /// </summary>
+    public string MediaSettledConsumerGroupId { get; set; } = "realtime-gateway-media";
+
     /// <summary>The media workers' consumer group. Every worker instance shares it, so the jobs are split between them.</summary>
     public string MediaConsumerGroupId { get; set; } = "media-worker";
 

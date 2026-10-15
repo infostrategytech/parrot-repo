@@ -68,8 +68,71 @@ public class MediaJobProcessorTests
 
     private static MediaJob Job(int index = 0) => new() { MessageId = "whatsapp:wamid.IMG", Index = index, CorrelationId = "c", EnqueuedAt = DateTime.UtcNow };
 
-    private static MediaJobProcessor Processor(IStoredMessageStore store, IInboundMediaStore media, List<TimeSpan>? waits = null) =>
-        new(store, media, NullLogger<MediaJobProcessor>.Instance, (wait, _) => { waits?.Add(wait); return Task.CompletedTask; });
+    private sealed class Announcements : IMediaSettledPublisher
+    {
+        public List<MediaSettled> Published { get; } = new();
+
+        public Task PublishAsync(MediaSettled settled, CancellationToken cancellationToken = default)
+        {
+            Published.Add(settled);
+            return Task.CompletedTask;
+        }
+    }
+
+    private static MediaJobProcessor Processor(IStoredMessageStore store, IInboundMediaStore media, List<TimeSpan>? waits = null, Announcements? announce = null) =>
+        new(store, media, NullLogger<MediaJobProcessor>.Instance, announce, (wait, _) => { waits?.Add(wait); return Task.CompletedTask; });
+
+    [Fact]
+    public async Task A_settled_file_is_announced_once_to_its_owner_with_the_customer_and_outcome()
+    {
+        MessageDocument document = Document(Pending());
+        document.ConnectionId = Guid.Parse("6f1c2d3e-4a5b-4c6d-8e7f-0a1b2c3d4e5f");
+        Announcements announce = new();
+
+        await Processor(new Store(document), new Media(Ready), announce: announce).ProcessAsync(Job(), default);
+
+        MediaSettled settled = Assert.Single(announce.Published);
+        Assert.Equal("whatsapp:wamid.IMG", settled.MessageId);
+        Assert.Equal("user-1", settled.OwnerUserId);
+        Assert.Equal(document.ConnectionId, settled.ConnectionId);
+        Assert.Equal("2348012345678", settled.Customer);
+        Assert.Equal(MediaStatus.Ready, settled.Status);
+    }
+
+    [Fact]
+    public async Task A_failure_and_a_too_large_file_are_announced_too_so_the_inbox_stops_saying_loading()
+    {
+        Announcements announce = new();
+
+        await Processor(new Store(Document(Pending())), new Media(Failed(MediaFailure.Refused)), announce: announce).ProcessAsync(Job(), default);
+        await Processor(new Store(Document(Pending())), new Media(new IncomingMedia { Kind = "image", Status = MediaStatus.TooLarge }), announce: announce).ProcessAsync(Job(), default);
+
+        Assert.Equal([MediaStatus.Failed, MediaStatus.TooLarge], announce.Published.Select(p => p.Status));
+    }
+
+    [Fact]
+    public async Task A_job_that_finds_the_file_already_settled_announces_nothing()
+    {
+        Announcements announce = new();
+        MessageDocument document = Document(new MessageAttachment { Kind = MediaKinds.Image, Status = MediaStatus.Ready, StorageKey = "k" });
+
+        await Processor(new Store(document), new Media(Ready), announce: announce).ProcessAsync(Job(), default);
+
+        Assert.Empty(announce.Published);
+    }
+
+    [Fact]
+    public async Task A_message_with_no_owner_is_settled_without_an_announcement()
+    {
+        Announcements announce = new();
+        MessageDocument document = Document(Pending());
+        document.OwnerUserId = null;
+
+        await Processor(new Store(document), new Media(Ready), announce: announce).ProcessAsync(Job(), default);
+
+        Assert.Empty(announce.Published);
+        Assert.Equal(MediaStatus.Ready, document.Attachments![0].Status);
+    }
 
     [Fact]
     public async Task A_pending_file_is_copied_and_the_attachment_becomes_ready_with_its_key()
