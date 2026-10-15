@@ -184,4 +184,54 @@ public class ConversationStateTests
         var now = new DateTime(2026, 10, 12, 12, 0, 0, DateTimeKind.Utc);
         Assert.Equal(expected, ReplyWindowLabel.Describe(now.AddSeconds(secondsLeft), now));
     }
+
+    [Fact]
+    public void ANewerChatNeverLandsAbovePinnedOne_WhetherItArrivesByListOrByPush()
+    {
+        var state = new ConversationsState();
+        var now = DateTime.UtcNow;
+        state.Apply([new InboxConversationDto(Connection, "pinned", "Pinned", "", now.AddDays(-3)) { Pinned = true },
+            new InboxConversationDto(Connection, "other", "Other", "", now.AddHours(-1))]);
+
+        // A brand-new customer shows up in the next list read, newer than everything.
+        state.Apply([new InboxConversationDto(Connection, "new", "New", "", now) { Pinned = false },
+            new InboxConversationDto(Connection, "pinned", "Pinned", "", now.AddDays(-3)) { Pinned = true }]);
+        Assert.Equal(["pinned", "new", "other"], state.Conversations.Select(c => c.Sender));
+
+        // And an existing one that gets a new message.
+        state.Touch(state.GetConversation($"{Connection}:other")!, Pushed("m1") with { Sender = "other", Receiver = "biz" });
+        Assert.Equal("pinned", state.Conversations[0].Sender);
+    }
+
+    [Fact]
+    public void AListReadThatStartedBeforeAPinWasSaved_DoesNotUndoIt()
+    {
+        var state = new ConversationsState();
+        var now = DateTime.UtcNow;
+        state.Apply([new InboxConversationDto(Connection, "a", "A", "", now.AddDays(-2)), new InboxConversationDto(Connection, "b", "B", "", now.AddDays(-1))]);
+        var a = state.GetConversation($"{Connection}:a")!;
+        a.Pinned = true;
+        a.PinSaving = true;
+        state.Resort();
+
+        // The stale read still says "not pinned", and a new chat is in it.
+        state.Apply([new InboxConversationDto(Connection, "a", "A", "", now.AddDays(-2)), new InboxConversationDto(Connection, "new", "New", "", now)]);
+
+        Assert.True(a.Pinned);
+        Assert.Equal("a", state.Conversations[0].Sender);
+    }
+
+    [Theory]
+    [InlineData(ConversationSort.Newest)]
+    [InlineData(ConversationSort.Oldest)]
+    [InlineData(ConversationSort.Priority)]
+    public void PinsStayOnTopWhateverTheSort(ConversationSort sort)
+    {
+        var state = new ConversationsState();
+        var now = DateTime.UtcNow;
+        state.Apply([new InboxConversationDto(Connection, "new", "New", "", now),
+            new InboxConversationDto(Connection, "pinned", "Pinned", "", now.AddDays(-9)) { Pinned = true }]);
+
+        Assert.Equal("pinned", ConversationsState.Order(state.Conversations, sort).First().Sender);
+    }
 }

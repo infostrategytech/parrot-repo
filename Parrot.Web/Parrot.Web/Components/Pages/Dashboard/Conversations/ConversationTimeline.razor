@@ -123,7 +123,7 @@
                                   Text="@Conversation.Draft" TextChanged="OnComposerTextChanged"
                                   Sending="@Conversation.Sending" Retry="@Conversation.DraftRequestId.HasValue"
                                   CanUseFeatures="@Features.Available" CanAddNotes
-                                  AttachmentName="@_attachment" OnAttachmentChanged="name => _attachment = name"
+                                  AttachmentName="@Conversation.PendingFile?.Name" OnAttachmentChanged="OnAttachmentChosen" OnAttachmentRejected="message => Conversation.SendError = message"
                                   DraftedBy="@_draftedBy" Drafting="@_drafting"
                                   OnSend="SendAsync" OnDraft="DraftAsync" />
         </footer>
@@ -203,7 +203,6 @@
     private bool _scrollPending;
     private ComposerMode _composerMode = ComposerMode.Reply;
     private ThreadView _view = ThreadView.Messages;
-    private string? _attachment;
     private string? _draftedBy;
     private MediaViewerItem? _media;
     private bool _drafting;
@@ -338,20 +337,32 @@
         _draftedBy = null;
     }
 
+    private void OnAttachmentChosen(Parrot.Web.Services.InboxPendingFile? file)
+    {
+        Conversation.SendError = null;
+        Conversation.PendingFile = file;
+        // The same request id belongs to the same message: a different file is a new one.
+        Conversation.DraftRequestId = null;
+    }
+
     private Task SendAsync() => _composerMode == ComposerMode.Note ? AddNoteAsync() : SendReplyAsync();
 
     private async Task SendReplyAsync()
     {
         var item = Conversation;
-        if (item.Sending || item.ReplyLocked || (item.ReplyWindowClosed && item.DraftRequestId is null) || string.IsNullOrWhiteSpace(item.Draft)) return;
+        if (item.Sending || item.ReplyLocked || (item.ReplyWindowClosed && item.DraftRequestId is null)
+            || (string.IsNullOrWhiteSpace(item.Draft) && item.PendingFile is null)) return;
         item.Sending = true;
         item.SendError = null;
         item.DraftRequestId ??= Guid.NewGuid();
         try
         {
-            var result = await Client.SendAsync(item.ConnectionId, item.Sender,
-                new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft) { AttachmentName = _attachment },
-                CancellationToken.None);
+            // Messenger cannot carry text with a file: the file goes alone and the text stays to be sent next.
+            var keepText = item.PendingFile is not null && item.Channel == "facebook";
+            var result = item.PendingFile is { } file
+                ? await Client.SendFileAsync(item.ConnectionId, item.Sender, item.DraftRequestId.Value, keepText ? null : item.Draft, file, CancellationToken.None)
+                : await Client.SendAsync(item.ConnectionId, item.Sender,
+                    new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft), CancellationToken.None);
             ConversationsState.Merge(item, new[] { result });
             item.SendError = result.Status switch
             {
@@ -360,9 +371,9 @@
                 _ => null,
             };
             Feedback.Play(item.SendError is null ? Parrot.Web.Services.FeedbackSound.Send : Parrot.Web.Services.FeedbackSound.Error);
-            item.Draft = "";
+            if (!keepText) item.Draft = "";
             item.DraftRequestId = null;
-            _attachment = null;
+            item.PendingFile = null;
             _draftedBy = null;
             _scrollPending = true;
             await OnSent.InvokeAsync();
@@ -439,7 +450,7 @@
         _composerMode = ComposerMode.Reply;
         Conversation.Draft = "";
         _draftedBy = null;
-        _attachment = null;
+        Conversation.PendingFile = null;
     }
 
     private async Task ActAsync(Func<Task> action)

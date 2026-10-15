@@ -1,11 +1,14 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+@using Parrot.Web.Services
 @inject AuroraInterop Interop
 
 @* React's composer. A reply goes through Parrot's send (SendReplyRequest:
-   RequestId + Text), with the same request id kept for a safe retry.
-   Attachments, saved replies and AI drafts have no endpoint yet: they are
-   offered only when CanUseFeatures confirms API support, and otherwise left
-   out. Internal notes have their own endpoints (CanAddNotes). *@
+   RequestId + Text), with the same request id kept for a safe retry. A picture
+   or file (the paperclip, top right) goes through the attachments endpoint
+   with the typed text as its caption. Saved replies and AI drafts have no
+   endpoint yet: they are offered only when CanUseFeatures confirms API
+   support, and otherwise left out. Internal notes have their own endpoints
+   (CanAddNotes). *@
 <div class="conversation-composer @ModeClass @(ReplyLocked || WindowClosed ? "is-reply-locked" : null)">
     <header>
         <Tabs Label="Message type" Variant="TabsVariant.Flat">
@@ -14,6 +17,16 @@
                  Title="@(CanAddNotes ? null : "Internal notes are not available")"
                  OnClick="() => ChangeModeAsync(ComposerMode.Note)">Internal note</Tab>
         </Tabs>
+        @if (!WindowClosed && Mode == ComposerMode.Reply)
+        {
+            @* The browser opens its file picker only for a click on a real
+               file input, so the button forwards one to this hidden input. *@
+            <InputFile @key="_fileKey" @ref="_file" class="sr-only" tabindex="-1" aria-hidden="true" accept="@Accept" OnChange="OnFileSelected" />
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool conversation-composer__attach"
+                    aria-label="Attach a picture or file" title="@AttachTitle" disabled="@(InputDisabled || !CanAttach)" @onclick="PickFileAsync">
+                <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+            </Button>
+        }
     </header>
 
     @if (WindowClosed)
@@ -30,6 +43,13 @@
                 <Typography TextStyle="TextStyle.Small10Medium" As="span">Only your team can see this note. It is saved here and is never sent to the customer.</Typography>
             </div>
         }
+        else if (Conversation.Channel == "facebook" && !string.IsNullOrWhiteSpace(AttachmentName))
+        {
+            <div class="conversation-composer__disclosure">
+                <Icon Name="IconName.RiAttachment2" />
+                <Typography TextStyle="TextStyle.Small10Medium" As="span">Messenger sends a file on its own. Your text stays here to send next.</Typography>
+            </div>
+        }
         else if (!string.IsNullOrWhiteSpace(DraftedBy))
         {
             <div class="conversation-composer__disclosure">
@@ -38,13 +58,13 @@
             </div>
         }
 
-        @if (!string.IsNullOrWhiteSpace(AttachmentName))
+        @if (Mode == ComposerMode.Reply && !string.IsNullOrWhiteSpace(AttachmentName))
         {
             <div class="conversation-composer__attachment">
                 <Icon Name="IconName.RiAttachment2" />
                 <Typography TextStyle="TextStyle.Small10Medium" As="span">@AttachmentName</Typography>
-                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove attachment"
-                        @onclick="() => OnAttachmentChanged.InvokeAsync(null)">
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove attachment" disabled="@InputDisabled"
+                        @onclick="RemoveAttachmentAsync">
                     <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
                 </Button>
             </div>
@@ -68,13 +88,6 @@
             <div class="conversation-composer__tools">
                 @if (CanUseFeatures)
                 {
-                    @* The browser opens its file picker only for a click on a real
-                       file input, so the button forwards one to this hidden input. *@
-                    <InputFile @ref="_file" class="sr-only" tabindex="-1" aria-hidden="true" OnChange="OnFileSelected" />
-                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool"
-                            aria-label="Attach a file" title="Attach a file" disabled="@InputDisabled" @onclick="PickFileAsync">
-                        <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
-                    </Button>
                     <SavedRepliesMenu Disabled="@(InputDisabled || Mode == ComposerMode.Note)" OnSelect="SelectSavedReplyAsync" />
                 }
                 <EmojiPicker Class="conversation-composer__tool" Disabled="@InputDisabled" OnPick="InsertEmojiAsync" />
@@ -117,7 +130,10 @@
     /// <summary>Internal notes can be saved. They need no AI features: only the notes endpoints.</summary>
     [Parameter] public bool CanAddNotes { get; set; }
     [Parameter] public string? AttachmentName { get; set; }
-    [Parameter] public EventCallback<string?> OnAttachmentChanged { get; set; }
+    [Parameter] public EventCallback<InboxPendingFile?> OnAttachmentChanged { get; set; }
+    /// <summary>The chosen file cannot be sent (too large, empty or the wrong type); the message says why.</summary>
+    [Parameter] public EventCallback<string> OnAttachmentRejected { get; set; }
+
     [Parameter] public string? DraftedBy { get; set; }
     [Parameter] public bool Drafting { get; set; }
     [Parameter] public EventCallback OnSend { get; set; }
@@ -139,7 +155,12 @@
     private bool WindowClosed => Mode == ComposerMode.Reply && !Retry && Conversation.ReplyWindowClosed;
     private string ChannelLabel => Conversation.Channel switch { "facebook" => "Messenger", "tiktok" => "TikTok", "instagram" => "Instagram", _ => "WhatsApp" };
     private bool InputDisabled => Sending || Retry || ReplyLocked || WindowClosed;
-    private bool CanSend => !Sending && !ReplyLocked && !WindowClosed && !string.IsNullOrWhiteSpace(Text);
+    // A file can go without text; a note and a plain reply need some.
+    private bool CanSend => !Sending && !ReplyLocked && !WindowClosed
+        && (!string.IsNullOrWhiteSpace(Text) || (Mode == ComposerMode.Reply && !string.IsNullOrWhiteSpace(AttachmentName)));
+    private bool CanAttach => Conversation.Channel is "whatsapp" or "facebook";
+    private string AttachTitle => CanAttach ? "Attach a picture or file" : "Files cannot be sent on this channel yet";
+    private const string Accept = ".jpg,.jpeg,.png,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx";
     private bool CanDraft => CanUseFeatures && Mode == ComposerMode.Reply && Conversation.HasAiAgent && !ReplyLocked && !WindowClosed;
     private string ModeClass => Mode == ComposerMode.Note ? "is-note" : "is-reply";
     private string Placeholder => Mode == ComposerMode.Note
@@ -186,7 +207,38 @@
         if (_file?.Element is { } element) await Interop.ClickAsync(element);
     }
 
-    private Task OnFileSelected(InputFileChangeEventArgs args) => OnAttachmentChanged.InvokeAsync(args.File.Name);
+    // A new input each time, so choosing the same file again after removing it still raises a change.
+    private int _fileKey;
+
+    private static readonly HashSet<string> Extensions = new(Accept.Split(','), StringComparer.OrdinalIgnoreCase);
+
+    private async Task RemoveAttachmentAsync()
+    {
+        _fileKey++;
+        await OnAttachmentChanged.InvokeAsync(null);
+    }
+
+    private async Task OnFileSelected(InputFileChangeEventArgs args)
+    {
+        var file = args.File;
+        var picture = Path.GetExtension(file.Name).ToLowerInvariant() is ".jpg" or ".jpeg" or ".png";
+        var rejected =
+            !Extensions.Contains(Path.GetExtension(file.Name)) ? "Attach a JPEG or PNG picture, or a PDF, Word, Excel, PowerPoint or text file."
+            : file.Size == 0 ? "That file is empty."
+            : picture && file.Size > 5 * 1024 * 1024 ? "Pictures can be up to 5 MB."
+            : file.Size > InboxPendingFile.MaxBytes ? "Files can be up to 16 MB."
+            : null;
+        _fileKey++;
+        if (rejected is not null)
+        {
+            await OnAttachmentRejected.InvokeAsync(rejected);
+            return;
+        }
+        // Read now, once, into an array of the right size: a retry after a dropped connection must send the same bytes.
+        var bytes = new byte[file.Size];
+        await using (var stream = file.OpenReadStream(InboxPendingFile.MaxBytes)) await stream.ReadExactlyAsync(bytes);
+        await OnAttachmentChanged.InvokeAsync(new InboxPendingFile(file.Name, file.ContentType, bytes));
+    }
 
     // At the caret, as typing it would, not tacked on the end.
     private Task InsertEmojiAsync(string emoji) => _field?.InsertAsync(emoji) ?? Task.CompletedTask;

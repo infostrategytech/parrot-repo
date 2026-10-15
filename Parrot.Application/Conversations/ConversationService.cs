@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
+using Parrot.Application.Storage;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
@@ -13,7 +14,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
     IFacebookCredentialProtector facebookProtector, IInstagramConnectionRepository instagramConnections,
     IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector, TikTokReplyService? tikTok = null,
-    IDeliveryReceipts? receipts = null)
+    IDeliveryReceipts? receipts = null, IPrivateObjectStorage? mediaStorage = null)
 {
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
@@ -59,6 +60,213 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         }
 
         throw new NotFoundException("Connection not found.");
+    }
+
+    /// <summary>What a teammate may attach: the extension decides, never the name or type the browser sent.</summary>
+    private static readonly IReadOnlyDictionary<string, (string Kind, string ContentType)> AllowedFiles =
+        new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase)
+        {
+            [".jpg"] = (MediaKinds.Image, "image/jpeg"), [".jpeg"] = (MediaKinds.Image, "image/jpeg"), [".png"] = (MediaKinds.Image, "image/png"),
+            [".pdf"] = (MediaKinds.Document, "application/pdf"), [".txt"] = (MediaKinds.Document, "text/plain"),
+            [".doc"] = (MediaKinds.Document, "application/msword"),
+            [".docx"] = (MediaKinds.Document, "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            [".xls"] = (MediaKinds.Document, "application/vnd.ms-excel"),
+            [".xlsx"] = (MediaKinds.Document, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"),
+            [".ppt"] = (MediaKinds.Document, "application/vnd.ms-powerpoint"),
+            [".pptx"] = (MediaKinds.Document, "application/vnd.openxmlformats-officedocument.presentationml.presentation"),
+        };
+
+    public const long MaxDocumentBytes = 16 * 1024 * 1024;
+
+    // WhatsApp's limit for a picture.
+    public const long MaxImageBytes = 5 * 1024 * 1024;
+
+    private const int MaxCaption = 1024;
+
+    // A picture or file goes out on WhatsApp or Messenger. Instagram's API takes only a public address and TikTok's
+    // no files at all, so those say so rather than failing at the channel.
+    public async Task<ConversationMessage> SendFileAsync(string owner, Guid connectionId, string recipient,
+        Guid requestId, string? caption, OutgoingFile file, CancellationToken ct)
+    {
+        caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
+        if (requestId == Guid.Empty || recipient.Length is < 1 or > 32 || !recipient.All(char.IsAsciiDigit))
+            throw new ValidationException("Supply a request ID, a numeric recipient and a file.");
+        if (caption is { Length: > MaxCaption }) throw new ValidationException($"A caption can be up to {MaxCaption} characters.");
+        if (mediaStorage is null) throw new ConflictException("Sending files is not set up on this server.");
+
+        string extension = Path.GetExtension(file.FileName ?? "");
+        if (!AllowedFiles.TryGetValue(extension, out (string Kind, string ContentType) allowed))
+            throw new ValidationException("Attach a JPEG or PNG picture, or a PDF, Word, Excel, PowerPoint or text file.");
+        long limit = allowed.Kind == MediaKinds.Image ? MaxImageBytes : MaxDocumentBytes;
+        if (file.Length <= 0) throw new ValidationException("That file is empty.");
+        if (file.Length > limit) throw new ValidationException($"Pictures can be up to {MaxImageBytes / 1024 / 1024} MB and other files up to {MaxDocumentBytes / 1024 / 1024} MB.");
+        if (!LooksLike(file, extension)) throw new ValidationException("That file is not what its name says it is.");
+        string fileName = new string(Path.GetFileName(file.FileName)!.Where(static c => !char.IsControl(c)).ToArray());
+        if (fileName.Length > 120) fileName = fileName[^120..];
+        OutgoingFile safe = file with { FileName = fileName, ContentType = allowed.ContentType };
+
+        SendReplyRequest request = new(requestId, caption ?? "");
+        WhatsAppConnection? whatsApp = await connections.GetByOwnerAndIdAsync(owner, connectionId);
+        if (whatsApp is not null)
+        {
+            if (recipient.Length > 20) throw new ValidationException("Supply a request ID, a numeric recipient and a file.");
+            return await SendWhatsAppFileAsync(owner, whatsApp, recipient, request, caption, allowed.Kind, safe, ct);
+        }
+
+        FacebookConnection? page = await facebookConnections.GetByOwnerAsync(owner, ct);
+        if (page is not null && page.Id == connectionId)
+        {
+            if (caption is not null) throw new ValidationException("Messenger cannot send text with a file. Send the file on its own, then your message.");
+            return await SendFacebookFileAsync(owner, page, recipient, request, allowed.Kind, safe, ct);
+        }
+
+        if ((tikTok is not null && await tikTok.FindConnectionAsync(owner, connectionId, ct) is not null)
+            || (await instagramConnections.GetByOwnerAsync(owner, ct))?.Id == connectionId)
+            throw new ValidationException("Files cannot be sent on this channel yet.");
+        throw new NotFoundException("Connection not found.");
+    }
+
+    // The first bytes say what the file is, for the kinds that have a signature.
+    private static bool LooksLike(OutgoingFile file, string extension)
+    {
+        byte[] head = new byte[8];
+        int read;
+        using (Stream stream = file.Open()) read = stream.ReadAtLeast(head, head.Length, throwOnEndOfStream: false);
+        ReadOnlySpan<byte> bytes = head.AsSpan(0, read);
+        return extension.ToLowerInvariant() switch
+        {
+            ".jpg" or ".jpeg" => bytes.StartsWith(new byte[] { 0xFF, 0xD8, 0xFF }),
+            ".png" => bytes.StartsWith(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A }),
+            ".pdf" => bytes.StartsWith("%PDF-"u8),
+            ".docx" or ".xlsx" or ".pptx" => bytes.StartsWith(new byte[] { 0x50, 0x4B, 0x03, 0x04 }),
+            ".txt" => !bytes.Contains((byte)0),
+            ".doc" or ".xls" or ".ppt" => bytes.StartsWith(new byte[] { 0xD0, 0xCF, 0x11, 0xE0 }),
+            _ => true,
+        };
+    }
+
+    // A picture or file takes longer than a line of text: the upload to the channel comes before the send.
+    private static readonly TimeSpan MediaSendBudget = TimeSpan.FromSeconds(90);
+
+    // Kept in private storage so the thread can show what was sent, under a key built from the request id alone.
+    private static MessageAttachment AttachmentFor(string owner, Guid requestId, string kind, OutgoingFile file, string? caption)
+    {
+        string scope = new(owner.Where(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_').ToArray());
+        return new MessageAttachment
+        {
+            Kind = kind, ContentType = file.ContentType, FileName = file.FileName, SizeBytes = file.Length, Caption = caption,
+            StorageKey = $"business-media/{(scope.Length == 0 ? "unknown" : scope)}/{requestId:N}{Path.GetExtension(file.FileName).ToLowerInvariant()}",
+        };
+    }
+
+    // False when the copy could not be saved: nothing has gone to the customer yet, so the send fails cleanly.
+    private async Task<bool> KeepAsync(MessageAttachment attachment, OutgoingFile file, CancellationToken ct)
+    {
+        try
+        {
+            await using Stream stream = file.Open();
+            await mediaStorage!.PutAsync(attachment.StorageKey!, stream, file.ContentType, ct);
+            return true;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    // A request id names one message: the same id with another file is a mistake, not a retry.
+    private static ConversationMessage MatchFile(MessageDocument doc, Guid connection, string recipient, string text, OutgoingFile file)
+    {
+        MessageAttachment? kept = doc.Attachments?.FirstOrDefault();
+        if (kept is null || kept.FileName != file.FileName || kept.SizeBytes != file.Length)
+            throw new ConflictException("This request ID has already been used for a different message.");
+        return Match(doc, connection, recipient, text);
+    }
+
+    private async Task<ConversationMessage> SendWhatsAppFileAsync(string owner, WhatsAppConnection connection, string recipient,
+        SendReplyRequest request, string? caption, string kind, OutgoingFile file, CancellationToken ct)
+    {
+        if (connection.DisabledAt.HasValue || connection.WebhookVerifiedAt is null)
+            throw new ConflictException("This connection is disabled or unverified.");
+
+        MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
+        if (existing is not null) return MatchFile(existing, connection.Id, recipient, request.Text, file);
+
+        if (string.IsNullOrWhiteSpace(connection.AccessTokenEncrypted)
+            || string.IsNullOrWhiteSpace(connection.PhoneNumberId) || string.IsNullOrWhiteSpace(connection.WhatsAppBusinessAccountId))
+            throw new ConflictException("Save the account IDs and access token in this WhatsApp connection's setup before sending.");
+        string accessToken = Unprotect(() => protector.Unprotect(connection.AccessTokenEncrypted));
+        (MessageDocument latest, string? conversationKey, long? replySequence) = await PrepareAsync(owner, connection.Id, recipient, ct);
+        MessageAttachment attachment = AttachmentFor(owner, request.RequestId, kind, file, caption);
+
+        DateTime now = DateTime.UtcNow;
+        WhatsAppMessageDocument doc = new WhatsAppMessageDocument
+        {
+            MessageId = RequestKey(owner, request.RequestId), OwnerUserId = owner, ConnectionId = connection.Id,
+            Platform = MessagingPlatform.WhatsApp, ExternalAccountId = connection.WhatsAppBusinessAccountId!,
+            ChannelId = connection.PhoneNumberId!, ChannelDisplayName = connection.DisplayPhoneNumber ?? "",
+            From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), SentAt = now,
+            Type = kind, TextBody = caption, Attachments = [attachment], ReceivedAt = now, StoredAt = now,
+            Outgoing = true, SendStatus = "pending",
+            ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
+        };
+
+        return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
+        {
+            try
+            {
+                // After the reserve, so a lost race or a refused request never leaves a stored file behind.
+                if (!await KeepAsync(attachment, file, timeout)) return (null, "storage");
+                await using Stream content = file.Open();
+                return (await sender.SendMediaAsync(connection.PhoneNumberId!, accessToken, recipient, kind, file.ContentType, file.FileName, content, caption, timeout), null);
+            }
+            catch (WhatsAppRejectedException ex)
+            {
+                return (null, ex.MetaErrorCode ?? "unknown");
+            }
+        }, ct, MediaSendBudget);
+    }
+
+    private async Task<ConversationMessage> SendFacebookFileAsync(string owner, FacebookConnection page, string recipient,
+        SendReplyRequest request, string kind, OutgoingFile file, CancellationToken ct)
+    {
+        if (page.DisabledAt.HasValue || page.WebhookVerifiedAt is null)
+            throw new ConflictException("This connection is disabled or unverified.");
+
+        MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
+        if (existing is not null) return MatchFile(existing, page.Id, recipient, request.Text, file);
+
+        if (string.IsNullOrWhiteSpace(page.AccessTokenEncrypted) || string.IsNullOrWhiteSpace(page.PageId))
+            throw new ConflictException("Save the Page and its access token in this Facebook connection's setup before sending.");
+        string pageToken = Unprotect(() => facebookProtector.Unprotect(page.AccessTokenEncrypted));
+        (MessageDocument latest, string? conversationKey, long? replySequence) = await PrepareAsync(owner, page.Id, recipient, ct);
+        MessageAttachment attachment = AttachmentFor(owner, request.RequestId, kind, file, null);
+
+        DateTime now = DateTime.UtcNow;
+        FacebookMessageDocument doc = new FacebookMessageDocument
+        {
+            MessageId = RequestKey(owner, request.RequestId), OwnerUserId = owner, ConnectionId = page.Id,
+            Platform = MessagingPlatform.Facebook, ExternalAccountId = page.PageId!,
+            ChannelId = page.PageId!, ChannelDisplayName = page.PageName ?? "",
+            From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
+            Type = kind, Attachments = [attachment], ReceivedAt = now, StoredAt = now,
+            Outgoing = true, SendStatus = "pending",
+            ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? page.PageId,
+        };
+
+        return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
+        {
+            try
+            {
+                if (!await KeepAsync(attachment, file, timeout)) return (null, "storage");
+                await using Stream content = file.Open();
+                return (await facebookSender.SendMediaAsync(page.PageId!, pageToken, recipient, kind, file.ContentType, file.FileName, content, timeout), null);
+            }
+            catch (FacebookRejectedException ex)
+            {
+                return (null, ex.MetaErrorCode ?? "unknown");
+            }
+        }, ct, MediaSendBudget);
     }
 
     private async Task<ConversationMessage> SendWhatsAppAsync(string owner, WhatsAppConnection connection, string recipient,
@@ -207,7 +415,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     // Reserved before the provider is called, so concurrent requests with one request id send once.
     private async Task<ConversationMessage> ReserveAndSendAsync(string owner, MessageDocument doc, SendReplyRequest request,
         MessageDocument latest, Func<CancellationToken, Task<(string? ProviderId, string? RejectedCode)>> send,
-        CancellationToken ct)
+        CancellationToken ct, TimeSpan? budget = null)
     {
         if (!await store.ReserveAsync(doc, ct))
         {
@@ -217,7 +425,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         }
 
         // Once reserved, browser disconnection must not cancel an already dispatched send.
-        using CancellationTokenSource timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        using CancellationTokenSource timeout = new CancellationTokenSource(budget ?? TimeSpan.FromSeconds(30));
         string status;
         string? providerId = null;
         string metaErrorCode = "none";
@@ -290,7 +498,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
     internal static ConversationMessage Match(MessageDocument doc, Guid connection, string recipient, string text)
     {
-        if (doc.ConnectionId != connection || doc.From != recipient || doc.TextBody != text)
+        if (doc.ConnectionId != connection || doc.From != recipient || (doc.TextBody ?? "") != text)
             throw new ConflictException("This request ID has already been used for a different message.");
         return ToMessage(doc);
     }

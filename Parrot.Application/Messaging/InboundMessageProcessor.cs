@@ -196,8 +196,8 @@ public sealed class InboundMessageProcessor(
             // so the inbox can show it. A duplicate above has its name already.
             if (incoming.ContactName is null && contactNames is not null)
             {
-                string? name = await TimedAsync("contact_name", () => contactNames.FindAsync(incoming, cancellationToken));
-                incoming = incoming with { ContactName = name };
+                ContactProfile? profile = await TimedAsync("contact_name", () => contactNames.FindAsync(incoming, cancellationToken));
+                incoming = incoming with { ContactName = profile?.Name, ContactUsername = profile?.Username };
             }
 
             // Copied before the sequence is taken, and only for a message not stored yet, so a duplicate

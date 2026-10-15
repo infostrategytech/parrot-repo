@@ -21,6 +21,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public int? ReplyWindowHours { get; init; }
     /// <summary>The business's account on that channel; the Facebook Page id is what its inbox link needs.</summary>
     public string? AccountId { get; init; }
+    /// <summary>The customer's handle on the channel without the @ (Instagram); their profile link is built from it.</summary>
+    public string? Username { get; init; }
     /// <summary>The signed-in user pinned this conversation: it is listed above the others.</summary>
     public bool Pinned { get; init; }
     /// <summary>The user marked it unread to return to it: the row shows "!" while no message is unread.</summary>
@@ -104,6 +106,13 @@ public sealed record InboxAttachmentDto(string Name, string? Type, string? Url);
 public sealed record InboxReplyDto(Guid RequestId, string Text)
 {
     public string? AttachmentName { get; init; }
+}
+
+/// <summary>A picture or file chosen to send, read into memory so a retry sends the same bytes.</summary>
+public sealed record InboxPendingFile(string Name, string ContentType, byte[] Bytes)
+{
+    /// <summary>The server's limits: 5 MB for a picture, 16 MB for any other file.</summary>
+    public const long MaxBytes = 16 * 1024 * 1024;
 }
 
 /// <summary>Customer 360: who the customer is, beyond the conversation.</summary>

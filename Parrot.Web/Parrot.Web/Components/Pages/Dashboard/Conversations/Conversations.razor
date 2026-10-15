@@ -440,12 +440,7 @@
             if (_filters.Channel is { } channel) list = list.Where(item => item.Channel == channel);
             if (_filters.Status is { } status) list = list.Where(item => item.Status == status);
             if (_filters.AgentId is { } agent) list = list.Where(item => item.AiAgent?.Id == agent);
-            list = _filters.Sort switch
-            {
-                ConversationSort.Oldest => list.OrderBy(item => item.UpdatedAt),
-                ConversationSort.Priority => list.OrderByDescending(item => item.Priority ?? ConversationPriority.Normal).ThenByDescending(item => item.UpdatedAt),
-                _ => list
-            };
+            list = ConversationsState.Order(list, _filters.Sort);
             return list.ToList();
         }
     }
@@ -715,6 +710,7 @@
     {
         bool pinned = !item.Pinned;
         item.Pinned = pinned;
+        item.PinSaving = true;
         ConversationsState.Resort();
         try { await Client.SetPinnedAsync(item.ConnectionId, item.Sender, pinned, _lifetime.Token); }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
@@ -723,6 +719,10 @@
             ConversationsState.Resort();
             Toasts.ShowError(pinned ? "Could not pin this conversation. Try again." : "Could not unpin this conversation. Try again.");
         }
+        finally { item.PinSaving = false; }
+
+        // A read that started before the save may have landed after it; reading again settles on what the server holds.
+        await RefreshAsync();
     }
 
     private Task MarkSelectedUnreadAsync() => _selected is { } item && !item.MarkedUnread ? ToggleMarkedUnreadAsync(item) : Task.CompletedTask;

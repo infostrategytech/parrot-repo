@@ -21,6 +21,8 @@
 .conversation-composer__disclosure { display: flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-brand-primary); }
 /* Note mode, as React draws it: the note tab and the privacy line in amber. */
 .conversation-composer__disclosure.is-note { padding: var(--spacing-xs) var(--spacing-sm); color: var(--colors-accent-yellow-text); background: var(--colors-accent-amber-muted); border-radius: var(--radius-radius-md); }
+/* The paperclip sits at the right end of the tab row. */
+.conversation-composer > header { display: flex; gap: var(--spacing-sm); align-items: center; justify-content: space-between; }
 .conversation-composer.is-note ::deep .ds-tab.is-active { color: var(--colors-feedback-warning-text); background: var(--colors-accent-amber-subtle); }
 .conversation-composer__attachment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-xs); align-items: center; width: fit-content; max-width: 100%; padding: var(--spacing-xs) var(--spacing-sm); color: var(--colors-text-muted); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
 .conversation-composer__attachment button { display: grid; place-items: center; padding: 0; color: inherit; background: transparent; border: 0; cursor: pointer; }

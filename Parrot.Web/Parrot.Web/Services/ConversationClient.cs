@@ -31,6 +31,18 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
             : media;
     public Task<InboxMessageDto> SendAsync(Guid connection, string sender, InboxReplyDto request, CancellationToken ct) =>
         RequestAsync<InboxMessageDto>(HttpMethod.Post, Path(connection, sender), request, ct);
+    /// <summary>Sends a picture or document, with the typed text as its caption. The same request id makes a retry safe.</summary>
+    public async Task<InboxMessageDto> SendFileAsync(Guid connection, string sender, Guid requestId, string? caption, InboxPendingFile file, CancellationToken ct)
+    {
+        var form = new MultipartFormDataContent { { new StringContent(requestId.ToString()), "RequestId" } };
+        if (!string.IsNullOrWhiteSpace(caption)) form.Add(new StringContent(caption), "Caption");
+        form.Add(new ByteArrayContent(file.Bytes), "File", file.Name);
+        using var response = await SendAsync(HttpMethod.Post,
+            $"api/conversations/{connection}/attachments?sender={Uri.EscapeDataString(sender)}", form, ct);
+        var message = await response.Content.ReadFromJsonAsync<InboxMessageDto>(cancellationToken: ct)
+            ?? throw new HttpRequestException("The server returned an empty response.");
+        return message.Attachments is { Count: > 0 } files ? message with { Attachments = [.. files.Select(Resolve)] } : message;
+    }
     public Task<InboxUnreadDto> UnreadAsync(CancellationToken ct) =>
         RequestAsync<InboxUnreadDto>(HttpMethod.Get, "api/conversations/unread", null, ct);
     public Task<InboxMarkReadResultDto> MarkReadAsync(Guid connection, string sender, string upToMessageId, CancellationToken ct) =>
@@ -63,13 +75,16 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
     }
 
     // The response, once it is known to have succeeded; a failure becomes an HttpRequestException carrying the API's message.
-    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct)
+    private Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body, CancellationToken ct) =>
+        SendAsync(method, path, body is null ? null : JsonContent.Create(body, options: WriteOptions), ct);
+
+    private async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, HttpContent? content, CancellationToken ct)
     {
         var token = auth.IsAuthenticated ? auth.CurrentUser!.Token : throw new InvalidOperationException("Sign in to load messages.");
         using var request = new HttpRequestMessage(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         // Null optional fields are left out, so the API sees the body it expects.
-        if (body is not null) request.Content = JsonContent.Create(body, options: WriteOptions);
+        request.Content = content;
         var response = await http.SendAsync(request, ct);
         if (response.IsSuccessStatusCode) return response;
         using (response)

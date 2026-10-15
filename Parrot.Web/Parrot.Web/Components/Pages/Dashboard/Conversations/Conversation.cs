@@ -24,6 +24,8 @@ public class ConversationItem
     public bool HistoryLoaded { get; set; }
     public string Draft { get; set; } = "";
     public Guid? DraftRequestId { get; set; }
+    /// <summary>A picture or file chosen to send with the draft. Kept with it, so a retry after switching threads still carries the file.</summary>
+    public Parrot.Web.Services.InboxPendingFile? PendingFile { get; set; }
     public bool Sending { get; set; }
     public string? SendError { get; set; }
     public List<ConvMessage> Messages { get; set; } = new();
@@ -35,11 +37,16 @@ public class ConversationItem
     /// <summary>The business's account on the channel, for links into that channel's own inbox.</summary>
     public string? AccountId { get; set; }
 
+    /// <summary>The customer's handle on the channel without the @ (Instagram).</summary>
+    public string? Username { get; set; }
+
     /// <summary>The customer's chat on their own platform, or null when none can be built.</summary>
-    public ChannelLink? PlatformLink => ChannelLinks.For(Channel, Sender, AccountId);
+    public ChannelLink? PlatformLink => ChannelLinks.For(Channel, Sender, AccountId, Username);
 
     /// <summary>Pinned by the signed-in user: listed above every unpinned conversation.</summary>
     public bool Pinned { get; set; }
+    /// <summary>A pin or unpin is being saved. A list read that started before it finished must not undo it.</summary>
+    public bool PinSaving { get; set; }
 
     /// <summary>Marked unread by the user to return to it. Shown as "!" while there are no unread messages.</summary>
     public bool MarkedUnread { get; set; }

@@ -55,8 +55,10 @@ public sealed class MetaMediaDownloader(
             }
             catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
             {
-                // Never the address: it is signed and names the customer's file.
-                logger.LogWarning("media.download_failed Kind={Kind} Platform={Platform} Error={Error}", media.Kind, message.Platform, ex.GetType().Name);
+                // Never the address: it is signed and names the customer's file. The reason is what tells a missing
+                // bucket or credential from a Meta refusal, so it is kept.
+                logger.LogWarning("media.download_failed Kind={Kind} Platform={Platform} Error={Error} Reason={Reason}",
+                    media.Kind, message.Platform, ex.GetType().Name, ex.Message);
                 saved.Add(media with { SourceUrl = null });
             }
         }
@@ -69,7 +71,7 @@ public sealed class MetaMediaDownloader(
         using HttpResponseMessage response = await OpenAsync(message, media, ct);
         if (!response.IsSuccessStatusCode)
         {
-            logger.LogInformation("media.refused Platform={Platform} Status={Status}", message.Platform, (int)response.StatusCode);
+            logger.LogWarning("media.refused Kind={Kind} Platform={Platform} Status={Status}", media.Kind, message.Platform, (int)response.StatusCode);
             return media with { SourceUrl = null };
         }
 

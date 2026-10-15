@@ -65,7 +65,7 @@
 .customer-tags { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); margin-top: var(--spacing-sm); }
 .customer-tags ::deep span { padding: var(--spacing-2xs) var(--spacing-sm); color: var(--colors-text-secondary); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
 
-.customer-section ::deep .ds-tabs { margin-bottom: var(--spacing-md); }
+.customer-media-tabs { margin-bottom: var(--spacing-md); }
 .customer-media-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-xs); }
 .customer-media-state { display: grid; justify-items: start; gap: var(--spacing-xs); color: var(--colors-text-muted); }
 .customer-media-tile { position: relative; display: grid; place-items: center; aspect-ratio: 1; padding: 0; overflow: hidden; color: var(--colors-text-muted); background: var(--colors-surface-muted); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-md); cursor: pointer; }
