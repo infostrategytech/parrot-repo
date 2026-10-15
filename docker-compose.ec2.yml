@@ -149,6 +149,8 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_PUBLIC_QUOTA: ${MINIO_PUBLIC_QUOTA:-5GiB}
+      MINIO_PRIVATE_QUOTA: ${MINIO_PRIVATE_QUOTA:-50GiB}
     command:
       - |
         until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done;
@@ -156,6 +158,10 @@ services:
         mc anonymous set download local/parrot;
         # Customers' pictures and files: no anonymous access. The API is the only reader.
         mc mb --ignore-existing local/parrot-private;
+        # Cap what each bucket may grow to, so uploads cannot fill the disk. Set MINIO_*_QUOTA in .env to change.
+        # The command differs between mc releases, so try both; a server that supports neither still starts.
+        mc quota set local/parrot --size $${MINIO_PUBLIC_QUOTA:-5GiB} || mc admin bucket quota local/parrot --hard $${MINIO_PUBLIC_QUOTA:-5GiB} || echo "bucket quota not applied";
+        mc quota set local/parrot-private --size $${MINIO_PRIVATE_QUOTA:-50GiB} || mc admin bucket quota local/parrot-private --hard $${MINIO_PRIVATE_QUOTA:-50GiB} || echo "bucket quota not applied";
     networks: [parrot]
 
   # ---- Parrot ---------------------------------------------------------------

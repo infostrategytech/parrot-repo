@@ -1,11 +1,13 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Exceptions;
 using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Utils;
 
 namespace Parrot.Api.Controllers;
 
@@ -163,6 +165,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     [Monitor("conversations.send_file", SlowMs = 5000)]
     [HttpPost("{connectionId:guid}/attachments")]
     [RequestSizeLimit(ConversationService.MaxDocumentBytes + 1024 * 1024)]
+    [EnableRateLimiting(RateLimitPolicies.FileSend)]
     public async Task<IActionResult> SendFile(Guid connectionId, [FromQuery] string sender, [FromForm] SendFileForm form,
         CancellationToken cancellationToken)
     {
