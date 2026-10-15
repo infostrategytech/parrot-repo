@@ -48,4 +48,8 @@ public sealed record IncomingMedia
     public string? ProviderMediaId { get; init; }
     public string? SourceUrl { get; init; }
     public string? StorageKey { get; init; }
+
+    /// <summary>See <see cref="Parrot.Domain.Entities.Messages.MediaStatus"/>. Null until the copy has been attempted.</summary>
+    public string? Status { get; init; }
+    public string? FailureReason { get; init; }
 }

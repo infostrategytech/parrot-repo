@@ -76,8 +76,10 @@ public sealed record StoredMessage
 }
 
 /// <param name="Kind">See <see cref="MediaKinds"/>.</param>
-/// <param name="Available">False when the file could not be saved (too large, or the platform refused it).</param>
-public sealed record StoredAttachment(string Kind, string? ContentType, string? FileName, long? SizeBytes, bool Available);
+/// <param name="Available">False when the file cannot be read now: still pending, too large, or the platform refused it.</param>
+/// <param name="Status">pending, ready, failed or too_large (see MediaStatus).</param>
+public sealed record StoredAttachment(string Kind, string? ContentType, string? FileName, long? SizeBytes, bool Available,
+    string Status = Parrot.Domain.Entities.Messages.MediaStatus.Ready);
 
 /// <summary>
 /// Pushed to the owner's inbox when a channel reports receipts for replies in a conversation. It names the

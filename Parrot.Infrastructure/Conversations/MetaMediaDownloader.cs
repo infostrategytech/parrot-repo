@@ -9,6 +9,7 @@ using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
+using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
 using Parrot.Infrastructure.Data;
 
@@ -59,7 +60,7 @@ public sealed class MetaMediaDownloader(
                 // bucket or credential from a Meta refusal, so it is kept.
                 logger.LogWarning("media.download_failed Kind={Kind} Platform={Platform} Error={Error} Reason={Reason}",
                     media.Kind, message.Platform, ex.GetType().Name, ex.Message);
-                saved.Add(media with { SourceUrl = null });
+                saved.Add(Failed(media, ex is OperationCanceledException ? "timeout" : "error"));
             }
         }
 
@@ -72,12 +73,12 @@ public sealed class MetaMediaDownloader(
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning("media.refused Kind={Kind} Platform={Platform} Status={Status}", media.Kind, message.Platform, (int)response.StatusCode);
-            return media with { SourceUrl = null };
+            return Failed(media, "refused");
         }
 
         long limit = storageSettings.Value.MaxInboundMediaBytes;
         if (response.Content.Headers.ContentLength > limit)
-            return media with { SourceUrl = null, SizeBytes = response.Content.Headers.ContentLength };
+            return TooLarge(media, response.Content.Headers.ContentLength);
 
         // Buffered: S3 needs the length up front, and the cap bounds the memory.
         await using MemoryStream bytes = new();
@@ -87,11 +88,11 @@ public sealed class MetaMediaDownloader(
             int read;
             while ((read = await body.ReadAsync(chunk, ct)) > 0)
             {
-                if (bytes.Length + read > limit) return media with { SourceUrl = null };
+                if (bytes.Length + read > limit) return TooLarge(media, null);
                 bytes.Write(chunk, 0, read);
             }
         }
-        if (bytes.Length == 0) return media with { SourceUrl = null };
+        if (bytes.Length == 0) return Failed(media, "empty");
 
         string contentType = media.ContentType
             ?? response.Content.Headers.ContentType?.MediaType
@@ -106,10 +107,19 @@ public sealed class MetaMediaDownloader(
             ContentType = contentType,
             SizeBytes = bytes.Length,
             StorageKey = key,
+            Status = MediaStatus.Ready,
+            FailureReason = null,
             // The link was only the way in; it expires and is not kept.
             SourceUrl = null,
         };
     }
+
+    // The link was only the way in; it expires and is not kept, whatever the outcome.
+    private static IncomingMedia Failed(IncomingMedia media, string reason) =>
+        media with { SourceUrl = null, Status = MediaStatus.Failed, FailureReason = reason };
+
+    private static IncomingMedia TooLarge(IncomingMedia media, long? size) =>
+        media with { SourceUrl = null, SizeBytes = size ?? media.SizeBytes, Status = MediaStatus.TooLarge };
 
     private async Task<HttpResponseMessage> OpenAsync(IncomingMessage message, IncomingMedia media, CancellationToken ct)
     {

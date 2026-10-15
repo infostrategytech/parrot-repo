@@ -153,10 +153,10 @@ else
                         }
                         else if (!file.Available)
                         {
-                            <div class="message-file is-unavailable">
+                            <div class="@($"message-file is-unavailable {(file.IsPending ? "is-pending" : null)}")" aria-busy="@(file.IsPending ? "true" : null)">
                                 <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
                                 <span><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
-                                      <Typography TextStyle="TextStyle.Small10Medium" As="small">Could not be loaded here. Open it on the customer's platform.</Typography></span>
+                                      <Typography TextStyle="TextStyle.Small10Medium" As="small">@MediaLabels.Unavailable(file)</Typography></span>
                             </div>
                         }
                         else if (file.Kind is "image" or "gif" or "sticker")

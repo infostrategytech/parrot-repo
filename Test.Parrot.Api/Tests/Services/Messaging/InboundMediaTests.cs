@@ -212,6 +212,7 @@ public class InboundMediaTests
         Assert.StartsWith("customer-media/user-1/", saved.StorageKey);
         Assert.EndsWith(".gif", saved.StorageKey);
         Assert.Equal([1, 2, 3], storage.Objects[saved.StorageKey!].Bytes);
+        Assert.Equal(MediaStatus.Ready, saved.Status);
     }
 
     [Theory]
@@ -230,6 +231,7 @@ public class InboundMediaTests
         Assert.Empty(http.Requests);
         Assert.Null(saved.StorageKey);
         Assert.Empty(storage.Objects);
+        Assert.Equal(MediaStatus.Failed, saved.Status);
     }
 
     [Fact]
@@ -243,6 +245,7 @@ public class InboundMediaTests
 
         Assert.Null(saved.StorageKey);
         Assert.Empty(storage.Objects);
+        Assert.Equal(MediaStatus.TooLarge, saved.Status);
     }
 
     [Fact]
@@ -255,6 +258,34 @@ public class InboundMediaTests
             Facebook(new IncomingMedia { Kind = MediaKinds.Image, SourceUrl = "https://scontent.xx.fbcdn.net/a.jpg" }), default));
 
         Assert.Null(saved.StorageKey);
+        Assert.Equal(MediaStatus.Failed, saved.Status);
+        Assert.Equal("refused", saved.FailureReason);
+    }
+
+    [Theory]
+    [InlineData(null, "key", "image", MediaStatus.Ready)]
+    [InlineData(null, null, "image", MediaStatus.Failed)]
+    [InlineData(null, null, "link", MediaStatus.Ready)]
+    [InlineData(MediaStatus.Pending, null, "image", MediaStatus.Pending)]
+    [InlineData(MediaStatus.TooLarge, null, "document", MediaStatus.TooLarge)]
+    public void A_message_stored_before_statuses_existed_reads_its_status_from_the_copy(string? status, string? key, string kind, string expected) =>
+        Assert.Equal(expected, MediaStatus.Of(new MessageAttachment { Kind = kind, Status = status, StorageKey = key }));
+
+    [Fact]
+    public void A_pending_file_is_pushed_as_unavailable_with_its_status()
+    {
+        MessageDocument document = new WhatsAppMessageDocumentMapper().ToDocument(new IncomingMessage
+        {
+            MessageId = "whatsapp:wamid.Q", Platform = MessagingPlatform.WhatsApp, ExternalAccountId = "waba", From = "2348012345678",
+            Timestamp = "1", Type = "image", ChannelId = "phone-1", ChannelDisplayName = "",
+            Media = [new IncomingMedia { Kind = MediaKinds.Image, ProviderMediaId = "m", Status = MediaStatus.Pending }],
+        });
+        document.ConversationKey = "k";
+        document.Sequence = 1;
+
+        StoredAttachment pushed = Assert.Single(document.ToStoredMessage().Attachments!);
+        Assert.False(pushed.Available);
+        Assert.Equal(MediaStatus.Pending, pushed.Status);
     }
 
     [Fact]

@@ -89,7 +89,10 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
 /// </summary>
 public sealed record InboxMediaDto(string Kind, string? ContentType, string? FileName, long? SizeBytes, string? Url)
 {
+    /// <summary>pending, ready, failed or too_large. A file with no status is one the API sent before the field existed.</summary>
+    public string Status { get; init; } = "ready";
     public bool Available => Url is not null;
+    public bool IsPending => Status == "pending";
     public bool IsVisual => Kind is "image" or "gif" or "sticker" or "video";
     public bool IsLink => Kind == "link";
 }

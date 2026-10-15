@@ -46,6 +46,8 @@ public sealed class WhatsAppMessageDocumentMapper : IMessageDocumentMapper
                 SizeBytes = m.SizeBytes,
                 Caption = m.Caption,
                 StorageKey = m.StorageKey,
+                Status = m.Status,
+                FailureReason = m.FailureReason,
                 ProviderMediaId = m.ProviderMediaId,
                 SourceUrl = m.SourceUrl,
             })]

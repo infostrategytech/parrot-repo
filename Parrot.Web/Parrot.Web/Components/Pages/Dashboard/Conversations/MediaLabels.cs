@@ -22,6 +22,14 @@ public static class MediaLabels
         _ => "File",
     };
 
+    /// <summary>Why a file cannot be opened right now, in the words the thread shows under its name.</summary>
+    public static string Unavailable(InboxMediaDto file) => file.Status switch
+    {
+        "pending" => "Still loading. It will appear here when it is saved.",
+        "too_large" => "Too large to keep here. Open it on the customer's platform.",
+        _ => "Could not be loaded here. Open it on the customer's platform.",
+    };
+
     /// <summary>"2.4 MB", or empty when the platform sent no size.</summary>
     public static string Size(long? bytes) => bytes switch
     {

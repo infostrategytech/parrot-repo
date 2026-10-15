@@ -147,7 +147,7 @@
                                 var file = item.Media;
                                 @if (!file.Available)
                                 {
-                                    <span class="customer-media-tile is-unavailable" title="@($"{MediaLabels.Name(file)} could not be loaded")">
+                                    <span class="customer-media-tile is-unavailable" title="@($"{MediaLabels.Name(file)}: {MediaLabels.Unavailable(file)}")">
                                         <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
                                     </span>
                                 }

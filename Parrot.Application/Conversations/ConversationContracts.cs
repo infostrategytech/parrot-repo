@@ -41,6 +41,9 @@ public record ConversationMessage(string Id, string Text, bool Outgoing, string 
 /// </summary>
 public record MessageMedia(string Kind, string? ContentType, string? FileName, long? SizeBytes, string? Url)
 {
+    /// <summary>pending, ready, failed or too_large (see MediaStatus). Ready is the default for a file that has a Url.</summary>
+    public string Status { get; init; } = Parrot.Domain.Entities.Messages.MediaStatus.Ready;
+
     /// <summary>Where the private copy lives. Server side only: swapped for <see cref="Url"/> before it leaves the API.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? StorageKey { get; init; }

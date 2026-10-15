@@ -154,7 +154,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         string scope = new(owner.Where(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_').ToArray());
         return new MessageAttachment
         {
-            Kind = kind, ContentType = file.ContentType, FileName = file.FileName, SizeBytes = file.Length, Caption = caption,
+            Kind = kind, ContentType = file.ContentType, FileName = file.FileName, SizeBytes = file.Length, Caption = caption, Status = MediaStatus.Ready,
             StorageKey = $"business-media/{(scope.Length == 0 ? "unknown" : scope)}/{requestId:N}{Path.GetExtension(file.FileName).ToLowerInvariant()}",
         };
     }
@@ -486,7 +486,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
     /// <summary>The unsigned form: a stored copy carries its key, a link its address. The API signs the key before it answers.</summary>
     public static MessageMedia ToMedia(MessageAttachment a) => new(a.Kind, a.ContentType, a.FileName, a.SizeBytes,
-        a.Kind == MediaKinds.Link ? a.SourceUrl : null) { StorageKey = a.StorageKey };
+        a.Kind == MediaKinds.Link ? a.SourceUrl : null) { StorageKey = a.StorageKey, Status = MediaStatus.Of(a) };
 
     // What the customer's channel has told us about a reply, over our own send state. A reply that
     // failed stays failed.
