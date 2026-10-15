@@ -71,6 +71,7 @@ public sealed class WhatsAppMessageDocumentMapper : IMessageDocumentMapper
         StoredAt = DateTime.UtcNow,
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
+        ReplyTo = message.ReplyToProviderId is { } quoted ? new MessageReplyTo { ProviderMessageId = quoted } : null,
         Attachments = Attachments(message),
     };
 }
@@ -98,6 +99,7 @@ public sealed class FacebookMessageDocumentMapper : IMessageDocumentMapper
         StoredAt = DateTime.UtcNow,
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
+        ReplyTo = message.ReplyToProviderId is { } quoted ? new MessageReplyTo { ProviderMessageId = quoted } : null,
         AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
         Attachments = WhatsAppMessageDocumentMapper.Attachments(message),
     };
@@ -126,6 +128,7 @@ public sealed class TikTokMessageDocumentMapper : IMessageDocumentMapper
         StoredAt = DateTime.UtcNow,
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
+        ReplyTo = message.ReplyToProviderId is { } quoted ? new MessageReplyTo { ProviderMessageId = quoted } : null,
         AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
         Attachments = WhatsAppMessageDocumentMapper.Attachments(message),
     };
@@ -153,6 +156,7 @@ public sealed class InstagramMessageDocumentMapper : IMessageDocumentMapper
         StoredAt = DateTime.UtcNow,
         ChannelId = message.ChannelId,
         ChannelDisplayName = message.ChannelDisplayName,
+        ReplyTo = message.ReplyToProviderId is { } quoted ? new MessageReplyTo { ProviderMessageId = quoted } : null,
         AttachmentUrls = message.AttachmentUrls is { Count: > 0 } urls ? [.. urls] : null,
         Attachments = WhatsAppMessageDocumentMapper.Attachments(message),
     };

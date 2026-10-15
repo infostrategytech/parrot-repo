@@ -81,7 +81,15 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
     /// <summary>open or answered, for an AI question.</summary>
     public string? RequestStatus { get; init; }
     public string? Answer { get; init; }
+    /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
+    public InboxQuoteDto? ReplyTo { get; init; }
 }
+
+/// <summary>
+/// A quoted message, shown above a reply. Id is the quoted message's InboxMessageDto.Id, null when it is not
+/// in the inbox. Type says what it was when it has no text ("image", "document", …).
+/// </summary>
+public sealed record InboxQuoteDto(string? Id, bool Outgoing, string? Text, string? Type);
 
 /// <summary>
 /// One file a customer sent. Kind is image, gif, sticker, video, audio, voice, document or link. Url is a
@@ -106,6 +114,8 @@ public sealed record InboxAttachmentDto(string Name, string? Type, string? Url);
 public sealed record InboxReplyDto(Guid RequestId, string Text)
 {
     public string? AttachmentName { get; init; }
+    /// <summary>The id of the message this replies to, quoting it; null for a plain reply.</summary>
+    public string? ReplyToMessageId { get; init; }
 }
 
 /// <summary>A picture or file chosen to send, read into memory so a retry sends the same bytes.</summary>

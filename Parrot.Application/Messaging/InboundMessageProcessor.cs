@@ -211,6 +211,7 @@ public sealed class InboundMessageProcessor(
             MessageDocument document = mappers.ToDocument(incoming);
             document.ConversationKey = inbound.ConversationKey;
             document.Receiver = inbound.Receiver;
+            if (document.ReplyTo is { } reply) document.ReplyTo = await QuotedAsync(document, reply, cancellationToken);
             document.Sequence = await sequence.NextAsync(inbound.ConversationKey, cancellationToken);
 
             stored = await store.InsertOrGetAsync(document, cancellationToken);
@@ -229,6 +230,28 @@ public sealed class InboundMessageProcessor(
             string reason = MessageMetrics.Classify(ex);
             MessageMetrics.PersistFailed.Add(1, new KeyValuePair<string, object?>("reason", reason));
             throw new StageFailedException("persist", reason, ex);
+        }
+    }
+
+    // The customer quoted one of the conversation's messages: theirs (stored under "{platform}:{id}") or one of
+    // our replies (found by the id the channel gave it). Kept as a copy, so the quote shows with the message.
+    // Not found (older than the inbox, or another conversation's), the reply keeps only the channel's id. A
+    // failed lookup never fails the message: it is stored without the copy.
+    private async Task<MessageReplyTo> QuotedAsync(MessageDocument document, MessageReplyTo reply, CancellationToken cancellationToken)
+    {
+        try
+        {
+            string id = reply.ProviderMessageId;
+            MessageDocument? quoted = await store.FindAsync($"{MessageReplies.Prefix(document.Platform)}:{id}", cancellationToken);
+            if (quoted is null && document.ConnectionId is { } connection)
+                quoted = await store.FindByProviderIdAsync(connection, id, cancellationToken);
+            return quoted is not null && quoted.ConnectionId == document.ConnectionId && quoted.From == document.From
+                ? MessageReplies.Quote(quoted, id)
+                : reply;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return reply;
         }
     }
 

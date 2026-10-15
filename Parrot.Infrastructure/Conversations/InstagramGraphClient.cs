@@ -123,15 +123,33 @@ public sealed class InstagramAccountApi(HttpClient http, IOptions<InstagramSetti
 // No automatic retry: a timeout leaves the outcome unknown, and sending again could deliver twice.
 public sealed class InstagramSender(HttpClient http, IOptions<InstagramSettings> options) : IInstagramSender
 {
-    public async Task<string> SendAsync(string accountId, string accessToken, string recipient, string text, CancellationToken ct)
+    public Task<string> SendAsync(string accountId, string accessToken, string recipient, string text, CancellationToken ct) =>
+        SendTextAsync(accountId, accessToken, recipient, text, null, ct);
+
+    // Quoting a message (reply_to.mid). Instagram documents it for accounts linked to a Facebook Page; should an
+    // account refuse the field (error 100, an invalid parameter), the text goes out again without the quote. A
+    // refused send never reached the customer, so this cannot deliver twice.
+    public async Task<string> SendReplyAsync(string accountId, string accessToken, string recipient, string text, string replyTo, CancellationToken ct)
+    {
+        try
+        {
+            return await SendTextAsync(accountId, accessToken, recipient, text, replyTo, ct);
+        }
+        catch (InstagramRejectedException ex) when (ex.MetaErrorCode == "100")
+        {
+            return await SendTextAsync(accountId, accessToken, recipient, text, null, ct);
+        }
+    }
+
+    private async Task<string> SendTextAsync(string accountId, string accessToken, string recipient, string text, string? replyTo, CancellationToken ct)
     {
         using HttpRequestMessage request = new(HttpMethod.Post, InstagramGraph.Url(options, $"{Uri.EscapeDataString(accountId)}/messages"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-        request.Content = JsonContent.Create(new
+        request.Content = JsonContent.Create(new Dictionary<string, object?>
         {
-            recipient = new { id = recipient },
-            message = new { text },
-        });
+            ["recipient"] = new { id = recipient },
+            ["message"] = new { text },
+        }.Quoting(replyTo));
         long started = System.Diagnostics.Stopwatch.GetTimestamp();
         HttpResponseMessage response;
         try

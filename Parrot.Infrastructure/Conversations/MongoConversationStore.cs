@@ -124,6 +124,10 @@ public sealed class MongoConversationStore : IConversationStore
     public async Task<MessageDocument?> FindRequestAsync(string owner, Guid request, CancellationToken ct) =>
         await _messages.Find(x => x.OwnerUserId == owner && x.MessageId == ConversationService.RequestKey(owner, request)).FirstOrDefaultAsync(ct);
 
+    public async Task<MessageDocument?> FindMessageAsync(string owner, Guid connection, string sender, string messageId, CancellationToken ct) =>
+        await _messages.Find(x => x.MessageId == messageId && x.OwnerUserId == owner && x.ConnectionId == connection && x.From == sender)
+            .FirstOrDefaultAsync(ct);
+
     public async Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct)
     {
         try { await _messages.InsertOneAsync(message, cancellationToken: ct); return true; }

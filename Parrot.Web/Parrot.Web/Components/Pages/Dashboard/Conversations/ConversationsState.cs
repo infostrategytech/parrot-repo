@@ -96,6 +96,7 @@ public class ConversationsState
                 KnowledgeUpdated = message.LearningStatus == "knowledge_updated",
                 Answered = message.RequestStatus == "answered",
                 Answer = message.Answer,
+                ReplyTo = message.ReplyTo,
             };
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
     }
@@ -147,6 +148,7 @@ public class ConversationsState
             // Described without addresses: the files are readable only through the API, which a read of the
             // thread signs. The thread is read again for a message that carries any.
             Attachments = message.Attachments?.Select(a => new InboxMediaDto(a.Kind, a.ContentType, a.FileName, a.SizeBytes, null)).ToList(),
+            ReplyTo = message.ReplyTo is { } quote ? new InboxQuoteDto(quote.Id, quote.Outgoing, quote.Text, quote.Type) : null,
         }]);
         return true;
     }
