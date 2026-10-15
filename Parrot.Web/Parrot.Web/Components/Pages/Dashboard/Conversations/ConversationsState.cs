@@ -27,7 +27,7 @@ public class ConversationsState
             item.UnreadCount = summary.UnreadCount;
             item.AccountId = summary.AccountId;
             item.Username = summary.Username;
-            item.Pinned = summary.Pinned;
+            if (!item.PinSaving) item.Pinned = summary.Pinned;
             item.MarkedUnread = summary.MarkedUnread;
             item.LastCustomerMessageAt = summary.LastCustomerMessageAt;
             item.ReplyWindowHours = summary.ReplyWindowHours;
@@ -42,6 +42,15 @@ public class ConversationsState
         }
         Resort();
     }
+
+    /// <summary>The inbox's own order, with the pins above the rest whichever sort is chosen. Newest first is the loaded order.</summary>
+    public static IEnumerable<ConversationItem> Order(IEnumerable<ConversationItem> list, ConversationSort sort) => sort switch
+    {
+        ConversationSort.Oldest => list.OrderByDescending(item => item.Pinned).ThenBy(item => item.UpdatedAt),
+        ConversationSort.Priority => list.OrderByDescending(item => item.Pinned)
+            .ThenByDescending(item => item.Priority ?? ConversationPriority.Normal).ThenByDescending(item => item.UpdatedAt),
+        _ => list,
+    };
 
     /// <summary>Pinned conversations first, then newest first within each group, so new messages land below the pins.</summary>
     public void Resort() => Conversations.Sort((a, b) =>

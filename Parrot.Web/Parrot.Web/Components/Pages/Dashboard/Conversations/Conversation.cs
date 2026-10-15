@@ -45,6 +45,8 @@ public class ConversationItem
 
     /// <summary>Pinned by the signed-in user: listed above every unpinned conversation.</summary>
     public bool Pinned { get; set; }
+    /// <summary>A pin or unpin is being saved. A list read that started before it finished must not undo it.</summary>
+    public bool PinSaving { get; set; }
 
     /// <summary>Marked unread by the user to return to it. Shown as "!" while there are no unread messages.</summary>
     public bool MarkedUnread { get; set; }
