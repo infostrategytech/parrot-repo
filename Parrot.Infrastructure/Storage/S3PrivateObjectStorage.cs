@@ -13,7 +13,7 @@ namespace Parrot.Infrastructure.Storage;
 /// </summary>
 public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
 {
-    private readonly IAmazonS3 _client;
+    private readonly Lazy<IAmazonS3> _lazyClient;
     private readonly string _bucket;
 
     public S3PrivateObjectStorage(IOptions<StorageSettings> settings)
@@ -33,7 +33,8 @@ public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
             config.AuthenticationRegion = value.Region;
         }
 
-        _client = new AmazonS3Client(value.AccessKey, value.SecretKey, config);
+        // Built on first use, so a deployment with no credentials yet still boots.
+        _lazyClient = new Lazy<IAmazonS3>(() => new AmazonS3Client(value.AccessKey, value.SecretKey, config));
     }
 
     // Below this a stream is read into memory and sent in one request; above it, in parts of this size.
@@ -43,7 +44,7 @@ public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
     {
         if (content.CanSeek)
         {
-            await _client.PutObjectAsync(
+            await _lazyClient.Value.PutObjectAsync(
                 new PutObjectRequest { BucketName = _bucket, Key = key, InputStream = content, ContentType = contentType, AutoCloseStream = false },
                 cancellationToken);
             return;
@@ -51,7 +52,7 @@ public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
 
         // A stream of unknown length (a download in flight): sent in parts, so memory stays at one part at a
         // time. If the stream fails part way the upload is aborted and nothing is left under the key.
-        using TransferUtility transfer = new(_client, new TransferUtilityConfig { ConcurrentServiceRequests = 2 });
+        using TransferUtility transfer = new(_lazyClient.Value, new TransferUtilityConfig { ConcurrentServiceRequests = 2 });
         await transfer.UploadAsync(
             new TransferUtilityUploadRequest
             {
@@ -64,7 +65,7 @@ public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
     {
         try
         {
-            GetObjectMetadataResponse response = await _client.GetObjectMetadataAsync(_bucket, key, cancellationToken);
+            GetObjectMetadataResponse response = await _lazyClient.Value.GetObjectMetadataAsync(_bucket, key, cancellationToken);
             return new StoredObjectInfo(response.Headers.ContentType ?? "application/octet-stream", response.ContentLength);
         }
         catch (AmazonS3Exception ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
@@ -77,7 +78,7 @@ public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
     {
         try
         {
-            GetObjectResponse response = await _client.GetObjectAsync(
+            GetObjectResponse response = await _lazyClient.Value.GetObjectAsync(
                 new GetObjectRequest { BucketName = _bucket, Key = key, ByteRange = new ByteRange(start, end) }, cancellationToken);
             return new StoredObject(response.ResponseStream, response.Headers.ContentType ?? "application/octet-stream", response.ContentLength);
         }
@@ -91,7 +92,7 @@ public sealed class S3PrivateObjectStorage : IPrivateObjectStorage
     {
         try
         {
-            GetObjectResponse response = await _client.GetObjectAsync(_bucket, key, cancellationToken);
+            GetObjectResponse response = await _lazyClient.Value.GetObjectAsync(_bucket, key, cancellationToken);
             // The stream owns the response: disposing the stream releases the connection.
             return new StoredObject(response.ResponseStream, response.Headers.ContentType ?? "application/octet-stream", response.ContentLength);
         }
