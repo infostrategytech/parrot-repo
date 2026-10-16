@@ -113,6 +113,7 @@
 .agent-advanced__content > .agent-advanced__field + .agent-advanced__field,
 .agent-advanced__content > .agent-advanced__field + .agent-advanced__row,
 .agent-advanced__topics + .agent-advanced__field { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.agent-advanced__field ::deep .agent-advanced__add-knowledge { justify-self: start; }
 .agent-advanced__row ::deep .ds-segmented { width: var(--ds-agent-advanced-control); }
 .agent-advanced__field { display: grid; gap: var(--spacing-md); padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl); }
 .agent-advanced__field.is-indented { padding-top: var(--spacing-none); border-top: 0; }
@@ -169,6 +170,9 @@
   .agent-advanced__row { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-md); }
   .agent-advanced__row ::deep .ds-segmented { width: 100%; }
   .agent-advanced__canvas ::deep .ds-button { justify-self: start; }
+  /* Stacked: a label like "Always" and a switch keep their own size, under the words. */
+  .agent-advanced__row > ::deep .status-badge,
+  .agent-advanced__row > ::deep .toggle { justify-self: start; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -177,3 +181,18 @@
   .agent-advanced__content,
   .agent-advanced__groups { animation: none; }
 }
+
+/* "More options": the optional extras, folded under one row. */
+.agent-advanced ::deep .agent-advanced__more {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-xl);
+  align-items: center;
+  width: 100%;
+  min-height: var(--ds-agent-advanced-row);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  text-align: left;
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.agent-advanced ::deep .agent-advanced__more:hover { background: var(--colors-interaction-hover); }
+.agent-advanced ::deep .agent-advanced__more.is-open .agent-advanced__chevron { transform: rotate(180deg); }

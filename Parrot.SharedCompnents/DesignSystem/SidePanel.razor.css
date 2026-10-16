@@ -1,0 +1,102 @@
+/* An inset card anchored right: lifted off the page rather than welded to
+   its edge, over a blurred page that stays readable as context. */
+
+.ds-side-panel-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-side-panel-layer);
+  display: flex;
+  justify-content: flex-end;
+  padding: var(--spacing-md);
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-side-panel-blur));
+  animation: ds-side-panel-backdrop-in var(--ds-side-panel-backdrop-enter) ease;
+}
+
+.ds-side-panel {
+  display: grid;
+  /* minmax(0, 1fr), not 1fr: a plain 1fr refuses to shrink below its content,
+     so the body would push the footer off screen instead of scrolling. */
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* The same for the width: wide content (a row of choices) wraps or
+     scrolls inside the panel instead of pushing it past a phone's edge. */
+  grid-template-columns: minmax(0, 1fr);
+  width: min(var(--ds-side-panel-width), 100%);
+  height: 100%;
+  overflow: hidden;
+  background: var(--colors-surface-elevated);
+  border-radius: var(--radius-radius-3xl);
+  outline: 0;
+  box-shadow: 0 var(--spacing-2xl) var(--spacing-6xl) var(--colors-surface-shadow-diffuse);
+  animation: ds-side-panel-in var(--ds-side-panel-enter) var(--ds-side-panel-ease);
+}
+
+.ds-side-panel-backdrop {
+  /* Gaps in the token set: no z-index, panel-width, border-width or motion
+     scale. The editor drawer's values, except the layer: under toasts (110)
+     and dialogs (120), so a save's toast and an "are you sure?" opened from
+     the panel show above it. */
+  --ds-side-panel-layer: 100;
+  --ds-side-panel-width: 680px;
+  --ds-side-panel-blur: 3px;
+  --ds-side-panel-backdrop-enter: 150ms;
+  --ds-side-panel-enter: 220ms;
+  --ds-side-panel-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ds-side-panel-hairline: 1px;
+  --ds-side-panel-rise: 24px;
+}
+
+.ds-side-panel__header {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: flex-start;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: var(--ds-side-panel-hairline) solid var(--colors-surface-border);
+}
+
+.ds-side-panel__badge {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  color: var(--colors-accent-brand-text);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-md);
+}
+
+.ds-side-panel__titles { display: grid; gap: var(--spacing-2xs); flex: 1; min-width: 0; align-self: center; }
+::deep .ds-side-panel__eyebrow { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.ds-side-panel__titles ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+.ds-side-panel__body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: start;
+  gap: var(--spacing-lg);
+  overflow-y: auto;
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+
+.ds-side-panel__footer {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--colors-surface-muted);
+  border-top: var(--ds-side-panel-hairline) solid var(--colors-surface-border);
+}
+
+@keyframes ds-side-panel-backdrop-in {
+  from { opacity: 0; }
+}
+
+@keyframes ds-side-panel-in {
+  from { opacity: 0; transform: translateX(var(--ds-side-panel-rise)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-side-panel-backdrop,
+  .ds-side-panel { animation: none; }
+}

@@ -10,6 +10,7 @@
 @inject IBusinessKnowledge Knowledge
 @inject IAgentCapabilities AgentCapabilities
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
+@inject Parrot.Web.Components.Pages.Dashboard.TeachAi.BusinessIntroState Intro
 @using Parrot.Web.Features.Dashboard.AiAgents
 @using Parrot.Web.Components.Pages.Dashboard.TeachAi
 @implements IDisposable
@@ -25,183 +26,185 @@
 
 <PageTitle>AI Operations · OmniAI</PageTitle>
 
-<main class="@($"operations-main {(IsEmpty ? "is-empty" : null)}")">
-    <header class="operations-header">
-        <div class="operations-heading">
-            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">AI Operations</Typography>
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Your agents and what they need from you.</Typography>
-        </div>
-        @if (AiAgentsState.Agents.Count > 0)
-        {
-            <Button Class="ds-no-shrink" @onclick="CreateAgentAsync">
-                <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-                <ChildContent>Create agent</ChildContent>
-            </Button>
-        }
-    </header>
-
-    @if (Loading)
-    {
-        <div class="agent-grid" aria-busy="true">
-            @for (var index = 0; index < 3; index++)
+@* A new agent is created in a full-screen flow of its own (AgentCreate),
+   then configured on its page (designer, 15 October 2026). *@
+    <main class="@($"operations-main {(IsEmpty ? "is-empty" : null)}")">
+        <header class="operations-header">
+            <div class="operations-heading">
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">AI Operations</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Your agents and what they need from you.</Typography>
+            </div>
+            @if (AiAgentsState.Agents.Count > 0)
             {
-                <div class="agent-card-skeleton">
-                    <Skeleton Shape="SkeletonShape.Block" Width="var(--ds-skeleton-avatar)" Height="var(--ds-skeleton-avatar)" Order="@(index * 3)" />
-                    <Skeleton Shape="SkeletonShape.Block" Height="var(--ds-skeleton-copy)" Order="@(index * 3 + 1)" />
-                    <Skeleton Shape="SkeletonShape.Block" Height="var(--ds-skeleton-body)" Order="@(index * 3 + 2)" />
-                </div>
+                <Button Class="ds-no-shrink" @onclick="CreateAgentAsync">
+                    <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                    <ChildContent>Create agent</ChildContent>
+                </Button>
             }
-        </div>
-    }
-    else if (AiAgentsState.LoadFailed)
-    {
-        <div class="operations-start">
+        </header>
+
+        @if (Loading)
+        {
+            <div class="agent-grid" aria-busy="true">
+                @for (var index = 0; index < 3; index++)
+                {
+                    <div class="agent-card-skeleton">
+                        <Skeleton Shape="SkeletonShape.Block" Width="var(--ds-skeleton-avatar)" Height="var(--ds-skeleton-avatar)" Order="@(index * 3)" />
+                        <Skeleton Shape="SkeletonShape.Block" Height="var(--ds-skeleton-copy)" Order="@(index * 3 + 1)" />
+                        <Skeleton Shape="SkeletonShape.Block" Height="var(--ds-skeleton-body)" Order="@(index * 3 + 2)" />
+                    </div>
+                }
+            </div>
+        }
+        else if (AiAgentsState.LoadFailed)
+        {
+            <div class="operations-start">
+                <section class="operations-empty">
+                    <EmptyState Glyph="IconName.RiErrorWarningFill"
+                                Size="EmptyStateSize.Page"
+                                Title="We couldn't load your agents"
+                                Description="Check your connection and try again.">
+                        <Action>
+                            <Button Busy="AiAgentsState.IsLoading" @onclick="() => AiAgentsState.LoadAsync(again: true)">Try again</Button>
+                        </Action>
+                    </EmptyState>
+                </section>
+            </div>
+        }
+        else if (IsEmpty)
+        {
+            @* Nothing yet: the way in sits in the middle of the page, in front
+               of them, with what their agents will know just under it. *@
+            <div class="operations-start">
             <section class="operations-empty">
-                <EmptyState Glyph="IconName.RiErrorWarningFill"
+                <EmptyState Glyph="IconName.RiRobot3Fill"
                             Size="EmptyStateSize.Page"
-                            Title="We couldn't load your agents"
-                            Description="Check your connection and try again.">
+                            Title="No agents yet"
+                            Description="Create an agent to answer your customers and handle routine requests for you.">
                     <Action>
-                        <Button Busy="AiAgentsState.IsLoading" @onclick="() => AiAgentsState.LoadAsync(again: true)">Try again</Button>
+                        <Button @onclick="CreateAgentAsync">
+                            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                            <ChildContent>Create agent</ChildContent>
+                        </Button>
                     </Action>
                 </EmptyState>
             </section>
-        </div>
-    }
-    else if (IsEmpty)
-    {
-        @* Nothing yet: the way in sits in the middle of the page, in front
-           of them, with what their agents will know just under it. *@
-        <div class="operations-start">
-        <section class="operations-empty">
-            <EmptyState Glyph="IconName.RiRobot3Fill"
-                        Size="EmptyStateSize.Page"
-                        Title="No agents yet"
-                        Description="Create an agent to answer your customers and handle routine requests for you.">
-                <Action>
-                    <Button @onclick="CreateAgentAsync">
-                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-                        <ChildContent>Create agent</ChildContent>
-                    </Button>
-                </Action>
-            </EmptyState>
-        </section>
-        @KnowledgeSummary
-        </div>
-    }
-    else
-    {
-        @* Today, at a glance: is the AI doing the work? Shown once an agent is on. *@
-        @if (Feed.Available && LiveAgents.Count > 0)
-        {
-            <section class="operations-stats" aria-label="Today">
-                <div class="operations-stat">
-                    <span class="operations-stat__icon is-conversations"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
-                    <div>
-                        <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.Conversations</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Conversations today</Typography>
-                    </div>
-                </div>
-                <div class="operations-stat">
-                    <span class="operations-stat__icon is-answered"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Md" /></span>
-                    <div>
-                        <span class="operations-stat__figure">
-                            <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.AnsweredAlone</Typography>
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="operations-stat__share">@Totals.AnsweredShare%</Typography>
-                        </span>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Answered by your agents</Typography>
-                    </div>
-                </div>
-                <div class="operations-stat">
-                    <span class="operations-stat__icon is-passed"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
-                    <div>
-                        <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.PassedToTeam</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Passed to your team</Typography>
-                        @if (Totals.TeamReplyMinutes is { } minutes)
-                        {
-                            <Typography TextStyle="TextStyle.Small12Medium" As="small" Class="operations-stat__note">Replied in @minutes min on average</Typography>
-                        }
-                    </div>
-                </div>
-                <div class="operations-stat">
-                    <span class="operations-stat__icon is-tasks"><Icon Name="IconName.RiTaskFill" Size="IconSize.Md" /></span>
-                    <div>
-                        <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.TasksCreated</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Tasks created</Typography>
-                    </div>
-                </div>
-            </section>
-        }
-
-        @* The one thing to act on. Only there when something is waiting. *@
-        @if (Waiting.Count > 0)
-        {
-            <section class="operations-needs" aria-labelledby="operations-needs-title">
-                <span class="operations-needs__icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
-                <div class="operations-needs__text">
-                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="operations-needs-title">@WaitingTitle</Typography>
-                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@WaitingLine</Typography>
-                </div>
-                <Button Class="ds-no-shrink" @onclick="ReviewWaiting">Answer</Button>
-            </section>
-        }
-
-        <section class="operations-agents" aria-labelledby="operations-agents-title">
-            <header class="operations-section-head">
-                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="operations-agents-title">Your agents</Typography>
-                @* Sorting through them only helps once there are many. *@
-                @if (AiAgentsState.Agents.Count > ManyAgents)
-                {
-                    <div class="operations-tools">
-                        <SegmentedControl TValue="AgentFilter" Label="Show agents" Options="FilterOptions" Value="_filter" ValueChanged="v => _filter = v" />
-                        <SearchField Value="@_search" ValueChanged="v => _search = v ?? string.Empty" Placeholder="Search agents" AriaLabel="Search agents" />
-                    </div>
-                }
-            </header>
-
-            <div class="agent-grid">
-                @foreach (var agent in FilteredAgents)
-                {
-                    var current = agent;
-                    <AgentCard Agent="current"
-                               Today="@Feed.Today(current)"
-                               ShowToday="Feed.Available"
-                               Busy="@(_busyAgentId == current.Id)"
-                               OnOpen="() => OpenAgent(current)"
-                               OnConfigure="() => OpenSettings(current)"
-                               OnDelete="() => _pendingDelete = current"
-                               OnStatusChange="() => ChangeStatusAsync(current)" />
-                }
+            @KnowledgeSummary
             </div>
-            @if (FilteredAgents.Count == 0)
+        }
+        else
+        {
+            @* Today, at a glance: is the AI doing the work? Shown once an agent is on. *@
+            @if (Feed.Available && LiveAgents.Count > 0)
             {
-                <div class="operations-empty">
-                    <EmptyState Glyph="IconName.RiSearch2Fill" Size="EmptyStateSize.Panel" Title="No agents found" Description="Try a different search or show all agents." />
-                </div>
+                <section class="operations-stats" aria-label="Today">
+                    <div class="operations-stat">
+                        <span class="operations-stat__icon is-conversations"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
+                        <div>
+                            <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.Conversations</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">Conversations today</Typography>
+                        </div>
+                    </div>
+                    <div class="operations-stat">
+                        <span class="operations-stat__icon is-answered"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Md" /></span>
+                        <div>
+                            <span class="operations-stat__figure">
+                                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.AnsweredAlone</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="operations-stat__share">@Totals.AnsweredShare%</Typography>
+                            </span>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">Answered by your agents</Typography>
+                        </div>
+                    </div>
+                    <div class="operations-stat">
+                        <span class="operations-stat__icon is-passed"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
+                        <div>
+                            <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.PassedToTeam</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">Passed to your team</Typography>
+                            @if (Totals.TeamReplyMinutes is { } minutes)
+                            {
+                                <Typography TextStyle="TextStyle.Small12Medium" As="small" Class="operations-stat__note">Replied in @minutes min on average</Typography>
+                            }
+                        </div>
+                    </div>
+                    <div class="operations-stat">
+                        <span class="operations-stat__icon is-tasks"><Icon Name="IconName.RiTaskFill" Size="IconSize.Md" /></span>
+                        <div>
+                            <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@Totals.TasksCreated</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">Tasks created</Typography>
+                        </div>
+                    </div>
+                </section>
             }
-        </section>
-    }
 
-    @if (AiAgentsState.IsLoaded && !IsEmpty && !AiAgentsState.IsLoading)
-    {
-        @KnowledgeSummary
-    }
-</main>
+            @* The one thing to act on. Only there when something is waiting. *@
+            @if (Waiting.Count > 0)
+            {
+                <section class="operations-needs" aria-labelledby="operations-needs-title">
+                    <span class="operations-needs__icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
+                    <div class="operations-needs__text">
+                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="operations-needs-title">@WaitingTitle</Typography>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@WaitingLine</Typography>
+                    </div>
+                    <Button Class="ds-no-shrink" @onclick="ReviewWaiting">Answer</Button>
+                </section>
+            }
+
+            <section class="operations-agents" aria-labelledby="operations-agents-title">
+                <header class="operations-section-head">
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="operations-agents-title">Your agents</Typography>
+                    @* Sorting through them only helps once there are many. *@
+                    @if (AiAgentsState.Agents.Count > ManyAgents)
+                    {
+                        <div class="operations-tools">
+                            <SegmentedControl TValue="AgentFilter" Label="Show agents" Options="FilterOptions" Value="_filter" ValueChanged="v => _filter = v" />
+                            <SearchField Value="@_search" ValueChanged="v => _search = v ?? string.Empty" Placeholder="Search agents" AriaLabel="Search agents" />
+                        </div>
+                    }
+                </header>
+
+                <div class="agent-grid">
+                    @foreach (var agent in FilteredAgents)
+                    {
+                        var current = agent;
+                        <AgentCard Agent="current"
+                                   Today="@Feed.Today(current)"
+                                   ShowToday="Feed.Available"
+                                   Busy="@(_busyAgentId == current.Id)"
+                                   OnOpen="() => OpenAgent(current)"
+                                   OnConfigure="() => OpenSettings(current)"
+                                   OnDelete="() => _pendingDelete = current"
+                                   OnStatusChange="() => ChangeStatusAsync(current)" />
+                    }
+                </div>
+                @if (FilteredAgents.Count == 0)
+                {
+                    <div class="operations-empty">
+                        <EmptyState Glyph="IconName.RiSearch2Fill" Size="EmptyStateSize.Panel" Title="No agents found" Description="Try a different search or show all agents." />
+                    </div>
+                }
+            </section>
+        }
+
+        @if (AiAgentsState.IsLoaded && !IsEmpty && !AiAgentsState.IsLoading)
+        {
+            @KnowledgeSummary
+        }
+    </main>
 
 @* What every agent answers from: the business knowledge from "Tell us about…".
    Blue is knowledge, wherever it shows. *@
 @code {
     private RenderFragment KnowledgeSummary => __builder =>
     {
-        if (Knowledge.Available)
+        if (Knowledge.Available && Intro.CanAdd)
         {
             <section class="operations-knowledge" aria-labelledby="operations-knowledge-title">
                 <span class="operations-knowledge__icon"><Icon Name="IconName.RiBookOpenFill" Size="IconSize.Md" /></span>
                 <div class="operations-knowledge__text">
-                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="operations-knowledge-title">What your agents know</Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="operations-knowledge-title">What your AI knows</Typography>
                     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@KnowledgeLine</Typography>
                 </div>
-                <Button Variant="ButtonVariant.Secondary" Class="ds-no-shrink" @onclick="UpdateKnowledgeAsync">@(_knowledgeApproved ? "Update" : "Start")</Button>
+                <Button Variant="ButtonVariant.Secondary" Class="ds-no-shrink" @onclick="UpdateKnowledgeAsync">@(_knowledgeApproved ? "Add to it" : "Tell us about your business")</Button>
             </section>
         }
     };
@@ -292,6 +295,7 @@
     protected override async Task OnInitializedAsync()
     {
         TeachAi.Changed += OnTeachAiChanged;
+        Intro.Changed += OnIntroChanged;
         AiAgentsState.Changed += OnAgentsChanged;
         await Task.WhenAll(AiAgentsState.LoadAsync(), LoadKnowledgeAsync());
     }
@@ -307,6 +311,17 @@
         _knowledge = _knowledgeApproved ? await Knowledge.GetDraftAsync() : [];
     }
 
+    // The business dialog closed: show what the agents know now.
+    private void OnIntroChanged()
+    {
+        if (Intro.IsOpen) return;
+        _ = InvokeAsync(async () =>
+        {
+            await LoadKnowledgeAsync();
+            StateHasChanged();
+        });
+    }
+
     // Closed after adding to it: show what the agents know now.
     private void OnTeachAiChanged()
     {
@@ -320,17 +335,16 @@
 
     private Task UpdateKnowledgeAsync()
     {
-        if (_knowledgeApproved)
-        {
-            TeachAi.TeachMore();
-            return Task.CompletedTask;
-        }
-        return TeachAi.RequireAsync(() => Task.CompletedTask);
+        // The business dialog is the one way to add business knowledge (designer, 14 October 2026).
+        if (_knowledgeApproved) Intro.AddMore();
+        else return Intro.RequireAsync(() => Task.CompletedTask);
+        return Task.CompletedTask;
     }
 
     public void Dispose()
     {
         TeachAi.Changed -= OnTeachAiChanged;
+        Intro.Changed -= OnIntroChanged;
         AiAgentsState.Changed -= OnAgentsChanged;
     }
 
@@ -360,7 +374,7 @@
     }
 
     // ?new=1: sent here to create an agent (from the dashboard or Business
-    // setup, after "Teach your AI"), so the create page opens straight away.
+    // setup, after "Teach your AI"), so setup opens straight away.
     [SupplyParameterFromQuery(Name = "new")] public string? New { get; set; }
 
     // Checked again on every arrival with ?new=1 (from another page, from
@@ -381,9 +395,9 @@
         if (New == "1" && _newHandled) Nav.NavigateTo("/ai-operations", replace: true);
     }
 
-    // A new agent needs a connected channel, then knowledge the business has
-    // approved: "Connect a channel first", or "Teach your AI", opens before
-    // creating it, on a page of its own (AgentCreate).
+    // A new agent needs a connected channel, then, the first time, what the
+    // business is: "Connect a channel first", or "Tell us about your business",
+    // opens before the create page.
     private Task CreateAgentAsync() => AgentGate.RequireAsync(() =>
     {
         Nav.NavigateTo("/ai-operations/new-agent");

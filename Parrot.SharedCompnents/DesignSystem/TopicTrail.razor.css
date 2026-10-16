@@ -1,0 +1,48 @@
+/* Topics as a quiet line of words: ticks for done, full colour for now,
+   muted for later, a middle dot between. Measured against its own width,
+   so a narrow card gets the short form. */
+.topic-trail {
+  container-type: inline-size;
+  min-width: 0;
+}
+
+.topic-trail__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-sm);
+  align-items: center;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+.topic-trail__item {
+  display: inline-flex;
+  gap: var(--spacing-2xs);
+  align-items: center;
+  color: var(--colors-text-muted);
+  white-space: nowrap;
+}
+.topic-trail__item + .topic-trail__item::before {
+  margin-inline-end: var(--spacing-sm);
+  color: var(--colors-text-muted);
+  content: "·";
+}
+.topic-trail__item.is-done { color: var(--colors-text-secondary); }
+.topic-trail__item.is-done > ::deep .ds-icon { color: var(--colors-feedback-success-text); }
+.topic-trail__item.is-current { color: var(--colors-text-primary); }
+
+.topic-trail__compact {
+  display: none;
+  gap: var(--spacing-xs);
+  align-items: center;
+  margin: var(--spacing-none);
+  color: var(--colors-text-primary);
+}
+.topic-trail__compact ::deep .topic-trail__next { color: var(--colors-text-muted); }
+
+/* A phone's width: the topic now, and the next one. */
+@container (max-width: 480px) {
+  .topic-trail__list { display: none; }
+  .topic-trail__compact { display: flex; }
+}

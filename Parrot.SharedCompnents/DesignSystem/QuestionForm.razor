@@ -1,0 +1,251 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A few questions at once, each with the control it needs (one choice, several,
+   or a few words), the way an AI asks for what it still needs to know (Claude's
+   design form, for one). The caller chooses the questions and may fill some in
+   already, as answers to check. Submit hands back every answer; "Decide for me"
+   hands back the same, for the caller to fill what is left with its defaults.
+   The rows look like a ChoicePrompt's, so a single question and a short form
+   read as the same voice.
+
+   To check rather than fill (Review): an answer already given shows as one
+   line, the question over the answer, with Change to open it. "Something
+   else" is the last choice; its box opens only once it is picked. A caller
+   can put something to read above the questions (Lead), and its own actions
+   on the left of the foot (Secondary, in place of "Decide for me"). *@
+
+<section class="question-form @Class" aria-labelledby="@_titleId">
+    <header class="question-form__head">
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@_titleId">@Title</Typography>
+        @if (Subtitle is { Length: > 0 } subtitle)
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="question-form__muted">@subtitle</Typography>
+        }
+    </header>
+
+    @Lead
+
+    @foreach (var question in Questions)
+    {
+        var current = question;
+        var answer = AnswerOf(current.Id);
+        if (Review && _checking.Contains(current.Id))
+        {
+            @* Given already: the answer to read, and Change to open the question. *@
+            <div class="question-form__check" @key="@($"check-{current.Id}")">
+                <div class="question-form__check-text">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="question-form__muted">@current.Question</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@Said(current, answer)</Typography>
+                </div>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" aria-label="@($"Change: {current.Question}")"
+                        @onclick="() => Open(current)">Change</Button>
+            </div>
+            continue;
+        }
+        <fieldset class="question-form__question" disabled="@Busy" @key="@($"ask-{current.Id}")">
+            <legend class="@TextStyle.BodySmallSemibold.ToClassName()">@current.Question</legend>
+            @if (current.Kind == FormQuestionKind.Text)
+            {
+                <TextArea @ref="_boxes[current.Id]" Value="@(answer.Text ?? string.Empty)" ValueChanged="value => SetTextAsync(current, value)" AriaLabel="@current.Question"
+                          Placeholder="@(current.Placeholder ?? "Type your answer")" Rows="2" AutoGrow MaxLength="300" />
+            }
+            else
+            {
+                var many = current.Kind == FormQuestionKind.Many;
+                var other = _other.Contains(current.Id);
+                <div class="question-form__options" role="@(many ? "group" : "radiogroup")" aria-label="@current.Question">
+                    @foreach (var option in current.Options ?? [])
+                    {
+                        var label = option.Label;
+                        @Choice(many, answer.Picked.Contains(label), label, option.Description, () => ToggleAsync(current, label))
+                    }
+                    @if (current.AllowOther)
+                    {
+                        @Choice(many, other, "Something else", null, () => ToggleOtherAsync(current))
+                        if (other)
+                        {
+                            <div class="question-form__other">
+                                <TextArea @ref="_boxes[current.Id]" Value="@(answer.Text ?? string.Empty)" ValueChanged="value => SetOtherAsync(current, value)"
+                                          Placeholder="@(current.Placeholder ?? "Tell me in your own words")" AriaLabel="@($"{current.Question}: something else")"
+                                          Rows="1" MaxLength="300" AutoGrow Class="question-form__other-input" />
+                            </div>
+                        }
+                    }
+                </div>
+            }
+        </fieldset>
+    }
+
+    <footer class="question-form__foot">
+        @if (Secondary is not null)
+        {
+            <span class="question-form__start">@Secondary</span>
+        }
+        else if (OnDecide.HasDelegate)
+        {
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="DecideAsync">@DecideLabel</Button>
+        }
+        <span class="question-form__end">
+            <Button Busy="@Busy" @onclick="SubmitAsync">@SubmitLabel</Button>
+        </span>
+    </footer>
+</section>
+
+@code {
+    private readonly string _titleId = $"question-form-{Guid.NewGuid():N}";
+    private readonly Dictionary<string, FormAnswer> _answers = [];
+    // Questions shown as an answer to check, and those with "Something else" open.
+    private readonly HashSet<string> _checking = [];
+    private readonly HashSet<string> _other = [];
+    private readonly Dictionary<string, TextArea> _boxes = [];
+    private string? _for, _focus;
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public string? Subtitle { get; set; }
+
+    [Parameter, EditorRequired] public IReadOnlyList<FormQuestion> Questions { get; set; } = [];
+
+    /// <summary>Answers already known, shown picked, to check rather than to give.</summary>
+    [Parameter] public IReadOnlyDictionary<string, FormAnswer>? Answers { get; set; }
+
+    /// <summary>An answer already given shows as one line to read, with Change to open its question.</summary>
+    [Parameter] public bool Review { get; set; }
+
+    /// <summary>Something to read above the questions (what is about to change, say).</summary>
+    [Parameter] public RenderFragment? Lead { get; set; }
+
+    /// <summary>The caller's own actions on the left of the foot, in place of "Decide for me".</summary>
+    [Parameter] public RenderFragment? Secondary { get; set; }
+
+    [Parameter] public string SubmitLabel { get; set; } = "Send";
+
+    [Parameter] public string DecideLabel { get; set; } = "Decide for me";
+
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Every answer, by question id; questions left unanswered have <see cref="FormAnswer.None"/>.</summary>
+    [Parameter] public EventCallback<IReadOnlyDictionary<string, FormAnswer>> OnSubmit { get; set; }
+
+    /// <summary>The same answers, for the caller to fill the rest; omit it and there is no "Decide for me".</summary>
+    [Parameter] public EventCallback<IReadOnlyDictionary<string, FormAnswer>> OnDecide { get; set; }
+
+    /// <summary>Every answer, each time one changes (to keep them if the form goes away).</summary>
+    [Parameter] public EventCallback<IReadOnlyDictionary<string, FormAnswer>> OnChange { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    // A new set of questions starts from the answers given with it; the same set keeps what was picked.
+    protected override void OnParametersSet()
+    {
+        var key = string.Join("|", Questions.Select(question => question.Id));
+        if (key == _for) return;
+        _for = key;
+        _answers.Clear();
+        _checking.Clear();
+        _other.Clear();
+        foreach (var question in Questions)
+        {
+            var given = Answers is not null && Answers.TryGetValue(question.Id, out var known) ? known : FormAnswer.None;
+            _answers[question.Id] = given;
+            if (!given.IsEmpty) _checking.Add(question.Id);
+            if (question.Kind != FormQuestionKind.Text && !string.IsNullOrWhiteSpace(given.Text)) _other.Add(question.Id);
+        }
+    }
+
+    // A box just opened takes the typing.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focus is { } id && _boxes.TryGetValue(id, out var box))
+        {
+            _focus = null;
+            await box.FocusAsync();
+        }
+    }
+
+    private RenderFragment Choice(bool many, bool picked, string label, string? description, Func<Task> toggle) => __builder =>
+    {
+        <RowButton Class="@($"question-form__option {(picked ? "is-picked" : null)}")" Disabled="@Busy"
+                   role="@(many ? "checkbox" : "radio")" aria-checked="@(picked ? "true" : "false")" OnClick="toggle">
+            <span class="@($"question-form__mark {(many ? "is-box" : "is-ring")}")" aria-hidden="true">
+                @if (picked)
+                {
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                }
+            </span>
+            <span class="question-form__text">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@label</Typography>
+                @if (description is { Length: > 0 })
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@description</Typography>
+                }
+            </span>
+        </RowButton>
+    };
+
+    private FormAnswer AnswerOf(string id) => _answers.TryGetValue(id, out var answer) ? answer : FormAnswer.None;
+
+    // An answer, read back: its choices, then their own words.
+    private static string Said(FormQuestion question, FormAnswer answer)
+    {
+        var parts = answer.Picked.ToList();
+        if (!string.IsNullOrWhiteSpace(answer.Text)) parts.Add(answer.Text.Trim());
+        return string.Join(", ", parts);
+    }
+
+    private void Open(FormQuestion question)
+    {
+        _checking.Remove(question.Id);
+        if (question.Kind == FormQuestionKind.Text) _focus = question.Id;
+    }
+
+    private Task ToggleAsync(FormQuestion question, string label)
+    {
+        if (Busy) return Task.CompletedTask;
+        var answer = AnswerOf(question.Id);
+        var picked = answer.Picked.ToList();
+        var text = answer.Text;
+        if (!picked.Remove(label))
+        {
+            if (question.Kind == FormQuestionKind.One)
+            {
+                // One choice: a picked row replaces their own words.
+                picked.Clear();
+                text = null;
+                _other.Remove(question.Id);
+            }
+            picked.Add(label);
+        }
+        return SetAsync(question, new(InOrder(question, picked), text));
+    }
+
+    // "Something else": opens a box for their own words (one choice: in place of a picked row); again, closes it.
+    private Task ToggleOtherAsync(FormQuestion question)
+    {
+        if (Busy) return Task.CompletedTask;
+        var answer = AnswerOf(question.Id);
+        if (_other.Remove(question.Id)) return SetAsync(question, new(answer.Picked, null));
+        _other.Add(question.Id);
+        _focus = question.Id;
+        return SetAsync(question, new(question.Kind == FormQuestionKind.One ? [] : answer.Picked, answer.Text));
+    }
+
+    private Task SetTextAsync(FormQuestion question, string? value) => SetAsync(question, new([], value));
+
+    private Task SetOtherAsync(FormQuestion question, string? value) => SetAsync(question, new(AnswerOf(question.Id).Picked, value));
+
+    private Task SetAsync(FormQuestion question, FormAnswer answer)
+    {
+        _answers[question.Id] = answer;
+        return OnChange.InvokeAsync(Snapshot());
+    }
+
+    private static IReadOnlyList<string> InOrder(FormQuestion question, List<string> picked) =>
+        (question.Options ?? []).Select(option => option.Label).Where(picked.Contains).ToList();
+
+    private IReadOnlyDictionary<string, FormAnswer> Snapshot() => new Dictionary<string, FormAnswer>(_answers);
+
+    private Task SubmitAsync() => OnSubmit.InvokeAsync(Snapshot());
+
+    private Task DecideAsync() => OnDecide.InvokeAsync(Snapshot());
+}

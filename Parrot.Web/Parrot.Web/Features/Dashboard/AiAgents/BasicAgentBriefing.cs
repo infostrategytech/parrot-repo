@@ -4,7 +4,7 @@ namespace Parrot.Web.Features.Dashboard.AiAgents;
 
 /// <summary>
 /// Writing an agent's job description without the AI, until the agents API
-/// has a service that does it (a backend request): what the
+/// has a service that does it (agents-backend-requests 14 and 15): what the
 /// owner said becomes the job description in their own words, tidied and in
 /// order (what it does, what it never does, when it calls them); the job's
 /// own sentences fill only what they didn't cover; the kind of business adds
@@ -102,27 +102,50 @@ public class BasicAgentBriefing : IAgentBriefing
         return new() { Summary = string.Join(" ", sentences) };
     }
 
-    /// <summary>What the owner said since, worked in next to what it belongs with; only what is new.</summary>
+    /// <summary>
+    /// What the owner said since, worked in next to what it belongs with; only
+    /// what is new. A new rule against an old one on the same thing takes its
+    /// place, so the job description never says both.
+    /// </summary>
     protected static AgentBriefUpdate Understand(string said, AgentBrief sofar)
     {
         var sentences = sofar.Sentences().ToList();
         var added = new List<string>();
+        var replaced = new List<string>();
         foreach (var sentence in Sentences(said))
         {
             var clean = Clean(sentence);
             if (sentences.Contains(clean, StringComparer.OrdinalIgnoreCase)) continue;
+            foreach (var old in sentences.Where(old => !added.Contains(old) && Against(old, clean)).ToList())
+            {
+                sentences.Remove(old);
+                replaced.Add(old);
+            }
             Place(sentences, clean);
             added.Add(clean);
         }
-        return new(new() { Summary = string.Join(" ", sentences) }, added);
+        return new(new() { Summary = string.Join(" ", sentences) }, added, replaced);
     }
+
+    // Things a rule is either allowed or not: discounts, refunds, an upset customer.
+    private static readonly Regex[] RuleTopics =
+    [
+        new(@"\bdiscounts?\b", RegexOptions.IgnoreCase),
+        new(@"\brefunds?\b", RegexOptions.IgnoreCase),
+        new(@"\b(upset|angry|complain\w*)\b", RegexOptions.IgnoreCase),
+    ];
+
+    // The same thing, one allowing it and one not ("Never give discounts", "Small discounts are fine").
+    private static bool Against(string old, string sentence) =>
+        RuleTopics.Any(topic => topic.IsMatch(old) && topic.IsMatch(sentence))
+        && (KindOf(old) == BriefKind.Does) != (KindOf(sentence) == BriefKind.Does);
 
     // ── Sentences ───────────────────────────────────────────────────────────
 
     /// <summary>What a sentence of a job description is: something it does, never does, or when it calls the owner.</summary>
     protected enum BriefKind { Does, Never, CallMe }
 
-    private static readonly Regex CallMeWords = new(@"\b(bring me in|bring (in )?(the )?(team|manager|owner)|call me|tell me|let me know|alert me|get me|contact me|hand (it |them )?over|pass (it|them|the customer|customers) (on )?to|escalate)\b", RegexOptions.IgnoreCase);
+    private static readonly Regex CallMeWords = new(@"\b(bring me in|bring (in )?(the )?(team|manager|owner)|call me|tell me|let me know|alert me|get me|contact me|hand (it |them )?over|pass (it|them|the customer|customers) (on )?to|pass\b[^.]{0,30}\bto (me|the team)|escalate)\b", RegexOptions.IgnoreCase);
     private static readonly Regex NeverWords = new(@"(^|\b)(never|don't|do not|dont|not allowed|avoid|no need to)\b", RegexOptions.IgnoreCase);
     // A sentence that says what the job is ("Help customers…", "Answer…").
     private static readonly Regex JobWords = new(@"^(your job is|help|answer|take|book|tell|follow|sell|handle|reply|look after|deal with)\b", RegexOptions.IgnoreCase);

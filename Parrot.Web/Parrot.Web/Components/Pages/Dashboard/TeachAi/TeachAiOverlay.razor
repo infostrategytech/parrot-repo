@@ -7,8 +7,9 @@
 @inject AuroraInterop Interop
 @implements IAsyncDisposable
 
-@* "Teach your AI": before the first agent, the business checks what Parrot
-   found about it, fills the gaps and approves it, by talking or typing.
+@* "Teach your AI": the business checks what Parrot found about it, fills
+   the gaps and approves it, by talking or typing. The first agent enters here
+   from its draft overview; later agents reuse the approved knowledge.
 
    One conversation, as ChatGPT, Gemini and Claude now do it: voice and text
    share the thread, and only the bar at the foot changes. At the start it

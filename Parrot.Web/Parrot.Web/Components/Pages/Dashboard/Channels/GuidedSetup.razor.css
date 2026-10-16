@@ -5,7 +5,9 @@
   display: grid;
   width: min(var(--ds-guided-width), 100%);
   margin-inline: auto;
-  overflow: hidden;
+  /* clip, not hidden: it rounds the corners the same, but is not a scroll
+     box of its own, so the footer can stay in view (below). */
+  overflow: clip;
   background: var(--colors-surface-card);
   border: var(--ds-guided-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-3xl);
@@ -204,7 +206,12 @@
    defeats the point of drawing it. */
 .guided__demo { min-width: 0; }
 
+/* On a window too short for the whole step, Back and Continue stay in view
+   at its foot; where it fits, this changes nothing. */
 .guided__footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   gap: var(--spacing-sm);
   align-items: center;

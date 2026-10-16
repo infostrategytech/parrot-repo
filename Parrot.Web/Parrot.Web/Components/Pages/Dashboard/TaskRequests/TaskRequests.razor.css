@@ -245,3 +245,16 @@
   .task-request-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .task-request-summary article:nth-child(3)::before { display: none; }
 }
+
+/* Tablets (below 1180px, designer, 14 October 2026): the search on a line of
+   its own with the three menus under it, and the table scrolling sideways
+   inside its card instead of cutting off its last columns. */
+@media not all and (min-width: 1180px) {
+  .task-request-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .task-request-toolbar > .task-request-search { grid-column: 1 / -1; }
+  .task-request-table-wrap { overflow-x: auto; }
+  .task-request-table {
+    min-width: calc(var(--ds-tr-col-items) + var(--ds-tr-col-customer) + var(--ds-tr-col-payment) + var(--ds-tr-col-due)
+      + var(--ds-tr-col-assignee) + var(--ds-tr-col-owner) + var(--ds-tr-col-action) + var(--spacing-sm) * 6 + var(--spacing-md) * 2);
+  }
+}

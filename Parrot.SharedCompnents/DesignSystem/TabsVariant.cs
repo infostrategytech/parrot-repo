@@ -10,5 +10,12 @@ public enum TabsVariant
     Floating,
 
     /// <summary>No tray; the chosen tab is filled. For a mode inside a card, such as a composer.</summary>
-    Flat
+    Flat,
+
+    /// <summary>
+    /// A row with a hairline under it; the chosen tab is underlined. For a
+    /// page's sections, such as an agent's settings (designer, 14 October
+    /// 2026). On a narrow screen the row scrolls sideways.
+    /// </summary>
+    Underline
 }

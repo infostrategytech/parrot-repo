@@ -6,7 +6,8 @@
 
 .agent-create {
   /* Missing from the token set: no column width for a guided flow, card
-     sizes for its choices, or the preview's avatar sizes. */
+     sizes for its choices, or the preview's avatar sizes. The job cards
+     match the first design's. */
   --ds-agent-create-column: 720px;
   --ds-agent-create-column-wide: 920px;
   --ds-agent-create-tile: 88px;
@@ -67,7 +68,8 @@
 /* ── The question, in the middle ─────────────────────────────────────────── */
 
 /* At least the rest of the window, its step centred in it (a little above
-   the true middle, where centred reads as centred); a longer step makes it taller, so it starts at the top
+   the true middle, where centred reads as centred, and clear of the demo's
+   concept switch); a longer step makes it taller, so it starts at the top
    and scrolls. */
 .agent-create__main {
   display: flex;
@@ -76,7 +78,8 @@
   justify-content: center;
   padding: var(--spacing-3xl) var(--ds-agent-create-gutter) var(--spacing-5xl);
 }
-.agent-create__main.is-step-4 { justify-content: flex-start; padding-top: var(--ds-agent-create-top); }
+.agent-create__main.is-step-4 { justify-content: flex-start; padding-top: var(--ds-agent-create-top); transition: padding-top var(--ds-motion-base) var(--ds-motion-enter); }
+.agent-create__main.is-step-4:has(.job-editor__voice.is-talking) { padding-top: var(--spacing-2xl); }
 .agent-create__step {
   display: grid;
   gap: var(--spacing-2xl);
@@ -84,7 +87,8 @@
   margin-inline: auto;
   animation: agent-create-in var(--ds-agent-create-reveal) var(--ds-motion-enter);
 }
-.agent-create__main.is-step-2 .agent-create__step { width: min(var(--ds-agent-create-column-wide), 100%); }
+.agent-create__main.is-step-2 .agent-create__step,
+.agent-create__main.is-step-4 .agent-create__step { width: min(var(--ds-agent-create-column-wide), 100%); }
 .agent-create__step > * { min-width: 0; }
 @keyframes agent-create-in {
   from { opacity: 0; transform: translateY(var(--spacing-sm)); }
@@ -95,7 +99,9 @@
 /* It takes the focus when the step changes (for screen readers); no ring on a heading. */
 .agent-create__question:focus { outline: none; }
 .agent-create__stale { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
-.agent-create__question ::deep h1 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+/* Two even lines, never one word left alone, when a question wraps; on the job step the question starts its own line. */
+.agent-create__question ::deep h1 { margin: var(--spacing-none); color: var(--colors-text-primary); text-wrap: balance; }
+.agent-create__question ::deep .agent-create__ask { display: block; }
 ::deep .agent-create__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
 
 .agent-create__card {
@@ -110,7 +116,7 @@
 /* The way on: right under the question, at its right-hand edge. */
 .agent-create__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-md); align-items: center; justify-content: flex-end; }
 
-/* ── 1. Its job: cards, two to a row, a colour each ─────────────────────── */
+/* ── 1. Its job: the first design's cards, two to a row, a colour each ──────────── */
 
 .agent-create__jobs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); }
 .agent-create__jobs ::deep .agent-create__job {
@@ -141,7 +147,7 @@
   background: var(--colors-accent-brand-subtle);
   border-radius: var(--radius-radius-lg);
 }
-/* A little colour makes the jobs easier to scan; choosing
+/* A little colour makes the jobs easier to scan, as before; choosing
    one still uses the single brand treatment. */
 .agent-create__jobs ::deep .is-support:not(.is-chosen) .agent-create__job-icon { color: var(--colors-accent-teal-text); background: var(--colors-accent-teal-subtle); }
 .agent-create__jobs ::deep .is-sales:not(.is-chosen) .agent-create__job-icon { color: var(--colors-accent-emerald-text); background: var(--colors-accent-emerald-subtle); }

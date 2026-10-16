@@ -6,7 +6,9 @@
   display: grid;
   width: min(var(--ds-guided-width), 100%);
   margin-inline: auto;
-  overflow: hidden;
+  /* clip, not hidden: the same rounded corners, but not a scroll box of its
+     own, so the footer can stay in view (below). */
+  overflow: clip;
   background: var(--colors-surface-card);
   border: var(--ds-guided-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-3xl);
@@ -167,7 +169,11 @@
   border-radius: var(--radius-radius-lg);
 }
 
+/* A long setup: Save and exit stays in view at the window's foot. */
 .guided__footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
   display: flex;
   gap: var(--spacing-sm);
   align-items: center;

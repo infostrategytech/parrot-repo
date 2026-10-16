@@ -80,3 +80,39 @@
 }
 .ds-tabs--flat ::deep .ds-tab:disabled { cursor: not-allowed; opacity: var(--ds-tabs-disabled-opacity); }
 .ds-tabs--flat ::deep .ds-tab.is-active { color: var(--colors-text-primary); background: var(--colors-surface-muted); }
+
+/* Underline: a page's sections. A hairline under the whole row, the chosen
+   tab underlined in the brand colour and in full-strength text, the others
+   muted; on a narrow screen the row scrolls sideways rather than wrapping. */
+.ds-tabs--underline {
+  /* Missing from the token set: no underline weight for a chosen tab. */
+  --ds-tabs-underline: 2px;
+
+  display: flex;
+  gap: var(--spacing-xl);
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.ds-tabs--underline::-webkit-scrollbar { display: none; }
+.ds-tabs--underline ::deep .ds-tab {
+  position: relative;
+  flex: none;
+  padding: var(--spacing-md) var(--spacing-2xs);
+  color: var(--colors-text-muted);
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+}
+.ds-tabs--underline ::deep .ds-tab:hover:not(:disabled) { color: var(--colors-text-primary); }
+.ds-tabs--underline ::deep .ds-tab.is-active { color: var(--colors-text-primary); }
+.ds-tabs--underline ::deep .ds-tab.is-active::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--ds-tabs-underline);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+}

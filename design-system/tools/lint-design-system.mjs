@@ -32,7 +32,8 @@ const BRAND_LITERALS = JSON.parse(
 
 // The sanctioned breakpoint scale. React had ten ad-hoc widths and no scale.
 // 760 is the phone breakpoint: the inbox shows one pane at a time below it.
-const BREAKPOINTS = [760, 1180, 1280, 1360, 1520];
+// 1024 is tablets (designer, 14 October 2026): below it, a tablet in portrait.
+const BREAKPOINTS = [760, 1024, 1180, 1280, 1360, 1520];
 
 // Values that carry no design decision, so tokenising them would be noise.
 const NEUTRAL = new Set([

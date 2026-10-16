@@ -3,7 +3,7 @@
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
 @inject IBusinessKnowledge Knowledge
 
-@* An agent's basics, the same on the create page and on its page: its name and look, where it answers, and how it
+@* An agent's basics, on its page: its name and look, where it answers, and how it
    stays safe, in plain sentences. A rule's Change opens a small control
    right under it: owners change it where they read it, never sent into
    Advanced settings (usability testing, 4 October). Edits the form only; the
@@ -106,7 +106,7 @@
     </section>
 }
 
-@* Creating an agent shows no safety rules (they're on the agent's page). *@
+@* Agent setup shows its own short "Always" list instead. *@
 @if (ShowSafety)
 {
     <section class="agent-basics__section" aria-labelledby="@($"{_id}-safety")">

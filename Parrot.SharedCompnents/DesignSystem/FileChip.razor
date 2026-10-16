@@ -1,0 +1,75 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A file someone attached: a picture's thumbnail, or its type, name and size,
+   with Remove when it can still be taken off. The same look as Teach your
+   AI's attachments, shared so every place that takes files draws them one
+   way (designer, 14 October 2026). *@
+
+<span class="@($"ds-file-chip is-{Kind}{(OnRemove.HasDelegate ? " is-removable" : null)}")" title="@Name">
+    @if (Preview is not null)
+    {
+        <img class="ds-file-chip__thumb" src="@Preview" alt="@Name" />
+    }
+    else
+    {
+        <span class="ds-file-chip__icon"><Icon Name="@Glyph" /></span>
+    }
+    <span class="ds-file-chip__text">
+        <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="ds-file-chip__name">@Name</Typography>
+        @if (SizeText is { Length: > 0 } size)
+        {
+            <Typography TextStyle="TextStyle.Small10Medium" As="span" Class="ds-file-chip__size">@size</Typography>
+        }
+    </span>
+    @if (OnRemove.HasDelegate)
+    {
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {Name}")" title="Remove" @onclick="OnRemove">
+            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+        </Button>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Name { get; set; } = "";
+
+    /// <summary>In bytes; 0 or less shows no size.</summary>
+    [Parameter] public long Size { get; set; }
+
+    /// <summary>A small picture (a data URL) for an image; null draws its type instead.</summary>
+    [Parameter] public string? Preview { get; set; }
+
+    /// <summary>Draws Remove; leave unset for a file that is already sent.</summary>
+    [Parameter] public EventCallback OnRemove { get; set; }
+
+    private string Kind
+    {
+        get
+        {
+            var extension = Path.GetExtension(Name).ToLowerInvariant();
+            return extension switch
+            {
+                ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp" or ".heic" => "image",
+                ".pdf" => "pdf",
+                ".doc" or ".docx" => "document",
+                ".xls" or ".xlsx" or ".csv" => "sheet",
+                _ => "other",
+            };
+        }
+    }
+
+    private IconName Glyph => Kind switch
+    {
+        "image" => IconName.RiImageFill,
+        "pdf" => IconName.RiFilePdf2Fill,
+        "document" => IconName.RiFileWord2Fill,
+        "sheet" => IconName.RiFileExcel2Fill,
+        _ => IconName.RiFileTextFill,
+    };
+
+    private string SizeText => Size switch
+    {
+        <= 0 => "",
+        < 1024 * 1024 => $"{Math.Max(1, Size / 1024)} KB",
+        _ => $"{Size / (1024d * 1024):0.#} MB",
+    };
+}

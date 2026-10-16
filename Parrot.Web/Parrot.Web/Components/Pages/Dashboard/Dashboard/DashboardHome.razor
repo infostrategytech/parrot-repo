@@ -1,0 +1,510 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Dashboard
+@using Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.Web.Components.Pages.Dashboard.TeachAi
+@using Parrot.Web.Features.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.AiAgents.State
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.State
+@inject AuthState AuthState
+@inject ChannelsState ChannelsState
+@inject NavigationManager Nav
+@inject AgentGate AgentGate
+@inject IBusinessKnowledge BusinessKnowledge
+@inject BusinessIntroState BusinessIntro
+@inject ToastService Toasts
+@inject AiAgentsState AgentsState
+@inject IAiOperationsFeed Feed
+@inject IAgentBriefing Briefing
+@inject IJSRuntime JS
+@inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
+@implements IDisposable
+
+@* The overview: one page that grows with the business (designer, 14 and
+   15 October 2026), in the first screen's style. The big card is always
+   the one thing to do next (connect a channel, set up an agent, test it, then
+   the Inbox or what is waiting), the rows under it fill in (tell us about your
+   business, Accelerate, your channels), and shortcuts once there is an agent.
+   No figures. "Tell us about your business" never holds the agent back;
+   setting up an agent asks for it anyway.
+
+   "is-live" once the business is named: the welcome card sits over this page
+   until then, and the page's entrance and its one bit of motion wait for it
+   rather than playing out unseen behind the card. *@
+
+<div class="workspace-onboarding @(IsLive ? "is-live" : null)" aria-hidden="@(!IsLive)">
+    <header class="workspace-onboarding__header">
+        <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h1">
+            Good to see you, @WorkspaceDisplayName
+        </Typography>
+        @if (Lede is { } lede)
+        {
+            <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                @lede
+            </Typography>
+        }
+    </header>
+
+    <section class="workspace-actions" aria-label="Get started with OmniAI">
+        @switch (Stage)
+            {
+                case Step.New:
+                    @ChannelsCard
+                    @BusinessRow
+                    @AiRow
+                    break;
+                case Step.AgentWithoutChannel:
+                    @ChannelsCard
+                    @AccelerateRow
+                    @Shortcuts
+                    break;
+                case Step.Channel:
+                    @* What is still to do first; the channel, done, last. *@
+                    @AiLead
+                    @BusinessRow
+                    @ChannelDoneRow
+                    break;
+                case Step.Draft:
+                    @DraftLead
+                    @AccelerateRow
+                    @ChannelsRow
+                    @Shortcuts
+                    break;
+                case Step.Live:
+                    @LiveLead
+                    @AccelerateRow
+                    @ChannelsRow
+                    @Shortcuts
+                    break;
+        }
+    </section>
+
+    @if (Stage is Step.New or Step.Channel)
+    {
+        <div class="workspace-onboarding__hint">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                You can explore the rest of OmniAI whenever you like.
+            </Typography>
+        </div>
+    }
+</div>
+
+@code {
+    private enum Step { New, Channel, AgentWithoutChannel, Draft, Live }
+
+    private string? BusinessName => AuthState.CurrentUser?.BusinessName;
+    private bool IsLive => !string.IsNullOrWhiteSpace(BusinessName);
+    private string WorkspaceDisplayName => IsLive ? BusinessName! : "Your Workspace";
+    private int ConnectedCount => ChannelsState.Workspace.ConnectedCount;
+    private bool HasConnectedChannel => ConnectedCount > 0;
+
+    // Where the business has got to, from its channels and agents.
+    private IReadOnlyList<AiAgent> Agents => AgentsState.Agents;
+    private List<AiAgent> LiveAgents => Agents.Where(agent => agent.IsActive && !agent.IsDraft).ToList();
+    private Step Stage => !HasConnectedChannel
+        ? (Agents.Count > 0 ? Step.AgentWithoutChannel : Step.New)
+        : Agents.Count == 0 ? Step.Channel
+        : LiveAgents.Count == 0 ? Step.Draft
+        : Step.Live;
+
+    // The agent the page speaks about: a live one, else the draft, else the first.
+    private AiAgent? Lead => LiveAgents.FirstOrDefault() ?? Agents.FirstOrDefault(agent => agent.IsDraft) ?? Agents.FirstOrDefault();
+    private string LeadName => Lead?.Name ?? "Your AI";
+    private string LeadPage => Lead is null ? "/ai-operations" : $"/ai-operations/{Lead.Id}";
+    private bool Waiting => Feed.Available && Feed.Waiting(Agents).Count > 0;
+
+    // What the agents need from the owner, as the Knowledge page reviews it:
+    // questions they couldn't answer, details that disagree, facts to confirm.
+    private int _toReview;
+    private bool HasReview => _toReview > 0;
+
+    private async Task ReadReviewAsync()
+    {
+        if (!Memory.Available) { _toReview = 0; return; }
+        var snapshot = await Memory.ListAsync();
+        _toReview = snapshot.Conflicts.Count + snapshot.Questions.Count
+            + snapshot.Facts.Count(fact => fact.State == Parrot.Web.Features.Dashboard.Knowledge.FactState.ToConfirm);
+    }
+
+    // Known only once asked, so the card does not flash in and out.
+    private bool? _businessTold;
+    private bool AskAboutBusiness => BusinessKnowledge.Available && _businessTold == false;
+
+    // Once there is an agent the big card says what is next, so no line here
+    // to say it again (designer, 15 October).
+    private string? Lede => Stage switch
+        {
+            Step.Channel => "Messages are coming in. Now bring in your AI.",
+            Step.AgentWithoutChannel or Step.Draft or Step.Live => null,
+            _ => "It’s quiet for now. Bring in your customer messages and watch your workspace come to life.",
+        };
+
+    private List<BusinessChannel> Connected => ChannelsState.Workspace.Channels
+        .Where(channel => channel.Status == ChannelStatus.Connected)
+        .GroupBy(channel => channel.Id).Select(group => group.First())
+        .ToList();
+
+    private string ConnectedNames
+    {
+        get
+        {
+            var names = Connected.Select(channel => channel.Name).ToList();
+            return names.Count switch
+            {
+                0 => "Your channel",
+                1 => names[0],
+                _ => $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}"
+            };
+        }
+    }
+
+    private string ChannelsLine
+    {
+        get
+        {
+            var connected = $"{ConnectedNames} {(Connected.Count == 1 ? "is" : "are")} connected.";
+            return Stage switch
+            {
+                Step.Live => $"{connected} {(LiveAgents.Count == 1 ? LeadName : "Your AI")} answers there.",
+                Step.Draft when Lead is { IsDraft: true } => $"{connected} {LeadName} will answer there once it’s on.",
+                _ => $"{connected} No agent answers there yet.",
+            };
+        }
+    }
+
+    private static string KeyOf(BusinessChannel channel) => channel.Id.ToString().ToLowerInvariant();
+
+    // The big card's words: 20px over 14px (designer, 15 October).
+    private static readonly TextStyle LeadTitle = TextStyle.HeadingH3Semibold;
+    private static readonly TextStyle LeadText = TextStyle.BodySmallMedium;
+
+    // ── The two first cards (the first screen's style) ─────────────────────
+
+    private RenderFragment ChannelsCard => __builder =>
+    {
+        <article class="workspace-action workspace-action--channels">
+            <div class="workspace-action__content">
+                <Typography TextStyle="@LeadTitle" As="h2">
+                    Bring Your Conversations In
+                </Typography>
+                <Typography TextStyle="@LeadText" As="p" Prose>
+                    Connect WhatsApp, Instagram or Facebook and reply from one shared inbox.
+                </Typography>
+                <Button Size="ButtonSize.Large" @onclick="OpenChannels">Connect a Channel</Button>
+            </div>
+
+            <div class="workspace-channel-flow" aria-hidden="true">
+                <div class="workspace-channel-flow__socials">
+                    <span class="flow-whatsapp"><Icon Name="IconName.RiWhatsappFill" Size="IconSize.Md" /></span>
+                    <span class="flow-instagram"><Icon Name="IconName.RiInstagramFill" Size="IconSize.Md" /></span>
+                    <span class="flow-facebook"><Icon Name="IconName.RiFacebookCircleFill" Size="IconSize.Md" /></span>
+                </div>
+                <span class="workspace-channel-flow__line"><i></i></span>
+                <span class="workspace-channel-flow__inbox"><Icon Name="IconName.RiInbox2Fill" Size="IconSize.Lg" /></span>
+            </div>
+        </article>
+    };
+
+    private RenderFragment AiRow => __builder =>
+    {
+        <article class="workspace-action workspace-action--ai @(HasConnectedChannel ? "is-ready" : "is-locked")">
+            <span class="workspace-action__icon is-tone-emerald" aria-hidden="true">
+                <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Lg" />
+            </span>
+
+            <div class="workspace-action__content">
+                <div class="workspace-action__title-row">
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">
+                        Bring AI Into Your Conversations
+                    </Typography>
+                    @if (!HasConnectedChannel)
+                    {
+                        <span class="workspace-action__lock @TextStyle.Small12Semibold.ToClassName()">
+                            <Icon Name="IconName.RiLock2Fill" Size="IconSize.Sm" />
+                            Connect a Channel First
+                        </span>
+                    }
+                </div>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                    Set up an AI agent to handle routine questions and bring you in when needed.
+                </Typography>
+            </div>
+
+            <Button Variant="@(HasConnectedChannel ? ButtonVariant.Primary : ButtonVariant.Secondary)"
+                    disabled="@(!HasConnectedChannel)"
+                    @onclick="OpenAiAgents">
+                Set Up an AI Agent
+            </Button>
+        </article>
+    };
+
+    // ── The big card, always the one thing to do next ──────────────────────
+
+    // The channels it has, flowing to where they go.
+    private RenderFragment Flow(IconName to) => __builder =>
+    {
+        <div class="workspace-channel-flow" aria-hidden="true">
+            <div class="workspace-channel-flow__socials">
+                @foreach (var channel in Connected.Take(3))
+                {
+                    <span class="flow-@KeyOf(channel)"><ChannelIcon Channel="@channel.Id.ToString()" Size="IconSize.Md" Plain /></span>
+                }
+            </div>
+            <span class="workspace-channel-flow__line"><i></i></span>
+            <span class="workspace-channel-flow__inbox"><Icon Name="@to" Size="IconSize.Lg" /></span>
+        </div>
+    };
+
+    private RenderFragment AiLead => __builder =>
+    {
+        <article class="workspace-action workspace-action--lead">
+            <div class="workspace-action__content">
+                <Typography TextStyle="@LeadTitle" As="h2">Bring AI Into Your Conversations</Typography>
+                <Typography TextStyle="@LeadText" As="p" Prose>
+                    Set up an AI agent to handle routine questions and bring you in when needed.
+                </Typography>
+                <Button Size="ButtonSize.Large" @onclick="OpenAiAgents">Set Up an AI Agent</Button>
+            </div>
+            @Flow(IconName.RiRobot3Fill)
+        </article>
+    };
+
+    private RenderFragment DraftLead => __builder =>
+    {
+        var draft = Lead is { IsDraft: true };
+        <article class="workspace-action workspace-action--lead">
+            <div class="workspace-action__content">
+                <Typography TextStyle="@LeadTitle" As="h2">
+                    @(draft ? $"Test {LeadName}, Then Turn It On" : $"{LeadName} Is Off")
+                </Typography>
+                <Typography TextStyle="@LeadText" As="p" Prose>
+                    @(draft
+                        ? $"Try a conversation as a customer. When you’re happy, turn {LeadName} on to start replying."
+                        : "Turn it back on when you’re ready for it to answer your customers again.")
+                </Typography>
+                <div class="workspace-action__buttons">
+                    @if (draft && Briefing.CanTry)
+                    {
+                        <Button Size="ButtonSize.Large" @onclick="@(() => Nav.NavigateTo(LeadPage + "?test=1"))">@($"Test {LeadName}")</Button>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="@(() => Nav.NavigateTo(LeadPage))">@($"Open {LeadName}")</Button>
+                    }
+                    else
+                    {
+                        <Button Size="ButtonSize.Large" @onclick="@(() => Nav.NavigateTo(LeadPage))">@($"Open {LeadName}")</Button>
+                    }
+                </div>
+            </div>
+            <div class="workspace-agent" aria-hidden="true">
+                <img src="@AgentBuilderCopy.MascotImage(Lead?.Mascot ?? "Nova")" alt="" />
+                <StatusBadge Tone="StatusTone.Neutral">@(draft ? "Draft" : "Off")</StatusBadge>
+            </div>
+        </article>
+    };
+
+    private RenderFragment LiveLead => __builder =>
+    {
+        <article class="workspace-action workspace-action--lead">
+            <div class="workspace-action__content">
+                @if (HasReview)
+                {
+                    @* See what's waiting: the agents' reviews, on the Knowledge page. *@
+                    <Typography TextStyle="@LeadTitle" As="h2">Your AI Has Questions for You</Typography>
+                    <Typography TextStyle="@LeadText" As="p" Prose>
+                        Some things your agents couldn’t answer, or need you to check. Answer once, and every agent knows next time.
+                    </Typography>
+                    <div class="workspace-action__buttons">
+                        <Button Size="ButtonSize.Large" @onclick="@(() => Nav.NavigateTo("/dashboard/knowledge?review=1"))">See What’s Waiting</Button>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="OpenInbox">Open Inbox</Button>
+                    </div>
+                }
+                else if (Waiting)
+                {
+                    @* Passed to the owner, with nothing to review: the conversations are in the Inbox. *@
+                    <Typography TextStyle="@LeadTitle" As="h2">Customers Are Waiting for You</Typography>
+                    <Typography TextStyle="@LeadText" As="p" Prose>
+                        Your AI passed some conversations to you. Reply in the Inbox.
+                    </Typography>
+                    <Button Size="ButtonSize.Large" @onclick="OpenInbox">Open Inbox</Button>
+                }
+                else
+                {
+                    <Typography TextStyle="@LeadTitle" As="h2">Your Inbox</Typography>
+                    <Typography TextStyle="@LeadText" As="p" Prose>
+                        @($"See the conversations {(LiveAgents.Count == 1 ? LeadName : "your AI")} replied to, and step in whenever you like.")
+                    </Typography>
+                    <Button Size="ButtonSize.Large" @onclick="OpenInbox">Open Inbox</Button>
+                }
+            </div>
+            @Flow(IconName.RiInbox2Fill)
+        </article>
+    };
+
+    // ── The rows under it ──────────────────────────────────────────────────
+
+    private RenderFragment ChannelDoneRow => __builder =>
+    {
+        <article class="workspace-action workspace-action--row is-done">
+            <span class="workspace-action__icon" aria-hidden="true">
+                <Icon Name="IconName.RiCheckFill" Size="IconSize.Lg" />
+            </span>
+            <div class="workspace-action__content">
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Your Conversations Are Coming In</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                    @ConnectedNames @(ConnectedCount == 1 ? "is" : "are") connected to your inbox.
+                </Typography>
+            </div>
+            <Button Variant="ButtonVariant.Ghost" @onclick="OpenChannels">Manage Channels</Button>
+        </article>
+    };
+
+    private RenderFragment BusinessRow => __builder =>
+    {
+        if (AskAboutBusiness)
+        {
+            <article class="workspace-action workspace-action--row">
+                <span class="workspace-action__icon is-tone-blue" aria-hidden="true">
+                    <Icon Name="IconName.RiStore2Fill" Size="IconSize.Lg" />
+                </span>
+                <div class="workspace-action__content">
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Tell Us About Your Business</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                        Anything your AI should know to answer your customers.
+                    </Typography>
+                </div>
+                <Button Variant="ButtonVariant.Secondary" @onclick="TellUsAsync">Tell Us About It</Button>
+            </article>
+        }
+    };
+
+    // Accelerate, our payments product: the one thing offered, and always
+    // there until it is set up (designer: no "Not now").
+    private RenderFragment AccelerateRow => __builder =>
+    {
+        {
+            <article class="workspace-action workspace-action--row workspace-action--accelerate" aria-labelledby="workspace-accelerate-title">
+                <span class="workspace-action__icon is-partner" aria-hidden="true">
+                    <img src="@Assets["partners/accelerate-mark.png"]" alt="" />
+                </span>
+                <div class="workspace-action__content">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="p" Class="workspace-action__brand">Accelerate</Typography>
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="workspace-accelerate-title">Get Paid in the Chat</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                        No more checking your bank app for “I’ve paid”. Your AI sends a payment link, and Accelerate confirms the moment it’s paid.
+                    </Typography>
+                </div>
+                <div class="workspace-action__buttons">
+                    <Button Variant="ButtonVariant.Secondary" aria-label="Set up Accelerate (opens accelerate.ng)" @onclick="SetUpAccelerateAsync">
+                        <ChildContent>Set It Up</ChildContent>
+                        <IconRight><Icon Name="IconName.RiExternalLinkLine" /></IconRight>
+                    </Button>
+                </div>
+            </article>
+        }
+    };
+
+    private RenderFragment ChannelsRow => __builder =>
+    {
+        <article class="workspace-action workspace-action--row">
+            <span class="workspace-action__icon is-tone-cyan" aria-hidden="true">
+                <Icon Name="IconName.RiLinksFill" Size="IconSize.Lg" />
+            </span>
+            <div class="workspace-action__content">
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Your Channels</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@ChannelsLine</Typography>
+            </div>
+            <Button Variant="ButtonVariant.Ghost" @onclick="OpenChannels">Manage Channels</Button>
+        </article>
+    };
+
+    private sealed record Shortcut(IconName Glyph, string Title, string Line, string? Href, string Tone);
+
+    // Integrations has no page yet (it is coming for the MVP): there, and marked Soon.
+    private static readonly Shortcut[] ShortcutList =
+    [
+        new(IconName.RiInbox2Fill, "Inbox", "Your customer conversations.", "/dashboard/conversations", "pink"),
+        new(IconName.RiRobot3Fill, "AI Agents", "Your agents and their jobs.", "/ai-operations", "emerald"),
+        new(IconName.RiBookOpenFill, "Business Knowledge", "What your AI knows.", "/dashboard/knowledge", "blue"),
+        new(IconName.RiExchangeBoxFill, "Integrations", "Connect the tools you use.", null, "indigo"),
+    ];
+
+    private RenderFragment Shortcuts => __builder =>
+    {
+        <nav class="workspace-shortcuts" aria-label="Shortcuts">
+            @foreach (var shortcut in ShortcutList)
+            {
+                var go = shortcut;
+                <RowButton Class="@($"workspace-shortcut{(go.Href is null ? " is-soon" : null)}")" Disabled="@(go.Href is null)" OnClick="@(() => Nav.NavigateTo(go.Href!))">
+                    <span class="workspace-shortcut__top">
+                        <span class="workspace-shortcut__icon is-tone-@go.Tone" aria-hidden="true"><Icon Name="@go.Glyph" Size="IconSize.Md" /></span>
+                        @if (go.Href is null)
+                        {
+                            <StatusBadge Tone="StatusTone.Neutral">Soon</StatusBadge>
+                        }
+                    </span>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@go.Title</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="workspace-shortcut__line">@go.Line</Typography>
+                </RowButton>
+            }
+        </nav>
+    };
+
+    // Connecting a channel comes back here once it is connected.
+    private void OpenChannels() => Nav.NavigateTo("/dashboard/channels?from=dashboard");
+    private void OpenInbox() => Nav.NavigateTo("/dashboard/conversations");
+    // An agent needs a connected channel, then knowledge the business has
+    // approved ("Teach your AI"); then setup opens.
+    // Straight to the create page, not AI Operations on the way.
+    private Task OpenAiAgents() => AgentGate.RequireAsync(() =>
+    {
+        Nav.NavigateTo("/ai-operations/new-agent");
+        return Task.CompletedTask;
+    });
+
+    // Saved from here rather than on the way to an agent: said, since the card just goes.
+    private Task TellUsAsync() => BusinessIntro.RequireAsync(() =>
+    {
+        Toasts.Show("Saved. Your AI will use this to answer customers.");
+        return Task.CompletedTask;
+    });
+
+    // Accelerate's own sign-up, in a new tab: linking the account here needs the backend.
+    private async Task SetUpAccelerateAsync() =>
+        await JS.InvokeVoidAsync("open", "https://accelerate.ng/auth/signup", "_blank", "noopener");
+
+    // The welcome card names the business through AuthState; that is the
+    // moment this page becomes live and plays its entrance.
+    protected override async Task OnInitializedAsync()
+    {
+        AuthState.OnChange += OnAuthChanged;
+        BusinessIntro.Changed += OnIntroChanged;
+        AgentsState.Changed += OnStateChanged;
+        Feed.Changed += OnStateChanged;
+        await ReadBusinessAsync();
+        await ReadReviewAsync();
+    }
+
+    private async Task ReadBusinessAsync() =>
+        _businessTold = !BusinessKnowledge.Available || await BusinessKnowledge.HasApprovedAsync();
+
+    private void OnAuthChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    // The business dialog closed: told now, or still not.
+    private void OnIntroChanged()
+    {
+        if (BusinessIntro.IsOpen) return;
+        _ = InvokeAsync(async () =>
+        {
+            await ReadBusinessAsync();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        AuthState.OnChange -= OnAuthChanged;
+        BusinessIntro.Changed -= OnIntroChanged;
+        AgentsState.Changed -= OnStateChanged;
+        Feed.Changed -= OnStateChanged;
+    }
+}

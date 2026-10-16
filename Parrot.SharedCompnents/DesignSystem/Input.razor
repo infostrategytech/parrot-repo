@@ -110,6 +110,16 @@
     /// <summary>Moves focus into the field (an edit opened in place, a table cell).</summary>
     public ValueTask FocusAsync() => _input.FocusAsync();
 
+    /// <summary>
+    /// Moves focus into the field with the caret after its text: something
+    /// started for the person to finish (a profile link's instagram.com/).
+    /// </summary>
+    public async Task FocusAtEndAsync()
+    {
+        if (string.IsNullOrEmpty(Value)) await _input.FocusAsync();
+        else await Interop.SetValueAsync(_input, Value, focus: true);
+    }
+
     // The text the field already shows (last typed or last pushed), and text
     // waiting to be pushed to it after the next render.
     private string _shown = "";

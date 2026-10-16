@@ -148,3 +148,15 @@
   gap: var(--spacing-md);
   align-items: center;
 }
+
+/* Tablets (below 1180px, designer, 14 October 2026): the columns keep their
+   widths and the table scrolls sideways inside its card, rather than cutting
+   off its last columns. The card's rounded edge stays. */
+@media not all and (min-width: 1180px) {
+  .contacts__table-wrap { overflow-x: auto; }
+  .contacts__table {
+    min-width: calc(var(--ds-contacts-col-name) + var(--ds-contacts-col-channels) + var(--ds-contacts-col-last)
+      + var(--ds-contacts-col-tags) + var(--ds-contacts-col-orders) + var(--ds-contacts-col-stage)
+      + var(--ds-contacts-col-actions) + var(--spacing-md) * 8);
+  }
+}

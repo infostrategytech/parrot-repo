@@ -1,0 +1,444 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TeachAi
+@implements IAsyncDisposable
+@inject BusinessIntroState State
+@inject Parrot.Web.Features.Auth.State.AuthState AuthState
+@inject VoiceInterop Voice
+@inject AuroraInterop Interop
+@inject IBusinessKnowledge Knowledge
+@inject Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentGate Gate
+@inject ToastService Toasts
+
+@* "Tell us about your business", before the first agent (designer and team,
+   14 October 2026). Not a chat and no topics to fill: one box
+   for the business to say what it does, typed, from a voice note (its words
+   land in the box, to check), or started from what its connected channels
+   already show; and, if it wants, files, and its website or social media
+   picked from a list. The box is all Save needs. Hosted once, in the
+   dashboard layout, beside "Connect a channel first". *@
+
+<div class="business-intro-host">
+<Dialog Open="State.IsOpen"
+        Title="@(State.Adding ? $"Tell us more about {Business}" : $"Tell us about {Business}")"
+        Subtitle="Your AI uses this to answer your customers."
+        Dismissible
+        ConfirmLabel="Save"
+        BusyLabel="Saving…"
+        Busy="_saving"
+        ConfirmDisabled="@(!CanSave)"
+        OnCancel="Cancel"
+        OnConfirm="SaveAsync">
+    <GlyphContent><Icon Name="IconName.RiStore2Fill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <div class="business-intro">
+            <section class="business-intro__about">
+                @* A label for the box: Typography has no <label>, so the text style is a class (as on the sign-in pages). *@
+                <label for="business-intro-summary" class="@TextStyle.BodySmallSemibold.ToClassName()">@Question</label>
+                <div class="business-intro__box">
+                    <TextArea @ref="_box" Id="business-intro-summary" Value="@_summary" ValueChanged="value => _summary = value ?? string.Empty"
+                              AriaLabel="@Question" Variant="TextAreaVariant.Plain" TextStyle="TextStyle.BodyDefaultMedium"
+                              Placeholder="For example: We sell handmade fabrics and ready-to-wear in Lagos. We deliver in 1–2 days, take bank transfer, and we're open Monday to Saturday, 9am to 6pm."
+                              Rows="5" AutoGrow MaxLength="4000" />
+                    @if (_files.Count > 0)
+                    {
+                        <ul class="business-intro__files" aria-label="Attached files">
+                            @foreach (var file in _files)
+                            {
+                                var current = file;
+                                <li><FileChip Name="@current.Name" Size="@current.Size" Preview="@current.Preview" OnRemove="() => _files.Remove(current)" /></li>
+                            }
+                        </ul>
+                    }
+                    @if (_recordingStarting || _recording is not null)
+                    {
+                        <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" Recording="_recording"
+                                            OnDelete="CancelNoteAsync" OnSend="SendNoteAsync" Class="business-intro__recording" />
+                    }
+                    else
+                    {
+                        <div class="business-intro__tools">
+                            @if (_canRecord)
+                            {
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_saving" @onclick="StartNote">
+                                    <IconLeft><Icon Name="IconName.RiVoiceprintFill" /></IconLeft>
+                                    <ChildContent>Voice note</ChildContent>
+                                </Button>
+                            }
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@(_saving || _files.Count >= MaxFiles)" @onclick="PickFilesAsync">
+                                <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                                <ChildContent>Attach a file</ChildContent>
+                            </Button>
+                            <InputFile @ref="_picker" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="@AcceptedFiles" OnChange="OnFilesPickedAsync" />
+                            @* On the right, for a blank box: what the connected channels already show, to check and add to. *@
+                            @if (_summary.Trim().Length == 0 && Knowledge.Available && !State.Adding)
+                            {
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="business-intro__fill" Busy="_starting" disabled="@_saving" @onclick="StartFromKnownAsync">
+                                    <IconLeft><Icon Name="IconName.RiSparkling2Fill" /></IconLeft>
+                                    <ChildContent>See what we found</ChildContent>
+                                </Button>
+                            }
+                        </div>
+                    }
+                </div>
+                @if (_notice is not null)
+                {
+                    <InlineError Tone="InlineErrorTone.Info" Message="@_notice" />
+                }
+            </section>
+
+            <section class="business-intro__links" aria-labelledby="business-intro-links-title">
+                <span class="business-intro__links-head">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3" id="business-intro-links-title">Website and social media</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="business-intro__optional">Optional</Typography>
+                </span>
+                @* A profile from a connected channel is filled in, as a link like the others (designer:
+                   "Connected" would suggest the links they add get connected too). *@
+                @foreach (var field in _fields)
+                {
+                    var current = field;
+                    var platform = Platforms.First(p => p.Key == current.Key);
+                    <div class="business-intro__link">
+                        <Input @ref="current.Box" FloatingLabel="@platform.Name" Type="@(platform.Key == "website" ? "url" : "text")"
+                               Value="@current.Value" ValueChanged="value => current.Value = value ?? string.Empty" IconLeft="@PlatformMark(platform.Key)" maxlength="300" />
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {platform.Name}")" title="Remove" @onclick="() => _fields.Remove(current)">
+                            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                        </Button>
+                    </div>
+                }
+                @* The rest, to pick from: tap one and its field appears, labelled for what to type. *@
+                @if (Available.Count > 0)
+                {
+                    <div class="business-intro__platforms" role="group" aria-label="Add a link">
+                        @foreach (var platform in Available)
+                        {
+                            var key = platform.Key;
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-label="@($"Add your {platform.Name}")" @onclick="() => AddField(key)">
+                                <IconLeft>@PlatformMark(key)</IconLeft>
+                                <ChildContent>@platform.Short</ChildContent>
+                            </Button>
+                        }
+                    </div>
+                }
+            </section>
+
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" />
+            }
+        </div>
+    </Body>
+</Dialog>
+</div>
+
+@code {
+    private const int MaxFiles = 5;
+    private const long MaxFileBytes = 10 * 1024 * 1024;
+    private const long MaxPreviewBytes = 512 * 1024;
+    private const string AcceptedFiles = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt";
+
+    private sealed record PickedFile(string Name, long Size, string? Preview);
+
+    // A website or social profile the business can add: its name, the start of
+    // its profile link, put in the field for them to finish (so it reads as
+    // the whole link, instagram.com/adirelagos; designer), and its short label.
+    private sealed record Platform(string Key, string Name, string Short, string Start, Func<string, string> Url);
+    private sealed class LinkField(string key)
+    {
+        public string Key { get; } = key;
+        public string Value { get; set; } = string.Empty;
+        public Input? Box { get; set; }
+    }
+
+    private static readonly Platform[] Platforms =
+    [
+        new("website", "Website", "Website", "", value => value.Contains("://") ? value : "https://" + value),
+        new("instagram", "Instagram", "Instagram", "instagram.com/", value => "https://instagram.com/" + Handle(value)),
+        new("tiktok", "TikTok", "TikTok", "tiktok.com/@", value => "https://www.tiktok.com/@" + Handle(value)),
+        new("facebook", "Facebook", "Facebook", "facebook.com/", value => "https://facebook.com/" + Handle(value)),
+        new("x", "X (Twitter)", "X", "x.com/", value => "https://x.com/" + Handle(value)),
+    ];
+
+    private readonly List<LinkField> _fields = [];
+    private bool _starting;
+
+    // What can still be added: what isn't there already.
+    private IReadOnlyList<Platform> Available => Platforms.Where(p => !_fields.Any(f => f.Key == p.Key)).ToList();
+
+    // Picked: its field appears, ready to type in.
+    private LinkField? _focusField;
+
+    private void AddField(string key)
+    {
+        var field = new LinkField(key) { Value = Platforms.First(p => p.Key == key).Start };
+        _fields.Add(field);
+        _focusField = field;
+    }
+
+    private static string Handle(string value)
+    {
+        var text = value.Trim().TrimStart('@');
+        var slash = text.LastIndexOf('/');
+        return slash >= 0 ? text[(slash + 1)..].TrimStart('@') : text;
+    }
+
+    private static RenderFragment PlatformMark(string key) => __builder =>
+    {
+        if (key == "website")
+        {
+            <Icon Name="IconName.RiGlobalFill" Size="IconSize.Sm" />
+        }
+        else
+        {
+            <ChannelIcon Channel="@key" Size="IconSize.Sm" />
+        }
+    };
+
+    // The first time it opens: a connected social profile (an Instagram, a
+    // Facebook Page, a TikTok) is filled in as its link, where its handle is
+    // known. Removed, it stays removed.
+    private bool _prefilled;
+
+    private async Task PrefillConnectedAsync()
+    {
+        if (_prefilled) return;
+        _prefilled = true;
+        IReadOnlyList<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentChannelChoice> connected;
+        try { connected = await Gate.ConnectedAsync(); }
+        catch (HttpRequestException) { return; }
+        foreach (var channel in connected)
+        {
+            var key = channel.Key.ToLowerInvariant();
+            var handle = channel.AccountName?.Trim() ?? string.Empty;
+            // A handle, not a page's display name or a phone number.
+            if (Platforms.All(p => p.Key != key) || key == "website" || handle.Length == 0 || handle.Contains(' ') || _fields.Any(f => f.Key == key)) continue;
+            _fields.Add(new LinkField(key) { Value = Platforms.First(p => p.Key == key).Start + handle.TrimStart('@') });
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task StartFromKnownAsync()
+    {
+        _notice = null;
+        _starting = true;
+        try
+        {
+            var known = await Knowledge.StartingPointAsync();
+            if (known is { Length: > 0 })
+            {
+                _summary = known;
+                _focusBox = true;
+            }
+            else _notice = $"We don't know much about {Business} yet. Tell us in your own words.";
+        }
+        catch (HttpRequestException)
+        {
+            _notice = "We couldn't read your channels just now. Tell us in your own words.";
+        }
+        finally
+        {
+            _starting = false;
+        }
+    }
+
+    private TextArea? _box;
+    private InputFile? _picker;
+    private VoiceNoteRecording? _recorder;
+    private VoiceRecording? _recording;
+    private CancellationTokenSource? _clock;
+
+    private string _summary = string.Empty;
+    private readonly List<PickedFile> _files = [];
+    private bool _canRecord, _recordingStarting, _saving, _focusBox, _wasOpen;
+    private int _recordSeconds;
+    private string? _notice, _error;
+
+    private string Business => AuthState.CurrentUser?.BusinessName is { Length: > 0 } name ? name : "your business";
+
+    private string Question => State.Adding ? "What else should your AI know?" : $"What does {Business} do?";
+
+    // The box is all it needs; not while a voice note is still recording.
+    private bool CanSave => _summary.Trim().Length > 0 && _recording is null && !_recordingStarting && !_saving;
+
+    protected override void OnInitialized() => State.Changed += Changed;
+
+    private void Changed() => _ = InvokeAsync(() =>
+    {
+        // Opened: the box takes the focus. Whatever was typed before a Cancel is kept.
+        if (State.IsOpen && !_wasOpen) { _focusBox = true; if (!State.Adding) _ = PrefillConnectedAsync(); }
+        _wasOpen = State.IsOpen;
+        StateHasChanged();
+    });
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try { _canRecord = (await Voice.CapabilitiesAsync()).Record; StateHasChanged(); }
+            catch (JSException) { }
+        }
+        // After the dialog has focused its card (it does on opening), the box takes it.
+        if (_focusField?.Box is { } picked) { _focusField = null; await picked.FocusAtEndAsync(); }
+        if (_focusBox && _box is not null) { _focusBox = false; await Task.Delay(60); await _box.FocusAsync(); }
+        if (_recordingStarting && _recording is null && _recorder is not null)
+        {
+            try
+            {
+                _recording = await Voice.RecordNoteAsync(_recorder.Element);
+                StartClock();
+            }
+            catch (JSException)
+            {
+                _notice = "Your browser is blocking the microphone. Type instead, or allow it from the address bar.";
+            }
+            finally
+            {
+                _recordingStarting = false;
+                StateHasChanged();
+            }
+        }
+    }
+
+
+    // ── A voice note: its words go into the box, to check ───────────────────
+
+    private void StartNote()
+    {
+        _notice = null;
+        _recordSeconds = 0;
+        _recordingStarting = true;
+    }
+
+    private void StartClock()
+    {
+        _clock?.Cancel();
+        _clock = new CancellationTokenSource();
+        _ = TickAsync(_clock.Token);
+    }
+
+    private async Task TickAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(1000, token);
+                _recordSeconds++;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task CancelNoteAsync()
+    {
+        _clock?.Cancel();
+        _recordingStarting = false;
+        var recording = _recording;
+        _recording = null;
+        if (recording is not null) await recording.CancelAsync();
+    }
+
+    private async Task SendNoteAsync()
+    {
+        _clock?.Cancel();
+        var recording = _recording;
+        _recording = null;
+        if (recording is null) return;
+        var note = await recording.StopAsync();
+        var words = note.Transcript.Trim();
+        if (words.Length == 0)
+        {
+            _notice = "We couldn't make out the words in that note. Try again, or type instead.";
+            return;
+        }
+        words = char.ToUpperInvariant(words[0]) + words[1..];
+        if (!".!?".Contains(words[^1])) words += ".";
+        _summary = _summary.Trim().Length == 0 ? words : $"{_summary.Trim()} {words}";
+        _focusBox = true;
+    }
+
+    // ── Files ───────────────────────────────────────────────────────────────
+
+    private async Task PickFilesAsync()
+    {
+        if (_picker?.Element is { } element) await Interop.ClickAsync(element);
+    }
+
+    private async Task OnFilesPickedAsync(InputFileChangeEventArgs args)
+    {
+        _notice = null;
+        var room = MaxFiles - _files.Count;
+        if (args.FileCount > room) _notice = $"You can attach up to {MaxFiles} files.";
+        foreach (var file in args.GetMultipleFiles(args.FileCount).Take(Math.Max(0, room)))
+        {
+            if (file.Size > MaxFileBytes)
+            {
+                _notice = $"{file.Name} is over 10 MB. Try a smaller file.";
+                continue;
+            }
+            var image = file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            _files.Add(new PickedFile(file.Name, file.Size, image ? await PreviewAsync(file) : null));
+        }
+    }
+
+    // A small copy of a picture for its thumbnail; none if the browser cannot make one.
+    private static async Task<string?> PreviewAsync(IBrowserFile file)
+    {
+        try
+        {
+            var small = await file.RequestImageFileAsync("image/jpeg", 160, 160);
+            await using var stream = small.OpenReadStream(MaxPreviewBytes);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            return "data:image/jpeg;base64," + Convert.ToBase64String(copy.ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or JSException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    // ── Save or cancel ──────────────────────────────────────────────────────
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            var adding = State.Adding;
+            var links = _fields.Where(field => field.Key == "website" ? field.Value.Trim().Length > 0 : Handle(field.Value).Length > 0)
+                .Select(field => Platforms.First(p => p.Key == field.Key).Url(field.Value.Trim()))
+                .Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            await State.SaveAsync(new BusinessIntro(_summary.Trim(), links, _files.Select(file => file.Name).ToList()));
+            // Saved: a fresh form if it is ever opened again.
+            _summary = string.Empty;
+            _fields.Clear();
+            _prefilled = false;
+            if (adding) Toasts.Show("Added. Every agent can use it now.");
+            _files.Clear();
+            _notice = null;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or NotSupportedException)
+        {
+            _error = "We couldn't save this. Check your connection and try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task Cancel()
+    {
+        await CancelNoteAsync();
+        State.Close();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        State.Changed -= Changed;
+        _clock?.Cancel();
+        if (_recording is not null) await _recording.CancelAsync();
+    }
+}

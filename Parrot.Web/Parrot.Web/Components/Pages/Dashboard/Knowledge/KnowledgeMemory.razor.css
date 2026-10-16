@@ -1,0 +1,135 @@
+/* Knowledge: one calm column, a memory manager rather than a dashboard. */
+
+.knowledge {
+  /* Gaps in the token set: no content-width scale. One column a sentence
+     can be read across. */
+  --ds-knowledge-max: 760px;
+  --ds-knowledge-search: 240px;
+  --ds-knowledge-icon: 32px;
+
+  display: grid;
+  gap: var(--spacing-xl);
+  width: min(var(--ds-knowledge-max), 100%);
+  margin-inline: auto;
+  padding: var(--spacing-4xl) var(--spacing-xl) var(--spacing-6xl);
+  color: var(--colors-text-primary);
+}
+.knowledge > ::deep * { min-width: 0; }
+.knowledge ::deep p,
+.knowledge ::deep h1,
+.knowledge ::deep h2,
+.knowledge ::deep h3 { margin: var(--spacing-none); }
+.knowledge ::deep .knowledge__muted { color: var(--colors-text-muted); }
+
+.knowledge__head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-md) var(--spacing-xl);
+  align-items: start;
+}
+.knowledge__heading { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.knowledge__heading ::deep .knowledge__lede { color: var(--colors-text-muted); }
+
+.knowledge__card {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+
+/* ── Add something to remember ───────────────────────────────────────────── */
+
+.knowledge__add-head { display: flex; gap: var(--spacing-sm); align-items: center; justify-content: space-between; }
+.knowledge__add-foot { display: flex; flex-wrap: wrap; gap: var(--spacing-sm) var(--spacing-md); align-items: center; justify-content: space-between; }
+
+.knowledge__saved {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+.knowledge__saved ::deep .ds-icon { flex: none; color: var(--colors-feedback-success-text); }
+.knowledge__saved ::deep p { flex: 1 1 auto; }
+
+/* ── Review needed: one quiet line ───────────────────────────────────────── */
+
+.knowledge__review {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-accent-brand-subtle);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-border);
+  border-radius: var(--radius-radius-xl);
+}
+.knowledge__review-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-knowledge-icon);
+  height: var(--ds-knowledge-icon);
+  color: var(--colors-icon-brand);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+}
+.knowledge__review-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+
+/* ── Saved knowledge: one list, light headings ───────────────────────────── */
+
+.knowledge__saved-list { display: grid; gap: var(--spacing-md); }
+.knowledge__section-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm) var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+}
+.knowledge__section-head ::deep .ds-search-field { width: min(var(--ds-knowledge-search), 100%); }
+
+.knowledge__list { gap: var(--spacing-lg); }
+.knowledge__list ::deep .knowledge__note { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-2xs); }
+.knowledge__list ::deep .knowledge__link { height: auto; padding: var(--spacing-none); color: var(--colors-text-link); text-decoration: underline; }
+
+.knowledge__group { display: grid; gap: var(--spacing-2xs); }
+.knowledge__group + .knowledge__group { padding-top: var(--spacing-sm); }
+.knowledge__group ::deep .knowledge__group-title { color: var(--colors-text-muted); }
+
+.knowledge__facts { display: grid; margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.knowledge__fact {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--spacing-sm) var(--spacing-none);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.knowledge__group:last-child .knowledge__fact:last-child { border-bottom: 0; }
+.knowledge__fact-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.knowledge__fact-text ::deep .knowledge__source { color: var(--colors-text-subtle); }
+
+/* The row's menu: quiet, a plain dots button rather than a bordered one. */
+.knowledge__fact ::deep .ds-action-menu__trigger {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  color: var(--colors-text-muted);
+}
+.knowledge__fact ::deep .ds-action-menu__trigger:hover,
+.knowledge__fact ::deep .ds-action-menu__trigger.is-open { background: var(--colors-interaction-hover); color: var(--colors-text-primary); }
+
+.knowledge__edit { display: grid; flex: 1 1 auto; gap: var(--spacing-sm); }
+.knowledge__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); justify-content: flex-end; }
+.knowledge__move { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; }
+.knowledge__move-new { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; }
+.knowledge__move-new ::deep .field { flex: 1 1 var(--ds-knowledge-search); }
+
+@media (max-width: 1180px) {
+  .knowledge { padding: var(--spacing-xl) var(--spacing-md) var(--spacing-5xl); gap: var(--spacing-lg); }
+  .knowledge__card { padding: var(--spacing-lg); }
+  .knowledge__review { grid-template-columns: auto minmax(0, 1fr); }
+  .knowledge__review > ::deep .ds-button { grid-column: 1 / -1; justify-self: start; }
+}

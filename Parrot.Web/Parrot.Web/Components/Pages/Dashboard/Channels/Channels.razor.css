@@ -40,7 +40,37 @@
 
 /* A setup flow gets the page to itself and sits higher up it, because it is a
    single task rather than a list to browse. */
+/* Where a setup screen sits. On a large screen, where the designer likes it:
+   176px down, as it always has. On a shorter window the space above gives way
+   first, only as much as the screen needs, so a laptop sees the whole card and
+   its button; a screen too long to fit anyway starts near the top. The page
+   is the window's height and the space above is the one thing that shrinks. */
 .channels--setup {
-  padding-top: var(--spacing-5xl);
-  padding-bottom: var(--spacing-4xl);
+  /* Missing from the token set: the large-screen space above (176px), less
+     the 32px that always stays. */
+  --ds-channels-setup-lift: 144px;
+
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: var(--spacing-3xl);
+  padding-bottom: var(--spacing-none);
+}
+
+/* The screens never give way, only the space around them. They are other
+   components, so this needs ::deep to reach them. */
+.channels--setup ::deep > * { flex-shrink: 0; }
+
+.channels--setup::before {
+  content: "";
+  flex: 0 1 var(--ds-channels-setup-lift);
+}
+
+/* Room under the card, even when it runs past the window. It gives way
+   before the space above does, so a large screen keeps its 176px. */
+.channels--setup::after {
+  content: "";
+  flex: 0 100 var(--spacing-4xl);
+  min-height: var(--spacing-lg);
 }
