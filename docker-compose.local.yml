@@ -176,6 +176,9 @@ services:
       Redis__ConnectionString: redis:6379
       GoogleOAuth__ClientId: ${GOOGLE_CLIENT_ID:-local-placeholder.apps.googleusercontent.com}
       GoogleOAuth__ClientSecret: ${GOOGLE_CLIENT_SECRET:-local-placeholder}
+      # Facebook sign-in: off until a Facebook app is set (FACEBOOK_APP_ID and FACEBOOK_APP_SECRET).
+      FacebookOAuth__AppId: ${FACEBOOK_APP_ID:-}
+      FacebookOAuth__AppSecret: ${FACEBOOK_APP_SECRET:-}
       EmailSettings__SmtpHost: mailpit
       EmailSettings__SmtpPort: 1025
       EmailSettings__UseStartTls: "false"
@@ -297,6 +300,8 @@ services:
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
       # Must match the API's: with it on, agents live in the API and can be turned on.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      # Shows "Continue with Facebook" on Sign in and Sign up; turn on with the API's Facebook app.
+      Sso__Facebook: ${FACEBOOK_SSO_ENABLED:-false}
       OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
     ports:
       - "5255:8080"

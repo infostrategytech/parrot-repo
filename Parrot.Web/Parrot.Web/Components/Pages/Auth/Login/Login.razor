@@ -76,6 +76,10 @@
     </div>
 
     <GoogleSignInButton Busy="_googleBusy" Disabled="Busy" OnClick="ContinueWithGoogle" />
+    @if (FacebookEnabled)
+    {
+        <FacebookSignInButton Busy="_facebookBusy" Disabled="Busy" OnClick="ContinueWithFacebook" />
+    }
 
     <p class="login-form__signup @TextStyle.BodySmallMedium.ToClassName()">
         New to OmniAI?
@@ -84,7 +88,7 @@
 </form>
 
 @code {
-    private enum Problem { Invalid, TooManyAttempts, GoogleFailed, Unreachable, Unknown }
+    private enum Problem { Invalid, TooManyAttempts, GoogleFailed, FacebookFailed, FacebookNoEmail, FacebookUnavailable, Unreachable, Unknown }
 
     [SupplyParameterFromQuery(Name = "sessionExpired")]
     public bool SessionExpired { get; set; }
@@ -98,17 +102,28 @@
     private string? _passwordError;
     private Problem? _problem;
     private bool _googleBusy;
+    private bool _facebookBusy;
+
+    // Shown once a Facebook app is configured on the API (Sso:Facebook on this app says so).
+    private bool FacebookEnabled => Configuration.GetValue<bool>("Sso:Facebook");
 
     /// <summary>One request at a time: every control is locked while any of them runs.</summary>
-    private bool Busy => LoginState.IsLoading || _googleBusy;
+    private bool Busy => LoginState.IsLoading || _googleBusy || _facebookBusy;
 
     protected override void OnInitialized()
     {
         LoginState.OnChange += StateHasChanged;
         _email = Forms.EnteredEmail;
 
-        // The API sends people back here with ?error= when Google sign-in fails.
-        if (!string.IsNullOrEmpty(error)) _problem = Problem.GoogleFailed;
+        // The API sends people back here with ?error= when Google or Facebook sign-in fails.
+        if (!string.IsNullOrEmpty(error))
+            _problem = error switch
+            {
+                "facebook_failed" => Problem.FacebookFailed,
+                "facebook_no_email" => Problem.FacebookNoEmail,
+                "facebook_unavailable" => Problem.FacebookUnavailable,
+                _ => Problem.GoogleFailed,
+            };
     }
 
     private static string Message(Problem problem) => problem switch
@@ -116,6 +131,9 @@
         Problem.Invalid => "That email or password is not right. Check them and try again.",
         Problem.TooManyAttempts => "Too many attempts. Wait a few minutes, then try again.",
         Problem.GoogleFailed => "Google sign-in did not finish. Try again, or use your email and password.",
+        Problem.FacebookFailed => "Facebook sign-in did not finish. Try again, or use your email and password.",
+        Problem.FacebookNoEmail => "Your Facebook account has no email address we can use. Sign up with your email or Google instead.",
+        Problem.FacebookUnavailable => "Facebook sign-in is not available yet. Use your email and password, or Google.",
         Problem.Unreachable => "We could not reach OmniAI. Check your internet connection.",
         _ => "Something went wrong on our side."
     };
@@ -211,6 +229,15 @@
 
     // The SSO entry point lives on the API, so this is a full navigation away
     // from the circuit.
+    private void ContinueWithFacebook()
+    {
+        if (Busy) return;
+        _facebookBusy = true;
+
+        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/facebook", forceLoad: true);
+    }
+
     private void ContinueWithGoogle()
     {
         if (Busy) return;

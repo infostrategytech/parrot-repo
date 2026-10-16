@@ -271,6 +271,16 @@ a:hover { color: var(--colors-text-link-hover); }
   --ds-google-label: #e3e3e3;
 }
 
+/* Facebook's sign-in button. Meta's button is the same in light and dark: Facebook blue (allowlisted in
+   brand-literals.json) with a white label and mark. */
+.facebook-signin-wrap {
+  /* Not a token: Meta's Facebook blue and its white label. */
+  --ds-facebook-fill: #1877f2;
+  --ds-facebook-label: #ffffff;
+  /* Not a token: hover darkens the same blue a little, as Meta's own button does. */
+  --ds-facebook-hover-brightness: 0.92;
+}
+
 /* Disabled buttons in dark mode. The disabled colours are already muted, and
    halving their opacity on top of that left a dark-on-dark label that was
    almost invisible (the Create Workspace dialog showed it worst). In dark the
