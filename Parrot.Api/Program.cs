@@ -187,6 +187,35 @@ builder.Services.AddAuthentication(options =>
     options.Scope.Add("profile");
 });
 
+// Facebook sign-in, once a Facebook app is configured (FacebookOAuth:AppId and AppSecret). Unlike Google's it is
+// optional: without it the API starts as before and /api/auth/sso/facebook says it is unavailable. Only
+// public_profile and email are asked for, which need no Meta App Review.
+string? facebookAppId = builder.Configuration["FacebookOAuth:AppId"];
+string? facebookAppSecret = builder.Configuration["FacebookOAuth:AppSecret"];
+if (!string.IsNullOrWhiteSpace(facebookAppId) && !string.IsNullOrWhiteSpace(facebookAppSecret))
+{
+    builder.Services.AddAuthentication().AddFacebook(options =>
+    {
+        options.SignInScheme = "ExternalCookies";
+        options.AppId = facebookAppId;
+        options.AppSecret = facebookAppSecret;
+        options.CallbackPath = "/signin-facebook";
+        options.Scope.Add("email");
+        options.Fields.Add("name");
+        options.Fields.Add("email");
+        // Cancelling on Facebook's screen (or any failure there) comes back to the login page with a message,
+        // not the framework's error page.
+        options.Events.OnRemoteFailure = context =>
+        {
+            string frontend = context.HttpContext.RequestServices
+                .GetRequiredService<Microsoft.Extensions.Options.IOptions<Parrot.Application.Auth.FrontendSettings>>().Value.BaseUrl;
+            context.Response.Redirect($"{frontend}/login?error=facebook_failed");
+            context.HandleResponse();
+            return Task.CompletedTask;
+        };
+    });
+}
+
 // The one policy only a service token satisfies (scope agent:service); every
 // other endpoint keeps its plain [Authorize].
 builder.Services.AddServiceScopePolicy();

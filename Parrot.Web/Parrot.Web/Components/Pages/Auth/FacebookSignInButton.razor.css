@@ -1,0 +1,21 @@
+/* Meta's sign-in button: Facebook blue, white label and mark, the same in light and dark. The colours are
+   Meta's, not ours, which is why they are literals (see app.css). */
+
+.facebook-signin-wrap ::deep .facebook-signin {
+  width: 100%;
+  margin-top: var(--spacing-sm);
+  color: var(--ds-facebook-label);
+  background: var(--ds-facebook-fill);
+  border: var(--ds-hairline) solid var(--ds-facebook-fill);
+}
+
+.facebook-signin-wrap ::deep .facebook-signin:hover:not(:disabled) {
+  color: var(--ds-facebook-label);
+  background: var(--ds-facebook-fill);
+  filter: brightness(var(--ds-facebook-hover-brightness));
+}
+
+.facebook-signin-wrap ::deep .facebook-signin svg {
+  width: var(--icon-size-icon-md);
+  height: var(--icon-size-icon-md);
+}

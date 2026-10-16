@@ -87,6 +87,10 @@
     </div>
 
     <GoogleSignInButton Busy="_googleBusy" Disabled="Busy" OnClick="ContinueWithGoogle" />
+    @if (FacebookEnabled)
+    {
+        <FacebookSignInButton Busy="_facebookBusy" Disabled="Busy" OnClick="ContinueWithFacebook" />
+    }
 
     <p class="signup-form__signin @TextStyle.BodySmallMedium.ToClassName()">
         Already have an account?
@@ -106,8 +110,12 @@
     private Problem? _problem;
     private string? _apiMessage;
     private bool _googleBusy;
+    private bool _facebookBusy;
 
-    private bool Busy => RegisterState.IsLoading || _googleBusy;
+    // Shown once a Facebook app is configured on the API (Sso:Facebook on this app says so).
+    private bool FacebookEnabled => Configuration.GetValue<bool>("Sso:Facebook");
+
+    private bool Busy => RegisterState.IsLoading || _googleBusy || _facebookBusy;
 
     private bool PasswordsMatch =>
         !string.IsNullOrEmpty(_confirmPassword) && _confirmPassword == _password;
@@ -232,6 +240,15 @@
     {
         Forms.Remember(_email);
         Navigation.NavigateTo("/login");
+    }
+
+    private void ContinueWithFacebook()
+    {
+        if (Busy) return;
+        _facebookBusy = true;
+
+        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/facebook", forceLoad: true);
     }
 
     private void ContinueWithGoogle()
