@@ -79,17 +79,13 @@ if (!builder.Environment.IsDevelopment() && !string.IsNullOrEmpty(authSettings.D
 
 builder.Services.Configure<EmailSettings>(builder.Configuration.GetSection(EmailSettings.SectionName));
 
-// Uploads are wired at boot: a bucket that has not been named yet fails here,
-// rather than on the first person to reach the logo step.
+// A bucket that has not been named yet must not take the whole API down with
+// it: it is logged loudly at boot, and only uploads fail until it is set.
 builder.Services.Configure<StorageSettings>(builder.Configuration.GetSection(StorageSettings.SectionName));
 StorageSettings storageSettings = builder.Configuration.GetSection(StorageSettings.SectionName).Get<StorageSettings>()
     ?? new StorageSettings();
-if (string.IsNullOrWhiteSpace(storageSettings.Bucket) ||
-    string.IsNullOrWhiteSpace(storageSettings.PublicBaseUrl))
-{
-    throw new InvalidOperationException(
-        "Storage:Bucket and Storage:PublicBaseUrl must be set for image uploads to work.");
-}
+bool storageConfigured = !string.IsNullOrWhiteSpace(storageSettings.Bucket) &&
+    !string.IsNullOrWhiteSpace(storageSettings.PublicBaseUrl);
 
 builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
 builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
@@ -574,6 +570,12 @@ WebApplication app = builder.Build();
 
 // Resolved eagerly so a platform missing its mapper fails the boot, not the first message of that kind.
 app.Services.GetRequiredService<IMessageDocumentMapperFactory>();
+
+if (!storageConfigured)
+{
+    app.Logger.LogError(
+        "Storage:Bucket and Storage:PublicBaseUrl are not set. The API is starting without them, but image uploads will fail until they are.");
+}
 
 if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
 {

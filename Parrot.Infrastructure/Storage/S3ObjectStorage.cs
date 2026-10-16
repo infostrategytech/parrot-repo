@@ -11,7 +11,7 @@ namespace Parrot.Infrastructure.Storage;
 /// </summary>
 public sealed class S3ObjectStorage : IObjectStorage
 {
-    private readonly IAmazonS3 _client;
+    private readonly Lazy<IAmazonS3> _lazyClient;
     private readonly StorageSettings _settings;
 
     public S3ObjectStorage(IOptions<StorageSettings> settings)
@@ -33,7 +33,8 @@ public sealed class S3ObjectStorage : IObjectStorage
             config.AuthenticationRegion = _settings.Region;
         }
 
-        _client = new AmazonS3Client(_settings.AccessKey, _settings.SecretKey, config);
+        // Built on first use, so a deployment with no credentials yet still boots.
+        _lazyClient = new Lazy<IAmazonS3>(() => new AmazonS3Client(_settings.AccessKey, _settings.SecretKey, config));
     }
 
     public async Task<string> PutAsync(
@@ -42,7 +43,7 @@ public sealed class S3ObjectStorage : IObjectStorage
         string contentType,
         CancellationToken cancellationToken = default)
     {
-        await _client.PutObjectAsync(
+        await _lazyClient.Value.PutObjectAsync(
             new PutObjectRequest
             {
                 BucketName = _settings.Bucket,
