@@ -134,6 +134,10 @@ public sealed class MongoConversationStore : IConversationStore
         catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey) { return false; }
     }
 
+    public async Task<bool> FailPendingAsync(string id, CancellationToken ct) =>
+        (await _messages.UpdateOneAsync(x => x.MessageId == id && x.SendStatus == "pending",
+            Builders<MessageDocument>.Update.Set(x => x.SendStatus, "failed"), cancellationToken: ct)).ModifiedCount > 0;
+
     public async Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct) =>
         await _messages.UpdateOneAsync(x => x.MessageId == id,
             Builders<MessageDocument>.Update.Set(x => x.SendStatus, status).Set(x => x.ProviderMessageId, providerId), cancellationToken: ct);

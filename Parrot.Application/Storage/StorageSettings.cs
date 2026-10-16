@@ -36,6 +36,13 @@ public class StorageSettings
     /// </summary>
     public string MediaBucket { get; init; } = "parrot-private";
 
+    /// <summary>
+    /// True: the message is stored at once with its files pending and a job per file goes to the media topic.
+    /// False (the default): the worker copies the files before it stores the message. Turn it on only when
+    /// the media workers run and the inbox refreshes a thread when a file finishes.
+    /// </summary>
+    public bool DeferInboundMedia { get; init; }
+
     /// <summary>Largest file the message worker saves from a customer. A bigger one is kept as a note that it was sent.</summary>
     public long MaxInboundMediaBytes { get; init; } = 25 * 1024 * 1024;
 

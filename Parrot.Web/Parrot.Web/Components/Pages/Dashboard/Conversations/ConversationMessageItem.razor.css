@@ -173,6 +173,7 @@ a.message-file:hover { background: var(--colors-interaction-hover); border-color
 .message-file ::deep strong { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
 .message-file ::deep small { color: var(--colors-text-muted); }
 .message-file.is-unavailable { color: var(--colors-text-muted); border-style: dashed; }
+.message-file.is-pending { border-style: solid; opacity: 0.8; }
 
 .message-note {
   display: flex;

@@ -16,6 +16,33 @@ public class KafkaSettings
     /// <summary>Where the message worker puts inbound messages it can never process, with the reason in a header.</summary>
     public string InboundDeadLetterTopic { get; set; } = "messages.inbound.dlq";
 
+    /// <summary>Where the message worker queues one job per customer file to copy into private storage, keyed by message.</summary>
+    public string MediaTopic { get; set; } = "messages.media";
+
+    /// <summary>Media jobs that can never succeed (the message is gone, the file's position is wrong), with the reason in a header.</summary>
+    public string MediaDeadLetterTopic { get; set; } = "messages.media.dlq";
+
+    /// <summary>Where the background workers announce that a customer's file finished loading or a queued reply was sent, for the open inbox to refresh.</summary>
+    public string SettledTopic { get; set; } = "messages.settled";
+
+    /// <summary>
+    /// The API's group on the settled topic. Each API instance appends its own name, so every instance reads every
+    /// event: a push can only reach the browsers connected to the instance that sends it.
+    /// </summary>
+    public string SettledConsumerGroupId { get; set; } = "realtime-gateway-settled";
+
+    /// <summary>The media workers' consumer group. Every worker instance shares it, so the jobs are split between them.</summary>
+    public string MediaConsumerGroupId { get; set; } = "media-worker";
+
+    /// <summary>Where the API queues a reply (today a picture or file) for the send worker, keyed by thread so one thread's replies keep their order.</summary>
+    public string OutboundTopic { get; set; } = "messages.outbound";
+
+    /// <summary>Outbound jobs that can never succeed (the message is gone, it is not a file), with the reason in a header.</summary>
+    public string OutboundDeadLetterTopic { get; set; } = "messages.outbound.dlq";
+
+    /// <summary>The send workers' consumer group. Every worker instance shares it, so the jobs are split between them.</summary>
+    public string OutboundConsumerGroupId { get; set; } = "outbound-worker";
+
     /// <summary>The message worker's consumer group on the inbound topic.</summary>
     public string ProcessorConsumerGroupId { get; set; } = "message-processor";
 

@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Utils;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Application.Profile;
 using Parrot.Application.Storage;
@@ -71,6 +73,9 @@ public class ProfileController : ControllerBase
     /// about where its files live.
     /// </summary>
     [HttpPost("image")]
+    // 5 MB of image plus the multipart framing; a bigger body is refused before it is buffered.
+    [RequestSizeLimit(6 * 1024 * 1024)]
+    [EnableRateLimiting(RateLimitPolicies.ImageUpload)]
     [EndpointSummary("Upload an image and get back a URL")]
     [EndpointDescription("multipart/form-data with one file: PNG, JPEG, GIF or WebP, at most 5 MB. The bytes go to object storage and only the URL comes back — save it with PUT /api/user/profile, which is what actually puts it on the account. The file name sent is ignored; the object key is minted here.")]
     [ProducesResponseType(typeof(ImageUploadResponse), StatusCodes.Status200OK)]

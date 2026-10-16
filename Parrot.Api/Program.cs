@@ -309,6 +309,25 @@ builder.Services.AddRateLimiter(options =>
             ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
             _ => PerIp(5, 15)));
 
+    // Uploads write to object storage, so they are capped. The limiter runs before authentication, so the
+    // partition is the IP: 60 files per minute leaves room for an office behind one address.
+    options.AddPolicy(RateLimitPolicies.FileSend, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
+    // 20 profile or logo image uploads per IP per 10 minutes
+    options.AddPolicy(RateLimitPolicies.ImageUpload, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => PerIp(20, 10)));
+
     // 1000 WhatsApp webhook deliveries per IP per minute (Meta sends bursts)
     options.AddPolicy(RateLimitPolicies.WhatsAppWebhook, ctx =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -495,6 +514,10 @@ builder.Services.AddSignalR()
 builder.Services.AddSingleton<Parrot.Api.Realtime.MessagePersistedRouter>();
 builder.Services.AddSingleton<IReceiptNotifier, Parrot.Api.Realtime.HubReceiptNotifier>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.RealtimeDeliveryService>();
+builder.Services.AddSingleton<Parrot.Api.Realtime.MessageSettledRouter>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.MessageSettledDeliveryService>();
+builder.Services.Configure<Parrot.Application.Conversations.OutboundSettings>(builder.Configuration.GetSection(Parrot.Application.Conversations.OutboundSettings.SectionName));
+builder.Services.AddSingleton<IOutboundJobPublisher, Parrot.Infrastructure.MessageBus.KafkaOutboundJobPublisher>();
 
 // What the orchestrator's agents did, kept per event in MongoDB and pushed
 // to the owner's connections as it arrives; the AI Operations screens read it.

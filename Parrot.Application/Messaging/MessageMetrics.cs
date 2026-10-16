@@ -66,6 +66,35 @@ public static class MessageMetrics
     public static readonly Histogram<double> ProcessingDuration = Meter.CreateHistogram<double>(
         "message_processing_duration_seconds", description: "Time spent in each processing stage.", advice: Fast);
 
+    // Customer files copied to private storage by the media worker. outcome: ready, failed, too_large, skipped.
+    public static readonly Counter<long> MediaProcessed = Meter.CreateCounter<long>(
+        "media_jobs_total", description: "Media jobs finished, by outcome and reason.");
+
+    public static readonly Counter<long> Swept = Meter.CreateCounter<long>(
+        "pending_sweeps_total", description: "Work the sweeper found waiting too long, by kind (media, send) and action (requeued, expired).");
+
+    public static readonly UpDownCounter<long> MediaActive = Meter.CreateUpDownCounter<long>(
+        "media_jobs_active", description: "Media jobs being worked on right now, per worker instance.");
+
+    public static readonly UpDownCounter<long> OutboundActive = Meter.CreateUpDownCounter<long>(
+        "outbound_jobs_active", description: "Outbound send jobs being worked on right now, per worker instance.");
+
+    public static readonly Histogram<double> MediaDuration = Meter.CreateHistogram<double>(
+        "media_job_duration_seconds", description: "Time to copy one customer file, retries included.", advice: Fast);
+
+    public static readonly Histogram<double> MediaQueueWait = Meter.CreateHistogram<double>(
+        "media_job_queue_wait_seconds", description: "Time from a media job being queued to a worker picking it up.", advice: Fast);
+
+    // Replies the send worker hands to a channel. outcome: accepted, failed, unknown, skipped.
+    public static readonly Counter<long> OutboundProcessed = Meter.CreateCounter<long>(
+        "outbound_jobs_total", description: "Outbound send jobs finished, by outcome and reason.");
+
+    public static readonly Histogram<double> OutboundDuration = Meter.CreateHistogram<double>(
+        "outbound_job_duration_seconds", description: "Time to hand one reply to its channel, retries included.", advice: Fast);
+
+    public static readonly Histogram<double> OutboundQueueWait = Meter.CreateHistogram<double>(
+        "outbound_job_queue_wait_seconds", description: "Time from a reply being queued to the send worker picking it up.", advice: Fast);
+
     // Stage 5: replies to the Meta API. status: accepted, failed, unknown.
     public static readonly Counter<long> Sent = Meter.CreateCounter<long>(
         "messages_sent_total", description: "Replies sent to the Meta API, by status and meta_error_code.");
@@ -142,20 +171,23 @@ public static class MessageMetrics
             new KeyValuePair<string, object?>("meta_error_code", "none"));
     }
 
+    /// <summary>One queue the gauges report on, with the topic its dead letters go to.</summary>
+    /// <param name="Depth">Read when Prometheus scrapes, so it must return quickly (a cached value, not a broker call).</param>
+    public sealed record QueueProbe(string Queue, string DeadLetterQueue, Func<long?> Depth, Func<long?> DeadLetters);
+
     /// <summary>
-    /// Registers the queue gauges. Their values are read when Prometheus
-    /// scrapes, so <paramref name="depth"/> and <paramref name="deadLetters"/>
-    /// must return quickly (a cached value, not a broker call).
+    /// Registers the queue gauges for every queue this process works on (the messages, media and outbound topics
+    /// each have their own consumer group and their own backlog). One gauge pair, one series per queue.
     /// </summary>
-    public static void RegisterQueueGauges(string queue, string deadLetterQueue, Func<long?> depth, Func<long?> deadLetters)
+    public static void RegisterQueueGauges(IReadOnlyList<QueueProbe> queues)
     {
         Meter.CreateObservableGauge(
             "message_queue_depth",
-            () => Observe(depth(), queue),
+            () => queues.SelectMany(q => Observe(q.Depth(), q.Queue)).ToList(),
             description: "Messages waiting on the queue (consumer lag).");
         Meter.CreateObservableGauge(
             "message_dead_letter_depth",
-            () => Observe(deadLetters(), deadLetterQueue),
+            () => queues.SelectMany(q => Observe(q.DeadLetters(), q.DeadLetterQueue)).ToList(),
             description: "Dead letters not yet reviewed.");
     }
 

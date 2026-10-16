@@ -25,6 +25,11 @@ public abstract class MessageDocument
     public string SendStatus { get; set; } = "received";
     public string? ProviderMessageId { get; set; }
 
+    // When a send worker took this reply to hand it to the channel (status "sending"). A reply still "sending"
+    // long after this was lost mid-send: whether the customer got it is unknown, so it is never sent again.
+    [BsonIgnoreIfNull]
+    public DateTime? SendClaimedAt { get; set; }
+
     // When the channel reported our reply delivered to the customer's device, and when the customer read
     // it. Set from the channel's receipts, only on replies, and only ever to the earliest time reported.
     // A customer who has turned read receipts off never gets a ReadAt: absent does not mean unread.

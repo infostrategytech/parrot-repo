@@ -33,7 +33,9 @@ public sealed class InboundMessageProcessor(
     IMessagePersistedPublisher publisher,
     ILogger<InboundMessageProcessor> logger,
     IContactNameLookup? contactNames = null,
-    IInboundMediaStore? mediaStore = null)
+    IInboundMediaStore? mediaStore = null,
+    IMediaJobPublisher? mediaJobs = null,
+    bool deferMedia = false)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -68,6 +70,13 @@ public sealed class InboundMessageProcessor(
             {
                 // Idempotent: a repeat finds the receipt already recorded.
                 await TimedAsync("receipt", () => receipts.RecordAsync(incoming, cancellationToken), "receipt_failed");
+            }
+
+            // One job per file still pending, with the write in place. A replay finds them still pending and
+            // queues them again, which is safe: the media worker skips a file that is already settled.
+            if (mediaJobs is not null && stored.Attachments is { Count: > 0 } files)
+            {
+                await TimedAsync("media_enqueue", () => EnqueueMediaAsync(inbound, stored, files, cancellationToken), "media_enqueue_failed");
             }
 
             // Only now, with the write in place. If this throws, the message comes
@@ -202,7 +211,16 @@ public sealed class InboundMessageProcessor(
 
             // Copied before the sequence is taken, and only for a message not stored yet, so a duplicate
             // never downloads twice. The platform's links expire, which is why it happens here.
-            if (incoming.Media is { Count: > 0 } && mediaStore is not null)
+            if (incoming.Media is { Count: > 0 } && deferMedia && mediaJobs is not null)
+            {
+                // Stored at once, the files loading: a job per file copies them after, so a slow platform never
+                // holds the message back. The link stays on the file for the job to use, and is dropped when it is done.
+                incoming = incoming with
+                {
+                    Media = [.. incoming.Media.Select(m => m.Kind == MediaKinds.Link ? m : m with { Status = MediaStatus.Pending })],
+                };
+            }
+            else if (incoming.Media is { Count: > 0 } && mediaStore is not null)
             {
                 IReadOnlyList<IncomingMedia> saved = await TimedAsync("media", () => mediaStore.SaveAsync(incoming, cancellationToken));
                 incoming = incoming with { Media = saved };
@@ -230,6 +248,18 @@ public sealed class InboundMessageProcessor(
             string reason = MessageMetrics.Classify(ex);
             MessageMetrics.PersistFailed.Add(1, new KeyValuePair<string, object?>("reason", reason));
             throw new StageFailedException("persist", reason, ex);
+        }
+    }
+
+    private async Task EnqueueMediaAsync(
+        InboundMessage inbound, MessageDocument stored, List<MessageAttachment> files, CancellationToken cancellationToken)
+    {
+        for (int index = 0; index < files.Count; index++)
+        {
+            if (MediaStatus.Of(files[index]) != MediaStatus.Pending) continue;
+            await mediaJobs!.PublishAsync(
+                new MediaJob { MessageId = stored.MessageId, Index = index, CorrelationId = inbound.CorrelationId, EnqueuedAt = DateTime.UtcNow },
+                cancellationToken);
         }
     }
 

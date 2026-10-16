@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
+using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Domain.Entities.Messages;
 
@@ -17,6 +18,76 @@ public sealed class MongoStoredMessageStore(IMongoClient client, IOptions<MongoD
 
     public async Task<MessageDocument?> FindAsync(string messageId, CancellationToken cancellationToken = default) =>
         await _messages.Find(d => d.MessageId == messageId).FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<bool> CompleteMediaAsync(string messageId, int index, IncomingMedia outcome, CancellationToken cancellationToken = default)
+    {
+        FilterDefinitionBuilder<MessageDocument> filter = Builders<MessageDocument>.Filter;
+        UpdateDefinitionBuilder<MessageDocument> update = Builders<MessageDocument>.Update;
+
+        // The status in the filter makes this a compare-and-set: of two workers finishing one file, one wins.
+        UpdateResult result = await _messages.UpdateOneAsync(
+            filter.Eq(d => d.MessageId, messageId) & filter.Eq(d => d.Attachments![index].Status, MediaStatus.Pending),
+            update.Combine(
+                update.Set(d => d.Attachments![index].Status, outcome.Status),
+                update.Set(d => d.Attachments![index].FailureReason, outcome.FailureReason),
+                update.Set(d => d.Attachments![index].StorageKey, outcome.StorageKey),
+                update.Set(d => d.Attachments![index].Kind, outcome.Kind),
+                update.Set(d => d.Attachments![index].ContentType, outcome.ContentType),
+                update.Set(d => d.Attachments![index].SizeBytes, outcome.SizeBytes),
+                update.Set(d => d.Attachments![index].SourceUrl, null)),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
+
+    public async Task<IReadOnlyList<StaleMessage>> FindStalePendingMediaAsync(DateTime storedBefore, int limit, CancellationToken cancellationToken = default)
+    {
+        FilterDefinitionBuilder<MessageDocument> filter = Builders<MessageDocument>.Filter;
+        List<MessageDocument> found = await _messages
+            .Find(filter.ElemMatch(d => d.Attachments, a => a.Status == MediaStatus.Pending) & filter.Lt(d => d.StoredAt, storedBefore))
+            .SortBy(d => d.StoredAt).Limit(limit).ToListAsync(cancellationToken);
+        return [.. found.Select(d => new StaleMessage(
+            d.MessageId, d.OwnerUserId, d.ConnectionId, d.From, d.StoredAt, d.SendStatus,
+            [.. d.Attachments!.Select((a, i) => (a, i)).Where(x => x.a.Status == MediaStatus.Pending).Select(x => x.i)]))];
+    }
+
+    public async Task<IReadOnlyList<StaleMessage>> FindStalePendingSendsAsync(
+        DateTime storedBefore, DateTime claimedBefore, int limit, CancellationToken cancellationToken = default)
+    {
+        FilterDefinitionBuilder<MessageDocument> filter = Builders<MessageDocument>.Filter;
+        List<MessageDocument> found = await _messages
+            .Find(filter.Eq(d => d.Outgoing, true) & filter.Exists(d => d.Attachments) & (
+                (filter.Eq(d => d.SendStatus, "pending") & filter.Lt(d => d.StoredAt, storedBefore))
+                | (filter.Eq(d => d.SendStatus, "sending") & filter.Lt(d => d.SendClaimedAt, claimedBefore))))
+            .SortBy(d => d.StoredAt).Limit(limit).ToListAsync(cancellationToken);
+        return [.. found.Select(d => new StaleMessage(d.MessageId, d.OwnerUserId, d.ConnectionId, d.From, d.StoredAt, d.SendStatus, []))];
+    }
+
+    public async Task<bool> FailPendingSendAsync(string messageId, CancellationToken cancellationToken = default)
+    {
+        UpdateResult result = await _messages.UpdateOneAsync(
+            d => d.MessageId == messageId && d.Outgoing && d.SendStatus == "pending",
+            Builders<MessageDocument>.Update.Set(d => d.SendStatus, "failed"),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
+
+    public async Task<bool> ClaimSendAsync(string messageId, DateTime claimedAt, CancellationToken cancellationToken = default)
+    {
+        UpdateResult result = await _messages.UpdateOneAsync(
+            d => d.MessageId == messageId && d.Outgoing && d.SendStatus == "pending",
+            Builders<MessageDocument>.Update.Set(d => d.SendStatus, "sending").Set(d => d.SendClaimedAt, claimedAt),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
+
+    public async Task<bool> CompleteSendAsync(string messageId, string status, string? providerId, CancellationToken cancellationToken = default)
+    {
+        UpdateResult result = await _messages.UpdateOneAsync(
+            d => d.MessageId == messageId && d.SendStatus == "sending",
+            Builders<MessageDocument>.Update.Set(d => d.SendStatus, status).Set(d => d.ProviderMessageId, providerId),
+            cancellationToken: cancellationToken);
+        return result.ModifiedCount > 0;
+    }
 
     public async Task<MessageDocument?> FindByProviderIdAsync(Guid connectionId, string providerMessageId, CancellationToken cancellationToken = default) =>
         await _messages.Find(d => d.ProviderMessageId == providerMessageId && d.ConnectionId == connectionId).FirstOrDefaultAsync(cancellationToken);

@@ -544,6 +544,12 @@ public class ConversationServiceTests
             return Task.CompletedTask;
         }
         public Task<MessageDocument?> LatestIncomingAsync(string owner, Guid connection, string sender, CancellationToken ct) => Task.FromResult(LastIncoming);
+        public Task<bool> FailPendingAsync(string id, CancellationToken ct)
+        {
+            if (Messages[id].SendStatus != "pending") return Task.FromResult(false);
+            Messages[id].SendStatus = "failed";
+            return Task.FromResult(true);
+        }
         public Task<MessageDocument?> FindMessageAsync(string owner, Guid connection, string sender, string messageId, CancellationToken ct) =>
             Task.FromResult(Messages.TryGetValue(messageId, out MessageDocument? found)
                 && found.OwnerUserId == owner && found.ConnectionId == connection && found.From == sender ? found : null);
@@ -669,5 +675,176 @@ public class ConversationServiceTests
         Assert.Equal("failed", sent.Status);
         _sender.Verify(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // --- Files queued for the send worker ---
+
+    private sealed class Jobs : IOutboundJobPublisher
+    {
+        public List<OutboundJob> Published { get; } = new();
+        public Exception? Failure { get; set; }
+        public Action? BeforeFailing { get; set; }
+
+        public Task PublishAsync(OutboundJob job, CancellationToken cancellationToken = default)
+        {
+            if (Failure is not null)
+            {
+                BeforeFailing?.Invoke();
+                throw Failure;
+            }
+            Published.Add(job);
+            return Task.CompletedTask;
+        }
+    }
+
+    private ConversationService CreateQueued(Jobs jobs, bool defer = true)
+    {
+        _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
+        _pages.Setup(x => x.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(_page);
+        return new ConversationService(_store, _connections.Object, _sender.Object,
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(), receipts: _receipts.Object, mediaStorage: _media.Object,
+            outboundJobs: jobs, outboundSettings: Microsoft.Extensions.Options.Options.Create(new OutboundSettings { DeferFileSends = defer }));
+    }
+
+    private void VerifyNothingSent() => _sender.Verify(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+        It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>()), Times.Never);
+
+    [Fact]
+    public async Task WhenQueued_APicture_IsKept_ReservedPending_AndHandedToTheWorker_WithoutBeingSentByTheRequest()
+    {
+        Jobs jobs = new();
+
+        ConversationMessage sent = await CreateQueued(jobs).SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), "Menu", File("menu.png", Png), default);
+
+        Assert.Equal("pending", sent.Status);
+        MessageAttachment kept = Assert.Single(_store.Messages[sent.Id].Attachments!);
+        _media.Verify(x => x.PutAsync(kept.StorageKey!, It.IsAny<Stream>(), "image/png", It.IsAny<CancellationToken>()), Times.Once);
+        OutboundJob job = Assert.Single(jobs.Published);
+        Assert.Equal(sent.Id, job.MessageId);
+        Assert.Equal(OutboundJob.KeyFor(_connection.Id, Recipient), job.ThreadKey);
+        VerifyNothingSent();
+    }
+
+    [Fact]
+    public async Task WhenQueued_APictureForAMessengerCustomer_IsQueuedToo()
+    {
+        _store.LastIncoming = PageIncoming(DateTime.UtcNow);
+        Jobs jobs = new();
+
+        ConversationMessage sent = await CreateQueued(jobs).SendFileAsync(Owner, _page.Id, Psid, Guid.NewGuid(), null, File("invoice.pdf", 0x25, 0x50, 0x44, 0x46, 0x2D), default);
+
+        Assert.Equal("pending", sent.Status);
+        Assert.Equal(OutboundJob.KeyFor(_page.Id, Psid), Assert.Single(jobs.Published).ThreadKey);
+    }
+
+    [Fact]
+    public async Task WhenQueued_ARetryWithTheSameRequestId_QueuesNothingMore()
+    {
+        Jobs jobs = new();
+        ConversationService service = CreateQueued(jobs);
+        Guid request = Guid.NewGuid();
+
+        ConversationMessage first = await service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("a.png", Png), default);
+        ConversationMessage again = await service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("a.png", Png), default);
+
+        Assert.Equal(first.Id, again.Id);
+        Assert.Single(jobs.Published);
+    }
+
+    [Fact]
+    public async Task WhenQueued_ARetryOfAReplyLeftPendingForAWhile_QueuesItAgainBecauseItsJobWasLost()
+    {
+        Jobs jobs = new();
+        ConversationService service = CreateQueued(jobs);
+        Guid request = Guid.NewGuid();
+        ConversationMessage first = await service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("a.png", Png), default);
+        _store.Messages[first.Id].ReceivedAt = DateTime.UtcNow.AddMinutes(-2);
+
+        await service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("a.png", Png), default);
+
+        Assert.Equal(2, jobs.Published.Count);
+    }
+
+    [Fact]
+    public async Task WhenQueued_AReplyTheWorkerHasAlreadySettled_IsNotQueuedAgainByARetry()
+    {
+        Jobs jobs = new();
+        ConversationService service = CreateQueued(jobs);
+        Guid request = Guid.NewGuid();
+        ConversationMessage first = await service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("a.png", Png), default);
+        _store.Messages[first.Id].ReceivedAt = DateTime.UtcNow.AddMinutes(-2);
+        _store.Messages[first.Id].SendStatus = "accepted";
+
+        ConversationMessage again = await service.SendFileAsync(Owner, _connection.Id, Recipient, request, null, File("a.png", Png), default);
+
+        Assert.Equal("accepted", again.Status);
+        Assert.Single(jobs.Published);
+    }
+
+    [Fact]
+    public async Task WhenQueued_ACopyThatCannotBeKept_FailsTheReplyCleanly_AndQueuesNothing()
+    {
+        _media.Setup(x => x.PutAsync(It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new IOException("bucket unavailable"));
+        Jobs jobs = new();
+
+        ConversationMessage sent = await CreateQueued(jobs).SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("a.png", Png), default);
+
+        Assert.Equal("failed", sent.Status);
+        Assert.Empty(jobs.Published);
+        VerifyNothingSent();
+    }
+
+    [Fact]
+    public async Task WhenQueued_AJobKafkaWillNotTake_FailsTheReplyCleanly()
+    {
+        Jobs jobs = new() { Failure = new IOException("Kafka is down") };
+
+        ConversationMessage sent = await CreateQueued(jobs).SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("a.png", Png), default);
+
+        Assert.Equal("failed", sent.Status);
+        Assert.Equal("failed", _store.Messages[sent.Id].SendStatus);
+        VerifyNothingSent();
+    }
+
+    [Fact]
+    public async Task WhenQueued_AJobThatReachedKafkaDespiteTheError_IsNotOverwrittenAsFailedOnceTheWorkerHasIt()
+    {
+        Jobs jobs = new() { Failure = new TimeoutException("ack lost") };
+        jobs.BeforeFailing = () => _store.Messages.Values.Single().SendStatus = "sending";
+
+        ConversationMessage sent = await CreateQueued(jobs).SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("a.png", Png), default);
+
+        Assert.Equal("pending", sent.Status);
+        Assert.Equal("sending", _store.Messages[sent.Id].SendStatus);
+    }
+
+    [Fact]
+    public async Task WhenQueued_APictureThatQuotesAMessage_KeepsTheQuoteOnTheReplySoTheWorkerCanSendIt()
+    {
+        _store.Messages["whatsapp:wamid.question"] = Stored("whatsapp:wamid.question", outgoing: false);
+        Jobs jobs = new();
+
+        ConversationMessage sent = await CreateQueued(jobs).SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("menu.png", Png), default,
+            replyToMessageId: "whatsapp:wamid.question");
+
+        Assert.Equal("pending", sent.Status);
+        Assert.Equal("wamid.question", _store.Messages[sent.Id].ReplyTo!.ProviderMessageId);
+        Assert.Single(jobs.Published);
+        VerifyNothingSent();
+    }
+
+    [Fact]
+    public async Task WithTheSwitchOffTheRequestStillSendsItselfEvenWhenAPublisherIsWired()
+    {
+        _sender.Setup(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.file");
+        Jobs jobs = new();
+
+        ConversationMessage sent = await CreateQueued(jobs, defer: false).SendFileAsync(Owner, _connection.Id, Recipient, Guid.NewGuid(), null, File("a.png", Png), default);
+
+        Assert.Equal("accepted", sent.Status);
+        Assert.Empty(jobs.Published);
     }
 }

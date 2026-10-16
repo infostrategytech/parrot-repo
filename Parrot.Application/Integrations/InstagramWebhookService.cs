@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
+using Parrot.Application.Conversations;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
 using Parrot.Application.Messaging;
@@ -15,9 +16,15 @@ public sealed class InstagramWebhookService(
     IInstagramConnectionRepository connections,
     InboundMessagePublisher publisher,
     IAppLogger<InstagramWebhookService> logger,
-    IInstagramCredentialProtector protector) : IInstagramWebhookService
+    IInstagramCredentialProtector protector,
+    IDeliveryReceipts? receipts = null,
+    IReplySendTimes? sendTimes = null,
+    IReceiptNotifier? notifier = null) : IInstagramWebhookService
 {
     private readonly InstagramSettings _settings = settings.Value;
+
+    // How long recording receipts may hold up the 200 Instagram is waiting for.
+    private static readonly TimeSpan ReceiptBudget = TimeSpan.FromSeconds(1);
 
     public async Task<bool> IsAuthenticAsync(string? identifier, string rawBody, string? signature,
         CancellationToken cancellationToken = default)
@@ -124,11 +131,14 @@ public sealed class InstagramWebhookService(
         DateTime receivedAt = DateTime.UtcNow;
         List<InboundMessage> inbound = [];
         List<string> types = [];
+        List<FacebookMessagingEvent> reads = [];
 
         foreach (FacebookEntry entry in payload.Entry)
         {
             foreach (FacebookMessagingEvent evt in entry.Messaging ?? [])
             {
+                if (evt.Read is not null) reads.Add(evt);
+
                 if (ToInbound(connection, evt, rawBody, correlationId, receivedAt) is { } message)
                 {
                     inbound.Add(message);
@@ -146,7 +156,45 @@ public sealed class InstagramWebhookService(
             MessageMetrics.Received.Add(1, MessageMetrics.MessageType(type));
         }
 
+        await RecordReadsAsync(connection, reads, cancellationToken);
         return true;
+    }
+
+    // The customer opened a reply. Instagram names the last message they read, so that reply and every
+    // earlier one to them is read. Never fails or delays the webhook: it has one short budget, and what
+    // it cannot record is simply not shown.
+    private async Task RecordReadsAsync(InstagramConnection connection, List<FacebookMessagingEvent> events,
+        CancellationToken cancellationToken)
+    {
+        if (receipts is null || events.Count == 0) return;
+
+        using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(ReceiptBudget);
+        foreach (FacebookMessagingEvent evt in events)
+        {
+            if (budget.IsCancellationRequested) return;
+            if (string.IsNullOrEmpty(evt.Read?.Mid)) continue;
+
+            try
+            {
+                // On a read event the sender is the customer.
+                string customer = ConversationKey.NormalizeParticipant(MessagingPlatform.Instagram, evt.Sender.Id);
+                DateTime at = ProviderTimestamp.FromUnixMilliseconds(evt.Timestamp) ?? DateTime.UtcNow;
+                await receipts.RecordAsync(connection.Id, evt.Read.Mid, DeliveryState.Read, at, budget.Token);
+
+                if (sendTimes is not null
+                    && await sendTimes.SentAtAsync(evt.Read.Mid, budget.Token) is { } upTo && upTo != default)
+                    await receipts.RecordUpToAsync(connection.Id, customer, DeliveryState.Read, at, upTo, budget.Token);
+
+                // The open inbox re-reads the thread.
+                if (notifier is not null)
+                    await notifier.ReceiptsChangedAsync(connection.OwnerUserId, connection.Id, customer, budget.Token);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogWarning("Instagram receipt not recorded. ConnectionId={ConnectionId} Reason={Reason}", connection.Id, ex.Message);
+            }
+        }
     }
 
     private InboundMessage? ToInbound(InstagramConnection connection, FacebookMessagingEvent evt, string rawBody,

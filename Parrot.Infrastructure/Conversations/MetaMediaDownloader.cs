@@ -9,6 +9,7 @@ using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
+using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
 using Parrot.Infrastructure.Data;
 
@@ -44,26 +45,31 @@ public sealed class MetaMediaDownloader(
         List<IncomingMedia> saved = [];
         for (int index = 0; index < (message.Media?.Count ?? 0); index++)
         {
-            IncomingMedia media = message.Media![index];
-            if (media.Kind == MediaKinds.Link) { saved.Add(media); continue; }
-
-            using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            budget.CancelAfter(Budget);
-            try
-            {
-                saved.Add(await SaveOneAsync(message, media, index, budget.Token) ?? media);
-            }
-            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
-            {
-                // Never the address: it is signed and names the customer's file. The reason is what tells a missing
-                // bucket or credential from a Meta refusal, so it is kept.
-                logger.LogWarning("media.download_failed Kind={Kind} Platform={Platform} Error={Error} Reason={Reason}",
-                    media.Kind, message.Platform, ex.GetType().Name, ex.Message);
-                saved.Add(media with { SourceUrl = null });
-            }
+            saved.Add(await SaveFileAsync(message, index, cancellationToken));
         }
 
         return saved;
+    }
+
+    public async Task<IncomingMedia> SaveFileAsync(IncomingMessage message, int index, CancellationToken cancellationToken)
+    {
+        IncomingMedia media = message.Media![index];
+        if (media.Kind == MediaKinds.Link) return media;
+
+        using CancellationTokenSource budget = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        budget.CancelAfter(Budget);
+        try
+        {
+            return await SaveOneAsync(message, media, index, budget.Token) ?? media;
+        }
+        catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Never the address: it is signed and names the customer's file. The reason is what tells a missing
+            // bucket or credential from a Meta refusal, so it is kept.
+            logger.LogWarning("media.download_failed Kind={Kind} Platform={Platform} Error={Error} Reason={Reason}",
+                media.Kind, message.Platform, ex.GetType().Name, ex.Message);
+            return Failed(media, ex is OperationCanceledException ? MediaFailure.Timeout : MediaFailure.Error);
+        }
     }
 
     private async Task<IncomingMedia?> SaveOneAsync(IncomingMessage message, IncomingMedia media, int index, CancellationToken ct)
@@ -72,44 +78,56 @@ public sealed class MetaMediaDownloader(
         if (!response.IsSuccessStatusCode)
         {
             logger.LogWarning("media.refused Kind={Kind} Platform={Platform} Status={Status}", media.Kind, message.Platform, (int)response.StatusCode);
-            return media with { SourceUrl = null };
+            // A busy or failing platform may answer next time; a refusal (expired, not allowed) will not change.
+            return Failed(media, (int)response.StatusCode is >= 500 or 429 ? MediaFailure.Unavailable : MediaFailure.Refused);
         }
 
         long limit = storageSettings.Value.MaxInboundMediaBytes;
         if (response.Content.Headers.ContentLength > limit)
-            return media with { SourceUrl = null, SizeBytes = response.Content.Headers.ContentLength };
-
-        // Buffered: S3 needs the length up front, and the cap bounds the memory.
-        await using MemoryStream bytes = new();
-        await using (Stream body = await response.Content.ReadAsStreamAsync(ct))
-        {
-            byte[] chunk = new byte[81920];
-            int read;
-            while ((read = await body.ReadAsync(chunk, ct)) > 0)
-            {
-                if (bytes.Length + read > limit) return media with { SourceUrl = null };
-                bytes.Write(chunk, 0, read);
-            }
-        }
-        if (bytes.Length == 0) return media with { SourceUrl = null };
+            return TooLarge(media, response.Content.Headers.ContentLength);
 
         string contentType = media.ContentType
             ?? response.Content.Headers.ContentType?.MediaType
             ?? "application/octet-stream";
-        bytes.Position = 0;
         string key = Key(message, index, contentType, media.FileName);
-        await storage.PutAsync(key, bytes, contentType, ct);
+
+        // Streamed from Meta into storage, never held whole in memory. The first chunk is read before the upload
+        // starts so an empty body is told apart without storing an empty object; the cap stops a body that is
+        // bigger than it said, or that said nothing, part way (storage then discards the half-sent upload).
+        await using Stream body = await response.Content.ReadAsStreamAsync(ct);
+        byte[] first = new byte[81920];
+        int firstRead = await body.ReadAsync(first, ct);
+        if (firstRead == 0) return Failed(media, MediaFailure.Empty);
+
+        CappedStream capped = new(body, first, firstRead, limit);
+        try
+        {
+            await storage.PutAsync(key, capped, contentType, ct);
+        }
+        catch (Exception) when (capped.Exceeded)
+        {
+            return TooLarge(media, null);
+        }
 
         return media with
         {
             Kind = MediaKinds.Refine(media.Kind, contentType),
             ContentType = contentType,
-            SizeBytes = bytes.Length,
+            SizeBytes = capped.BytesRead,
             StorageKey = key,
+            Status = MediaStatus.Ready,
+            FailureReason = null,
             // The link was only the way in; it expires and is not kept.
             SourceUrl = null,
         };
     }
+
+    // The link was only the way in; it expires and is not kept, whatever the outcome.
+    private static IncomingMedia Failed(IncomingMedia media, string reason) =>
+        media with { SourceUrl = null, Status = MediaStatus.Failed, FailureReason = reason };
+
+    private static IncomingMedia TooLarge(IncomingMedia media, long? size) =>
+        media with { SourceUrl = null, SizeBytes = size ?? media.SizeBytes, Status = MediaStatus.TooLarge };
 
     private async Task<HttpResponseMessage> OpenAsync(IncomingMessage message, IncomingMedia media, CancellationToken ct)
     {
@@ -189,5 +207,73 @@ public sealed class MetaMediaDownloader(
         // An extension the customer's file name carries, kept only if it is plain letters and digits.
         string ext = Path.GetExtension(fileName ?? "");
         return ext.Length is > 1 and <= 8 && ext[1..].All(char.IsAsciiLetterOrDigit) ? ext.ToLowerInvariant() : "";
+    }
+
+    /// <summary>
+    /// A read-once view of a download that starts with the bytes already read from it, counts what passes, and
+    /// refuses to pass more than the limit. <see cref="Exceeded"/> tells the caller why the upload failed, since a
+    /// storage client may wrap the exception.
+    /// </summary>
+    private sealed class CappedStream(Stream inner, byte[] head, int headLength, long limit) : Stream
+    {
+        private int _headRead;
+
+        public long BytesRead { get; private set; }
+
+        public bool Exceeded { get; private set; }
+
+        public override bool CanRead => true;
+
+        public override bool CanSeek => false;
+
+        public override bool CanWrite => false;
+
+        public override long Length => throw new NotSupportedException();
+
+        public override long Position
+        {
+            get => throw new NotSupportedException();
+            set => throw new NotSupportedException();
+        }
+
+        public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
+        {
+            int read;
+            if (_headRead < headLength)
+            {
+                read = Math.Min(buffer.Length, headLength - _headRead);
+                head.AsMemory(_headRead, read).CopyTo(buffer);
+                _headRead += read;
+            }
+            else
+            {
+                read = await inner.ReadAsync(buffer, cancellationToken);
+            }
+
+            BytesRead += read;
+            if (BytesRead > limit)
+            {
+                Exceeded = true;
+                throw new IOException("The file is larger than the limit.");
+            }
+
+            return read;
+        }
+
+        public override Task<int> ReadAsync(byte[] buffer, int offset, int count, CancellationToken cancellationToken) =>
+            ReadAsync(buffer.AsMemory(offset, count), cancellationToken).AsTask();
+
+        public override int Read(byte[] buffer, int offset, int count) =>
+            ReadAsync(buffer.AsMemory(offset, count)).AsTask().GetAwaiter().GetResult();
+
+        public override void Flush()
+        {
+        }
+
+        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+
+        public override void SetLength(long value) => throw new NotSupportedException();
+
+        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     }
 }

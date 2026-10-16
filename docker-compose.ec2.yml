@@ -103,6 +103,11 @@ services:
         create messages.inbound 24
         create messages.inbound.dlq 3
         create messages.persisted 24
+        create messages.media 24
+        create messages.media.dlq 3
+        create messages.settled 6
+        create messages.outbound 24
+        create messages.outbound.dlq 3
         create agent.events 6
         create catalog.events 3
     restart: "no"
@@ -149,6 +154,8 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_PUBLIC_QUOTA: ${MINIO_PUBLIC_QUOTA:-5GiB}
+      MINIO_PRIVATE_QUOTA: ${MINIO_PRIVATE_QUOTA:-50GiB}
     command:
       - |
         until mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"; do sleep 1; done;
@@ -156,6 +163,10 @@ services:
         mc anonymous set download local/parrot;
         # Customers' pictures and files: no anonymous access. The API is the only reader.
         mc mb --ignore-existing local/parrot-private;
+        # Cap what each bucket may grow to, so uploads cannot fill the disk. Set MINIO_*_QUOTA in .env to change.
+        # The command differs between mc releases, so try both; a server that supports neither still starts.
+        mc quota set local/parrot --size $${MINIO_PUBLIC_QUOTA:-5GiB} || mc admin bucket quota local/parrot --hard $${MINIO_PUBLIC_QUOTA:-5GiB} || echo "bucket quota not applied";
+        mc quota set local/parrot-private --size $${MINIO_PRIVATE_QUOTA:-50GiB} || mc admin bucket quota local/parrot-private --hard $${MINIO_PRIVATE_QUOTA:-50GiB} || echo "bucket quota not applied";
     networks: [parrot]
 
   # ---- Parrot ---------------------------------------------------------------
@@ -280,16 +291,20 @@ services:
         condition: service_healthy
     networks: [parrot]
 
-  # The message worker, the only thing that stores incoming messages:
-  # messages.inbound -> MongoDB -> messages.persisted.
-  message-processor:
+  # One program, three jobs, each its own service so each scales on its own backlog (Worker__Roles):
+  #   message-processor: messages.inbound -> MongoDB -> messages.persisted, the only thing that stores incoming messages.
+  #   media-worker: copies customers' pictures and files into private storage (messages.media).
+  #   outbound-worker: hands agents' pictures and files to WhatsApp or Messenger (messages.outbound).
+  # The media and outbound workers idle until Storage__DeferInboundMedia / Outbound__DeferFileSends are turned on.
+  message-processor: &message-worker
     build:
       context: .
       dockerfile: MessageProcessor/Dockerfile
     restart: unless-stopped
     logging: *logging
-    environment:
+    environment: &message-worker-env
       DOTNET_ENVIRONMENT: Production
+      Worker__Roles: messages
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD}
       Kafka__BootstrapServers: kafka:9092
       MongoDB__ConnectionString: mongodb://mongodb:27017
@@ -307,6 +322,12 @@ services:
       Storage__ServiceUrl: ${STORAGE_SERVICE_URL-http://minio:9000}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
+      # true: a picture or file an agent sends is queued for the message-processor's send worker and the request
+      # answers "pending" at once. Leave false until that worker runs in this deployment.
+      Outbound__DeferFileSends: ${DEFER_FILE_SENDS:-false}
+      # true: store a message at once with its files loading and copy them from the messages.media topic.
+      # Leave false until the inbox refreshes a thread when a file finishes.
+      Storage__DeferInboundMedia: ${DEFER_INBOUND_MEDIA:-false}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     secrets:
@@ -322,6 +343,19 @@ services:
       kafka-topic-init:
         condition: service_completed_successfully
     networks: [parrot]
+
+
+  media-worker:
+    <<: *message-worker
+    environment:
+      <<: *message-worker-env
+      Worker__Roles: media
+
+  outbound-worker:
+    <<: *message-worker
+    environment:
+      <<: *message-worker-env
+      Worker__Roles: outbound
 
   parrot-web:
     build:

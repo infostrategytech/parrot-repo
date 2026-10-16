@@ -451,6 +451,7 @@
         AuthState.OnChange += AuthChanged;
         Realtime.MessageReceived += OnMessagePushed;
         Realtime.ReceiptsChanged += OnReceiptsChanged;
+        Realtime.MediaChanged += OnMediaChanged;
         Realtime.Reconnected += OnRealtimeReconnected;
     }
 
@@ -532,6 +533,30 @@
         if (_disposed || _selected is not { } open || !change.Concerns(open.ConnectionId, open.Sender)) return;
         await RunAsync(() => ReadSelectedAsync(false));
     });
+
+    // A file finished loading. Several often finish together (a message with five pictures), so the reads are
+    // folded into one a moment later, and it waits out a read already running instead of being dropped by it:
+    // that read may have started before the file was settled.
+    private CancellationTokenSource? _mediaRefresh;
+
+    private Task OnMediaChanged(Parrot.Application.Messaging.MediaChanged change) => InvokeAsync(() =>
+    {
+        if (_disposed || _selected is not { } open || !change.Concerns(open.ConnectionId, open.Sender)) return;
+        _mediaRefresh?.Cancel();
+        _mediaRefresh = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        _ = RefreshAfterMediaAsync(_mediaRefresh.Token);
+    });
+
+    private async Task RefreshAfterMediaAsync(CancellationToken ct)
+    {
+        try
+        {
+            await Task.Delay(300, ct);
+            for (var waits = 0; _busy && waits < 25; waits++) await Task.Delay(200, ct);
+            await InvokeAsync(() => RunAsync(() => ReadSelectedAsync(false)));
+        }
+        catch (OperationCanceledException) { }
+    }
 
     // Pushes sent while the connection was down were missed. The thread read
     // pages back until it meets a message it already has, so it fills the gap.
@@ -903,7 +928,7 @@
     public void Dispose()
     {
         _disposed = true; AuthState.OnChange -= AuthChanged;
-        Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.Reconnected -= OnRealtimeReconnected;
+        Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.MediaChanged -= OnMediaChanged; _mediaRefresh?.Cancel(); Realtime.Reconnected -= OnRealtimeReconnected;
         _lifetime.Cancel(); _lifetime.Dispose();
         if (_customerEscape is not null) _ = _customerEscape.DisposeAsync().AsTask().ContinueWith(_ => _self?.Dispose());
         else _self?.Dispose();

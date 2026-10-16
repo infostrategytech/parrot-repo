@@ -1,4 +1,5 @@
 using System.Security.Cryptography;
+using Microsoft.Extensions.Options;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
@@ -14,8 +15,12 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     IFacebookConnectionRepository facebookConnections, IFacebookSender facebookSender,
     IFacebookCredentialProtector facebookProtector, IInstagramConnectionRepository instagramConnections,
     IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector, TikTokReplyService? tikTok = null,
-    IDeliveryReceipts? receipts = null, IPrivateObjectStorage? mediaStorage = null)
+    IDeliveryReceipts? receipts = null, IPrivateObjectStorage? mediaStorage = null,
+    IOutboundJobPublisher? outboundJobs = null, IOptions<OutboundSettings>? outboundSettings = null)
 {
+    // A picture or file is queued for the send worker instead of being sent before the request answers.
+    private bool DeferFileSends => outboundJobs is not null && outboundSettings?.Value.DeferFileSends == true;
+
     // Messenger's limit; WhatsApp's is 4096.
     private const int FacebookMaxText = 2000;
 
@@ -159,7 +164,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         string scope = new(owner.Where(static c => char.IsAsciiLetterOrDigit(c) || c is '-' or '_').ToArray());
         return new MessageAttachment
         {
-            Kind = kind, ContentType = file.ContentType, FileName = file.FileName, SizeBytes = file.Length, Caption = caption,
+            Kind = kind, ContentType = file.ContentType, FileName = file.FileName, SizeBytes = file.Length, Caption = caption, Status = MediaStatus.Ready,
             StorageKey = $"business-media/{(scope.Length == 0 ? "unknown" : scope)}/{requestId:N}{Path.GetExtension(file.FileName).ToLowerInvariant()}",
         };
     }
@@ -188,6 +193,65 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         return Match(doc, connection, recipient, text);
     }
 
+    // How long a reply may sit pending, with no job known to have been taken, before another request for it queues the job again.
+    private static readonly TimeSpan RequeueAfter = TimeSpan.FromSeconds(30);
+
+    // The same request id again. Normally the stored reply is simply returned; one still pending after a while had
+    // its job lost (Kafka was down as it was queued, or the API stopped before it was), so it is queued again, which
+    // is safe because the send worker claims a reply before it sends and only one claim wins.
+    private async Task<ConversationMessage> ExistingFileAsync(MessageDocument existing, Guid connection, string recipient,
+        string text, OutgoingFile file, CancellationToken ct)
+    {
+        ConversationMessage message = MatchFile(existing, connection, recipient, text, file);
+        if (DeferFileSends && existing.SendStatus == "pending" && DateTime.UtcNow - existing.ReceivedAt > RequeueAfter)
+        {
+            try { await PublishJobAsync(existing, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException) { /* still pending; the next request tries again */ }
+        }
+        return message;
+    }
+
+    private Task PublishJobAsync(MessageDocument reply, CancellationToken ct) =>
+        outboundJobs!.PublishAsync(
+            new OutboundJob { MessageId = reply.MessageId, ThreadKey = OutboundJob.KeyFor(reply.ConnectionId!.Value, reply.From), EnqueuedAt = DateTime.UtcNow },
+            ct);
+
+    // Reserve, keep the file, queue the job, answer: the reply is pending and the send worker does the rest. Nothing
+    // has gone to the customer by the time a step here fails, so each failure is a clean refusal.
+    private async Task<ConversationMessage> QueueFileAsync(MessageDocument doc, SendReplyRequest request, MessageAttachment attachment,
+        OutgoingFile file, CancellationToken ct)
+    {
+        if (!await store.ReserveAsync(doc, ct))
+        {
+            MessageDocument existing = await store.FindRequestAsync(doc.OwnerUserId!, request.RequestId, ct)
+                ?? throw new ConflictException("The send request is being processed. Check again shortly.");
+            return MatchFile(existing, doc.ConnectionId!.Value, doc.From, request.Text, file);
+        }
+
+        // Reserved, so the browser leaving must not stop the file being kept or the job being queued.
+        using CancellationTokenSource budget = new(TimeSpan.FromSeconds(60));
+        string? refused = null;
+        if (!await KeepAsync(attachment, file, budget.Token)) refused = "storage";
+        else
+        {
+            // Any failure, a timeout included: the job is not known to be queued, so the reply is refused.
+            try { await PublishJobAsync(doc, budget.Token); }
+            catch (Exception) { refused = "queue"; }
+        }
+
+        if (refused is not null)
+        {
+            using CancellationTokenSource persist = new(TimeSpan.FromSeconds(10));
+            // Only if still pending: a job that did reach Kafka may already be with the send worker.
+            if (await store.FailPendingAsync(doc.MessageId, persist.Token))
+            {
+                doc.SendStatus = "failed";
+                MessageMetrics.Sent.Add(1, new KeyValuePair<string, object?>("status", "failed"), new KeyValuePair<string, object?>("meta_error_code", refused));
+            }
+        }
+        return ToMessage(doc);
+    }
+
     private async Task<ConversationMessage> SendWhatsAppFileAsync(string owner, WhatsAppConnection connection, string recipient,
         SendReplyRequest request, string? caption, string kind, OutgoingFile file, CancellationToken ct)
     {
@@ -195,7 +259,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             throw new ConflictException("This connection is disabled or unverified.");
 
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
-        if (existing is not null) return MatchFile(existing, connection.Id, recipient, request.Text, file);
+        if (existing is not null) return await ExistingFileAsync(existing, connection.Id, recipient, request.Text, file, ct);
         MessageReplyTo? quote = await QuoteAsync(owner, connection.Id, recipient, request.ReplyToMessageId, ct);
 
         if (string.IsNullOrWhiteSpace(connection.AccessTokenEncrypted)
@@ -216,6 +280,8 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
         };
+
+        if (DeferFileSends) return await QueueFileAsync(doc, request, attachment, file, ct);
 
         return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
         {
@@ -242,7 +308,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             throw new ConflictException("This connection is disabled or unverified.");
 
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
-        if (existing is not null) return MatchFile(existing, page.Id, recipient, request.Text, file);
+        if (existing is not null) return await ExistingFileAsync(existing, page.Id, recipient, request.Text, file, ct);
         MessageReplyTo? quote = await QuoteAsync(owner, page.Id, recipient, request.ReplyToMessageId, ct);
 
         if (string.IsNullOrWhiteSpace(page.AccessTokenEncrypted) || string.IsNullOrWhiteSpace(page.PageId))
@@ -262,6 +328,8 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? page.PageId,
         };
+
+        if (DeferFileSends) return await QueueFileAsync(doc, request, attachment, file, ct);
 
         return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
         {
@@ -524,12 +592,13 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
     /// <summary>The unsigned form: a stored copy carries its key, a link its address. The API signs the key before it answers.</summary>
     public static MessageMedia ToMedia(MessageAttachment a) => new(a.Kind, a.ContentType, a.FileName, a.SizeBytes,
-        a.Kind == MediaKinds.Link ? a.SourceUrl : null) { StorageKey = a.StorageKey };
+        a.Kind == MediaKinds.Link ? a.SourceUrl : null) { StorageKey = a.StorageKey, Status = MediaStatus.Of(a) };
 
     // What the customer's channel has told us about a reply, over our own send state. A reply that
     // failed stays failed.
     public static string DisplayStatus(MessageDocument doc) =>
         !doc.Outgoing || doc.SendStatus == "failed" ? doc.SendStatus
+        : doc.SendStatus == "sending" ? "pending"
         : doc.ReadAt is not null ? "read"
         : doc.DeliveredAt is not null ? "delivered"
         : doc.SendStatus;

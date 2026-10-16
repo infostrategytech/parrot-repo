@@ -147,7 +147,7 @@ public class ConversationsState
         {
             // Described without addresses: the files are readable only through the API, which a read of the
             // thread signs. The thread is read again for a message that carries any.
-            Attachments = message.Attachments?.Select(a => new InboxMediaDto(a.Kind, a.ContentType, a.FileName, a.SizeBytes, null)).ToList(),
+            Attachments = message.Attachments?.Select(a => new InboxMediaDto(a.Kind, a.ContentType, a.FileName, a.SizeBytes, null) { Status = a.Status }).ToList(),
             ReplyTo = message.ReplyTo is { } quote ? new InboxQuoteDto(quote.Id, quote.Outgoing, quote.Text, quote.Type) : null,
         }]);
         return true;

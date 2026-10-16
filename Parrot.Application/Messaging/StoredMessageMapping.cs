@@ -42,7 +42,7 @@ public static class StoredMessageMapping
         },
         Attachments = document.Attachments is { Count: > 0 } attachments
             ? [.. attachments.Select(a => new StoredAttachment(
-                a.Kind, a.ContentType, a.FileName, a.SizeBytes, a.StorageKey is not null || a.Kind == MediaKinds.Link))]
+                a.Kind, a.ContentType, a.FileName, a.SizeBytes, a.StorageKey is not null || a.Kind == MediaKinds.Link, MediaStatus.Of(a)))]
             : null,
         SentAt = document.SentAt,
         PersistedAt = document.StoredAt,

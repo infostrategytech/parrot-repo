@@ -36,6 +36,26 @@ public sealed class MongoMessageRepository : IMessageRepository
                 Name = "ConversationKey_Sequence_unique",
                 PartialFilterExpression = Builders<MessageDocument>.Filter.Type(x => x.Sequence, BsonType.Int64),
             }));
+
+        // What the media and send sweepers look for: files still pending, replies still pending or sending. Partial, so each
+        // holds only the few messages in that state at any moment, and the sweep never scans the collection.
+        _collection.Indexes.CreateOne(new CreateIndexModel<MessageDocument>(
+            Builders<MessageDocument>.IndexKeys.Ascending("Attachments.Status").Ascending(x => x.StoredAt),
+            new CreateIndexOptions<MessageDocument>
+            {
+                Name = "PendingMedia_StoredAt",
+                PartialFilterExpression = new BsonDocument("Attachments.Status", "pending"),
+            }));
+        foreach (string status in (string[])["pending", "sending"])
+        {
+            _collection.Indexes.CreateOne(new CreateIndexModel<MessageDocument>(
+                Builders<MessageDocument>.IndexKeys.Ascending(x => x.SendStatus).Ascending(x => x.StoredAt),
+                new CreateIndexOptions<MessageDocument>
+                {
+                    Name = $"Send_{status}_StoredAt",
+                    PartialFilterExpression = new BsonDocument("SendStatus", status),
+                }));
+        }
     }
 
     public async Task InsertAsync(IncomingMessage message, CancellationToken cancellationToken = default)

@@ -51,6 +51,9 @@ public record MessageQuote(string? Id, bool Outgoing, string? Text, string? Type
 /// </summary>
 public record MessageMedia(string Kind, string? ContentType, string? FileName, long? SizeBytes, string? Url)
 {
+    /// <summary>pending, ready, failed or too_large (see MediaStatus). Ready is the default for a file that has a Url.</summary>
+    public string Status { get; init; } = Parrot.Domain.Entities.Messages.MediaStatus.Ready;
+
     /// <summary>Where the private copy lives. Server side only: swapped for <see cref="Url"/> before it leaves the API.</summary>
     [System.Text.Json.Serialization.JsonIgnore]
     public string? StorageKey { get; init; }
@@ -150,6 +153,12 @@ public interface IConversationStore
         Task.FromResult<MessageDocument?>(null);
     Task<bool> ReserveAsync(MessageDocument message, CancellationToken ct);
     Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct);
+
+    /// <summary>
+    /// Marks a reply failed only while it is still pending: false when the send worker has already taken it, in
+    /// which case its outcome is the worker's to record and must not be overwritten.
+    /// </summary>
+    Task<bool> FailPendingAsync(string id, CancellationToken ct);
 }
 
 // When a reply was sent, found by the wamid Meta gave it: for delivery latency

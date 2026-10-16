@@ -22,6 +22,12 @@ public sealed class MessageAttachment
     /// <summary>Where the private copy lives. Null when it could not be saved (too large, expired, refused).</summary>
     public string? StorageKey { get; set; }
 
+    /// <summary>See <see cref="MediaStatus"/>. Null on messages stored before it existed; read it with <see cref="MediaStatus.Of"/>.</summary>
+    public string? Status { get; set; }
+
+    /// <summary>A short reason code when <see cref="Status"/> is failed (refused, empty, expired, error). Never the platform's link.</summary>
+    public string? FailureReason { get; set; }
+
     /// <summary>The platform's id for the media (WhatsApp's), kept so the file can be fetched again.</summary>
     public string? ProviderMediaId { get; set; }
 

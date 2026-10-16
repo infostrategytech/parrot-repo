@@ -13,4 +13,6 @@ public static class RateLimitPolicies
     public const string FacebookWebhook = "webhooks:facebook";
     public const string TikTokWebhook = "webhooks:tiktok";
     public const string InstagramWebhook = "webhooks:instagram";
+    public const string FileSend = "uploads:file-send";
+    public const string ImageUpload = "uploads:image";
 }

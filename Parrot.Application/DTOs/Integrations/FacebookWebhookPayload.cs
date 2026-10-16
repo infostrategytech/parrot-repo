@@ -117,6 +117,10 @@ public record FacebookRead
 {
     [JsonPropertyName("watermark")]
     public long Watermark { get; init; }
+
+    // Instagram's read names the last message read instead of a watermark.
+    [JsonPropertyName("mid")]
+    public string? Mid { get; init; }
 }
 
 public record FacebookReaction
