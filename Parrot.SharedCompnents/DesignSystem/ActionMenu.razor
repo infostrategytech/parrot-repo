@@ -1,16 +1,33 @@
 @namespace Parrot.SharedComponents.DesignSystem
 
 @* An icon button that opens a short list of actions (a "more" menu), as the
-   inbox's conversation toolbar uses it. Items are ActionMenuItem; choosing
+   inbox's conversation toolbar uses it; with Text, a labelled button with a
+   chevron ("Import"), for a page header. Items are ActionMenuItem; choosing
    one closes the menu. Escape and a click anywhere else close it too. *@
 <div class="ds-action-menu" @onkeydown="OnKeyDown">
-    <Button Variant="ButtonVariant.Secondary" Size="@Size"
-            Class="@(_open ? "ds-action-menu__trigger is-open" : "ds-action-menu__trigger")"
-            aria-label="@Label" title="@Label"
-            aria-haspopup="menu" aria-expanded="@(_open ? "true" : "false")"
-            @onclick="Toggle">
-        <IconLeft><Icon Name="@Glyph" /></IconLeft>
-    </Button>
+    @* Two renderings, not one with an empty label: the Button builds an
+       icon-only button from an omitted label. *@
+    @if (Text is null)
+    {
+        <Button Variant="ButtonVariant.Secondary" Size="@Size"
+                Class="@(_open ? "ds-action-menu__trigger is-open" : "ds-action-menu__trigger")"
+                aria-label="@Label" title="@Label"
+                aria-haspopup="menu" aria-expanded="@(_open ? "true" : "false")"
+                @onclick="Toggle">
+            <IconLeft><Icon Name="@Glyph" /></IconLeft>
+        </Button>
+    }
+    else
+    {
+        <Button Variant="ButtonVariant.Secondary" Size="@Size"
+                Class="@(_open ? "ds-action-menu__trigger is-open" : "ds-action-menu__trigger")"
+                aria-haspopup="menu" aria-expanded="@(_open ? "true" : "false")"
+                @onclick="Toggle">
+            <IconLeft><Icon Name="@Glyph" /></IconLeft>
+            <ChildContent>@Text</ChildContent>
+            <IconRight><Icon Name="IconName.RiArrowDownSLine" /></IconRight>
+        </Button>
+    }
 
     @if (_open)
     {
@@ -28,6 +45,9 @@
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter] public IconName Glyph { get; set; } = IconName.RiMore2Fill;
     [Parameter] public ButtonSize Size { get; set; } = ButtonSize.Small;
+
+    /// <summary>A visible label on the trigger, beside the glyph. Null for an icon-only button.</summary>
+    [Parameter] public string? Text { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private bool _open;

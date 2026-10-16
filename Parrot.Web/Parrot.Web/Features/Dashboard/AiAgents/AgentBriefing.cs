@@ -4,7 +4,7 @@ namespace Parrot.Web.Features.Dashboard.AiAgents;
 
 /// <summary>
 /// An agent's job description, the way you would brief a new assistant
-/// (designer, 13 October 2026): one short summary in the
+/// (agent setup, 13 October 2026): one short summary in the
 /// owner's words of what it does, what it never does, and when it calls them.
 /// The owner reads and edits it as text; the agent follows it sentence by
 /// sentence, and a test reply can say which sentence it followed.
@@ -33,8 +33,12 @@ public sealed partial class AgentBrief
     private static partial Regex SentenceBreak();
 }
 
-/// <summary>The job description after the owner said more, and the sentences added to it.</summary>
-public sealed record AgentBriefUpdate(AgentBrief Brief, IReadOnlyList<string> Added);
+/// <summary>
+/// The job description after the owner said more: the sentences added to it,
+/// and any they replaced (a new rule against an old one on the same thing,
+/// "Small discounts are fine" for "Never give discounts").
+/// </summary>
+public sealed record AgentBriefUpdate(AgentBrief Brief, IReadOnlyList<string> Added, IReadOnlyList<string>? Replaced = null);
 
 /// <summary>
 /// What the job summary is written from: what the owner said (empty for a
@@ -59,9 +63,9 @@ public sealed record AgentTryReply(string Reply, string Why, AgentTryBasis Basis
 
 /// <summary>
 /// Writing and understanding an agent's job description, and answering a test
-/// message the way the agent would: an AI's work. Until the agents API does
-/// this work (a backend request), BasicAgentBriefing
-/// writes it from the owner's words, and a test can't be answered (CanTry).
+/// message the way the agent would: an AI's work. The demo stands in with
+/// simple rules (see agents-backend-requests). Agent setup is
+/// shown in the demo only for now.
 /// </summary>
 public interface IAgentBriefing
 {

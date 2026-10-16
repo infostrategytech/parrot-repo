@@ -38,4 +38,12 @@ public sealed class OrientationBusinessKnowledge : IBusinessKnowledge
     public Task<IReadOnlyList<KnowledgeCard>> GetDraftAsync() => Task.FromResult<IReadOnlyList<KnowledgeCard>>([]);
 
     public Task ApproveAsync(IReadOnlyList<KnowledgeCard> cards) => Task.CompletedTask;
+
+    // What the business types about itself has nowhere to go here yet: "Tell us about your
+    // business" and "Add to business knowledge" stay hidden (CanSaveIntro).
+    public bool CanSaveIntro => false;
+
+    public Task SaveIntroAsync(BusinessIntro intro) => throw new NotSupportedException();
+
+    public Task<string?> StartingPointAsync() => Task.FromResult<string?>(null);
 }

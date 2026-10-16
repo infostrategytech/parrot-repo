@@ -193,6 +193,23 @@
 .workspace-action--ai.is-locked { background: var(--colors-surface-muted); }
 .workspace-action--ai.is-ready { border-color: var(--colors-accent-brand-muted); }
 
+/* "Tell us about your business", and the channel step once
+   it is done, share the AI card's row: an icon, the words, one action. */
+.workspace-action--row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-2xl);
+}
+
+.workspace-action--row.is-done .workspace-action__icon {
+  color: var(--colors-accent-green-text);
+  background: var(--colors-accent-green-subtle);
+}
+
+.workspace-onboarding.is-live .workspace-action:nth-child(3) { animation-delay: calc(var(--ds-workspace-stagger) * 4); }
+
 .workspace-action__icon {
   display: grid;
   place-items: center;
@@ -246,4 +263,138 @@
 @media (prefers-reduced-motion: reduce) {
   .workspace-onboarding.is-live .workspace-channel-flow__line i { animation: none; display: none; }
   .workspace-onboarding.is-live :is(.workspace-onboarding__header, .workspace-action, .workspace-onboarding__hint) { animation: none; }
+}
+
+/* ── One page that grows ───────────────────────────────────────────────── */
+
+.workspace-onboarding {
+  /* Missing from the token set: the agent's picture on its card, and the
+     partner mark in a row's icon tile. */
+  --ds-workspace-agent: 88px;
+  --ds-workspace-partner-mark: 28px;
+}
+
+/* The big card is always the one thing to do next: the first screen's first card,
+   for whichever step that is. */
+.workspace-action--lead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-4xl);
+  min-height: var(--ds-workspace-channel-card-min);
+  padding: var(--spacing-3xl);
+  overflow: hidden;
+  background:
+    radial-gradient(circle at right center, var(--colors-accent-cyan-subtle), transparent 42%),
+    var(--colors-surface-card);
+}
+
+.workspace-action--lead .workspace-action__content ::deep .ds-button,
+.workspace-action--lead .workspace-action__buttons { margin-top: var(--spacing-md); }
+.workspace-action--lead .workspace-action__buttons ::deep .ds-button { margin-top: var(--spacing-none); }
+
+.workspace-action__buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+/* The agent, on its own card: its picture and where it stands. */
+.workspace-agent {
+  display: grid;
+  justify-items: center;
+  gap: var(--spacing-sm);
+  padding-inline: var(--spacing-xl);
+}
+
+.workspace-agent img {
+  width: var(--ds-workspace-agent);
+  height: var(--ds-workspace-agent);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow-diffuse);
+}
+
+/* Accelerate: its mark on its own warm tile, its name in its colour. */
+.workspace-action__icon.is-partner { background: var(--colors-accent-orange-subtle); }
+
+.workspace-action__icon.is-partner img {
+  width: var(--ds-workspace-partner-mark);
+  height: var(--ds-workspace-partner-mark);
+  object-fit: contain;
+}
+
+.workspace-action__content ::deep .workspace-action__brand { color: var(--colors-accent-orange-text); }
+
+/* Shortcuts, once there is an agent: four small cards. */
+.workspace-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.workspace-shortcuts ::deep .workspace-shortcut {
+  display: grid;
+  justify-items: start;
+  align-content: start;
+  gap: var(--spacing-xs);
+  width: 100%;
+  padding: var(--spacing-xl);
+  text-align: left;
+  background: var(--colors-surface-card);
+  border: var(--ds-workspace-card-border) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+
+.workspace-shortcuts ::deep .workspace-shortcut:hover { border-color: var(--colors-accent-brand-muted); }
+
+.workspace-shortcut__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  justify-self: stretch;
+  margin-bottom: var(--spacing-sm);
+}
+
+.workspace-shortcut__icon {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+
+/* Integrations: there, but its page is still to come. */
+.workspace-shortcuts ::deep .workspace-shortcut.is-soon { cursor: default; }
+.workspace-shortcuts ::deep .workspace-shortcut.is-soon:hover { border-color: var(--colors-surface-border); }
+
+/* Each kind of card in the colour it has across the product: the icon in
+   the accent's text colour on its subtle tile. Knowledge blue (Teach your
+   AI, the agent page), conversations pink and the AI emerald (AI Operations'
+   figures), channels cyan (the channel card's light), integrations indigo
+   (new, and used for nothing else). */
+.workspace-onboarding .is-tone-blue { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
+.workspace-onboarding .is-tone-pink { color: var(--colors-accent-pink-text); background: var(--colors-accent-pink-subtle); }
+.workspace-onboarding .is-tone-cyan { color: var(--colors-accent-cyan-text); background: var(--colors-accent-cyan-subtle); }
+.workspace-onboarding .is-tone-emerald { color: var(--colors-accent-emerald-text); background: var(--colors-accent-emerald-subtle); }
+.workspace-onboarding .is-tone-indigo { color: var(--colors-accent-indigo-text); background: var(--colors-accent-indigo-subtle); }
+
+.workspace-shortcuts ::deep .workspace-shortcut strong { color: var(--colors-text-primary); }
+.workspace-shortcuts ::deep .workspace-shortcut__line { color: var(--colors-text-muted); }
+
+.workspace-onboarding.is-live :is(.workspace-shortcuts) { animation: workspace-arrive var(--ds-motion-slow) var(--ds-motion-enter) both; }
+.workspace-onboarding.is-live .workspace-action:nth-child(4) { animation-delay: calc(var(--ds-workspace-stagger) * 5); }
+.workspace-onboarding.is-live .workspace-shortcuts { animation-delay: calc(var(--ds-workspace-stagger) * 6); }
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-onboarding.is-live .workspace-shortcuts { animation: none; }
+}
+
+/* Tablets: a row's action goes under its words, the shortcuts two by two. */
+@media not all and (min-width: 1024px) {
+  .workspace-action--row { grid-template-columns: auto minmax(0, 1fr); }
+  .workspace-action--row ::deep > :last-child { grid-column: 2; justify-self: start; }
+  .workspace-shortcuts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }

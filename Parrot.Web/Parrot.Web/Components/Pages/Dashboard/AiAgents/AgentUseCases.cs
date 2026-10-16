@@ -1,10 +1,11 @@
+using System.Text.RegularExpressions;
 using Parrot.SharedComponents.DesignSystem;
 using Parrot.Web.Features.Dashboard.AiAgents;
 
 namespace Parrot.Web.Components.Pages.Dashboard.AiAgents;
 
 /// <summary>
-/// The jobs an agent can be created for (designer, 13 October
+/// The jobs an agent can be created for (agent setup, 13 October
 /// 2026): what a small business hires an assistant to do on its chats. Each
 /// maps to one of the roles the settings already know, for its sensible
 /// defaults, and suggests what to try it with. One job per agent; an owner
@@ -95,8 +96,8 @@ public sealed record AgentIndustry(string Id, string Name, string Examples, stri
 
 /// <summary>
 /// What creating an agent from a job description sets: its job and kind of
-/// business, the defaults its job brings (as choosing a role did), and the
-/// switches its job description implies, so creating it asks none.
+/// business, the defaults its job brings (as choosing a role does in Concept
+/// A), and the switches its job description implies, so setup asks none.
 /// Every one of them can be changed on the agent's page.
 /// </summary>
 public static class AgentBriefDefaults
@@ -118,12 +119,58 @@ public static class AgentBriefDefaults
         if (useCase.Id is "sales" or "followups") settings.CanRecommend = true;
         form.Job = brief.Job.Trim();
 
-        var sentences = brief.Sentences().Select(sentence => sentence.ToLowerInvariant()).ToList();
-        var never = string.Join(" ", sentences.Where(sentence => sentence.Contains("never") || sentence.Contains("don't") || sentence.Contains("do not")));
-        var callMe = string.Join(" ", sentences.Where(sentence => sentence.Contains("bring me in") || sentence.Contains("tell me") || sentence.Contains("call me") || sentence.Contains("let me know")));
-        if (never.Contains("discount")) settings.CanOfferDiscounts = false;
-        if (never.Contains("refund") || callMe.Contains("refund")) settings.CanApproveRefunds = false;
-        if (callMe.Contains("upset") || callMe.Contains("angry") || callMe.Contains("complain")) settings.HandOverWhenUpset = true;
-        if (callMe.Contains("big order") || callMe.Contains("large order")) settings.HandOverBigOrders = true;
+        Follow(settings, brief.Sentences());
+    }
+
+    /// <summary>
+    /// The settings the job description's sentences decide, both ways, so the
+    /// two never disagree: "Never give discounts" turns discounts off, "Small
+    /// discounts are fine" turns them on; "Pass refund requests to me" keeps
+    /// refunds with the owner; "Bring me in when a customer is upset" (or a big
+    /// order comes in, or it can't answer) turns that handover on. Settings the
+    /// sentences don't speak to stay as they are.
+    /// </summary>
+    public static void Follow(AgentSettings settings, IEnumerable<string> sentences)
+    {
+        foreach (var sentence in sentences)
+        {
+            var never = Never.IsMatch(sentence);
+            var callMe = CallMe.IsMatch(sentence);
+            var allows = !never && !callMe && Allows.IsMatch(sentence);
+            if (Regex.IsMatch(sentence, @"\bdiscounts?\b", RegexOptions.IgnoreCase))
+            {
+                if (never || callMe) settings.CanOfferDiscounts = false;
+                else if (allows) settings.CanOfferDiscounts = true;
+            }
+            if (Regex.IsMatch(sentence, @"\brefunds?\b", RegexOptions.IgnoreCase))
+            {
+                if (never || callMe) settings.CanApproveRefunds = false;
+                else if (allows) settings.CanApproveRefunds = true;
+            }
+            if (!callMe) continue;
+            if (Regex.IsMatch(sentence, @"\b(upset|angry|complain\w*)\b", RegexOptions.IgnoreCase)) settings.HandOverWhenUpset = true;
+            if (Regex.IsMatch(sentence, @"\b(big|large|bulk)\s+orders?\b", RegexOptions.IgnoreCase)) settings.HandOverBigOrders = true;
+            if (Regex.IsMatch(sentence, @"\b(can'?t|cannot) answer\b|\bdon'?t know\b", RegexOptions.IgnoreCase)) settings.HandOverAfterMisses = true;
+        }
+    }
+
+    private static readonly Regex Never = new(@"\b(never|don'?t|do not|without asking)\b", RegexOptions.IgnoreCase);
+    private static readonly Regex CallMe = new(@"\b(bring me in|tell me|call me|let me know|alert me|pass (it|them|refund requests|the customer|customers)? ?(on )?to me)\b", RegexOptions.IgnoreCase);
+    private static readonly Regex Allows = new(@"\b(fine|okay|ok|can|may|allowed|approve|offer|give)\b", RegexOptions.IgnoreCase);
+}
+
+/// <summary>The settings a job description decides, as they were (for Undo).</summary>
+public sealed record AgentBriefRules(bool CanOfferDiscounts, bool CanApproveRefunds, bool HandOverWhenUpset, bool HandOverAfterMisses, bool HandOverBigOrders)
+{
+    public static AgentBriefRules Of(AgentSettings settings) =>
+        new(settings.CanOfferDiscounts, settings.CanApproveRefunds, settings.HandOverWhenUpset, settings.HandOverAfterMisses, settings.HandOverBigOrders);
+
+    public void Restore(AgentSettings settings)
+    {
+        settings.CanOfferDiscounts = CanOfferDiscounts;
+        settings.CanApproveRefunds = CanApproveRefunds;
+        settings.HandOverWhenUpset = HandOverWhenUpset;
+        settings.HandOverAfterMisses = HandOverAfterMisses;
+        settings.HandOverBigOrders = HandOverBigOrders;
     }
 }

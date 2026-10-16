@@ -77,6 +77,9 @@
         </div>
     </div>
 
+    @* The tick and Continue travel together: on a window too short for the
+       whole page they stay in view at its foot (see the stylesheet). *@
+    <div class="prep__actions">
     <div class="prep__agreement">
         <Checkbox State="@(Accepted ? CheckboxState.Checked : CheckboxState.Unchecked)"
                   StateChanged="@(state => AcceptedChanged.InvokeAsync(state == CheckboxState.Checked))"
@@ -97,6 +100,7 @@
             <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
         </Button>
     </footer>
+    </div>
 </section>
 
 @code {

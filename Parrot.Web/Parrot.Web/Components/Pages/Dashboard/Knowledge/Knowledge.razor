@@ -1,8 +1,17 @@
 @page "/dashboard/knowledge"
 @layout DashboardLayout
+@inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
 
 <PageTitle>Knowledge · OmniAI</PageTitle>
 
-@* Aurora draws this route as a placeholder, and Parrot has no knowledge
-   store behind it yet, so the placeholder is the honest screen. *@
-<ComingInPhase Title="Knowledge" Phase="6" Glyph="IconName.RiBookOpenFill" Summary="What your agents know, and the questions they could not answer." />
+@* What the business's AI knows, kept like ChatGPT's memory (designer, 12
+   October 2026; see KnowledgeMemory). With no knowledge store behind it
+   (real mode today), the placeholder is the honest screen. *@
+@if (Memory.Available)
+{
+    <KnowledgeMemory />
+}
+else
+{
+    <ComingInPhase Title="Knowledge" Phase="6" Glyph="IconName.RiBookOpenFill" Summary="What your agents know, and the questions they could not answer." />
+}

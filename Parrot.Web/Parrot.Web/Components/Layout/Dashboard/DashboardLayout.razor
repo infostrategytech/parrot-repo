@@ -38,9 +38,10 @@
     </ChildContent>
 </AppShell>
 
-@* Before an agent: a channel for it to answer on, then the business checks
-   what its AI will know. *@
+@* Before an agent: a channel for it to answer on, then, the first time, a
+   few lines about the business. Teach your AI is "Teach more" from an agent. *@
 <Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentChannelGate />
+<Parrot.Web.Components.Pages.Dashboard.TeachAi.BusinessIntroDialog />
 <Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiOverlay />
 
 <div id="blazor-error-ui" data-nosnippet>

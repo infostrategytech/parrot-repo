@@ -8,13 +8,13 @@ namespace Parrot.Web.Components.Pages.Dashboard.AiAgents;
 
 /// <summary>
 /// What a business needs before it can set up an agent, in order: a connected
-/// channel for it to answer on (designer's decision, 4 October: setup is not
-/// reachable without one), then knowledge it has approved (Teach your AI,
-/// whose draft is read from the connected channels). Every way of creating an
-/// agent goes through RequireAsync. Without a channel, the "Connect a channel
-/// first" dialog opens instead and nothing else happens.
+/// channel for it to answer on, then, the first time, what the business is.
+/// It asks for a few lines about it ("Tell us about your business", designer
+/// and team, 14 October 2026). Every way of creating an agent goes through
+/// RequireAsync. Without a channel, the
+/// "Connect a channel first" dialog opens instead and nothing else happens.
 /// </summary>
-public sealed class AgentGate(ChannelStatusLoader loader, ChannelsState channels, AuthState auth, TeachAiState teachAi)
+public sealed class AgentGate(ChannelStatusLoader loader, ChannelsState channels, AuthState auth, BusinessIntroState intro)
 {
     public bool NeedsChannel { get; private set; }
 
@@ -28,7 +28,7 @@ public sealed class AgentGate(ChannelStatusLoader loader, ChannelsState channels
             Changed?.Invoke();
             return;
         }
-        await teachAi.RequireAsync(then, setsUpAgent: true);
+        await intro.RequireAsync(then);
     }
 
     public void Dismiss()

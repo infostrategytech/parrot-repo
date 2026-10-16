@@ -24,7 +24,9 @@
   /* Geometry the token set has no scale for: React draws this reading page at
      920px, with an asymmetric 30/36/28px padding and its own shadow. */
   --ds-prep-width: 920px;
-  --ds-prep-pad: 30px 36px 28px;
+  --ds-prep-pad-x: 36px;
+  --ds-prep-pad-bottom: 28px;
+  --ds-prep-pad: 30px var(--ds-prep-pad-x) var(--ds-prep-pad-bottom);
   --ds-prep-hairline: 1px;
   --ds-prep-icon: 36px;
   --ds-prep-row-icon: 40px;
@@ -186,6 +188,20 @@
    component default of primary. */
 .prep__agreement ::deep .checkbox__text strong { color: var(--colors-text-secondary); }
 
+/* On a window too short for the whole page, the tick and Continue stay in
+   view at its foot while the reading scrolls under them; where it fits, this
+   changes nothing. The group reaches the card's edges so the reading passes
+   cleanly beneath it, fading out over the gap above the tick. */
+.prep__actions {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  margin: 0 calc(var(--ds-prep-pad-x) * -1) calc(var(--ds-prep-pad-bottom) * -1);
+  padding: 0 var(--ds-prep-pad-x) var(--ds-prep-pad-bottom);
+  background: linear-gradient(to bottom, transparent, var(--colors-surface-card) var(--ds-prep-agreement-gap));
+  border-radius: 0 0 var(--radius-radius-3xl) var(--radius-radius-3xl);
+}
+
 /* The design-system Button, held to the width the design gives it. */
 .prep__footer ::deep .prep__continue { min-width: var(--ds-prep-cta-width); }
 
@@ -221,5 +237,23 @@
 
 .prep { --ds-prep-cta-width: 220px; --ds-prep-cta-height: 46px; }
 
+/* Shorter windows (laptops): the same page, its rhythm drawn in a little, so
+   it fits without scrolling down to Continue. Missing from the token set:
+   the compact padding is the design's own, smaller. */
+@media (max-height: 960px) {
+  .prep {
+    /* Missing from the token set: the design's spacing, a step tighter. */
+    --ds-prep-pad-x: 32px;
+    --ds-prep-pad-bottom: 22px;
+    --ds-prep-pad: 24px var(--ds-prep-pad-x) var(--ds-prep-pad-bottom);
+    --ds-prep-header-gap: 20px;
+    --ds-prep-section-gap: 20px;
+    --ds-prep-agreement-gap: 16px;
+    --ds-prep-footer-gap: 16px;
+  }
 
+  .prep__item { padding: var(--spacing-md) 0; }
 
+  .prep__priority,
+  .prep__agreement { padding: var(--spacing-md) var(--spacing-lg); }
+}

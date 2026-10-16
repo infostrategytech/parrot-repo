@@ -66,7 +66,24 @@
                                 <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Emoji</Typography>
                                 <SegmentedControl TValue="AgentEmojiUsage" Label="Emoji" Options="Emojis" Value="@Form.Settings.Emoji" ValueChanged="v => SetAsync(() => Form.Settings.Emoji = v)" />
                             </div>
-                            <div class="agent-advanced__field">
+                            @* Optional extras, folded where the page asks; open
+                               already when either is set, so nothing set is hidden. *@
+                            @if (MoreOptions)
+                            {
+                                <RowButton Class="@($"agent-advanced__more{(MoreOpen ? " is-open" : null)}")"
+                                           OnClick="() => _moreOpen = !MoreOpen"
+                                           aria-expanded="@(MoreOpen ? "true" : "false")"
+                                           aria-controls="@($"{_id}-more")">
+                                    <span class="agent-advanced__text">
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">More options</Typography>
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">A first message, and phrases it should never say.</Typography>
+                                    </span>
+                                    <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
+                                </RowButton>
+                            }
+                            @if (!MoreOptions || MoreOpen)
+                            {
+                            <div class="agent-advanced__field" id="@($"{_id}-more")">
                                 <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">First message</Typography>
                                 <TextArea Value="@Form.Settings.Greeting" ValueChanged="v => SetAsync(() => Form.Settings.Greeting = v ?? string.Empty)" AriaLabel="First message"
                                           Placeholder="Leave empty to use one written for its job, in its tone."
@@ -80,6 +97,7 @@
                                           HelperText="Language that feels wrong for your brand. Press Enter or type a comma to add one."
                                           Suggestions="AvoidSuggestions" />
                             </div>
+                            }
                         </div>
                     }
                 </section>
@@ -105,6 +123,8 @@
                     @if (_section == AgentTopic.Actions)
                     {
                         <div class="agent-advanced__content" id="@($"{_id}-can-content")">
+                            @if (ShowAlways)
+                            {
                             <div class="agent-advanced__row">
                                 <span class="agent-advanced__text">
                                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Answers questions</Typography>
@@ -112,6 +132,7 @@
                                 </span>
                                 <StatusBadge Tone="StatusTone.Neutral">Always</StatusBadge>
                             </div>
+                            }
                             @Switch("Recommends products", "Suggests what to buy, from what you sell.", Form.Settings.CanRecommend, v => Form.Settings.CanRecommend = v)
                             @Switch("Checks order status", "Tells customers where their order is.", Form.Settings.CanCheckOrders, v => Form.Settings.CanCheckOrders = v)
                             @Switch("Takes customer details", "Asks for a name and phone number before handing over.", Form.Settings.CanTakeDetails, v => Form.Settings.CanTakeDetails = v)
@@ -140,6 +161,19 @@
                     @if (_section == AgentTopic.Handoff)
                     {
                         <div class="agent-advanced__content" id="@($"{_id}-hand-content")">
+                            @* Who it brings in, where the page shows it with these. *@
+                            @if (ShowWho)
+                            {
+                                <div class="agent-advanced__field">
+                                    <Input FloatingLabel="Who it brings in"
+                                           Value="@Form.Settings.HandoverTo"
+                                           ValueChanged="v => SetAsync(() => Form.Settings.HandoverTo = v ?? string.Empty)"
+                                           HelperText="A name and a phone number is perfect. Leave it empty to take them yourself, in the Inbox."
+                                           maxlength="120" />
+                                </div>
+                            }
+                            @if (ShowAlways)
+                            {
                             <div class="agent-advanced__row">
                                 <span class="agent-advanced__text">
                                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">A customer asks for a person</Typography>
@@ -147,6 +181,7 @@
                                 </span>
                                 <StatusBadge Tone="StatusTone.Neutral">Always</StatusBadge>
                             </div>
+                            }
                             @Switch("A customer seems upset", "Complaints and frustration go straight to a person.", Form.Settings.HandOverWhenUpset, v => Form.Settings.HandOverWhenUpset = v)
                             @Switch("It can't answer twice in a row", "So no one gets stuck going round in circles.", Form.Settings.HandOverAfterMisses, v => Form.Settings.HandOverAfterMisses = v)
                             @Switch("A big order comes in", "A person closes large orders.", Form.Settings.HandOverBigOrders, v => Form.Settings.HandOverBigOrders = v)
@@ -205,13 +240,22 @@
                                                    Disabled="@(!taught)"
                                                    OnClick="() => ToggleTopicAsync(topic)"
                                                    aria-pressed="@(on ? "true" : "false")"
-                                                   title="@(taught ? null : "Not taught yet")">
+                                                   title="@(taught ? null : Missing)">
                                             <Icon Name="@(on ? IconName.RiCheckboxCircleFill : taught ? IconName.RiCloseFill : IconName.RiInformationFill)" Size="IconSize.Sm" />
-                                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(topic)@(taught ? null : " · not taught yet")</Typography>
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@TeachAiConversation.Name(topic)@(taught ? null : $" · {Missing.ToLowerInvariant()}")</Typography>
                                         </RowButton>
                                     }
                                 </div>
+                                @if (OnAddKnowledge.HasDelegate)
+                                {
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="agent-advanced__add-knowledge" @onclick="OnAddKnowledge">
+                                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                                        <ChildContent>Add to business knowledge</ChildContent>
+                                    </Button>
+                                }
                             </div>
+                            @if (ShowNotes)
+                            {
                             @* Typed, attached, or said: a voice note becomes words in the box. *@
                             <div class="agent-advanced__field">
                                 <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Only for @Form.DisplayName</Typography>
@@ -261,6 +305,7 @@
                                 @* A file input cannot be styled; the button above opens it. *@
                                 <InputFile @ref="_picker" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="@AcceptedFiles" OnChange="OnFilesPickedAsync" />
                             </div>
+                            }
                         </div>
                     }
                 </section>
@@ -299,6 +344,37 @@
 
     /// <summary>Just this topic, open, with no fold or heading: a tab of the agent's page.</summary>
     [Parameter] public AgentTopic? Only { get; set; }
+
+    /// <summary>
+    /// Notes only for this agent, under its knowledge. The agent's page leaves them
+    /// out: business knowledge is shared, and what one agent should do is its
+    /// job description (designer, 14 October 2026).
+    /// </summary>
+    [Parameter] public bool ShowNotes { get; set; } = true;
+
+    /// <summary>
+    /// The rows that are always so and can't be changed ("Answers questions",
+    /// "A customer asks for a person"). Off where the page says them once in
+    /// words instead, so they don't read as settings.
+    /// </summary>
+    [Parameter] public bool ShowAlways { get; set; } = true;
+
+    /// <summary>What a topic the business hasn't covered says: "Not taught yet" by
+    /// Teach your AI, "Not added yet" beside "Add to business knowledge".</summary>
+    [Parameter] public string Missing { get; set; } = "Not taught yet";
+
+    /// <summary>Who it hands customers to, as the first line of when it does.</summary>
+    [Parameter] public bool ShowWho { get; set; }
+
+    /// <summary>The first message and the phrases to avoid under "More options".</summary>
+    [Parameter] public bool MoreOptions { get; set; }
+
+    private bool? _moreOpen;
+
+    private bool MoreOpen => _moreOpen ?? (!string.IsNullOrWhiteSpace(Form.Settings.Greeting) || Form.Settings.AvoidPhrases.Count > 0);
+
+    /// <summary>Draws "Add to business knowledge" under what it uses (the business dialog).</summary>
+    [Parameter] public EventCallback OnAddKnowledge { get; set; }
 
     protected override void OnParametersSet()
     {

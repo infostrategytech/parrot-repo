@@ -1,0 +1,63 @@
+/* One detail at a time: where it came from, the question, the answers. */
+.knowledge-review {
+  /* Gap in the token set: no claim-width scale. */
+  --ds-knowledge-review-claim-min: 220px;
+
+  display: grid;
+  gap: var(--spacing-lg);
+}
+.knowledge-review ::deep p,
+.knowledge-review ::deep h3 { margin: var(--spacing-none); }
+.knowledge-review ::deep .knowledge-review__muted { color: var(--colors-text-muted); }
+.knowledge-review ::deep .knowledge-review__step { color: var(--colors-text-secondary); }
+
+.knowledge-review__item { display: grid; gap: var(--spacing-md); }
+
+.knowledge-review__said {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+.knowledge-review__said ::deep .ds-icon { flex: none; color: var(--colors-feedback-success-text); }
+
+.knowledge-review__quote {
+  margin: var(--spacing-none);
+  padding: var(--spacing-lg);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-muted);
+  border-left: var(--spacing-2xs) solid var(--colors-accent-brand-border);
+  border-radius: var(--radius-radius-lg);
+}
+
+.knowledge-review__claims {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(var(--ds-knowledge-review-claim-min), 100%), 1fr));
+  gap: var(--spacing-sm);
+}
+.knowledge-review__claims ::deep .knowledge-review__claim {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-md);
+  text-align: left;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.knowledge-review__claims ::deep .knowledge-review__claim:hover { border-color: var(--colors-brand-primary); }
+.knowledge-review__claims ::deep .knowledge-review__claim span { color: var(--colors-text-muted); }
+
+.knowledge-review__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: flex-end; }
+.knowledge-review__actions.is-stacked { display: grid; justify-content: stretch; }
+
+.knowledge-review__done {
+  display: grid;
+  gap: var(--spacing-sm);
+  justify-items: center;
+  padding: var(--spacing-3xl) var(--spacing-lg);
+  text-align: center;
+}
+.knowledge-review__done .knowledge-review__actions { justify-content: center; margin-top: var(--spacing-sm); }
+.knowledge-review__done-mark { color: var(--colors-feedback-success-text); }

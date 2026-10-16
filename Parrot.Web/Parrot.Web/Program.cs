@@ -118,6 +118,8 @@ builder.Services.AddScoped<OrientationApi>();
 builder.Services.AddScoped<Parrot.SharedComponents.Services.AiVoiceInterop>();
 // "Teach your AI" before the first agent, and the browser's voice for it.
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState>();
+// "Tell us about your business", asked once before the first agent (skipped while there is no knowledge API).
+builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.TeachAi.BusinessIntroState>();
 builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentGate>();
 builder.Services.AddScoped<Parrot.SharedComponents.Services.VoiceInterop>();
 // With the AI orchestrator connected (OmniAi:Enabled), agents live in the
@@ -141,6 +143,9 @@ builder.Services.AddScoped<AiAgentsState>();
 // basic writer keeps the owner's words as they said them, and a test as a
 // customer stays hidden (it needs the agent to answer).
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentBriefing, Parrot.Web.Features.Dashboard.AiAgents.BasicAgentBriefing>();
+// Getting to know the job (its topics, questions and approvals) needs the AI: until the agents API
+// can read, hear and conclude, the job description is written from the owner's first answer.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IJobInterview, Parrot.Web.Features.Dashboard.AiAgents.UnavailableJobInterview>();
 // The business's knowledge as facts (what an agent uses): no API for it yet.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory, Parrot.Web.Features.Dashboard.Knowledge.UnavailableKnowledgeMemory>();
 builder.Services.AddScoped<CatalogState>();

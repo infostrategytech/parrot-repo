@@ -85,6 +85,104 @@
   margin: var(--spacing-none) auto var(--spacing-2xl);
 }
 
+/* Draft readiness: the shortest safe path from a saved agent to live. */
+.agent-detail__readiness {
+  overflow: hidden;
+  margin-bottom: var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.agent-detail__readiness-head {
+  display: flex;
+  gap: var(--spacing-xl);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--spacing-2xl);
+  background: linear-gradient(135deg, var(--colors-accent-brand-subtle), var(--colors-surface-card) 72%);
+  border-bottom: var(--ds-detail-hairline) solid var(--colors-surface-border);
+}
+
+.agent-detail__readiness-head > div { display: grid; gap: var(--spacing-xs); }
+.agent-detail__readiness-head ::deep h2,
+.agent-detail__readiness-head ::deep p,
+.agent-detail__readiness-title ::deep h3,
+.agent-detail__readiness-copy ::deep p,
+.agent-detail__readiness-foot ::deep p { margin: var(--spacing-none); }
+.agent-detail__readiness-head ::deep h2,
+.agent-detail__readiness-title ::deep h3 { color: var(--colors-text-primary); }
+.agent-detail__readiness-head ::deep p,
+.agent-detail__readiness-copy ::deep p { color: var(--colors-text-secondary); }
+
+.agent-detail__readiness-list {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+}
+
+.agent-detail__readiness-step {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+  min-width: 0;
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border: var(--ds-detail-hairline) solid transparent;
+  border-radius: var(--radius-radius-xl);
+}
+
+.agent-detail__readiness-step.is-next {
+  background: var(--colors-accent-blue-subtle);
+  border-color: var(--colors-accent-blue-text);
+}
+
+.agent-detail__readiness-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-detail-stat-icon);
+  height: var(--ds-detail-stat-icon);
+  border-radius: var(--radius-radius-lg);
+}
+
+.agent-detail__readiness-step.is-knowledge .agent-detail__readiness-icon {
+  color: var(--colors-accent-blue-text);
+  background: var(--colors-accent-blue-subtle);
+}
+.agent-detail__readiness-step.is-test .agent-detail__readiness-icon {
+  color: var(--colors-accent-violet-text);
+  background: var(--colors-accent-violet-subtle);
+}
+.agent-detail__readiness-step.is-live .agent-detail__readiness-icon {
+  color: var(--colors-accent-emerald-text);
+  background: var(--colors-accent-emerald-subtle);
+}
+.agent-detail__readiness-step.is-live.is-locked .agent-detail__readiness-icon {
+  color: var(--colors-icon-muted);
+  background: var(--colors-surface-card);
+}
+
+.agent-detail__readiness-copy { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.agent-detail__readiness-title { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+
+.agent-detail__readiness-foot {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  padding: var(--spacing-md) var(--spacing-2xl) var(--spacing-lg);
+  color: var(--colors-icon-secondary);
+  border-top: var(--ds-detail-hairline) solid var(--colors-surface-border);
+}
+.agent-detail__readiness-foot ::deep p { color: var(--colors-text-muted); }
+
+@media (max-width: 1180px) {
+  .agent-detail__readiness-step { grid-template-columns: auto minmax(0, 1fr); }
+  .agent-detail__readiness-step > ::deep .ds-button { grid-column: 2; justify-self: start; }
+}
+
 /* ── Today ───────────────────────────────────────────────────────────────── */
 /* The four figures in one strip, as on AI Operations. The three that lead
    somewhere (the chats, the handovers, the tasks) are buttons. */
@@ -278,8 +376,6 @@
 .agent-detail__row-text ::deep small { color: var(--colors-text-muted); }
 .agent-detail__fact-title { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
 
-/* Playbooks are coming soon: one card that says so. */
-.agent-detail__empty { padding: var(--spacing-2xl) var(--spacing-xl) var(--spacing-3xl); }
 
 @media (max-width: 1280px) {
   .agent-detail__pair { grid-template-columns: minmax(0, 1fr); }
@@ -366,7 +462,7 @@
 }
 
 
-/* ── Its configuration, one tab at a time ─────────────────────────────── */
+/* ── Its configuration, one tab at a time ─────────────────────── */
 /* One column at a reading width, the setup rhythm between cards, and the
    save bar under whichever tab is open. */
 
@@ -421,4 +517,110 @@
 @media (max-width: 1180px) {
   .agent-detail__website { grid-template-columns: minmax(0, 1fr); }
   .agent-detail__website > ::deep .ds-button { margin-top: var(--spacing-none); justify-self: start; }
+}
+
+/* ── Revised (designer, 14 October 2026) ──────────────────────── */
+
+/* The tabs are the page's sections: left, in line with the name, at the
+   page's width, and pinned at the top as the page scrolls so they are never
+   lost on a long tab. The page's own colour behind them, so what scrolls
+   under them doesn't show through. */
+.agent-detail ::deep .agent-detail__tabs.is-sections {
+  position: sticky;
+  top: 0;
+  z-index: var(--ds-detail-tabs-layer);
+  width: min(var(--ds-detail-max), 100%);
+  margin: var(--spacing-none) auto var(--spacing-2xl);
+  padding-top: var(--spacing-sm);
+  background: var(--colors-surface-muted);
+}
+
+.agent-detail {
+  /* Missing from the token set: no z-index scale. Above the cards, under dialogs. */
+  --ds-detail-tabs-layer: 3;
+}
+
+/* Every tab one column, at the same width as the header and the tabs, so
+   switching tabs never changes the page's width (and no second column to
+   fold on a smaller screen). */
+.agent-detail__config { width: min(var(--ds-detail-max), 100%); }
+
+/* How it's set up: each line opens the tab where it is set. */
+.agent-detail ::deep .agent-detail__setup-row {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  width: 100%;
+  min-height: var(--ds-detail-row-min);
+  padding: var(--spacing-md) var(--spacing-xl);
+  text-align: left;
+  border-top: var(--ds-detail-hairline) solid var(--colors-surface-border);
+}
+.agent-detail ::deep .agent-detail__setup-row:hover { background: var(--colors-interaction-hover); }
+.agent-detail ::deep .agent-detail__setup-go { flex: none; color: var(--colors-icon-secondary); }
+.agent-detail__setup { overflow: hidden; }
+
+/* What this job needs that the business hasn't said: knowledge's blue, one line, a way to add it. */
+.agent-detail__gaps {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-detail-hairline) solid var(--colors-accent-blue-subtle);
+  border-radius: var(--radius-radius-2xl);
+}
+.agent-detail__gaps > ::deep p { flex: 1; min-width: 0; color: var(--colors-text-secondary); }
+.agent-detail__gaps-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-detail-stat-icon);
+  height: var(--ds-detail-stat-icon);
+  color: var(--colors-accent-blue-text);
+  background: var(--colors-accent-blue-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+
+/* ── Four tabs, each thing said once ──────────────────────────── */
+
+/* A titled part of a tab: its heading, a line under it, then its card. */
+.agent-detail__group { display: grid; gap: var(--spacing-md); min-width: 0; }
+.agent-detail__group ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.agent-detail__group-head { display: grid; gap: var(--spacing-xs); }
+.agent-detail__group-head ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+/* Overview: where it answers, above how it's set up. */
+.agent-detail__where { margin-bottom: var(--spacing-xl); }
+
+
+/* Handover & safety: its limits, a switch a row. */
+.agent-detail__limit { padding: var(--spacing-lg) var(--spacing-xl); }
+.agent-detail__limit + .agent-detail__limit { border-top: var(--ds-detail-hairline) solid var(--colors-surface-border); }
+
+/* A part's heading with one action beside it (Knowledge: All business knowledge). */
+.agent-detail__group-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md) var(--spacing-xl);
+  align-items: flex-end;
+  justify-content: space-between;
+}
+
+/* The save bar: the page's last child, so it floats at the window's
+   foot on any tab, above the cards; what is unsaved on the left, the two
+   buttons on the right. */
+.agent-detail__save.is-floating {
+  z-index: var(--ds-detail-tabs-layer);
+  justify-content: space-between;
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-3xl) var(--colors-surface-shadow);
+}
+.agent-detail__save.is-floating ::deep p { flex: 1; min-width: 0; }
+.agent-detail__save-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+
+.agent-detail {
+  /* Missing from the token set: the height of the demo's own tools at the
+     window's foot (concept switch, theme toggle), to float the bar above. */
 }

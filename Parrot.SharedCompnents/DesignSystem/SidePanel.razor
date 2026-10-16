@@ -1,0 +1,117 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IAsyncDisposable
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+
+@* A long form over a page, anchored right, so the page behind it stays the
+   context for what is being typed (an item's details over the list).
+
+   Lifted from Products & Services' editor drawer, so every panel of this kind
+   looks and behaves the same: an inset card, a header with the title and a
+   close, a body that scrolls, and a footer for the actions. As the
+   design-system Dialog: focus moves in and stays in, Escape and the space
+   around it close (unless Busy), and focus goes back where it was. *@
+
+@if (Open)
+{
+    <div class="ds-side-panel-backdrop" @onmousedown="RequestCloseAsync">
+        <section class="ds-side-panel @Class"
+                 role="dialog"
+                 aria-modal="true"
+                 aria-labelledby="@_titleId"
+                 tabindex="-1"
+                 @ref="_panel"
+                 @onmousedown:stopPropagation="true">
+            <header class="ds-side-panel__header">
+                @if (Glyph is { } glyph)
+                {
+                    <span class="ds-side-panel__badge"><Icon Name="glyph" Size="IconSize.Md" /></span>
+                }
+                <div class="ds-side-panel__titles">
+                    @if (Eyebrow is not null)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="ds-side-panel__eyebrow ds-overline">@Eyebrow</Typography>
+                    }
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
+                </div>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@CloseLabel" disabled="@Busy" @onclick="RequestCloseAsync">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </header>
+
+            <div class="ds-side-panel__body">@ChildContent</div>
+
+            @if (Footer is not null)
+            {
+                <footer class="ds-side-panel__footer">@Footer</footer>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private readonly string _titleId = "side-panel-" + Guid.NewGuid().ToString("N");
+
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>A small line above the title, as an overline. Null for none.</summary>
+    [Parameter] public string? Eyebrow { get; set; }
+
+    /// <summary>An icon on a tinted square beside the title. Null for none.</summary>
+    [Parameter] public IconName? Glyph { get; set; }
+
+    /// <summary>Something is saving: the panel cannot be closed until it ends.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The close button, Escape or the space around the panel. The page decides whether to close (it may ask first).</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Parameter] public string CloseLabel { get; set; } = "Close";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private ElementReference _panel;
+    private IAsyncDisposable? _trap;
+    private DotNetObjectReference<SidePanel>? _self;
+    private bool _wasOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            await _panel.FocusAsync();
+            _self ??= DotNetObjectReference.Create(this);
+            _trap = await Interop.TrapFocusAsync(_panel, _self, nameof(OnEscapeAsync));
+        }
+        else if (!Open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseTrapAsync();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnEscapeAsync() => RequestCloseAsync();
+
+    private Task RequestCloseAsync() => Busy ? Task.CompletedTask : OnClose.InvokeAsync();
+
+    private async Task ReleaseTrapAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap;
+        _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await ReleaseTrapAsync();
+        _self?.Dispose();
+    }
+}

@@ -1,0 +1,45 @@
+/* A file: a picture's thumbnail, or its type, name and size, on a quiet
+   tile; Remove at the end when it can still be taken off. */
+.ds-file-chip {
+  display: inline-flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-width: 0;
+  max-width: var(--ds-file-chip-width);
+  padding: var(--spacing-2xs);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.ds-file-chip {
+  /* Missing from the token set: no attachment width. Teach your AI's. */
+  --ds-file-chip-width: 260px;
+}
+
+.ds-file-chip__thumb {
+  display: block;
+  flex: none;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  object-fit: cover;
+  border-radius: var(--radius-radius-md);
+}
+
+.ds-file-chip__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  color: var(--colors-icon-brand);
+  background: var(--colors-surface-popover);
+  border-radius: var(--radius-radius-md);
+}
+.ds-file-chip.is-pdf .ds-file-chip__icon { color: var(--colors-accent-red-text); }
+.ds-file-chip.is-document .ds-file-chip__icon { color: var(--colors-accent-blue-text); }
+.ds-file-chip.is-sheet .ds-file-chip__icon { color: var(--colors-accent-green-text); }
+
+.ds-file-chip__text { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; padding-right: var(--spacing-xs); }
+.ds-file-chip__text ::deep span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.ds-file-chip__text ::deep .ds-file-chip__name { color: var(--colors-text-primary); }
+.ds-file-chip__text ::deep .ds-file-chip__size { color: var(--colors-text-muted); }

@@ -3,11 +3,11 @@ using Parrot.Web.Services;
 namespace Parrot.Web.Components.Pages.Dashboard.TeachAi;
 
 /// <summary>
-/// The first-agent rule: an AI agent needs base knowledge the business has
-/// approved. Every way of creating an agent goes through RequireAsync, which
-/// either carries straight on or opens "Teach your AI" first and carries on
-/// once it is approved. In real mode the knowledge API does not exist yet, so
-/// nothing is held back.
+/// Opens the shared business-knowledge conversation (with its voice orb)
+/// when an agent needs more grounded information: "Teach more" from an
+/// agent. Before the first agent, the business now says what it does in
+/// "Tell us about your business" (BusinessIntroState) instead. In real mode
+/// the knowledge API does not exist yet, so nothing is held back.
 /// </summary>
 public sealed class TeachAiState(IBusinessKnowledge knowledge)
 {

@@ -1,0 +1,133 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Knowledge
+@using System.Text.RegularExpressions
+@using Parrot.Web.Features.Dashboard.Knowledge
+
+@* Ask what a customer would ask and see which fact the answer comes from
+   (research: Intercom's and respond.io's test, kept to one question at a
+   time). When nothing fits, the question goes to the Add box, to be taught.
+   The demo matches words; the real one is the AI answering from the
+   knowledge, with the fact it used (see knowledge-backend-requests). *@
+
+<SidePanel Open="Open" Title="Test an answer" Glyph="IconName.RiQuestionAnswerFill" OnClose="OnClose">
+    <ChildContent>
+        <div class="knowledge-try">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge-try__muted">Ask what a customer would ask. You'll see what your AI knows to answer it.</Typography>
+            <TextArea @ref="_box"
+                      Value="@_question"
+                      ValueChanged="value => _question = value"
+                      Placeholder="For example: Do you deliver to Abuja?"
+                      AriaLabel="A customer's question"
+                      Rows="2"
+                      MaxLength="300"
+                      AutoGrow
+                      SubmitOnEnter
+                      OnKeyDown="KeyAsync" />
+            <div class="knowledge-try__ask">
+                <Button disabled="@string.IsNullOrWhiteSpace(_question)" @onclick="Ask">Ask</Button>
+            </div>
+
+            @if (_asked is not null)
+            {
+                <div class="knowledge-try__result" role="status">
+                    <div class="knowledge-try__bubble is-customer">
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@_asked</Typography>
+                    </div>
+                    @if (_matches.Count > 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="p" Class="knowledge-try__label">Your AI would answer from this</Typography>
+                        @foreach (var fact in _matches)
+                        {
+                            <div class="knowledge-try__fact">
+                                <span class="knowledge-try__fact-icon"><Icon Name="@KnowledgeTopics.Icon(fact.Topic)" Size="IconSize.Sm" /></span>
+                                <div>
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@fact.Text</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge-try__muted">@fact.Label</Typography>
+                                </div>
+                            </div>
+                        }
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge-try__muted">Not quite right? Change it in the list, or add what's missing.</Typography>
+                    }
+                    else
+                    {
+                        <div class="knowledge-try__unknown">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Your AI doesn't know this yet</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge-try__muted">It would pass the customer to your team. Teach it the answer, and it can reply next time.</Typography>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => OnTeach.InvokeAsync(_asked!)">Teach it the answer</Button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    </ChildContent>
+</SidePanel>
+
+@code {
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    /// <summary>What the AI knows (only what the business confirmed).</summary>
+    [Parameter] public IReadOnlyList<KnowledgeFact> Facts { get; set; } = [];
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>Nothing fits: the question, to be answered in the Add box.</summary>
+    [Parameter] public EventCallback<string> OnTeach { get; set; }
+
+    private TextArea? _box;
+    private string? _question, _asked;
+    private List<KnowledgeFact> _matches = [];
+    private bool _wasOpen, _focus;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen) { _question = _asked = null; _matches = []; _focus = true; }
+        _wasOpen = Open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focus && _box is not null) { _focus = false; await _box.FocusAsync(); }
+    }
+
+    private void KeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey) Ask();
+    }
+
+    // Words that say little on their own.
+    private static readonly HashSet<string> Common = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "is", "are", "do", "does", "you", "your", "we", "our",
+        "can", "i", "it", "my", "me", "with", "how", "what", "when", "where", "much", "any", "if", "be", "have", "has", "there", "outside", "inside",
+    };
+
+    // Words customers use for the same thing, folded together.
+    private static readonly Dictionary<string, string> Same = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ship"] = "deliver", ["shipping"] = "deliver", ["delivery"] = "deliver", ["send"] = "deliver", ["nationwide"] = "deliver",
+        ["payment"] = "pay", ["transfer"] = "pay", ["paid"] = "pay",
+        ["refund"] = "return", ["exchange"] = "return",
+        ["open"] = "hour", ["close"] = "hour", ["closed"] = "hour",
+        ["cost"] = "price",
+    };
+
+    private static IEnumerable<string> Words(string text) =>
+        Regex.Matches(text.ToLowerInvariant(), @"[\p{L}\d₦]+")
+            .Select(match => Same.TryGetValue(match.Value, out var same) ? same : match.Value.TrimEnd('s'))
+            .Select(word => Same.TryGetValue(word, out var same) ? same : word)
+            .Where(word => word.Length > 1 && !Common.Contains(word));
+
+    private void Ask()
+    {
+        var question = _question?.Trim();
+        if (string.IsNullOrEmpty(question)) return;
+        _asked = question;
+        var asked = Words(question).ToHashSet();
+        _matches = [.. Facts
+            .Select(fact => (fact, score: Words(fact.Text).Count(asked.Contains)))
+            .Where(entry => entry.score > 0)
+            .OrderByDescending(entry => entry.score)
+            .Take(2)
+            .Select(entry => entry.fact)];
+        _question = null;
+    }
+}

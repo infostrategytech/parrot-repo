@@ -6,6 +6,8 @@
 @inject AgentGate Gate
 @inject IAgentBriefing Briefing
 @inject AuthState AuthState
+@inject IBusinessKnowledge Knowledge
+@inject Parrot.Web.Features.Profile.ProfileClient Profile
 @inject NavigationManager Nav
 
 @* Creating an agent (designer, 13 October 2026), after the
@@ -145,12 +147,14 @@
 
                 default:
                     <div class="agent-create__question" tabindex="-1" @ref="_question">
-                        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@($"Tell {_form.DisplayName} its job")</Typography>
-                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-create__lede">@($"Brief {_form.DisplayName} the way you'd brief a new team member.")</Typography>
+                        @* The agent speaks for itself here, to the owner by name (designer, 14 October 2026). *@
+                        @* The greeting, then the question on a line of its own. *@
+                        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@($"{Greeting}, I'm {_form.DisplayName}.") <span class="agent-create__ask">How should I help your customers?</span></Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-create__lede">Brief me the way you'd brief a new team member.</Typography>
                     </div>
                     @if (_stale)
                     {
-                        <InlineError Tone="InlineErrorTone.Info" Message="@($"You changed {_form.DisplayName}'s job since its job description was written.")">
+                        <InlineError Tone="InlineErrorTone.Info" Message="You changed my job since I wrote my job description.">
                             <Action>
                                 <span class="agent-create__stale">
                                     <Button Size="ButtonSize.Small" @onclick="StartAgain">@($"Start again for {JobName}")</Button>
@@ -161,8 +165,8 @@
                     }
                     @if (_brief is not null)
                     {
-                        <AgentJobEditor @key="_briefVersion" @ref="_editor" Brief="_brief" Name="@_form.DisplayName" OnChange="BriefChanged"
-                                        UseCase="@_useCase" CustomJob="@_customJob" Industry="@_industry" Business="@Business" />
+                        <AgentJobEditor @key="_briefVersion" @ref="_editor" Brief="_brief" Name="@_form.DisplayName" Mascot="@_form.Mascot" OnChange="BriefChanged"
+                                        UseCase="@_useCase" CustomJob="@_customJob" Industry="@_industry" Business="@Business" OnSettings="settings => _decided = settings" />
                     }
                     break;
             }
@@ -206,6 +210,7 @@
                    Brief="_brief" UseCase="@_useCase" Industry="@_industry"
                    OnChangeLine="ChangeLine" />
 }
+
 
 <Dialog Open="_confirmingLeave"
         Type="DialogType.Destructive"
@@ -263,6 +268,19 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Without a way to write the job description there is nothing to set up here.
+        if (!Briefing.Available)
+        {
+            Nav.NavigateTo("/ai-operations", replace: true);
+            return;
+        }
+        // The first agent comes after "Tell us about your business" (the gate on AI Operations opens it).
+        if (Knowledge.Available && !await Knowledge.HasApprovedAsync())
+        {
+            _done = true;
+            Nav.NavigateTo("/ai-operations?new=1", replace: true);
+            return;
+        }
         await AiAgentsState.LoadAsync();
         _channels = await Gate.ConnectedAsync();
         // A connected channel comes first (the gate on AI Operations says so).
@@ -276,7 +294,13 @@
         _form = AgentForm.Suggested(AiAgentsState.Agents, _channels.Select(channel => channel.Key));
         _suggested = await Briefing.SuggestIndustryAsync();
         _industry = _suggested;
+        try { _firstName = (await Profile.GetAsync()).FirstName?.Trim(); }
+        catch (HttpRequestException) { }
     }
+
+    // "Hi Ada" when the profile has a first name, "Hi" when it doesn't.
+    private string? _firstName;
+    private string Greeting => _firstName is { Length: > 0 } name ? $"Hi {name}" : "Hi";
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -347,6 +371,8 @@
 
     // ── Creating it ────────────────────────────────────────────────────────
 
+    private Action<AgentSettings>? _decided;
+
     private async Task CreateAsync()
     {
         if (_brief is null || _creating || !_form.HasName) return;
@@ -354,6 +380,10 @@
         _error = null;
         var useCase = AgentUseCase.Of(_useCase) ?? AgentUseCase.All[0];
         AgentBriefDefaults.Apply(_form, useCase, _customJob, _industry, string.Empty, _brief);
+        // What its follow-ups decided (when to bring you in, discounts, tone) wins over the job's defaults.
+        _decided?.Invoke(_form.Settings);
+        // What the job description says, after any additions, has the last word.
+        AgentBriefDefaults.Follow(_form.Settings, _brief.Sentences());
         try
         {
             var saved = await AiAgentsState.CreateAsync(_form.ToAgent(live: false));
@@ -396,5 +426,4 @@
     }
 
     private void Stay() => _confirmingLeave = false;
-
 }

@@ -32,7 +32,7 @@ public sealed class AgentSettings
     public bool CanOfferDiscounts { get; set; }
     public bool CanApproveRefunds { get; set; }
 
-    // ── Its job description ─────────────────────────────────────────────────
+    // ── Its job description ──────────────────────────────
 
     /// <summary>The job it was created for (AgentUseCase.Id); null for agents set up before there were jobs to choose.</summary>
     public string? UseCase { get; set; }
@@ -237,7 +237,7 @@ public sealed class AgentForm
         // words. The agents API keeps the description (up to 2,000
         // characters, as the job description box) but not the job
         // description yet, so this is how it survives a reload and reaches
-        // the AI (a backend request).
+        // the AI (see agents-backend-requests).
         if (Settings.Brief is { IsEmpty: false } brief) agent.Description = brief.Summary.Trim();
         agent.Settings = Settings.Copy();
         foreach (var channel in agent.Channels)

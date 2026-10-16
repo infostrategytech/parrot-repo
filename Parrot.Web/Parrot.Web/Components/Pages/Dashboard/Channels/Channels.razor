@@ -18,9 +18,11 @@
    opening over it, because an SME halfway through connecting WhatsApp should
    not be looking at the other two channels. Those flows land next. *@
 
+@* Only while it shows: an empty wrapper kept its padding (112px) above
+   every setup screen, which pushed each one down the window. *@
+@if (Active is null || _view == SetupView.Choice)
+{
 <div class="channels">
-    @if (Active is null || _view == SetupView.Choice)
-    {
     <header class="channels__header">
         <div class="channels__heading">
             <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Channels</Typography>
@@ -60,8 +62,8 @@
             }
         </section>
     }
-    }
 </div>
+}
 
 @* Choosing a route is modal; everything after it replaces the page, because
    someone halfway through connecting WhatsApp should not be looking at the

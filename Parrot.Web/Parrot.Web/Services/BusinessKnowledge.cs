@@ -46,6 +46,16 @@ public sealed record KnowledgeCard(KnowledgeTopic Topic, string Text, KnowledgeS
 }
 
 /// <summary>
+/// What a business says about itself before its first agent (designer and
+/// team, 14 October 2026): a summary in its own words, typed or from a voice
+/// note, and, if it wants, links (its website, social media) and files (a
+/// price list, a menu). The summary is all it needs to save. Links are read
+/// by the business-setup enrichment; files by name, frontend only until the
+/// API can take uploads (see knowledge-backend-requests).
+/// </summary>
+public sealed record BusinessIntro(string Summary, IReadOnlyList<string> Links, IReadOnlyList<string> Files);
+
+/// <summary>
 /// The business's base knowledge: a draft built from what Parrot already knows
 /// (the workspace, connected channels' profiles), which the business checks
 /// and approves before its first AI agent. Agents are grounded in what is
@@ -62,6 +72,23 @@ public interface IBusinessKnowledge
     Task<IReadOnlyList<KnowledgeCard>> GetDraftAsync();
 
     Task ApproveAsync(IReadOnlyList<KnowledgeCard> cards);
+
+    /// <summary>Saves what the business said about itself; from then on it has a base.</summary>
+    Task SaveIntroAsync(BusinessIntro intro);
+
+    /// <summary>
+    /// Whether what the business says about itself ("Tell us about your
+    /// business", "Add to business knowledge") can be kept. Off, those ways
+    /// in are hidden rather than failing.
+    /// </summary>
+    bool CanSaveIntro => Available;
+
+    /// <summary>
+    /// What is already known about the business (its connected channels'
+    /// profiles), written as a few lines in its own voice, to start "Tell us
+    /// about your business" from; null when nothing is known yet.
+    /// </summary>
+    Task<string?> StartingPointAsync();
 }
 
 /// <summary>Real mode: no knowledge endpoint yet, so agents are not held back.</summary>
@@ -71,4 +98,6 @@ public sealed class UnavailableBusinessKnowledge : IBusinessKnowledge
     public Task<bool> HasApprovedAsync() => Task.FromResult(true);
     public Task<IReadOnlyList<KnowledgeCard>> GetDraftAsync() => Task.FromResult<IReadOnlyList<KnowledgeCard>>([]);
     public Task ApproveAsync(IReadOnlyList<KnowledgeCard> cards) => throw new NotSupportedException();
+    public Task SaveIntroAsync(BusinessIntro intro) => throw new NotSupportedException();
+    public Task<string?> StartingPointAsync() => Task.FromResult<string?>(null);
 }

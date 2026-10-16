@@ -13,7 +13,14 @@
   display: grid;
   grid-template-columns: var(--app-nav-width) minmax(0, 1fr);
   width: 100vw;
+  /* As wide as the page at least: under the floor the page is wider than
+     the window, and the shell left a blank band beside it. */
+  min-width: var(--ds-viewport-floor);
   height: 100vh;
+  /* The visible height where the browser has one (tablets and phones): 100vh
+     there is the height with the toolbar hidden, so with it showing, the foot
+     of the page (an Inbox composer) would sit under it. */
+  height: 100dvh;
   overflow: hidden;
   background: var(--colors-surface-muted);
 }

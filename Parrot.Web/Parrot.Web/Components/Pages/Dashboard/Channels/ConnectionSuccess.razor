@@ -1,12 +1,17 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Channels
 @using Parrot.Web.Features.Dashboard.Channels.Models
+@inject NavigationManager Nav
+@inject ToastService Toasts
 
 @* The end of every route. A real message arrived, so this is the only screen
    in the module allowed to say the channel is connected.
 
    It replaces the test card where it stands, in the same shape: the channel's
    own mark, now with a tick, and a heading the same size. Focus moves here,
-   so a screen reader hears the result. *@
+   so a screen reader hears the result.
+
+   Opened from the dashboard (?from=dashboard): straight back to
+   it with a toast instead, so the owner sees what is next on their list. *@
 
 <section class="connected channel-@Channel.Id.ToString().ToLowerInvariant()"
          tabindex="-1" aria-labelledby="connected-title" @ref="_root">
@@ -61,6 +66,16 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) await _root.FocusAsync(preventScroll: true);
+        if (!firstRender) return;
+        if (FromDashboard)
+        {
+            Toasts.Show($"{Channel.Name} is connected. Here's what's next.");
+            Nav.NavigateTo("/dashboard");
+            return;
+        }
+        await _root.FocusAsync(preventScroll: true);
     }
+
+    private bool FromDashboard =>
+        new Uri(Nav.Uri).Query.TrimStart('?').Split('&').Contains("from=dashboard");
 }

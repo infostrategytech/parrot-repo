@@ -1,0 +1,46 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The topics a conversation goes through, as words rather than a bar, so it
+   never reads as a second progress bar next to a flow's own steps (designer,
+   15 October 2026): done ones with a small tick, the one being talked about
+   in full colour, the rest quieter. No numbers. Where it is narrow (a phone),
+   just the topic now and the one after it. *@
+
+<nav class="topic-trail @Class" aria-label="@Label">
+    <ol class="topic-trail__list">
+        @foreach (var item in Items)
+        {
+            <li class="@($"topic-trail__item is-{item.State.ToString().ToLowerInvariant()}")" aria-current="@(item.State == TopicState.Current ? "step" : null)">
+                @if (item.State == TopicState.Done)
+                {
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                }
+                <Typography TextStyle="@(item.State == TopicState.Current ? TextStyle.Small12Semibold : TextStyle.Small12Medium)" As="span">@item.Title</Typography>
+                @if (item.State == TopicState.Done)
+                {
+                    <span class="sr-only">, done</span>
+                }
+            </li>
+        }
+    </ol>
+    @if (Items.FirstOrDefault(item => item.State == TopicState.Current) is { } now)
+    {
+        var next = Items.SkipWhile(item => item != now).Skip(1).FirstOrDefault(item => item.State != TopicState.Done);
+        <p class="topic-trail__compact">
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@now.Title</Typography>
+            @if (next is not null)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="topic-trail__next">· next: @next.Title</Typography>
+            }
+        </p>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TopicTrailItem> Items { get; set; } = [];
+
+    /// <summary>What the topics are, for a screen reader ("What we'll talk about").</summary>
+    [Parameter] public string Label { get; set; } = "Topics";
+
+    [Parameter] public string? Class { get; set; }
+}

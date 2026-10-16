@@ -65,16 +65,21 @@ body {
 /* Except the sign-in pages. They are the public way in, often opened on a
    small laptop or a phone from a shared link, and lay themselves out to any
    width. The floor protects the app shell, which these pages do not use;
-   nor does creating an agent (a full-screen flow of its own). */
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create),
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create) body {
+   nor does creating an agent (a full-screen flow of its own). Nor any page while
+   "Tell us about your business" is open: on a tablet or a phone the floor shrank
+   the page, and the dialog with it; it lays itself out at the screen's width. */
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .business-intro-host .dialog-backdrop),
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .business-intro-host .dialog-backdrop) body {
   min-width: 0;
 }
 
 :root {
   /* Missing from the token set: layout breakpoints. Added to variables/ in a
-     later phase; until then the floor lives here rather than in eight files. */
-  --ds-viewport-floor: 1080px;
+     later phase; until then the floor lives here rather than in eight files.
+     768px, a tablet in portrait (designer, 14 October 2026): at 1080px every
+     tablet saw the page cut off with a blank band; under 768px (phones,
+     not designed yet) the browser still shows the tablet layout, zoomed out. */
+  --ds-viewport-floor: 768px;
 }
 
 body {
