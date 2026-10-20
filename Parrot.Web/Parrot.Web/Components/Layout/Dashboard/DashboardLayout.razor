@@ -3,6 +3,8 @@
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Nav
 @inject Parrot.Web.Services.InboxUnreadState Unread
+@inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceCreationState WorkspaceCreation
+@inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceDirectoryState WorkspaceDirectory
 @implements IDisposable
 
 @* Aurora's shell, fed by Parrot's session. The rail, the workspace switcher
@@ -12,9 +14,13 @@
 <ActivityBar />
 
 <AppShell BrandName="OmniAI"
-          WorkspaceId="@WorkspaceSeed"
-          WorkspaceName="@(AuthState.CurrentUser?.BusinessName ?? "")"
-          WorkspaceLogoUrl="@AuthState.CurrentUser?.LogoUrl"
+          WorkspaceId="@WorkspaceId"
+          WorkspaceName="@WorkspaceName"
+          WorkspaceLogoUrl="@WorkspaceLogoUrl"
+          Workspaces="@WorkspaceDirectory.Workspaces"
+          ActiveWorkspaceId="@WorkspaceDirectory.Active?.Id"
+          OnSelectWorkspace="SelectWorkspace"
+          OnAddWorkspace="OpenWorkspaceCreation"
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
@@ -38,6 +44,10 @@
     </ChildContent>
 </AppShell>
 
+@* One workspace dialog for the whole dashboard. The rail can start it from
+   any page, and first-time accounts see the same experience automatically. *@
+<Parrot.Web.Components.Pages.Dashboard.Dashboard.WorkspaceWelcome />
+
 @* Before an agent: a channel for it to answer on, then, the first time, a
    few lines about the business. Teach your AI is "Teach more" from an agent. *@
 <Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentChannelGate />
@@ -58,11 +68,22 @@
     // everywhere they appear. The user id is the seed for the person; the
     // business has no id of its own in the session, so its name stands in.
     private string UserSeed => AuthState.CurrentUser?.UserId ?? "user";
-    private string WorkspaceSeed => "workspace-" + (AuthState.CurrentUser?.BusinessName ?? "");
+    private string WorkspaceId => WorkspaceDirectory.Active?.Id ?? "workspace-" + (AuthState.CurrentUser?.BusinessName ?? "");
+    private string WorkspaceName => WorkspaceDirectory.Active?.Name ?? AuthState.CurrentUser?.BusinessName ?? "";
+    private string? WorkspaceLogoUrl => WorkspaceDirectory.Active?.LogoUrl ?? AuthState.CurrentUser?.LogoUrl;
+
+    private void OpenWorkspaceCreation() => WorkspaceCreation.OpenAdditionalWorkspace();
+
+    private void SelectWorkspace(string id)
+    {
+        if (WorkspaceDirectory.Select(id)) Nav.NavigateTo("/dashboard");
+    }
 
     protected override void OnInitialized()
     {
+        WorkspaceDirectory.Sync(AuthState.CurrentUser);
         AuthState.OnChange += AuthChanged;
+        WorkspaceDirectory.Changed += WorkspaceChanged;
         Unread.Changed += UnreadChanged;
     }
 
@@ -75,9 +96,12 @@
 
     private void UnreadChanged() => _ = InvokeAsync(StateHasChanged);
 
+    private void WorkspaceChanged() => _ = InvokeAsync(StateHasChanged);
+
     // Signing in starts the count; signing out clears it.
     private void AuthChanged() => _ = InvokeAsync(async () =>
     {
+        WorkspaceDirectory.Sync(AuthState.CurrentUser);
         await Unread.StartAsync();
         if (!AuthState.IsAuthenticated) Unread.Set(0);
         StateHasChanged();
@@ -109,6 +133,7 @@
     public void Dispose()
     {
         AuthState.OnChange -= AuthChanged;
+        WorkspaceDirectory.Changed -= WorkspaceChanged;
         Unread.Changed -= UnreadChanged;
     }
 }

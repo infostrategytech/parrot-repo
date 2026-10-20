@@ -193,7 +193,7 @@
 .workspace-action--ai.is-locked { background: var(--colors-surface-muted); }
 .workspace-action--ai.is-ready { border-color: var(--colors-accent-brand-muted); }
 
-/* "Tell us about your business", and the channel step once
+/* Concept B (demo): "Tell us about your business", and the channel step once
    it is done, share the AI card's row: an icon, the words, one action. */
 .workspace-action--row {
   display: grid;
@@ -274,7 +274,7 @@
   --ds-workspace-partner-mark: 28px;
 }
 
-/* The big card is always the one thing to do next: the first screen's first card,
+/* The big card is always the one thing to do next: Concept A's first card,
    for whichever step that is. */
 .workspace-action--lead {
   display: grid;

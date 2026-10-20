@@ -80,6 +80,8 @@ builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
 // The account's profile, for the welcome card and the settings page.
 builder.Services.AddScoped<ProfileClient>();
 builder.Services.AddScoped<IWorkspaceSetupService, WorkspaceSetupService>();
+builder.Services.AddScoped<WorkspaceCreationState>();
+builder.Services.AddScoped<WorkspaceDirectoryState>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {

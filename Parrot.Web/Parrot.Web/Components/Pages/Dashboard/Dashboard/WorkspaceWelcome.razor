@@ -2,26 +2,33 @@
 @using Parrot.Web.Features.Dashboard.Workspace
 @inject AuthState AuthState
 @inject IWorkspaceSetupService WorkspaceSetup
+@inject WorkspaceCreationState WorkspaceCreation
+@inject WorkspaceDirectoryState WorkspaceDirectory
+@inject NavigationManager Nav
+@implements IDisposable
 
 @* The workspace welcome card: the first thing a new account sees, over the
    dashboard. It asks for the business name (required) and, optionally, a
    logo. Sign-up deliberately does not ask for the name; it is asked for here,
    once the person is inside.
 
-   It opens only when the signed-in business has no name yet, so anyone who
-   already set one up never sees it. Aurora's Original design: the channels
-   flowing into the OmniAI hub, over a slow colour wash. *@
+   It opens automatically when the signed-in business has no name yet, or on
+   request when an existing owner chooses Add another workspace. Aurora's
+   Original design: the channels flowing into the OmniAI hub, over a slow
+   colour wash. *@
 
-<Dialog Open="@_open"
+<Dialog Open="@WorkspaceCreation.IsOpen"
         Title="Welcome to OmniAI"
         TitleVisuallyHidden="true"
+        Dismissible="@WorkspaceCreation.IsAdditionalWorkspace"
         ConfirmLabel="Create Workspace"
         ConfirmFullWidth="true"
         FitToScreen="true"
         BusyLabel="Creating Workspace…"
         Busy="@_creating"
         ConfirmDisabled="@(!CanCreateWorkspace)"
-        OnConfirm="CreateWorkspaceAsync">
+        OnConfirm="CreateWorkspaceAsync"
+        OnCancel="@CancelCallback">
     <AmbientBackground>
         <div class="workspace-dialog-gradient @(HasEnteredBusinessName ? "has-business-name" : null)">
             <span class="workspace-dialog-gradient__wash wash-cyan"></span>
@@ -170,7 +177,6 @@
     // none, the card only redraws for its own changes. The page learns the
     // workspace exists from AuthState.OnChange, which SaveAsync raises.
 
-    private bool _open;
     private string? _businessName;
     private string? _businessNameError;
     private string? _phone;
@@ -185,8 +191,24 @@
     private bool HasEnteredBusinessName => !string.IsNullOrWhiteSpace(_businessName);
     private bool CanCreateWorkspace => !_creating && !_reading && HasEnteredBusinessName;
 
-    protected override void OnInitialized() =>
-        _open = AuthState.IsAuthenticated && string.IsNullOrWhiteSpace(AuthState.CurrentUser?.BusinessName);
+    private EventCallback CancelCallback => WorkspaceCreation.IsAdditionalWorkspace
+        ? EventCallback.Factory.Create(this, CancelAdditionalWorkspace)
+        : default;
+
+    protected override void OnInitialized()
+    {
+        WorkspaceCreation.Changed += OnWorkspaceCreationChanged;
+        WorkspaceCreation.EnsureFirstWorkspace(
+            AuthState.IsAuthenticated && string.IsNullOrWhiteSpace(AuthState.CurrentUser?.BusinessName));
+    }
+
+    private void OnWorkspaceCreationChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void CancelAdditionalWorkspace()
+    {
+        ResetForm();
+        WorkspaceCreation.Close();
+    }
 
     private async Task HandleLogoSelectedAsync(InputFileChangeEventArgs args)
     {
@@ -276,8 +298,27 @@
         _creating = true;
         try
         {
-            await WorkspaceSetup.SaveAsync(name, phone, _logo);
-            _open = false;
+            if (WorkspaceCreation.IsAdditionalWorkspace)
+            {
+                _createError = "Creating another workspace is not available yet. Your current workspace has not been changed.";
+                return;
+            }
+
+            var addedWorkspace = WorkspaceCreation.IsAdditionalWorkspace;
+            if (addedWorkspace)
+            {
+                WorkspaceDirectory.AddLocal(name, _logo?.DataUrl);
+            }
+            else
+            {
+                await WorkspaceSetup.SaveAsync(name, phone, _logo);
+            }
+            WorkspaceCreation.Close();
+            ResetForm();
+
+            // Production will add the workspace returned by its create endpoint.
+            // The demo keeps both identities in its session list.
+            if (addedWorkspace) Nav.NavigateTo("/dashboard");
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
         {
@@ -297,4 +338,19 @@
             _creating = false;
         }
     }
+
+    private void ResetForm()
+    {
+        _businessName = null;
+        _businessNameError = null;
+        _phone = null;
+        _phoneError = null;
+        _logo = null;
+        _readingName = null;
+        _reading = false;
+        _logoError = null;
+        _createError = null;
+    }
+
+    public void Dispose() => WorkspaceCreation.Changed -= OnWorkspaceCreationChanged;
 }

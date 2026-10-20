@@ -36,28 +36,37 @@
 
         <div class="workspace__menu" role="menu" @onkeydown="OnKeyDown">
             <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="workspace__menu-label ds-overline">
-                Signed in
+                Workspaces
             </Typography>
 
-            <button type="button"
-                    role="menuitemradio"
-                    aria-checked="true"
-                    class="workspace__option is-active"
-                    @onclick="() => _open = false">
-                <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" ImageUrl="@LogoUrl" />
-                <span class="workspace__identity">
-                    <Typography TextStyle="TextStyle.Small12Medium" As="strong">@Name</Typography>
-                    @if (!string.IsNullOrWhiteSpace(Plan))
+            @foreach (var workspace in MenuWorkspaces)
+            {
+                var isActive = workspace.Id == CurrentWorkspaceId;
+                <button type="button"
+                        role="menuitemradio"
+                        aria-checked="@isActive.ToString().ToLowerInvariant()"
+                        class="workspace__option @(isActive ? "is-active" : null)"
+                        @onclick="() => SelectWorkspaceAsync(workspace.Id)">
+                    <PetalAvatar Seed="@workspace.Id"
+                                 Initials="@DesignSystem.Initials.From(workspace.Name)"
+                                 ImageUrl="@workspace.LogoUrl" />
+                    <span class="workspace__identity">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="strong">@workspace.Name</Typography>
+                        @if (!string.IsNullOrWhiteSpace(workspace.Plan))
+                        {
+                            <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="workspace__eyebrow">@workspace.Plan</Typography>
+                        }
+                    </span>
+                    @if (isActive)
                     {
-                        <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="workspace__eyebrow">@Plan</Typography>
+                        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                     }
-                </span>
-                <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
-            </button>
+                </button>
+            }
 
-            <button type="button" class="workspace__add" role="menuitem">
+            <button type="button" class="workspace__add" role="menuitem" @onclick="AddWorkspaceAsync">
                 <Icon Name="IconName.RiAddFill" Size="IconSize.Sm" />
-                <Typography TextStyle="TextStyle.Small12Medium" As="span">Add another business</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">Add another workspace</Typography>
             </button>
         </div>
     }
@@ -77,11 +86,39 @@
     /// <summary>Optional. The business logo, shown in place of the initials.</summary>
     [Parameter] public string? LogoUrl { get; set; }
 
+    /// <summary>Starts the host application's create-workspace flow.</summary>
+    [Parameter] public EventCallback OnAddWorkspace { get; set; }
+
+    /// <summary>Every workspace available to the person. Falls back to the active one when omitted.</summary>
+    [Parameter] public IReadOnlyList<WorkspaceMenuItem>? Workspaces { get; set; }
+
+    [Parameter] public string? ActiveWorkspaceId { get; set; }
+
+    [Parameter] public EventCallback<string> OnSelectWorkspace { get; set; }
+
     private bool _open;
 
     private string Seed => string.IsNullOrWhiteSpace(Id) ? "workspace" : Id;
 
     private string InitialsOrDefault => Initials ?? DesignSystem.Initials.From(Name);
+
+    private string CurrentWorkspaceId => ActiveWorkspaceId ?? Id;
+
+    private IReadOnlyList<WorkspaceMenuItem> MenuWorkspaces => Workspaces is { Count: > 0 }
+        ? Workspaces
+        : [new WorkspaceMenuItem(Id, Name, Plan, LogoUrl)];
+
+    private async Task AddWorkspaceAsync()
+    {
+        _open = false;
+        await OnAddWorkspace.InvokeAsync();
+    }
+
+    private async Task SelectWorkspaceAsync(string id)
+    {
+        _open = false;
+        if (id != CurrentWorkspaceId) await OnSelectWorkspace.InvokeAsync(id);
+    }
 
     private void OnKeyDown(KeyboardEventArgs args)
     {

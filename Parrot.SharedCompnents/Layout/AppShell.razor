@@ -15,6 +15,10 @@
                 WorkspaceName="@WorkspaceName"
                 WorkspacePlan="@WorkspacePlan"
                 WorkspaceLogoUrl="@WorkspaceLogoUrl"
+                Workspaces="@Workspaces"
+                ActiveWorkspaceId="@ActiveWorkspaceId"
+                OnSelectWorkspace="@OnSelectWorkspace"
+                OnAddWorkspace="@OnAddWorkspace"
                 UserName="@UserName"
                 UserRole="@UserRole"
                 UserInitials="@UserInitials"
@@ -52,6 +56,10 @@
     [Parameter] public string WorkspaceName { get; set; } = "";
     [Parameter] public string? WorkspacePlan { get; set; }
     [Parameter] public string? WorkspaceLogoUrl { get; set; }
+    [Parameter] public EventCallback OnAddWorkspace { get; set; }
+    [Parameter] public IReadOnlyList<WorkspaceMenuItem>? Workspaces { get; set; }
+    [Parameter] public string? ActiveWorkspaceId { get; set; }
+    [Parameter] public EventCallback<string> OnSelectWorkspace { get; set; }
     [Parameter] public string UserName { get; set; } = "";
     [Parameter] public string? UserRole { get; set; }
     [Parameter] public string UserInitials { get; set; } = "";
