@@ -28,12 +28,13 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            string pattern = $"%{search}%";
+            string escaped = search.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
+            string pattern = $"%{escaped}%";
             query = query.Where(c =>
-                EF.Functions.ILike(c.Name, pattern) ||
+                EF.Functions.ILike(c.Name, pattern, @"\") ||
                 c.Identities.Any(i =>
-                    EF.Functions.ILike(i.Sender, pattern) ||
-                    (i.Username != null && EF.Functions.ILike(i.Username, pattern))));
+                    EF.Functions.ILike(i.Sender, pattern, @"\") ||
+                    (i.Username != null && EF.Functions.ILike(i.Username, pattern, @"\"))));
         }
 
         if (!string.IsNullOrWhiteSpace(stage))

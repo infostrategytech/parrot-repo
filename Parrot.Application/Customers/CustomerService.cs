@@ -50,11 +50,19 @@ public sealed class CustomerService(ICustomerRepository repository)
         return ToDetail(customer);
     }
 
+    private static readonly string[] ValidStages = ["New Lead", "Interested", "Customer", "Vip"];
+
     public async Task<CustomerDetailResponse> CreateAsync(string ownerUserId, CreateCustomerRequest request, CancellationToken ct)
     {
         List<string> errors = [];
         if (string.IsNullOrWhiteSpace(request.Name)) errors.Add("Name is required.");
         else if (request.Name.Length > 256) errors.Add("Name must be 256 characters or fewer.");
+
+        string stage = string.IsNullOrWhiteSpace(request.Stage) ? "Customer" : request.Stage;
+        if (!ValidStages.Contains(stage)) errors.Add("Stage is not valid.");
+
+        List<string> tags = NormalizeTags(request.Tags, errors);
+
         if (errors.Count > 0) throw new ValidationException(errors);
 
         Customer customer = new()
@@ -62,15 +70,13 @@ public sealed class CustomerService(ICustomerRepository repository)
             OwnerUserId = ownerUserId,
             Name = request.Name.Trim(),
             Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim(),
-            Stage = string.IsNullOrWhiteSpace(request.Stage) ? "Customer" : request.Stage,
-            Tags = request.Tags ?? [],
+            Stage = stage,
+            Tags = tags,
             CreatedAt = DateTime.UtcNow,
         };
         await repository.CreateAsync(customer, ct);
         return ToDetail(customer);
     }
-
-    private static readonly string[] ValidStages = ["New Lead", "Interested", "Customer", "Vip"];
 
     public async Task<CustomerDetailResponse> UpdateStageAsync(
         string ownerUserId, Guid id, string stage, CancellationToken ct)
@@ -84,11 +90,24 @@ public sealed class CustomerService(ICustomerRepository repository)
     public async Task<CustomerDetailResponse> UpdateTagsAsync(
         string ownerUserId, Guid id, List<string> tags, CancellationToken ct)
     {
-        List<string> trimmed = [.. tags.Select(t => t.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
-        if (trimmed.Any(t => t.Length > 64)) throw new ValidationException("Each tag must be 64 characters or fewer.");
-        Customer? customer = await repository.UpdateTagsAsync(ownerUserId, id, trimmed, ct);
+        List<string> errors = [];
+        List<string> normalized = NormalizeTags(tags, errors);
+        if (errors.Count > 0) throw new ValidationException(errors);
+        Customer? customer = await repository.UpdateTagsAsync(ownerUserId, id, normalized, ct);
         if (customer is null) throw new NotFoundException("Customer not found.");
         return ToDetail(customer);
+    }
+
+    // Trims, removes blanks, deduplicates case-insensitively, and validates.
+    // Appends validation messages to errors rather than throwing, so callers
+    // can accumulate multiple errors before surfacing them.
+    private static List<string> NormalizeTags(List<string>? raw, List<string> errors)
+    {
+        List<string> trimmed = [.. (raw ?? []).Select(t => t.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
+        if (trimmed.Any(t => t.Contains(','))) errors.Add("Tags must not contain commas.");
+        if (trimmed.Any(t => t.Length > 64)) errors.Add("Each tag must be 64 characters or fewer.");
+        if (trimmed.Count > 20) errors.Add("Customers can have at most 20 tags.");
+        return trimmed;
     }
 
     private static CustomerListItemResponse ToListItem(Customer c) => new(

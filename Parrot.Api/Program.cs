@@ -173,6 +173,15 @@ builder.Services.AddAuthentication(options =>
                 context.Token = token;
             return Task.CompletedTask;
         },
+        // Return 404 for unauthenticated requests so the endpoint's existence
+        // is not revealed to anonymous callers.
+        OnChallenge = async ctx =>
+        {
+            ctx.HandleResponse();
+            ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+            ctx.Response.ContentType = "application/json";
+            await ctx.Response.WriteAsync("{\"message\":\"Not found.\"}");
+        },
     };
 })
 .AddCookie("ExternalCookies", options =>
