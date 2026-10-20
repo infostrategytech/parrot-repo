@@ -1,9 +1,12 @@
 @page "/dashboard/contacts"
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@implements IAsyncDisposable
 @using Parrot.Web.Components.Pages.Dashboard.Contacts
 @using Parrot.Web.Services
+@using Parrot.Web.Services.Realtime
 @inject CustomerClient CustomerClient
+@inject RealtimeClient Realtime
 
 <PageTitle>Customers · OmniAI</PageTitle>
 
@@ -193,7 +196,13 @@
     private int PageStart => _total == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
     private int PageEnd => Math.Min(CurrentPage * PageSize, _total);
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        Realtime.MessageReceived += OnMessageReceived;
+        Realtime.Reconnected += OnReconnected;
+        await LoadAsync();
+        await Realtime.StartAsync();
+    }
 
     private async Task SelectStage(string val)
     {
@@ -312,5 +321,31 @@
         {
             _error = ex.Message;
         }
+    }
+
+    private Task OnMessageReceived(Parrot.Application.Messaging.StoredMessage message) =>
+        InvokeAsync(async () =>
+        {
+            // Outgoing replies are not new customers — skip them.
+            if (message.Outgoing) return;
+
+            // If this sender is already in the list, nothing to do.
+            bool known = _contacts.Any(c =>
+                c.Identities.Any(i =>
+                    i.ConnectionId == message.ConnectionId &&
+                    i.Sender == message.Sender));
+            if (known) return;
+
+            // New sender — reload so the new customer row appears.
+            await LoadAsync();
+        });
+
+    private Task OnReconnected() => InvokeAsync(LoadAsync);
+
+    public ValueTask DisposeAsync()
+    {
+        Realtime.MessageReceived -= OnMessageReceived;
+        Realtime.Reconnected -= OnReconnected;
+        return ValueTask.CompletedTask;
     }
 }
