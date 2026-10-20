@@ -1,5 +1,6 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities Capabilities
+@inject Parrot.Web.Features.Dashboard.AiAgents.JobConversationDrafts Drafts
 @using Parrot.Web.Features.Dashboard.AiAgents
 
 @* One agent on AI Operations: who it is and its job, whether it is on, how
@@ -40,7 +41,14 @@
     </header>
 
     <div class="agent-card__today">
-        @if (Agent.IsDraft)
+        @if (Agent.IsDraft && !Told)
+        {
+            @* Created first, told its job next (designer, 19 October 2026). *@
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(Drafts.ProgressOf(Agent.Id) is { Next: { } next }
+                ? $"Getting to know its job. You got as far as {LowerFirst(next)}."
+                : $"A draft. Tell {Agent.Name} its job before it answers anyone.")</Typography>
+        }
+        else if (Agent.IsDraft)
         {
             <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(Capabilities.CanReply ? "Not answering customers yet. Turn it on when you're ready." : "A draft. You'll be able to turn it on once agents can reply to customers.")</Typography>
         }
@@ -78,7 +86,11 @@
             }
         </div>
         <span @onclick:stopPropagation="true" @onkeydown:stopPropagation="true">
-            @if ((Agent.IsDraft || !Agent.IsActive) && Capabilities.CanReply)
+            @if (Agent.IsDraft && !Told)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="OnGetReady">@($"Get {Agent.Name} ready")</Button>
+            }
+            else if ((Agent.IsDraft || !Agent.IsActive) && Capabilities.CanReply)
             {
                 <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="Busy" @onclick="OnStatusChange">Turn on</Button>
             }
@@ -94,6 +106,11 @@
 </article>
 
 @code {
+    // Told its job: a job description, written and approved (an agent from before job descriptions has its description).
+    private bool Told => Agent.Settings.Brief is { IsEmpty: false } || (Agent.Settings.Brief is null && !string.IsNullOrWhiteSpace(Agent.Description));
+
+    private static string LowerFirst(string text) => text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1]) ? char.ToLowerInvariant(text[0]) + text[1..] : text;
+
     [Parameter, EditorRequired] public AiAgent Agent { get; set; } = default!;
 
     /// <summary>Its day so far, from the operations feed.</summary>
@@ -107,6 +124,8 @@
     [Parameter] public EventCallback OnOpen { get; set; }
 
     [Parameter] public EventCallback OnConfigure { get; set; }
+    /// <summary>A draft not told its job yet: its Overview, whose Get ready card starts it (designer, 20 October 2026: the view opens only from Start).</summary>
+    [Parameter] public EventCallback OnGetReady { get; set; }
 
     [Parameter] public EventCallback OnDelete { get; set; }
 

@@ -1,0 +1,107 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IAsyncDisposable
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+
+@* A task that takes the whole window for a while (designer, 19 October 2026:
+   telling an agent its job): no navigation, nothing else to look at, a thin
+   bar on top with what this is, how far it has got (in the middle, where a
+   guided flow shows its progress), its actions and a close, and the task in a
+   centred column under it that scrolls on its own. For something too long and too
+   involved for a dialog or a side panel, that still has an end. As the
+   design-system Dialog and SidePanel: focus moves in and stays in, Escape
+   closes (unless Busy), and focus goes back where it was. Toasts show above it. *@
+
+@if (Open)
+{
+    <section class="@($"ds-focus-view {Class}")"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="@_titleId"
+             tabindex="-1"
+             @ref="_view">
+        <header class="ds-focus-view__bar">
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="@_titleId" Class="ds-focus-view__title">@Title</Typography>
+            @* In the middle, as a guided flow's progress: how far the task has got (its topics). *@
+            <div class="ds-focus-view__center">@Center</div>
+            <div class="ds-focus-view__end">
+                @if (Actions is not null)
+                {
+                    <div class="ds-focus-view__actions">@Actions</div>
+                }
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@CloseLabel" title="@CloseLabel" disabled="@Busy" @onclick="RequestCloseAsync">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </div>
+        </header>
+        <div class="ds-focus-view__body">
+            <div class="ds-focus-view__column">@ChildContent</div>
+        </div>
+    </section>
+}
+
+@code {
+    private readonly string _titleId = "focus-view-" + Guid.NewGuid().ToString("N");
+
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    /// <summary>What the task is, in the bar ("Tell Tolu its job").</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>The middle of the bar: how far the task has got, as a guided flow shows its progress there.</summary>
+    [Parameter] public RenderFragment? Center { get; set; }
+
+    /// <summary>Buttons in the bar, before the close (a "Done" once the task is done).</summary>
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    /// <summary>Something is saving: the view cannot be closed until it ends.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>The close button or Escape. The page decides what closing means (it may say what was kept).</summary>
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    [Parameter] public string CloseLabel { get; set; } = "Close";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private ElementReference _view;
+    private IAsyncDisposable? _trap;
+    private DotNetObjectReference<FocusView>? _self;
+    private bool _wasOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            try { await _view.FocusAsync(); } catch (JSException) { }
+            _self ??= DotNetObjectReference.Create(this);
+            _trap = await Interop.TrapFocusAsync(_view, _self, nameof(OnEscapeAsync));
+        }
+        else if (!Open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseTrapAsync();
+        }
+    }
+
+    [JSInvokable]
+    public Task OnEscapeAsync() => RequestCloseAsync();
+
+    private Task RequestCloseAsync() => Busy ? Task.CompletedTask : OnClose.InvokeAsync();
+
+    private async Task ReleaseTrapAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap;
+        _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await ReleaseTrapAsync();
+        _self?.Dispose();
+    }
+}

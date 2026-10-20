@@ -3,6 +3,7 @@
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @using Parrot.Web.Features.Dashboard.AiAgents
+@using Microsoft.AspNetCore.Components.Sections
 @inject AiAgentsState AiAgentsState
 @inject NavigationManager Nav
 @inject ToastService Toasts
@@ -15,6 +16,9 @@
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.BusinessIntroState Intro
 @inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
 @inject IAgentBriefing Briefing
+@inject JobConversationDrafts Drafts
+@inject Parrot.Web.Features.Profile.ProfileClient Profile
+@inject VoiceInterop Voice
 @implements IDisposable
 
 @* One agent: who it is and whether it is on, then its day (what it did,
@@ -22,7 +26,7 @@
    link to where the work is. (Playbooks are parked: see the project's
    playbooks research.)
 
-   (13 October 2026): one row of tabs instead of Settings,
+   Concept B (demo, 13 October 2026): one row of tabs instead of Settings,
    each a part of how it works (Job description, Knowledge, Channels,
    Personality, Handover & safety), with one save bar across them.
    Revised 14 October (designer): the tabs are the page's sections, left
@@ -76,6 +80,8 @@ else if (agent is null)
 }
 else
 {
+    @* is-demo: the demo's concept switch and theme toggle sit at the window's
+       foot, so the floating save bar rises above them there. *@
     <main class="agent-detail">
         <header class="agent-detail__header">
             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="agent-detail__back" @onclick="BackToAgents">
@@ -105,11 +111,11 @@ else
                     </div>
                 </div>
                 @* On or off is the one thing an owner does here most; Edit opens Settings.
-                   Test as a customer and Turn on, always here. *@
+                   Concept B: Test as a customer and Turn on, always here. *@
                 <div class="agent-detail__actions">
                     @if (Briefing.CanTry)
                     {
-                        <Button Variant="ButtonVariant.Secondary" @onclick="() => _testing = true">
+                        <Button Variant="ButtonVariant.Secondary" disabled="@(!Told(agent))" title="@(Told(agent) ? null : $"Tell {agent.Name} its job first")" @onclick="() => _testing = true">
                             <IconLeft><Icon Name="IconName.RiChat3Fill" /></IconLeft>
                             <ChildContent>Test as a customer</ChildContent>
                         </Button>
@@ -120,7 +126,7 @@ else
                     }
                     else if (Capabilities.CanReply)
                     {
-                        <Button disabled="@(agent.ChannelCount == 0)" Busy="_switching"
+                        <Button disabled="@(agent.ChannelCount == 0 || !Told(agent))" Busy="_switching"
                                 title="@TurnOnTitle(agent)"
                                 @onclick="() => SetLiveAsync(agent, true)">Turn on</Button>
                     }
@@ -145,7 +151,7 @@ else
             </section>
         }
 
-        @* The page's sections, words only, at reading size. *@
+        @* Concept B: the page's sections, words only, at reading size. *@
         <Tabs Label="Agent sections" Variant="TabsVariant.Underline" Class="agent-detail__tabs is-sections">
             @foreach (var tab in CurrentTabs)
             {
@@ -158,12 +164,69 @@ else
 
         @if (_activeTab == "overview")
         {
+            @* A draft, getting ready (designer, 19 October 2026): told its job first, then a test, then on. *@
+            @if (agent.IsDraft)
+            {
+                var told = Told(agent);
+                var progress = Drafts.ProgressOf(agent.Id);
+                var onStep = Briefing.CanTry ? 3 : 2;
+                <section class="agent-detail__card agent-detail__ready" aria-labelledby="agent-ready-title">
+                    <header class="agent-detail__card-head">
+                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-ready-title">@($"Get {agent.Name} ready")</Typography>
+                    </header>
+                    <ol class="agent-detail__ready-steps">
+                        <li class="@($"agent-detail__ready-step {(told ? "is-done" : "is-now")}")">
+                            <span class="agent-detail__ready-mark" aria-hidden="true">
+                                @if (told) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> } else { <Typography TextStyle="TextStyle.Small12Semibold" As="span">1</Typography> }
+                            </span>
+                            <div class="agent-detail__ready-text">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@($"Tell {agent.Name} its job")</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>
+                                    @(told ? "Done. Its job description is saved."
+                                        : progress is { Next: { } next } ? $"You got as far as {LowerFirst(next)}. It picks up from there."
+                                        : "What it does, what it never does, and when it brings you in, one topic at a time.")
+                                </Typography>
+                            </div>
+                            <Button Variant="@(told ? ButtonVariant.Ghost : ButtonVariant.Primary)" Size="ButtonSize.Small" @onclick="@(() => { if (told) _activeTab = "job"; else OpenTelling(); })">
+                                @(told ? "Change" : progress is null ? "Start" : "Continue")
+                            </Button>
+                        </li>
+                        @if (Briefing.CanTry)
+                        {
+                            <li class="@($"agent-detail__ready-step {(told ? "is-now" : "is-later")}")">
+                                <span class="agent-detail__ready-mark" aria-hidden="true"><Typography TextStyle="TextStyle.Small12Semibold" As="span">2</Typography></span>
+                                <div class="agent-detail__ready-text">
+                                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">Test as a customer</Typography>
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>@($"See how {agent.Name} replies before any customer does.")</Typography>
+                                </div>
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(!told)" @onclick="() => _testing = true">Try it</Button>
+                            </li>
+                        }
+                        <li class="agent-detail__ready-step is-later">
+                            <span class="agent-detail__ready-mark" aria-hidden="true"><Typography TextStyle="TextStyle.Small12Semibold" As="span">@onStep</Typography></span>
+                            <div class="agent-detail__ready-text">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">Turn it on</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>@TurnOnReadinessLine(agent)</Typography>
+                            </div>
+                            @if (Capabilities.CanReply)
+                            {
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="_switching" disabled="@(agent.ChannelCount == 0 || !told || !KnowledgeReady)"
+                                        @onclick="() => SetLiveAsync(agent, true)">Turn on</Button>
+                            }
+                        </li>
+                    </ol>
+                </section>
+            }
             @* Its day: is it doing the work, does it need me, what has it said. *@
             @if (!Feed.Available)
             {
                 @* Real mode: no operations feed yet, so there is no day to show. *@
             }
-            else if (!agent.IsActive || agent.IsDraft)
+            else if (agent.IsDraft)
+            {
+                @* A draft has no day yet: the ready card above says what comes next. *@
+            }
+            else if (!agent.IsActive)
             {
                 <section class="agent-detail__card agent-detail__quiet">
                     <span class="agent-detail__fact-icon"><Icon Name="IconName.RiPauseCircleFill" Size="IconSize.Md" /></span>
@@ -331,7 +394,10 @@ else
                         <AgentBasics Form="_form" Others="OthersThan(agent)" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" ShowIdentity="false" ShowSafety="false" />
                     </div>
                 }
-                @* One line per tab, each opening it: the page's index, not a copy. *@
+                @* One line per tab, each opening it: the page's index, not a copy. Not for a draft
+                   (designer, 20 October 2026): getting it ready is all there is to read; the tabs are above. *@
+                @if (!agent.IsDraft)
+                {
                 <section class="agent-detail__card agent-detail__setup" aria-labelledby="agent-setup-title">
                     <header class="agent-detail__card-head">
                         <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-setup-title">How it's set up</Typography>
@@ -344,6 +410,7 @@ else
                     @SetupRow(IconName.RiChatSmile3Fill, "How it talks", $"{ToneWord(agent.Settings.Tone)} tone, {LengthWord(agent.Settings.Length)} replies.", "personality", "Personality")
                     @SetupRow(IconName.RiUserSharedFill, "When it brings you in", $"When it can't help. {AgentBasics.MoneyRule(agent.Settings)}.", "handover", "Handover & safety")
                 </section>
+                }
         }
 
         @if (IsConfigTab(_activeTab) && _form is not null)
@@ -352,43 +419,53 @@ else
                 @switch (_activeTab)
                 {
                     case "job":
-                        @* What it is: its job and the kind of business, both chosen when it was made. *@
-                        <section class="agent-detail__card" aria-label="Its job">
-                            <div class="agent-detail__row">
-                                <span class="agent-detail__fact-icon"><Icon Name="@(AgentUseCase.Of(_form.Settings.UseCase)?.Icon ?? AgentRole.Of(_form.Settings.Role).Icon)" Size="IconSize.Md" /></span>
-                                <div class="agent-detail__row-text">
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@_form.RoleName</Typography>
-                                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Its main job.</Typography>
-                                </div>
-                                <FilterPopover Label="Change" Title="Its main job" AlignEnd Open="@(_menu == "job")" OpenChanged="JobMenu">
-                                    @foreach (var useCase in AgentUseCase.All.Where(item => item.Id != AgentUseCase.Custom || _form.Settings.UseCase == AgentUseCase.Custom))
-                                    {
-                                        var current = useCase;
-                                        <PopoverOption Label="@current.Name" Description="@current.Does" Active="@(_form.Settings.UseCase == current.Id)" OnSelect="() => ChooseUseCase(current)" />
-                                    }
-                                </FilterPopover>
-                            </div>
-                            <div class="agent-detail__row">
-                                <span class="agent-detail__fact-icon"><Icon Name="IconName.RiStore2Fill" Size="IconSize.Md" /></span>
-                                <div class="agent-detail__row-text">
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@(AgentIndustry.Of(_form.Settings.Industry)?.Name ?? "Kind of business not chosen")</Typography>
-                                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@($"The kind of business {Business} is.")</Typography>
-                                </div>
-                                <FilterPopover Label="Change" Title="Kind of business" AlignEnd Open="@(_menu == "industry")" OpenChanged="IndustryMenu">
-                                    @foreach (var industry in AgentIndustry.All)
-                                    {
-                                        var current = industry;
-                                        <PopoverOption Label="@current.Name" Description="@current.Examples" Active="@(_form.Settings.Industry == current.Id)" OnSelect="() => ChooseIndustry(current)" />
-                                    }
-                                </FilterPopover>
-                            </div>
-                        </section>
-                        <AgentJobEditor @ref="_jobEditor" Brief="JobBrief" Name="@_form.DisplayName" Mascot="@_form.Mascot" Settings="_form.Settings" OnChange="StateHasChanged" Fold
-                                        UseCase="@_form.Settings.UseCase" CustomJob="@_form.Settings.CustomRole" Industry="@_form.Settings.Industry" Business="@Business" />
-                        <section class="agent-detail__group" aria-labelledby="agent-can-title">
-                            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
-                            <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Actions" ShowAlways="false" />
-                        </section>
+                        var toldJob = Told(agent);
+                        if (!toldJob)
+                        {
+                            @* Not told its job yet: it happens in a view of its own (designer, 19 October 2026). *@
+                            var kept = Drafts.ProgressOf(agent.Id);
+                            <section class="agent-detail__card agent-detail__job-empty">
+                                <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiChatSmile3Fill"
+                                            Title="@($"{agent.Name} doesn't know its job yet")"
+                                            Description="@(kept is { Next: { } next } ? $"You got as far as {LowerFirst(next)}. It picks up from there." : $"Tell {agent.Name} what to do, what never to do, and when to bring you in. A few minutes, one topic at a time.")">
+                                    <Action>
+                                        <Button @onclick="OpenTelling">@(kept is null ? $"Tell {agent.Name} its job" : "Continue")</Button>
+                                    </Action>
+                                </EmptyState>
+                            </section>
+                        }
+                        else
+                        {
+                            @* Its job (designer, 20 October 2026): what it does, read as one summary, and one way to
+                               change it, telling it in its own view, where the change shows before it goes in. *@
+                            <section class="agent-detail__card agent-detail__job-card" aria-labelledby="agent-job-title">
+                                <header class="agent-detail__job-head">
+                                    <span class="agent-detail__fact-icon"><Icon Name="@(AgentUseCase.Of(_form.Settings.UseCase)?.Icon ?? AgentRole.Of(_form.Settings.Role).Icon)" Size="IconSize.Md" /></span>
+                                    <div class="agent-detail__row-text">
+                                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-job-title">@($"{agent.Name}'s job")</Typography>
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@_form.RoleName</Typography>
+                                    </div>
+                                    <div class="agent-detail__job-actions">
+                                        @if (_canSpeak)
+                                        {
+                                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-pressed="@(_hearing ? "true" : "false")" @onclick="HearJobAsync">
+                                                <IconLeft><Icon Name="@(_hearing ? IconName.RiStopFill : IconName.RiPlayFill)" /></IconLeft>
+                                                <ChildContent>@(_hearing ? "Stop" : "Hear it")</ChildContent>
+                                            </Button>
+                                        }
+                                        <Button Size="ButtonSize.Small" @onclick="() => OpenUpdateAsync()">
+                                            <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                                            <ChildContent>@($"Update {agent.Name}'s job")</ChildContent>
+                                        </Button>
+                                    </div>
+                                </header>
+                                <div class="agent-detail__job-body">@JobSummary(JobBrief, _freshLines, null, aloud: true)</div>
+                            </section>
+                            <section class="agent-detail__group" aria-labelledby="agent-can-title">
+                                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
+                                <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Actions" ShowAlways="false" />
+                            </section>
+                        }
                         break;
                     case "knowledge":
                         @* The business's knowledge, shared by every agent: what this one uses
@@ -446,13 +523,108 @@ else
             </div>
         }
 
-        @* One save bar for the page, at its end, so it stays at the
+        @* Concept B: one save bar for the page, at its end, so it stays at the
            window's foot however long the tab (designer, 15 October). *@
         @if (Dirty && (IsConfigTab(_activeTab) || _activeTab == "overview"))
         {
             @SaveBar(agent)
         }
     </main>
+}
+
+@if (_form is not null && AiAgentsState.GetAgent(AgentId) is { } telling)
+{
+    var told = Told(telling);
+    <FocusView Open="_telling" Title="@ViewTitle(telling)" OnClose="() => CloseViewAsync(telling)" Busy="_saving" Class="agent-detail__telling">
+        <Center>
+            @if (!_toldNow && _jobView != JobView.Update)
+            {
+                <SectionOutlet SectionName="@TellTopics" />
+            }
+        </Center>
+        <ChildContent>
+            @if (_toldNow && told)
+            {
+                @* The end (designer, 19 October 2026): it knows its job. What it will do, in its job
+                   description's own sentences (still what they're approving), and the way on. *@
+                <section class="agent-detail__told" aria-labelledby="agent-told-title">
+                    <div class="agent-detail__told-face" aria-hidden="true">
+                        <img src="@AgentBuilderCopy.MascotImage(telling.Mascot)" alt="" />
+                        <span class="agent-detail__told-tick"><Icon Name="IconName.RiCheckFill" Size="IconSize.Md" /></span>
+                    </div>
+                    <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2" id="agent-told-title">@KnowsTitle(telling)</Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-detail__told-lede">@($"Here's what you told {telling.Name}:")</Typography>
+                    @{ var toldLines = JobBrief.Sentences() ?? []; }
+                    <ul class="agent-detail__told-list">
+                        @foreach (var (sentence, index) in toldLines.Take(ToldShown).Select((sentence, index) => (sentence, index)))
+                        {
+                            <li style="@($"--ds-told-at: {index}")">
+                                <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@sentence</Typography>
+                            </li>
+                        }
+                    </ul>
+                    @if (toldLines.Count > ToldShown)
+                    {
+                        @* The rest are in its job description, a click away. *@
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="agent-detail__told-more" style="@($"--ds-told-at: {ToldShown}")" @onclick="@(() => FinishTelling("job"))">@($"And {toldLines.Count - ToldShown} more, in its job description")</Button>
+                    }
+                    @if (_toldNote is { Length: > 0 } note)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="agent-detail__told-note">@note</Typography>
+                    }
+                    <div class="agent-detail__told-actions">
+                        @if (Briefing.CanTry)
+                        {
+                            <Button Size="ButtonSize.Large" @onclick="TestAfterTelling">@($"Test {telling.Name} as a customer")</Button>
+                        }
+                        else
+                        {
+                            <Button Size="ButtonSize.Large" @onclick="@(() => FinishTelling("overview"))">Done</Button>
+                        }
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Large" @onclick="@(() => FinishTelling("job"))">Change something</Button>
+                    </div>
+                </section>
+            }
+            else if (_jobView == JobView.Update)
+            {
+                @* Updating it (designer, 20 October 2026): its job now, to talk about, and its main job, to change
+                   by telling it its new one; then what's changed, shown before it goes in. *@
+                <div class="agent-detail__update-now">
+                    <div class="agent-detail__update-head">
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="h3" Class="agent-detail__update-label">Its job now</Typography>
+                        <FilterPopover Label="@($"Main job: {_form.RoleName}")" Title="Its main job" Subtitle="@($"Pick a new one and {telling.Name} asks you about it. Its job stays as it is until you finish.")" AlignEnd Open="@(_menu == "job")" OpenChanged="JobMenu">
+                            @foreach (var useCase in AgentUseCase.All.Where(item => item.Id != AgentUseCase.Custom || _form.Settings.UseCase == AgentUseCase.Custom))
+                            {
+                                var current = useCase;
+                                <PopoverOption Label="@current.Name" Description="@current.Does" Active="@(_form.Settings.UseCase == current.Id)" OnSelect="() => StartNewJob(current)" />
+                            }
+                        </FilterPopover>
+                    </div>
+                    @JobSummary(JobBrief, [], _focusLine)
+                </div>
+                <AgentJobEditor @key="@($"update-{telling.Id}")" Brief="JobBrief" Name="@_form.DisplayName" Mascot="@_form.Mascot" Settings="_form.Settings" OnChange="StateHasChanged"
+                                UseCase="@_form.Settings.UseCase" CustomJob="@_form.Settings.CustomRole" Industry="@_form.Settings.Industry" Business="@Business"
+                                HideSummary OnUpdated="update => JobUpdatedAsync(telling, update)" />
+            }
+            else
+            {
+            var newJob = _jobView == JobView.NewJob && _newSettings is not null;
+            var settings = newJob ? _newSettings! : _form.Settings;
+            if (!told || newJob)
+            {
+                <div class="agent-detail__job-intro">
+                    <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2">@(newJob ? $"{Greeting}. Let's talk about my new job." : $"{Greeting}, I'm {telling.Name}.") <span class="agent-detail__job-ask">@JobAsk(settings.UseCase)</span></Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-detail__job-lede">@(newJob ? "Until we finish, my job stays as it is." : "One topic at a time. Leave whenever you like.")</Typography>
+                </div>
+            }
+            <AgentJobEditor @key="@(newJob ? $"new-{settings.UseCase}" : $"tell-{telling.Id}")" Brief="@(settings.Brief ?? JobBrief)" Name="@_form.DisplayName" Mascot="@_form.Mascot" Settings="settings" OnChange="StateHasChanged"
+                            UseCase="@settings.UseCase" CustomJob="@settings.CustomRole" Industry="@settings.Industry" Business="@Business"
+                            DraftKey="@(newJob ? null : telling.Id)" OnWritten="noted => newJob ? NewJobToldAsync(telling, noted) : JobToldAsync(telling, noted)"
+                            TopicsSection="@TellTopics" HideSummary />
+            }
+        </ChildContent>
+    </FocusView>
 }
 
 @if (_form is not null && Briefing.CanTry)
@@ -490,11 +662,32 @@ else
     // ?tab=settings: sent here to change its settings (the card's menu).
     [SupplyParameterFromQuery(Name = "tab")] public string? TabQuery { get; set; }
 
-    // ?created=1: just created, as a draft.
+    // ?created=1: just created in Concept B's flow, as a draft.
     [SupplyParameterFromQuery(Name = "created")] public string? Created { get; set; }
 
     // ?test=1: "Test Ada" on the dashboard; the test chat opens, once.
     [SupplyParameterFromQuery(Name = "test")] public string? Test { get; set; }
+
+    // Telling it its job, in the view of its own: opened only from Start (Overview) or the Job tab, never by itself.
+    private bool _telling;
+
+    // What the view is doing: telling it its job the first time, updating it, or telling it a new main job.
+    private enum JobView { Tell, Update, NewJob }
+    private JobView _jobView = JobView.Tell;
+
+    // A new main job being told: its settings, kept apart until it's finished (closing leaves everything as it was).
+    private AgentSettings? _newSettings;
+
+    // The last update, for its Undo, and the sentences it added, lit for a moment in the summary.
+    private AgentJobEditor.JobUpdate? _lastUpdate;
+    private IReadOnlyCollection<string> _freshLines = [];
+
+    // Hear it: its job description read aloud, each sentence reached lighting in turn.
+    private bool _canSpeak, _hearing;
+    private int _readKey;
+    private ElementReference _summaryText;
+    private VoiceSpeech? _speech;
+    private DotNetObjectReference<AiAgentDetail>? _self;
 
     // ── Its sections ────────────────────────────────────────────────────────
 
@@ -515,29 +708,27 @@ else
     private bool _testing, _createdDismissed, _reading, _openedOnJob, _createdSaid, _testAsked;
     private string? _menu;
     private void JobMenu(bool open) => _menu = open ? "job" : null;
-    private void IndustryMenu(bool open) => _menu = open ? "industry" : null;
     private int _siteWaiting;
-    private AgentJobEditor? _jobEditor;
+    // A sentence to change, from the test chat ("Change this"): marked in its job now, in the update view.
     private string? _focusLine;
 
-    // Every agent has a job description here; one set up before job descriptions starts from its description.
+    // Every agent has a job description here; one set up in Concept A starts from its description.
     private AgentBrief JobBrief => _form?.Settings.Brief ?? new();
 
-    private void ChooseUseCase(AgentUseCase useCase)
+    // A new main job, from the update view: it's told its new job, its own topics, on a copy of its settings with
+    // no job description yet; finished, that copy becomes its settings. Until then nothing about it changes.
+    private void StartNewJob(AgentUseCase useCase)
     {
-        if (_form is null) return;
-        _form.Settings.UseCase = useCase.Id;
-        _form.Settings.Role = useCase.Role;
-        if (useCase.Role == AgentRoleTemplate.Custom && useCase.Id != AgentUseCase.Custom) _form.Settings.CustomRole = useCase.Name;
         _menu = null;
-    }
-
-    private async Task ChooseIndustry(AgentIndustry industry)
-    {
-        if (_form is null) return;
-        _form.Settings.Industry = industry.Id;
-        _menu = null;
-        await Task.CompletedTask;
+        if (_form is null || useCase.Id == _form.Settings.UseCase) return;
+        var settings = _form.Settings.Copy();
+        settings.UseCase = useCase.Id;
+        settings.Role = useCase.Role;
+        if (useCase.Role == AgentRoleTemplate.Custom && useCase.Id != AgentUseCase.Custom) settings.CustomRole = useCase.Name;
+        settings.Brief = new AgentBrief();
+        _newSettings = settings;
+        _focusLine = null;
+        _jobView = JobView.NewJob;
     }
 
     private async Task ReadWebsiteAsync()
@@ -569,20 +760,20 @@ else
         _siteWaiting = snapshot.Facts.Count(fact => fact.Source == site && fact.State == Parrot.Web.Features.Dashboard.Knowledge.FactState.ToConfirm);
     }
 
-    // "Change this", from the test chat: its sentence, on Job description.
-    private void ChangeLine(string target)
+    // "Change this", from the test chat: the update view, that sentence marked in its job now.
+    private async Task ChangeLine(string target)
     {
         _testing = false;
         _activeTab = "job";
-        _focusLine = target;
+        await OpenUpdateAsync(target);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_focusLine is { } line && _jobEditor is not null)
+        if (firstRender)
         {
-            _focusLine = null;
-            _jobEditor.Focus(line);
+            try { _canSpeak = (await Voice.CapabilitiesAsync()).Speak; StateHasChanged(); }
+            catch (JSException) { }
         }
         if (_activeTab == "knowledge" && _countedFor != _formFor)
         {
@@ -625,11 +816,220 @@ else
         TeachAi.Changed += KnowledgeChanged;
         Intro.Changed += IntroChanged;
         AiAgentsState.Changed += OnAgentsChanged;
+        Drafts.Changed += OnAgentsChanged;
         await AiAgentsState.LoadAsync();
         ResetIfNew();
         await LoadKnowledgeAsync();
         // The channels it can answer on are the ones connected now.
         _channels = await Gate.ConnectedAsync();
+        try { _firstName = (await Profile.GetAsync()).FirstName?.Trim(); }
+        catch (HttpRequestException) { }
+    }
+
+    // "Hi Ada" when the profile has a first name, "Hi" when it doesn't.
+    private string? _firstName;
+    private string Greeting => _firstName is { Length: > 0 } name ? $"Hi {name}" : "Hi";
+
+    // Told its job: a job description, written and approved (an agent from before job descriptions has its description).
+    private static bool Told(AiAgent agent) => agent.Settings.Brief is { IsEmpty: false } || (agent.Settings.Brief is null && !string.IsNullOrWhiteSpace(agent.Description));
+
+    private static string LowerFirst(string text) => text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1]) ? char.ToLowerInvariant(text[0]) + text[1..] : text;
+
+    private string ViewTitle(AiAgent agent) => _jobView switch
+    {
+        JobView.Update => $"Update {agent.Name}'s job",
+        JobView.NewJob => $"Tell {agent.Name} its new job",
+        _ => $"Tell {agent.Name} its job",
+    };
+
+    // What it asks, in its job's words: how it should do that job.
+    private static string JobAsk(string? useCase) => useCase switch
+    {
+        "support" => "How should I help your customers?",
+        "sales" => "How should I take your orders?",
+        "tracking" => "How should I keep customers updated on their orders?",
+        "bookings" => "How should I book your customers in?",
+        "followups" => "When should I follow up with your customers?",
+        _ => "What should I do for your customers?",
+    };
+
+    private void OpenTelling()
+    {
+        _jobView = JobView.Tell;
+        _toldNow = false;
+        _telling = true;
+    }
+
+    private async Task OpenUpdateAsync(string? line = null)
+    {
+        await StopHearingAsync();
+        _focusLine = line;
+        _newSettings = null;
+        _jobView = JobView.Update;
+        _toldNow = false;
+        _telling = true;
+    }
+
+    // Closing the view. Telling it: nothing is lost (below). Updating it: a change not yet approved is let go.
+    // A new main job not finished: everything stays as it was, and it says so.
+    private async Task CloseViewAsync(AiAgent agent)
+    {
+        var view = _jobView;
+        if (view == JobView.Tell || _toldNow) { await CloseTellingAsync(agent); return; }
+        _telling = false;
+        _menu = null;
+        _focusLine = null;
+        _jobView = JobView.Tell;
+        if (view == JobView.NewJob && _newSettings is not null)
+        {
+            _newSettings = null;
+            Toasts.Show($"Nothing changed. {agent.Name}'s job is as it was.");
+        }
+    }
+
+    // A change approved in the view: kept at once; the view closes on its job, the change lit, with Undo.
+    private async Task JobUpdatedAsync(AiAgent agent, AgentJobEditor.JobUpdate update)
+    {
+        await SaveAsync(agent, quiet: true);
+        _telling = false;
+        _jobView = JobView.Tell;
+        _focusLine = null;
+        _activeTab = "job";
+        if (_saveError is not null) { Toasts.ShowError("We couldn't save that change. Try again from Save changes."); return; }
+        _lastUpdate = update;
+        _freshLines = update.Added;
+        Toasts.Show(new ToastMessage($"Updated {agent.Name}'s job.", ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(UndoUpdateAsync)));
+    }
+
+    private async Task UndoUpdateAsync()
+    {
+        if (_lastUpdate is not { } update || _form?.Settings.Brief is not { } brief || AiAgentsState.GetAgent(AgentId) is not { } agent) return;
+        brief.Summary = update.Before.Summary;
+        if (update.RulesBefore is { } rules) rules.Restore(_form.Settings);
+        _lastUpdate = null;
+        _freshLines = [];
+        await SaveAsync(agent, $"Undone. {agent.Name}'s job is as it was.");
+        StateHasChanged();
+    }
+
+    // Its new main job, told: its settings now, kept, and the view ends on what it knows how to do.
+    private async Task NewJobToldAsync(AiAgent agent, string? noted)
+    {
+        if (_form is null || _newSettings is null) return;
+        _form.Settings = _newSettings;
+        await JobToldAsync(agent, noted);
+        _newSettings = null;
+    }
+
+    private async Task HearJobAsync()
+    {
+        if (_hearing) { await StopHearingAsync(); return; }
+        if (JobBrief.IsEmpty) return;
+        _self ??= DotNetObjectReference.Create(this);
+        _hearing = true;
+        try { _speech = await Voice.SpeakAsync(_summaryText, string.Join(" ", JobBrief.Sentences()), _self, nameof(HeardAsync), _summaryText); }
+        catch (JSException) { _hearing = false; }
+    }
+
+    [JSInvokable]
+    public Task HeardAsync() => InvokeAsync(async () => { await StopHearingAsync(); StateHasChanged(); });
+
+    private async Task StopHearingAsync()
+    {
+        if (!_hearing && _speech is null) return;
+        _hearing = false;
+        _readKey++;
+        if (_speech is { } speech) { _speech = null; await speech.DisposeAsync(); }
+    }
+
+    // Its job description as one summary, a sentence at a time underneath: those just added lit for a moment,
+    // one to change marked, and (aloud) each one reached as it is read.
+    private RenderFragment JobSummary(AgentBrief brief, IReadOnlyCollection<string> fresh, string? focus, bool aloud = false) => __builder =>
+    {
+        var sentences = brief.Sentences();
+        RenderFragment text = __builder =>
+        {
+            var at = 0;
+            <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                @foreach (var sentence in sentences)
+                {
+                    var start = at;
+                    at += sentence.Length + 1;
+                    <span data-at="@start" class="@(fresh.Contains(sentence) ? "is-new" : focus == sentence ? "is-focus" : null)">@(sentence + " ")</span>
+                }
+            </Typography>
+        };
+        if (aloud)
+        {
+            <div class="@($"agent-detail__job-summary{(_hearing ? " is-reading" : null)}")" @ref="_summaryText" @key="_readKey">@text</div>
+        }
+        else
+        {
+            <div class="agent-detail__job-summary">@text</div>
+        }
+    };
+
+    // Closing the view: nothing is lost. Each approval is kept (it says where it will pick up), and
+    // what was added or changed once it was told is saved, as the page's save bar is behind the view.
+    private async Task CloseTellingAsync(AiAgent agent)
+    {
+        if (Told(agent) && Dirty) await SaveAsync(agent);
+        _telling = false;
+        _toldNow = false;
+        if (!Told(agent) && Drafts.ProgressOf(agent.Id) is { Next: { } next })
+            Toasts.Show($"Saved. We'll pick up at {LowerFirst(next)}.");
+    }
+
+    // Its first job description, written and approved: kept at once, no Save changes for it; then the
+    // view says it knows its job (no toast: the moment says it).
+    private bool _toldNow;
+    private string? _toldNote;
+
+    // The view's bar shows the conversation's topics, from the editor inside it.
+    private const string TellTopics = "agent-detail-tell-topics";
+
+    // The ending shows this many of its lines; the rest are in the job description.
+    private const int ToldShown = 6;
+
+    // What it now knows how to do, in the words of its job (designer, 19 October 2026).
+    private static string KnowsTitle(AiAgent agent) => agent.Settings.UseCase switch
+    {
+        "support" => $"{agent.Name} knows how to help your customers",
+        "sales" => $"{agent.Name} knows how to take your orders",
+        "tracking" => $"{agent.Name} knows how to keep customers updated on their orders",
+        "bookings" => $"{agent.Name} knows how to book your customers in",
+        "followups" => $"{agent.Name} knows when to follow up",
+        _ => $"{agent.Name} knows its job",
+    };
+
+    private async Task JobToldAsync(AiAgent agent, string? noted)
+    {
+        if (_form is null) return;
+        if (_form.Settings.Brief is { } brief) AgentBriefDefaults.Follow(_form.Settings, brief.Sentences());
+        await SaveAsync(agent, quiet: true);
+        // Not kept: said over the view (its save bar is behind it), and the view stays where it is.
+        if (_saveError is not null) { Toasts.ShowError($"We couldn't save {agent.Name}'s job description. Check your connection and try again."); return; }
+        if (AiAgentsState.GetAgent(agent.Id) is { } saved && Told(saved))
+        {
+            _toldNote = noted;
+            _toldNow = true;
+        }
+    }
+
+    // From the moment: on to a test (over its Overview), or to its job description to change something.
+    private void TestAfterTelling()
+    {
+        FinishTelling("overview");
+        _testing = true;
+    }
+
+    private void FinishTelling(string tab)
+    {
+        _telling = false;
+        _toldNow = false;
+        _jobView = JobView.Tell;
+        _newSettings = null;
+        _activeTab = tab;
     }
 
     private async Task RetryLoadAsync()
@@ -659,11 +1059,13 @@ else
             if (CurrentTabs.Any(t => t.Id == asked)) _activeTab = asked!;
         }
         ResetIfNew();
-        // Just created: said once, as a toast, not a banner over the page.
+        // Just created (Concept B): said once, as a toast, not a banner over the page.
         if (Created == "1" && !_createdSaid && AiAgentsState.GetAgent(AgentId) is { IsDraft: true } created)
         {
             _createdSaid = true;
-            Toasts.Show($"{created.Name} was created as a draft. It won't reply to anyone until you turn it on.");
+            Toasts.Show(Told(created)
+                ? $"{created.Name} was created as a draft. It won't reply to anyone until you turn it on."
+                : $"{created.Name} was created as a draft. Next, tell {created.Name} its job.");
         }
         if (Test == "1" && !_testAsked && Briefing.CanTry && AiAgentsState.GetAgent(AgentId) is not null)
         {
@@ -779,12 +1181,14 @@ else
     }
 
     private string TurnOnReadinessLine(AiAgent agent) =>
-        agent.ChannelCount == 0 ? "Choose where it should answer under Channels."
+        !Told(agent) ? $"After {agent.Name} knows its job, it can start answering customers."
+        : agent.ChannelCount == 0 ? "Choose where it should answer under Channels."
         : !KnowledgeReady ? "Review and approve your business knowledge first."
         : $"Ready for new matching conversations on {AgentBuilderCopy.ChannelList(agent)}.";
 
     private string? TurnOnTitle(AiAgent agent) =>
-        agent.ChannelCount == 0 ? "Choose where it answers first, on Overview."
+        !Told(agent) ? $"Tell {agent.Name} its job first."
+        : agent.ChannelCount == 0 ? "Choose where it answers first, on Overview."
         : null;
 
     // The agent's figures changed, possibly off the circuit's thread (a push
@@ -796,6 +1200,9 @@ else
         TeachAi.Changed -= KnowledgeChanged;
         Intro.Changed -= IntroChanged;
         AiAgentsState.Changed -= OnAgentsChanged;
+        Drafts.Changed -= OnAgentsChanged;
+        if (_speech is { } speech) _ = speech.DisposeAsync().AsTask();
+        _self?.Dispose();
     }
 
     private string Business => AuthState.CurrentUser?.BusinessName ?? string.Empty;
@@ -814,14 +1221,14 @@ else
     {
         _form = AgentForm.From(agent);
         _formFor = agent.Id;
-        // A job description to edit, even for an agent set up without one (before job descriptions): its description to start.
+        // A job description to edit, even for an agent set up without one (Concept A): its description to start.
         _form.Settings.Brief ??= new() { Summary = agent.Description };
         _saved = _form.Snapshot();
         _tried = false;
     }
 
     // The changes go onto a copy; the agent shown changes only once saved.
-    private async Task SaveAsync(AiAgent agent)
+    private async Task SaveAsync(AiAgent agent, string? said = null, bool quiet = false)
     {
         _tried = true;
         if (_form is null || !_form.HasName || !_form.HasRoleName || _saving) return;
@@ -834,7 +1241,7 @@ else
             await AiAgentsState.SaveAsync(changed);
             _saved = _form.Snapshot();
             _tried = false;
-            Toasts.Show($"Saved. {changed.Name} works this way from now on.");
+            if (!quiet) Toasts.Show(said ?? $"Saved. {changed.Name} works this way from now on.");
         }
         catch (Exception exception) when (AiAgentsState.IsFailure(exception))
         {
@@ -933,7 +1340,7 @@ else
 
     private string ChannelDetail(AiAgent agent)
     {
-        // The Overview already says a draft isn't answering, so the row only names where.
+        // Concept B: the Overview already says a draft isn't answering, so the row only names where.
         if (agent.IsDraft && agent.ChannelCount > 0) return $"{AgentBuilderCopy.ChannelList(agent)}.";
         var status = agent.IsDraft && !Capabilities.CanReply ? "A draft: it answers no one yet."
             : agent.IsDraft ? "A draft: it answers no one until you turn it on."
@@ -967,7 +1374,7 @@ else
         index == count - 1 ? "Today" : DateTime.Today.AddDays(index - (count - 1)).ToString("ddd");
 
     // One plain sentence about how the agent works, under its icon.
-    // A line of "How it's set up" that opens the tab where it is set.
+    // A line of "How it's set up" that opens the tab where it is set (Concept B).
     // One save bar for every tab with settings. A save that fails keeps every
     // change, and says so in the bar, where the person is looking.
     private RenderFragment SaveBar(AiAgent agent) => __builder =>

@@ -43,7 +43,7 @@ public sealed class BusinessIntroState(IBusinessKnowledge knowledge, IKnowledgeM
     /// <summary>
     /// "Add to business knowledge" (AI Operations, an agent's page): the same
     /// dialog, to say more; every agent uses what is added. The one way to add
-    /// business knowledge (designer, 14 October 2026).
+    /// business knowledge in Concept B (designer, 14 October 2026).
     /// </summary>
     public void AddMore()
     {

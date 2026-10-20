@@ -106,7 +106,7 @@
     </section>
 }
 
-@* Agent setup shows its own short "Always" list instead. *@
+@* Concept B of setup shows its own short "Always" list instead. *@
 @if (ShowSafety)
 {
     <section class="agent-basics__section" aria-labelledby="@($"{_id}-safety")">
@@ -182,10 +182,10 @@
 @code {
     [Parameter, EditorRequired] public AgentForm Form { get; set; } = default!;
 
-    /// <summary>The name and look; off on a tab that shows something else.</summary>
+    /// <summary>The name and look; off on a tab that shows something else (Concept B).</summary>
     [Parameter] public bool ShowIdentity { get; set; } = true;
 
-    /// <summary>Where it answers; off on a tab that shows something else.</summary>
+    /// <summary>Where it answers; off on a tab that shows something else (Concept B).</summary>
     [Parameter] public bool ShowChannels { get; set; } = true;
 
     /// <summary>The "Keeping it safe" rules; off where a page shows its own.</summary>
