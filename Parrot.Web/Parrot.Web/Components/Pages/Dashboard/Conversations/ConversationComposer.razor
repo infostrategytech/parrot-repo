@@ -30,7 +30,7 @@
         {
             <div class="conversation-composer__disclosure is-note">
                 <Icon Name="IconName.RiLock2Fill" />
-                <Typography TextStyle="TextStyle.Small10Medium" As="span">Only teammates can see this note. It will show your name and timestamp.</Typography>
+                <Typography TextStyle="TextStyle.Small10Medium" As="span">Only your team sees this note. It's never sent to the customer.</Typography>
             </div>
         }
         else if (Conversation.Channel == "facebook" && !string.IsNullOrWhiteSpace(AttachmentName))
