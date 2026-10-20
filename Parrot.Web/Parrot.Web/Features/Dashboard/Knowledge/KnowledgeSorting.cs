@@ -33,6 +33,14 @@ public static class KnowledgeSorting
         return new(Guid.NewGuid().ToString("N"), sorted, sentence, FactState.Known, null, DateTimeOffset.UtcNow, label);
     }
 
+    /// <summary>A fact with no section yet (found, not yet approved), put in one; one that has a section keeps it.</summary>
+    public static KnowledgeFact Placed(KnowledgeFact fact)
+    {
+        if (fact.Label.Length > 0) return fact;
+        var sorted = New(fact.Text, null);
+        return fact with { Topic = sorted.Topic, Label = sorted.Label };
+    }
+
     /// <summary>One fact a sentence, as a memory list keeps them short.</summary>
     public static IEnumerable<string> Sentences(string text) =>
         Regex.Split(text.Trim(), @"(?<=[.!?])\s+|\n+")

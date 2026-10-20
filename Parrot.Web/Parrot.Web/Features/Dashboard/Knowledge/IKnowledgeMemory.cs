@@ -63,8 +63,11 @@ public interface IKnowledgeMemory
 
     Task<KnowledgeFact> UpdateAsync(string id, string text, CancellationToken cancellationToken = default);
 
-    /// <summary>"Yes, that's right": a found fact becomes known.</summary>
-    Task ConfirmAsync(string id, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// "Yes, that's right": a found fact becomes known, in the section the AI puts it in (a found fact may
+    /// have no section until then: its label is empty). Returns it as it is now.
+    /// </summary>
+    Task<KnowledgeFact> ConfirmAsync(string id, CancellationToken cancellationToken = default);
 
     Task DeleteAsync(string id, CancellationToken cancellationToken = default);
 
@@ -98,7 +101,7 @@ public sealed class UnavailableKnowledgeMemory : IKnowledgeMemory
     public Task<KnowledgeSnapshot> ListAsync(CancellationToken cancellationToken = default) => Task.FromResult(new KnowledgeSnapshot([], [], []));
     public Task<IReadOnlyList<KnowledgeFact>> AddAsync(string text, KnowledgeTopic? topic = null, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<KnowledgeFact> UpdateAsync(string id, string text, CancellationToken cancellationToken = default) => throw new NotSupportedException();
-    public Task ConfirmAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
+    public Task<KnowledgeFact> ConfirmAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task DeleteAsync(string id, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task<KnowledgeFact> MoveAsync(string id, string label, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task RestoreAsync(KnowledgeFact fact, CancellationToken cancellationToken = default) => throw new NotSupportedException();

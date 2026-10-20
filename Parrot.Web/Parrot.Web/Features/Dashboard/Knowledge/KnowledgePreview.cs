@@ -65,19 +65,19 @@ public sealed class KnowledgePreview(IConfiguration configuration, IJSRuntime js
     {
         var facts = await FactsAsync();
         var index = Find(facts, id);
-        var updated = facts[index] with { Text = KnowledgeSorting.Tidy(text), State = FactState.Known, UpdatedAt = DateTimeOffset.UtcNow };
+        var updated = KnowledgeSorting.Placed(facts[index]) with { Text = KnowledgeSorting.Tidy(text), State = FactState.Known, UpdatedAt = DateTimeOffset.UtcNow };
         facts[index] = updated;
         await KeepAsync();
         return updated;
     }
 
-    public async Task ConfirmAsync(string id, CancellationToken cancellationToken = default)
+    public async Task<KnowledgeFact> ConfirmAsync(string id, CancellationToken cancellationToken = default)
     {
         var facts = await FactsAsync();
-        var index = facts.FindIndex(fact => fact.Id == id);
-        if (index < 0) return;
-        facts[index] = facts[index] with { State = FactState.Known, UpdatedAt = DateTimeOffset.UtcNow };
+        var index = Find(facts, id);
+        facts[index] = KnowledgeSorting.Placed(facts[index]) with { State = FactState.Known, UpdatedAt = DateTimeOffset.UtcNow };
         await KeepAsync();
+        return facts[index];
     }
 
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)

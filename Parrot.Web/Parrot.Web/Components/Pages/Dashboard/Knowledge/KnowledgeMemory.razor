@@ -51,13 +51,13 @@
                 <span class="knowledge__review-icon"><Icon Name="IconName.RiCheckDoubleFill" Size="IconSize.Md" /></span>
                 <div class="knowledge__review-copy">
                     <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">
-                        @(ReviewCount == 1 ? "1 detail needs your review" : $"{ReviewCount} details need your review")
+                        @(ReviewCount == 1 ? "1 thing to check" : $"{ReviewCount} things to check")
                     </Typography>
                     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge__muted">
-                        From your channels and questions your AI couldn't answer. Nothing is used until you approve it.
+                        Found on your channels, and questions your AI couldn't answer. About a minute; nothing is used until you say yes.
                     </Typography>
                 </div>
-                <Button Class="ds-no-shrink" @onclick="() => _reviewOpen = true">Review details</Button>
+                <Button Class="ds-no-shrink" @onclick="() => _reviewOpen = true">Check them</Button>
             </section>
         }
 
@@ -194,11 +194,12 @@
                 </ul>
             }
 
+            @* What it knows from Products & Services, kept there: a way there, and a reminder that it counts. *@
             <div class="knowledge__catalog-link">
                 <span class="knowledge__catalog-icon"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span>
                 <div>
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Products and prices</Typography>
-                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge__muted">Keep individual items, prices and availability in Products &amp; Services.</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge__muted">Your AI also knows your items, prices and availability from Products &amp; Services.</Typography>
                 </div>
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OpenCatalog">
                     <ChildContent>Open Products &amp; Services</ChildContent>
@@ -209,7 +210,8 @@
     }
 </main>
 
-<KnowledgeReview Store="Knowledge" Open="_reviewOpen" Snapshot="_snapshot" OnClose="() => _reviewOpen = false" OnChanged="ReloadAsync" />
+<KnowledgeReview Store="Knowledge" Open="_reviewOpen" Snapshot="_snapshot" OnClose="() => _reviewOpen = false" OnChanged="ReloadAsync"
+                 OnTest="() => { _reviewOpen = false; _testOpen = true; }" />
 <KnowledgeTest Open="_testOpen" Facts="KnownFacts" OnClose="() => _testOpen = false" OnTeach="TeachFromTest" />
 
 <Dialog Open="_linkOpen"

@@ -1,180 +1,189 @@
-.knowledge-review-shell {
-  /* Gaps in the token set: no border width or reduced-motion duration. */
-  --ds-review-b-hairline: 1px;
-  --ds-review-b-reduced-motion: 1ms;
-}
-
-.knowledge-review-shell ::deep .dialog { overflow: hidden auto; }
-.knowledge-review-shell ::deep .dialog__body { min-height: 0; }
-
+/* Checking what was found (designer, 20 October 2026): a deck in a full-screen view. The card on top, the
+   next ones peeking from behind; the decision under it; the card leaves right for yes, left for no, up for
+   later, and the next one rises into its place. */
 .knowledge-review {
-  display: grid;
-  gap: var(--spacing-lg);
-  color: var(--colors-text-primary);
-}
+  /* Missing from the token set: the card's width and least height, how far the cards behind peek, the tilt
+     and distance of a card leaving, and the stamp's border. */
+  --ds-review-card: 620px;
+  --ds-review-card-min: 300px;
+  --ds-review-peek: 10px;
+  --ds-review-tilt: 12deg;
+  --ds-review-fly: 130%;
+  --ds-review-hairline: 1px;
+  --ds-review-stamp: 2px;
+  /* The narrowest a choice gets before the two stack. */
+  --ds-review-claim: 220px;
+  /* With reduced motion, the cards change at once. */
+  --ds-review-instant: 1ms;
 
+  display: grid;
+  gap: var(--spacing-xl);
+  justify-items: center;
+  color: var(--colors-text-primary);
+  outline: 0;
+}
 .knowledge-review ::deep p,
+.knowledge-review ::deep h2,
 .knowledge-review ::deep h3 { margin: var(--spacing-none); }
 .knowledge-review ::deep .knowledge-review__muted { color: var(--colors-text-muted); }
 
-.knowledge-review__progress {
+/* The deck: the card, and two behind it. */
+.knowledge-review__deck {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(var(--spacing-xl), 1fr));
-  gap: var(--spacing-xs);
+  width: min(var(--ds-review-card), 100%);
+  padding-bottom: calc(var(--ds-review-peek) * 2);
 }
-.knowledge-review__progress > span {
-  height: var(--spacing-2xs);
-  background: var(--colors-surface-border);
-  border-radius: var(--radius-radius-full);
-  transition: background var(--ds-motion-base) var(--ds-motion-enter);
+.knowledge-review__behind {
+  position: absolute;
+  inset: 0 0 calc(var(--ds-review-peek) * 2);
+  background: var(--colors-surface-card);
+  border: var(--ds-review-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  transform-origin: 50% 100%;
+  transition: transform var(--ds-motion-base) var(--ds-motion-enter);
 }
-.knowledge-review__progress > .is-current { background: var(--colors-brand-primary); }
-.knowledge-review__progress > .is-done { background: var(--colors-feedback-success-text); }
-.knowledge-review__progress > .is-skipped { background: var(--colors-accent-amber-text); }
-
-.knowledge-review__said {
-  display: flex;
-  gap: var(--spacing-sm);
-  align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-  color: var(--colors-feedback-success-text);
-  background: var(--colors-feedback-success-subtle);
-  border-radius: var(--radius-radius-lg);
-}
+.knowledge-review__behind.is-1 { transform: translateY(var(--ds-review-peek)) scale(0.96); opacity: 0.8; }
+.knowledge-review__behind.is-2 { transform: translateY(calc(var(--ds-review-peek) * 2)) scale(0.92); opacity: 0.5; }
 
 .knowledge-review__card {
+  --swipe: 0;
+  --lift: 0;
+
+  position: relative;
+  z-index: 1;
   display: grid;
+  gap: var(--spacing-lg);
   align-content: start;
-  padding: var(--spacing-xl);
+  min-height: var(--ds-review-card-min);
+  padding: var(--spacing-2xl);
+  overflow: hidden;
   background: var(--colors-surface-card);
-  border: var(--ds-review-b-hairline) solid var(--colors-surface-border);
+  border: var(--ds-review-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-2xl);
-  box-shadow:
-    0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse),
-    inset 0 0 0 var(--ds-review-b-hairline) var(--colors-surface-card);
-  transform-origin: center;
-  will-change: opacity, transform;
-  animation: review-card-enter var(--ds-motion-slow) var(--ds-motion-enter) both;
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+  transform-origin: 50% 90%;
+  animation: review-card-rise var(--ds-motion-slow) var(--ds-motion-enter) both;
 }
+/* A found detail: where it came from at the top, the detail in the middle of the card. */
+.knowledge-review__card.is-found { grid-template-rows: auto 1fr auto; }
+.knowledge-review__body { display: grid; gap: var(--spacing-sm); align-content: center; padding-bottom: var(--spacing-xl); }
+.knowledge-review__card.is-yes { animation: review-card-yes var(--ds-motion-base) var(--ds-motion-exit) forwards; }
+.knowledge-review__card.is-no { animation: review-card-no var(--ds-motion-base) var(--ds-motion-exit) forwards; }
+.knowledge-review__card.is-later { animation: review-card-later var(--ds-motion-base) var(--ds-motion-exit) forwards; }
 
-.knowledge-review__card.is-approved { animation: review-card-up var(--ds-motion-slow) var(--ds-motion-exit) forwards; }
-.knowledge-review__card.is-rejected { animation: review-card-down var(--ds-motion-slow) var(--ds-motion-exit) forwards; }
-.knowledge-review__card.is-skipping { animation: review-card-skip var(--ds-motion-base) var(--ds-motion-exit) forwards; }
+@keyframes review-card-rise { from { opacity: 0.8; transform: translateY(var(--ds-review-peek)) scale(0.96); } }
+@keyframes review-card-yes { to { opacity: 0; transform: translateX(var(--ds-review-fly)) rotate(var(--ds-review-tilt)); } }
+@keyframes review-card-no { to { opacity: 0; transform: translateX(calc(var(--ds-review-fly) * -1)) rotate(calc(var(--ds-review-tilt) * -1)); } }
+@keyframes review-card-later { to { opacity: 0; transform: translateY(-40%) scale(0.96); } }
 
-.knowledge-review__card-top {
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--spacing-xl);
+/* The stamps: shown as a card leaves, and as it is dragged (--swipe from -1 to 1). */
+.knowledge-review__stamp {
+  position: absolute;
+  top: var(--spacing-xl);
+  z-index: 2;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  text-transform: uppercase;
+  background: var(--colors-surface-card);
+  border: var(--ds-review-stamp) solid currentColor;
+  border-radius: var(--radius-radius-md);
+  opacity: 0;
+  pointer-events: none;
 }
-.knowledge-review__step { color: var(--colors-text-subtle); }
+.knowledge-review__stamp.is-yes { left: var(--spacing-xl); color: var(--colors-feedback-success-text); transform: rotate(calc(var(--ds-review-tilt) * -1)); opacity: max(0, var(--swipe)); }
+.knowledge-review__stamp.is-no { right: var(--spacing-xl); color: var(--colors-feedback-destructive-text); transform: rotate(var(--ds-review-tilt)); opacity: max(0, calc(var(--swipe) * -1)); }
+.knowledge-review__card.is-yes .knowledge-review__stamp.is-yes,
+.knowledge-review__card.is-no .knowledge-review__stamp.is-no { opacity: 1; }
 
-.knowledge-review__content { display: grid; gap: var(--spacing-lg); }
-.knowledge-review__source {
-  display: flex;
-  gap: var(--spacing-xs);
-  align-items: center;
-  color: var(--colors-text-muted);
+/* What's on a card. */
+.knowledge-review__top { display: flex; flex-wrap: wrap; gap: var(--spacing-sm) var(--spacing-md); align-items: center; justify-content: space-between; }
+.knowledge-review__source { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.knowledge-review__source.is-warning { color: var(--colors-accent-amber-text); }
+.knowledge-review__goes {
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  color: var(--colors-accent-brand-text);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
 }
-.knowledge-review__source.is-neutral ::deep .ds-icon { color: var(--colors-accent-amber-text); }
+.knowledge-review__card ::deep .knowledge-review__ask { color: var(--colors-text-muted); }
+.knowledge-review__card ::deep .knowledge-review__detail { color: var(--colors-text-primary); }
+.knowledge-review__inline { display: flex; gap: var(--spacing-sm); justify-content: flex-end; }
 
-.knowledge-review__quote {
-  margin: var(--spacing-none);
-  padding: var(--spacing-xl);
-  color: var(--colors-text-primary);
-  background:
-    linear-gradient(135deg, var(--colors-accent-brand-subtle), transparent 58%),
-    var(--colors-surface-elevated);
-  border: var(--ds-review-b-hairline) solid var(--colors-accent-brand-border);
-  border-left: var(--spacing-xs) solid var(--colors-brand-primary);
+/* This or that. */
+.knowledge-review__claims { display: grid; grid-template-columns: repeat(auto-fit, minmax(var(--ds-review-claim), 1fr)); gap: var(--spacing-md); }
+.knowledge-review ::deep .knowledge-review__claim {
+  display: grid;
+  gap: var(--spacing-sm);
+  align-content: start;
+  padding: var(--spacing-lg);
+  text-align: left;
+  background: var(--colors-surface-muted);
+  border: var(--ds-review-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-xl);
+  transition: border-color var(--ds-motion-fast) var(--ds-motion-ease), background-color var(--ds-motion-fast) var(--ds-motion-ease);
 }
+.knowledge-review ::deep .knowledge-review__claim:hover,
+.knowledge-review ::deep .knowledge-review__claim:focus-visible { background: var(--colors-surface-card); border-color: var(--colors-brand-primary); }
+.knowledge-review ::deep .knowledge-review__use { color: var(--colors-brand-primary); }
+.knowledge-review__card ::deep .knowledge-review__neither { justify-self: center; }
 
-.knowledge-review__actions {
+/* The decision, on the card: under what it's about, a rule above it. */
+.knowledge-review__card-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm);
-  justify-content: flex-end;
-}
-.knowledge-review__actions.is-decision { justify-content: flex-start; }
-
-.knowledge-review__claims { display: grid; gap: var(--spacing-sm); }
-.knowledge-review ::deep .knowledge-review__claim {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--spacing-xs) var(--spacing-md);
-  width: 100%;
-  padding: var(--spacing-md);
-  color: var(--colors-text-primary);
-  text-align: left;
-  background: var(--colors-surface-elevated);
-  border: var(--ds-review-b-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-xl);
-  transition:
-    border-color var(--ds-motion-base) var(--ds-motion-enter),
-    transform var(--ds-motion-base) var(--ds-motion-enter);
-}
-.knowledge-review ::deep .knowledge-review__claim:hover {
-  border-color: var(--colors-accent-brand-border);
-  transform: translateY(calc(var(--spacing-2xs) * -1));
-}
-.knowledge-review ::deep .knowledge-review__claim > strong { align-self: end; }
-.knowledge-review ::deep .knowledge-review__claim > .knowledge-review__source { grid-column: 1; }
-.knowledge-review ::deep .knowledge-review__claim > .knowledge-review__use { grid-column: 2; grid-row: 1 / span 2; align-self: center; color: var(--colors-brand-primary); opacity: 0; transition: opacity var(--ds-motion-fast) var(--ds-motion-ease); }
-/* "Use this" shows on the choice under the pointer or the keyboard: one tap picks it. */
-.knowledge-review ::deep .knowledge-review__claim:hover > .knowledge-review__use,
-.knowledge-review ::deep .knowledge-review__claim:focus-visible > .knowledge-review__use { opacity: 1; }
-
-.knowledge-review__under-card {
-  display: flex;
-  gap: var(--spacing-md);
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
+  margin-top: auto;
+  padding-top: var(--spacing-lg);
+  border-top: var(--ds-review-hairline) solid var(--colors-surface-border);
 }
+.knowledge-review__card.is-found .knowledge-review__card-actions > ::deep .ds-button:first-child { margin-right: auto; }
+.knowledge-review__under { display: flex; gap: var(--spacing-md); align-items: center; justify-content: space-between; width: min(var(--ds-review-card), 100%); }
+.knowledge-review__last { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-secondary); }
+.knowledge-review__last ::deep .ds-icon { color: var(--colors-feedback-success-text); }
+.knowledge-review__under ::deep .knowledge-review__hint { color: var(--colors-text-subtle); }
+.knowledge-review__under ::deep .knowledge-review__hint.is-swipe { display: none; }
 
-.knowledge-review__done {
+/* The end. */
+.knowledge-review__end { display: grid; gap: var(--spacing-md); justify-items: center; max-width: var(--ds-review-card); text-align: center; }
+.knowledge-review__end-mark {
   display: grid;
-  justify-items: center;
-  gap: var(--spacing-md);
-  padding: var(--spacing-4xl) var(--spacing-xl);
-  text-align: center;
+  place-items: center;
+  width: calc(var(--spacing-4xl) + var(--spacing-lg));
+  height: calc(var(--spacing-4xl) + var(--spacing-lg));
+  margin-bottom: var(--spacing-sm);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
+  animation: review-end-mark var(--ds-motion-slow) var(--ds-motion-enter) both;
 }
-.knowledge-review__done > span { color: var(--colors-accent-amber-text); }
-.knowledge-review__done > span.is-success { color: var(--colors-feedback-success-text); }
+.knowledge-review__end-mark.is-done { color: var(--colors-brand-primary-foreground); background: var(--colors-brand-primary); box-shadow: 0 0 0 var(--spacing-sm) var(--colors-accent-brand-subtle); }
+.knowledge-review__end-mark.is-paused { color: var(--colors-accent-amber-text); background: var(--colors-accent-amber-subtle); }
+@keyframes review-end-mark { from { opacity: 0; transform: scale(0.6); } }
+.knowledge-review__tally { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: center; margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.knowledge-review__tally li { padding: var(--spacing-xs) var(--spacing-md); color: var(--colors-text-secondary); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
+.knowledge-review__end-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: center; margin-top: var(--spacing-md); }
 
-@keyframes review-card-enter {
-  from { opacity: 0; transform: translateY(var(--spacing-lg)) scale(0.985); }
-  to { opacity: 1; transform: translateY(0) scale(1); }
+/* A phone (a finger, not a mouse): a found detail is swiped; the card follows the finger without scrolling the view. */
+@media (pointer: coarse) {
+  .knowledge-review__card[data-swipe="true"] { touch-action: none; user-select: none; }
+  .knowledge-review__card.is-dragging { animation: none; transition: none; }
+  .knowledge-review__under ::deep .knowledge-review__hint.is-swipe { display: inline; }
 }
-
-@keyframes review-card-up {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(-24%) scale(0.975); }
-}
-
-@keyframes review-card-down {
-  from { opacity: 1; transform: translateY(0) scale(1); }
-  to { opacity: 0; transform: translateY(24%) scale(0.975); }
-}
-
-@keyframes review-card-skip {
-  from { opacity: 1; transform: translateX(0) scale(1); }
-  to { opacity: 0; transform: translateX(-8%) scale(0.985); }
-}
-
 @media (max-width: 760px) {
-  .knowledge-review__card { min-height: 0; padding: var(--spacing-lg); }
-  .knowledge-review__actions.is-decision { display: grid; }
-  .knowledge-review__actions.is-decision > ::deep .ds-button { width: 100%; }
-  .knowledge-review__under-card { align-items: flex-start; }
+  /* A shorter card on a phone (the token set has no card heights). */
+  .knowledge-review { --ds-review-card-min: 260px; gap: var(--spacing-lg); }
+  .knowledge-review__card { padding: var(--spacing-xl); }
+  .knowledge-review__card-actions > ::deep .ds-button { flex: 1 1 0; }
+  .knowledge-review__card.is-found .knowledge-review__card-actions > ::deep .ds-button:first-child { margin-right: 0; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .knowledge-review__card,
-  .knowledge-review__card.is-approved,
-  .knowledge-review__card.is-rejected,
-  .knowledge-review__card.is-skipping { animation-duration: var(--ds-review-b-reduced-motion); }
-  .knowledge-review ::deep .knowledge-review__claim { transition-duration: var(--ds-review-b-reduced-motion); }
-  .knowledge-review ::deep .knowledge-review__claim:hover { transform: none; }
+  .knowledge-review__card.is-yes,
+  .knowledge-review__card.is-no,
+  .knowledge-review__card.is-later,
+  .knowledge-review__end-mark { animation-duration: var(--ds-review-instant); }
+  .knowledge-review__behind { transition: none; }
 }

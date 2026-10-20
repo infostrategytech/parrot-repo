@@ -186,6 +186,8 @@
 .knowledge__topic-icon.is-teal { color: var(--colors-accent-teal-text); background: var(--colors-accent-teal-subtle); }
 .knowledge__topic-icon.is-violet { color: var(--colors-accent-violet-text); background: var(--colors-accent-violet-subtle); }
 
+
+/* Products and prices, at the foot of what it knows: quiet, as everything inside a card. */
 .knowledge__catalog-link {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
@@ -200,13 +202,13 @@
 .knowledge__catalog-icon { width: var(--ds-knowledge-icon); height: var(--ds-knowledge-icon); color: var(--colors-accent-teal-text); background: var(--colors-surface-card); }
 
 @media (max-width: 1024px) {
+  .knowledge__catalog-link { grid-template-columns: auto minmax(0, 1fr); }
+  .knowledge__catalog-link > ::deep .ds-button { grid-column: 1 / -1; justify-self: start; }
   .knowledge { padding: var(--spacing-xl) var(--spacing-md) var(--spacing-5xl); gap: var(--spacing-lg); }
   .knowledge__header { grid-template-columns: 1fr; align-items: start; }
   .knowledge__header > ::deep .ds-button { justify-self: start; }
   .knowledge__review { grid-template-columns: auto minmax(0, 1fr); }
   .knowledge__review > ::deep .ds-button { grid-column: 1 / -1; justify-self: start; }
-  .knowledge__catalog-link { grid-template-columns: auto minmax(0, 1fr); }
-  .knowledge__catalog-link > ::deep .ds-button { grid-column: 1 / -1; justify-self: start; }
 }
 
 @media (max-width: 760px) {
