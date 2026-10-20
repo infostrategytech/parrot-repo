@@ -139,6 +139,8 @@ else
     builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.LiveAgentCapabilities>();
 }
 builder.Services.AddScoped<AiAgentsState>();
+builder.Services.AddScoped<WorkspaceCreationState>();
+builder.Services.AddScoped<WorkspaceDirectoryState>();
 // Writing an agent's job description: until the agents API writes them, the
 // basic writer keeps the owner's words as they said them, and a test as a
 // customer stays hidden (it needs the agent to answer).
