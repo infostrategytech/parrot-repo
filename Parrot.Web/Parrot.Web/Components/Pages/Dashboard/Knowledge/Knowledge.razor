@@ -1,15 +1,21 @@
 @page "/dashboard/knowledge"
 @layout DashboardLayout
 @inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
+@inject Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview Preview
 
 <PageTitle>Knowledge · OmniAI</PageTitle>
 
 @* What the business's AI knows (designer, 20 October 2026: Concept B is the page now): what needs a decision,
    telling it something, and a summary per section to rewrite. With no knowledge store behind it (real mode
-   today), the placeholder is the honest screen. *@
+   today), the placeholder is the honest screen, unless the preview is on: the page, empty, kept in this
+   browser, saying so. *@
 @if (Memory.Available)
 {
     <KnowledgeMemory />
+}
+else if (Preview.Enabled)
+{
+    <KnowledgeMemory Store="Preview" />
 }
 else
 {

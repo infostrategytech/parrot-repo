@@ -33,6 +33,20 @@
 }
 
 .knowledge__heading { display: grid; gap: var(--spacing-xs); }
+.knowledge__title { display: flex; flex-wrap: wrap; gap: var(--spacing-sm) var(--spacing-md); align-items: center; }
+/* The preview, said plainly under the lede. */
+.knowledge__preview-note {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  max-width: var(--ds-knowledge-measure);
+  margin-top: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-feedback-info-text);
+  background: var(--colors-feedback-info-subtle);
+  border-radius: var(--radius-radius-lg);
+}
+.knowledge__preview-note ::deep .ds-icon { flex: none; margin-top: var(--spacing-2xs); }
 .knowledge__heading ::deep .knowledge__lede { max-width: var(--ds-knowledge-measure); color: var(--colors-text-secondary); }
 
 .knowledge__review {

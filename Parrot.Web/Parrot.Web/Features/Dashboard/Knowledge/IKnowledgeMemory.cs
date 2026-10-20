@@ -46,6 +46,12 @@ public interface IKnowledgeMemory
     /// <summary>False until the API keeps knowledge; the page shows its placeholder then.</summary>
     bool Available { get; }
 
+    /// <summary>A preview kept in this browser, before the knowledge store exists: the page says so.</summary>
+    bool IsPreview => false;
+
+    /// <summary>Whether a website or social link can be read for details.</summary>
+    bool CanReadLinks => true;
+
     Task<KnowledgeSnapshot> ListAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

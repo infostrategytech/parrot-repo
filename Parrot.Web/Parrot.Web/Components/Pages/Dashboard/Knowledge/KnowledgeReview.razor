@@ -156,6 +156,11 @@
 </div>
 
 @code {
+    /// <summary>The store to use instead of the app's (the preview).</summary>
+    [Parameter] public IKnowledgeMemory? Store { get; set; }
+
+    private IKnowledgeMemory Knowledge => Store ?? Memory;
+
     [Parameter, EditorRequired] public bool Open { get; set; }
     [Parameter, EditorRequired] public KnowledgeSnapshot Snapshot { get; set; } = new([], [], []);
     [Parameter] public EventCallback OnClose { get; set; }
@@ -288,27 +293,27 @@
     }
 
     private Task ConfirmAsync(Item item, KnowledgeFact fact) =>
-        DecideAsync(item, DecisionMotion.Approve, async () => { await Memory.ConfirmAsync(fact.Id); return $"Approved and saved to {fact.Label}."; });
+        DecideAsync(item, DecisionMotion.Approve, async () => { await Knowledge.ConfirmAsync(fact.Id); return $"Approved and saved to {fact.Label}."; });
 
     private Task ChangeAsync(Item item, KnowledgeFact fact) =>
-        DecideAsync(item, DecisionMotion.Approve, async () => { var saved = await Memory.UpdateAsync(fact.Id, _text!); return $"Corrected and saved to {saved.Label}."; });
+        DecideAsync(item, DecisionMotion.Approve, async () => { var saved = await Knowledge.UpdateAsync(fact.Id, _text!); return $"Corrected and saved to {saved.Label}."; });
 
     private Task LeaveOutAsync(Item item, KnowledgeFact fact) =>
-        DecideAsync(item, DecisionMotion.Reject, async () => { await Memory.DeleteAsync(fact.Id); return "Left out. Your AI won't use it."; });
+        DecideAsync(item, DecisionMotion.Reject, async () => { await Knowledge.DeleteAsync(fact.Id); return "Left out. Your AI won't use it."; });
 
     private Task ResolveAsync(Item item, KnowledgeConflict conflict, string text) =>
-        DecideAsync(item, DecisionMotion.Approve, async () => { var saved = await Memory.ResolveAsync(conflict.Id, text); return $"Saved to {saved.Label}."; });
+        DecideAsync(item, DecisionMotion.Approve, async () => { var saved = await Knowledge.ResolveAsync(conflict.Id, text); return $"Saved to {saved.Label}."; });
 
     private Task AnswerAsync(Item item, KnowledgeQuestion question) =>
         DecideAsync(item, DecisionMotion.Approve, async () =>
         {
-            var saved = await Memory.AnswerAsync(question.Id, _text!);
+            var saved = await Knowledge.AnswerAsync(question.Id, _text!);
             var labels = saved.Select(fact => fact.Label).Distinct().ToList();
             return $"Answer saved to {string.Join(" and ", labels)}.";
         });
 
     private Task DismissAsync(Item item, KnowledgeQuestion question) =>
-        DecideAsync(item, DecisionMotion.Reject, async () => { await Memory.DismissAsync(question.Id); return "Left to your team."; });
+        DecideAsync(item, DecisionMotion.Reject, async () => { await Knowledge.DismissAsync(question.Id); return "Left to your team."; });
 
     private static Task NoopAsync() => Task.CompletedTask;
 }

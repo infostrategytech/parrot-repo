@@ -14,10 +14,24 @@
 <main class="knowledge">
     <header class="knowledge__header">
         <div class="knowledge__heading">
-            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Knowledge</Typography>
+            <div class="knowledge__title">
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Knowledge</Typography>
+                @if (Knowledge.IsPreview)
+                {
+                    <StatusBadge Tone="StatusTone.Info">Preview</StatusBadge>
+                }
+            </div>
             <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="knowledge__lede">
                 @($"What your AI knows about {Business}, and uses when it replies to customers.")
             </Typography>
+            @if (Knowledge.IsPreview)
+            {
+                @* Said plainly, so nobody thinks their agents have learnt it (designer, 20 October 2026). *@
+                <div class="knowledge__preview-note" role="note">
+                    <Icon Name="IconName.RiInformationFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>A preview: what you save here stays in this browser, and your AI doesn't use it yet.</Typography>
+                </div>
+            }
         </div>
         <Button Variant="ButtonVariant.Secondary" Class="ds-no-shrink" @onclick="() => _testOpen = true">
             <IconLeft><Icon Name="IconName.RiChat3Fill" /></IconLeft>
@@ -81,10 +95,13 @@
 
             <div class="knowledge__composer-actions">
                 <div class="knowledge__add-options">
-                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OpenLinkDialog">
-                        <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
-                        <ChildContent>Add from a link</ChildContent>
-                    </Button>
+                    @if (Knowledge.CanReadLinks)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OpenLinkDialog">
+                            <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
+                            <ChildContent>Add from a link</ChildContent>
+                        </Button>
+                    }
                     <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge__hint">Press Enter to save</Typography>
                 </div>
                 <Button Busy="_adding" disabled="@(string.IsNullOrWhiteSpace(_draft) || _adding)" @onclick="AddAsync">Save</Button>
@@ -121,7 +138,7 @@
                 <EmptyState Glyph="IconName.RiBookOpenFill"
                             Size="EmptyStateSize.Panel"
                             Title="Nothing saved yet"
-                            Description="Tell your AI something above, or review what was found for you." />
+                            Description="@(Knowledge.IsPreview ? "Tell your AI something above. Each detail goes into its section." : "Tell your AI something above, or review what was found for you.")" />
             }
             else if (VisibleSections.Count == 0)
             {
@@ -192,7 +209,7 @@
     }
 </main>
 
-<KnowledgeReview Open="_reviewOpen" Snapshot="_snapshot" OnClose="() => _reviewOpen = false" OnChanged="ReloadAsync" />
+<KnowledgeReview Store="Knowledge" Open="_reviewOpen" Snapshot="_snapshot" OnClose="() => _reviewOpen = false" OnChanged="ReloadAsync" />
 <KnowledgeTest Open="_testOpen" Facts="KnownFacts" OnClose="() => _testOpen = false" OnTeach="TeachFromTest" />
 
 <Dialog Open="_linkOpen"
@@ -216,6 +233,11 @@
 </Dialog>
 
 @code {
+    /// <summary>The store to use instead of the app's (the preview, before the knowledge store exists).</summary>
+    [Parameter] public IKnowledgeMemory? Store { get; set; }
+
+    private IKnowledgeMemory Knowledge => Store ?? Memory;
+
     private KnowledgeSnapshot _snapshot = new([], [], []);
     private bool _loading = true, _adding, _reviewOpen, _testOpen, _focusBox;
     private bool _linkOpen, _readingLink, _savingEdit;
@@ -247,7 +269,7 @@
         }
     }
 
-    private async Task LoadAsync() => _snapshot = await Memory.ListAsync();
+    private async Task LoadAsync() => _snapshot = await Knowledge.ListAsync();
 
     private async Task ReloadAsync()
     {
@@ -325,7 +347,7 @@
         _adding = true;
         try
         {
-            _justSaved = [.. await Memory.AddAsync(text)];
+            _justSaved = [.. await Knowledge.AddAsync(text)];
             _freshLabels = [.. _justSaved.Select(fact => fact.Label)];
             _draft = null;
             _forQuestion = null;
@@ -344,7 +366,7 @@
     private async Task UndoAddAsync()
     {
         if (_justSaved is null) return;
-        foreach (var fact in _justSaved) await Memory.DeleteAsync(fact.Id);
+        foreach (var fact in _justSaved) await Knowledge.DeleteAsync(fact.Id);
         _justSaved = null;
         _freshLabels = [];
         await LoadAsync();
@@ -396,8 +418,8 @@
         try
         {
             var keep = before.OrderByDescending(fact => fact.UpdatedAt).First();
-            await Memory.UpdateAsync(keep.Id, text);
-            foreach (var other in before.Where(fact => fact.Id != keep.Id)) await Memory.DeleteAsync(other.Id);
+            await Knowledge.UpdateAsync(keep.Id, text);
+            foreach (var other in before.Where(fact => fact.Id != keep.Id)) await Knowledge.DeleteAsync(other.Id);
             await LoadAsync();
             CancelEdit();
             _freshLabels = [section.Label];
@@ -418,8 +440,8 @@
     {
         foreach (var fact in before)
         {
-            await Memory.DeleteAsync(fact.Id);
-            await Memory.RestoreAsync(fact);
+            await Knowledge.DeleteAsync(fact.Id);
+            await Knowledge.RestoreAsync(fact);
         }
         _freshLabels = [];
         await LoadAsync();
@@ -438,7 +460,7 @@
         _readingLink = true;
         try
         {
-            var found = await Memory.ReadWebsiteAsync(_link.Trim());
+            var found = await Knowledge.ReadWebsiteAsync(_link.Trim());
             await LoadAsync();
             _linkOpen = false;
             if (found.Count > 0)
