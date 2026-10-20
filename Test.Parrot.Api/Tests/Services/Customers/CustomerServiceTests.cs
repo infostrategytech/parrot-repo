@@ -151,15 +151,86 @@ public class CustomerServiceTests
             _service.CreateAsync(Owner, request, CancellationToken.None));
     }
 
+    // ---- UpdateStageAsync ----
+
+    [Fact]
+    public async Task UpdateStageAsync_ValidStage_UpdatesAndReturns()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+
+        CustomerDetailResponse result = await _service.UpdateStageAsync(Owner, id, "Vip", CancellationToken.None);
+
+        Assert.Equal("Vip", result.Stage);
+        Assert.Equal("Vip", _repository.Store.First(c => c.Id == id).Stage);
+    }
+
+    [Fact]
+    public async Task UpdateStageAsync_InvalidStage_ThrowsValidationException()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.UpdateStageAsync(Owner, id, "Unknown", CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UpdateStageAsync_AnotherOwnersId_ThrowsNotFoundException()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, OwnerUserId = "other", Name = "Theirs", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.UpdateStageAsync(Owner, id, "Vip", CancellationToken.None));
+    }
+
+    // ---- UpdateTagsAsync ----
+
+    [Fact]
+    public async Task UpdateTagsAsync_SetsTags()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+
+        CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["VIP", "Loyal"], CancellationToken.None);
+
+        Assert.Equal(["VIP", "Loyal"], result.Tags);
+    }
+
+    [Fact]
+    public async Task UpdateTagsAsync_TrimsAndDeduplicatesCaseInsensitive()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+
+        CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["  VIP  ", "vip", "Loyal"], CancellationToken.None);
+
+        // "VIP" and "vip" collapse to one after trim+dedup; order is the first occurrence
+        Assert.Equal(2, result.Tags.Count);
+        Assert.Contains("VIP", result.Tags);
+        Assert.Contains("Loyal", result.Tags);
+    }
+
+    [Fact]
+    public async Task UpdateTagsAsync_AnotherOwnersId_ThrowsNotFoundException()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, OwnerUserId = "other", Name = "Theirs", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.UpdateTagsAsync(Owner, id, ["VIP"], CancellationToken.None));
+    }
+
     // --------------- fake ---------------
 
     private sealed class FakeCustomerRepository : ICustomerRepository
     {
         public List<UpsertCall> UpsertCalls { get; } = [];
         public List<Customer> Created { get; } = [];
-        private readonly List<Customer> _store = [];
+        public List<Customer> Store { get; } = [];
 
-        public void Seed(Customer customer) => _store.Add(customer);
+        public void Seed(Customer customer) => Store.Add(customer);
 
         public Task UpsertAsync(string ownerUserId, Guid connectionId, string platform, string sender,
             string name, string? username, DateTime seenAt, CancellationToken ct)
@@ -171,20 +242,34 @@ public class CustomerServiceTests
         public Task<(List<Customer> Items, int Total)> ListAsync(
             string ownerUserId, string? search, string? stage, string? channel, int skip, int take, CancellationToken ct)
         {
-            List<Customer> results = [.. _store.Where(c => c.OwnerUserId == ownerUserId).Skip(skip).Take(take)];
+            List<Customer> results = [.. Store.Where(c => c.OwnerUserId == ownerUserId).Skip(skip).Take(take)];
             return Task.FromResult((results, results.Count));
         }
 
         public Task<Customer?> FindAsync(string ownerUserId, Guid id, CancellationToken ct)
         {
-            Customer? customer = _store.FirstOrDefault(c => c.Id == id && c.OwnerUserId == ownerUserId);
+            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.OwnerUserId == ownerUserId);
             return Task.FromResult(customer);
         }
 
         public Task<Customer> CreateAsync(Customer customer, CancellationToken ct)
         {
-            _store.Add(customer);
+            Store.Add(customer);
             Created.Add(customer);
+            return Task.FromResult(customer);
+        }
+
+        public Task<Customer?> UpdateStageAsync(string ownerUserId, Guid id, string stage, CancellationToken ct)
+        {
+            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.OwnerUserId == ownerUserId);
+            if (customer is not null) customer.Stage = stage;
+            return Task.FromResult(customer);
+        }
+
+        public Task<Customer?> UpdateTagsAsync(string ownerUserId, Guid id, List<string> tags, CancellationToken ct)
+        {
+            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.OwnerUserId == ownerUserId);
+            if (customer is not null) customer.Tags = tags;
             return Task.FromResult(customer);
         }
 

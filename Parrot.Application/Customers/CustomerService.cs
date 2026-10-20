@@ -70,6 +70,27 @@ public sealed class CustomerService(ICustomerRepository repository)
         return ToDetail(customer);
     }
 
+    private static readonly string[] ValidStages = ["New Lead", "Interested", "Customer", "Vip"];
+
+    public async Task<CustomerDetailResponse> UpdateStageAsync(
+        string ownerUserId, Guid id, string stage, CancellationToken ct)
+    {
+        if (!ValidStages.Contains(stage)) throw new ValidationException("Stage is not valid.");
+        Customer? customer = await repository.UpdateStageAsync(ownerUserId, id, stage, ct);
+        if (customer is null) throw new NotFoundException("Customer not found.");
+        return ToDetail(customer);
+    }
+
+    public async Task<CustomerDetailResponse> UpdateTagsAsync(
+        string ownerUserId, Guid id, List<string> tags, CancellationToken ct)
+    {
+        List<string> trimmed = [.. tags.Select(t => t.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
+        if (trimmed.Any(t => t.Length > 64)) throw new ValidationException("Each tag must be 64 characters or fewer.");
+        Customer? customer = await repository.UpdateTagsAsync(ownerUserId, id, trimmed, ct);
+        if (customer is null) throw new NotFoundException("Customer not found.");
+        return ToDetail(customer);
+    }
+
     private static CustomerListItemResponse ToListItem(Customer c) => new(
         c.Id, c.Name, c.Stage, c.Tags,
         [.. c.Identities.Select(ToIdentityResponse)],

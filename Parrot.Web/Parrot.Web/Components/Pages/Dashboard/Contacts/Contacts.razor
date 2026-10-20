@@ -145,7 +145,7 @@
 
 <AddContactModal Visible="_showAdd" OnCancel="CloseModals" OnSave="HandleAddContact" />
 <ImportContactModal Visible="_showImport" OnCancel="CloseModals" />
-<ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" />
+<ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" OnUpdated="HandleContactUpdated" />
 
 @code {
     private static readonly string[] Columns = ["Name", "Channels", "Last interaction", "Tags", "Orders", "Stage"];
@@ -287,6 +287,13 @@
     private void OpenDetail(Contact c) => _selectedContact = c;
     private void CloseDetail() => _selectedContact = null;
     private void CloseModals() { _showAdd = false; _showImport = false; }
+
+    private void HandleContactUpdated(Contact updated)
+    {
+        int idx = _contacts.FindIndex(c => c.Id == updated.Id);
+        if (idx >= 0) _contacts[idx] = updated;
+        _selectedContact = updated;
+    }
 
     private async Task HandleAddContact(Contact draft)
     {

@@ -37,3 +37,7 @@ public sealed record CreateCustomerDto(
     string? Phone,
     string? Stage,
     List<string>? Tags);
+
+public sealed record UpdateStageDto(string Stage);
+
+public sealed record UpdateTagsDto(List<string> Tags);

@@ -39,3 +39,7 @@ public sealed record CreateCustomerRequest(
 public sealed record CustomerPageResponse(
     List<CustomerListItemResponse> Items,
     int Total);
+
+public sealed record UpdateStageRequest(string Stage);
+
+public sealed record UpdateTagsRequest(List<string> Tags);

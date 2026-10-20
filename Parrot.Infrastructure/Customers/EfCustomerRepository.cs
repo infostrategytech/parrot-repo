@@ -159,6 +159,34 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         if (changed) customer.UpdatedAt = DateTime.UtcNow;
     }
 
+    public async Task<Customer?> UpdateStageAsync(
+        string ownerUserId, Guid id, string stage, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        Customer? customer = await db.Customers
+            .Include(c => c.Identities)
+            .FirstOrDefaultAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, ct);
+        if (customer is null) return null;
+        customer.Stage = stage;
+        customer.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return customer;
+    }
+
+    public async Task<Customer?> UpdateTagsAsync(
+        string ownerUserId, Guid id, List<string> tags, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        Customer? customer = await db.Customers
+            .Include(c => c.Identities)
+            .FirstOrDefaultAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, ct);
+        if (customer is null) return null;
+        customer.Tags = tags;
+        customer.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return customer;
+    }
+
     private static bool IsIdentityConflict(DbUpdateException ex) =>
         ex.InnerException is PostgresException
         {

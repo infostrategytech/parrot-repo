@@ -45,4 +45,24 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
         CustomerDetailResponse response = await customers.CreateAsync(Owner, request, cancellationToken);
         return Created($"api/customers/{response.Id}", response);
     }
+
+    [HttpPut("{id:guid}/stage")]
+    public async Task<IActionResult> UpdateStage(
+        Guid id,
+        [FromBody] UpdateStageRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        CustomerDetailResponse response = await customers.UpdateStageAsync(Owner, id, request.Stage, cancellationToken);
+        return Ok(response);
+    }
+
+    [HttpPut("{id:guid}/tags")]
+    public async Task<IActionResult> UpdateTags(
+        Guid id,
+        [FromBody] UpdateTagsRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        CustomerDetailResponse response = await customers.UpdateTagsAsync(Owner, id, request.Tags, cancellationToken);
+        return Ok(response);
+    }
 }

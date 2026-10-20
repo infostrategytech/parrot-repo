@@ -33,4 +33,8 @@ public interface ICustomerRepository
     Task<Customer?> FindAsync(string ownerUserId, Guid id, CancellationToken ct);
 
     Task<Customer> CreateAsync(Customer customer, CancellationToken ct);
+
+    Task<Customer?> UpdateStageAsync(string ownerUserId, Guid id, string stage, CancellationToken ct);
+
+    Task<Customer?> UpdateTagsAsync(string ownerUserId, Guid id, List<string> tags, CancellationToken ct);
 }

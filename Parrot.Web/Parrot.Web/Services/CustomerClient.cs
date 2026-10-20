@@ -23,6 +23,12 @@ public sealed class CustomerClient(HttpClient http, AuthState auth)
     public Task<CustomerDetailDto> CreateAsync(CreateCustomerDto request, CancellationToken ct) =>
         RequestAsync<CustomerDetailDto>(HttpMethod.Post, "api/customers", request, ct);
 
+    public Task<CustomerDetailDto> UpdateStageAsync(Guid id, string stage, CancellationToken ct) =>
+        RequestAsync<CustomerDetailDto>(HttpMethod.Put, $"api/customers/{id}/stage", new UpdateStageDto(stage), ct);
+
+    public Task<CustomerDetailDto> UpdateTagsAsync(Guid id, List<string> tags, CancellationToken ct) =>
+        RequestAsync<CustomerDetailDto>(HttpMethod.Put, $"api/customers/{id}/tags", new UpdateTagsDto(tags), ct);
+
     private static readonly JsonSerializerOptions WriteOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
