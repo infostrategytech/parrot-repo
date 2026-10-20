@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
+using Parrot.Application.Customers;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Entities.Messages;
@@ -35,7 +36,8 @@ public sealed class InboundMessageProcessor(
     IContactNameLookup? contactNames = null,
     IInboundMediaStore? mediaStore = null,
     IMediaJobPublisher? mediaJobs = null,
-    bool deferMedia = false)
+    bool deferMedia = false,
+    ICustomerRepository? customerRepository = null)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -88,6 +90,28 @@ public sealed class InboundMessageProcessor(
                 CorrelationId = inbound.CorrelationId,
             };
             await TimedAsync("publish", () => publisher.PublishAsync(persisted, cancellationToken), "publish_failed");
+
+            // Best-effort: a failure here never retries the message or blocks the consumer.
+            if (customerRepository is not null && stored.OwnerUserId is not null && stored.ConnectionId.HasValue && !stored.Outgoing)
+            {
+                try
+                {
+                    await customerRepository.UpsertAsync(
+                        stored.OwnerUserId,
+                        stored.ConnectionId.Value,
+                        stored.Platform.ToString().ToLowerInvariant(),
+                        stored.From,
+                        stored.ContactName is { Length: > 0 } ? stored.ContactName : stored.From,
+                        stored.ContactUsername,
+                        stored.ReceivedAt,
+                        cancellationToken);
+                }
+                catch (Exception ex) when (ex is not OperationCanceledException)
+                {
+                    logger.LogWarning(ex, "customer_upsert_failed Sender={Sender} ConnectionId={ConnectionId}; continuing",
+                        stored.From, stored.ConnectionId);
+                }
+            }
 
             Processed("success", "none");
             logger.LogInformation(

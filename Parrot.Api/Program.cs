@@ -29,7 +29,9 @@ using Parrot.Application.Models;
 using Parrot.Application.Profile;
 using Parrot.Application.Storage;
 using Parrot.Application.Utils;
+using Parrot.Application.Customers;
 using Parrot.Infrastructure.Agents;
+using Parrot.Infrastructure.Customers;
 using Parrot.Infrastructure.Auth;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.Email;
@@ -109,6 +111,10 @@ AnthropicSettings anthropicSettings = builder.Configuration.GetSection(Anthropic
 // Database
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Factory for singleton services (e.g. EfCustomerRepository) that create short-lived contexts.
+builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")),
+    ServiceLifetime.Singleton);
 
 // Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
@@ -392,6 +398,8 @@ builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
+builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
+builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
 
 // Calls to the orchestrator carry a short-lived service token for the owner.
