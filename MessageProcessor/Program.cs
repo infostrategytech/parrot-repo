@@ -5,10 +5,12 @@ using MessageProcessor;
 using MessageProcessor.Monitoring;
 using OpenTelemetry.Metrics;
 using Parrot.Application.Conversations;
+using Parrot.Application.Customers;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
 using Parrot.Infrastructure.Conversations;
+using Parrot.Infrastructure.Customers;
 using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.MessageBus;
 using Parrot.Infrastructure.Messaging;
@@ -43,6 +45,7 @@ string postgresConnection = builder.Configuration.GetConnectionString("DefaultCo
     : throw new InvalidOperationException("ConnectionStrings__DefaultConnection is required to record connection receipts. Use the same PostgreSQL database as the API.");
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseNpgsql(postgresConnection));
 builder.Services.AddSingleton<IConnectionMessageReceipt, ConnectionMessageReceipt>();
+builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
 
 // Messenger and Instagram webhooks name the customer only by id; the worker asks Meta for the name
 // with the connection's token, so it reads the API's key ring (never writing to it).

@@ -16,6 +16,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<InstagramConnection> InstagramConnections => Set<InstagramConnection>();
     public DbSet<FeatureFlag> FeatureFlags => Set<FeatureFlag>();
 
+    public DbSet<Customer> Customers => Set<Customer>();
+    public DbSet<CustomerIdentity> CustomerIdentities => Set<CustomerIdentity>();
+
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
@@ -164,6 +167,50 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .HasFilter("\"DisabledAt\" IS NULL");
             entity.HasIndex(c => c.AccountId).IsUnique()
                 .HasFilter("\"AccountId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
+        });
+
+        builder.Entity<Customer>(entity =>
+        {
+            entity.HasKey(c => c.Id);
+            entity.Property(c => c.OwnerUserId).IsRequired();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(c => c.Name).HasMaxLength(256).IsRequired();
+            entity.Property(c => c.Email).HasMaxLength(256);
+            entity.Property(c => c.Stage).HasMaxLength(64).IsRequired().HasDefaultValue("Customer");
+            entity.Property(c => c.LastSeenChannel).HasMaxLength(32);
+            entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // Tags stored as a comma-separated text column, same pattern as Agent.Channels.
+            ValueComparer<List<string>> listComparer = new(
+                (left, right) => (left ?? new List<string>()).SequenceEqual(right ?? new List<string>()),
+                tags => tags.Aggregate(0, (hash, tag) => HashCode.Combine(hash, tag.GetHashCode())),
+                tags => tags.ToList());
+            entity.Property(c => c.Tags)
+                .HasConversion(
+                    tags => string.Join(',', tags),
+                    col => col.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
+                    listComparer)
+                .HasColumnType("text")
+                .IsRequired()
+                .HasDefaultValueSql("''");
+
+            entity.HasIndex(c => c.OwnerUserId);
+            entity.HasMany(c => c.Identities).WithOne(i => i.Customer).HasForeignKey(i => i.CustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CustomerIdentity>(entity =>
+        {
+            entity.HasKey(i => i.Id);
+            entity.Property(i => i.Platform).HasMaxLength(32).IsRequired();
+            entity.Property(i => i.Sender).HasMaxLength(128).IsRequired();
+            entity.Property(i => i.Username).HasMaxLength(128);
+            entity.Property(i => i.LinkedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // The primary deduplication guard: one row per (connection, sender) pair.
+            entity.HasIndex(i => new { i.ConnectionId, i.Sender }).IsUnique();
+            entity.HasIndex(i => i.CustomerId);
         });
     }
 

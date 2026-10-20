@@ -102,6 +102,14 @@
 
 .customer-since { display: flex; gap: var(--spacing-xs); align-items: center; justify-content: center; padding: var(--spacing-lg); color: var(--colors-text-muted); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
 
+.customer-tags { display: grid; gap: var(--spacing-sm); }
+.customer-tags__options { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+.customer-tags__option { padding: var(--spacing-2xs) var(--spacing-sm); color: var(--colors-text-secondary); background: var(--colors-surface-muted); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-full); cursor: pointer; }
+.customer-tags__option:hover:not(:disabled) { background: var(--colors-interaction-hover); }
+.customer-tags__option.is-selected { color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); border-color: var(--colors-brand-primary); }
+.customer-tags__option:disabled { opacity: 0.5; cursor: not-allowed; }
+.customer-field-error { margin-top: var(--spacing-xs); color: var(--colors-feedback-destructive-text); }
+
 @keyframes panel-backdrop-in {
   from { opacity: 0; }
 }
