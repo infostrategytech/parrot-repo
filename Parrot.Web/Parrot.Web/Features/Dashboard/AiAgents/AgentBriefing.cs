@@ -4,7 +4,7 @@ namespace Parrot.Web.Features.Dashboard.AiAgents;
 
 /// <summary>
 /// An agent's job description, the way you would brief a new assistant
-/// (agent setup, 13 October 2026): one short summary in the
+/// (agent setup, Concept B, 13 October 2026): one short summary in the
 /// owner's words of what it does, what it never does, and when it calls them.
 /// The owner reads and edits it as text; the agent follows it sentence by
 /// sentence, and a test reply can say which sentence it followed.
@@ -64,7 +64,7 @@ public sealed record AgentTryReply(string Reply, string Why, AgentTryBasis Basis
 /// <summary>
 /// Writing and understanding an agent's job description, and answering a test
 /// message the way the agent would: an AI's work. The demo stands in with
-/// simple rules (see agents-backend-requests). Agent setup is
+/// simple rules (see agents-backend-requests). Concept B of agent setup is
 /// shown in the demo only for now.
 /// </summary>
 public interface IAgentBriefing

@@ -1,0 +1,70 @@
+/* The whole window for one task: the muted page, a white bar on top (as a
+   guided flow's), and the task in a column a little above centre, that scrolls on its own. */
+
+.ds-focus-view {
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-focus-view-layer);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
+  outline: 0;
+  animation: ds-focus-view-in var(--ds-motion-base) var(--ds-motion-enter);
+}
+
+.ds-focus-view {
+  /* Gaps in the token set: no z-index scale, no column width for a guided
+     task, and the window's side room. The layer is the side panel's: under
+     toasts (110) and dialogs (120), so what it says and asks shows above it. */
+  --ds-focus-view-layer: 100;
+  --ds-focus-view-column: 920px;
+  --ds-focus-view-center: 720px;
+  /* The room above and below the task, as shares: a little above centre. */
+  --ds-focus-view-above: 2;
+  --ds-focus-view-below: 3;
+  --ds-focus-view-gutter: clamp(16px, 4vw, 48px);
+}
+
+.ds-focus-view__bar {
+  display: grid;
+  /* The middle centred on the window; the title and the close never squeezed (the middle gives way first). */
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, var(--ds-focus-view-center)) minmax(max-content, 1fr);
+  gap: var(--spacing-lg);
+  align-items: center;
+  padding: var(--spacing-md) var(--ds-focus-view-gutter);
+  background: var(--colors-surface-card);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.ds-focus-view__bar ::deep .ds-focus-view__title { min-width: 0; margin: var(--spacing-none); }
+.ds-focus-view__center { min-width: 0; }
+.ds-focus-view__end { display: flex; gap: var(--spacing-sm); align-items: center; justify-content: flex-end; }
+.ds-focus-view__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+
+.ds-focus-view__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: var(--spacing-2xl) var(--ds-focus-view-gutter);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* A little above centre while it fits (the room above and below shared 2 : 3, as the eye's middle
+   sits above the true one); from the top, scrolling, once it doesn't. */
+.ds-focus-view__body::before,
+.ds-focus-view__body::after { flex: var(--ds-focus-view-above) 1 0; content: ""; }
+.ds-focus-view__body::after { flex-grow: var(--ds-focus-view-below); }
+.ds-focus-view__column { flex: none; width: min(var(--ds-focus-view-column), 100%); margin-inline: auto; }
+
+/* Narrow: the title and close on one line, how far it has got under them. */
+@media (max-width: 760px) {
+  .ds-focus-view__bar { grid-template-columns: minmax(0, 1fr) auto; }
+  .ds-focus-view__center { grid-column: 1 / -1; grid-row: 2; }
+}
+
+@keyframes ds-focus-view-in { from { opacity: 0; transform: translateY(var(--spacing-sm)); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-focus-view { animation: none; }
+}

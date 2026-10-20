@@ -139,6 +139,8 @@ else
     builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.LiveAgentCapabilities>();
 }
 builder.Services.AddScoped<AiAgentsState>();
+// "Tell Tolu its job" left halfway, per agent, for the session (picked up at the next topic).
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.JobConversationDrafts>();
 // Writing an agent's job description: until the agents API writes them, the
 // basic writer keeps the owner's words as they said them, and a test as a
 // customer stays hidden (it needs the agent to answer).

@@ -43,6 +43,8 @@
   gap: var(--spacing-lg);
   min-width: 0;
 }
+/* In a full-screen view (telling an agent its job on its page): the window under its bar (the topics in it), with room above and below. */
+.ds-focus-view .job-editor { --ds-job-editor-chat: min(860px, calc(100dvh - 200px)); }
 .job-editor > * { min-width: 0; }
 ::deep .job-editor__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
 
@@ -136,6 +138,12 @@
   overflow-y: auto;
   overscroll-behavior: contain;
 }
+/* The chat and its approval scroll with no bar showing (designer, 19 October 2026): the
+   conversation is the focus. The wheel, a trackpad and the keyboard still scroll them. */
+.job-editor__log,
+.job-editor__dock.is-asking { scrollbar-width: none; }
+.job-editor__log::-webkit-scrollbar,
+.job-editor__dock.is-asking::-webkit-scrollbar { display: none; }
 .job-editor__thread {
   display: grid;
   gap: var(--spacing-lg);

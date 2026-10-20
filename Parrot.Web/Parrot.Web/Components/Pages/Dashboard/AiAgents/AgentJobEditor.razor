@@ -1,15 +1,17 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @implements IAsyncDisposable
 @using Parrot.SharedComponents.Services
+@using Microsoft.AspNetCore.Components.Sections
 @using Parrot.Web.Features.Dashboard.AiAgents
 @inject IAgentBriefing Briefing
 @inject IJobInterview Interview
+@inject JobConversationDrafts Drafts
 @inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
 @inject VoiceInterop Voice
 @inject AuroraInterop Interop
 
 @* An agent's job description, the way you would brief a new assistant
-   (13 October 2026), as one conversation (designer and team, 15
+   (Concept B, 13 October 2026), as one conversation (designer and team, 15
    October 2026): talking and typing both land in the same chat, the agent's
    words on the left (said aloud while they talk, each word lighting as it is
    said), the owner's on the right (filling in as they talk), and they can
@@ -72,7 +74,7 @@
                     <div class="job-editor__start">
                         <Button Size="ButtonSize.Large" disabled="@(!_canTalk)" @onclick="() => OpenAsync(voice: true)">
                             <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
-                            <ChildContent>@(HasSummary ? "Talk to add more" : "Talk to me")</ChildContent>
+                            <ChildContent>Talk to me</ChildContent>
                         </Button>
                         <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="() => OpenAsync(voice: false)">
                             <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
@@ -88,7 +90,12 @@
         }
         else
         {
-            @if (Topics.Count > 0)
+            @if (Topics.Count > 0 && TopicsSection is { } topicsSection)
+            {
+                @* Where the page shows how far a task has got (a full-screen view's bar). *@
+                <SectionContent SectionName="@topicsSection"><TopicTrail Items="Topics" Label="What we'll talk about" Bar /></SectionContent>
+            }
+            else if (Topics.Count > 0)
             {
                 <div class="job-editor__topics">
                     <TopicTrail Items="Topics" Label="What we'll talk about" />
@@ -118,11 +125,18 @@
                     }
                 </ol>
             </div>
-            @if (CanSkip)
+            @if (CanSkip || CanFinishUpdate)
             {
-                @* A suggested reply, as in Teach your AI: a chip above the box, under what it asked. *@
+                @* Suggested replies, as in Teach your AI: chips above the box, under what it asked. *@
                 <div class="job-editor__replies">
-                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="SkipQuestionAsync">Skip this question</Button>
+                    @if (CanSkip)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="SkipQuestionAsync">Skip this question</Button>
+                    }
+                    @if (CanFinishUpdate)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="FinishUpdateAsync">That's all</Button>
+                    }
                 </div>
             }
             <div class="job-editor__foot">
@@ -148,7 +162,7 @@
     }
 
     @* Its job description: only once they've finished, appearing as it is written, to read before going on. *@
-    @if (HasSummary)
+    @if (HasSummary && !HidingSummary)
     {
         <section class="job-editor__brief" aria-labelledby="@($"{_id}-job")" aria-busy="@(_writing || _stream.Count > 0 ? "true" : "false")" tabindex="-1" @ref="_summarySection">
             <div class="job-editor__brief-head">
@@ -265,6 +279,34 @@
     /// </summary>
     [Parameter] public bool Fold { get; set; }
 
+    /// <summary>
+    /// The agent being told its job, once it exists (its page): each approved topic is kept
+    /// for it, so leaving and coming back picks up at the next topic.
+    /// </summary>
+    [Parameter] public string? DraftKey { get; set; }
+
+    /// <summary>
+    /// Its first job description is written and approved: the agent's page keeps it at once.
+    /// With it, what it noted that the job description doesn't show (how it will sound, what it saved).
+    /// </summary>
+    [Parameter] public EventCallback<string?> OnWritten { get; set; }
+
+    /// <summary>The page's own place for the topics (a SectionOutlet, as a full-screen view's bar); null keeps them in the chat.</summary>
+    [Parameter] public string? TopicsSection { get; set; }
+
+    /// <summary>
+    /// No job description written out here: the page shows its own (a full-screen view, ending on its own
+    /// moment or going back to the job's summary). It still shows while a ready-made one waits for its "Just to be sure".
+    /// </summary>
+    [Parameter] public bool HideSummary { get; set; }
+
+    /// <summary>A change approved (added, or said another way): what it was before, for the page's Undo, and what changed.</summary>
+    [Parameter] public EventCallback<JobUpdate> OnUpdated { get; set; }
+
+    public sealed record JobUpdate(AgentBrief Before, AgentBriefRules? RulesBefore, IReadOnlyList<string> Added, IReadOnlyList<string> Replaced);
+
+    private bool HidingSummary => HideSummary && !_readyMade && _readyQuestions.Count == 0;
+
     private bool _unfolded;
 
     // Folded only while nothing is happening: a conversation, or a voice note, keeps it open.
@@ -325,7 +367,11 @@
     private bool InConversation => _messages.Count > 0;
 
     // A question waiting for its answer (typed or said): it can be skipped, and is left open in the approval.
-    private bool CanSkip => Interviewing && _voiceAsk is not null && _phase is Phase.Idle or Phase.Listening or Phase.Finishing;
+    private bool CanSkip => ((Interviewing && _voiceAsk is not null) || (HasSummary && _changeAsk is not null)) && _phase is Phase.Idle or Phase.Listening or Phase.Finishing;
+
+    // Updating it, with something to change and nothing asked: the approval, when they've said it all.
+    private bool CanFinishUpdate => HasSummary && _change is null && _changeAsk is null && (_pendingAdded.Count > 0 || _pendingReplaced.Count > 0)
+        && _phase is Phase.Idle or Phase.Listening or Phase.Finishing;
 
     // An approval waiting where the box is: it takes the foot until it's approved.
     private bool Docked => (_phase == Phase.Checking && _change is not null) || (_phase == Phase.Asking && CurrentCheck is not null);
@@ -349,6 +395,49 @@
     private bool _stopAsking, _closingHeard, _formBusy;
     private string? _noted;
 
+    // A conversation left halfway: what it had reached, kept at each approval (JobConversationDrafts).
+    private sealed record Kept(List<Message> Messages, string Told, string Later, Dictionary<string, FormAnswer> Answers,
+        HashSet<string> Asked, HashSet<string> Confirmed, JobReading? Job, IReadOnlyList<JobSection> Sections, int TopicAt);
+    private Kept? _resume;
+
+    // The topic it will pick up at.
+    private string? ResumeAt => _resume is { } kept ? kept.Sections.Skip(kept.TopicAt).Select(section => section.Title).FirstOrDefault() : null;
+
+    // Each approval kept as it happens (designer, 19 October 2026): leave now, and it picks up at the next topic.
+    private void KeepProgress()
+    {
+        if (DraftKey is null) return;
+        var next = Math.Min(_topicAt, _sections.Count);
+        var topics = new List<TopicTrailItem> { new("Your job", TopicState.Done) };
+        topics.AddRange(_sections.Select((section, index) => new TopicTrailItem(section.Title,
+            _confirmed.Contains(section.Id) ? TopicState.Done : index == next ? TopicState.Current : TopicState.Upcoming)));
+        Drafts.Keep(DraftKey, new Kept([.. _messages], _told, _later, new(_answers), [.. _asked], [.. _confirmed], _job, _sections, _topicAt),
+            new JobConversationDrafts.Progress(topics, _sections.Skip(next).Select(section => section.Title).FirstOrDefault()));
+    }
+
+    // Coming back: the conversation as it was, then the next topic.
+    private async Task ResumeAsync(Kept kept)
+    {
+        _resume = null;
+        _messages.Clear();
+        _messages.AddRange(kept.Messages);
+        _told = kept.Told;
+        _later = kept.Later;
+        _answers.Clear();
+        foreach (var (id, answer) in kept.Answers) _answers[id] = answer;
+        _asked.Clear();
+        _asked.UnionWith(kept.Asked);
+        _confirmed.Clear();
+        _confirmed.UnionWith(kept.Confirmed);
+        _job = kept.Job;
+        _sections = kept.Sections;
+        _topicAt = kept.TopicAt;
+        var next = _sections.Skip(_topicAt).Select(section => section.Title).FirstOrDefault();
+        _messages.Add(new Message { Who = Who.Agent, Text = next is null ? "Welcome back." : $"Welcome back. Let's carry on with {LowerFirst(next)}." });
+        _speaking = null;
+        await NextTopicAsync();
+    }
+
     private JobSection? CurrentSection => _topicAt >= 1 && _topicAt <= _sections.Count ? _sections[_topicAt - 1] : null;
 
     private IReadOnlyList<TopicTrailItem> Topics =>
@@ -364,9 +453,7 @@
 
     // ── Adding to it: read, shown, then added on a yes ─────────────────────
     private AgentBriefUpdate? _change;
-    private string _changeSaid = string.Empty;
     private JobAsk? _changeAsk;
-    private FormAnswer? _changeAnswer;
     private bool _changeTalked;
     // What the last addition replaced, and the settings before it (Undo).
     private IReadOnlyList<string> _replaced = [];
@@ -441,7 +528,8 @@
         Phase.Speaking => "I'm talking",
         Phase.Thinking => "Writing my job description…",
         _ when !_canTalk => "Type, or record a voice note",
-        _ when HasSummary => "Anything to add to my job?",
+        _ when HasSummary => "What's changed?",
+        _ when ResumeAt is not null => "Shall we carry on?",
         _ => "Talk to me like a new team member",
     };
 
@@ -449,7 +537,8 @@
     {
         Phase.Speaking or Phase.Thinking => null,
         _ when !_canTalk => "Talking works in Chrome or Edge.",
-        _ when HasSummary => "Talk or type, and I'll add it to my job description.",
+        _ when HasSummary => "Tell me what to add or do differently. You'll see the change before it goes in.",
+        _ when ResumeAt is { } next => $"We'd got to {LowerFirst(next)}. Talk or type, and I'll pick up from there.",
         _ => "Tell me what to do, what never to do, and when to call you.",
     };
 
@@ -472,7 +561,7 @@
 
     private string ComposerHint =>
         _voiceAsk is not null || _changeAsk is not null ? "Type your answer…"
-        : !Interviewing && HasSummary ? "What would you like to add?"
+        : !Interviewing && HasSummary ? "What's changed?"
         : _topicAt == 0 ? "For example: Answer questions about our prices and delivery. Never give discounts."
         : "Type a message…";
 
@@ -655,8 +744,8 @@
         if (_phase == Phase.Checking && _change is { } change)
         {
             <QuestionForm Title="@ChangeTitle(change)" Subtitle="Have a look before it goes into my job description."
-                          Questions="ChangeQuestions" Answers="ChangeAnswers" Review Lead="@ChangeLead(change)" Secondary="@ChangeActions"
-                          SubmitLabel="Add it" Busy="_formBusy" OnSubmit="AddChangeAsync" Class="job-editor__approve" />
+                          Questions="ChangeQuestions" Review Lead="@ChangeLead(change)" Secondary="@ChangeActions"
+                          SubmitLabel="@(change.Replaced is { Count: > 0 } ? "Update my job" : "Add it")" Busy="_formBusy" OnSubmit="AddChangeAsync" Class="job-editor__approve" />
         }
         else if (_phase == Phase.Asking && CurrentCheck is { } check)
         {
@@ -677,6 +766,7 @@
     protected override async Task OnInitializedAsync()
     {
         _shown = !Brief.IsEmpty;
+        if (Interviewing && DraftKey is not null && Drafts.TryGet(DraftKey, out var kept) && kept is Kept resume) _resume = resume;
         try
         {
             var can = await Voice.CapabilitiesAsync();
@@ -686,7 +776,12 @@
         }
         catch (JSException) { }
         // The topics, ready before the first word: the conversation shows where it's going.
-        if (Interviewing)
+        if (Interviewing && _resume is { } picking)
+        {
+            _job = picking.Job;
+            _sections = picking.Sections;
+        }
+        else if (Interviewing)
         {
             try
             {
@@ -733,7 +828,7 @@
                 try { await Interop.ScrollToBottomAsync(_thread); } catch (JSException) { }
             }
         }
-        if (_scrollToSummary) { _scrollToSummary = false; try { await Interop.ScrollIntoViewAsync(_summarySection); } catch (JSException) { } }
+        if (_scrollToSummary) { _scrollToSummary = false; if (!HidingSummary) try { await Interop.ScrollIntoViewAsync(_summarySection); } catch (JSException) { } }
         // Focus is a nicety: an element just replaced (the box giving way to an approval) must never take the page down.
         if (_select is { } sentence && _summary is not null)
         {
@@ -842,17 +937,23 @@
         _voiceNotice = null;
         if (voice && !await MicAllowedAsync()) return;
         _voice = voice;
-        _messages.Clear();
         _said = string.Empty;
         _interim = string.Empty;
         _scrollToCard = true;
+        if (Interviewing && _resume is { } kept)
+        {
+            await ResumeAsync(kept);
+            if (!voice) _focusType = true;
+            return;
+        }
+        _messages.Clear();
         if (Interviewing)
         {
             _topicAt = 0;
             _confirmed.Clear();
             if (_sections.Count > 0) _messages.Add(new Message { Who = Who.Topic, Text = "Your job" });
         }
-        var opening = HasSummary ? "What would you like to add?" : $"Hi, I'm {Name}. Tell me about my job: what should I do, what should I never do, and when should I bring you in?";
+        var opening = HasSummary ? "What's changed? Tell me what to add, or what I should do differently." : $"Hi, I'm {Name}. Tell me about my job: what should I do, what should I never do, and when should I bring you in?";
         await AgentSaysAsync(opening, ListenTurnAsync);
         if (!voice) _focusType = true;
     }
@@ -1047,6 +1148,13 @@
         _said = string.Empty;
         if (_closingHeard) _stopAsking = true;
         _closingHeard = false;
+        if (said.Length == 0 && _stopAsking && CanFinishUpdateNow)
+        {
+            _stopAsking = false;
+            await FinishUpdateAsync();
+            await InvokeAsync(StateHasChanged);
+            return;
+        }
         if (said.Length == 0)
         {
             _phase = _change is not null ? Phase.Checking : CurrentCheck is not null ? Phase.Asking : Phase.Idle;
@@ -1064,18 +1172,22 @@
     private async Task OwnerSaidAsync(string text)
     {
         _messages.Add(new Message { Who = Who.Owner, Text = text });
-        // An answer to what an addition left open: then the change, to approve.
-        if (_change is not null)
+        // Updating it: an answer to what a change left open, more to change, or "that's all".
+        if (HasSummary)
         {
             if (_changeAsk is { } gap)
             {
+                _changeAsk = null;
                 await ThinkAsync();
-                _changeAnswer = await Interview.HearAsync(gap, text);
+                var (added, replaced) = await ConcludeIntoPendingAsync(gap, await Interview.HearAsync(gap, text));
+                await AnythingElseAsync(added, replaced);
+                return;
             }
-            ShowChange();
+            if (EndsUpdate.IsMatch(text.Trim())) { await FinishUpdateAsync(); return; }
+            await WriteAsync(text, talked: _voice);
             return;
         }
-        if (HasSummary || !Interview.Available)
+        if (!Interview.Available)
         {
             await WriteAsync(text, talked: _voice);
             return;
@@ -1291,6 +1403,7 @@
             }
         }
         else foreach (var (id, answer) in answers) _answers[id] = answer;
+        KeepProgress();
         await NextTopicAsync();
     }
 
@@ -1358,10 +1471,18 @@
         var heard = $"{_said} {_interim}".Trim();
         _said = string.Empty;
         _interim = string.Empty;
-        if (_change is not null)
+        if (HasSummary && _changeAsk is { } open)
         {
-            if (heard.Length > 0 && _changeAsk is { } gap) _changeAnswer = await Interview.HearAsync(gap, heard);
-            ShowChange();
+            _changeAsk = null;
+            if (heard.Length > 0)
+            {
+                _messages.Add(new Message { Who = Who.Owner, Text = Sentence(heard) });
+                var (added, replaced) = await ConcludeIntoPendingAsync(open, await Interview.HearAsync(open, heard));
+                await AnythingElseAsync(added, replaced);
+                return;
+            }
+            if (!_pendingOpen.Any(ask => ask.Id == open.Id)) _pendingOpen.Add(open);
+            await AnythingElseAsync();
             return;
         }
         if (heard.Length > 0) _messages.Add(new Message { Who = Who.Owner, Text = Sentence(heard) });
@@ -1420,6 +1541,9 @@
                 if (_noted is not null) NotedFade.Start(NotedSeconds, () => _noted = null);
                 if (_readyMade) await ShowReadyCheckAsync();
                 await OnChange.InvokeAsync();
+                if (DraftKey is not null) Drafts.Drop(DraftKey);
+                // Written from approved topics (or what was said): the agent's now. A ready-made one waits for its check.
+                if (!_readyMade || _readyQuestions.Count == 0) await OnWritten.InvokeAsync(_noted);
                 // It says so, aloud when they were talking, and they read it.
                 if (_canSpeak && (talked || (_readyMade && _readyQuestions.Count > 0)))
                 {
@@ -1432,9 +1556,7 @@
             }
             else
             {
-                var update = await Briefing.UnderstandAsync(said, Brief);
-                if (update.Added.Count > 0) await CheckChangeAsync(update, said, talked);
-                else await AgentSaysAsync("That's in my job description already. Anything else?", ListenTurnAsync);
+                await NoteChangeAsync(said);
             }
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
@@ -1452,26 +1574,143 @@
         }
     }
 
-    // ── Adding to it, on a yes ─────────────────────────────────────────────
+    // ── Updating it: everything they want changed, then one approval ───────
 
-    // Read: what changes, and anything it leaves open (asked aloud first when talking).
-    private async Task CheckChangeAsync(AgentBriefUpdate update, string said, bool talked)
+    // What they've asked for so far: the job description as it would be, the sentences going in, the ones they
+    // take the place of (from the job description as it was), what a change left open (for the approval), and
+    // what has been asked already.
+    private AgentBrief? _pending;
+    private readonly List<string> _pendingAdded = [], _pendingReplaced = [];
+    private readonly List<JobAsk> _pendingOpen = [];
+    private readonly HashSet<string> _pendingAsked = [];
+
+    private bool CanFinishUpdateNow => HasSummary && _change is null && (_pendingAdded.Count > 0 || _pendingReplaced.Count > 0);
+
+    // A whole message that ends it: "That's all", "No", "Nothing else"...
+    private static readonly System.Text.RegularExpressions.Regex EndsUpdate = new(@"^(no|nope|no thanks|no thank you|that's all|that is all|that's it|that is it|nothing else|nothing|i'm done|i am done|done)[.!]?$", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    // Said: worked into the change so far; what it leaves open asked there and then; then "Anything else?".
+    private async Task NoteChangeAsync(string said)
     {
-        _change = update;
-        _changeSaid = said;
-        _changeTalked = talked;
-        _changeAnswer = null;
-        _changeAsk = null;
-        if (Interview.Available)
+        var update = await Briefing.UnderstandAsync(said, _pending ?? Brief);
+        if (update.Added.Count == 0)
         {
-            try { _changeAsk = await Interview.GapAsync(Request(update.Brief.Summary), update.Added); }
-            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException) { }
-        }
-        if (talked && _changeAsk is { } gap)
-        {
-            await AgentSaysAsync(gap.Spoken, ListenTurnAsync);
+            if (_stopAsking && CanFinishUpdateNow) { _stopAsking = false; await FinishUpdateAsync(); return; }
+            await AgentSaysAsync(CanFinishUpdateNow ? "I have that already. Anything else?" : "That's in my job description already. Anything else?", ListenTurnAsync);
+            if (!_voice) _focusType = true;
             return;
         }
+        Merge(update);
+        if (Interview.Available)
+        {
+            JobAsk? gap = null;
+            try { gap = await Interview.GapAsync(Request(update.Brief.Summary), update.Added); }
+            catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException) { }
+            if (gap is not null && !_stopAsking && _pendingAsked.Add(gap.Id))
+            {
+                _changeAsk = gap;
+                await AgentSaysAsync($"{SaidBack(update.Added, update.Replaced)} {gap.Spoken}", ListenTurnAsync);
+                if (!_voice) _focusType = true;
+                return;
+            }
+            if (gap is not null && _stopAsking && !_pendingOpen.Any(ask => ask.Id == gap.Id)) _pendingOpen.Add(gap);
+        }
+        await AnythingElseAsync(update.Added, update.Replaced);
+    }
+
+    // Said back, then "Anything else?" (or, after "that's all", the approval).
+    private async Task AnythingElseAsync(IReadOnlyList<string>? added = null, IReadOnlyList<string>? replaced = null)
+    {
+        if (_stopAsking && CanFinishUpdateNow) { _stopAsking = false; await FinishUpdateAsync(); return; }
+        _stopAsking = false;
+        await AgentSaysAsync(added is { Count: > 0 } ? $"{SaidBack(added, replaced)} Anything else?" : "Okay. Anything else?", ListenTurnAsync);
+        if (!_voice) _focusType = true;
+    }
+
+    // What it understood, said back: what goes in, and what of the job description as it was it takes the place of.
+    private string SaidBack(IReadOnlyList<string> added, IReadOnlyList<string>? replaced)
+    {
+        var instead = (replaced ?? []).Where(line => Brief.Sentences().Contains(line)).ToList();
+        return $"Got it: {Quoted(added)}{(instead.Count > 0 ? $", instead of {Quoted(instead)}" : null)}.";
+    }
+
+    private static string Quoted(IEnumerable<string> lines) => string.Join(" ", lines.Select(line => $"“{line.Trim().TrimEnd('.')}”"));
+
+    // Into the change so far, with what it takes the place of: an earlier addition goes (it's said another way
+    // now); a sentence from the job description as it was is shown as replaced.
+    private void Merge(AgentBriefUpdate update)
+    {
+        _pending = update.Brief;
+        Replace(update.Replaced ?? []);
+        foreach (var line in update.Added)
+            if (!_pendingAdded.Contains(line)) _pendingAdded.Add(line);
+    }
+
+    private void Replace(IEnumerable<string> lines)
+    {
+        foreach (var line in lines)
+            if (!_pendingAdded.Remove(line) && !_pendingReplaced.Contains(line)) _pendingReplaced.Add(line);
+    }
+
+    // An answer to what a change left open, worked in (what it replaces goes); an empty one waits on the approval.
+    private async Task<(List<string> Added, List<string> Replaced)> ConcludeIntoPendingAsync(JobAsk gap, FormAnswer? answer)
+    {
+        var added = new List<string>();
+        var replaced = new List<string>();
+        if (answer is not { IsEmpty: false } || _pending is null)
+        {
+            if (!_pendingOpen.Any(ask => ask.Id == gap.Id)) _pendingOpen.Add(gap);
+            return (added, replaced);
+        }
+        _pendingOpen.RemoveAll(ask => ask.Id == gap.Id);
+        try
+        {
+            var outcome = await Interview.ConcludeAsync(new(UseCase ?? AgentUseCase.Custom, CustomJob, Industry, Business, _pending.Summary,
+                new Dictionary<string, FormAnswer> { [gap.Id] = answer }));
+            if (outcome.Replaced is { Count: > 0 } gone)
+            {
+                _pending = new AgentBrief { Summary = string.Join(" ", _pending.Sentences().Where(line => !gone.Contains(line))) };
+                Replace(gone);
+                replaced.AddRange(gone);
+            }
+            foreach (var sentence in outcome.Sentences)
+            {
+                var more = await Briefing.UnderstandAsync(sentence, _pending);
+                Merge(more);
+                added.AddRange(more.Added);
+                replaced.AddRange(more.Replaced ?? []);
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException) { }
+        return (added, replaced);
+    }
+
+    // "That's all": everything they asked for, together, to approve; what's still open, to answer there.
+    private async Task FinishUpdateAsync()
+    {
+        _pause?.Cancel();
+        await StopListeningAsync();
+        var heard = $"{_said} {_interim}".Trim();
+        _said = string.Empty;
+        _interim = string.Empty;
+        if (heard.Length > 0 && !EndsUpdate.IsMatch(heard))
+        {
+            _messages.Add(new Message { Who = Who.Owner, Text = Sentence(heard) });
+            var update = await Briefing.UnderstandAsync(heard, _pending ?? Brief);
+            if (update.Added.Count > 0) Merge(update);
+        }
+        if (_changeAsk is { } open)
+        {
+            if (!_pendingOpen.Any(ask => ask.Id == open.Id)) _pendingOpen.Add(open);
+            _changeAsk = null;
+        }
+        if (_pending is null || !CanFinishUpdateNow)
+        {
+            await AgentSaysAsync("Okay, nothing to change. My job stays as it is.", null);
+            return;
+        }
+        _change = new AgentBriefUpdate(_pending, [.. _pendingAdded], [.. _pendingReplaced]);
+        _changeTalked = _voice;
         ShowChange();
     }
 
@@ -1482,7 +1721,7 @@
         var message = _messages.FirstOrDefault(each => each.Change);
         if (message is null)
         {
-            message = new Message { Who = Who.Agent, Text = $"{ChangeTitle(change)}. Have a look, and approve it below.", Change = true };
+            message = new Message { Who = Who.Agent, Text = $"{ChangeTitle(change)}, everything together. Have a look, and approve it below.", Change = true };
             _messages.Add(message);
         }
         _phase = Phase.Checking;
@@ -1495,10 +1734,8 @@
 
     private static string ChangeTitle(AgentBriefUpdate change) => change.Replaced is { Count: > 0 } ? "Here's what I'll change" : "Here's what I'll add";
 
-    private IReadOnlyList<FormQuestion> ChangeQuestions => _changeAsk is { } gap ? [gap.Form] : [];
-
-    private IReadOnlyDictionary<string, FormAnswer>? ChangeAnswers =>
-        _changeAsk is { } gap && _changeAnswer is { IsEmpty: false } answer ? new Dictionary<string, FormAnswer> { [gap.Id] = answer } : null;
+    // What a change left open and they skipped: asked again on the approval.
+    private IReadOnlyList<FormQuestion> ChangeQuestions => [.. _pendingOpen.Select(ask => ask.Form)];
 
     // What changes: each sentence going in, and any it takes the place of.
     private RenderFragment ChangeLead(AgentBriefUpdate change) => __builder =>
@@ -1524,36 +1761,22 @@
     private RenderFragment ChangeActions => __builder =>
     {
         <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_formBusy" @onclick="CancelChange">Cancel</Button>
-        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_formBusy" @onclick="EditChange">
-            <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
-            <ChildContent>Edit</ChildContent>
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_formBusy" @onclick="SayMore">
+            <IconLeft><Icon Name="IconName.RiChat3Fill" /></IconLeft>
+            <ChildContent>Say more</ChildContent>
         </Button>
     };
 
     // A yes: it goes in, with the answer to its question, and the settings follow.
     private async Task AddChangeAsync(IReadOnlyDictionary<string, FormAnswer> answers)
     {
-        if (_change is not { } change) return;
+        if (_change is null || _pending is null) return;
         _formBusy = true;
-        var brief = change.Brief;
-        var added = change.Added.ToList();
-        var replaced = (change.Replaced ?? []).ToList();
-        try
-        {
-            if (_changeAsk is { } gap && answers.TryGetValue(gap.Id, out var answer) && !answer.IsEmpty)
-            {
-                var outcome = await Interview.ConcludeAsync(new(UseCase ?? AgentUseCase.Custom, CustomJob, Industry, Business, brief.Summary,
-                    new Dictionary<string, FormAnswer> { [gap.Id] = answer }));
-                foreach (var sentence in outcome.Sentences)
-                {
-                    var more = await Briefing.UnderstandAsync(sentence, brief);
-                    brief = more.Brief;
-                    added.AddRange(more.Added);
-                    replaced.AddRange(more.Replaced ?? []);
-                }
-            }
-        }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException) { }
+        foreach (var gap in _pendingOpen.ToList())
+            if (answers.TryGetValue(gap.Id, out var answer) && !answer.IsEmpty) await ConcludeIntoPendingAsync(gap, answer);
+        var brief = _pending;
+        var added = _pendingAdded.ToList();
+        var replaced = _pendingReplaced.ToList();
         _before = Brief.Copy();
         _rulesBefore = Settings is null ? null : AgentBriefRules.Of(Settings);
         Brief.Summary = brief.Summary;
@@ -1564,10 +1787,13 @@
         _fresh = true;
         // Added: the conversation is put away, and the card folds again, with what was added showing.
         _unfolded = false;
+        var before = _before;
+        var rulesBefore = _rulesBefore;
         ClearChange();
         ResetConversation();
         _phase = Phase.Idle;
         await OnChange.InvokeAsync();
+        if (before is not null) await OnUpdated.InvokeAsync(new(before, rulesBefore, added, replaced));
     }
 
     private void CancelChange()
@@ -1577,13 +1803,12 @@
         _phase = Phase.Idle;
     }
 
-    // Back to their words, in the box, to say it another way.
-    private void EditChange()
+    // Back to the conversation, everything so far kept, to add or change more.
+    private void SayMore()
     {
-        var said = _changeSaid;
-        ClearChange();
+        _change = null;
         _messages.RemoveAll(message => message.Change);
-        _typed = said;
+        _messages.Add(new Message { Who = Who.Agent, Text = "What else?" });
         _phase = Phase.Idle;
         _focusType = true;
     }
@@ -1592,10 +1817,13 @@
     {
         _change = null;
         _changeAsk = null;
-        _changeAnswer = null;
-        _changeSaid = string.Empty;
         _changeTalked = false;
         _formBusy = false;
+        _pending = null;
+        _pendingAdded.Clear();
+        _pendingReplaced.Clear();
+        _pendingOpen.Clear();
+        _pendingAsked.Clear();
     }
 
     // ── A ready-made one ───────────────────────────────────────────────────
@@ -1638,7 +1866,7 @@
     {
         var changed = answers.Where(pair => !SameAnswer(pair.Value, _readyAnswers?.GetValueOrDefault(pair.Key) ?? FormAnswer.None))
             .ToDictionary(pair => pair.Key, pair => pair.Value);
-        if (changed.Count == 0) { CloseReadyCheck(); return; }
+        if (changed.Count == 0) { CloseReadyCheck(); await OnWritten.InvokeAsync(_noted); return; }
         _formBusy = true;
         try
         {
@@ -1669,6 +1897,7 @@
             _voiceNotice = "We couldn't update that just now. Try again.";
         }
         CloseReadyCheck();
+        await OnWritten.InvokeAsync(_noted);
     }
 
     private void CloseReadyCheck()

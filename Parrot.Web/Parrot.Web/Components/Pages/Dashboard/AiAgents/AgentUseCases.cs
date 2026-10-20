@@ -5,7 +5,7 @@ using Parrot.Web.Features.Dashboard.AiAgents;
 namespace Parrot.Web.Components.Pages.Dashboard.AiAgents;
 
 /// <summary>
-/// The jobs an agent can be created for (agent setup, 13 October
+/// The jobs an agent can be created for (agent setup, Concept B, 13 October
 /// 2026): what a small business hires an assistant to do on its chats. Each
 /// maps to one of the roles the settings already know, for its sensible
 /// defaults, and suggests what to try it with. One job per agent; an owner

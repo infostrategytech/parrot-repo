@@ -1,21 +1,50 @@
 @namespace Parrot.SharedComponents.DesignSystem
 
-@* The topics a conversation goes through, as words rather than a bar, so it
-   never reads as a second progress bar next to a flow's own steps (designer,
-   15 October 2026): done ones with a small tick, the one being talked about
-   in full colour, the rest quieter. No numbers. Where it is narrow (a phone),
-   just the topic now and the one after it. *@
+@* The topics a conversation goes through, as a horizontal timeline across the
+   whole width (designer, 19 October 2026): a marker for each topic on one line,
+   its name under it. Done ones are filled with a tick and the line up to them
+   is drawn in; the one being talked about is a ring, its name in full colour;
+   the rest are quiet dots. No numbers, so it never reads as a second step bar
+   next to a flow's own. Where it is narrow (a phone), the markers alone, with
+   the topic now and the one after it under them. *@
 
+@if (Bar)
+{
+    @* In a flow's top bar (designer, 20 October 2026: telling an agent its job, full screen): as creation's
+       step bar, a short segment per topic, filled once done, the one now lighter; and the topic now beside
+       them, in words. Each segment names its topic on hover and to a screen reader. *@
+    var current = Items.FirstOrDefault(item => item.State == TopicState.Current);
+    <nav class="@($"topic-trail is-bar {Class}")" aria-label="@Label">
+        <div class="topic-trail__bar">
+            <ol class="topic-trail__segments">
+                @foreach (var item in Items)
+                {
+                    <li class="@($"topic-trail__segment is-{item.State.ToString().ToLowerInvariant()}")" title="@item.Title" aria-current="@(item.State == TopicState.Current ? "step" : null)">
+                        <span class="sr-only">@item.Title@(item.State == TopicState.Done ? ", done" : null)</span>
+                    </li>
+                }
+            </ol>
+            @if (current is not null)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="topic-trail__now" aria-hidden="true">@current.Title</Typography>
+            }
+        </div>
+    </nav>
+}
+else
+{
 <nav class="topic-trail @Class" aria-label="@Label">
     <ol class="topic-trail__list">
         @foreach (var item in Items)
         {
             <li class="@($"topic-trail__item is-{item.State.ToString().ToLowerInvariant()}")" aria-current="@(item.State == TopicState.Current ? "step" : null)">
-                @if (item.State == TopicState.Done)
-                {
-                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
-                }
-                <Typography TextStyle="@(item.State == TopicState.Current ? TextStyle.Small12Semibold : TextStyle.Small12Medium)" As="span">@item.Title</Typography>
+                <span class="topic-trail__marker" aria-hidden="true">
+                    @if (item.State == TopicState.Done)
+                    {
+                        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                    }
+                </span>
+                <Typography TextStyle="@(item.State == TopicState.Current ? TextStyle.Small12Semibold : TextStyle.Small12Medium)" As="span" Class="topic-trail__label">@item.Title</Typography>
                 @if (item.State == TopicState.Done)
                 {
                     <span class="sr-only">, done</span>
@@ -26,7 +55,7 @@
     @if (Items.FirstOrDefault(item => item.State == TopicState.Current) is { } now)
     {
         var next = Items.SkipWhile(item => item != now).Skip(1).FirstOrDefault(item => item.State != TopicState.Done);
-        <p class="topic-trail__compact">
+        <p class="topic-trail__compact" aria-hidden="true">
             <Typography TextStyle="TextStyle.Small12Semibold" As="span">@now.Title</Typography>
             @if (next is not null)
             {
@@ -35,12 +64,16 @@
         </p>
     }
 </nav>
+}
 
 @code {
     [Parameter, EditorRequired] public IReadOnlyList<TopicTrailItem> Items { get; set; } = [];
 
     /// <summary>What the topics are, for a screen reader ("What we'll talk about").</summary>
     [Parameter] public string Label { get; set; } = "Topics";
+
+    /// <summary>As a flow's step bar, for a top bar: segments and the topic now, in place of the timeline.</summary>
+    [Parameter] public bool Bar { get; set; }
 
     [Parameter] public string? Class { get; set; }
 }

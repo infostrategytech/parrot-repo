@@ -66,7 +66,7 @@
                                 <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Emoji</Typography>
                                 <SegmentedControl TValue="AgentEmojiUsage" Label="Emoji" Options="Emojis" Value="@Form.Settings.Emoji" ValueChanged="v => SetAsync(() => Form.Settings.Emoji = v)" />
                             </div>
-                            @* Optional extras, folded where the page asks; open
+                            @* Optional extras, folded where the page asks (Concept B); open
                                already when either is set, so nothing set is hidden. *@
                             @if (MoreOptions)
                             {
@@ -161,7 +161,7 @@
                     @if (_section == AgentTopic.Handoff)
                     {
                         <div class="agent-advanced__content" id="@($"{_id}-hand-content")">
-                            @* Who it brings in, where the page shows it with these. *@
+                            @* Who it brings in, where the page shows it with these (Concept B). *@
                             @if (ShowWho)
                             {
                                 <div class="agent-advanced__field">
@@ -342,11 +342,11 @@
     /// <summary>Shows the builder canvas row, marked Coming soon (an existing agent's Settings).</summary>
     [Parameter] public bool ShowCanvas { get; set; }
 
-    /// <summary>Just this topic, open, with no fold or heading: a tab of the agent's page.</summary>
+    /// <summary>Just this topic, open, with no fold or heading: a tab of the agent's page (Concept B).</summary>
     [Parameter] public AgentTopic? Only { get; set; }
 
     /// <summary>
-    /// Notes only for this agent, under its knowledge. The agent's page leaves them
+    /// Notes only for this agent, under its knowledge. Concept B leaves them
     /// out: business knowledge is shared, and what one agent should do is its
     /// job description (designer, 14 October 2026).
     /// </summary>
@@ -355,25 +355,25 @@
     /// <summary>
     /// The rows that are always so and can't be changed ("Answers questions",
     /// "A customer asks for a person"). Off where the page says them once in
-    /// words instead, so they don't read as settings.
+    /// words instead (Concept B), so they don't read as settings.
     /// </summary>
     [Parameter] public bool ShowAlways { get; set; } = true;
 
     /// <summary>What a topic the business hasn't covered says: "Not taught yet" by
-    /// Teach your AI, "Not added yet" beside "Add to business knowledge".</summary>
+    /// Teach your AI, "Not added yet" beside "Add to business knowledge" (Concept B).</summary>
     [Parameter] public string Missing { get; set; } = "Not taught yet";
 
-    /// <summary>Who it hands customers to, as the first line of when it does.</summary>
+    /// <summary>Who it hands customers to, as the first line of when it does (Concept B).</summary>
     [Parameter] public bool ShowWho { get; set; }
 
-    /// <summary>The first message and the phrases to avoid under "More options".</summary>
+    /// <summary>The first message and the phrases to avoid under "More options" (Concept B).</summary>
     [Parameter] public bool MoreOptions { get; set; }
 
     private bool? _moreOpen;
 
     private bool MoreOpen => _moreOpen ?? (!string.IsNullOrWhiteSpace(Form.Settings.Greeting) || Form.Settings.AvoidPhrases.Count > 0);
 
-    /// <summary>Draws "Add to business knowledge" under what it uses (the business dialog).</summary>
+    /// <summary>Draws "Add to business knowledge" under what it uses (Concept B: the business dialog).</summary>
     [Parameter] public EventCallback OnAddKnowledge { get; set; }
 
     protected override void OnParametersSet()

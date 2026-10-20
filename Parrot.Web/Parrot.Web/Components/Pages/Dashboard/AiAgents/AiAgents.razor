@@ -27,7 +27,7 @@
 <PageTitle>AI Operations · OmniAI</PageTitle>
 
 @* A new agent is created in a full-screen flow of its own (AgentCreate),
-   then configured on its page (designer, 15 October 2026). *@
+   then configured on its page (Concept B, the one kept: designer, 15 October 2026). *@
     <main class="@($"operations-main {(IsEmpty ? "is-empty" : null)}")">
         <header class="operations-header">
             <div class="operations-heading">
@@ -172,6 +172,7 @@
                                    Busy="@(_busyAgentId == current.Id)"
                                    OnOpen="() => OpenAgent(current)"
                                    OnConfigure="() => OpenSettings(current)"
+                                   OnGetReady="@(() => Nav.NavigateTo($"/ai-operations/{current.Id}?tab=overview"))"
                                    OnDelete="() => _pendingDelete = current"
                                    OnStatusChange="() => ChangeStatusAsync(current)" />
                     }

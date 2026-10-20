@@ -462,7 +462,7 @@
 }
 
 
-/* ── Its configuration, one tab at a time ─────────────────────── */
+/* ── Concept B: its configuration, one tab at a time ─────────────────────── */
 /* One column at a reading width, the setup rhythm between cards, and the
    save bar under whichever tab is open. */
 
@@ -519,7 +519,7 @@
   .agent-detail__website > ::deep .ds-button { margin-top: var(--spacing-none); justify-self: start; }
 }
 
-/* ── Revised (designer, 14 October 2026) ──────────────────────── */
+/* ── Concept B, revised (designer, 14 October 2026) ──────────────────────── */
 
 /* The tabs are the page's sections: left, in line with the name, at the
    page's width, and pinned at the top as the page scrolls so they are never
@@ -582,7 +582,7 @@
   border-radius: var(--radius-radius-lg);
 }
 
-/* ── Four tabs, each thing said once ──────────────────────────── */
+/* ── Concept B: four tabs, each thing said once ──────────────────────────── */
 
 /* A titled part of a tab: its heading, a line under it, then its card. */
 .agent-detail__group { display: grid; gap: var(--spacing-md); min-width: 0; }
@@ -607,7 +607,7 @@
   justify-content: space-between;
 }
 
-/* The save bar: the page's last child, so it floats at the window's
+/* Concept B's save bar: the page's last child, so it floats at the window's
    foot on any tab, above the cards; what is unsaved on the left, the two
    buttons on the right. */
 .agent-detail__save.is-floating {
@@ -623,4 +623,174 @@
 .agent-detail {
   /* Missing from the token set: the height of the demo's own tools at the
      window's foot (concept switch, theme toggle), to float the bar above. */
+  --ds-detail-demo-tools: 64px;
+}
+.agent-detail.is-demo .agent-detail__save.is-floating { bottom: calc(var(--spacing-lg) + var(--ds-detail-demo-tools)); }
+
+/* ── A draft, getting ready (designer, 19 October 2026) ────────────────────
+   Its job first, then a test, then on: one row each, a numbered mark that
+   becomes a tick, the one to do now in full colour, the rest quieter. */
+/* Room to breathe (designer, 20 October 2026): a roomier head with no rule under it, taller rows, the mark
+   and the button centred on the words, and rules between the steps starting at the words. */
+.agent-detail__ready { margin-bottom: var(--spacing-4xl); }
+.agent-detail__ready > .agent-detail__card-head { padding: var(--spacing-2xl) var(--spacing-2xl) var(--spacing-sm); border-bottom: 0; }
+.agent-detail__ready-steps { display: grid; margin: var(--spacing-none); padding: var(--spacing-none) var(--spacing-none) var(--spacing-sm); list-style: none; }
+.agent-detail__ready-step {
+  position: relative;
+  display: flex;
+  gap: var(--spacing-lg);
+  align-items: center;
+  min-height: var(--ds-detail-row-min);
+  padding: var(--spacing-xl) var(--spacing-2xl);
+}
+.agent-detail__ready-step + .agent-detail__ready-step::before {
+  position: absolute;
+  top: 0;
+  right: var(--spacing-2xl);
+  left: calc(var(--spacing-2xl) + var(--ds-detail-ready-mark) + var(--spacing-lg));
+  border-top: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  content: "";
+}
+.agent-detail__ready-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-detail-ready-mark);
+  height: var(--ds-detail-ready-mark);
+  color: var(--colors-text-muted);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.agent-detail__ready-step.is-now .agent-detail__ready-mark { color: var(--colors-brand-primary); border-color: var(--colors-brand-primary); }
+.agent-detail__ready-step.is-done .agent-detail__ready-mark { color: var(--colors-brand-primary-foreground); background: var(--colors-brand-primary); border-color: var(--colors-brand-primary); }
+.agent-detail__ready-text { display: grid; flex: 1; gap: var(--spacing-xs); min-width: 0; }
+.agent-detail__ready-text ::deep strong { color: var(--colors-text-primary); }
+.agent-detail__ready-text ::deep small { color: var(--colors-text-muted); }
+.agent-detail__ready-step.is-later .agent-detail__ready-text ::deep strong { color: var(--colors-text-secondary); }
+.agent-detail__ready-step > ::deep .ds-button { flex: none; }
+.agent-detail {
+  /* Missing from the token set: a numbered step's round mark. */
+  --ds-detail-ready-mark: 32px;
+}
+
+/* ── Told its job, in its view: it speaks for itself first ──────────────── */
+.agent-detail__job-empty { padding: var(--spacing-2xl) var(--spacing-xl); }
+.agent-detail__job-intro { display: grid; gap: var(--spacing-sm); margin-bottom: var(--spacing-xl); }
+/* Once they are talking, it has said hello in the chat: the chat takes the room, the window's height. */
+.agent-detail__job-intro:has(~ .job-editor .job-editor__voice.is-talking) { display: none; }
+.agent-detail__job-intro ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.agent-detail__job-intro ::deep .agent-detail__job-ask { display: block; }
+.agent-detail__job-intro ::deep .agent-detail__job-lede { max-width: var(--ds-detail-job-lede); margin: var(--spacing-none); color: var(--colors-text-muted); }
+.agent-detail {
+  /* Missing from the token set: a comfortable reading measure for one paragraph. */
+  --ds-detail-job-lede: 640px;
+}
+
+/* ── It knows its job: the end of telling it (designer, 19 October 2026) ───
+   Calm: its face, a tick that pops in, then what it will do, a line at a time. */
+.agent-detail__told { display: grid; justify-items: center; gap: var(--spacing-md); text-align: center; }
+.agent-detail__told ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); animation: agent-told-rise var(--ds-motion-slow) var(--ds-motion-enter) both; animation-delay: var(--ds-told-step); }
+.agent-detail__told-face { position: relative; width: var(--ds-told-face); height: var(--ds-told-face); animation: agent-told-face var(--ds-motion-slow) var(--ds-motion-enter) both; }
+.agent-detail__told-face img { display: block; width: 100%; height: 100%; border-radius: var(--radius-radius-full); box-shadow: 0 0 0 var(--spacing-sm) var(--colors-accent-brand-subtle); }
+.agent-detail__told-tick {
+  position: absolute;
+  right: calc(-1 * var(--spacing-2xs));
+  bottom: calc(-1 * var(--spacing-2xs));
+  display: grid;
+  place-items: center;
+  width: var(--ds-told-tick);
+  height: var(--ds-told-tick);
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border: var(--ds-told-ring) solid var(--colors-surface-background);
+  border-radius: var(--radius-radius-full);
+  animation: agent-told-tick var(--ds-motion-slow) var(--ds-motion-enter) both;
+  animation-delay: var(--ds-told-step);
+}
+.agent-detail__told ::deep .agent-detail__told-lede { margin: var(--spacing-sm) var(--spacing-none) var(--spacing-none); color: var(--colors-text-muted); animation: agent-told-rise var(--ds-motion-slow) var(--ds-motion-enter) both; animation-delay: calc(var(--ds-told-step) * 2); }
+.agent-detail__told-list {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-detail-job-lede), 100%);
+  margin: var(--spacing-none);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  text-align: left;
+  list-style: none;
+  background: var(--colors-surface-card);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.agent-detail__told-list li { display: flex; gap: var(--spacing-sm); align-items: flex-start; color: var(--colors-text-secondary); animation: agent-told-rise var(--ds-motion-base) var(--ds-motion-enter) both; animation-delay: calc(var(--ds-told-step) * 2 + var(--ds-told-at, 0) * var(--ds-told-line)); }
+.agent-detail__told-list li > ::deep .ds-icon { flex: none; margin-top: var(--spacing-2xs); color: var(--colors-brand-primary); }
+.agent-detail__told ::deep .agent-detail__told-more { animation: agent-told-rise var(--ds-motion-base) var(--ds-motion-enter) both; animation-delay: calc(var(--ds-told-step) * 2 + var(--ds-told-at, 0) * var(--ds-told-line)); }
+.agent-detail__told ::deep .agent-detail__told-note { max-width: var(--ds-detail-job-lede); margin: var(--spacing-none); color: var(--colors-text-muted); }
+.agent-detail__told-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: center; margin-top: var(--spacing-md); }
+.agent-detail__told {
+  /* Missing from the token set: the moment's face and tick, and its pace (a beat between each part, a shorter one between lines). */
+  --ds-told-face: 88px;
+  --ds-told-tick: 32px;
+  --ds-told-ring: 3px;
+  --ds-told-step: 160ms;
+  --ds-told-line: 70ms;
+}
+@keyframes agent-told-face { from { opacity: 0; transform: scale(0.9); } }
+@keyframes agent-told-tick { from { opacity: 0; transform: scale(0.4); } 70% { transform: scale(1.12); } }
+@keyframes agent-told-rise { from { opacity: 0; transform: translateY(var(--spacing-xs)); } }
+@media (prefers-reduced-motion: reduce) {
+  .agent-detail__told ::deep h2,
+  .agent-detail__told-face,
+  .agent-detail__told-tick,
+  .agent-detail__told ::deep .agent-detail__told-lede,
+  .agent-detail__told-list li,
+  .agent-detail__told ::deep .agent-detail__told-more { animation: none; }
+}
+
+/* Its job (designer, 20 October 2026): the summary to read, its name and the way to change it above. */
+.agent-detail__job-card {
+  /* Missing from the token set: a reading measure for the summary, and how long an addition stays lit. */
+  --ds-detail-job-measure: 760px;
+  --ds-detail-job-glow: 4s;
+}
+.agent-detail__job-head {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-bottom: var(--ds-detail-hairline) solid var(--colors-surface-border);
+}
+.agent-detail__job-head ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.agent-detail__job-head ::deep small { color: var(--colors-text-muted); }
+.agent-detail__job-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: flex-end; }
+.agent-detail__job-body { padding: var(--spacing-xl); }
+.agent-detail__job-summary ::deep p { max-width: var(--ds-detail-job-measure); margin: var(--spacing-none); color: var(--colors-text-primary); }
+.agent-detail__job-summary span { border-radius: var(--radius-radius-sm); box-decoration-break: clone; transition: color var(--ds-motion-base) var(--ds-motion-ease); }
+/* Just added: lit, then back to the page. */
+.agent-detail__job-summary span.is-new { animation: agent-job-new var(--ds-detail-job-glow) var(--ds-motion-ease) both; }
+/* To change (from the test chat): marked while they talk about it. */
+.agent-detail__job-summary span.is-focus { background: var(--colors-accent-brand-subtle); }
+/* Read aloud: what is still to come quieter, each sentence lighting as it is reached. */
+.agent-detail__job-summary.is-reading span:not([data-on]) { color: var(--colors-text-muted); }
+@keyframes agent-job-new { from { background-color: var(--colors-accent-brand-subtle); } }
+
+/* Updating it: its job now, quiet, above the conversation; put away once they talk (the chat takes the room). */
+.agent-detail__update-now { display: grid; gap: var(--spacing-sm); margin-bottom: var(--spacing-xl); }
+.agent-detail__update-now:has(~ .job-editor .job-editor__voice.is-talking) { display: none; }
+.agent-detail__update-head { display: flex; gap: var(--spacing-md); align-items: center; justify-content: space-between; }
+.agent-detail__update-head ::deep .agent-detail__update-label { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.agent-detail__update-now .agent-detail__job-summary {
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.agent-detail__update-now .agent-detail__job-summary ::deep p { color: var(--colors-text-secondary); }
+
+@media (max-width: 760px) {
+  .agent-detail__job-head { flex-wrap: wrap; }
+  .agent-detail__job-actions { justify-content: flex-start; width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-detail__job-summary span { transition: none; }
+  .agent-detail__job-summary span.is-new { animation: none; }
 }

@@ -182,7 +182,7 @@
   .agent-advanced__groups { animation: none; }
 }
 
-/* "More options": the optional extras, folded under one row. */
+/* "More options" (Concept B): the optional extras, folded under one row. */
 .agent-advanced ::deep .agent-advanced__more {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

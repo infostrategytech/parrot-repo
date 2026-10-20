@@ -1,48 +1,152 @@
-/* Topics as a quiet line of words: ticks for done, full colour for now,
-   muted for later, a middle dot between. Measured against its own width,
-   so a narrow card gets the short form. */
+/* Topics as a horizontal timeline across the whole width (designer, 19 October 2026):
+   each topic an equal share, its marker on one line, its name centred under it.
+   Measured against its own width, so a narrow card gets the short form. */
 .topic-trail {
   container-type: inline-size;
   min-width: 0;
+  /* Missing from the token set: the timeline's marker, its line, and the current one's halo. */
+  --ds-topic-marker: 20px;
+  --ds-topic-dot: 8px;
+  --ds-topic-line: 2px;
+  --ds-topic-halo: 4px;
 }
 
 .topic-trail__list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-xs) var(--spacing-sm);
-  align-items: center;
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
   margin: var(--spacing-none);
   padding: var(--spacing-none);
   list-style: none;
 }
 
 .topic-trail__item {
-  display: inline-flex;
-  gap: var(--spacing-2xs);
-  align-items: center;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  padding-inline: var(--spacing-2xs);
   color: var(--colors-text-muted);
-  white-space: nowrap;
+  text-align: center;
 }
+
+/* The line into each topic, from the one before: drawn in once that one is done. */
 .topic-trail__item + .topic-trail__item::before {
-  margin-inline-end: var(--spacing-sm);
-  color: var(--colors-text-muted);
-  content: "·";
+  position: absolute;
+  top: calc((var(--ds-topic-marker) - var(--ds-topic-line)) / 2);
+  right: calc(50% + var(--ds-topic-marker) / 2 + var(--spacing-2xs));
+  left: calc(-50% + var(--ds-topic-marker) / 2 + var(--spacing-2xs));
+  height: var(--ds-topic-line);
+  background: linear-gradient(var(--colors-brand-primary), var(--colors-brand-primary)) left / 0% 100% no-repeat, var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  content: "";
+  transition: background-size var(--ds-motion-slow) var(--ds-motion-ease);
+}
+.topic-trail__item.is-done + .topic-trail__item::before { background-size: 100% 100%, auto; }
+/* Past the topic now, the line stays quiet even where a topic was covered ahead: progress never jumps forward. */
+.topic-trail__item.is-current ~ .topic-trail__item::before { background-size: 0% 100%, auto; }
+
+.topic-trail__marker {
+  display: grid;
+  place-items: center;
+  width: var(--ds-topic-marker);
+  height: var(--ds-topic-marker);
+  color: var(--colors-brand-primary-foreground);
+  border-radius: var(--radius-radius-full);
+  transition: background-color var(--ds-motion-base) var(--ds-motion-ease), box-shadow var(--ds-motion-base) var(--ds-motion-ease);
+}
+/* Still to come: a quiet hollow dot. */
+.topic-trail__item.is-upcoming .topic-trail__marker::after {
+  width: var(--ds-topic-dot);
+  height: var(--ds-topic-dot);
+  border: var(--ds-topic-line) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  content: "";
+}
+/* Now: a ring with a soft halo. */
+.topic-trail__item.is-current .topic-trail__marker {
+  background: var(--colors-surface-card);
+  box-shadow: inset 0 0 0 var(--ds-topic-line) var(--colors-brand-primary), 0 0 0 var(--ds-topic-halo) var(--colors-accent-brand-subtle);
+}
+.topic-trail__item.is-current .topic-trail__marker::after {
+  width: var(--ds-topic-dot);
+  height: var(--ds-topic-dot);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+  content: "";
+}
+/* Done: filled, with a tick. */
+.topic-trail__item.is-done .topic-trail__marker { background: var(--colors-brand-primary); }
+
+.topic-trail__item ::deep .topic-trail__label {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 100%;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
 }
 .topic-trail__item.is-done { color: var(--colors-text-secondary); }
-.topic-trail__item.is-done > ::deep .ds-icon { color: var(--colors-feedback-success-text); }
 .topic-trail__item.is-current { color: var(--colors-text-primary); }
 
 .topic-trail__compact {
   display: none;
   gap: var(--spacing-xs);
   align-items: center;
-  margin: var(--spacing-none);
+  margin: var(--spacing-sm) var(--spacing-none) var(--spacing-none);
   color: var(--colors-text-primary);
 }
 .topic-trail__compact ::deep .topic-trail__next { color: var(--colors-text-muted); }
 
-/* A phone's width: the topic now, and the next one. */
+/* A phone's width: the markers alone, then the topic now and the next one. */
 @container (max-width: 480px) {
-  .topic-trail__list { display: none; }
+  .topic-trail__item ::deep .topic-trail__label { display: none; }
   .topic-trail__compact { display: flex; }
+}
+
+/* In a flow's top bar: creation's step bar, a segment per topic and the topic now beside them. The words
+   have a slot of their own, so the segments stay put as the topic changes. */
+.topic-trail.is-bar {
+  /* Missing from the token set, as creation's own: the segments' width, and room for a topic's name. */
+  --ds-topic-bar: 280px;
+  --ds-topic-bar-words: 180px;
+}
+.topic-trail__bar {
+  display: grid;
+  grid-template-columns: var(--ds-topic-bar) minmax(0, var(--ds-topic-bar-words));
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: center;
+}
+.topic-trail__segments {
+  display: flex;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+.topic-trail__segment {
+  flex: 1;
+  height: var(--spacing-xs);
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  transition: background-color var(--ds-motion-slow) var(--ds-motion-enter);
+}
+.topic-trail__segment.is-done { background: var(--colors-brand-primary); }
+.topic-trail__segment.is-current { background: var(--colors-accent-brand-border); }
+.topic-trail__bar ::deep .topic-trail__now { overflow: hidden; color: var(--colors-text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+
+/* A phone's width: the segments share the room left by the words. */
+@container (max-width: 480px) {
+  .topic-trail__bar { grid-template-columns: minmax(0, 1fr) auto; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .topic-trail__item + .topic-trail__item::before,
+  .topic-trail__marker,
+  .topic-trail__segment { transition: none; }
 }

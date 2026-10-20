@@ -32,9 +32,9 @@ public sealed class AgentSettings
     public bool CanOfferDiscounts { get; set; }
     public bool CanApproveRefunds { get; set; }
 
-    // ── Its job description ──────────────────────────────
+    // ── Its job description (setup Concept B) ──────────────────────────────
 
-    /// <summary>The job it was created for (AgentUseCase.Id); null for agents set up before there were jobs to choose.</summary>
+    /// <summary>The job it was created for (AgentUseCase.Id); null for agents set up in Concept A.</summary>
     public string? UseCase { get; set; }
 
     /// <summary>The kind of business (AgentIndustry.Id), which shaped its first draft.</summary>
@@ -237,8 +237,9 @@ public sealed class AgentForm
         // words. The agents API keeps the description (up to 2,000
         // characters, as the job description box) but not the job
         // description yet, so this is how it survives a reload and reaches
-        // the AI (see agents-backend-requests).
-        if (Settings.Brief is { IsEmpty: false } brief) agent.Description = brief.Summary.Trim();
+        // the AI (see agents-backend-requests). Created first and not told its job
+        // yet (designer, 19 October 2026): no description, never the job's stock one.
+        if (Settings.Brief is { } brief) agent.Description = brief.Summary.Trim();
         agent.Settings = Settings.Copy();
         foreach (var channel in agent.Channels)
             channel.IsEnabled = Channels.Contains(channel.Key);
