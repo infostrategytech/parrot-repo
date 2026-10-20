@@ -1,5 +1,9 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.AiAgents
 @inject AuthState AuthState
+@inject BusinessKind Kind
+@inject ToastService Toasts
 
 @* Business-level configuration. The workspace name is the business name the
    session carries; the slug has no value in Parrot yet and stays empty. *@
@@ -34,6 +38,24 @@
                 }
             </SelectField>
 
+            @* The kind of business (designer, 20 October 2026): kept here, once, for every agent. It starts as
+               the AI's guess from what the business has told it; the owner confirms or changes it. *@
+            <div class="workspace__full">
+                <SelectField FloatingLabel="Kind of business"
+                             Value="@(AgentIndustry.Of(_industry)?.Name)"
+                             HelperText="@KindHelp"
+                             Open='@(_openMenu == "industry")'
+                             OpenChanged="@(open => _openMenu = open ? "industry" : null)">
+                    @foreach (var industry in AgentIndustry.All)
+                    {
+                        var current = industry;
+                        <PopoverOption Label="@current.Name" Description="@current.Examples"
+                                       Active="@(_industry == current.Id)"
+                                       OnSelect="@(() => { _industry = current.Id; _guessed = false; _openMenu = null; })" />
+                    }
+                </SelectField>
+            </div>
+
             <label class="workspace__full">
                 <Typography TextStyle="TextStyle.Small12Medium" As="span">Business description</Typography>
                 <textarea class="@TextStyle.BodySmallRegular.ToClassName(prose: true)"
@@ -45,7 +67,7 @@
         </div>
     </ChildContent>
     <Footer>
-        <Button>Save</Button>
+        <Button @onclick="SaveAsync">Save</Button>
     </Footer>
 </SettingsCard>
 
@@ -59,9 +81,26 @@
     private string _timeZone = TimeZones[0];
     private string _description = string.Empty;
     private string? _openMenu;
+    private string? _industry;
+    private bool _guessed;
 
-    protected override void OnInitialized()
+    private string KindHelp => _guessed
+        ? "Our guess, from what you've told your AI. Change it if it's not right."
+        : "Your agents use this: what they're careful about, and the questions to test them with.";
+
+    protected override async Task OnInitializedAsync()
     {
         _name = AuthState.CurrentUser?.BusinessName ?? string.Empty;
+        _industry = await Kind.ReadAsync();
+        _guessed = Kind.IsGuess;
+    }
+
+    // Saves the kind of business (for the session until the backend keeps it); the other fields have no store yet.
+    private Task SaveAsync()
+    {
+        Kind.Choose(_industry);
+        _guessed = false;
+        Toasts.Show("Kind of business saved. Your agents use it from now on.");
+        return Task.CompletedTask;
     }
 }
