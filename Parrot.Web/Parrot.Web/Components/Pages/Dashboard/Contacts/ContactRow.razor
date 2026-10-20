@@ -1,4 +1,5 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@using Parrot.Web.Services
 
 @* One customer. The columns are set by the table that contains it; this file
    styles what sits inside each cell. Mirrors Aurora's ProductRow. *@
@@ -10,17 +11,29 @@
     </div>
 
     <div class="contact-row__channels" role="cell">
-        @if (Contact.HasWhatsApp)
+        @foreach (ContactIdentity identity in Contact.Identities)
         {
-            <span class="contact-row__mark contact-row__mark--whatsapp" title="WhatsApp">
-                <Icon Name="IconName.RiWhatsappFill" Size="IconSize.Sm" Label="WhatsApp" />
-            </span>
-        }
-        @if (Contact.HasInstagram)
-        {
-            <span class="contact-row__mark contact-row__mark--instagram" title="Instagram">
-                <Icon Name="IconName.RiInstagramFill" Size="IconSize.Sm" Label="Instagram" />
-            </span>
+            ChannelLink? link = ChannelLinks.For(identity.Platform, identity.Sender, null, identity.Username);
+            string cssClass = $"contact-row__mark contact-row__mark--{identity.Platform}";
+            IconName icon = PlatformIcon(identity.Platform);
+            string label = ChannelLinks.PlatformName(identity.Platform);
+            @if (link is not null)
+            {
+                <a class="@cssClass"
+                   href="@link.Url"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   title="@link.ButtonLabel"
+                   @onclick:stopPropagation="true">
+                    <Icon Name="@icon" Size="IconSize.Sm" Label="@label" />
+                </a>
+            }
+            else
+            {
+                <span class="@cssClass" title="@label">
+                    <Icon Name="@icon" Size="IconSize.Sm" Label="@label" />
+                </span>
+            }
         }
     </div>
 
@@ -63,4 +76,12 @@
     [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
 
     [Parameter] public EventCallback OnOpen { get; set; }
+
+    private static IconName PlatformIcon(string platform) => platform switch
+    {
+        "whatsapp" => IconName.RiWhatsappFill,
+        "instagram" => IconName.RiInstagramFill,
+        "tiktok" => IconName.RiTiktokFill,
+        _ => IconName.RiFacebookCircleFill,
+    };
 }

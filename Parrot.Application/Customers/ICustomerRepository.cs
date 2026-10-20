@@ -1,3 +1,5 @@
+using Parrot.Domain.Entities;
+
 namespace Parrot.Application.Customers;
 
 public interface ICustomerRepository
@@ -18,4 +20,17 @@ public interface ICustomerRepository
         string? username,
         DateTime seenAt,
         CancellationToken ct);
+
+    Task<(List<Customer> Items, int Total)> ListAsync(
+        string ownerUserId,
+        string? search,
+        string? stage,
+        string? channel,
+        int skip,
+        int take,
+        CancellationToken ct);
+
+    Task<Customer?> FindAsync(string ownerUserId, Guid id, CancellationToken ct);
+
+    Task<Customer> CreateAsync(Customer customer, CancellationToken ct);
 }

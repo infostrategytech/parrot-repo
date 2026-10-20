@@ -11,6 +11,63 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
     // The constraint name EF generates for the unique index on (ConnectionId, Sender).
     private const string IdentityUniqueConstraint = "IX_CustomerIdentities_ConnectionId_Sender";
 
+    public async Task<(List<Customer> Items, int Total)> ListAsync(
+        string ownerUserId,
+        string? search,
+        string? stage,
+        string? channel,
+        int skip,
+        int take,
+        CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+
+        IQueryable<Customer> query = db.Customers
+            .Include(c => c.Identities)
+            .Where(c => c.OwnerUserId == ownerUserId);
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            string pattern = $"%{search}%";
+            query = query.Where(c =>
+                EF.Functions.ILike(c.Name, pattern) ||
+                c.Identities.Any(i =>
+                    EF.Functions.ILike(i.Sender, pattern) ||
+                    (i.Username != null && EF.Functions.ILike(i.Username, pattern))));
+        }
+
+        if (!string.IsNullOrWhiteSpace(stage))
+            query = query.Where(c => c.Stage == stage);
+
+        if (!string.IsNullOrWhiteSpace(channel))
+            query = query.Where(c => c.Identities.Any(i => i.Platform == channel));
+
+        int total = await query.CountAsync(ct);
+        List<Customer> items = await query
+            .OrderByDescending(c => c.LastSeenAt ?? c.CreatedAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync(ct);
+
+        return (items, total);
+    }
+
+    public async Task<Customer?> FindAsync(string ownerUserId, Guid id, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        return await db.Customers
+            .Include(c => c.Identities)
+            .FirstOrDefaultAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, ct);
+    }
+
+    public async Task<Customer> CreateAsync(Customer customer, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        db.Customers.Add(customer);
+        await db.SaveChangesAsync(ct);
+        return customer;
+    }
+
     public async Task UpsertAsync(
         string ownerUserId,
         Guid connectionId,
