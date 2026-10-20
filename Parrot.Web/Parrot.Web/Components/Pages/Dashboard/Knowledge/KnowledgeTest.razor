@@ -1,0 +1,218 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Knowledge
+@using System.Text.RegularExpressions
+@using Parrot.Web.Features.Dashboard.Knowledge
+
+@* Test as a customer, on what the business's AI knows (the same name as on an agent's page). The demo derives a
+   grounded reply from approved facts; production replaces Match with its
+   knowledge-answer endpoint and returns the facts used with the answer. *@
+
+<div class="knowledge-test-shell">
+    <Dialog Open="Open"
+            Title="Test as a customer"
+            Subtitle="Ask what a customer would. Nothing here is sent to a real person."
+            Size="DialogSize.Large"
+            Dismissible
+            HideFooter
+            OnConfirm="NoopAsync"
+            OnCancel="OnClose">
+        <Body>
+            <div class="knowledge-test">
+                <ol class="knowledge-test__thread" aria-label="Knowledge test conversation" aria-live="polite">
+                    <li class="knowledge-test__message is-ai">
+                        <span class="knowledge-test__avatar"><Icon Name="IconName.RiSparkling2Fill" Size="IconSize.Sm" /></span>
+                        <div class="knowledge-test__bubble">
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Ask me something a customer might ask. I only answer from what you've approved.</Typography>
+                        </div>
+                    </li>
+
+                    @foreach (var turn in _chat)
+                    {
+                        <li class="knowledge-test__message is-customer">
+                            <div class="knowledge-test__bubble">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@turn.Question</Typography>
+                            </div>
+                        </li>
+
+                        <li class="knowledge-test__message is-ai">
+                            <span class="knowledge-test__avatar"><Icon Name="IconName.RiSparkling2Fill" Size="IconSize.Sm" /></span>
+                            <div class="knowledge-test__reply">
+                                <div class="knowledge-test__bubble @(!turn.Knows ? "is-unknown" : null)">
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@turn.Answer</Typography>
+                                </div>
+
+                                @if (turn.Knows)
+                                {
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="knowledge-test__source-toggle" @onclick="() => ToggleSources(turn)">
+                                        <IconLeft><Icon Name="IconName.RiBookOpenFill" /></IconLeft>
+                                        <ChildContent>@(turn.ShowSources ? "Hide what it used" : $"What it used · {turn.Facts.Count}")</ChildContent>
+                                    </Button>
+                                    @if (turn.ShowSources)
+                                    {
+                                        <div class="knowledge-test__sources" aria-label="Knowledge used for this answer">
+                                            @foreach (var fact in turn.Facts)
+                                            {
+                                                <div class="knowledge-test__fact">
+                                                    <span><Icon Name="@KnowledgeTopics.Icon(fact.Topic)" Size="IconSize.Sm" /></span>
+                                                    <div>
+                                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@fact.Text</Typography>
+                                                        <div class="knowledge-test__fact-meta">
+                                                            @if (ChannelIcon.From(fact.Source) is { } channel)
+                                                            {
+                                                                <ChannelIcon Channel="@channel" Size="IconSize.Sm" />
+                                                            }
+                                                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge-test__muted">@fact.Label</Typography>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            }
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="knowledge-test__teach" @onclick="() => Teach(turn.Question)">
+                                        <IconLeft><Icon Name="IconName.RiBookOpenFill" /></IconLeft>
+                                        <ChildContent>Teach the answer</ChildContent>
+                                    </Button>
+                                }
+                            </div>
+                        </li>
+                    }
+                </ol>
+
+                <footer class="knowledge-test__dock">
+                    @* Questions to try, still there after the first answer (less what was asked). *@
+                    @if (Suggestions.Any())
+                    {
+                        <div class="knowledge-test__suggestions" role="group" aria-label="Questions to try">
+                            @foreach (var suggestion in Suggestions)
+                            {
+                                var question = suggestion;
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => Ask(question)">@question</Button>
+                            }
+                        </div>
+                    }
+
+                    <div class="knowledge-test__composer">
+                        <TextArea @ref="_box"
+                                  Value="@_question"
+                                  ValueChanged="value => _question = value ?? string.Empty"
+                                  Placeholder="Write as a customer…"
+                                  AriaLabel="Write as a customer"
+                                  Variant="TextAreaVariant.Plain"
+                                  Rows="1"
+                                  MaxLength="300"
+                                  AutoGrow
+                                  SubmitOnEnter
+                                  OnKeyDown="KeyAsync" />
+                        <Button Size="ButtonSize.Small" aria-label="Send" title="Send" disabled="@string.IsNullOrWhiteSpace(_question)" @onclick="() => Ask(_question)">
+                            <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                        </Button>
+                    </div>
+                </footer>
+            </div>
+        </Body>
+    </Dialog>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public bool Open { get; set; }
+    [Parameter] public IReadOnlyList<KnowledgeFact> Facts { get; set; } = [];
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnTeach { get; set; }
+
+    private sealed class TestTurn
+    {
+        public required string Question { get; init; }
+        public required string Answer { get; init; }
+        public required IReadOnlyList<KnowledgeFact> Facts { get; init; }
+        public bool ShowSources { get; set; }
+        public bool Knows => Facts.Count > 0;
+    }
+
+    private readonly List<TestTurn> _chat = [];
+    private TextArea? _box;
+    private string _question = string.Empty;
+    private bool _wasOpen, _focus;
+
+    private IEnumerable<string> Suggestions => Facts
+        .Select(fact => KnowledgeTopics.Question(fact.Topic))
+        .Distinct(StringComparer.CurrentCultureIgnoreCase)
+        .Where(question => !_chat.Any(turn => string.Equals(turn.Question, question, StringComparison.CurrentCultureIgnoreCase)))
+        .Take(4);
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            _question = string.Empty;
+            _chat.Clear();
+            _focus = true;
+        }
+        _wasOpen = Open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focus && _box is not null)
+        {
+            _focus = false;
+            await _box.FocusAsync();
+        }
+    }
+
+    private Task KeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey) Ask(_question);
+        return Task.CompletedTask;
+    }
+
+    private static readonly HashSet<string> Common = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "the", "a", "an", "and", "or", "to", "of", "in", "on", "for", "is", "are", "do", "does", "you", "your", "we", "our",
+        "can", "i", "it", "my", "me", "with", "how", "what", "when", "where", "much", "any", "if", "be", "have", "has", "there", "outside", "inside",
+    };
+
+    private static readonly Dictionary<string, string> Same = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ship"] = "deliver", ["shipping"] = "deliver", ["delivery"] = "deliver", ["send"] = "deliver", ["nationwide"] = "deliver",
+        ["payment"] = "pay", ["transfer"] = "pay", ["paid"] = "pay", ["refund"] = "return", ["exchange"] = "return",
+        ["open"] = "hour", ["close"] = "hour", ["closed"] = "hour", ["cost"] = "price",
+    };
+
+    private static IEnumerable<string> Words(string text) =>
+        Regex.Matches(text.ToLowerInvariant(), @"[\p{L}\d₦]+")
+            .Select(match => Same.TryGetValue(match.Value, out var same) ? same : match.Value.TrimEnd('s'))
+            .Select(word => Same.TryGetValue(word, out var same) ? same : word)
+            .Where(word => word.Length > 1 && !Common.Contains(word));
+
+    private void Ask(string? value)
+    {
+        var question = value?.Trim();
+        if (string.IsNullOrEmpty(question)) return;
+
+        var asked = Words(question).ToHashSet();
+        var matches = Facts
+            .Select(fact => (fact, score: Words(fact.Text).Count(asked.Contains)))
+            .Where(entry => entry.score > 0)
+            .OrderByDescending(entry => entry.score)
+            .Take(2)
+            .Select(entry => entry.fact)
+            .ToList();
+
+        _chat.Add(new TestTurn
+        {
+            Question = question,
+            Facts = matches,
+            Answer = matches.Count > 0
+                ? string.Join(" ", matches.Select(fact => fact.Text))
+                : "I don't have an approved answer for that yet. I'd hand this conversation to your team instead of guessing.",
+        });
+        _question = string.Empty;
+        _focus = true;
+    }
+
+    private static void ToggleSources(TestTurn turn) => turn.ShowSources = !turn.ShowSources;
+    private Task Teach(string question) => OnTeach.InvokeAsync(question);
+    private static Task NoopAsync() => Task.CompletedTask;
+}

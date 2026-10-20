@@ -1,0 +1,131 @@
+.knowledge-test-shell {
+  /* Gaps in the token set: no chat-modal height, source width, avatar size or border width. */
+  --ds-knowledge-test-height: 680px;
+  --ds-knowledge-test-sources: 560px;
+  --ds-knowledge-test-avatar: 32px;
+  --ds-knowledge-test-hairline: 1px;
+}
+
+.knowledge-test-shell ::deep .dialog {
+  grid-template-rows: auto minmax(0, 1fr);
+  height: min(var(--ds-knowledge-test-height), calc(100dvh - 2 * var(--spacing-3xl)));
+  overflow: hidden;
+}
+.knowledge-test-shell ::deep .dialog__body { min-height: 0; }
+
+.knowledge-test {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  color: var(--colors-text-primary);
+}
+
+.knowledge-test ::deep p { margin: var(--spacing-none); }
+.knowledge-test ::deep .knowledge-test__muted { color: var(--colors-text-muted); }
+
+.knowledge-test__thread {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-lg);
+  min-height: 0;
+  margin: var(--spacing-none);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-2xl);
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-gutter: stable;
+}
+
+.knowledge-test__message {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  max-width: 78%;
+}
+.knowledge-test__message.is-customer { justify-self: end; }
+.knowledge-test__message.is-ai { justify-self: start; }
+
+.knowledge-test__avatar {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--ds-knowledge-test-avatar);
+  height: var(--ds-knowledge-test-avatar);
+  color: var(--colors-icon-brand);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.knowledge-test__reply { display: grid; gap: var(--spacing-xs); justify-items: start; }
+.knowledge-test__bubble {
+  width: fit-content;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-xl);
+  border-bottom-left-radius: var(--radius-radius-sm);
+}
+.knowledge-test__message.is-customer .knowledge-test__bubble {
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border-bottom-right-radius: var(--radius-radius-sm);
+  border-bottom-left-radius: var(--radius-radius-xl);
+}
+.knowledge-test__bubble.is-unknown {
+  color: var(--colors-text-secondary);
+  background: var(--colors-accent-amber-subtle);
+}
+
+.knowledge-test ::deep .knowledge-test__source-toggle,
+.knowledge-test ::deep .knowledge-test__teach { justify-self: start; }
+
+.knowledge-test__sources {
+  display: grid;
+  gap: var(--spacing-xs);
+  width: min(100%, var(--ds-knowledge-test-sources));
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+.knowledge-test__fact {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-card);
+  border: var(--ds-knowledge-test-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.knowledge-test__fact > span { color: var(--colors-accent-teal-text); }
+.knowledge-test__fact > div { display: grid; gap: var(--spacing-xs); }
+.knowledge-test__fact-meta { display: flex; gap: var(--spacing-xs); align-items: center; }
+
+.knowledge-test__dock {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-md);
+  background: linear-gradient(to bottom, transparent, var(--colors-surface-elevated) var(--spacing-xl));
+}
+.knowledge-test__suggestions { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+.knowledge-test__composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: end;
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-card);
+  border: var(--ds-knowledge-test-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-xl) var(--colors-surface-shadow-diffuse);
+}
+.knowledge-test__composer > ::deep .ds-textarea { min-height: 0; background: transparent; border: 0; box-shadow: none; }
+
+@media (max-height: 800px) {
+  .knowledge-test-shell ::deep .dialog { height: calc(100dvh - 2 * var(--spacing-lg)); }
+}
+
+@media (max-width: 760px) {
+  .knowledge-test__message { max-width: 92%; }
+  .knowledge-test__suggestions { flex-wrap: nowrap; padding-bottom: var(--spacing-xs); overflow-x: auto; }
+  .knowledge-test__suggestions > ::deep .ds-button { flex: 0 0 auto; }
+}

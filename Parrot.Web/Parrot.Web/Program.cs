@@ -150,6 +150,8 @@ builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentBrief
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IJobInterview, Parrot.Web.Features.Dashboard.AiAgents.UnavailableJobInterview>();
 // The business's knowledge as facts (what an agent uses): no API for it yet.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory, Parrot.Web.Features.Dashboard.Knowledge.UnavailableKnowledgeMemory>();
+// Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
 builder.Services.AddScoped<CatalogState>();
 builder.Services.AddScoped<ChannelsState>();
 builder.Services.AddScoped<ContactsState>();

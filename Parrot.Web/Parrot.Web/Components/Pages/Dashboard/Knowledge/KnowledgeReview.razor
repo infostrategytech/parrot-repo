@@ -1,176 +1,339 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Knowledge
 @using Parrot.Web.Features.Dashboard.Knowledge
+@implements IAsyncDisposable
 @inject IKnowledgeMemory Memory
 @inject ToastService Toasts
+@inject IJSRuntime JS
 
-@* What needs the owner, one at a time (audit, 12 October 2026: the page
-   had become a task queue of large cards). Three kinds, each asked as a
-   question: something found on a channel ("Is this right?"), two places that
-   disagree ("Which is right?"), and a question customers asked that the AI
-   couldn't answer (answering it is how the knowledge grows: HubSpot, Tidio).
-   "Skip for now" leaves it for later; nothing is used until the owner says
-   yes. *@
+@* Checking what was found, as a quick deck of cards (designer, 20 October 2026), in a full-screen view.
+   On a computer the buttons decide (the arrow keys too); on a phone a found detail can be swiped: right,
+   that's right; left, not right; up, later. A card that needs words takes them on the card: a customer's
+   question is answered there, a found detail fixed, a disagreement settled in the owner's own words.
+   Undo takes back the last found detail. It ends on what changed, and Test as a customer. *@
 
-<SidePanel Open="Open" Title="Review" Glyph="IconName.RiCheckDoubleFill" Busy="_busy" OnClose="OnClose">
+<FocusView Open="Open" Title="Check what we found" OnClose="CloseAsync" Busy="_busy" Class="knowledge-review-view">
+    <Center>
+        @if (_order.Count > 0 && Current is not null)
+        {
+            <TopicTrail Items="Trail" Label="What to check" Bar />
+        }
+    </Center>
     <ChildContent>
-        <div class="knowledge-review">
-            @if (_said is not null)
-            {
-                @* What the last answer did, said here rather than in a toast over the panel. *@
-                <div class="knowledge-review__said" role="status">
-                    <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
-                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@_said</Typography>
-                </div>
-            }
+        <div class="knowledge-review" tabindex="-1" @ref="_deck" @onkeydown="KeyAsync">
             @if (Current is { } item)
             {
-                <Typography TextStyle="TextStyle.Small12Semibold" As="p" Class="knowledge-review__step" role="status">@($"{Position} of {_order.Count}")</Typography>
-
-                @switch (item.Kind)
-                {
-                    case Kind.Found when FoundFact(item) is { } fact:
-                        <section class="knowledge-review__item" aria-labelledby="review-title">
-                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="knowledge-review__muted">@($"Found on {fact.Source}")</Typography>
-                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" id="review-title">Is this right?</Typography>
-                            @if (_writing)
-                            {
-                                <TextArea Value="@_text" ValueChanged="value => _text = value" AriaLabel="What's right" Rows="3" AutoGrow MaxLength="600" />
-                                <div class="knowledge-review__actions">
-                                    <Button Variant="ButtonVariant.Ghost" @onclick="() => _writing = false">Cancel</Button>
-                                    <Button disabled="@string.IsNullOrWhiteSpace(_text)" @onclick="() => ChangeAsync(item, fact)">Save</Button>
-                                </div>
-                            }
-                            else
-                            {
-                                <blockquote class="knowledge-review__quote"><Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>@fact.Text</Typography></blockquote>
-                                <div class="knowledge-review__actions is-stacked">
-                                    <Button FullWidth @onclick="() => ConfirmAsync(item, fact)">
-                                        <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
-                                        <ChildContent>Yes, that's right</ChildContent>
-                                    </Button>
-                                    <Button Variant="ButtonVariant.Secondary" FullWidth @onclick="() => Write(fact.Text)">Change it</Button>
-                                    <Button Variant="ButtonVariant.Ghost" FullWidth @onclick="() => LeaveOutAsync(item, fact)">Not right</Button>
-                                </div>
-                            }
-                        </section>
-                        break;
-
-                    case Kind.Conflict when ConflictOf(item) is { } conflict:
-                        <section class="knowledge-review__item" aria-labelledby="review-title">
-                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="knowledge-review__muted">Two places say different things</Typography>
-                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" id="review-title">@conflict.Question</Typography>
-                            @if (_writing)
-                            {
-                                <TextArea Value="@_text" ValueChanged="value => _text = value" AriaLabel="What's right" Placeholder="Write what's right" Rows="3" AutoGrow MaxLength="600" />
-                                <div class="knowledge-review__actions">
-                                    <Button Variant="ButtonVariant.Ghost" @onclick="() => _writing = false">Cancel</Button>
-                                    <Button disabled="@string.IsNullOrWhiteSpace(_text)" @onclick="() => ResolveAsync(item, conflict, _text!)">Save</Button>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="knowledge-review__claims" role="group" aria-label="Which is right?">
-                                    @foreach (var claim in conflict.Claims)
+                var behind = Math.Min(2, Remaining - 1);
+                <div class="knowledge-review__deck">
+                    @* The next ones, peeking from behind: how much is left, at a glance. *@
+                    @for (var depth = behind; depth >= 1; depth--)
+                    {
+                        <div class="@($"knowledge-review__behind is-{depth}")" aria-hidden="true"></div>
+                    }
+                    <section class="@CardClass(item)" @key="item.Id" @ref="_card" aria-labelledby="review-title" aria-live="polite"
+                             data-swipe="@(item.Kind == Kind.Found && !_writing ? "true" : null)">
+                        <span class="knowledge-review__stamp is-yes" aria-hidden="true"><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">That's right</Typography></span>
+                        <span class="knowledge-review__stamp is-no" aria-hidden="true"><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Not right</Typography></span>
+                        @switch (item.Kind)
+                        {
+                            case Kind.Found when FoundFact(item) is { } fact:
+                                <div class="knowledge-review__top">
+                                    @SourceLine(fact.Source)
+                                    @* Only when the AI has already said where it goes; otherwise it decides on approval. *@
+                                    @if (fact.Label is { Length: > 0 } guessed)
                                     {
-                                        var picked = claim;
-                                        <RowButton Class="knowledge-review__claim" OnClick="() => ResolveAsync(item, conflict, picked.Text)">
-                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@picked.Text</Typography>
-                                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"From {picked.Source}")</Typography>
-                                        </RowButton>
+                                        <span class="knowledge-review__goes">@($"Goes into {guessed}")</span>
                                     }
                                 </div>
-                                <Button Variant="ButtonVariant.Ghost" FullWidth @onclick="() => Write(null)">Neither. I'll write it</Button>
-                            }
-                        </section>
-                        break;
+                                <div class="knowledge-review__body">
+                                <Typography TextStyle="TextStyle.Small12Semibold" As="p" Class="knowledge-review__ask">Is this right?</Typography>
+                                @if (_writing)
+                                {
+                                    <TextArea @ref="_box" Value="@_text" ValueChanged="value => _text = value" AriaLabel="What is right" TextStyle="TextStyle.BodyLargeMedium" Rows="3" AutoGrow MaxLength="1200" Disabled="_busy" />
+                                    <div class="knowledge-review__inline">
+                                        <Button Variant="ButtonVariant.Ghost" disabled="@_busy" @onclick="CancelWriting">Cancel</Button>
+                                        <Button Busy="_busy" disabled="@(string.IsNullOrWhiteSpace(_text) || _busy)" @onclick="() => FixAsync(item, fact)">Save and approve</Button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" id="review-title" Prose Class="knowledge-review__detail">@fact.Text</Typography>
+                                }
+                                </div>
+                                @if (!_writing)
+                                {
+                                    @* The decision, on the card itself. *@
+                                    <div class="knowledge-review__card-actions">
+                                        <Button Variant="ButtonVariant.Secondary" disabled="@_busy" @onclick="() => LeaveOutAsync(item, fact)">
+                                            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                                            <ChildContent>Not right</ChildContent>
+                                        </Button>
+                                        <Button Variant="ButtonVariant.Ghost" disabled="@_busy" @onclick="() => Write(fact.Text)">
+                                            <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                                            <ChildContent>Fix it</ChildContent>
+                                        </Button>
+                                        <Button Busy="_busy" disabled="@_busy" @onclick="() => ApproveAsync(item, fact)">
+                                            <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
+                                            <ChildContent>That's right</ChildContent>
+                                        </Button>
+                                    </div>
+                                }
+                                break;
 
-                    case Kind.Question when QuestionOf(item) is { } question:
-                        <section class="knowledge-review__item" aria-labelledby="review-title">
-                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="knowledge-review__muted">@($"Customers asked this {Times(question.Asked)}, last on {question.Channel}")</Typography>
-                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" id="review-title">@($"“{question.Question}”")</Typography>
-                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge-review__muted">Your AI didn't know, so it passed them to your team.</Typography>
-                            <TextArea Value="@_text" ValueChanged="value => _text = value" AriaLabel="@($"Answer to {question.Question}")" Placeholder="Write the answer in your own words" Rows="3" AutoGrow MaxLength="600" />
-                            <div class="knowledge-review__actions is-stacked">
-                                <Button FullWidth disabled="@string.IsNullOrWhiteSpace(_text)" Busy="_busy" @onclick="() => AnswerAsync(item, question)">Save answer</Button>
-                                <Button Variant="ButtonVariant.Ghost" FullWidth @onclick="() => DismissAsync(item, question)">Leave it to your team</Button>
-                            </div>
-                        </section>
-                        break;
-                }
-            }
-            else if (_skipped.Count > 0)
-            {
-                <div class="knowledge-review__done">
-                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3">@($"You skipped {(_skipped.Count == 1 ? "1 detail" : $"{_skipped.Count} details")}")</Typography>
-                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge-review__muted">They'll be here when you're ready. Nothing is used until you say yes.</Typography>
-                    <div class="knowledge-review__actions">
-                        <Button Variant="ButtonVariant.Secondary" @onclick="GoAgain">Go through them</Button>
-                        <Button @onclick="OnClose">Done</Button>
-                    </div>
+                            case Kind.Conflict when ConflictOf(item) is { } conflict:
+                                <div class="knowledge-review__top">
+                                    <span class="knowledge-review__source is-warning">
+                                        <Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Sm" />
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span">Two places say different things</Typography>
+                                    </span>
+                                </div>
+                                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" id="review-title" Prose>@conflict.Question</Typography>
+                                @if (_writing)
+                                {
+                                    <TextArea @ref="_box" Value="@_text" ValueChanged="value => _text = value" AriaLabel="What is right" Placeholder="Write what's right" TextStyle="TextStyle.BodyLargeMedium" Rows="3" AutoGrow MaxLength="1200" Disabled="_busy" />
+                                    <div class="knowledge-review__inline">
+                                        <Button Variant="ButtonVariant.Ghost" disabled="@_busy" @onclick="CancelWriting">Cancel</Button>
+                                        <Button Busy="_busy" disabled="@(string.IsNullOrWhiteSpace(_text) || _busy)" @onclick="() => ResolveAsync(item, conflict, _text!)">Save</Button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    @* This or that: the right one, in one click. *@
+                                    <div class="knowledge-review__claims" role="group" aria-label="Choose what is right">
+                                        @foreach (var claim in conflict.Claims)
+                                        {
+                                            var picked = claim;
+                                            <RowButton Class="knowledge-review__claim" Disabled="_busy" OnClick="() => ResolveAsync(item, conflict, picked.Text)">
+                                                <Typography TextStyle="TextStyle.BodyLargeSemibold" As="strong" Prose>@picked.Text</Typography>
+                                                @SourceLine(picked.Source)
+                                                <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="knowledge-review__use">Use this</Typography>
+                                            </RowButton>
+                                        }
+                                    </div>
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="knowledge-review__neither" disabled="@_busy" @onclick="() => Write(null)">Neither, I'll write it</Button>
+                                }
+                                break;
+
+                            case Kind.Question when QuestionOf(item) is { } question:
+                                <div class="knowledge-review__top">
+                                    <span class="knowledge-review__source">
+                                        <ChannelIcon Channel="@question.Channel" Size="IconSize.Sm" />
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"Customers asked this {Times(question.Asked)} on {ChannelStack.NameOf(question.Channel)}")</Typography>
+                                    </span>
+                                </div>
+                                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" id="review-title" Prose>@($"“{question.Question}”")</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge-review__muted">Your AI passed it to your team instead of guessing. Answer it once, and it knows next time.</Typography>
+                                <TextArea @ref="_box" Value="@_text" ValueChanged="value => _text = value" AriaLabel="Your answer" Placeholder="Write the answer in your own words" TextStyle="TextStyle.BodyDefaultMedium" Rows="3" AutoGrow MaxLength="1200" Disabled="_busy" />
+                                <div class="knowledge-review__card-actions">
+                                    <Button Variant="ButtonVariant.Secondary" disabled="@_busy" @onclick="() => DismissAsync(item, question)">Leave it to my team</Button>
+                                    <Button Busy="_busy" disabled="@(string.IsNullOrWhiteSpace(_text) || _busy)" @onclick="() => AnswerAsync(item, question)">Save answer</Button>
+                                </div>
+                                break;
+                        }
+                    </section>
+                </div>
+
+                <div class="knowledge-review__under">
+                    @if (_last is { } last)
+                    {
+                        <span class="knowledge-review__last" role="status">
+                            <Icon Name="@(last.Outcome == Outcome.LeftOut ? IconName.RiCloseFill : IconName.RiCheckboxCircleFill)" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@last.Said</Typography>
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_busy" @onclick="UndoAsync">Undo</Button>
+                        </span>
+                    }
+                    else if (item.Kind == Kind.Found && !_writing)
+                    {
+                        @* On a phone only: the swipe can't be seen until it's said. *@
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge-review__hint is-swipe">Swipe right if it's right, left if it isn't</Typography>
+                    }
+                    else
+                    {
+                        <span></span>
+                    }
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_busy" @onclick="() => LaterAsync(item)">Later</Button>
                 </div>
             }
             else
             {
-                <div class="knowledge-review__done">
-                    <span class="knowledge-review__done-mark"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Lg" /></span>
-                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3">All reviewed</Typography>
-                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge-review__muted">Your AI uses what you said yes to.</Typography>
-                    <Button @onclick="OnClose">Done</Button>
-                </div>
+                @* The end: what changed, and a way to see it used. *@
+                <section class="knowledge-review__end" aria-labelledby="review-end-title">
+                    @if (_order.Count == 0)
+                    {
+                        <span class="knowledge-review__end-mark"><Icon Name="IconName.RiCheckDoubleFill" Size="IconSize.Lg" /></span>
+                        <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2" id="review-end-title">Nothing to check</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="knowledge-review__muted">New details found on your channels, and questions customers ask, show up here.</Typography>
+                        <div class="knowledge-review__end-actions"><Button Size="ButtonSize.Large" @onclick="CloseAsync">Done</Button></div>
+                    }
+                    else if (_skipped.Count > 0)
+                    {
+                        <span class="knowledge-review__end-mark is-paused"><Icon Name="IconName.RiTimeFill" Size="IconSize.Lg" /></span>
+                        <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2" id="review-end-title">@($"{_skipped.Count} left for later")</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="knowledge-review__muted">Nothing you left for later is used yet.</Typography>
+                        @Tally()
+                        <div class="knowledge-review__end-actions">
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="GoAgain">Check them now</Button>
+                            <Button Size="ButtonSize.Large" @onclick="CloseAsync">Done</Button>
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="knowledge-review__end-mark is-done"><Icon Name="IconName.RiCheckFill" Size="IconSize.Lg" /></span>
+                        <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2" id="review-end-title">All checked</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="knowledge-review__muted">
+                            @(_sections.Count > 0 ? "Your AI now uses what you approved." : "Your AI only uses what you approved.")
+                        </Typography>
+                        @Tally()
+                        <div class="knowledge-review__end-actions">
+                            @if (OnTest.HasDelegate && _sections.Count > 0)
+                            {
+                                <Button Size="ButtonSize.Large" @onclick="() => OnTest.InvokeAsync()">Test as a customer</Button>
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Large" @onclick="CloseAsync">Done</Button>
+                            }
+                            else
+                            {
+                                <Button Size="ButtonSize.Large" @onclick="CloseAsync">Done</Button>
+                            }
+                        </div>
+                    }
+                </section>
             }
         </div>
     </ChildContent>
-    <Footer>
-        @if (Current is { } item)
-        {
-            <Button Variant="ButtonVariant.Ghost" disabled="@_busy" @onclick="() => Skip(item)">Skip for now</Button>
-        }
-    </Footer>
-</SidePanel>
+</FocusView>
 
 @code {
+    /// <summary>The store to use instead of the app's (the preview).</summary>
+    [Parameter] public IKnowledgeMemory? Store { get; set; }
+
+    private IKnowledgeMemory Knowledge => Store ?? Memory;
+
     [Parameter, EditorRequired] public bool Open { get; set; }
-
-    /// <summary>The knowledge as it stands; the page reads it again after each answer.</summary>
     [Parameter, EditorRequired] public KnowledgeSnapshot Snapshot { get; set; } = new([], [], []);
-
     [Parameter] public EventCallback OnClose { get; set; }
-
-    /// <summary>Something was answered: the page reads the knowledge again.</summary>
     [Parameter] public EventCallback OnChanged { get; set; }
 
-    private enum Kind { Conflict, Found, Question }
+    /// <summary>From the end: Test as a customer, to see what was approved used.</summary>
+    [Parameter] public EventCallback OnTest { get; set; }
 
-    private sealed record Item(Kind Kind, string Id);
+    private enum Kind { Conflict, Found, Question }
+    private sealed record Item(Kind Kind, string Id, string Title);
+
+    // The last found detail decided, for Undo: as it was, and what was said.
+    private enum Outcome { Approved, Fixed, LeftOut }
+    private sealed record Decision(Item Item, KnowledgeFact Before, string Said, Outcome Outcome);
+
+    // Matches the card's fly-off (--ds-motion-base), so the next card arrives as this one leaves.
+    private static readonly TimeSpan CardMotion = TimeSpan.FromMilliseconds(220);
 
     private List<Item> _order = [];
-    private readonly HashSet<Item> _done = [], _skipped = [];
-    private bool _wasOpen, _busy, _writing;
-    private string? _text, _said;
+    private readonly HashSet<string> _done = [], _skipped = [];
+    private readonly List<string> _sections = [];
+    private int _approved, _fixed, _leftOut, _answered, _leftToTeam, _settled;
+    private Decision? _last;
+    private bool _wasOpen, _busy, _writing, _focusCard;
+    private string? _text, _motion, _attachedTo;
+    private ElementReference _deck, _card;
+    private TextArea? _box;
+    private IJSObjectReference? _module, _swipe;
+    private DotNetObjectReference<KnowledgeReview>? _self;
+
+    private Item? Current => _order.FirstOrDefault(item => !_done.Contains(item.Id) && !_skipped.Contains(item.Id) && Exists(item));
+    private int Remaining => _order.Count(item => !_done.Contains(item.Id) && !_skipped.Contains(item.Id) && Exists(item));
+
+    private IReadOnlyList<TopicTrailItem> Trail =>
+    [
+        .. _order.Select(item => new TopicTrailItem(item.Title,
+            _done.Contains(item.Id) ? TopicState.Done : Equals(item, Current) ? TopicState.Current : TopicState.Upcoming)),
+    ];
 
     protected override void OnParametersSet()
     {
         if (Open && !_wasOpen)
         {
-            // Disagreements first (they decide a fact), then what was found, then customers' questions.
+            // Disagreements first (two places can't both be right), then what was found, then customers' questions.
             _order =
             [
-                .. Snapshot.Conflicts.Select(conflict => new Item(Kind.Conflict, conflict.Id)),
-                .. Snapshot.Facts.Where(fact => fact.State == FactState.ToConfirm).Select(fact => new Item(Kind.Found, fact.Id)),
-                .. Snapshot.Questions.Select(question => new Item(Kind.Question, question.Id)),
+                .. Snapshot.Conflicts.Select(conflict => new Item(Kind.Conflict, conflict.Id, "Disagreement")),
+                .. Snapshot.Facts.Where(fact => fact.State == FactState.ToConfirm).Select(fact => new Item(Kind.Found, fact.Id, fact.Label is { Length: > 0 } label ? label : "Found detail")),
+                .. Snapshot.Questions.Select(question => new Item(Kind.Question, question.Id, "Customer question")),
             ];
             _done.Clear();
             _skipped.Clear();
-            _said = null;
+            _sections.Clear();
+            _approved = _fixed = _leftOut = _answered = _leftToTeam = _settled = 0;
+            _last = null;
+            _motion = null;
+            _focusCard = true;
             Reset();
         }
         _wasOpen = Open;
     }
 
-    // The next one still open; one handled elsewhere since counts as done.
-    private Item? Current => _order.FirstOrDefault(item => !_done.Contains(item) && !_skipped.Contains(item) && Exists(item));
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!Open) { await DetachAsync(); return; }
+        // A found detail on top: it can be swiped on a phone (the module ignores a mouse).
+        var swipeable = Current is { Kind: Kind.Found } top && !_writing ? top.Id : null;
+        if (swipeable != _attachedTo)
+        {
+            await DetachAsync();
+            if (swipeable is not null)
+            {
+                try
+                {
+                    _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./Components/Pages/Dashboard/Knowledge/KnowledgeReview.razor.js");
+                    _self ??= DotNetObjectReference.Create(this);
+                    _swipe = await _module.InvokeAsync<IJSObjectReference>("swipe", _card, _self);
+                    _attachedTo = swipeable;
+                }
+                catch (JSException) { }
+            }
+        }
+        if (_focusCard)
+        {
+            _focusCard = false;
+            try
+            {
+                if (Current is { Kind: Kind.Question } && _box is not null) await _box.FocusAsync();
+                else await _deck.FocusAsync();
+            }
+            catch (JSException) { }
+        }
+    }
 
-    private int Position => _order.IndexOf(Current!) + 1;
+    private async Task DetachAsync()
+    {
+        _attachedTo = null;
+        if (_swipe is { } swipe)
+        {
+            _swipe = null;
+            try { await swipe.InvokeVoidAsync("dispose"); await swipe.DisposeAsync(); } catch (JSDisconnectedException) { } catch (JSException) { }
+        }
+    }
+
+    // A phone's swipe on a found detail: the card has already flown off, so it decides without its own motion.
+    [JSInvokable]
+    public Task SwipedAsync(string way) => InvokeAsync(async () =>
+    {
+        if (Current is not { Kind: Kind.Found } item || FoundFact(item) is not { } fact || _busy) return;
+        if (way == "right") await ApproveAsync(item, fact, flown: true);
+        else if (way == "left") await LeaveOutAsync(item, fact, flown: true);
+        else if (way == "up") await LaterAsync(item, flown: true);
+        StateHasChanged();
+    });
+
+    // The arrow keys, on a computer: for a found detail, as its buttons.
+    private async Task KeyAsync(KeyboardEventArgs args)
+    {
+        if (_busy || _writing || Current is not { Kind: Kind.Found } item || FoundFact(item) is not { } fact) return;
+        if (args.Key == "ArrowRight") await ApproveAsync(item, fact);
+        else if (args.Key == "ArrowLeft") await LeaveOutAsync(item, fact);
+        else if (args.Key == "ArrowUp") await LaterAsync(item);
+    }
+
+    private string CardClass(Item item) => $"knowledge-review__card is-{item.Kind.ToString().ToLowerInvariant()}{(_motion is { } motion ? $" {motion}" : null)}";
+
+    private static string Times(int count) => count switch { 1 => "once", 2 => "twice", _ => $"{count} times" };
 
     private bool Exists(Item item) => item.Kind switch
     {
@@ -183,7 +346,38 @@
     private KnowledgeConflict? ConflictOf(Item item) => Snapshot.Conflicts.FirstOrDefault(conflict => conflict.Id == item.Id);
     private KnowledgeQuestion? QuestionOf(Item item) => Snapshot.Questions.FirstOrDefault(question => question.Id == item.Id);
 
-    private static string Times(int count) => count switch { 1 => "once", 2 => "twice", _ => $"{count} times" };
+    private RenderFragment SourceLine(string? source) => @<span class="knowledge-review__source">
+        @if (ChannelIcon.From(source) is { } channel)
+        {
+            <ChannelIcon Channel="@channel" Size="IconSize.Sm" />
+        }
+        else
+        {
+            <Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" />
+        }
+        <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"Found on {source ?? "a connected source"}")</Typography>
+    </span>;
+
+    // What was done, in a line of counts.
+    private RenderFragment Tally() => __builder =>
+    {
+        var parts = new List<string>();
+        if (_approved > 0) parts.Add($"{_approved} approved");
+        if (_fixed > 0) parts.Add($"{_fixed} fixed");
+        if (_settled > 0) parts.Add($"{_settled} settled");
+        if (_answered > 0) parts.Add($"{_answered} answered");
+        if (_leftOut > 0) parts.Add($"{_leftOut} left out");
+        if (_leftToTeam > 0) parts.Add($"{_leftToTeam} left to your team");
+        if (parts.Count > 0)
+        {
+            <ul class="knowledge-review__tally" aria-label="What you did">
+                @foreach (var part in parts)
+                {
+                    <li><Typography TextStyle="TextStyle.Small12Semibold" As="span">@part</Typography></li>
+                }
+            </ul>
+        }
+    };
 
     private void Reset()
     {
@@ -195,36 +389,49 @@
     {
         _writing = true;
         _text = start;
+        _focusCard = true;
     }
 
-    private void Skip(Item item)
-    {
-        _said = null;
-        _skipped.Add(item);
-        Reset();
-    }
+    private void CancelWriting() => Reset();
 
     private void GoAgain()
     {
         _skipped.Clear();
+        _last = null;
+        _focusCard = true;
         Reset();
     }
 
-    // Each answer says back what happened, then the next one shows.
-    private async Task DoAsync(Item item, Func<Task<string>> act)
+    private Task CloseAsync() => _busy ? Task.CompletedTask : OnClose.InvokeAsync();
+
+    private void Touched(string label)
+    {
+        if (!_sections.Contains(label, StringComparer.CurrentCultureIgnoreCase)) _sections.Add(label);
+    }
+
+    // A decision: saved, then the card leaves (right for yes, left for no, up for later), and the next one rises.
+    private async Task DecideAsync(Item item, string motion, bool flown, Func<Task> act)
     {
         if (_busy) return;
         _busy = true;
         try
         {
-            var said = await act();
-            _done.Add(item);
+            await act();
+            if (!flown)
+            {
+                _motion = motion;
+                await InvokeAsync(StateHasChanged);
+                await Task.Delay(CardMotion);
+            }
+            _done.Add(item.Id);
+            _motion = null;
             Reset();
+            _focusCard = true;
             await OnChanged.InvokeAsync();
-            _said = said;
         }
-        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
         {
+            _motion = null;
             Toasts.ShowError("We couldn't save that. Check your connection and try again.");
         }
         finally
@@ -233,26 +440,109 @@
         }
     }
 
-    private Task ConfirmAsync(Item item, KnowledgeFact fact) =>
-        DoAsync(item, async () => { await Memory.ConfirmAsync(fact.Id); return $"Saved to {fact.Label}."; });
+    private Task ApproveAsync(Item item, KnowledgeFact fact, bool flown = false) =>
+        DecideAsync(item, "is-yes", flown, async () =>
+        {
+            // Where it went is the store's to say (the AI places it on approval).
+            var saved = await Knowledge.ConfirmAsync(fact.Id);
+            _approved++;
+            Touched(saved.Label);
+            _last = new Decision(item, fact, "Approved", Outcome.Approved);
+        });
 
-    private Task ChangeAsync(Item item, KnowledgeFact fact) =>
-        DoAsync(item, async () => { var saved = await Memory.UpdateAsync(fact.Id, _text!); return $"Saved to {saved.Label}."; });
+    private Task FixAsync(Item item, KnowledgeFact fact) =>
+        DecideAsync(item, "is-yes", false, async () =>
+        {
+            var saved = await Knowledge.UpdateAsync(fact.Id, _text!);
+            _fixed++;
+            Touched(saved.Label);
+            _last = new Decision(item, fact, "Approved", Outcome.Fixed);
+        });
 
-    private Task LeaveOutAsync(Item item, KnowledgeFact fact) =>
-        DoAsync(item, async () => { await Memory.DeleteAsync(fact.Id); return "Left out. Your AI won't use it."; });
+    private Task LeaveOutAsync(Item item, KnowledgeFact fact, bool flown = false) =>
+        DecideAsync(item, "is-no", flown, async () =>
+        {
+            await Knowledge.DeleteAsync(fact.Id);
+            _leftOut++;
+            _last = new Decision(item, fact, "Left out", Outcome.LeftOut);
+        });
 
     private Task ResolveAsync(Item item, KnowledgeConflict conflict, string text) =>
-        DoAsync(item, async () => { var saved = await Memory.ResolveAsync(conflict.Id, text); return $"Saved to {saved.Label}."; });
+        DecideAsync(item, "is-yes", false, async () =>
+        {
+            var saved = await Knowledge.ResolveAsync(conflict.Id, text);
+            _settled++;
+            Touched(saved.Label);
+            _last = null;
+        });
 
     private Task AnswerAsync(Item item, KnowledgeQuestion question) =>
-        DoAsync(item, async () =>
+        DecideAsync(item, "is-yes", false, async () =>
         {
-            var saved = await Memory.AnswerAsync(question.Id, _text!);
-            var where = saved.Select(fact => fact.Label).Distinct().ToList();
-            return $"Saved to {string.Join(" and ", where)}. Your AI can answer it now.";
+            var saved = await Knowledge.AnswerAsync(question.Id, _text!);
+            _answered++;
+            foreach (var label in saved.Select(fact => fact.Label).Distinct()) Touched(label);
+            _last = null;
         });
 
     private Task DismissAsync(Item item, KnowledgeQuestion question) =>
-        DoAsync(item, async () => { await Memory.DismissAsync(question.Id); return "Left to your team."; });
+        DecideAsync(item, "is-no", false, async () =>
+        {
+            await Knowledge.DismissAsync(question.Id);
+            _leftToTeam++;
+            _last = null;
+        });
+
+    // Later: it stays waiting, unused, and comes back at the end.
+    private async Task LaterAsync(Item item, bool flown = false)
+    {
+        if (_busy) return;
+        _busy = true;
+        if (!flown)
+        {
+            _motion = "is-later";
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(CardMotion);
+        }
+        _skipped.Add(item.Id);
+        _motion = null;
+        _last = null;
+        _focusCard = true;
+        Reset();
+        _busy = false;
+    }
+
+    // Undo: the last found detail, back as it was, waiting on top of the deck again.
+    private async Task UndoAsync()
+    {
+        if (_last is not { } last || _busy) return;
+        _busy = true;
+        try
+        {
+            await Knowledge.DeleteAsync(last.Before.Id);
+            await Knowledge.RestoreAsync(last.Before);
+            _done.Remove(last.Item.Id);
+            if (last.Outcome == Outcome.Approved) _approved--;
+            else if (last.Outcome == Outcome.Fixed) _fixed--;
+            else _leftOut--;
+            _last = null;
+            _focusCard = true;
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            Toasts.ShowError("We couldn't undo that. Try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await DetachAsync();
+        if (_module is { } module) { try { await module.DisposeAsync(); } catch (JSDisconnectedException) { } }
+        _self?.Dispose();
+    }
 }

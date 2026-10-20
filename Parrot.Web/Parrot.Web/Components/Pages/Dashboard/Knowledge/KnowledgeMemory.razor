@@ -6,35 +6,36 @@
 @inject ToastService Toasts
 @inject NavigationManager Nav
 
-@* Knowledge (designer, 12 October 2026): a simple memory manager, as
-   ChatGPT's memory is, keeping OmniAI's sources and approval because it is
-   used in customers' replies. Top to bottom:
-
-   - What your AI knows: a line, and "Test an answer".
-   - Add something to remember: one box, in the owner's own words; it is
-     split into short facts and filed ("Saved to Delivery", Undo).
-   - Review needed: one quiet banner; the details are gone through one at a
-     time in a side panel.
-   - Saved knowledge: one searchable list under light headings taken from
-     what is saved, so it fits any business (research: Claude's memory
-     topics, Intercom, Ada). Each fact says where it came from; its menu
-     changes, moves or removes it.
-
-   From the audit: no topic pills or counts that nag, no empty shelves, no
-   "Who takes over" (that is the agents' boundaries), and items and prices
-   stay in Products & services. *@
+@* What the business's AI knows (designer, 20 October 2026; was Concept B): three jobs, in order. What needs a
+   decision; telling it something, which goes into the section it belongs to; and what it knows, one summary
+   per section, which the owner can rewrite whenever something changes. How each detail was added is not shown:
+   the summary is the thing. *@
 
 <main class="knowledge">
-    <header class="knowledge__head">
+    <header class="knowledge__header">
         <div class="knowledge__heading">
-            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Knowledge</Typography>
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge__lede">
-                @($"What your AI knows about {Business}. It uses this when it replies to your customers.")
+            <div class="knowledge__title">
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Knowledge</Typography>
+                @if (Knowledge.IsPreview)
+                {
+                    <StatusBadge Tone="StatusTone.Info">Preview</StatusBadge>
+                }
+            </div>
+            <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="knowledge__lede">
+                @($"What your AI knows about {Business}, and uses when it replies to customers.")
             </Typography>
+            @if (Knowledge.IsPreview)
+            {
+                @* Said plainly, so nobody thinks their agents have learnt it (designer, 20 October 2026). *@
+                <div class="knowledge__preview-note" role="note">
+                    <Icon Name="IconName.RiInformationFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>A preview: what you save here stays in this browser, and your AI doesn't use it yet.</Typography>
+                </div>
+            }
         </div>
         <Button Variant="ButtonVariant.Secondary" Class="ds-no-shrink" @onclick="() => _testOpen = true">
-            <IconLeft><Icon Name="IconName.RiQuestionAnswerFill" /></IconLeft>
-            <ChildContent>Test an answer</ChildContent>
+            <IconLeft><Icon Name="IconName.RiChat3Fill" /></IconLeft>
+            <ChildContent>Test as a customer</ChildContent>
         </Button>
     </header>
 
@@ -44,35 +45,70 @@
     }
     else
     {
-        @* ── Add something to remember ───────────────────────────────────── *@
-        <section class="knowledge__card knowledge__add" aria-labelledby="knowledge-add-title">
-            <div class="knowledge__add-head">
-                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="knowledge-add-title">@AddTitle</Typography>
-                @if (_forQuestion is not null)
-                {
-                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Write about anything instead" @onclick="() => { _forQuestion = null; _focusBox = true; }">
+        @if (ReviewCount > 0)
+        {
+            <section class="knowledge__review" aria-label="Details waiting for review">
+                <span class="knowledge__review-icon"><Icon Name="IconName.RiCheckDoubleFill" Size="IconSize.Md" /></span>
+                <div class="knowledge__review-copy">
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">
+                        @(ReviewCount == 1 ? "1 thing to check" : $"{ReviewCount} things to check")
+                    </Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge__muted">
+                        Found on your channels, and questions your AI couldn't answer. About a minute; nothing is used until you say yes.
+                    </Typography>
+                </div>
+                <Button Class="ds-no-shrink" @onclick="() => _reviewOpen = true">Check them</Button>
+            </section>
+        }
+
+        <section class="knowledge__composer" aria-labelledby="knowledge-add-title">
+            <div class="knowledge__composer-title">
+                <span class="knowledge__composer-icon"><Icon Name="IconName.RiSparkling2Fill" Size="IconSize.Sm" /></span>
+                <div>
+                    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="knowledge-add-title">Tell your AI something</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge__muted">Write it the way you'd explain it to a new team member. It goes into the right section.</Typography>
+                </div>
+            </div>
+
+            @if (_forQuestion is not null)
+            {
+                <div class="knowledge__question-context">
+                    <Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@($"A customer asked: “{_forQuestion}”")</Typography>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Clear customer question" @onclick="ClearQuestion">
                         <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
                     </Button>
-                }
-            </div>
+                </div>
+            }
+
             <TextArea @ref="_box"
                       Value="@_draft"
                       ValueChanged="value => _draft = value"
-                      Placeholder="@(_forQuestion is not null ? "Write the answer in your own words" : "For example: We don't deliver on Sundays.")"
-                      AriaLabel="@AddTitle"
+                      Placeholder="@(_forQuestion is not null ? "Write the answer in your own words" : "For example: We deliver across Lagos in 1 to 2 days.")"
+                      AriaLabel="Tell your AI something"
                       Rows="2"
                       MaxLength="1200"
                       AutoGrow
                       SubmitOnEnter
                       OnKeyDown="AddKeyAsync"
                       Disabled="_adding" />
-            <div class="knowledge__add-foot">
-                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge__muted">Write it the way you'd tell a new team member. Press Enter to save.</Typography>
+
+            <div class="knowledge__composer-actions">
+                <div class="knowledge__add-options">
+                    @if (Knowledge.CanReadLinks)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OpenLinkDialog">
+                            <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
+                            <ChildContent>Add from a link</ChildContent>
+                        </Button>
+                    }
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge__hint">Press Enter to save</Typography>
+                </div>
                 <Button Busy="_adding" disabled="@(string.IsNullOrWhiteSpace(_draft) || _adding)" @onclick="AddAsync">Save</Button>
             </div>
+
             @if (_justSaved is { Count: > 0 } saved)
             {
-                @* What was saved and where, as ChatGPT says "Memory updated", with a way back. *@
                 <div class="knowledge__saved" role="status">
                     <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
                     <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@SavedLine(saved)</Typography>
@@ -81,113 +117,139 @@
             }
         </section>
 
-        @* ── Review needed ───────────────────────────────────────────────── *@
-        @if (ReviewCount > 0)
-        {
-            <section class="knowledge__review" aria-label="Review needed">
-                <span class="knowledge__review-icon"><Icon Name="IconName.RiCheckDoubleFill" Size="IconSize.Sm" /></span>
-                <div class="knowledge__review-text">
-                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">@(ReviewCount == 1 ? "1 detail needs your review" : $"{ReviewCount} details need your review")</Typography>
-                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge__muted">Things found on your channels, and questions customers asked. Nothing is used until you say yes.</Typography>
+        <section class="knowledge__memory" aria-labelledby="knowledge-list-title">
+            <div class="knowledge__memory-head">
+                <div>
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="knowledge-list-title">What your AI knows</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge__muted">A summary of each part of your business. Edit one whenever something changes.</Typography>
                 </div>
-                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ds-no-shrink" @onclick="() => _reviewOpen = true">Review</Button>
-            </section>
-        }
-
-        @* ── Saved knowledge ─────────────────────────────────────────────── *@
-        <section class="knowledge__saved-list" aria-labelledby="knowledge-list-title">
-            <div class="knowledge__section-head">
-                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="knowledge-list-title">Saved knowledge</Typography>
-                <SearchField Value="@_search" ValueChanged="value => _search = value" Placeholder="Search" AriaLabel="Search saved knowledge" />
+                @if (KnownFacts.Count > 0)
+                {
+                    <SearchField Value="@_search"
+                                 ValueChanged="value => _search = value"
+                                 Placeholder="Search knowledge"
+                                 AriaLabel="Search what your AI knows"
+                                 Class="knowledge__search" />
+                }
             </div>
 
-            <div class="knowledge__card knowledge__list">
-                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge__muted knowledge__note">
-                    Your items and their prices live in
-                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="knowledge__link" @onclick="@(() => Nav.NavigateTo("/dashboard/catalog"))">Products &amp; services</Button>
-                </Typography>
-
-                @if (Groups.Count == 0)
-                {
-                    <EmptyState Glyph="@(Searching ? IconName.RiSearch2Fill : IconName.RiBookOpenFill)"
-                                Size="EmptyStateSize.Panel"
-                                Title="@(Searching ? "Nothing matches" : "Nothing saved yet")"
-                                Description="@(Searching ? "Try another word." : "Add something above, or answer the details waiting for review.")" />
-                }
-
-                @foreach (var group in Groups)
-                {
-                    var heading = group.Key;
-                    <section class="knowledge__group" aria-label="@heading">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="h3" Class="knowledge__group-title">@heading</Typography>
-                        <ul class="knowledge__facts">
-                            @foreach (var fact in group)
+            @if (KnownFacts.Count == 0)
+            {
+                <EmptyState Glyph="IconName.RiBookOpenFill"
+                            Size="EmptyStateSize.Panel"
+                            Title="Nothing saved yet"
+                            Description="@(Knowledge.IsPreview ? "Tell your AI something above. Each detail goes into its section." : "Tell your AI something above, or review what was found for you.")" />
+            }
+            else if (VisibleSections.Count == 0)
+            {
+                <EmptyState Glyph="IconName.RiSearch2Fill"
+                            Size="EmptyStateSize.Panel"
+                            Title="Nothing matches"
+                            Description="Try another word." />
+            }
+            else
+            {
+                @* One row per section: its icon, its name, the summary, when it last changed, and Edit. *@
+                <ul class="knowledge__sections">
+                    @foreach (var section in VisibleSections)
+                    {
+                        var current = section;
+                        var editing = _editing == current.Label;
+                        <li class="@($"knowledge__section{(_freshLabels.Contains(current.Label) ? " is-fresh" : null)}{(editing ? " is-editing" : null)}")" @key="current.Label">
+                            <span class="@($"knowledge__topic-icon {TopicTone(current.Topic)}")" aria-hidden="true">
+                                <Icon Name="@KnowledgeTopics.Icon(current.Topic)" Size="IconSize.Sm" />
+                            </span>
+                            <div class="knowledge__section-body">
+                                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@SectionId(current)">@current.Label</Typography>
+                                @if (editing)
+                                {
+                                    <TextArea Value="@_editText"
+                                              ValueChanged="value => _editText = value"
+                                              AriaLabel="@($"{current.Label}: what your AI knows")"
+                                              TextStyle="TextStyle.BodySmallMedium"
+                                              Rows="3"
+                                              AutoGrow
+                                              MaxLength="1200"
+                                              Disabled="_savingEdit" />
+                                    <div class="knowledge__edit-actions">
+                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_savingEdit" @onclick="CancelEdit">Cancel</Button>
+                                        <Button Size="ButtonSize.Small" Busy="_savingEdit" disabled="@(string.IsNullOrWhiteSpace(_editText) || _savingEdit)" @onclick="() => SaveSummaryAsync(current)">Save</Button>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="knowledge__summary">@current.Summary</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge__updated">@UpdatedLine(current.Latest)</Typography>
+                                }
+                            </div>
+                            @if (!editing)
                             {
-                                var item = fact;
-                                <li class="knowledge__fact" @key="item.Id">
-                                    @if (_editing == item.Id)
-                                    {
-                                        <div class="knowledge__edit">
-                                            <TextArea Value="@_editText" ValueChanged="value => _editText = value" AriaLabel="Change it" Rows="2" AutoGrow MaxLength="600" />
-                                            <div class="knowledge__actions">
-                                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _editing = null">Cancel</Button>
-                                                <Button Size="ButtonSize.Small" disabled="@string.IsNullOrWhiteSpace(_editText)" @onclick="() => SaveEditAsync(item)">Save</Button>
-                                            </div>
-                                        </div>
-                                    }
-                                    else if (_moving == item.Id)
-                                    {
-                                        <div class="knowledge__edit">
-                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@item.Text</Typography>
-                                            <div class="knowledge__move">
-                                                <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="knowledge__muted">Move to</Typography>
-                                                @foreach (var label in Labels.Where(label => label != item.Label))
-                                                {
-                                                    var target = label;
-                                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => MoveAsync(item, target)">@target</Button>
-                                                }
-                                            </div>
-                                            <div class="knowledge__move-new">
-                                                <Input FloatingLabel="A new heading" maxlength="40" Value="@_newLabel" ValueChanged="value => _newLabel = value" />
-                                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@string.IsNullOrWhiteSpace(_newLabel)" @onclick="() => MoveAsync(item, _newLabel!)">Move</Button>
-                                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _moving = null">Cancel</Button>
-                                            </div>
-                                        </div>
-                                    }
-                                    else
-                                    {
-                                        <div class="knowledge__fact-text">
-                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@item.Text</Typography>
-                                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge__source">@Origin(item)</Typography>
-                                        </div>
-                                        <ActionMenu Label="@($"More for: {item.Text}")" Glyph="IconName.RiMore2Fill">
-                                            <ActionMenuItem Label="Edit" Glyph="IconName.RiPencilFill" OnClick="() => StartEditing(item)" />
-                                            <ActionMenuItem Label="Move to…" Glyph="IconName.RiArchive2Fill" OnClick="() => StartMoving(item)" />
-                                            <ActionMenuItem Label="Remove" Glyph="IconName.RiDeleteBin6Fill" OnClick="() => RemoveAsync(item)" />
-                                        </ActionMenu>
-                                    }
-                                </li>
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="knowledge__edit" aria-describedby="@SectionId(current)" disabled="@(_editing is not null)" @onclick="() => StartEditing(current)">
+                                    <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                                    <ChildContent>Edit</ChildContent>
+                                </Button>
                             }
-                        </ul>
-                    </section>
-                }
+                        </li>
+                    }
+                </ul>
+            }
+
+            @* What it knows from Products & Services, kept there: a way there, and a reminder that it counts. *@
+            <div class="knowledge__catalog-link">
+                <span class="knowledge__catalog-icon"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span>
+                <div>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Products and prices</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge__muted">Your AI also knows your items, prices and availability from Products &amp; Services.</Typography>
+                </div>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OpenCatalog">
+                    <ChildContent>Open Products &amp; Services</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightSLine" /></IconRight>
+                </Button>
             </div>
         </section>
     }
 </main>
 
-<KnowledgeReview Open="_reviewOpen" Snapshot="_snapshot" OnClose="() => _reviewOpen = false" OnChanged="ReloadAsync" />
+<KnowledgeReview Store="Knowledge" Open="_reviewOpen" Snapshot="_snapshot" OnClose="() => _reviewOpen = false" OnChanged="ReloadAsync"
+                 OnTest="() => { _reviewOpen = false; _testOpen = true; }" />
+<KnowledgeTest Open="_testOpen" Facts="KnownFacts" OnClose="() => _testOpen = false" OnTeach="TeachFromTest" />
 
-<KnowledgeTry Open="_testOpen" Facts="KnownFacts" OnClose="() => _testOpen = false" OnTeach="TeachFromTest" />
+<Dialog Open="_linkOpen"
+        Title="Add knowledge from a link"
+        Subtitle="OmniAI finds the useful details and asks you to approve them."
+        ConfirmLabel="Check link"
+        Busy="_readingLink"
+        BusyLabel="Checking link…"
+        ConfirmDisabled="@string.IsNullOrWhiteSpace(_link)"
+        Dismissible
+        OnConfirm="ReadLinkAsync"
+        OnCancel="CloseLinkDialog">
+    <Body>
+        <Input FloatingLabel="Website or social link"
+               Value="@_link"
+               ValueChanged="value => _link = value"
+               Placeholder="https://yourbusiness.com"
+               autocomplete="url"
+               disabled="@_readingLink" />
+    </Body>
+</Dialog>
 
 @code {
+    /// <summary>The store to use instead of the app's (the preview, before the knowledge store exists).</summary>
+    [Parameter] public IKnowledgeMemory? Store { get; set; }
+
+    private IKnowledgeMemory Knowledge => Store ?? Memory;
+
     private KnowledgeSnapshot _snapshot = new([], [], []);
     private bool _loading = true, _adding, _reviewOpen, _testOpen, _focusBox;
-    private string? _draft, _search, _editing, _editText, _moving, _newLabel, _forQuestion;
+    private bool _linkOpen, _readingLink, _savingEdit;
+    private string? _draft, _forQuestion, _link, _search, _editing, _editText;
     private List<KnowledgeFact>? _justSaved;
+    private IReadOnlyCollection<string> _freshLabels = [];
     private TextArea? _box;
 
-    // The headings a list usually reads in; any others the AI makes come after, Other last.
+    private sealed record SummarySection(string Label, KnowledgeTopic Topic, string Summary, KnowledgeFact Latest);
+
     private static readonly string[] Usual =
         ["About the business", "Prices and offers", "Delivery", "Payment", "Hours and contact", "Policies"];
 
@@ -197,8 +259,6 @@
     {
         await LoadAsync();
         _loading = false;
-        // ?review=1: "See what's waiting" on the dashboard; the review opens
-        // straight away when there is something in it.
         if (new Uri(Nav.Uri).Query.TrimStart('?').Split('&').Contains("review=1") && ReviewCount > 0) _reviewOpen = true;
     }
 
@@ -211,7 +271,7 @@
         }
     }
 
-    private async Task LoadAsync() => _snapshot = await Memory.ListAsync();
+    private async Task LoadAsync() => _snapshot = await Knowledge.ListAsync();
 
     private async Task ReloadAsync()
     {
@@ -219,36 +279,55 @@
         StateHasChanged();
     }
 
-    // ── What shows ─────────────────────────────────────────────────────────
-
     private IReadOnlyList<KnowledgeFact> KnownFacts => [.. _snapshot.Facts.Where(fact => fact.State == FactState.Known)];
-
     private int ReviewCount => _snapshot.Conflicts.Count + _snapshot.Questions.Count + _snapshot.Facts.Count(fact => fact.State == FactState.ToConfirm);
-
-    private bool Searching => !string.IsNullOrWhiteSpace(_search);
 
     private static int Order(string label) => label == "Other" ? int.MaxValue : Array.IndexOf(Usual, label) is var index and >= 0 ? index : Usual.Length;
 
-    /// <summary>The headings in use, in reading order.</summary>
-    private List<string> Labels => [.. KnownFacts.Select(fact => fact.Label).Distinct().OrderBy(Order).ThenBy(label => label, StringComparer.CurrentCultureIgnoreCase)];
+    private IReadOnlyList<SummarySection> SummarySections =>
+    [
+        .. KnownFacts.GroupBy(fact => fact.Label)
+            .Select(group =>
+            {
+                var facts = group.OrderBy(fact => fact.UpdatedAt).ToList();
+                var latest = facts[^1];
+                return new SummarySection(group.Key, latest.Topic, Summarise(facts), latest);
+            })
+            .OrderBy(section => Order(section.Label))
+            .ThenBy(section => section.Label, StringComparer.CurrentCultureIgnoreCase),
+    ];
 
-    private List<IGrouping<string, KnowledgeFact>> Groups => [.. KnownFacts
-        .Where(fact => !Searching || fact.Text.Contains(_search!.Trim(), StringComparison.CurrentCultureIgnoreCase) || fact.Label.Contains(_search!.Trim(), StringComparison.CurrentCultureIgnoreCase))
-        .OrderBy(fact => fact.UpdatedAt)
-        .GroupBy(fact => fact.Label)
-        .OrderBy(group => Order(group.Key))
-        .ThenBy(group => group.Key, StringComparer.CurrentCultureIgnoreCase)];
+    private bool Searching => !string.IsNullOrWhiteSpace(_search);
 
-    private string AddTitle => _forQuestion is not null ? $"Customers ask: “{_forQuestion}”" : "Add something to remember";
+    private IReadOnlyList<SummarySection> VisibleSections =>
+    [
+        .. SummarySections.Where(section =>
+            !Searching ||
+            section.Label.Contains(_search!.Trim(), StringComparison.CurrentCultureIgnoreCase) ||
+            section.Summary.Contains(_search!.Trim(), StringComparison.CurrentCultureIgnoreCase)),
+    ];
 
-    private string Origin(KnowledgeFact fact) =>
-        fact.Source is { } source ? $"From {source} · {Ago(fact.UpdatedAt)}" : $"Added by you · {Ago(fact.UpdatedAt)}";
+    // The demo's summary: the section's details, as one paragraph. The knowledge service writes this (see the backend requests).
+    private static string Summarise(IReadOnlyList<KnowledgeFact> facts) =>
+        string.Join(" ", facts.Select(fact => fact.Text.Trim()).Where(text => text.Length > 0).Distinct(StringComparer.CurrentCultureIgnoreCase));
+
+    private static string SectionId(SummarySection section) => "knowledge-section-" + string.Concat(section.Label.Where(char.IsLetterOrDigit)).ToLowerInvariant();
+
+    private static string TopicTone(KnowledgeTopic topic) => topic switch
+    {
+        KnowledgeTopic.Prices or KnowledgeTopic.Payment => "is-amber",
+        KnowledgeTopic.Delivery or KnowledgeTopic.Hours => "is-teal",
+        KnowledgeTopic.Returns or KnowledgeTopic.Handover => "is-violet",
+        _ => "is-cyan",
+    };
+
+    private static string UpdatedLine(KnowledgeFact fact) => $"Updated {Ago(fact.UpdatedAt)}";
 
     private static string SavedLine(IReadOnlyList<KnowledgeFact> saved)
     {
         var labels = saved.Select(fact => fact.Label).Distinct().ToList();
         var where = labels.Count == 1 ? labels[0] : string.Join(", ", labels[..^1]) + " and " + labels[^1];
-        return saved.Count == 1 ? $"Saved to {where}." : $"Saved {saved.Count} things to {where}.";
+        return $"Added to {where}.";
     }
 
     private static string Ago(DateTimeOffset when)
@@ -257,13 +336,12 @@
         return days switch { <= 0 => "today", 1 => "yesterday", < 7 => $"{days} days ago", < 14 => "last week", _ => when.ToString("d MMM") };
     }
 
-    // ── Add ─────────────────────────────────────────────────────────────────
-
     private async Task AddKeyAsync(KeyboardEventArgs args)
     {
         if (args.Key == "Enter" && !args.ShiftKey) await AddAsync();
     }
 
+    // Told something: it goes into the section it belongs to, and that section lights for a moment.
     private async Task AddAsync()
     {
         var text = _draft?.Trim();
@@ -271,7 +349,8 @@
         _adding = true;
         try
         {
-            _justSaved = [.. await Memory.AddAsync(text)];
+            _justSaved = [.. await Knowledge.AddAsync(text)];
+            _freshLabels = [.. _justSaved.Select(fact => fact.Label)];
             _draft = null;
             _forQuestion = null;
             await LoadAsync();
@@ -289,65 +368,120 @@
     private async Task UndoAddAsync()
     {
         if (_justSaved is null) return;
-        foreach (var fact in _justSaved) await Memory.DeleteAsync(fact.Id);
+        foreach (var fact in _justSaved) await Knowledge.DeleteAsync(fact.Id);
         _justSaved = null;
+        _freshLabels = [];
         await LoadAsync();
     }
 
-    // ── Edit, move, remove ─────────────────────────────────────────────────
-
-    private void StartEditing(KnowledgeFact fact)
-    {
-        _editing = fact.Id;
-        _editText = fact.Text;
-        _moving = null;
-    }
-
-    private void StartMoving(KnowledgeFact fact)
-    {
-        _moving = fact.Id;
-        _newLabel = null;
-        _editing = null;
-    }
-
-    private async Task SaveEditAsync(KnowledgeFact fact)
-    {
-        if (string.IsNullOrWhiteSpace(_editText)) return;
-        await Memory.UpdateAsync(fact.Id, _editText);
-        _editing = null;
-        await LoadAsync();
-        Toasts.Show("Saved.");
-    }
-
-    private async Task MoveAsync(KnowledgeFact fact, string label)
-    {
-        if (string.IsNullOrWhiteSpace(label)) return;
-        var moved = await Memory.MoveAsync(fact.Id, label);
-        _moving = null;
-        await LoadAsync();
-        Toasts.Show($"Moved to {moved.Label}.");
-    }
-
-    private async Task RemoveAsync(KnowledgeFact fact)
-    {
-        await Memory.DeleteAsync(fact.Id);
-        await LoadAsync();
-        Toasts.Show(new ToastMessage(
-            "Removed. Your AI won't use it.",
-            null,
-            ToastStatus.Success,
-            "Undo",
-            () => InvokeAsync(async () => { await Memory.RestoreAsync(fact); await LoadAsync(); StateHasChanged(); })));
-    }
-
-    // ── Test an answer ─────────────────────────────────────────────────────
-
-    // "It doesn't know this yet": the question comes to the box, to be answered.
     private void TeachFromTest(string question)
     {
         _testOpen = false;
         _forQuestion = question;
-        _justSaved = null;
         _focusBox = true;
+    }
+
+    private void ClearQuestion()
+    {
+        _forQuestion = null;
+        _focusBox = true;
+    }
+
+    private void OpenLinkDialog()
+    {
+        _link = null;
+        _linkOpen = true;
+    }
+
+    private void OpenCatalog() => Nav.NavigateTo("/dashboard/catalog");
+
+    // Editing a section: its summary, in place.
+    private void StartEditing(SummarySection section)
+    {
+        _editing = section.Label;
+        _editText = section.Summary;
+    }
+
+    private void CancelEdit()
+    {
+        _editing = null;
+        _editText = null;
+    }
+
+    // Saved: the section becomes the summary they wrote (one entry; the details it was made from are let go),
+    // with Undo, which brings those back as they were.
+    private async Task SaveSummaryAsync(SummarySection section)
+    {
+        var text = _editText?.Trim();
+        if (string.IsNullOrEmpty(text) || _savingEdit) return;
+        if (text == section.Summary) { CancelEdit(); return; }
+        _savingEdit = true;
+        var before = KnownFacts.Where(fact => fact.Label == section.Label).ToList();
+        try
+        {
+            var keep = before.OrderByDescending(fact => fact.UpdatedAt).First();
+            await Knowledge.UpdateAsync(keep.Id, text);
+            foreach (var other in before.Where(fact => fact.Id != keep.Id)) await Knowledge.DeleteAsync(other.Id);
+            await LoadAsync();
+            CancelEdit();
+            _freshLabels = [section.Label];
+            Toasts.Show(new ToastMessage($"{section.Label} updated. Your AI uses it from now on.", null, ToastStatus.Success, "Undo",
+                () => InvokeAsync(() => UndoSummaryAsync(before))));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            Toasts.ShowError("We couldn't save that. Check your connection and try again.");
+        }
+        finally
+        {
+            _savingEdit = false;
+        }
+    }
+
+    private async Task UndoSummaryAsync(IReadOnlyList<KnowledgeFact> before)
+    {
+        foreach (var fact in before)
+        {
+            await Knowledge.DeleteAsync(fact.Id);
+            await Knowledge.RestoreAsync(fact);
+        }
+        _freshLabels = [];
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private Task CloseLinkDialog()
+    {
+        if (!_readingLink) _linkOpen = false;
+        return Task.CompletedTask;
+    }
+
+    private async Task ReadLinkAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_link) || _readingLink) return;
+        _readingLink = true;
+        try
+        {
+            var found = await Knowledge.ReadWebsiteAsync(_link.Trim());
+            await LoadAsync();
+            _linkOpen = false;
+            if (found.Count > 0)
+            {
+                Toasts.Show(found.Count == 1 ? "1 detail is ready to review" : $"{found.Count} details are ready to review");
+                _reviewOpen = true;
+            }
+            else
+            {
+                Toasts.Show("This link is already added");
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            Toasts.ShowError("We couldn't read that link. Check it and try again.");
+        }
+        finally
+        {
+            _readingLink = false;
+        }
     }
 }

@@ -119,12 +119,18 @@
   /* Gaps in the token set: no component width scale, no z-index scale and
      no blur scale. Motion comes from the shared scale in app.css. */
   --ds-dialog-width: 480px;
+  /* Gaps in the token set: no modal content-width scale. */
+  --ds-dialog-wide-width: 720px;
+  --ds-dialog-large-width: 960px;
   --ds-dialog-layer: 120;
   --ds-dialog-blur: 6px;
   --ds-dialog-backdrop-enter: var(--ds-motion-base);
   --ds-dialog-enter: var(--ds-motion-base);
   --ds-dialog-ease: var(--ds-motion-enter);
 }
+
+.dialog.dialog--wide { --ds-dialog-width: var(--ds-dialog-wide-width); }
+.dialog.dialog--large { --ds-dialog-width: var(--ds-dialog-large-width); }
 
 .dialog > header {
   display: flex;
