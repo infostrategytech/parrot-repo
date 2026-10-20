@@ -51,6 +51,7 @@ public sealed class CustomerService(ICustomerRepository repository)
     }
 
     private static readonly string[] ValidStages = ["New Lead", "Interested", "Customer", "Vip"];
+    public static readonly string[] ValidTags = ["Business", "Consumer", "New client", "Returning client", "VIP", "VVIP"];
 
     public async Task<CustomerDetailResponse> CreateAsync(string ownerUserId, CreateCustomerRequest request, CancellationToken ct)
     {
@@ -98,16 +99,17 @@ public sealed class CustomerService(ICustomerRepository repository)
         return ToDetail(customer);
     }
 
-    // Trims, removes blanks, deduplicates case-insensitively, and validates.
-    // Appends validation messages to errors rather than throwing, so callers
-    // can accumulate multiple errors before surfacing them.
+    // Deduplicates case-insensitively, normalises to canonical casing, and
+    // validates that every tag is one of the fixed ValidTags options.
     private static List<string> NormalizeTags(List<string>? raw, List<string> errors)
     {
-        List<string> trimmed = [.. (raw ?? []).Select(t => t.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
-        if (trimmed.Any(t => t.Contains(','))) errors.Add("Tags must not contain commas.");
-        if (trimmed.Any(t => t.Length > 64)) errors.Add("Each tag must be 64 characters or fewer.");
-        if (trimmed.Count > 20) errors.Add("Customers can have at most 20 tags.");
-        return trimmed;
+        List<string> deduped = [.. (raw ?? []).Select(t => t.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase)];
+        if (deduped.Any(t => !ValidTags.Contains(t, StringComparer.OrdinalIgnoreCase)))
+        {
+            errors.Add("One or more tags are not valid.");
+            return deduped;
+        }
+        return [.. deduped.Select(t => ValidTags.First(v => v.Equals(t, StringComparison.OrdinalIgnoreCase)))];
     }
 
     private static CustomerListItemResponse ToListItem(Customer c) => new(

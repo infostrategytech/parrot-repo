@@ -161,19 +161,9 @@ public class CustomerServiceTests
     }
 
     [Fact]
-    public async Task CreateAsync_TagWithComma_ThrowsValidationException()
+    public async Task CreateAsync_InvalidTag_ThrowsValidationException()
     {
-        CreateCustomerRequest request = new("Ada", null, null, null, ["high, value"]);
-
-        await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.CreateAsync(Owner, request, CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task CreateAsync_TooManyTags_ThrowsValidationException()
-    {
-        List<string> tags = [.. Enumerable.Range(1, 21).Select(i => $"tag{i}")];
-        CreateCustomerRequest request = new("Ada", null, null, null, tags);
+        CreateCustomerRequest request = new("Ada", null, null, null, ["NotATag"]);
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             _service.CreateAsync(Owner, request, CancellationToken.None));
@@ -221,9 +211,9 @@ public class CustomerServiceTests
         Guid id = Guid.NewGuid();
         _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
 
-        CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["VIP", "Loyal"], CancellationToken.None);
+        CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["VIP", "Consumer"], CancellationToken.None);
 
-        Assert.Equal(["VIP", "Loyal"], result.Tags);
+        Assert.Equal(["VIP", "Consumer"], result.Tags);
     }
 
     [Fact]
@@ -232,33 +222,22 @@ public class CustomerServiceTests
         Guid id = Guid.NewGuid();
         _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
 
-        CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["  VIP  ", "vip", "Loyal"], CancellationToken.None);
+        CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["  VIP  ", "vip", "Consumer"], CancellationToken.None);
 
-        // "VIP" and "vip" collapse to one after trim+dedup; order is the first occurrence
+        // "VIP" and "vip" collapse to one after trim+dedup; canonical casing is preserved
         Assert.Equal(2, result.Tags.Count);
         Assert.Contains("VIP", result.Tags);
-        Assert.Contains("Loyal", result.Tags);
+        Assert.Contains("Consumer", result.Tags);
     }
 
     [Fact]
-    public async Task UpdateTagsAsync_TagWithComma_ThrowsValidationException()
+    public async Task UpdateTagsAsync_InvalidTag_ThrowsValidationException()
     {
         Guid id = Guid.NewGuid();
         _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
 
         await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.UpdateTagsAsync(Owner, id, ["good", "bad,tag"], CancellationToken.None));
-    }
-
-    [Fact]
-    public async Task UpdateTagsAsync_TooManyTags_ThrowsValidationException()
-    {
-        Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
-        List<string> tags = [.. Enumerable.Range(1, 21).Select(i => $"tag{i}")];
-
-        await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.UpdateTagsAsync(Owner, id, tags, CancellationToken.None));
+            _service.UpdateTagsAsync(Owner, id, ["VIP", "NotATag"], CancellationToken.None));
     }
 
     [Fact]

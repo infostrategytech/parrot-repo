@@ -98,30 +98,19 @@
 
                 <ContactSection Title="Tags" Count="@(_tags.Count == 0 ? null : _tags.Count)">
                     <div class="customer-tags">
-                        @if (_tags.Count > 0)
-                        {
-                            <div class="customer-tags__list">
-                                @foreach (string tag in _tags.ToList())
-                                {
-                                    string t = tag;
-                                    <span class="customer-tags__chip">
-                                        <Typography TextStyle="TextStyle.Small12Regular" As="span">@t</Typography>
-                                        <button type="button"
-                                                aria-label="@($"Remove {t}")"
-                                                disabled="@_tagsSaving"
-                                                @onclick="() => RemoveTagAsync(t)">
-                                            <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
-                                        </button>
-                                    </span>
-                                }
-                            </div>
-                        }
-                        <div class="customer-tags__add">
-                            <Input FloatingLabel="New tag" @bind-Value="_newTag" maxlength="64" />
-                            <Button Variant="ButtonVariant.Secondary"
-                                    Size="ButtonSize.Small"
-                                    Disabled="@(string.IsNullOrWhiteSpace(_newTag) || _tagsSaving)"
-                                    @onclick="AddTagAsync">Add</Button>
+                        <div class="customer-tags__options">
+                            @foreach (string option in TagOptions)
+                            {
+                                string opt = option;
+                                bool selected = _tags.Contains(opt, StringComparer.OrdinalIgnoreCase);
+                                <button type="button"
+                                        class="@($"customer-tags__option{(selected ? " is-selected" : "")}")"
+                                        aria-pressed="@selected"
+                                        disabled="@_tagsSaving"
+                                        @onclick="() => ToggleTagAsync(opt)">
+                                    <Typography TextStyle="TextStyle.Small12Regular" As="span">@opt</Typography>
+                                </button>
+                            }
                         </div>
                         @if (_tagsError is not null)
                         {
@@ -186,6 +175,7 @@
 
 @code {
     private static readonly string[] Stages = ["New Lead", "Interested", "Customer", "Vip"];
+    private static readonly string[] TagOptions = ["Business", "Consumer", "New client", "Returning client", "VIP", "VVIP"];
 
     [Parameter] public Contact? Contact { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
@@ -204,7 +194,6 @@
 
     // Tag editing
     private List<string> _tags = [];
-    private string _newTag = string.Empty;
     private bool _tagsSaving;
     private string? _tagsError;
 
@@ -217,7 +206,6 @@
             _loadedId = Contact?.Id;
             _stage = Contact?.Stage ?? string.Empty;
             _tags = Contact is not null ? [.. Contact.Tags] : [];
-            _newTag = string.Empty;
             _copied = null;
             _stageError = null;
             _tagsError = null;
@@ -266,17 +254,12 @@
         }
     }
 
-    private async Task RemoveTagAsync(string tag)
+    private async Task ToggleTagAsync(string tag)
     {
-        await SaveTagsAsync([.. _tags.Where(t => t != tag)]);
-    }
-
-    private async Task AddTagAsync()
-    {
-        string tag = _newTag.Trim();
-        if (tag.Length == 0 || _tags.Contains(tag, StringComparer.OrdinalIgnoreCase)) return;
-        await SaveTagsAsync([.. _tags, tag]);
-        if (_tagsError is null) _newTag = string.Empty;
+        List<string> newTags = _tags.Contains(tag, StringComparer.OrdinalIgnoreCase)
+            ? [.. _tags.Where(t => !t.Equals(tag, StringComparison.OrdinalIgnoreCase))]
+            : [.. _tags, tag];
+        await SaveTagsAsync(newTags);
     }
 
     private async Task SaveTagsAsync(List<string> newTags)
