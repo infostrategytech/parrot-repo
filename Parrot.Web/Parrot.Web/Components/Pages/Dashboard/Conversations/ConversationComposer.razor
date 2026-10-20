@@ -4,7 +4,7 @@
 
 @* React's composer. A reply goes through Parrot's send (SendReplyRequest:
    RequestId + Text), with the same request id kept for a safe retry. A picture
-   or file (the paperclip, top right) goes through the attachments endpoint
+   or file (the paperclip, beside saved replies) goes through the attachments endpoint
    with the typed text as its caption. Saved replies and AI drafts have no
    endpoint yet: they are offered only when CanUseFeatures confirms API
    support, and otherwise left out. Internal notes have their own endpoints
@@ -17,16 +17,6 @@
                  Title="@(CanAddNotes ? null : "Internal notes are not available")"
                  OnClick="() => ChangeModeAsync(ComposerMode.Note)">Internal note</Tab>
         </Tabs>
-        @if (!WindowClosed && Mode == ComposerMode.Reply)
-        {
-            @* The browser opens its file picker only for a click on a real
-               file input, so the button forwards one to this hidden input. *@
-            <InputFile @key="_fileKey" @ref="_file" class="sr-only" tabindex="-1" aria-hidden="true" accept="@Accept" OnChange="OnFileSelected" />
-            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool conversation-composer__attach"
-                    aria-label="Attach a picture or file" title="@AttachTitle" disabled="@(InputDisabled || !CanAttach)" @onclick="PickFileAsync">
-                <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
-            </Button>
-        }
     </header>
 
     @if (WindowClosed)
@@ -40,7 +30,7 @@
         {
             <div class="conversation-composer__disclosure is-note">
                 <Icon Name="IconName.RiLock2Fill" />
-                <Typography TextStyle="TextStyle.Small10Medium" As="span">Only your team can see this note. It is saved here and is never sent to the customer.</Typography>
+                <Typography TextStyle="TextStyle.Small10Medium" As="span">Only teammates can see this note. It will show your name and timestamp.</Typography>
             </div>
         }
         else if (Conversation.Channel == "facebook" && !string.IsNullOrWhiteSpace(AttachmentName))
@@ -72,11 +62,20 @@
 
         @if (Mode == ComposerMode.Reply && ReplyingTo is { } quote)
         {
-            @* The message this reply quotes, as WhatsApp Web shows it above the box. ✕ or Esc sends a plain reply instead. *@
+            @* The message this reply quotes, above the box (designer, 19 October 2026): a quiet card with a reply
+               arrow in the quoted side's colour, who wrote it ("You" for the business's own, as WhatsApp says),
+               and up to two lines of what they said. ✕ or Esc sends a plain reply instead. *@
             <div class="@($"conversation-composer__quote {(quote.Outgoing ? "is-own" : null)}")" role="status">
+                <span class="conversation-composer__quote-glyph" aria-hidden="true"><Icon Name="IconName.RiReplyFill" Size="IconSize.Sm" /></span>
                 <div class="conversation-composer__quote-text">
-                    <Typography TextStyle="TextStyle.Small10Semibold" As="strong">Replying to @QuoteLabels.Author(quote, Conversation.CustomerName)</Typography>
-                    <Typography TextStyle="TextStyle.Small12Regular" As="span">@QuoteLabels.Text(quote)</Typography>
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="strong"><span class="sr-only">Replying to </span>@QuoteLabels.Author(quote, Conversation.CustomerName)</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="conversation-composer__quote-body">
+                        @if (QuoteLabels.Glyph(quote) is { } glyph)
+                        {
+                            <Icon Name="glyph" Size="IconSize.Inherit" Class="conversation-composer__quote-media" />
+                        }
+                        @QuoteLabels.Text(quote)
+                    </Typography>
                 </div>
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Cancel reply" title="Cancel reply (Esc)"
                         disabled="@Sending" @onclick="OnCancelReply">
@@ -90,6 +89,7 @@
                   ValueChanged="OnTextChanged"
                   OnKeyDown="OnKeyDown"
                   Variant="TextAreaVariant.Plain"
+                  TextStyle="TextStyle.BodyDefaultMedium"
                   AriaLabel="@(Mode == ComposerMode.Note ? "Internal note" : "Reply")"
                   Disabled="@InputDisabled"
                   Placeholder="@Placeholder"
@@ -101,6 +101,16 @@
 
         <footer>
             <div class="conversation-composer__tools">
+                @if (Mode == ComposerMode.Reply)
+                {
+                    @* The browser opens its file picker only for a click on a real
+                       file input, so the button forwards one to this hidden input. *@
+                    <InputFile @key="_fileKey" @ref="_file" class="sr-only" tabindex="-1" aria-hidden="true" accept="@Accept" OnChange="OnFileSelected" />
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="conversation-composer__tool"
+                            aria-label="Attach a picture or file" title="@AttachTitle" disabled="@(InputDisabled || !CanAttach)" @onclick="PickFileAsync">
+                        <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                    </Button>
+                }
                 @if (CanUseFeatures)
                 {
                     <SavedRepliesMenu Disabled="@(InputDisabled || Mode == ComposerMode.Note)" OnSelect="SelectSavedReplyAsync" />

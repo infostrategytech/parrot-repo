@@ -86,7 +86,9 @@ else if (Message.Kind == MessageKind.Note)
 }
 else
 {
-    <article class="message-bubble @DirectionClass @KindClass @(_highlighted ? "is-highlighted" : null)" @ref="_element">
+    @* As WhatsApp Web: double-click the empty space beside a message (its row, not the message) to reply to it. *@
+    <div class="message-row @DirectionClass" @ondblclick="ReplyAsync">
+    <article class="message-bubble @DirectionClass @KindClass @(_highlighted ? "is-highlighted" : null)" @ref="_element" @ondblclick:stopPropagation>
         @if (Message.Kind == MessageKind.Ai)
         {
             <span class="message-bubble__ai-avatar"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></span>
@@ -104,33 +106,17 @@ else
             <PetalAvatar Seed="@AvatarSeed" Initials="@AvatarInitials" Size="AvatarSize.Md" />
         }
 
-        @* As WhatsApp Web: double-click a message (or use its menu) to reply to it. *@
-        <div class="message-bubble__content" @ondblclick="ReplyAsync">
+        <div class="message-bubble__content">
             <header>
                 <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@AuthorLabel</Typography>
                 @if (Message.Kind == MessageKind.Ai)
                 {
                     <Typography TextStyle="TextStyle.Small10Semibold" As="span">AI agent</Typography>
                 }
-                @* The dropdown button: right-aligned at the end of the name line, level with the name, as WhatsApp
-                   places its chevron. It shows on hover or keyboard focus (always, on a touch screen). *@
-                @if (Replyable || Message.Text.Length > 0)
-                {
-                    <div class="message-actions">
-                        <ActionMenu Label="Message options" Glyph="IconName.RiArrowDownSLine">
-                            @if (Replyable)
-                            {
-                                <ActionMenuItem Label="Reply" OnClick="ReplyAsync" />
-                            }
-                            @if (Message.Text.Length > 0)
-                            {
-                                <ActionMenuItem Label="Copy" OnClick="CopyAsync" />
-                            }
-                        </ActionMenu>
-                    </div>
-                }
             </header>
 
+            @* The message itself (its quote, words and files): hovered, it shows its arrow. *@
+            <div class="message-bubble__box">
             @if (Message.ReplyTo is { } quote)
             {
                 @* The message this replies to; choosing it scrolls to the original when the thread has it. *@
@@ -185,6 +171,21 @@ else
                                       <Typography TextStyle="TextStyle.Small10Medium" As="small">Opens in a new tab</Typography></span>
                             </a>
                         }
+                        else if (file.IsPending && file.IsVisual)
+                        {
+                            <div class="message-pending message-pending--image" role="status" aria-label="@($"{MediaLabels.Name(file)} loading")">
+                                <Skeleton Shape="SkeletonShape.Block" Height="var(--ds-message-image-height)" />
+                                <span class="message-image__caption"><Icon Name="@MediaLabels.Glyph(file)" />@MediaLabels.Name(file)</span>
+                            </div>
+                        }
+                        else if (file.IsPending)
+                        {
+                            <div class="message-attachment message-pending" role="status" aria-label="@($"{MediaLabels.Name(file)} loading")">
+                                <Icon Name="@MediaLabels.Glyph(file)" />
+                                <Typography TextStyle="TextStyle.Small10Medium" As="span">@MediaLabels.Name(file)</Typography>
+                                <Skeleton Shape="SkeletonShape.Line" Width="var(--ds-message-pending-line)" />
+                            </div>
+                        }
                         else if (!file.Available)
                         {
                             <div class="@($"message-file is-unavailable {(file.IsPending ? "is-pending" : null)}")" aria-busy="@(file.IsPending ? "true" : null)">
@@ -222,6 +223,24 @@ else
                 </div>
             }
 
+                @* WhatsApp's arrow: in the bubble's top-right corner, shown while the message is pointed at
+                   or reached by keyboard (always, on a touch screen). *@
+                @if (Replyable || Message.Text.Length > 0)
+                {
+                    <div class="message-actions">
+                        <ActionMenu Label="Message options" Glyph="IconName.RiArrowDownSLine">
+                            @if (Replyable)
+                            {
+                                <ActionMenuItem Label="Reply" OnClick="ReplyAsync" />
+                            }
+                            @if (Message.Text.Length > 0)
+                            {
+                                <ActionMenuItem Label="Copy" OnClick="CopyAsync" />
+                            }
+                        </ActionMenu>
+                    </div>
+                }
+            </div>
 
             <footer>
                 <Typography TextStyle="TextStyle.Small10Regular" As="time">@TimeLabel</Typography>
@@ -250,6 +269,7 @@ else
             </footer>
         </div>
     </article>
+    </div>
 }
 
 @code {
@@ -282,7 +302,13 @@ else
 
     private bool Replyable => CanReply && QuoteLabels.CanQuote(Message);
 
-    private Task ReplyAsync() => Replyable ? OnReply.InvokeAsync(Message) : Task.CompletedTask;
+    private async Task ReplyAsync()
+    {
+        if (!Replyable) return;
+        // A double-click also selects a word; quoting it should leave nothing highlighted.
+        try { await Interop.ClearSelectionAsync(); } catch (JSException) { }
+        await OnReply.InvokeAsync(Message);
+    }
 
     private async Task CopyAsync()
     {

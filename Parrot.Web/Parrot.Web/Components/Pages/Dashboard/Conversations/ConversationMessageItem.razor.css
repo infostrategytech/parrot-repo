@@ -5,10 +5,11 @@
   max-width: var(--ds-message-measure);
 }
 
-.message-bubble.is-outbound {
-  flex-direction: row-reverse;
-  align-self: flex-end;
-}
+.message-bubble.is-outbound { flex-direction: row-reverse; }
+
+/* The message's row, the thread's width: the space beside the message is where a double-click replies. */
+.message-row { display: flex; }
+.message-row.is-outbound { justify-content: flex-end; }
 
 .message-bubble__content { display: grid; min-width: 0; }
 .message-bubble ::deep .ds-button.message-customer-trigger {
@@ -128,6 +129,23 @@
 .message-image img { display: block; width: 100%; height: var(--ds-message-image-height); object-fit: cover; object-position: top; background: var(--colors-surface-muted); }
 .message-image__caption { display: flex; gap: var(--spacing-xs); align-items: center; padding: var(--spacing-sm) var(--spacing-md); }
 
+/* Pushed media before its file arrives: the image tile or attachment row it
+   will become, with a loading shimmer, so nothing jumps when it lands. */
+.message-pending--image {
+  display: grid;
+  width: var(--ds-message-image);
+  max-width: 100%;
+  margin-top: var(--spacing-sm);
+  overflow: hidden;
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+
+.message-pending--image ::deep .skeleton { border-radius: 0; }
+.message-bubble.is-outbound .message-pending--image { margin-left: auto; }
+
 
 
 .message-files { display: grid; gap: var(--spacing-xs); justify-items: start; margin-top: var(--spacing-xs); }
@@ -226,6 +244,8 @@ a.message-file:hover { background: var(--colors-interaction-hover); border-color
   --ds-question-measure: 620px;
   --ds-message-attachment: 240px;
   --ds-message-image: 184px;
+  /* Gap in the token set: the loading line beside a pending attachment's name. */
+  --ds-message-pending-line: 64px;
   --ds-message-image-height: 128px;
   --ds-message-media: 240px;
   --ds-message-media-height: 240px;
@@ -303,36 +323,43 @@ a.message-file:hover { background: var(--colors-interaction-hover); border-color
 .message-note__card > header ::deep .message-note__delete { flex: 0 0 auto; color: var(--colors-feedback-warning-text); }
 .message-note__card > header ::deep .message-note__delete.is-confirming { color: var(--colors-feedback-destructive-text); }
 
-/* Replying, as WhatsApp Web: a dropdown button at the end of the message's name line, right-aligned to the
-   bubble's edge and level with the name, opens the message's options (Reply, Copy). It stays out of the way
-   until the message is pointed at or reached by keyboard; a touch screen always shows it. */
+/* Replying, as WhatsApp (designer, 18 October 2026): the message's arrow sits in its bubble's top-right
+   corner, with no fade, and shows while the message itself is pointed at or reached by keyboard; a touch
+   screen always shows it. Double-clicking the space beside the message replies too. */
+.message-bubble__box { position: relative; display: grid; min-width: 0; }
+.message-bubble { --ds-message-ink: var(--colors-text-subtle); }
+.message-bubble.is-human { --ds-message-ink: var(--colors-brand-primary-foreground); }
+.message-bubble.is-ai { --ds-message-ink: var(--colors-text-secondary); }
 .message-actions {
+  position: absolute;
+  top: var(--spacing-xs);
+  right: var(--spacing-xs);
+  z-index: 1;
   display: flex;
-  margin-inline-start: auto;
   opacity: 0;
+  pointer-events: none;
   transition: opacity var(--ds-motion-fast) var(--ds-motion-ease);
 }
-/* Our own messages have their name at the right already: the button follows it, at the same edge. */
-.message-bubble.is-outbound .message-actions { margin-inline-start: 0; }
-.message-bubble:hover .message-actions,
-.message-bubble:focus-within .message-actions,
-.message-actions:has(.is-open) { opacity: 1; }
-@media (hover: none) { .message-actions { opacity: 1; } }
+.message-bubble__box:hover .message-actions,
+.message-bubble__box:focus-within .message-actions,
+.message-actions:has(.is-open) { opacity: 1; pointer-events: auto; }
+@media (hover: none) { .message-actions { opacity: 1; pointer-events: auto; } }
 .message-actions ::deep .ds-action-menu__trigger {
   width: auto;
   min-width: 0;
   height: auto;
   min-height: 0;
   padding: var(--spacing-2xs);
-  color: var(--colors-text-subtle);
+  color: var(--ds-message-ink);
   background: transparent;
   border-color: transparent;
   border-radius: var(--radius-radius-full);
   box-shadow: none;
 }
-.message-actions ::deep .ds-action-menu__trigger:hover:not(:disabled) { color: var(--colors-text-primary); background: var(--colors-interaction-hover); }
-/* The name line draws its text as the "AI agent" pill; the menu's own labels are not pills. */
-.message-bubble__content > header .message-actions ::deep span { padding: 0; color: inherit; background: none; border-radius: 0; }
+/* The arrow alone: no circle behind it when pointed at, pressed or open (designer, 19 October 2026). */
+.message-actions ::deep .ds-action-menu__trigger:hover:not(:disabled),
+.message-actions ::deep .ds-action-menu__trigger:active:not(:disabled),
+.message-actions ::deep .ds-action-menu__trigger.is-open { color: var(--ds-message-ink); background: transparent; }
 /* A customer's message sits on the left: its menu opens rightwards, into the thread. */
 .message-bubble.is-inbound .message-actions ::deep .ds-action-menu__menu { right: auto; left: 0; }
 

@@ -115,8 +115,8 @@
             }
             else
             {
-                <ResponseControl Conversation="@Conversation" CanAct="@Features.Available" Countdown="@CountdownLabel"
-                                 Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" />
+                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Features.Available" Countdown="@CountdownLabel"
+                                 Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" OnDismiss="() => _quoteOnTakeOver = null" />
             }
 
             <ConversationComposer @ref="_composer" Conversation="@Conversation"
@@ -225,6 +225,9 @@
 
     protected override void OnParametersSet()
     {
+        // A reply waiting on Take over belongs to the conversation it was asked in.
+        if (_quoteOnTakeOver is { } waiting && !Conversation.Messages.Any(m => m.Id == waiting.Id)) _quoteOnTakeOver = null;
+
         // Polling merges new messages in place; only a new tail (or the first
         // load) pulls the view to the bottom, so paging older history keeps
         // the reader's place.
@@ -354,14 +357,31 @@
     private readonly Dictionary<string, ConversationMessageItem> _items = new();
     private ConversationComposer? _composer;
 
-    // Reply is offered only when a reply can be typed: not while the AI agent is answering, after the window
-    // closes, once resolved, or on TikTok (which cannot show a quote).
+    // Reply is offered wherever a quoting reply can be sent (designer, 18 October 2026, as WhatsApp): while the
+    // AI agent is answering, Reply leads through Take over (19 October), so it needs the take-over actions.
+    // Not after the window closes, once resolved, or on TikTok (which cannot show a quote).
     private bool CanQuoteReplies => Conversation.Channel != "tiktok" && !Conversation.ReplyWindowClosed
-        && !Conversation.ReplyLocked && Conversation.Status != ConversationStatus.Resolved;
+        && Conversation.Status != ConversationStatus.Resolved && (!Conversation.ReplyLocked || Features.Available);
+
+    private ResponseControl? _control;
+    // The message Reply asked for while the AI agent had the conversation: quoted once it is taken over.
+    private ConvMessage? _quoteOnTakeOver;
 
     private void ReplyTo(ConvMessage message)
     {
         if (!CanQuoteReplies) return;
+        if (Conversation.ReplyLocked)
+        {
+            // Never a quote in a locked box: the take-over choice opens, and the quote follows it.
+            _quoteOnTakeOver = message;
+            _control?.Offer("Take over to reply. For how long?");
+            return;
+        }
+        Quote(message);
+    }
+
+    private void Quote(ConvMessage message)
+    {
         if (_composerMode != ComposerMode.Reply) ChangeComposerMode(ComposerMode.Reply);
         // A different quote is a different message: a pending retry's request id does not carry over.
         if (Conversation.ReplyingTo?.Id != message.Id) Conversation.DraftRequestId = null;
@@ -482,7 +502,13 @@
         finally { _drafting = false; }
     }
 
-    private Task TakeOverAsync(int? minutes) => ActAsync(() => Features.TakeOverAsync(Conversation.ConnectionId, Conversation.Sender, minutes));
+    private async Task TakeOverAsync(int? minutes)
+    {
+        await ActAsync(() => Features.TakeOverAsync(Conversation.ConnectionId, Conversation.Sender, minutes));
+        // Taken over from Reply: the message it asked for is quoted, ready to type under.
+        if (_quoteOnTakeOver is { } message && _actionError is null) Quote(message);
+        _quoteOnTakeOver = null;
+    }
 
     private async Task ReturnToAiAsync()
     {

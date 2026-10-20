@@ -17,7 +17,7 @@
   cursor: pointer;
 }
 
-.conversation-row-host ::deep .conversation-row:hover { background: var(--colors-interaction-hover); }
+.conversation-row-host:hover ::deep .conversation-row { background: var(--colors-interaction-hover); }
 
 .conversation-row-host ::deep .conversation-row.is-selected {
   background: var(--colors-interaction-selected);
@@ -69,12 +69,48 @@
   /* Missing from the token set: no selected-edge width token. */
   --ds-conversation-selected-edge: 3px;
 }
+.conversation-row-host {
+  /* Missing from the token set: the small icon button's width (the options button), which the
+     unread count slides by. Button keeps it to itself (--ds-button-height-sm). */
+  --ds-conversation-row-menu: 32px;
+}
 
 .conversation-row__name { display: flex; gap: var(--spacing-xs); align-items: center; min-width: 0; }
 .conversation-row__name ::deep .conversation-row__pin { flex: 0 0 auto; color: var(--colors-brand-primary); }
 
-/* The options button sits at the row's right edge; the row leaves room for it. It shows on hover and focus,
-   and always on touch screens, which have no hover. */
-.conversation-row-host ::deep .conversation-row { padding-right: calc(var(--spacing-md) + var(--spacing-3xl)); }
-.conversation-row__menu { position: absolute; top: var(--spacing-md); right: var(--spacing-xs); z-index: 1; }
+/* The options button (designer, 18 October 2026): in the unread count's place at the row's
+   foot, not beside the time, and only while the row is hovered or has the keyboard. A count
+   there slides left to make room. Touch screens have no hover, so there it always shows. */
+.conversation-row__menu {
+  position: absolute;
+  right: var(--spacing-md);
+  bottom: var(--spacing-md);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  /* The count's line: the button centres on it. */
+  height: var(--spacing-xl);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateX(var(--spacing-xs));
+  transition: opacity var(--ds-motion-base) var(--ds-motion-ease), transform var(--ds-motion-base) var(--ds-motion-ease);
+}
 .conversation-row__menu ::deep .ds-button { color: var(--colors-text-muted); background: transparent; border-color: transparent; box-shadow: none; }
+.conversation-row__menu ::deep .ds-button:hover:not(:disabled),
+.conversation-row__menu ::deep .ds-button.is-open { color: var(--colors-text-primary); background: var(--colors-interaction-hover); }
+::deep .conversation-row__unread { transition: transform var(--ds-motion-base) var(--ds-motion-ease); }
+
+.conversation-row-host:hover .conversation-row__menu,
+.conversation-row-host:focus-within .conversation-row__menu { opacity: 1; pointer-events: auto; transform: none; }
+.conversation-row-host:hover ::deep .conversation-row__unread,
+.conversation-row-host:focus-within ::deep .conversation-row__unread { transform: translateX(calc(-1 * (var(--ds-conversation-row-menu) + var(--spacing-xs)))); }
+
+@media (hover: none) {
+  .conversation-row__menu { opacity: 1; pointer-events: auto; transform: none; }
+  ::deep .conversation-row__unread { transform: translateX(calc(-1 * (var(--ds-conversation-row-menu) + var(--spacing-xs)))); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-row__menu,
+  ::deep .conversation-row__unread { transition: none; }
+}

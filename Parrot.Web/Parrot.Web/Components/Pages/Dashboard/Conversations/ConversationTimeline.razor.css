@@ -7,6 +7,8 @@
   height: 100%;
   padding-top: var(--ds-timeline-top-clear);
   overflow-y: auto;
+  /* The rail is measured against this width (see --ds-timeline-rail). */
+  container-type: inline-size;
   scrollbar-color: var(--colors-accent-neutral-border) transparent;
   -webkit-mask-image: linear-gradient(to bottom, transparent var(--ds-timeline-fade-start), var(--colors-surface-card) var(--ds-timeline-fade-end));
   mask-image: linear-gradient(to bottom, transparent var(--ds-timeline-fade-start), var(--colors-surface-card) var(--ds-timeline-fade-end));
@@ -31,7 +33,7 @@
 /* One responsive rail aligns the thread, response control and composer. The
    bubbles retain their own readable measure while the rail can breathe on a
    large display, as conversation-first products do. */
-.conversation-timeline__messages { display: flex; flex-direction: column; gap: var(--spacing-xl); box-sizing: border-box; width: 100%; max-width: var(--ds-timeline-rail-measure); margin-inline: auto; padding: 0 var(--spacing-2xl) var(--ds-timeline-composer-reserve); transform: translateX(var(--ds-timeline-optical-shift)); }
+.conversation-timeline__messages { display: flex; flex-direction: column; gap: var(--spacing-xl); box-sizing: border-box; width: 100%; max-width: var(--ds-timeline-rail); margin-inline: auto; padding: 0 var(--spacing-2xl) var(--ds-timeline-composer-reserve); transform: translateX(var(--ds-timeline-optical-shift)); }
 /* Parrot pages message history; Aurora has no equivalent control. */
 .conversation-timeline__older { display: flex; justify-content: center; }
 .conversation-timeline__date { display: flex; align-items: center; gap: var(--spacing-md); align-self: stretch; color: var(--colors-text-subtle); }
@@ -60,13 +62,15 @@
   padding: var(--spacing-4xl) var(--spacing-2xl) var(--spacing-xl);
   background: linear-gradient(to bottom, transparent, var(--colors-surface-muted) var(--ds-timeline-gradient-stop));
   pointer-events: none;
+  /* The rail is measured against this width (see --ds-timeline-rail). */
+  container-type: inline-size;
 }
 
 /* The footer lets clicks through its fade so the thread above stays usable;
    what sits in it takes them again. The bar and the composer are components
    of their own, so the rule has to reach into them (::deep), or clicks on
    them fall through to the messages underneath. */
-.conversation-timeline__composer > ::deep * { width: 100%; max-width: var(--ds-timeline-rail-measure); margin-inline: auto; pointer-events: auto; transform: translateX(var(--ds-timeline-optical-shift)); }
+.conversation-timeline__composer > ::deep * { width: 100%; max-width: var(--ds-timeline-rail); margin-inline: auto; pointer-events: auto; transform: translateX(var(--ds-timeline-optical-shift)); }
 .conversation-timeline__resolved { display: flex; gap: var(--spacing-xs); align-items: center; justify-content: center; color: var(--colors-text-muted); }
 
 .learning-dialog { display: grid; gap: var(--spacing-lg); }
@@ -97,7 +101,13 @@
   /* Missing from the token set: no readable conversation rail measure or
      optical-balance offset. */
   --ds-timeline-rail-measure: 760px;
-  --ds-timeline-optical-shift: 0;
+  /* A length, not a bare 0: the rail below does sums with it. */
+  --ds-timeline-optical-shift: 0px;
+  /* The rail as drawn: its measure, but narrower when the column has no room
+     for the optical shift on both sides, so the thread, the bar and the
+     composer never slide under the conversation list (just over 1520px they
+     did, by up to 27px). 100cqw is the width of the area it sits in. */
+  --ds-timeline-rail: min(var(--ds-timeline-rail-measure), calc(100cqw + var(--ds-timeline-optical-shift) * 2));
 }
 
 @media (min-width: 1520px) {

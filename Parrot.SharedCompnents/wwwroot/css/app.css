@@ -65,11 +65,13 @@ body {
 /* Except the sign-in pages. They are the public way in, often opened on a
    small laptop or a phone from a shared link, and lay themselves out to any
    width. The floor protects the app shell, which these pages do not use;
-   nor does creating an agent (a full-screen flow of its own). Nor any page while
-   "Tell us about your business" is open: on a tablet or a phone the floor shrank
-   the page, and the dialog with it; it lays itself out at the screen's width. */
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .business-intro-host .dialog-backdrop),
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .business-intro-host .dialog-backdrop) body {
+   nor does creating an agent (a full-screen flow of its own). Nor the Inbox,
+   which lays itself out for tablets (one pane at a time below 1024px). Nor
+   any page while "Tell us about your business" is open: on a tablet or a
+   phone the floor shrank the page, and the dialog with it, to a third of
+   its size; it lays itself out at the screen's width. */
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .business-intro-host .dialog-backdrop),
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .business-intro-host .dialog-backdrop) body {
   min-width: 0;
 }
 

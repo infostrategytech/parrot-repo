@@ -6,6 +6,8 @@
   --ds-action-menu-layer: 40;
   --ds-action-menu-width: 214px;
   --ds-action-menu-hairline: 1px;
+  /* Not in the token set: an instant change (no duration), for the reveal below. */
+  --ds-action-menu-instant: 0s;
 }
 
 ::deep .ds-action-menu__trigger.is-open {
@@ -34,4 +36,11 @@
   border: var(--ds-action-menu-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-lg);
   box-shadow: 0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow);
+  /* Hidden for the moment it takes to know where it fits; shown anyway after a beat. */
+  visibility: hidden;
+  animation: ds-action-menu-show var(--ds-action-menu-instant) var(--ds-motion-slow) forwards;
 }
+.ds-action-menu__menu[data-placed] { visibility: visible; animation: none; }
+/* No room below (the last rows of a list): it opens upward instead. */
+.ds-action-menu__menu[data-place="above"] { top: auto; bottom: calc(100% + var(--spacing-xs)); }
+@keyframes ds-action-menu-show { to { visibility: visible; } }
