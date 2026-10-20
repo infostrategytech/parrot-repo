@@ -213,6 +213,19 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("scrollToBottom", element);
     }
 
+    public async Task ClearSelectionAsync()
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("clearSelection");
+    }
+
+    /// <summary>Opens a menu upward when it would not fit below (see placeMenu).</summary>
+    public async Task PlaceMenuAsync(ElementReference menu)
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("placeMenu", menu);
+    }
+
     public async Task ScrollIntoViewAsync(ElementReference element)
     {
         var module = await _module.Value;

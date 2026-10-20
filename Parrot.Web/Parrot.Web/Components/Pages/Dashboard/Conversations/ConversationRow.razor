@@ -1,4 +1,5 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+@using System.Globalization
 
 @* The whole row is one control that opens the conversation. The wrapper
    takes no space; it lets this component's styles reach the RowButton. *@
@@ -15,7 +16,8 @@
                     <Icon Name="IconName.RiPushpin2Fill" Size="IconSize.Sm" Label="Pinned" Class="conversation-row__pin" />
                 }
             </span>
-            <Typography TextStyle="TextStyle.Small12Medium" As="time">@RelativeTime</Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="time" datetime="@Conversation.UpdatedAt.ToUniversalTime().ToString("o", CultureInfo.InvariantCulture)"
+                        title="@WhenInFull">@When</Typography>
         </span>
 
         <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="conversation-row__preview">
@@ -69,17 +71,23 @@
 
     private string ClassName => $"conversation-row{(Selected ? " is-selected" : "")}{(Conversation.UnreadCount > 0 || Conversation.MarkedUnread ? " has-unread" : "")}";
 
-    private string RelativeTime
+    // When it last moved, as WhatsApp's chat list says it (designer, 18 October 2026): the time
+    // today, "Yesterday", the weekday within the week, then the date. The whole date on hover.
+    private string When
     {
         get
         {
-            var elapsed = DateTime.UtcNow - Conversation.UpdatedAt.ToUniversalTime();
-            if (elapsed < TimeSpan.Zero) elapsed = TimeSpan.Zero;
-            if (elapsed.TotalMinutes < 60) return $"{Math.Max(1, (int)Math.Round(elapsed.TotalMinutes))}m";
-            if (elapsed.TotalHours < 24) return $"{(int)elapsed.TotalHours}h";
-            return $"{(int)elapsed.TotalDays}d";
+            var local = Conversation.UpdatedAt.ToLocalTime();
+            var day = DateOnly.FromDateTime(local);
+            var today = DateOnly.FromDateTime(DateTime.Now);
+            if (day >= today) return local.ToString("h:mm tt", CultureInfo.InvariantCulture);
+            if (day == today.AddDays(-1)) return "Yesterday";
+            if (day > today.AddDays(-7)) return local.ToString("dddd", CultureInfo.InvariantCulture);
+            return local.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
         }
     }
+
+    private string WhenInFull => Conversation.UpdatedAt.ToLocalTime().ToString("dddd, d MMMM yyyy 'at' h:mm tt", CultureInfo.InvariantCulture);
 
     // Without an AI agent (today's API) every conversation is answered by
     // hand, which is the design's human-has-control state.

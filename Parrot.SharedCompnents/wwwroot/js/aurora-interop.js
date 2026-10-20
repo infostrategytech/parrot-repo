@@ -356,6 +356,34 @@ export function followRailTooltips(rail) {
   rail.addEventListener("focusin", place);
 }
 
+/** Drops any text selection (a double-click selects a word). */
+export function clearSelection() {
+  window.getSelection()?.removeAllRanges();
+}
+
+/**
+ * Opens a menu upward when there is no room for it below, inside whatever
+ * clips it (a scrolling list) or the window, and there is room above. Marks it
+ * placed either way; it stays hidden until then.
+ */
+export function placeMenu(menu) {
+  if (!menu) return;
+  const box = menu.getBoundingClientRect();
+  let top = 0, bottom = window.innerHeight;
+  for (let el = menu.parentElement?.parentElement; el && el !== document.body; el = el.parentElement) {
+    if (/(auto|scroll|hidden|clip)/.test(getComputedStyle(el).overflowY)) {
+      const clip = el.getBoundingClientRect();
+      top = Math.max(top, clip.top); bottom = Math.min(bottom, clip.bottom);
+      break;
+    }
+  }
+  const trigger = menu.parentElement.getBoundingClientRect();
+  const margin = 8;
+  if (box.bottom > bottom - margin && trigger.top - top > box.height + margin) menu.dataset.place = "above";
+  else delete menu.dataset.place;
+  menu.dataset.placed = "";
+}
+
 export function scrollIntoView(element) {
   if (!element) return;
   // One frame later, so the panel has been laid out before we measure it.

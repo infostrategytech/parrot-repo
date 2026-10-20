@@ -49,7 +49,7 @@ else
             {
                 <Button Size="ButtonSize.Small" Class="response-control__action" Busy="@(Busy && !_choosing)"
                         aria-controls="takeover-options" aria-expanded="@(_expanded ? "true" : "false")"
-                        disabled="@(Busy || _choosing)" @onclick="() => _expanded = !_expanded">
+                        disabled="@(Busy || _choosing)" @onclick="ToggleAsync">
                     <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
                     <ChildContent>Take over</ChildContent>
                 </Button>
@@ -66,7 +66,7 @@ else
 
         <div class="response-control__disclosure" id="takeover-options" aria-hidden="@(!_expanded)">
             <div class="response-control__panel">
-                <Typography TextStyle="TextStyle.Small12Semibold" As="span">Take over for how long?</Typography>
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(_reason ?? "Take over for how long?")</Typography>
                 <div class="response-control__options">
                     @* The chosen length holds the spinner until the switch is done, so
                        the choice never looks as if it was cancelled. *@
@@ -78,7 +78,7 @@ else
                                 @onclick="() => ChooseAsync(option.Minutes)">@option.Label</Button>
                     }
                     <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="response-control__cancel"
-                            disabled="@(_choosing || !_expanded)" tabindex="@(_expanded ? 0 : -1)" @onclick="Collapse">Cancel</Button>
+                            disabled="@(_choosing || !_expanded)" tabindex="@(_expanded ? 0 : -1)" @onclick="CollapseAsync">Cancel</Button>
                 </div>
             </div>
         </div>
@@ -94,11 +94,15 @@ else
     /// <summary>Minutes to take over for; null means until the person hands it back.</summary>
     [Parameter] public EventCallback<int?> OnTakeOver { get; set; }
     [Parameter] public EventCallback OnReturn { get; set; }
+    /// <summary>The take-over choice closed without taking over (Cancel, Escape, or Take over pressed again).</summary>
+    [Parameter] public EventCallback OnDismiss { get; set; }
 
     private static readonly (int? Minutes, string Label)[] Durations =
         [(15, "15 min"), (30, "30 min"), (60, "1 hour"), (null, "Until I return")];
 
     private bool _expanded;
+    // Why the choice opened when something else asked (Reply): it says so in place of its title.
+    private string? _reason;
     private bool _choosing;
     private int? _chosen;
 
@@ -123,11 +127,32 @@ else
         _shownState = Conversation.AiState;
     }
 
-    private void Collapse() { if (!_choosing) _expanded = false; }
-
-    private void OnKeyDown(KeyboardEventArgs args)
+    /// <summary>Opens the take-over choice for something that needs it, saying why ("Take over to reply…").</summary>
+    public void Offer(string reason)
     {
-        if (args.Key == "Escape") Collapse();
+        if (Conversation.AiState != AiState.Active || !CanAct) return;
+        _reason = reason;
+        _expanded = true;
+        StateHasChanged();
+    }
+
+    private Task ToggleAsync()
+    {
+        if (!_expanded) { _reason = null; _expanded = true; return Task.CompletedTask; }
+        return CollapseAsync();
+    }
+
+    private async Task CollapseAsync()
+    {
+        if (_choosing || !_expanded) return;
+        _expanded = false;
+        _reason = null;
+        await OnDismiss.InvokeAsync();
+    }
+
+    private async Task OnKeyDown(KeyboardEventArgs args)
+    {
+        if (args.Key == "Escape") await CollapseAsync();
     }
 
     private async Task ChooseAsync(int? minutes)
@@ -139,6 +164,7 @@ else
         {
             _choosing = false;
             _expanded = false;
+            _reason = null;
         }
     }
 }

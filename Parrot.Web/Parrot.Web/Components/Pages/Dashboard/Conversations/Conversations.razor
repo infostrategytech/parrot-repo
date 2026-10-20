@@ -26,15 +26,10 @@
    than WhatsApp, AI agents, assignment, status). Each part is
    drawn only when its data is present, so the real app shows what the API
    supports. See InboxContracts. *@
-<div class="@($"inbox-workspace {(_selected is not null ? "is-thread-open" : "")}")">
+<div class="inbox-workspace @(Reading ? "is-reading" : null)">
     <section class="inbox-queue" aria-label="Unified inbox">
         <header class="inbox-queue__header">
-            <div>
-                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h1">Inbox</Typography>
-                <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>
-                    Customer conversations across your connected channels.
-                </Typography>
-            </div>
+            <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h1">Inbox</Typography>
             <Button Size="ButtonSize.Medium" Class="inbox-start" aria-label="Start conversation" title="Start conversation"
                     @onclick="StartConversation">
                 <IconLeft><Icon Name="IconName.HiPlus" /></IconLeft>
@@ -237,11 +232,12 @@
         else
         {
             <header class="inbox-conversation__header">
-                @* Phones show one pane at a time; this returns to the list. Hidden on wider screens. *@
-                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="inbox-back"
-                        aria-label="Back to inbox" title="Back to inbox" @onclick="BackToList">
-                    <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
-                </Button>
+                <span class="inbox-back">
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-label="Back to conversations" title="Back to conversations"
+                            @onclick="BackToListAsync">
+                        <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                    </Button>
+                </span>
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="inbox-customer-trigger"
                         aria-label="View customer details" title="View customer details"
                         aria-controls="customer-details-panel" aria-expanded="@_customerOpen"
@@ -475,7 +471,7 @@
         if (item is null) return;
         await CloseCustomerDetailsAsync();
         _selected = item;
-        await RunAsync(() => ReadSelectedAsync(false));
+        await ReadSelectedSoonAsync();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -505,7 +501,7 @@
         {
             if (message.Outgoing)
             {
-                if (item.Messages.All(m => m.Id != message.MessageId)) await RunAsync(() => ReadSelectedAsync(false));
+                if (item.Messages.All(m => m.Id != message.MessageId)) await ReadSelectedSoonAsync();
             }
             else if (ConversationsState.MergePushed(item, message))
             {
@@ -516,7 +512,7 @@
                 await TryMarkReadAsync(item, message.MessageId);
 
                 // Its files are readable only by an address the API signs when it reads the thread.
-                if (message.Attachments is { Count: > 0 }) await RunAsync(() => ReadSelectedAsync(false));
+                if (message.Attachments is { Count: > 0 }) await ReadSelectedSoonAsync();
             }
         }
         else if (!message.Outgoing)
@@ -531,7 +527,7 @@
     private Task OnReceiptsChanged(Parrot.Application.Messaging.ReceiptsChanged change) => InvokeAsync(async () =>
     {
         if (_disposed || _selected is not { } open || !change.Concerns(open.ConnectionId, open.Sender)) return;
-        await RunAsync(() => ReadSelectedAsync(false));
+        await ReadSelectedSoonAsync();
     });
 
     // A file finished loading. Several often finish together (a message with five pictures), so the reads are
@@ -553,7 +549,7 @@
         {
             await Task.Delay(300, ct);
             for (var waits = 0; _busy && waits < 25; waits++) await Task.Delay(200, ct);
-            await InvokeAsync(() => RunAsync(() => ReadSelectedAsync(false)));
+            await InvokeAsync(ReadSelectedSoonAsync);
         }
         catch (OperationCanceledException) { }
     }
@@ -599,7 +595,22 @@
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException or OperationCanceledException)
         { _error = ex is HttpRequestException ? ex.Message : "Could not load messages. Retrying shortly."; }
-        finally { _busy = false; _initialLoad = false; if (!_disposed) StateHasChanged(); }
+        finally
+        {
+            _busy = false; _initialLoad = false;
+            if (!_disposed) StateHasChanged();
+            if (_readQueued && !_disposed) { _readQueued = false; _ = InvokeAsync(() => RunAsync(() => ReadSelectedAsync(false))); }
+        }
+    }
+
+    // A read of the open conversation asked for while another load is in flight is not dropped: it runs as
+    // soon as that one is done. It used to wait for the next poll (up to 15 seconds), so a conversation opened
+    // during a refresh could sit on its loading placeholders.
+    private bool _readQueued;
+    private Task ReadSelectedSoonAsync()
+    {
+        if (_busy) { _readQueued = true; return Task.CompletedTask; }
+        return RunAsync(() => ReadSelectedAsync(false));
     }
 
     private Task RefreshAsync() => RunAsync(async () =>
@@ -624,6 +635,16 @@
         if (_selected is not null) await ReadSelectedAsync(false);
     });
 
+    // A conversation the person opened (its address), not the one shown first
+    // by default: on a tablet it replaces the list until they go back.
+    private bool Reading => !string.IsNullOrWhiteSpace(ConversationId) && _selected?.Id == ConversationId;
+
+    private async Task BackToListAsync()
+    {
+        await CloseCustomerDetailsAsync();
+        Nav.NavigateTo("/dashboard/conversations");
+    }
+
     private async Task SelectConversationAsync(string id)
     {
         var item = ConversationsState.GetConversation(id);
@@ -631,11 +652,9 @@
         await CloseCustomerDetailsAsync();
         _selected = item;
         Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(id)}");
-        // If a refresh is in flight the next poll reads the new selection.
-        await RunAsync(() => ReadSelectedAsync(false));
+        // If a refresh is in flight, the new selection is read as soon as it is done.
+        await ReadSelectedSoonAsync();
     }
-
-    private void BackToList() => Nav.NavigateTo("/dashboard/conversations");
 
     private Task LoadOlderAsync() => RunAsync(() => ReadSelectedAsync(true));
 

@@ -21,27 +21,54 @@
 .conversation-composer__disclosure { display: flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-brand-primary); }
 /* Note mode, as React draws it: the note tab and the privacy line in amber. */
 .conversation-composer__disclosure.is-note { padding: var(--spacing-xs) var(--spacing-sm); color: var(--colors-accent-yellow-text); background: var(--colors-accent-amber-muted); border-radius: var(--radius-radius-md); }
-/* The paperclip sits at the right end of the tab row. */
-.conversation-composer > header { display: flex; gap: var(--spacing-sm); align-items: center; justify-content: space-between; }
 .conversation-composer.is-note ::deep .ds-tab.is-active { color: var(--colors-feedback-warning-text); background: var(--colors-accent-amber-subtle); }
 .conversation-composer__attachment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-xs); align-items: center; width: fit-content; max-width: 100%; padding: var(--spacing-xs) var(--spacing-sm); color: var(--colors-text-muted); background: var(--colors-surface-muted); border-radius: var(--radius-radius-full); }
 .conversation-composer__attachment button { display: grid; place-items: center; padding: 0; color: inherit; background: transparent; border: 0; cursor: pointer; }
-/* The message a reply quotes, above the box: its edge in the quoted side's colour, as in the thread. */
+/* The message a reply quotes (designer, 19 October 2026): a quiet card above the box, with no coloured edge.
+   A reply arrow in the quoted side's colour says what it is, who wrote it leads, and up to two muted lines of
+   what they said sit apart from what is being typed. */
 .conversation-composer__quote {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--spacing-xs);
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
   align-items: center;
-  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-sm);
-  background: var(--colors-accent-brand-subtle);
-  border-inline-start: var(--spacing-2xs) solid var(--colors-brand-primary);
-  border-radius: var(--radius-radius-sm);
+  padding: var(--spacing-sm) var(--spacing-xs) var(--spacing-sm) var(--spacing-sm);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+  animation: composer-quote-in var(--ds-motion-base) var(--ds-motion-enter);
+  --ds-composer-quote-ink: var(--colors-accent-brand-text);
+  /* Missing from the token set: the reply arrow's round tile, an avatar's size in the thread. */
+  --ds-composer-quote-glyph: 32px;
 }
-.conversation-composer__quote.is-own { border-inline-start-color: var(--colors-accent-teal-text); }
+.conversation-composer__quote.is-own { --ds-composer-quote-ink: var(--colors-accent-teal-text); }
+.conversation-composer__quote-glyph {
+  display: grid;
+  place-items: center;
+  width: var(--ds-composer-quote-glyph);
+  height: var(--ds-composer-quote-glyph);
+  color: var(--ds-composer-quote-ink);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--ds-hairline) var(--spacing-xs) var(--colors-surface-shadow-diffuse);
+}
 .conversation-composer__quote-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
-.conversation-composer__quote-text ::deep strong { color: var(--colors-brand-primary); }
-.conversation-composer__quote.is-own .conversation-composer__quote-text ::deep strong { color: var(--colors-accent-teal-text); }
-.conversation-composer__quote-text ::deep span { overflow: hidden; color: var(--colors-text-secondary); text-overflow: ellipsis; white-space: nowrap; }
+.conversation-composer__quote-text ::deep strong { color: var(--colors-text-primary); }
+.conversation-composer__quote-text ::deep .conversation-composer__quote-body {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--colors-text-muted);
+  /* Its line breaks fold into spaces, so two lines are always two lines of words. */
+  white-space: normal;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.conversation-composer__quote-text ::deep .conversation-composer__quote-media { margin-inline-end: var(--spacing-2xs); vertical-align: middle; }
+.conversation-composer__quote ::deep .ds-button { color: var(--colors-text-muted); }
+@keyframes composer-quote-in { from { opacity: 0; transform: translateY(var(--spacing-xs)); } }
+@media (prefers-reduced-motion: reduce) { .conversation-composer__quote { animation: none; } }
 
 .conversation-composer > footer { display: flex; gap: var(--spacing-sm); align-items: center; }
 .conversation-composer__tools { display: flex; gap: var(--spacing-xs); align-items: center; }

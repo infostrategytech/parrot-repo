@@ -5,14 +5,21 @@
   grid-template-rows: minmax(0, 1fr);
   grid-template-columns: var(--ds-inbox-queue) minmax(0, 1fr);
   height: 100vh;
+  /* The visible height on tablets (see the app shell). */
+  height: 100dvh;
   min-width: 0;
   overflow: hidden;
   background: var(--colors-surface-background);
 }
 
 .inbox-workspace {
-  /* The three desktop panes retain the proportions validated in React. */
-  --ds-inbox-queue: 438px;
+  /* Missing from the token set: no pane widths. The list grows with the
+     window instead of holding React's 438px, which took 44% of a 1080px
+     laptop and left the conversation 554px (responsive audit, 14 October
+     2026): 340px on the smallest laptops, about 360px at 1280, 420px from
+     1500px up, close to the 320–380px support inboxes use. */
+  --ds-inbox-queue: clamp(340px, 28vw, 420px);
+  /* The customer panel keeps the width validated in React. */
   --ds-inbox-customer: 380px;
   --ds-inbox-control: 40px;
   --ds-inbox-avatar: 44px;
@@ -31,13 +38,13 @@
   z-index: 2;
 }
 
-.inbox-queue__header { display: flex; gap: var(--spacing-md); align-items: flex-start; justify-content: space-between; padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-md); }
+/* The title and the start button on one line: "Inbox" and the tabs under it
+   say what the page is, so it has no subtitle (designer, 14 October 2026). */
+.inbox-queue__header { display: flex; gap: var(--spacing-md); align-items: center; justify-content: space-between; padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-md); }
 /* React's round start button beside the title. */
 /* React's start button: a medium pill with side padding rather than a square
    icon button, holding its 16px plus. */
 .inbox-queue__header ::deep .ds-button.inbox-start { flex: 0 0 auto; width: auto; aspect-ratio: auto; padding-inline: var(--spacing-lg); border-radius: var(--radius-radius-full); }
-.inbox-queue__header > div { display: grid; gap: var(--spacing-xs); }
-.inbox-queue__header ::deep p { color: var(--colors-text-muted); }
 
 .inbox-search-wrap { margin: 0 var(--spacing-xl) var(--spacing-md); }
 
@@ -65,6 +72,21 @@
 
 .inbox-list__skeleton { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--spacing-md); min-height: var(--ds-inbox-row-min); padding: var(--spacing-md); border-bottom: var(--ds-hairline) solid var(--colors-surface-border); }
 .inbox-list__skeleton > span { display: grid; align-content: start; gap: var(--spacing-md); padding-top: var(--spacing-xs); }
+
+/* Back to the list: only when one pane shows at a time (below 1024px). */
+.inbox-back { display: none; }
+
+/* ── Tablets in portrait: one pane at a time ──────────────────────────────
+   Below 1024px the list and a conversation don't fit side by side (an iPad
+   mini in portrait would leave the conversation 340px). The list fills the
+   page; opening a conversation (its address) shows it instead, with Back. */
+@media not all and (min-width: 1024px) {
+  .inbox-workspace { grid-template-columns: minmax(0, 1fr); }
+  .inbox-workspace.is-reading .inbox-queue,
+  .inbox-workspace:not(.is-reading) .inbox-conversation { display: none; }
+  .inbox-queue { border-right: 0; box-shadow: none; }
+  .inbox-back { display: contents; }
+}
 
 .inbox-conversation { display: grid; grid-template-rows: auto minmax(0, 1fr); min-width: 0; background: var(--colors-surface-muted); }
 .inbox-conversation__header { display: flex; gap: var(--spacing-md); align-items: center; min-height: var(--spacing-5xl); padding: var(--spacing-md) var(--spacing-xl); background: var(--colors-surface-card); border-bottom: var(--ds-hairline) solid var(--colors-surface-border); }
@@ -208,7 +230,6 @@
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */
 .inbox-workspace { height: 100vh; height: 100dvh; }
-.inbox-conversation__header ::deep .ds-button.inbox-back { display: none; flex: 0 0 auto; }
 
 /* Tablets: a slimmer queue, and the customer drawer takes more of the thread. */
 @media (max-width: 1180px) {
@@ -224,14 +245,9 @@
   .inbox-conversation__actions { gap: var(--spacing-xs); }
 }
 
-/* Phones: one pane at a time. The list is the default; opening a conversation
-   shows the thread with a back button. */
+/* Phones (already one pane at a time, below 1024px): a tighter header, and the
+   customer panel edge to edge. */
 @media (max-width: 760px) {
-  .inbox-workspace { grid-template-columns: minmax(0, 1fr); }
-  .inbox-workspace.is-thread-open .inbox-queue,
-  .inbox-workspace:not(.is-thread-open) .inbox-conversation { display: none; }
-  .inbox-queue { border-right: 0; box-shadow: none; }
-  .inbox-conversation__header ::deep .ds-button.inbox-back { display: inline-flex; }
   .inbox-conversation__header { gap: var(--spacing-xs); padding-inline: var(--spacing-sm); }
   .inbox-conversation__header ::deep .ds-button.inbox-customer-trigger { flex: 1 1 auto; min-width: 0; }
   .inbox-conversation__actions { flex: 0 0 auto; }

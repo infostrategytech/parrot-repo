@@ -12,6 +12,17 @@ public static class QuoteLabels
     /// <summary>"You" for the business's own messages, as WhatsApp shows it; the customer's name for theirs.</summary>
     public static string Author(InboxQuoteDto quote, string customerName) => quote.Outgoing ? "You" : customerName;
 
+    /// <summary>The glyph for a quote with no words (a photo, a voice message…); null when it has words.</summary>
+    public static Parrot.SharedComponents.DesignSystem.IconName? Glyph(InboxQuoteDto quote) => !string.IsNullOrWhiteSpace(quote.Text) ? null : quote.Type switch
+    {
+        "image" or "gif" or "sticker" => Parrot.SharedComponents.DesignSystem.IconName.RiImageFill,
+        "video" => Parrot.SharedComponents.DesignSystem.IconName.RiPlayFill,
+        "voice" or "audio" => Parrot.SharedComponents.DesignSystem.IconName.RiMicFill,
+        "document" or "file" => Parrot.SharedComponents.DesignSystem.IconName.RiFileTextFill,
+        "link" => Parrot.SharedComponents.DesignSystem.IconName.RiLinksFill,
+        _ => null,
+    };
+
     /// <summary>The quoted text, or what kind of message it was when it had none.</summary>
     public static string Text(InboxQuoteDto quote) => !string.IsNullOrWhiteSpace(quote.Text) ? quote.Text! : quote.Type switch
     {
