@@ -105,9 +105,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(a => a.Version).HasDefaultValue(1);
         });
 
-        // A connection's OwnerUserId is the workspace it belongs to. The column
-        // kept its name from when the owner was the user; a tenant's first
-        // workspace has the user's id, so the existing rows still point right.
+        // A connection belongs to a workspace. A tenant's first workspace has
+        // the user's id, so rows from before workspaces still point right.
         builder.Entity<WhatsAppConnection>(entity =>
         {
             entity.HasKey(c => c.Id);
@@ -191,8 +190,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Customer>(entity =>
         {
             entity.HasKey(c => c.Id);
-            entity.Property(c => c.OwnerUserId).IsRequired();
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+            entity.Property(c => c.WorkspaceId).IsRequired();
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.Property(c => c.Name).HasMaxLength(256).IsRequired();
             entity.Property(c => c.Email).HasMaxLength(256);
@@ -214,7 +213,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired()
                 .HasDefaultValueSql("''");
 
-            entity.HasIndex(c => c.OwnerUserId);
+            entity.HasIndex(c => c.WorkspaceId);
             entity.HasMany(c => c.Identities).WithOne(i => i.Customer).HasForeignKey(i => i.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

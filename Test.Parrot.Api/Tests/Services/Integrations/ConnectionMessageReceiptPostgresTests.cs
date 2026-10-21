@@ -54,6 +54,8 @@ public class ConnectionMessageReceiptPostgresTests : IAsyncLifetime
         await using ApplicationDbContext db = new(_options!);
         ApplicationUser user = new() { UserName = "owner@example.com", Email = "owner@example.com" };
         db.Users.Add(user);
+        // A tenant's first workspace takes the user's id, as sign-in makes it.
+        db.Workspaces.Add(new Workspace { Id = user.Id, OwnerId = user.Id });
         FacebookConnection page = new()
         {
             WorkspaceId = user.Id, VerifyTokenEncrypted = "encrypted", PageId = PageId, PageName = "Oma's Kitchen",
@@ -107,6 +109,8 @@ public class ConnectionMessageReceiptPostgresTests : IAsyncLifetime
         await using ApplicationDbContext db = new(_options!);
         ApplicationUser user = new() { UserName = "ig@example.com", Email = "ig@example.com" };
         db.Users.Add(user);
+        // A tenant's first workspace takes the user's id, as sign-in makes it.
+        db.Workspaces.Add(new Workspace { Id = user.Id, OwnerId = user.Id });
         InstagramConnection account = new()
         {
             WorkspaceId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = "17841400000000000", Username = "omaskitchen",

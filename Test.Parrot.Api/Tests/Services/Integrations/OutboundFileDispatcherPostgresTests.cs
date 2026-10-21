@@ -48,6 +48,8 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
         await db.Database.EnsureCreatedAsync();
         ApplicationUser user = new() { UserName = "owner@example.com", Email = "owner@example.com" };
         db.Users.Add(user);
+        // A tenant's first workspace takes the user's id, as sign-in makes it.
+        db.Workspaces.Add(new Workspace { Id = user.Id, OwnerId = user.Id });
         await db.SaveChangesAsync();
         _owner = user.Id;
 

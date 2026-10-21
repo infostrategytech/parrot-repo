@@ -68,7 +68,7 @@ public sealed class CustomerService(ICustomerRepository repository)
 
         Customer customer = new()
         {
-            OwnerUserId = ownerUserId,
+            WorkspaceId = ownerUserId,
             Name = request.Name.Trim(),
             Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim(),
             Stage = stage,

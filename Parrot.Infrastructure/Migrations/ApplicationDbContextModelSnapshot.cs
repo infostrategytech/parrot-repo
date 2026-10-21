@@ -345,10 +345,6 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
-                    b.Property<string>("OwnerUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("Stage")
                         .IsRequired()
                         .ValueGeneratedOnAdd()
@@ -365,9 +361,13 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("OwnerUserId");
+                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("Customers");
                 });
@@ -808,9 +808,9 @@ namespace Parrot.Infrastructure.Migrations
 
             modelBuilder.Entity("Parrot.Domain.Entities.Customer", b =>
                 {
-                    b.HasOne("Parrot.Application.Models.ApplicationUser", null)
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
                         .WithMany()
-                        .HasForeignKey("OwnerUserId")
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

@@ -4,7 +4,8 @@ public class Customer
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public required string OwnerUserId { get; set; }
+    /// <summary>The workspace the customer wrote to. Every lookup is scoped by it.</summary>
+    public required string WorkspaceId { get; set; }
 
     public required string Name { get; set; }
 
