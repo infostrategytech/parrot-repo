@@ -27,14 +27,19 @@ public sealed record CustomerDetailResponse(
     List<CustomerIdentityResponse> Identities,
     DateTime? LastSeenAt,
     string? LastSeenChannel,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? Phone,
+    string? ChannelPlatform,
+    string? ChannelIdentifier);
 
 public sealed record CreateCustomerRequest(
     string Name,
     string? Email,
     string? Phone,
     string? Stage,
-    List<string>? Tags);
+    List<string>? Tags,
+    string? ChannelPlatform,
+    string? ChannelIdentifier);
 
 public sealed record CustomerPageResponse(
     List<CustomerListItemResponse> Items,
@@ -43,3 +48,5 @@ public sealed record CustomerPageResponse(
 public sealed record UpdateStageRequest(string Stage);
 
 public sealed record UpdateTagsRequest(List<string> Tags);
+
+public sealed record UpdateChannelIdentifierRequest(string? ChannelPlatform, string? ChannelIdentifier);

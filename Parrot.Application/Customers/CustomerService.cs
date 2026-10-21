@@ -71,6 +71,9 @@ public sealed class CustomerService(ICustomerRepository repository)
             WorkspaceId = ownerUserId,
             Name = request.Name.Trim(),
             Email = string.IsNullOrWhiteSpace(request.Email) ? null : request.Email.Trim(),
+            Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim(),
+            ChannelPlatform = string.IsNullOrWhiteSpace(request.ChannelPlatform) ? null : request.ChannelPlatform.Trim(),
+            ChannelIdentifier = string.IsNullOrWhiteSpace(request.ChannelIdentifier) ? null : request.ChannelIdentifier.Trim(),
             Stage = stage,
             Tags = tags,
             CreatedAt = DateTime.UtcNow,
@@ -117,10 +120,19 @@ public sealed class CustomerService(ICustomerRepository repository)
         [.. c.Identities.Select(ToIdentityResponse)],
         c.LastSeenAt, c.LastSeenChannel, c.CreatedAt);
 
+    public async Task<CustomerDetailResponse> UpdateChannelIdentifierAsync(
+        string ownerUserId, Guid id, string? channelPlatform, string? channelIdentifier, CancellationToken ct)
+    {
+        Customer? customer = await repository.UpdateChannelIdentifierAsync(ownerUserId, id, channelPlatform, channelIdentifier, ct);
+        if (customer is null) throw new NotFoundException("Customer not found.");
+        return ToDetail(customer);
+    }
+
     private static CustomerDetailResponse ToDetail(Customer c) => new(
         c.Id, c.Name, c.Email, c.Stage, c.Tags,
         [.. c.Identities.Select(ToIdentityResponse)],
-        c.LastSeenAt, c.LastSeenChannel, c.CreatedAt);
+        c.LastSeenAt, c.LastSeenChannel, c.CreatedAt,
+        c.Phone, c.ChannelPlatform, c.ChannelIdentifier);
 
     private static CustomerIdentityResponse ToIdentityResponse(CustomerIdentity i) =>
         new(i.Id, i.ConnectionId, i.Platform, i.Sender, i.Username, i.LinkedAt);

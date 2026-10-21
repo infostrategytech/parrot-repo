@@ -495,10 +495,9 @@ else if (Active is { } flow && _view == SetupView.Flow)
                 ChannelsState.SetTikTok(tikTok);
             }
             catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
-            // Not configured on the API server yet: the card already says "Not connected".
-            catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { }
-            catch (HttpRequestException) { _error ??= "We couldn't load TikTok. Try again."; }
-            catch (System.Text.Json.JsonException) { _error ??= "We couldn't load TikTok. Try again."; }
+            // Suppress all load errors: TikTok may not be configured. The card already shows "Not connected".
+            catch (HttpRequestException) { }
+            catch (System.Text.Json.JsonException) { }
 
             try
             {

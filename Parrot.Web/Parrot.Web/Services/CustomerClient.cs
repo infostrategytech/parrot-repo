@@ -29,6 +29,9 @@ public sealed class CustomerClient(HttpClient http, AuthState auth)
     public Task<CustomerDetailDto> UpdateTagsAsync(Guid id, List<string> tags, CancellationToken ct) =>
         RequestAsync<CustomerDetailDto>(HttpMethod.Put, $"api/customers/{id}/tags", new UpdateTagsDto(tags), ct);
 
+    public Task<CustomerDetailDto> UpdateChannelIdentifierAsync(Guid id, string? channelPlatform, string? channelIdentifier, CancellationToken ct) =>
+        RequestAsync<CustomerDetailDto>(HttpMethod.Put, $"api/customers/{id}/channel", new UpdateChannelIdentifierDto(channelPlatform, channelIdentifier), ct);
+
     private static readonly JsonSerializerOptions WriteOptions = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,

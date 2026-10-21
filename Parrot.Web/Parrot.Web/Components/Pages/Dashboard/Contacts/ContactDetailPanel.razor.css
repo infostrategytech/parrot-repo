@@ -87,6 +87,12 @@
 
 .customer-identities__link { margin-top: var(--spacing-md); }
 
+.customer-identity__link { color: inherit; text-decoration: none; }
+.customer-identity__link:hover { text-decoration: underline; }
+
+.customer-link-form { display: grid; gap: var(--spacing-sm); }
+.customer-link-form__actions { display: flex; gap: var(--spacing-xs); justify-content: flex-end; }
+
 .customer-orders { display: grid; gap: var(--spacing-xs); }
 .customer-orders__row { display: grid; grid-template-columns: var(--spacing-3xl) minmax(0, 1fr) auto; gap: var(--spacing-sm); align-items: center; width: 100%; min-height: var(--spacing-5xl); padding: var(--spacing-sm); color: var(--colors-text-secondary); text-align: left; border-radius: var(--radius-radius-lg); }
 .customer-orders__row:hover { background: var(--colors-interaction-hover); }
