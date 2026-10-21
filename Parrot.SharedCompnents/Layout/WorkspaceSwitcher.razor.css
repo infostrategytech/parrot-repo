@@ -95,3 +95,9 @@
 .workspace__option.is-active { background: var(--colors-interaction-selected); }
 
 .workspace__add { color: var(--colors-text-link); }
+
+/* While the host switches, the other choices wait. */
+.workspace__option:disabled,
+.workspace__add:disabled { opacity: 0.5; cursor: progress; }
+.workspace__option:disabled:hover,
+.workspace__add:disabled:hover { background: none; }

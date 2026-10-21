@@ -71,7 +71,7 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
     {
         WhatsAppConnection connection = new()
         {
-            OwnerUserId = _owner, Name = "Shop", VerifyTokenEncrypted = "v", PhoneNumberId = "phone-1", AccessTokenEncrypted = "enc",
+            WorkspaceId = _owner, Name = "Shop", VerifyTokenEncrypted = "v", PhoneNumberId = "phone-1", AccessTokenEncrypted = "enc",
             WebhookVerifiedAt = DateTime.UtcNow,
         };
         tweak?.Invoke(connection);
@@ -83,7 +83,7 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
 
     private async Task<FacebookConnection> PageAsync(Action<FacebookConnection>? tweak = null)
     {
-        FacebookConnection page = new() { OwnerUserId = _owner, VerifyTokenEncrypted = "v", PageId = "page-1", AccessTokenEncrypted = "enc", WebhookVerifiedAt = DateTime.UtcNow };
+        FacebookConnection page = new() { WorkspaceId = _owner, VerifyTokenEncrypted = "v", PageId = "page-1", AccessTokenEncrypted = "enc", WebhookVerifiedAt = DateTime.UtcNow };
         tweak?.Invoke(page);
         await using ApplicationDbContext db = new(_options!);
         db.FacebookConnections.Add(page);

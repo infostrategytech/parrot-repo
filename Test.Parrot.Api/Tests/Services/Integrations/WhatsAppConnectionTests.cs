@@ -1,7 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Parrot.Application.Models;
 using Parrot.Domain.Entities;
 using Parrot.Infrastructure.Data;
 
@@ -22,7 +21,7 @@ public class WhatsAppConnectionTests
     {
         var connection = new WhatsAppConnection
         {
-            OwnerUserId = "owner",
+            WorkspaceId = "owner",
             Name = "Customer Support",
             VerifyTokenEncrypted = "encrypted-token",
             DisabledAt = disabled ? DateTime.UtcNow : null,
@@ -58,9 +57,10 @@ public class WhatsAppConnectionTests
         Assert.Equal("WhatsAppConnections", entity.GetTableName());
         Assert.Null(entity.FindProperty(nameof(WhatsAppConnection.SetupStatus)));
         var owner = Assert.Single(entity.GetForeignKeys());
-        Assert.Equal(typeof(ApplicationUser), owner.PrincipalEntityType.ClrType);
+        // A connection belongs to a workspace; the column kept its old name.
+        Assert.Equal(typeof(Workspace), owner.PrincipalEntityType.ClrType);
         Assert.Equal(DeleteBehavior.Restrict, owner.DeleteBehavior);
-        Assert.Equal(nameof(WhatsAppConnection.OwnerUserId), Assert.Single(owner.Properties).Name);
+        Assert.Equal(nameof(WhatsAppConnection.WorkspaceId), Assert.Single(owner.Properties).Name);
         var phoneIndex = Assert.Single(entity.GetIndexes(), i => i.Properties.Single().Name == nameof(WhatsAppConnection.PhoneNumberId));
         Assert.True(phoneIndex.IsUnique);
         Assert.Equal("\"PhoneNumberId\" IS NOT NULL AND \"DisabledAt\" IS NULL", phoneIndex.GetFilter());

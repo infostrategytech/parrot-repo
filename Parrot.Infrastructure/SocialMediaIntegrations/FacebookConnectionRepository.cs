@@ -11,10 +11,10 @@ namespace Parrot.Infrastructure.SocialMediaIntegrations;
 public sealed class FacebookConnectionRepository(ApplicationDbContext db) : IFacebookConnectionRepository
 {
     // Reads this owner's active connection.
-    public async Task<FacebookConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task<FacebookConnection?> GetByOwnerAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
         return await db.FacebookConnections.AsNoTracking()
-            .SingleOrDefaultAsync(c => c.OwnerUserId == ownerUserId && c.DisabledAt == null, cancellationToken);
+            .SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId && c.DisabledAt == null, cancellationToken);
     }
 
     // Indexed lookup on the webhook reference; replaces the decrypt-every-row verify token scan.
@@ -44,22 +44,22 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) : IFac
                 .SetProperty(c => c.UpdatedAt, verifiedAt), cancellationToken) == 1;
     }
 
-    public Task<bool> IsOwnedByAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default) =>
-        db.FacebookConnections.AnyAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, cancellationToken);
+    public Task<bool> IsOwnedByAsync(Guid id, string workspaceId, CancellationToken cancellationToken = default) =>
+        db.FacebookConnections.AnyAsync(c => c.Id == id && c.WorkspaceId == workspaceId, cancellationToken);
 
-    public async Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt,
+    public async Task<bool> DisableAsync(Guid id, string workspaceId, DateTime disabledAt,
         CancellationToken cancellationToken = default) =>
         await db.FacebookConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.DisabledAt, disabledAt)
                 .SetProperty(c => c.UpdatedAt, disabledAt), cancellationToken) == 1;
 
-    public async Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret,
+    public async Task SaveAppSecretAsync(Guid id, string workspaceId, string encryptedSecret,
         CancellationToken cancellationToken = default)
     {
         int updated = await db.FacebookConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.AppSecretEncrypted, encryptedSecret)
                 .SetProperty(c => c.UpdatedAt, DateTime.UtcNow), cancellationToken);
@@ -67,13 +67,13 @@ public sealed class FacebookConnectionRepository(ApplicationDbContext db) : IFac
     }
 
     // Writes the Page and token in one statement; the WHERE clause enforces ownership and verification.
-    public async Task SavePageAsync(Guid id, string ownerUserId, string pageId, string pageName,
+    public async Task SavePageAsync(Guid id, string workspaceId, string pageId, string pageName,
         string encryptedAccessToken, CancellationToken cancellationToken = default)
     {
         try
         {
             int updated = await db.FacebookConnections
-                .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null && c.WebhookVerifiedAt != null)
+                .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null && c.WebhookVerifiedAt != null)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(c => c.PageId, pageId)
                     .SetProperty(c => c.PageName, pageName)

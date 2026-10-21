@@ -1,8 +1,12 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Dashboard.Workspace
 @inject AuthState AuthState
+@inject WorkspaceClient Workspaces
+@inject ToastService Toasts
 
-@* Business-level configuration. The workspace name is the business name the
-   session carries; the slug has no value in Parrot yet and stays empty. *@
+@* Business-level configuration for the workspace the session is in. Only the
+   name is saved today; the slug, currency, time zone and description have no
+   home in Parrot yet and are not sent. *@
 
 <SettingsCard Title="Workspace settings" Description="Business-level configuration and identity.">
     <ChildContent>
@@ -45,7 +49,11 @@
         </div>
     </ChildContent>
     <Footer>
-        <Button>Save</Button>
+        @if (_saveError is not null)
+        {
+            <InlineError Message="@_saveError" />
+        }
+        <Button Busy="@_saving" disabled="@_saving" @onclick="SaveAsync">Save</Button>
     </Footer>
 </SettingsCard>
 
@@ -59,9 +67,42 @@
     private string _timeZone = TimeZones[0];
     private string _description = string.Empty;
     private string? _openMenu;
+    private bool _saving;
+    private string? _saveError;
 
     protected override void OnInitialized()
     {
         _name = AuthState.CurrentUser?.BusinessName ?? string.Empty;
+    }
+
+    private async Task SaveAsync()
+    {
+        _saveError = null;
+        string name = _name.Trim();
+        if (name.Length == 0)
+        {
+            _saveError = "Enter a workspace name.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            // Updates the session as well, so the switcher shows the new name at once.
+            _name = (await Workspaces.UpdateCurrentAsync(name, logoUrl: null)).Name ?? name;
+            Toasts.Show("Workspace saved");
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            _saveError = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _saveError = "We could not save your workspace. Try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 }

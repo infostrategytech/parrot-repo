@@ -61,7 +61,7 @@ public class WebhookAuthenticationTests
 
     private static WhatsAppConnection WhatsAppConnection(string? appSecretEncrypted) => new()
     {
-        OwnerUserId = "owner",
+        WorkspaceId = "owner",
         Name = "Support",
         VerifyTokenEncrypted = "enc:verify",
         AppSecretEncrypted = appSecretEncrypted,
@@ -69,7 +69,7 @@ public class WebhookAuthenticationTests
 
     private static FacebookConnection FacebookConnection(string? appSecretEncrypted) => new()
     {
-        OwnerUserId = "owner",
+        WorkspaceId = "owner",
         VerifyTokenEncrypted = "enc:verify",
         AppSecretEncrypted = appSecretEncrypted,
     };

@@ -4,6 +4,9 @@ namespace Parrot.Application.Models;
 
 public class ApplicationUser : IdentityUser
 {
+    // The business name and logo now live on the workspace. These two columns
+    // are only read once, to name a tenant's first workspace, and go in a later
+    // migration once every account has one.
     public string? BusinessName { get; set; }
 
     public string? FirstName { get; set; }
@@ -16,6 +19,9 @@ public class ApplicationUser : IdentityUser
     // number, e.g. 234 and 8012345678. Sign-in matches on both, so a person can
     // type 08012345678 or 2348012345678 and reach the same row.
     public string? PhoneDialCode { get; set; }
+
+    /// <summary>The workspace switched to last, where the next sign-in lands. Null before the first.</summary>
+    public string? LastWorkspaceId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

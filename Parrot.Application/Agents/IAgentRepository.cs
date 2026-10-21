@@ -10,10 +10,10 @@ public interface IAgentRepository
     Task UpdateAsync(Agent agent);
 
     /// <summary>The owner's agents, newest first: on, off and drafts alike.</summary>
-    Task<IReadOnlyList<Agent>> GetByUserIdAsync(string userId);
+    Task<IReadOnlyList<Agent>> GetByWorkspaceAsync(string workspaceId);
 
     Task<Agent?> GetByIdAsync(Guid id);
 
     /// <summary>The turned-on agent that answers <paramref name="channel"/> for the owner, or null when none does.</summary>
-    Task<Agent?> GetLiveForChannelAsync(string userId, string channel);
+    Task<Agent?> GetLiveForChannelAsync(string workspaceId, string channel);
 }

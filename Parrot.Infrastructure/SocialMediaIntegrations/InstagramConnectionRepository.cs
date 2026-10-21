@@ -10,9 +10,9 @@ namespace Parrot.Infrastructure.SocialMediaIntegrations;
 // EF Core store for Instagram connections; also serves ?ref= webhook routing.
 public sealed class InstagramConnectionRepository(ApplicationDbContext db) : IInstagramConnectionRepository
 {
-    public async Task<InstagramConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default) =>
+    public async Task<InstagramConnection?> GetByOwnerAsync(string workspaceId, CancellationToken cancellationToken = default) =>
         await db.InstagramConnections.AsNoTracking()
-            .SingleOrDefaultAsync(c => c.OwnerUserId == ownerUserId && c.DisabledAt == null, cancellationToken);
+            .SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId && c.DisabledAt == null, cancellationToken);
 
     public async Task<InstagramConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default) =>
         await db.InstagramConnections.AsNoTracking()
@@ -35,14 +35,14 @@ public sealed class InstagramConnectionRepository(ApplicationDbContext db) : IIn
                 .SetProperty(c => c.UpdatedAt, verifiedAt), cancellationToken) == 1;
 
     // One statement; the WHERE clause enforces ownership and verification.
-    public async Task SaveAccountAsync(Guid id, string ownerUserId, string accountId, string username, string encryptedAccessToken,
+    public async Task SaveAccountAsync(Guid id, string workspaceId, string accountId, string username, string encryptedAccessToken,
         DateTime expiresAt, CancellationToken cancellationToken = default)
     {
         DateTime now = DateTime.UtcNow;
         try
         {
             int updated = await db.InstagramConnections
-                .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null && c.WebhookVerifiedAt != null)
+                .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null && c.WebhookVerifiedAt != null)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(c => c.AccountId, accountId)
                     .SetProperty(c => c.Username, username)
@@ -86,22 +86,22 @@ public sealed class InstagramConnectionRepository(ApplicationDbContext db) : IIn
                 .SetProperty(c => c.AccessTokenRejectedAt, rejectedAt)
                 .SetProperty(c => c.UpdatedAt, rejectedAt), cancellationToken);
 
-    public async Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret, CancellationToken cancellationToken = default)
+    public async Task SaveAppSecretAsync(Guid id, string workspaceId, string encryptedSecret, CancellationToken cancellationToken = default)
     {
         int updated = await db.InstagramConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.AppSecretEncrypted, encryptedSecret)
                 .SetProperty(c => c.UpdatedAt, DateTime.UtcNow), cancellationToken);
         if (updated == 0) throw new ConflictException("This Instagram connection is unavailable.");
     }
 
-    public Task<bool> IsOwnedByAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default) =>
-        db.InstagramConnections.AnyAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, cancellationToken);
+    public Task<bool> IsOwnedByAsync(Guid id, string workspaceId, CancellationToken cancellationToken = default) =>
+        db.InstagramConnections.AnyAsync(c => c.Id == id && c.WorkspaceId == workspaceId, cancellationToken);
 
-    public async Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default) =>
+    public async Task<bool> DisableAsync(Guid id, string workspaceId, DateTime disabledAt, CancellationToken cancellationToken = default) =>
         await db.InstagramConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.DisabledAt, disabledAt)
                 .SetProperty(c => c.UpdatedAt, disabledAt), cancellationToken) == 1;

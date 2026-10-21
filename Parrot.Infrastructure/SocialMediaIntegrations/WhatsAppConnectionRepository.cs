@@ -22,8 +22,8 @@ public class WhatsAppConnectionRepository : IWhatsAppConnectionRepository
         // Existing connections are preserved; this also works for accounts created before the one-connection rule.
         await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await _db.Database.BeginTransactionAsync();
         await _db.Database.ExecuteSqlInterpolatedAsync(
-            $"SELECT 1 FROM \"AspNetUsers\" WHERE \"Id\" = {connection.OwnerUserId} FOR UPDATE");
-        if (await _db.WhatsAppConnections.AnyAsync(c => c.OwnerUserId == connection.OwnerUserId))
+            $"SELECT 1 FROM \"AspNetUsers\" WHERE \"Id\" = {connection.WorkspaceId} FOR UPDATE");
+        if (await _db.WhatsAppConnections.AnyAsync(c => c.WorkspaceId == connection.WorkspaceId))
         {
             throw new ConflictException("This user already has a WhatsApp connection.");
         }
@@ -43,12 +43,12 @@ public class WhatsAppConnectionRepository : IWhatsAppConnectionRepository
         }
     }
 
-    public async Task<IReadOnlyList<WhatsAppConnection>> GetByOwnerAsync(string ownerUserId) =>
-        await _db.WhatsAppConnections.AsNoTracking().Where(c => c.OwnerUserId == ownerUserId)
+    public async Task<IReadOnlyList<WhatsAppConnection>> GetByOwnerAsync(string workspaceId) =>
+        await _db.WhatsAppConnections.AsNoTracking().Where(c => c.WorkspaceId == workspaceId)
             .OrderByDescending(c => c.CreatedAt).ToListAsync();
 
-    public Task<WhatsAppConnection?> GetByOwnerAndIdAsync(string ownerUserId, Guid id) =>
-        _db.WhatsAppConnections.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id && c.OwnerUserId == ownerUserId);
+    public Task<WhatsAppConnection?> GetByOwnerAndIdAsync(string workspaceId, Guid id) =>
+        _db.WhatsAppConnections.AsNoTracking().SingleOrDefaultAsync(c => c.Id == id && c.WorkspaceId == workspaceId);
 
     public Task<WhatsAppConnection?> GetActiveByIdentifierAsync(string identifier) =>
         _db.WhatsAppConnections.AsNoTracking().SingleOrDefaultAsync(c => c.WebhookIdentifier == identifier && c.DisabledAt == null);
@@ -64,41 +64,41 @@ public class WhatsAppConnectionRepository : IWhatsAppConnectionRepository
         return updated == 1;
     }
 
-    public async Task DisableAsync(Guid id, string ownerUserId, DateTime disabledAt)
+    public async Task DisableAsync(Guid id, string workspaceId, DateTime disabledAt)
     {
         await _db.WhatsAppConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.DisabledAt, disabledAt)
                 .SetProperty(c => c.UpdatedAt, disabledAt));
     }
 
-    public async Task SaveAccessTokenAsync(Guid id, string ownerUserId, string encryptedToken)
+    public async Task SaveAccessTokenAsync(Guid id, string workspaceId, string encryptedToken)
     {
         int count = await _db.WhatsAppConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.AccessTokenEncrypted, encryptedToken)
                 .SetProperty(c => c.UpdatedAt, DateTime.UtcNow));
         if (count == 0) throw new ConflictException("This WhatsApp connection is unavailable.");
     }
 
-    public async Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret)
+    public async Task SaveAppSecretAsync(Guid id, string workspaceId, string encryptedSecret)
     {
         int count = await _db.WhatsAppConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.AppSecretEncrypted, encryptedSecret)
                 .SetProperty(c => c.UpdatedAt, DateTime.UtcNow));
         if (count == 0) throw new ConflictException("This WhatsApp connection is unavailable.");
     }
 
-    public async Task ConfigureAccountAsync(Guid id, string ownerUserId, string businessAccountId, string phoneNumberId)
+    public async Task ConfigureAccountAsync(Guid id, string workspaceId, string businessAccountId, string phoneNumberId)
     {
         try
         {
             int count = await _db.WhatsAppConnections
-                .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null
+                .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null
                     && c.FirstMessageReceivedAt == null)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(c => c.WhatsAppBusinessAccountId, businessAccountId)

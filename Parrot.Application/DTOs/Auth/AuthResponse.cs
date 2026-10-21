@@ -13,10 +13,12 @@ public record AuthResponse(
     string UserId,
     [property: Description("The address on the account.")]
     string Email,
-    [property: Description("The business name, or null before setup has been completed.")]
+    [property: Description("The active workspace's business name, or null before setup has been completed.")]
     string? BusinessName,
-    [property: Description("The image URL saved on the account, or null when none has been set.")]
+    [property: Description("The active workspace's logo URL, or null when none has been set.")]
     string? LogoUrl,
     [property: Description("The phone number in international display form, e.g. +2348012345678, or null when none is on the account.")]
-    string? PhoneNumber
+    string? PhoneNumber,
+    [property: Description("The workspace this session works in. Everything the token reads and writes belongs to it.")]
+    string WorkspaceId
 );

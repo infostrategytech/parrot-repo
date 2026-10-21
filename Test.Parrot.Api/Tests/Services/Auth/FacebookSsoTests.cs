@@ -67,7 +67,7 @@ public class FacebookSsoTests
     public async Task AFacebookSignIn_FindsOrCreatesTheAccountByEmail_AndHandsOverTheSession()
     {
         _auth.Setup(a => a.ExternalLoginAsync("ada@example.test", "Facebook", "fb-123"))
-            .ReturnsAsync(new AuthResponse("token", DateTime.UtcNow.AddHours(1), "user-1", "ada@example.test", null, null, null));
+            .ReturnsAsync(new AuthResponse("token", DateTime.UtcNow.AddHours(1), "user-1", "ada@example.test", null, null, null, "user-1"));
 
         IActionResult result = await Create(Person("ada@example.test")).FacebookCallback();
 

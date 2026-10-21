@@ -75,14 +75,14 @@ internal sealed class MemoryTikTokRepository : ITikTokConnectionRepository
 
     // Like the real one: a disabled connection is not the owner's connection any more.
     public Task<TikTokConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default) =>
-        Task.FromResult(Connection?.OwnerUserId == ownerUserId && Connection.DisabledAt is null ? Connection : null);
+        Task.FromResult(Connection?.WorkspaceId == ownerUserId && Connection.DisabledAt is null ? Connection : null);
 
     public Task<TikTokConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default) =>
         Task.FromResult(Connection?.WebhookIdentifier == identifier && Connection.DisabledAt is null ? Connection : null);
 
     public Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default)
     {
-        if (Connection?.Id != id || Connection.OwnerUserId != ownerUserId || Connection.DisabledAt is not null)
+        if (Connection?.Id != id || Connection.WorkspaceId != ownerUserId || Connection.DisabledAt is not null)
             return Task.FromResult(false);
         Connection.DisabledAt = disabledAt;
         return Task.FromResult(true);

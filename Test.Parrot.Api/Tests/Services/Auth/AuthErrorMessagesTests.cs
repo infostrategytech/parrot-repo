@@ -10,6 +10,8 @@ using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Application.Utils;
 using Parrot.Domain.Exceptions;
+using Parrot.Application.Workspaces;
+using Test.Parrot.Api.Tests.Services.Workspaces;
 
 namespace Test.Parrot.Api.Tests.Services.Auth;
 
@@ -21,6 +23,7 @@ public class AuthErrorMessagesTests
     private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
     private readonly Mock<IPasswordHasher<ApplicationUser>> _passwordHasherMock;
     private readonly Mock<IJwtHelper> _jwtHelperMock;
+    private readonly FakeWorkspaceRepository _workspaces = new();
     private readonly Mock<IEmailService> _emailServiceMock;
     private readonly Mock<IFeatureFlagService> _featureFlagsMock;
     private readonly Mock<IAppLogger<AuthService>> _loggerMock;
@@ -58,6 +61,7 @@ public class AuthErrorMessagesTests
             _userManagerMock.Object,
             _passwordHasherMock.Object,
             _jwtHelperMock.Object,
+            new WorkspaceService(_workspaces, Mock.Of<IAppLogger<WorkspaceService>>()),
             _emailServiceMock.Object,
             _featureFlagsMock.Object,
             Options.Create(new EmailSettings

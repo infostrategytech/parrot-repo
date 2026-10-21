@@ -188,7 +188,7 @@ public sealed class InstagramWebhookService(
 
                 // The open inbox re-reads the thread.
                 if (notifier is not null)
-                    await notifier.ReceiptsChangedAsync(connection.OwnerUserId, connection.Id, customer, budget.Token);
+                    await notifier.ReceiptsChangedAsync(connection.WorkspaceId, connection.Id, customer, budget.Token);
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
@@ -232,7 +232,7 @@ public sealed class InstagramWebhookService(
             ReceivedAt = receivedAt,
             CorrelationId = correlationId,
             ConnectionId = connection.Id,
-            OwnerUserId = connection.OwnerUserId,
+            OwnerUserId = connection.WorkspaceId,
         };
     }
 }

@@ -5,7 +5,10 @@ using Parrot.Application.DTOs.Auth;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Application.Profile;
+using Parrot.Application.Workspaces;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
+using Test.Parrot.Api.Tests.Services.Workspaces;
 
 namespace Test.Parrot.Api.Tests.Services.Auth;
 
@@ -13,6 +16,7 @@ public class ProfileServiceTests
 {
     private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
     private readonly Mock<IAppLogger<ProfileService>> _loggerMock;
+    private readonly FakeWorkspaceRepository _workspaces = new();
     private readonly ProfileService _sut;
 
     public ProfileServiceTests()
@@ -26,7 +30,15 @@ public class ProfileServiceTests
             .Setup(l => l.BeginEntityScope(It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Mock.Of<IDisposable>());
 
-        _sut = new ProfileService(_userManagerMock.Object, _loggerMock.Object);
+        Mock<IAppLogger<WorkspaceService>> workspaceLogger = new Mock<IAppLogger<WorkspaceService>>();
+        workspaceLogger
+            .Setup(l => l.BeginEntityScope(It.IsAny<string>(), It.IsAny<string>()))
+            .Returns(Mock.Of<IDisposable>());
+
+        _sut = new ProfileService(
+            _userManagerMock.Object,
+            new WorkspaceService(_workspaces, workspaceLogger.Object),
+            _loggerMock.Object);
     }
 
     // ---------------------------------------------------------------------------
@@ -39,7 +51,7 @@ public class ProfileServiceTests
         ApplicationUser user = NewUser();
         _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
 
-        ProfileResponse response = await _sut.GetAsync(user.Id);
+        ProfileResponse response = await _sut.GetAsync(user.Id, user.Id);
 
         Assert.Equal(user.Id, response.UserId);
         Assert.Equal(user.Email, response.Email);
@@ -51,7 +63,7 @@ public class ProfileServiceTests
     {
         _userManagerMock.Setup(m => m.FindByIdAsync(It.IsAny<string>())).ReturnsAsync((ApplicationUser?)null);
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetAsync("no-such-id"));
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetAsync("no-such-id", "no-such-id"));
     }
 
     // ---------------------------------------------------------------------------
@@ -66,7 +78,7 @@ public class ProfileServiceTests
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook();
 
-        ProfileResponse response = await _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+        ProfileResponse response = await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
         {
             BusinessName = "  Oma's Kitchen  ",
         });
@@ -83,7 +95,7 @@ public class ProfileServiceTests
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook();
 
-        ProfileResponse response = await _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+        ProfileResponse response = await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
         {
             CountryCode = "234",
             Number = "08012345678",
@@ -106,7 +118,7 @@ public class ProfileServiceTests
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook();
 
-        await _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+        await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
         {
             CountryCode = "234",
             Number = typed,
@@ -128,7 +140,7 @@ public class ProfileServiceTests
         UsingPhoneBook(user, other);
 
         ConflictException ex = await Assert.ThrowsAsync<ConflictException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
             {
                 CountryCode = "234",
                 Number = "08012345678",
@@ -153,7 +165,7 @@ public class ProfileServiceTests
         UsingPhoneBook(user, other);
 
         ConflictException ex = await Assert.ThrowsAsync<ConflictException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
             {
                 CountryCode = "234",
                 Number = "08012345678",
@@ -173,7 +185,7 @@ public class ProfileServiceTests
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook(user);
 
-        await _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+        await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
         {
             CountryCode = "234",
             Number = "08012345678",
@@ -193,7 +205,7 @@ public class ProfileServiceTests
         UsingPhoneBook();
 
         ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
             {
                 CountryCode = "234",
                 Number = "+442071234567",
@@ -216,7 +228,7 @@ public class ProfileServiceTests
         UsingPhoneBook();
 
         ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
             {
                 CountryCode = dial,
                 Number = "8012345678",
@@ -235,7 +247,7 @@ public class ProfileServiceTests
         UsingPhoneBook();
 
         ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest { Number = "08012345678" }));
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest { Number = "08012345678" }));
 
         Assert.Equal(AuthMessages.InvalidDialCode, ex.Message);
     }
@@ -245,12 +257,12 @@ public class ProfileServiceTests
     {
         // A partial save must not clear what an earlier step already wrote.
         ApplicationUser user = NewUser();
-        user.BusinessName = "Already Set";
+        Workspace(user).Name = "Already Set";
         _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook();
 
-        ProfileResponse response = await _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+        ProfileResponse response = await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
         {
             LogoUrl = "https://cdn.example.com/logo.png",
         });
@@ -271,7 +283,7 @@ public class ProfileServiceTests
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook();
 
-        ProfileResponse response = await _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+        ProfileResponse response = await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
         {
             FirstName = "  Seun ",
             LastName = " Amole  ",
@@ -287,12 +299,12 @@ public class ProfileServiceTests
         ApplicationUser user = NewUser();
         user.FirstName = "Seun";
         user.LastName = "Amole";
-        user.LogoUrl = "https://cdn.example.com/logo.png";
+        Workspace(user).LogoUrl = "https://cdn.example.com/logo.png";
         _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook();
 
-        ProfileResponse response = await _sut.UpdateAsync(user.Id, new UpdateProfileRequest
+        ProfileResponse response = await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
         {
             FirstName = "",
             LastName = "   ",
@@ -315,7 +327,7 @@ public class ProfileServiceTests
         UsingPhoneBook();
 
         ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest { LogoUrl = logoUrl }));
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest { LogoUrl = logoUrl }));
 
         Assert.Equal(AuthMessages.InvalidLogoUrl, ex.Message);
     }
@@ -328,7 +340,7 @@ public class ProfileServiceTests
         UsingPhoneBook();
 
         ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest { FirstName = new string('a', 81) }));
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest { FirstName = new string('a', 81) }));
 
         Assert.Equal(AuthMessages.NameTooLong, ex.Message);
     }
@@ -339,13 +351,13 @@ public class ProfileServiceTests
         // No field is required: an empty body is a valid save.
         ApplicationUser user = NewUser();
         user.FirstName = "Seun";
-        user.BusinessName = "SeunFoods";
-        user.LogoUrl = "https://cdn.example.com/logo.png";
+        Workspace(user).Name = "SeunFoods";
+        Workspace(user).LogoUrl = "https://cdn.example.com/logo.png";
         _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
         _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
         UsingPhoneBook();
 
-        ProfileResponse response = await _sut.UpdateAsync(user.Id, new UpdateProfileRequest());
+        ProfileResponse response = await _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest());
 
         Assert.Equal("Seun", response.FirstName);
         Assert.Equal("SeunFoods", response.BusinessName);
@@ -364,9 +376,82 @@ public class ProfileServiceTests
         UsingPhoneBook();
 
         ValidationException ex = await Assert.ThrowsAsync<ValidationException>(() =>
-            _sut.UpdateAsync(user.Id, new UpdateProfileRequest { BusinessName = "Oma's Kitchen" }));
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest { BusinessName = "Oma's Kitchen" }));
 
         Assert.Contains("That account changed elsewhere.", ex.Errors);
+    }
+
+    // ---------------------------------------------------------------------------
+    // UpdateAsync — the business belongs to the workspace
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task UpdateAsync_PutsTheBusinessNameAndLogoOnTheSessionsWorkspace()
+    {
+        ApplicationUser user = NewUser();
+        Workspace second = _workspaces.Seed("ws-2", user.Id);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
+        UsingPhoneBook();
+
+        ProfileResponse response = await _sut.UpdateAsync(user.Id, second.Id, new UpdateProfileRequest
+        {
+            BusinessName = "Second Shop",
+            LogoUrl = "https://cdn.example.com/second.png",
+        });
+
+        Assert.Equal("Second Shop", response.BusinessName);
+        Assert.Equal("Second Shop", second.Name);
+        Assert.Equal("https://cdn.example.com/second.png", second.LogoUrl);
+        Assert.Null(Workspace(user).Name);
+        Assert.Null(user.BusinessName);
+    }
+
+    [Fact]
+    public async Task UpdateAsync_InAWorkspaceSomeoneElseOwns_IsNotFound()
+    {
+        ApplicationUser user = NewUser();
+        Workspace theirs = _workspaces.Seed("theirs", "another-tenant", name: "Their Shop");
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        UsingPhoneBook();
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _sut.UpdateAsync(user.Id, theirs.Id, new UpdateProfileRequest { BusinessName = "Mine Now" }));
+
+        Assert.Equal("Their Shop", theirs.Name);
+        _userManagerMock.Verify(m => m.UpdateAsync(It.IsAny<ApplicationUser>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task GetAsync_ForAWorkspaceSomeoneElseOwns_IsNotFound()
+    {
+        ApplicationUser user = NewUser();
+        _workspaces.Seed("theirs", "another-tenant");
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.GetAsync(user.Id, "theirs"));
+    }
+
+    // The phone is checked before the workspace is saved, so a refused number
+    // leaves the business name as it was rather than half the form saved.
+    [Fact]
+    public async Task UpdateAsync_WhenThePhoneIsRefused_LeavesTheWorkspaceAlone()
+    {
+        ApplicationUser user = NewUser();
+        Workspace(user).Name = "Before";
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        UsingPhoneBook();
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _sut.UpdateAsync(user.Id, user.Id, new UpdateProfileRequest
+            {
+                BusinessName = "After",
+                CountryCode = "234",
+                Number = "+442071234567",
+            }));
+
+        Assert.Equal("Before", Workspace(user).Name);
+        Assert.Equal(0, _workspaces.Updates);
     }
 
     // ---------------------------------------------------------------------------
@@ -374,11 +459,18 @@ public class ProfileServiceTests
     private void UsingPhoneBook(params ApplicationUser[] users) =>
         _userManagerMock.SetupGet(m => m.Users).Returns(users.AsQueryable());
 
-    private static ApplicationUser NewUser() =>
-        new ApplicationUser
+    private Workspace Workspace(ApplicationUser user) => _workspaces.Rows[user.Id];
+
+    // Every account has its first workspace, under its own id.
+    private ApplicationUser NewUser()
+    {
+        ApplicationUser user = new ApplicationUser
         {
             Id = Guid.NewGuid().ToString(),
             Email = "user@test.com",
             UserName = "user@test.com",
         };
+        _workspaces.Seed(user.Id, user.Id);
+        return user;
+    }
 }

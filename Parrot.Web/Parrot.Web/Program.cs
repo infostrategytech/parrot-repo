@@ -79,9 +79,10 @@ builder.Services.AddScoped<ChannelStatusLoader>();
 builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
 // The account's profile, for the welcome card and the settings page.
 builder.Services.AddScoped<ProfileClient>();
+// The owner's workspaces, for the switcher, the welcome card and the settings page.
+builder.Services.AddScoped<WorkspaceClient>();
 builder.Services.AddScoped<IWorkspaceSetupService, WorkspaceSetupService>();
-builder.Services.AddScoped<WorkspaceCreationState>();
-builder.Services.AddScoped<WorkspaceDirectoryState>();
+builder.Services.AddScoped<WorkspacePrompt>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {

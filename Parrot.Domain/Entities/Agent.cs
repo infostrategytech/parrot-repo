@@ -4,7 +4,8 @@ public class Agent
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public required string UserId { get; set; }
+    /// <summary>The workspace the agent works for.</summary>
+    public required string WorkspaceId { get; set; }
 
     public required string Name { get; set; }
 

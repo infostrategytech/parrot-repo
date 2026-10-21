@@ -10,6 +10,8 @@ using Parrot.Application.FeatureFlags;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Application.Utils;
+using Parrot.Application.Workspaces;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
 namespace Parrot.Application.Auth;
@@ -31,6 +33,7 @@ public class AuthService : IAuthService
     private readonly UserManager<ApplicationUser> _userManager;
     private readonly IPasswordHasher<ApplicationUser> _passwordHasher;
     private readonly IJwtHelper _jwtHelper;
+    private readonly IWorkspaceService _workspaces;
     private readonly IEmailService _emailService;
     private readonly IFeatureFlagService _featureFlags;
     private readonly EmailSettings _emailSettings;
@@ -42,6 +45,7 @@ public class AuthService : IAuthService
         UserManager<ApplicationUser> userManager,
         IPasswordHasher<ApplicationUser> passwordHasher,
         IJwtHelper jwtHelper,
+        IWorkspaceService workspaces,
         IEmailService emailService,
         IFeatureFlagService featureFlags,
         IOptions<EmailSettings> emailSettings,
@@ -52,6 +56,7 @@ public class AuthService : IAuthService
         _userManager = userManager;
         _passwordHasher = passwordHasher;
         _jwtHelper = jwtHelper;
+        _workspaces = workspaces;
         _emailService = emailService;
         _featureFlags = featureFlags;
         _emailSettings = emailSettings.Value;
@@ -120,7 +125,7 @@ public class AuthService : IAuthService
             _logger.LogInformation("User logged in successfully. Email: {Email}", user.Email);
         }
 
-        return BuildAuthResponse(user);
+        return await BuildAuthResponseAsync(user);
     }
 
     public async Task<AuthResponse?> RegisterAsync(RegisterRequest request)
@@ -170,7 +175,7 @@ public class AuthService : IAuthService
                 _logger.LogWarning("User registered with email verification switched off; signing in directly. Email: {Email}", request.Email);
             }
 
-            return BuildAuthResponse(user);
+            return await BuildAuthResponseAsync(user);
         }
 
         await TrySendVerificationEmailAsync(user);
@@ -246,7 +251,7 @@ public class AuthService : IAuthService
             _logger.LogInformation("Email verified successfully. Email: {Email}", user.Email);
         }
 
-        return BuildAuthResponse(user);
+        return await BuildAuthResponseAsync(user);
     }
 
     public async Task ResendVerificationEmailAsync(ResendVerificationEmailRequest request)
@@ -417,7 +422,7 @@ public class AuthService : IAuthService
             _logger.LogInformation("User signed in via {Provider}. Email: {Email}", provider, email);
         }
 
-        return BuildAuthResponse(user);
+        return await BuildAuthResponseAsync(user);
     }
 
     // The account row is already committed by the time the verification code
@@ -498,26 +503,56 @@ public class AuthService : IAuthService
         return (user, "phone");
     }
 
-    private AuthResponse BuildAuthResponse(ApplicationUser user)
+    public async Task<AuthResponse> SwitchWorkspaceAsync(string userId, string workspaceId)
+    {
+        ApplicationUser user = await _userManager.FindByIdAsync(userId)
+            ?? throw new NotFoundException("Account not found.");
+
+        // Throws not-found for a workspace the user does not own, before
+        // anything is saved or issued.
+        Workspace workspace = await _workspaces.GetOwnedAsync(userId, workspaceId);
+
+        if (user.LastWorkspaceId != workspace.Id)
+        {
+            user.LastWorkspaceId = workspace.Id;
+            await _userManager.UpdateAsync(user);
+        }
+
+        using (_logger.BeginEntityScope("User", user.Id))
+        {
+            _logger.LogInformation("Switched to workspace {WorkspaceId}", workspace.Id);
+        }
+
+        return BuildAuthResponse(user, workspace);
+    }
+
+    private async Task<AuthResponse> BuildAuthResponseAsync(ApplicationUser user) =>
+        BuildAuthResponse(user, await _workspaces.ResolveForSignInAsync(user));
+
+    // A session works in one workspace at a time. Switching issues a new token
+    // rather than letting a request name the workspace, so every request is
+    // scoped by a claim that was checked against ownership when it was signed.
+    private AuthResponse BuildAuthResponse(ApplicationUser user, Workspace workspace)
     {
         List<Claim> claims =
         [
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            new Claim(WorkspaceClaims.WorkspaceId, workspace.Id),
         ];
 
-        if (!string.IsNullOrEmpty(user.BusinessName))
+        if (!string.IsNullOrEmpty(workspace.Name))
         {
-            claims.Add(new Claim("businessName", user.BusinessName));
+            claims.Add(new Claim(WorkspaceClaims.WorkspaceName, workspace.Name));
         }
 
         // The catalog service keys every row to a tenant and reads it from this claim
-        // alone. Today one business account is one tenant, so the user id is the
-        // tenant id; its owner administers that tenant's catalog. The AI agent gets
+        // alone. Each workspace has its own catalog, so the workspace id is the catalog
+        // tenant id; the workspace's owner administers it. The AI agent gets
         // catalog:ai-tools through a separate service token, never through a user
         // session (docs/catalog/adr/ADR-003-auth-tenant-and-scopes.md).
-        claims.Add(new Claim(CatalogTenantClaim, user.Id));
+        claims.Add(new Claim(CatalogTenantClaim, workspace.Id));
         claims.Add(new Claim(ScopeClaim, CatalogOwnerScopes));
 
         DateTime expiresAt = _jwtHelper.GetDefaultExpiration();
@@ -528,9 +563,10 @@ public class AuthService : IAuthService
             expiresAt,
             user.Id,
             user.Email!,
-            user.BusinessName,
-            user.LogoUrl,
-            PhoneNormalizer.ToDisplay(user.PhoneDialCode, user.PhoneNumber));
+            workspace.Name,
+            workspace.LogoUrl,
+            PhoneNormalizer.ToDisplay(user.PhoneDialCode, user.PhoneNumber),
+            workspace.Id);
     }
 
     // People type "222 222" as readily as "222222"; only the digits matter.

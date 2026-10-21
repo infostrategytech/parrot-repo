@@ -8,6 +8,7 @@ using Parrot.Domain.Exceptions;
 using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Utils;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Controllers;
 
@@ -20,7 +21,12 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram) : ControllerBase
 {
-    private string Owner => User.FindFirstValue(ClaimTypes.NameIdentifier)
+    // The workspace owns the conversations; what has been read, and who wrote
+    // a note, belong to the person signed in.
+    private string Owner => User.WorkspaceId()
+        ?? throw new UnauthorizedException("Sign in to continue.");
+
+    private string Reader => User.UserId()
         ?? throw new UnauthorizedException("Sign in to continue.");
 
     [HttpGet]
@@ -41,7 +47,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             rows.AddRange(await store.FindAsync(Owner, missing, cancellationToken));
         }
 
-        IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Owner,
+        IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Reader,
             rows.Select(c => (c.ConnectionId, c.Sender)).ToList(), cancellationToken);
         return Ok(rows
             .Select(c =>
@@ -70,12 +76,12 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromBody] MarkReadRequest request, CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        ReadAdvance? read = await reads.MarkReadAsync(Owner, Owner, connectionId, sender, request.UpToMessageId, cancellationToken);
+        ReadAdvance? read = await reads.MarkReadAsync(Owner, Reader, connectionId, sender, request.UpToMessageId, cancellationToken);
         await flags.SetMarkedUnreadAsync(Owner, connectionId, sender, false, cancellationToken);
 
         // Only when this moved the position: a repeat must not tell the channel again.
         if (read is not null) await channelReads.SendAsync(Owner, read, cancellationToken);
-        IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Owner, [(connectionId, sender)], cancellationToken);
+        IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Reader, [(connectionId, sender)], cancellationToken);
         return Ok(new MarkReadResult(unread.GetValueOrDefault((connectionId, sender)), await TotalUnreadAsync(cancellationToken)));
     }
 
@@ -116,7 +122,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         if (text.Length > IConversationNoteStore.MaxLength)
             throw new ValidationException($"A note can be at most {IConversationNoteStore.MaxLength} characters.");
         string author = User.FindFirstValue(ClaimTypes.Email) ?? User.FindFirstValue("email") ?? "Team member";
-        return Ok(await notes.AddAsync(Owner, connectionId, sender, text, Owner, author, cancellationToken));
+        return Ok(await notes.AddAsync(Owner, connectionId, sender, text, Reader, author, cancellationToken));
     }
 
     [HttpDelete("{connectionId:guid}/notes/{noteId}")]
@@ -131,10 +137,10 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     // the inbox badge counts what the agent has set aside to come back to.
     private async Task<int> TotalUnreadAsync(CancellationToken ct)
     {
-        int total = await reads.TotalUnreadAsync(Owner, Owner, ct);
+        int total = await reads.TotalUnreadAsync(Owner, Reader, ct);
         List<(Guid Connection, string Sender)> marked = [.. (await flags.ListAsync(Owner, ct)).Where(f => f.Value.MarkedUnread).Select(f => f.Key)];
         if (marked.Count == 0) return total;
-        IReadOnlyDictionary<(Guid, string), int> counts = await reads.CountUnreadAsync(Owner, Owner, marked, ct);
+        IReadOnlyDictionary<(Guid, string), int> counts = await reads.CountUnreadAsync(Owner, Reader, marked, ct);
         return total + marked.Count(m => counts.GetValueOrDefault(m) == 0);
     }
 

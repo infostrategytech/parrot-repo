@@ -17,7 +17,6 @@
 @inject IAgentBriefing Briefing
 @inject IJSRuntime JS
 @inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
-@inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceDirectoryState WorkspaceDirectory
 @implements IDisposable
 
 @* The overview: one page that grows with the business (designer, 14 and
@@ -92,14 +91,14 @@
 @code {
     private enum Step { New, Channel, AgentWithoutChannel, Draft, Live }
 
-    private string? BusinessName => WorkspaceDirectory.Active?.Name ?? AuthState.CurrentUser?.BusinessName;
+    private string? BusinessName => AuthState.CurrentUser?.BusinessName;
     private bool IsLive => !string.IsNullOrWhiteSpace(BusinessName);
     private string WorkspaceDisplayName => IsLive ? BusinessName! : "Your Workspace";
-    private int ConnectedCount => WorkspaceDirectory.IsActiveLocallyCreated ? 0 : ChannelsState.Workspace.ConnectedCount;
+    private int ConnectedCount => ChannelsState.Workspace.ConnectedCount;
     private bool HasConnectedChannel => ConnectedCount > 0;
 
     // Concept B: where the business has got to, from its channels and agents.
-    private IReadOnlyList<AiAgent> Agents => WorkspaceDirectory.IsActiveLocallyCreated ? [] : AgentsState.Agents;
+    private IReadOnlyList<AiAgent> Agents => AgentsState.Agents;
     private List<AiAgent> LiveAgents => Agents.Where(agent => agent.IsActive && !agent.IsDraft).ToList();
     private Step Stage => !HasConnectedChannel
         ? (Agents.Count > 0 ? Step.AgentWithoutChannel : Step.New)
@@ -128,8 +127,7 @@
 
     // Known only once asked, so the card does not flash in and out.
     private bool? _businessTold;
-    private bool AskAboutBusiness => WorkspaceDirectory.IsActiveLocallyCreated
-        || BusinessKnowledge.Available && _businessTold == false;
+    private bool AskAboutBusiness => BusinessKnowledge.Available && _businessTold == false;
 
     // Once there is an agent the big card says what is next, so no line here
     // to say it again (designer, 15 October).
@@ -140,9 +138,7 @@
             _ => "It’s quiet for now. Bring in your customer messages and watch your workspace come to life.",
         };
 
-    private List<BusinessChannel> Connected => (WorkspaceDirectory.IsActiveLocallyCreated
-            ? []
-            : ChannelsState.Workspace.Channels)
+    private List<BusinessChannel> Connected => ChannelsState.Workspace.Channels
         .Where(channel => channel.Status == ChannelStatus.Connected)
         .GroupBy(channel => channel.Id).Select(group => group.First())
         .ToList();
@@ -479,7 +475,6 @@
     protected override async Task OnInitializedAsync()
     {
         AuthState.OnChange += OnAuthChanged;
-        WorkspaceDirectory.Changed += OnStateChanged;
         BusinessIntro.Changed += OnIntroChanged;
         AgentsState.Changed += OnStateChanged;
         Feed.Changed += OnStateChanged;
@@ -508,7 +503,6 @@
     public void Dispose()
     {
         AuthState.OnChange -= OnAuthChanged;
-        WorkspaceDirectory.Changed -= OnStateChanged;
         BusinessIntro.Changed -= OnIntroChanged;
         AgentsState.Changed -= OnStateChanged;
         Feed.Changed -= OnStateChanged;

@@ -172,7 +172,7 @@ public class MessageHistoryTests : IAsyncLifetime
         MongoMessageHistory history = History();
         WhatsAppConnection connection = new()
         {
-            OwnerUserId = Owner, Name = "Support", VerifyTokenEncrypted = "encrypted", WebhookVerifiedAt = DateTime.UtcNow,
+            WorkspaceId = Owner, Name = "Support", VerifyTokenEncrypted = "encrypted", WebhookVerifiedAt = DateTime.UtcNow,
             PhoneNumberId = "106540352242922", WhatsAppBusinessAccountId = "102290129340398",
             // Typed at setup in a different shape from Meta's; the reply must not depend on it.
             DisplayPhoneNumber = "0901 111 2222",

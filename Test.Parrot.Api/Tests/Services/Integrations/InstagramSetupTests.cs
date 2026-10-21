@@ -405,7 +405,7 @@ public class InstagramSetupTests
         public InstagramConnection? Connection { get; private set; }
 
         public Task<InstagramConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Connection?.OwnerUserId == ownerUserId && Connection.DisabledAt is null ? Connection : null);
+            Task.FromResult(Connection?.WorkspaceId == ownerUserId && Connection.DisabledAt is null ? Connection : null);
 
         public Task<InstagramConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default) =>
             Task.FromResult(Connection?.WebhookIdentifier == identifier && Connection.DisabledAt is null ? Connection : null);
@@ -464,7 +464,7 @@ public class InstagramSetupTests
         }
 
         public Task<bool> IsOwnedByAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default) =>
-            Task.FromResult(Connection?.Id == id && Connection.OwnerUserId == ownerUserId);
+            Task.FromResult(Connection?.Id == id && Connection.WorkspaceId == ownerUserId);
 
         public Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default)
         {

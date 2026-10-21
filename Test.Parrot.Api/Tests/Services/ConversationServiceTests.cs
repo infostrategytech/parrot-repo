@@ -19,7 +19,7 @@ public class ConversationServiceTests
     private const string Recipient = "2348012345678";
     private readonly WhatsAppConnection _connection = new()
     {
-        OwnerUserId = Owner, Name = "Test", VerifyTokenEncrypted = "encrypted",
+        WorkspaceId = Owner, Name = "Test", VerifyTokenEncrypted = "encrypted",
         PhoneNumberId = "123", WhatsAppBusinessAccountId = "456", WebhookVerifiedAt = DateTime.UtcNow,
     };
     private readonly Mock<IWhatsAppConnectionRepository> _connections = new();
@@ -35,7 +35,7 @@ public class ConversationServiceTests
     private const string PageConversation = "facebook:185860297939218:6215837091842310";
     private readonly FacebookConnection _page = new()
     {
-        OwnerUserId = Owner, VerifyTokenEncrypted = "encrypted", PageId = PageId, PageName = "Oma's Kitchen",
+        WorkspaceId = Owner, VerifyTokenEncrypted = "encrypted", PageId = PageId, PageName = "Oma's Kitchen",
         WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "enc:page-token",
     };
     private readonly Mock<IFacebookConnectionRepository> _pages = new();
@@ -235,7 +235,7 @@ public class ConversationServiceTests
     {
         InstagramConnection account = new()
         {
-            OwnerUserId = Owner, VerifyTokenEncrypted = "enc:verify", AccountId = "17841400000000000", Username = "omaskitchen",
+            WorkspaceId = Owner, VerifyTokenEncrypted = "enc:verify", AccountId = "17841400000000000", Username = "omaskitchen",
             WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "enc:IGAAtoken",
         };
         _instagramAccounts.Setup(a => a.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(account);

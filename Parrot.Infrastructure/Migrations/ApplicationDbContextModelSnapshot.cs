@@ -190,6 +190,9 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(80)
                         .HasColumnType("character varying(80)");
 
+                    b.Property<string>("LastWorkspaceId")
+                        .HasColumnType("text");
+
                     b.Property<bool>("LockoutEnabled")
                         .HasColumnType("boolean");
 
@@ -299,18 +302,18 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<int>("Version")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("integer")
                         .HasDefaultValue(1);
 
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("WorkspaceId");
 
                     b.ToTable("Agents");
                 });
@@ -430,10 +433,6 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("DisabledAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("OwnerUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("PageId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -459,11 +458,11 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("WebhookVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.HasKey("Id");
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.HasIndex("OwnerUserId")
-                        .IsUnique()
-                        .HasFilter("\"DisabledAt\" IS NULL");
+                    b.HasKey("Id");
 
                     b.HasIndex("PageId")
                         .IsUnique()
@@ -471,6 +470,10 @@ namespace Parrot.Infrastructure.Migrations
 
                     b.HasIndex("WebhookIdentifier")
                         .IsUnique();
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasFilter("\"DisabledAt\" IS NULL");
 
                     b.ToTable("FacebookConnections");
                 });
@@ -531,10 +534,6 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("DisabledAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("OwnerUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("UpdatedAt")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("timestamp with time zone")
@@ -556,18 +555,22 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("WebhookVerifiedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AccountId")
                         .IsUnique()
                         .HasFilter("\"AccountId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
 
-                    b.HasIndex("OwnerUserId")
-                        .IsUnique()
-                        .HasFilter("\"DisabledAt\" IS NULL");
-
                     b.HasIndex("WebhookIdentifier")
                         .IsUnique();
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasFilter("\"DisabledAt\" IS NULL");
 
                     b.ToTable("InstagramConnections");
                 });
@@ -605,10 +608,6 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("OwnerUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("RefreshTokenEncrypted")
                         .HasColumnType("text");
 
@@ -629,11 +628,11 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.HasKey("Id");
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.HasIndex("OwnerUserId")
-                        .IsUnique()
-                        .HasFilter("\"DisabledAt\" IS NULL");
+                    b.HasKey("Id");
 
                     b.HasIndex("TikTokOpenId")
                         .IsUnique()
@@ -641,6 +640,10 @@ namespace Parrot.Infrastructure.Migrations
 
                     b.HasIndex("WebhookIdentifier")
                         .IsUnique();
+
+                    b.HasIndex("WorkspaceId")
+                        .IsUnique()
+                        .HasFilter("\"DisabledAt\" IS NULL");
 
                     b.ToTable("TikTokConnections");
                 });
@@ -677,10 +680,6 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("character varying(128)");
 
-                    b.Property<string>("OwnerUserId")
-                        .IsRequired()
-                        .HasColumnType("text");
-
                     b.Property<string>("PhoneNumberId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -706,9 +705,11 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
-                    b.HasKey("Id");
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasColumnType("text");
 
-                    b.HasIndex("OwnerUserId");
+                    b.HasKey("Id");
 
                     b.HasIndex("PhoneNumberId")
                         .IsUnique()
@@ -717,7 +718,41 @@ namespace Parrot.Infrastructure.Migrations
                     b.HasIndex("WebhookIdentifier")
                         .IsUnique();
 
+                    b.HasIndex("WorkspaceId");
+
                     b.ToTable("WhatsAppConnections");
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.Workspace", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("LogoUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("OwnerId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OwnerId");
+
+                    b.ToTable("Workspaces");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
@@ -793,36 +828,45 @@ namespace Parrot.Infrastructure.Migrations
 
             modelBuilder.Entity("Parrot.Domain.Entities.FacebookConnection", b =>
                 {
-                    b.HasOne("Parrot.Application.Models.ApplicationUser", null)
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
                         .WithMany()
-                        .HasForeignKey("OwnerUserId")
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.InstagramConnection", b =>
                 {
-                    b.HasOne("Parrot.Application.Models.ApplicationUser", null)
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
                         .WithMany()
-                        .HasForeignKey("OwnerUserId")
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.TikTokConnection", b =>
                 {
-                    b.HasOne("Parrot.Application.Models.ApplicationUser", null)
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
                         .WithMany()
-                        .HasForeignKey("OwnerUserId")
+                        .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.WhatsAppConnection", b =>
                 {
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.Workspace", b =>
+                {
                     b.HasOne("Parrot.Application.Models.ApplicationUser", null)
                         .WithMany()
-                        .HasForeignKey("OwnerUserId")
+                        .HasForeignKey("OwnerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

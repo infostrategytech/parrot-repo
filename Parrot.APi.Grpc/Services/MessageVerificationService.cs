@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Grpc.Contracts.Messaging.V1;
+using Parrot.Application.Workspaces;
 
 namespace Parrot.APi.Grpc.Services;
 
@@ -19,7 +20,11 @@ public sealed class MessageVerificationGrpcService(
     {
         DateTime since = DateTimeOffset.FromUnixTimeSeconds(request.SinceUnixSeconds).UtcDateTime;
         ClaimsPrincipal user = context.GetHttpContext().User;
-        string? owner = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub");
+        // The session's workspace owns the connections; a token from before
+        // workspaces has none, and its user id is that tenant's first workspace.
+        string? owner = user.FindFirstValue(WorkspaceClaims.WorkspaceId)
+            ?? user.FindFirstValue(ClaimTypes.NameIdentifier)
+            ?? user.FindFirstValue("sub");
         if (string.IsNullOrWhiteSpace(owner))
             throw new RpcException(new Status(StatusCode.Unauthenticated, "Sign in to check for a message."));
 

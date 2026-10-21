@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -19,7 +19,7 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         return Ok(await connections.GetSetupAsync(owner, cancellationToken));
     }
@@ -28,7 +28,7 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
     [HttpPut("page")]
     public async Task<IActionResult> SavePage([FromBody] FacebookPageRequest request, CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         await connections.SavePageAsync(owner, request, cancellationToken);
         return NoContent();
@@ -38,7 +38,7 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
     [HttpPost("disable")]
     public async Task<IActionResult> Disable(CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         await connections.DisableAsync(owner, cancellationToken);
         return NoContent();
@@ -48,7 +48,7 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
     [HttpPut("app-secret")]
     public async Task<IActionResult> SaveAppSecret([FromBody] AppSecretRequest request, CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         await connections.SaveAppSecretAsync(owner, request, cancellationToken);
         return NoContent();

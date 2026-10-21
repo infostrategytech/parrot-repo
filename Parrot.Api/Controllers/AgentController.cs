@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Application.Agents;
 using Parrot.Application.DTOs.Agents;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Controllers;
 
@@ -23,7 +23,7 @@ public class AgentController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> CreateAgent([FromBody] AgentInfo agentInfo)
     {
-        string userId = GetUserId();
+        string userId = Owner();
         AgentResponse agent = await _agentService.CreateAsync(userId, agentInfo);
         return CreatedAtAction(nameof(GetAgent), new { id = agent.Id }, agent);
     }
@@ -31,7 +31,7 @@ public class AgentController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetAgents()
     {
-        string userId = GetUserId();
+        string userId = Owner();
         IReadOnlyList<AgentResponse> agents = await _agentService.GetAllAsync(userId);
         return Ok(agents);
     }
@@ -39,7 +39,7 @@ public class AgentController : ControllerBase
     [HttpGet("{id:guid}")]
     public async Task<IActionResult> GetAgent(Guid id)
     {
-        string userId = GetUserId();
+        string userId = Owner();
         AgentResponse agent = await _agentService.GetByIdAsync(userId, id);
         return Ok(agent);
     }
@@ -48,7 +48,7 @@ public class AgentController : ControllerBase
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> UpdateAgent(Guid id, [FromBody] AgentInfo agentInfo)
     {
-        string userId = GetUserId();
+        string userId = Owner();
         AgentResponse agent = await _agentService.UpdateAsync(userId, id, agentInfo);
         return Ok(agent);
     }
@@ -57,7 +57,7 @@ public class AgentController : ControllerBase
     [HttpPatch("{id:guid}/live")]
     public async Task<IActionResult> SetLive(Guid id, [FromBody] AgentLiveRequest request)
     {
-        string userId = GetUserId();
+        string userId = Owner();
         AgentResponse agent = await _agentService.SetLiveAsync(userId, id, request.On);
         return Ok(agent);
     }
@@ -65,13 +65,12 @@ public class AgentController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> DeleteAgent(Guid id)
     {
-        string userId = GetUserId();
+        string userId = Owner();
         await _agentService.DeleteAsync(userId, id);
         return NoContent();
     }
 
-    private string GetUserId() =>
-        User.FindFirstValue(ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub")
+    private string Owner() =>
+        User.WorkspaceId()
             ?? throw new InvalidOperationException("User ID claim not found.");
 }

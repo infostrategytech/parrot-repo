@@ -6,7 +6,7 @@ namespace Parrot.Application.Integrations;
 public interface IFacebookConnectionRepository
 {
     // Returns this owner's active connection, or null before setup has started.
-    Task<FacebookConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default);
+    Task<FacebookConnection?> GetByOwnerAsync(string workspaceId, CancellationToken cancellationToken = default);
 
     // Resolves the connection named by a webhook's ?ref= value; the only routing path for inbound events.
     Task<FacebookConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default);
@@ -18,15 +18,15 @@ public interface IFacebookConnectionRepository
     Task<bool> MarkVerifiedAsync(Guid id, DateTime verifiedAt, CancellationToken cancellationToken = default);
 
     // Whether the connection is the owner's, disabled or not: its conversations stay readable.
-    Task<bool> IsOwnedByAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default);
+    Task<bool> IsOwnedByAsync(Guid id, string workspaceId, CancellationToken cancellationToken = default);
 
     // Marks the owner's active connection disabled; its ?ref= stops routing webhooks at once.
-    Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default);
+    Task<bool> DisableAsync(Guid id, string workspaceId, DateTime disabledAt, CancellationToken cancellationToken = default);
 
     // Saves the encrypted App Secret of the customer's own Meta app (manual setup).
-    Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret, CancellationToken cancellationToken = default);
+    Task SaveAppSecretAsync(Guid id, string workspaceId, string encryptedSecret, CancellationToken cancellationToken = default);
 
     // Saves the chosen Page and its encrypted token; requires the webhook to be verified first.
-    Task SavePageAsync(Guid id, string ownerUserId, string pageId, string pageName, string encryptedAccessToken,
+    Task SavePageAsync(Guid id, string workspaceId, string pageId, string pageName, string encryptedAccessToken,
         CancellationToken cancellationToken = default);
 }

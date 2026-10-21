@@ -3,24 +3,26 @@
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Nav
 @inject Parrot.Web.Services.InboxUnreadState Unread
-@inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceCreationState WorkspaceCreation
-@inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceDirectoryState WorkspaceDirectory
+@inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceClient Workspaces
+@inject Parrot.Web.Features.Dashboard.Workspace.WorkspacePrompt WorkspacePrompt
+@inject Parrot.SharedComponents.Services.ToastService Toasts
 @implements IDisposable
 
 @* Aurora's shell, fed by Parrot's session. The rail, the workspace switcher
    and the account card come from the shared component library; this layout
-   only says who is signed in and what the account menu does. *@
+   says who is signed in, which workspaces they can switch to, and what the
+   account menu does. *@
 
 <ActivityBar />
 
 <AppShell BrandName="OmniAI"
-          WorkspaceId="@WorkspaceId"
-          WorkspaceName="@WorkspaceName"
-          WorkspaceLogoUrl="@WorkspaceLogoUrl"
-          Workspaces="@WorkspaceDirectory.Workspaces"
-          ActiveWorkspaceId="@WorkspaceDirectory.Active?.Id"
-          OnSelectWorkspace="SelectWorkspace"
-          OnAddWorkspace="OpenWorkspaceCreation"
+          WorkspaceId="@(AuthState.CurrentUser?.CurrentWorkspaceId ?? "")"
+          WorkspaceName="@(AuthState.CurrentUser?.BusinessName ?? "")"
+          WorkspaceLogoUrl="@AuthState.CurrentUser?.LogoUrl"
+          Workspaces="@_workspaces"
+          OnWorkspaceSwitch="SwitchWorkspaceAsync"
+          OnWorkspaceAdd="WorkspacePrompt.RequestCreate"
+          WorkspaceSwitching="@_switching"
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
@@ -44,8 +46,7 @@
     </ChildContent>
 </AppShell>
 
-@* One workspace dialog for the whole dashboard. The rail can start it from
-   any page, and first-time accounts see the same experience automatically. *@
+@* Naming a new account's workspace, and making another from the switcher. *@
 <Parrot.Web.Components.Pages.Dashboard.Dashboard.WorkspaceWelcome />
 
 @* Before an agent: a channel for it to answer on, then, the first time, a
@@ -63,27 +64,16 @@
 @code {
     private bool _loggingOut;
     private string? _logoutError;
+    private bool _switching;
+    private IReadOnlyList<WorkspaceOption>? _workspaces;
 
-    // Stable seeds, so the business and the person keep one avatar tint
-    // everywhere they appear. The user id is the seed for the person; the
-    // business has no id of its own in the session, so its name stands in.
+    // A stable seed, so the person keeps one avatar tint everywhere they
+    // appear. A workspace is seeded by its own id, in the switcher.
     private string UserSeed => AuthState.CurrentUser?.UserId ?? "user";
-    private string WorkspaceId => WorkspaceDirectory.Active?.Id ?? "workspace-" + (AuthState.CurrentUser?.BusinessName ?? "");
-    private string WorkspaceName => WorkspaceDirectory.Active?.Name ?? AuthState.CurrentUser?.BusinessName ?? "";
-    private string? WorkspaceLogoUrl => WorkspaceDirectory.Active?.LogoUrl ?? AuthState.CurrentUser?.LogoUrl;
-
-    private void OpenWorkspaceCreation() => WorkspaceCreation.OpenAdditionalWorkspace();
-
-    private void SelectWorkspace(string id)
-    {
-        if (WorkspaceDirectory.Select(id)) Nav.NavigateTo("/dashboard");
-    }
 
     protected override void OnInitialized()
     {
-        WorkspaceDirectory.Sync(AuthState.CurrentUser);
         AuthState.OnChange += AuthChanged;
-        WorkspaceDirectory.Changed += WorkspaceChanged;
         Unread.Changed += UnreadChanged;
     }
 
@@ -91,19 +81,59 @@
     // the inbox page, so it is right on every dashboard page and moves on live pushes.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) await Unread.StartAsync();
+        if (!firstRender) return;
+        await Unread.StartAsync();
+        await LoadWorkspacesAsync();
+    }
+
+    // The switcher's list. Unnamed workspaces are left out: one is only
+    // unnamed until its welcome card is done, and that is the current one.
+    private async Task LoadWorkspacesAsync()
+    {
+        if (!AuthState.IsAuthenticated) return;
+        try
+        {
+            IReadOnlyList<Parrot.Web.Features.Dashboard.Workspace.WorkspaceSummary> listed = await Workspaces.ListAsync();
+            _workspaces = listed
+                .Where(w => !string.IsNullOrWhiteSpace(w.Name))
+                .Select(w => new WorkspaceOption(w.Id, w.Name!, w.LogoUrl))
+                .ToList();
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            // The switcher still shows the current workspace; it simply offers no others.
+            _workspaces = null;
+        }
+    }
+
+    private async Task SwitchWorkspaceAsync(string workspaceId)
+    {
+        if (_switching) return;
+        _switching = true;
+        try
+        {
+            await Workspaces.SwitchAsync(workspaceId);
+            // A fresh circuit, so nothing the old workspace loaded (its inbox,
+            // agents, channels, live connection) is carried into the new one.
+            Nav.NavigateTo("/dashboard", forceLoad: true, replace: true);
+        }
+        catch (Exception)
+        {
+            _switching = false;
+            Toasts.ShowError("We could not switch workspaces. Try again.");
+        }
     }
 
     private void UnreadChanged() => _ = InvokeAsync(StateHasChanged);
 
-    private void WorkspaceChanged() => _ = InvokeAsync(StateHasChanged);
-
-    // Signing in starts the count; signing out clears it.
+    // Signing in starts the count; signing out clears it. A renamed workspace
+    // shows its new name in the list too.
     private void AuthChanged() => _ = InvokeAsync(async () =>
     {
-        WorkspaceDirectory.Sync(AuthState.CurrentUser);
         await Unread.StartAsync();
         if (!AuthState.IsAuthenticated) Unread.Set(0);
+        await LoadWorkspacesAsync();
         StateHasChanged();
     });
 
@@ -133,7 +163,6 @@
     public void Dispose()
     {
         AuthState.OnChange -= AuthChanged;
-        WorkspaceDirectory.Changed -= WorkspaceChanged;
         Unread.Changed -= UnreadChanged;
     }
 }

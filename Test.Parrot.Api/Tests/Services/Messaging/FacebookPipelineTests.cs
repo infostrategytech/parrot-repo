@@ -85,7 +85,7 @@ public class FacebookPipelineTests : IAsyncLifetime
         connections.Setup(c => c.GetActiveByIdentifierAsync("ref", It.IsAny<CancellationToken>())).ReturnsAsync(new FacebookConnection
         {
             Id = ConnectionId,
-            OwnerUserId = Owner,
+            WorkspaceId = Owner,
             VerifyTokenEncrypted = "encrypted",
             PageId = PageId,
             PageName = "Oma's Kitchen",
@@ -214,7 +214,7 @@ public class FacebookPipelineTests : IAsyncLifetime
         Mock<IFacebookConnectionRepository> pages = new();
         pages.Setup(p => p.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(new FacebookConnection
         {
-            Id = ConnectionId, OwnerUserId = Owner, VerifyTokenEncrypted = "encrypted", PageId = PageId,
+            Id = ConnectionId, WorkspaceId = Owner, VerifyTokenEncrypted = "encrypted", PageId = PageId,
             PageName = "Oma's Kitchen", WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "page-token",
         });
         Mock<IFacebookCredentialProtector> protector = new();

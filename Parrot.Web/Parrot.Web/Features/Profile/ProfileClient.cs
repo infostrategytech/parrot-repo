@@ -98,6 +98,7 @@ public sealed class ProfileClient(HttpClient http, AuthState authState, TokenSto
             ExpiresAt = current.ExpiresAt,
             UserId = current.UserId,
             Email = current.Email,
+            WorkspaceId = current.WorkspaceId,
             BusinessName = profile.BusinessName,
             LogoUrl = profile.LogoUrl,
         };

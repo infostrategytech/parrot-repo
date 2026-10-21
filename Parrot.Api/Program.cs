@@ -45,6 +45,8 @@ using Parrot.Api.OpenApi;
 using Parrot.Api.Realtime;
 using Parrot.Api.Security;
 using Parrot.Api.Utils;
+using Parrot.Application.Workspaces;
+using Parrot.Infrastructure.Workspaces;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
 
@@ -432,6 +434,8 @@ builder.Services.AddHttpClient<IOrientationClient, OrientationClient>(client =>
 });
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
+builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+builder.Services.AddScoped<IWorkspaceService, WorkspaceService>();
 
 // This is the only line that knows which object store is in play. Swapping S3
 // for another vendor means changing what IObjectStorage resolves to here and

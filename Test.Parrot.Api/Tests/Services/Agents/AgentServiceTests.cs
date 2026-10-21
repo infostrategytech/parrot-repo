@@ -30,7 +30,7 @@ public class AgentServiceTests
     private static Agent Existing(string owner = Owner, bool draft = false, bool active = true, DateTime? deletedAt = null) => new()
     {
         Id = Guid.NewGuid(),
-        UserId = owner,
+        WorkspaceId = owner,
         Name = "Nova",
         Description = "Answers customer questions.",
         MascotUrl = "/assets/images/avatars/avatar-1.png",
@@ -272,7 +272,7 @@ public class AgentServiceTests
     {
         Agent broken = Existing();
         broken.SettingsJson = "not json";
-        _repository.Setup(r => r.GetByUserIdAsync(Owner)).ReturnsAsync([Existing(), broken]);
+        _repository.Setup(r => r.GetByWorkspaceAsync(Owner)).ReturnsAsync([Existing(), broken]);
 
         IReadOnlyList<AgentResponse> agents = await _sut.GetAllAsync(Owner);
 

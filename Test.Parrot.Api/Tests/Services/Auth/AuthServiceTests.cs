@@ -1,3 +1,4 @@
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -11,6 +12,8 @@ using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Application.Utils;
 using Parrot.Domain.Exceptions;
+using Parrot.Application.Workspaces;
+using Test.Parrot.Api.Tests.Services.Workspaces;
 
 namespace Test.Parrot.Api.Tests.Services.Auth;
 
@@ -19,6 +22,7 @@ public class AuthServiceTests
     private readonly Mock<UserManager<ApplicationUser>> _userManagerMock;
     private readonly Mock<IPasswordHasher<ApplicationUser>> _passwordHasherMock;
     private readonly Mock<IJwtHelper> _jwtHelperMock;
+    private readonly FakeWorkspaceRepository _workspaces = new();
     private readonly Mock<IEmailService> _emailServiceMock;
     private readonly Mock<IFeatureFlagService> _featureFlagsMock;
     private readonly Mock<IAppLogger<AuthService>> _loggerMock;
@@ -80,6 +84,7 @@ public class AuthServiceTests
             _userManagerMock.Object,
             _passwordHasherMock.Object,
             _jwtHelperMock.Object,
+            new WorkspaceService(_workspaces, Mock.Of<IAppLogger<WorkspaceService>>()),
             _emailServiceMock.Object,
             _featureFlagsMock.Object,
             emailSettings,
@@ -1199,6 +1204,103 @@ public class AuthServiceTests
         });
 
         _userManagerMock.Verify(m => m.ChangePasswordAsync(user, "OldPass1!", "NewPass1!"), Times.Once);
+    }
+
+    // ---------------------------------------------------------------------------
+    // Workspaces — where a session works
+    // ---------------------------------------------------------------------------
+
+    [Fact]
+    public async Task LoginAsync_ForAnAccountWithNoWorkspace_MakesItsFirstUnderTheUsersId()
+    {
+        ApplicationUser user = SignsIn(CreateUser(emailConfirmed: true));
+        List<Claim> claims = CaptureClaims();
+
+        AuthResponse response = await _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "correct" });
+
+        Assert.Equal(user.Id, response.WorkspaceId);
+        Assert.Equal("Test Business", _workspaces.Rows[user.Id].Name);
+        Assert.Contains(claims, c => c.Type == WorkspaceClaims.WorkspaceId && c.Value == user.Id);
+    }
+
+    [Fact]
+    public async Task LoginAsync_LandsInTheWorkspaceSwitchedToLast()
+    {
+        ApplicationUser user = SignsIn(CreateUser(emailConfirmed: true));
+        _workspaces.Seed(user.Id, user.Id, name: "First", createdAt: DateTime.UtcNow.AddDays(-2));
+        _workspaces.Seed("ws-2", user.Id, name: "Second", createdAt: DateTime.UtcNow.AddDays(-1));
+        user.LastWorkspaceId = "ws-2";
+
+        AuthResponse response = await _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "correct" });
+
+        Assert.Equal("ws-2", response.WorkspaceId);
+        Assert.Equal("Second", response.BusinessName);
+    }
+
+    [Fact]
+    public async Task SwitchWorkspaceAsync_IssuesATokenForThatWorkspace_AndRemembersIt()
+    {
+        ApplicationUser user = CreateUser(emailConfirmed: true);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.UpdateAsync(user)).ReturnsAsync(IdentityResult.Success);
+        _workspaces.Seed(user.Id, user.Id, name: "First");
+        _workspaces.Seed("ws-2", user.Id, name: "Second", logoUrl: "https://cdn.example.com/2.png");
+        List<Claim> claims = CaptureClaims();
+
+        AuthResponse response = await _sut.SwitchWorkspaceAsync(user.Id, "ws-2");
+
+        Assert.Equal("ws-2", response.WorkspaceId);
+        Assert.Equal("Second", response.BusinessName);
+        Assert.Equal("https://cdn.example.com/2.png", response.LogoUrl);
+        Assert.Contains(claims, c => c.Type == WorkspaceClaims.WorkspaceId && c.Value == "ws-2");
+        Assert.Contains(claims, c => c.Type == WorkspaceClaims.WorkspaceName && c.Value == "Second");
+        Assert.DoesNotContain(claims, c => c.Type == "businessName");
+        Assert.Contains(claims, c => c.Type == "tenant_id" && c.Value == "ws-2");
+        Assert.Contains(claims, c => c.Type == JwtRegisteredClaimNames.Sub && c.Value == user.Id);
+        Assert.Equal("ws-2", user.LastWorkspaceId);
+        _userManagerMock.Verify(m => m.UpdateAsync(user), Times.Once);
+    }
+
+    [Fact]
+    public async Task SwitchWorkspaceAsync_ToAWorkspaceSomeoneElseOwns_IsNotFound_AndIssuesNothing()
+    {
+        ApplicationUser user = CreateUser(emailConfirmed: true);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+        _workspaces.Seed("theirs", "another-tenant");
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.SwitchWorkspaceAsync(user.Id, "theirs"));
+
+        Assert.Null(user.LastWorkspaceId);
+        _jwtHelperMock.Verify(j => j.GenerateToken(It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTime?>()), Times.Never);
+        _userManagerMock.Verify(m => m.UpdateAsync(It.IsAny<ApplicationUser>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task SwitchWorkspaceAsync_ToAWorkspaceThatDoesNotExist_IsNotFound()
+    {
+        ApplicationUser user = CreateUser(emailConfirmed: true);
+        _userManagerMock.Setup(m => m.FindByIdAsync(user.Id)).ReturnsAsync(user);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => _sut.SwitchWorkspaceAsync(user.Id, "no-such-workspace"));
+    }
+
+    private ApplicationUser SignsIn(ApplicationUser user)
+    {
+        _userManagerMock.Setup(m => m.FindByEmailAsync(user.Email!)).ReturnsAsync(user);
+        _userManagerMock.Setup(m => m.IsLockedOutAsync(user)).ReturnsAsync(false);
+        _userManagerMock.Setup(m => m.CheckPasswordAsync(user, "correct")).ReturnsAsync(true);
+        _userManagerMock.Setup(m => m.ResetAccessFailedCountAsync(user)).ReturnsAsync(IdentityResult.Success);
+        return user;
+    }
+
+    private List<Claim> CaptureClaims()
+    {
+        List<Claim> claims = [];
+        _jwtHelperMock
+            .Setup(j => j.GenerateToken(It.IsAny<IEnumerable<Claim>>(), It.IsAny<DateTime?>()))
+            .Callback<IEnumerable<Claim>, DateTime?>((issued, _) => claims.AddRange(issued))
+            .Returns("test-jwt-token");
+        return claims;
     }
 
     // ---------------------------------------------------------------------------

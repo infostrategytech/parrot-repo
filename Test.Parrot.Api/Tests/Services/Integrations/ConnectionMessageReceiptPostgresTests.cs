@@ -56,7 +56,7 @@ public class ConnectionMessageReceiptPostgresTests : IAsyncLifetime
         db.Users.Add(user);
         FacebookConnection page = new()
         {
-            OwnerUserId = user.Id, VerifyTokenEncrypted = "encrypted", PageId = PageId, PageName = "Oma's Kitchen",
+            WorkspaceId = user.Id, VerifyTokenEncrypted = "encrypted", PageId = PageId, PageName = "Oma's Kitchen",
             WebhookVerifiedAt = DateTime.UtcNow,
         };
         db.FacebookConnections.Add(page);
@@ -66,7 +66,7 @@ public class ConnectionMessageReceiptPostgresTests : IAsyncLifetime
 
     private static IncomingMessage Message(FacebookConnection page, string channelId = PageId) => new()
     {
-        ConnectionId = page.Id, OwnerUserId = page.OwnerUserId, MessageId = "facebook:m_1",
+        ConnectionId = page.Id, OwnerUserId = page.WorkspaceId, MessageId = "facebook:m_1",
         Platform = MessagingPlatform.Facebook, ExternalAccountId = channelId, From = "6215837091842310",
         Timestamp = "1791447800000", Type = "text", ChannelId = channelId, ChannelDisplayName = "",
         ReceivedAt = DateTime.UtcNow,
@@ -109,7 +109,7 @@ public class ConnectionMessageReceiptPostgresTests : IAsyncLifetime
         db.Users.Add(user);
         InstagramConnection account = new()
         {
-            OwnerUserId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = "17841400000000000", Username = "omaskitchen",
+            WorkspaceId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = "17841400000000000", Username = "omaskitchen",
             WebhookVerifiedAt = DateTime.UtcNow,
         };
         db.InstagramConnections.Add(account);
@@ -119,7 +119,7 @@ public class ConnectionMessageReceiptPostgresTests : IAsyncLifetime
 
     private static IncomingMessage InstagramMessage(InstagramConnection account, string channelId = "17841400000000000") => new()
     {
-        ConnectionId = account.Id, OwnerUserId = account.OwnerUserId, MessageId = "instagram:ig_1",
+        ConnectionId = account.Id, OwnerUserId = account.WorkspaceId, MessageId = "instagram:ig_1",
         Platform = MessagingPlatform.Instagram, ExternalAccountId = channelId, From = "5834920000000000",
         Timestamp = "1791447800000", Type = "text", ChannelId = channelId, ChannelDisplayName = "",
         ReceivedAt = DateTime.UtcNow,
