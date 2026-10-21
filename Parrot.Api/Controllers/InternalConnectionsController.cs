@@ -31,7 +31,7 @@ public sealed class InternalConnectionsController(IConnectionService connections
     {
         string workspaceId = Tenant();
         ConnectionValidationResult result = await connections.ValidateForWorkspaceAsync(id, workspaceId, cancellationToken);
-        return Ok(new { result.Id, result.ChannelKey, result.WorkspaceId });
+        return Ok(result);
     }
 
     private string Tenant() =>
