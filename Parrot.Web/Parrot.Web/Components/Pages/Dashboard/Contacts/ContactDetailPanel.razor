@@ -13,17 +13,17 @@
 {
     <div class="panel-backdrop" @onmousedown="OnClose">
         <aside class="customer-panel"
-               aria-label="Customer 360"
+               aria-label="Customer details"
                tabindex="-1"
                @ref="_card"
                @onkeydown="OnKeyDown"
                @onmousedown:stopPropagation="true">
             <header class="customer-panel__header">
                 <div>
-                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer 360</Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer details</Typography>
                     <Typography TextStyle="TextStyle.Small12Regular" As="p">Everything you know about this customer</Typography>
                 </div>
-                <button type="button" aria-label="Close Customer 360" title="Close Customer 360" @onclick="OnClose">
+                <button type="button" aria-label="Close customer details" title="Close customer details" @onclick="OnClose">
                     <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
                 </button>
             </header>
@@ -119,7 +119,7 @@
                     </div>
                 </ContactSection>
 
-                <ContactSection Title="Connected identities" Count="@(Contact.Identities.Count == 0 ? null : Contact.Identities.Count)">
+                <ContactSection Title="Connected identities" Count="@IdentityCount">
                     <div class="customer-identities">
                         @foreach (ContactIdentity identity in Contact.Identities)
                         {
@@ -127,34 +127,103 @@
                             string cssClass = $"customer-identities__mark customer-identities__mark--{identity.Platform}";
                             IconName icon = IdentityIcon(identity.Platform);
                             string display = identity.Username is { Length: > 0 } ? identity.Username : identity.Sender;
+                            ChannelLink? link = ChannelLinks.For(identity.Platform, identity.Sender, null, identity.Username);
                             <div>
                                 <span class="@cssClass">
                                     <Icon Name="@icon" Size="IconSize.Sm" Label="@platformName" />
                                 </span>
                                 <span>
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@display</Typography>
+                                    @if (link is not null)
+                                    {
+                                        <a href="@link.Url" target="_blank" rel="noopener noreferrer" class="customer-identity__link" title="@link.ButtonLabel">
+                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@display</Typography>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@display</Typography>
+                                    }
                                     <Typography TextStyle="TextStyle.Small10Regular" As="small">@platformName</Typography>
                                 </span>
                             </div>
                         }
-                        @if (Contact.Identities.Count == 0 && !string.IsNullOrWhiteSpace(Contact.ChannelIdentifier))
+                        @if (!string.IsNullOrWhiteSpace(Contact.ChannelIdentifier))
                         {
+                            string? manualPlatform = string.IsNullOrWhiteSpace(Contact.ChannelPlatform) ? null : Contact.ChannelPlatform;
+                            string manualPlatformName = manualPlatform is not null ? ChannelLinks.PlatformName(manualPlatform) : "Channel";
+                            string manualCssClass = manualPlatform is not null
+                                ? $"customer-identities__mark customer-identities__mark--{manualPlatform}"
+                                : "customer-identities__mark";
+                            IconName manualIcon = manualPlatform is not null ? IdentityIcon(manualPlatform) : IconName.RiLinksFill;
+                            ChannelLink? manualLink = manualPlatform == "whatsapp"
+                                ? ChannelLinks.For("whatsapp", Contact.ChannelIdentifier, null)
+                                : manualPlatform == "instagram"
+                                    ? ChannelLinks.For("instagram", "", null, Contact.ChannelIdentifier.TrimStart('@'))
+                                    : null;
                             <div>
-                                <span class="customer-identities__mark">
-                                    <Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" />
+                                <span class="@manualCssClass">
+                                    <Icon Name="@manualIcon" Size="IconSize.Sm" Label="@manualPlatformName" />
                                 </span>
                                 <span>
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">Channel identifier</Typography>
+                                    @if (manualLink is not null)
+                                    {
+                                        <a href="@manualLink.Url" target="_blank" rel="noopener noreferrer" class="customer-identity__link" title="@manualLink.ButtonLabel">
+                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
+                                    }
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@manualPlatformName · manually added</Typography>
                                 </span>
                             </div>
                         }
                     </div>
                     <div class="customer-identities__link">
-                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">
-                            <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
-                            <ChildContent>Link another account</ChildContent>
-                        </Button>
+                        @if (!_linkingAccount)
+                        {
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _linkingAccount = true">
+                                <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
+                                <ChildContent>Link another account</ChildContent>
+                            </Button>
+                        }
+                        else
+                        {
+                            <div class="customer-link-form">
+                                <SelectField FloatingLabel="Platform"
+                                             Value="@ChannelLabel(_linkPlatform)"
+                                             Open="@(_openPanelMenu == "link-platform")"
+                                             OpenChanged="@(open => _openPanelMenu = open ? "link-platform" : null)">
+                                    @foreach (ChannelOption ch in LinkChannels)
+                                    {
+                                        string chKey = ch.Key;
+                                        <PopoverOption Label="@ch.Label"
+                                                       Active="@(_linkPlatform == chKey)"
+                                                       OnSelect="() => { _linkPlatform = chKey; _openPanelMenu = null; }" />
+                                    }
+                                </SelectField>
+                                @if (_linkPlatform is not null)
+                                {
+                                    <Input FloatingLabel="@LinkHandleLabel(_linkPlatform)"
+                                           HelperText="@LinkHandleHint(_linkPlatform)"
+                                           @bind-Value="_linkIdentifier" />
+                                }
+                                @if (_linkError is not null)
+                                {
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="p" Class="customer-field-error">@_linkError</Typography>
+                                }
+                                <div class="customer-link-form__actions">
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                                            disabled="@_linkSaving"
+                                            @onclick="CancelLinkAccount">Cancel</Button>
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small"
+                                            Busy="@_linkSaving"
+                                            disabled="@(string.IsNullOrWhiteSpace(_linkIdentifier) || _linkPlatform is null)"
+                                            @onclick="SaveLinkAccountAsync">Save</Button>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </ContactSection>
 
@@ -177,6 +246,15 @@
     private static readonly string[] Stages = ["New Lead", "Interested", "Customer", "Vip"];
     private static readonly string[] TagOptions = ["Business", "Consumer", "New client", "Returning client", "VIP", "VVIP"];
 
+    private sealed record ChannelOption(string Key, string Label);
+    private static readonly ChannelOption[] LinkChannels =
+    [
+        new("whatsapp", "WhatsApp"),
+        new("instagram", "Instagram"),
+        new("facebook", "Messenger"),
+        new("tiktok", "TikTok"),
+    ];
+
     [Parameter] public Contact? Contact { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<Contact> OnUpdated { get; set; }
@@ -197,7 +275,24 @@
     private bool _tagsSaving;
     private string? _tagsError;
 
+    // Link account form
+    private bool _linkingAccount;
+    private string? _linkPlatform;
+    private string _linkIdentifier = string.Empty;
+    private bool _linkSaving;
+    private string? _linkError;
+
     private Guid? _loadedId;
+
+    // Count of identities the panel header shows — real linked + manually added.
+    private int? IdentityCount
+    {
+        get
+        {
+            int count = (Contact?.Identities.Count ?? 0) + (!string.IsNullOrWhiteSpace(Contact?.ChannelIdentifier) ? 1 : 0);
+            return count == 0 ? null : count;
+        }
+    }
 
     protected override void OnParametersSet()
     {
@@ -210,6 +305,10 @@
             _stageError = null;
             _tagsError = null;
             _openPanelMenu = null;
+            _linkingAccount = false;
+            _linkPlatform = null;
+            _linkIdentifier = string.Empty;
+            _linkError = null;
         }
     }
 
@@ -288,6 +387,7 @@
         Id = contact.Id,
         Name = dto.Name,
         Email = dto.Email ?? string.Empty,
+        Phone = dto.Phone ?? string.Empty,
         Stage = dto.Stage,
         Tags = dto.Tags,
         Identities = contact.Identities,
@@ -299,6 +399,88 @@
         LastInteractionChannel = contact.LastInteractionChannel,
         OrderCount = contact.OrderCount,
         Orders = contact.Orders,
+        ChannelPlatform = dto.ChannelPlatform,
+        ChannelIdentifier = dto.ChannelIdentifier ?? string.Empty,
+    };
+
+    private static string? ChannelLabel(string? platform) => platform switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Messenger",
+        "tiktok" => "TikTok",
+        _ => null,
+    };
+
+    private static string LinkHandleLabel(string platform) => platform switch
+    {
+        "whatsapp" => "Phone number",
+        "instagram" => "Instagram handle or profile URL",
+        "facebook" => "Facebook profile URL",
+        "tiktok" => "TikTok username or profile URL",
+        _ => "Channel identifier",
+    };
+
+    private static string LinkHandleHint(string platform) => platform switch
+    {
+        "whatsapp" => "Include country code, e.g. +2348012345678",
+        "instagram" => "@username or instagram.com/username",
+        "facebook" => "facebook.com/username or profile URL",
+        "tiktok" => "@username or tiktok.com/@username",
+        _ => "A username or profile URL",
+    };
+
+    private void CancelLinkAccount()
+    {
+        _linkingAccount = false;
+        _linkPlatform = null;
+        _linkIdentifier = string.Empty;
+        _linkError = null;
+    }
+
+    private async Task SaveLinkAccountAsync()
+    {
+        if (Contact is null || _linkPlatform is null || string.IsNullOrWhiteSpace(_linkIdentifier)) return;
+        _linkSaving = true;
+        _linkError = null;
+        StateHasChanged();
+        try
+        {
+            CustomerDetailDto updated = await CustomerClient.UpdateChannelIdentifierAsync(
+                Contact.Id, _linkPlatform, _linkIdentifier.Trim(), CancellationToken.None);
+            Contact updatedContact = ApplyLinkIdentifier(ApplyDetail(Contact, updated), _linkPlatform, _linkIdentifier.Trim());
+            CancelLinkAccount();
+            await OnUpdated.InvokeAsync(updatedContact);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _linkError = ex.Message;
+        }
+        finally
+        {
+            _linkSaving = false;
+        }
+    }
+
+    private static Contact ApplyLinkIdentifier(Contact contact, string platform, string identifier) => new()
+    {
+        Id = contact.Id,
+        Name = contact.Name,
+        Email = contact.Email,
+        Phone = contact.Phone,
+        Stage = contact.Stage,
+        Tags = contact.Tags,
+        Identities = contact.Identities,
+        HasWhatsApp = contact.HasWhatsApp,
+        HasInstagram = contact.HasInstagram,
+        WhatsAppNumber = contact.WhatsAppNumber,
+        InstagramHandle = contact.InstagramHandle,
+        LastInteraction = contact.LastInteraction,
+        LastInteractionChannel = contact.LastInteractionChannel,
+        OrderCount = contact.OrderCount,
+        Orders = contact.Orders,
+        ChannelPlatform = platform,
+        ChannelIdentifier = identifier,
     };
 
     private static IconName IdentityIcon(string platform) => platform switch

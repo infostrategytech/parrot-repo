@@ -1,6 +1,3 @@
-/* The form inside the dialog. Two columns, as Aurora's ProductEditor lays
-   out its fields; the name and the identifier span both. */
-
 ::deep .contact-form__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
 
 .contact-form {
@@ -9,6 +6,8 @@
   gap: var(--spacing-lg);
   align-items: start;
   margin-top: var(--spacing-lg);
+  /* Allow SelectField popovers to overflow the dialog body */
+  overflow: visible;
 }
 
 .contact-form__full { grid-column: 1 / -1; }

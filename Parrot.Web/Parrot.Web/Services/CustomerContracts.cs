@@ -29,15 +29,22 @@ public sealed record CustomerDetailDto(
     List<CustomerIdentityDto> Identities,
     DateTime? LastSeenAt,
     string? LastSeenChannel,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? Phone,
+    string? ChannelPlatform,
+    string? ChannelIdentifier);
 
 public sealed record CreateCustomerDto(
     string Name,
     string? Email,
     string? Phone,
     string? Stage,
-    List<string>? Tags);
+    List<string>? Tags,
+    string? ChannelPlatform,
+    string? ChannelIdentifier);
 
 public sealed record UpdateStageDto(string Stage);
 
 public sealed record UpdateTagsDto(List<string> Tags);
+
+public sealed record UpdateChannelIdentifierDto(string? ChannelPlatform, string? ChannelIdentifier);

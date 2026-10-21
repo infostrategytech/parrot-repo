@@ -10,6 +10,7 @@ public class Contact
     public string Email { get; set; } = string.Empty;
     public string Phone { get; set; } = string.Empty;
     public string ChannelIdentifier { get; set; } = string.Empty;
+    public string? ChannelPlatform { get; set; }
     public bool HasWhatsApp { get; set; }
     public bool HasInstagram { get; set; }
     public string WhatsAppNumber { get; set; } = string.Empty;

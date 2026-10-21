@@ -18,12 +18,12 @@
         </Typography>
 
         <div class="import__template">
-            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="DownloadTemplateAsync">
                 <IconLeft><Icon Name="IconName.RiFileTextFill" /></IconLeft>
                 <ChildContent>Download template</ChildContent>
             </Button>
             <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="import__hint">
-                Template columns: Name, Phone, Email, Stage
+                Template columns: Name, Phone, Email
             </Typography>
         </div>
 
@@ -59,6 +59,11 @@
         if (Visible && !_wasVisible) _fileName = string.Empty;
         _wasVisible = Visible;
     }
+
+    private const string TemplateCsv = "data:text/csv;charset=utf-8,Name%2CPhone%2CEmail%0A";
+
+    private Task DownloadTemplateAsync() =>
+        Interop.DownloadAsync(TemplateCsv, "contacts-template.csv");
 
     private async Task PickFile()
     {

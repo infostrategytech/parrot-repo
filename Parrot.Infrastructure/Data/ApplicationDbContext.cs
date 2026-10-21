@@ -197,6 +197,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(c => c.Email).HasMaxLength(256);
             entity.Property(c => c.Stage).HasMaxLength(64).IsRequired().HasDefaultValue("Customer");
             entity.Property(c => c.LastSeenChannel).HasMaxLength(32);
+            entity.Property(c => c.Phone).HasMaxLength(32);
+            entity.Property(c => c.ChannelPlatform).HasMaxLength(32);
+            entity.Property(c => c.ChannelIdentifier).HasMaxLength(256);
             entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
 
             // Tags stored as a comma-separated text column, same pattern as Agent.Channels.

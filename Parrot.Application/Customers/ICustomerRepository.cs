@@ -37,4 +37,6 @@ public interface ICustomerRepository
     Task<Customer?> UpdateStageAsync(string ownerUserId, Guid id, string stage, CancellationToken ct);
 
     Task<Customer?> UpdateTagsAsync(string ownerUserId, Guid id, List<string> tags, CancellationToken ct);
+
+    Task<Customer?> UpdateChannelIdentifierAsync(string ownerUserId, Guid id, string? channelPlatform, string? channelIdentifier, CancellationToken ct);
 }
