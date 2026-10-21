@@ -1,0 +1,15 @@
+/* The count at the start, the page controls at the end; they stack on a narrow screen. */
+.ds-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  align-items: center;
+  justify-content: space-between;
+  color: var(--colors-text-muted);
+}
+
+.ds-pagination__controls {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+}

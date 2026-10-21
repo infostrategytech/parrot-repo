@@ -9,8 +9,6 @@
 }
 
 .customer-panel__header { display: flex; align-items: center; justify-content: space-between; min-height: var(--spacing-5xl); padding-inline: var(--spacing-xl); border-bottom: var(--ds-hairline) solid var(--colors-surface-border); }
-.customer-panel__header > div { display: grid; gap: var(--spacing-2xs); }
-.customer-panel__header ::deep p { color: var(--colors-text-muted); }
 .customer-panel__header ::deep .ds-button { flex: 0 0 auto; }
 
 .customer-panel__loading { display: grid; justify-items: center; gap: var(--spacing-md); padding: var(--spacing-2xl); }
@@ -19,10 +17,24 @@
 
 .customer-profile { display: grid; justify-items: center; gap: var(--spacing-xs); padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-lg); text-align: center; }
 .customer-profile > div { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; justify-content: center; color: var(--colors-text-muted); }
+.customer-profile__platform {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  margin-top: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  text-decoration: none;
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.customer-profile__platform:hover { color: var(--colors-text-primary); border-color: var(--colors-accent-brand-border); }
 
-.customer-panel__scroll { min-height: 0; overflow-y: auto; scrollbar-color: var(--colors-accent-neutral-border) transparent; }
+/* It still scrolls; the bar stays out of the way (designer, 20 October 2026). */
+.customer-panel__scroll { min-height: 0; overflow-y: auto; scrollbar-width: none; }
+.customer-panel__scroll::-webkit-scrollbar { display: none; }
 
-.customer-panel__scroll ::deep .customer-section { padding: var(--spacing-lg) var(--spacing-xl); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.customer-panel__scroll ::deep .customer-section { padding: var(--spacing-xl); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
 .customer-panel__scroll ::deep .customer-section > header { display: flex; align-items: center; justify-content: space-between; margin-bottom: var(--spacing-md); color: var(--colors-text-muted); }
 .customer-panel__scroll ::deep .customer-section > header > span { display: grid; place-items: center; min-width: var(--spacing-lg); height: var(--spacing-lg); color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); border-radius: var(--radius-radius-full); }
 
@@ -53,11 +65,40 @@
 .customer-latest-note > ::deep p { color: var(--colors-text-secondary); white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .customer-tasks { display: grid; gap: var(--spacing-xs); }
-.customer-tasks > a { display: grid; grid-template-columns: var(--spacing-3xl) minmax(0, 1fr) auto; gap: var(--spacing-sm); align-items: center; width: 100%; min-height: var(--spacing-5xl); padding: var(--spacing-sm); color: var(--colors-text-secondary); text-decoration: none; border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-lg); }
-.customer-tasks > a:hover { background: var(--colors-interaction-hover); border-color: var(--colors-accent-brand-border); }
+.customer-tasks > a { display: grid; grid-template-columns: var(--spacing-3xl) minmax(0, 1fr) auto; gap: var(--spacing-sm); align-items: center; width: 100%; min-height: var(--spacing-5xl); padding: var(--spacing-xs) var(--spacing-sm); color: var(--colors-text-secondary); text-decoration: none; border-radius: var(--radius-radius-md); }
+.customer-tasks > a:hover { background: var(--colors-interaction-hover); }
 .customer-tasks > a > span:first-child { display: grid; place-items: center; width: var(--spacing-3xl); height: var(--spacing-3xl); color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); border-radius: var(--radius-radius-md); }
 .customer-tasks > a > span:nth-child(2) { display: grid; gap: var(--spacing-2xs); min-width: 0; }
 .customer-task__arrow { display: grid; place-items: center; color: var(--colors-text-muted); }
+
+/* This customer's open tasks: room between the lines, the title in body weight, the kind beside its first line. */
+.customer-task-list {
+  /* Missing from the token set: an agent's look, inline with small type. */
+  --ds-customer-task-look: 18px;
+
+  display: grid;
+  gap: var(--spacing-sm);
+}
+.customer-task-list > a.customer-task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-md) var(--spacing-sm);
+  margin-inline: calc(var(--spacing-sm) * -1);
+  color: var(--colors-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-radius-lg);
+}
+.customer-task-list > a.customer-task:hover { background: var(--colors-interaction-hover); }
+.customer-task-list > a.customer-task > .customer-task__arrow { align-self: center; }
+.customer-task__words { display: grid; gap: var(--spacing-sm); min-width: 0; }
+.customer-task__words ::deep .customer-task__title { color: var(--colors-text-primary); }
+.customer-task__meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.customer-task__look { width: var(--ds-customer-task-look); height: var(--ds-customer-task-look); object-fit: cover; border-radius: var(--radius-radius-full); }
+.customer-task-list > ::deep .customer-empty { padding-block: var(--spacing-xs); }
+.customer-task-list > a.customer-tasks__more { display: block; padding: var(--spacing-xs) var(--spacing-none); color: var(--colors-text-link); text-decoration: none; }
+.customer-task-list ::deep .customer-tasks__add { justify-self: start; margin-top: var(--spacing-sm); }
 .customer-tasks ::deep strong { color: var(--colors-text-primary); }
 .customer-tasks ::deep small { color: var(--colors-text-muted); }
 .customer-empty { color: var(--colors-text-muted); }

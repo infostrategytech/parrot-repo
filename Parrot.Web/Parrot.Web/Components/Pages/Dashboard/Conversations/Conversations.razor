@@ -319,7 +319,7 @@
                     <ConversationTimeline @key="_selected.Id" Conversation="@_selected"
                                           AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" Busy="@_busy"
                                           OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" OnChanged="RefreshAsync"
-                                          OnCustomerDetails="OpenCustomerDetailsAsync" />
+                                          OnCustomerDetails="OpenCustomerDetailsAsync" FocusMessageId="@FocusMessage" />
                 </div>
 
                 @* A raw full-area button is intentional: it is the drawer's
@@ -343,6 +343,9 @@
 
 @code {
     [Parameter] public string? ConversationId { get; set; }
+
+    /// <summary>Opened at one line of the thread (?message=), brought into view and lit.</summary>
+    [SupplyParameterFromQuery(Name = "message")] public string? FocusMessage { get; set; }
 
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConversationFilters _filters = new();

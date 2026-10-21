@@ -23,6 +23,11 @@ const FOCUSABLE = [
 // called only for Escape, never for other keys, so typing in a dialog's
 // fields does not cost a server round trip per keystroke (on Blazor Server a
 // per-key handler redraws the dialog and can overwrite the field mid-typing).
+// The person's own time zone (an IANA id such as "Africa/Lagos"), so "today" is their today.
+export function timeZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; }
+}
+
 export function trapFocus(container, escapeTarget, escapeMethod) {
   // The dialog can be gone by the time this runs (its page was left, or the
   // session ended, between render and this call). Nothing to trap then; an
@@ -384,11 +389,88 @@ export function placeMenu(menu) {
   menu.dataset.placed = "";
 }
 
-export function scrollIntoView(element) {
+// ── Floating menus ──────────────────────────────────────────────────────────
+// A menu inside a dialog or a side panel was cut off by the panel's own
+// scrolling, and the dialog card's transform traps position: fixed as well
+// (designer, 21 October 2026: a popover must stay a popover, never push the
+// form). The browser's top layer (the popover attribute) draws the menu above
+// everything while it stays where it is in the document, so clicks, focus and
+// the dialog's focus trap behave as before. The menu sits against its trigger:
+// below it, or above when there is more room there; kept on screen; following
+// the trigger when the window resizes or the menu's content changes size.
+// Escape closes the menu, not the dialog under it.
+export function floatMenu(layer, anchor, menu, alignEnd, matchWidth) {
+  if (!layer || !anchor || !menu) return;
+  // A browser without the top layer still shows the menu, placed the same way.
+  if (typeof layer.showPopover !== "function") layer.removeAttribute("popover");
+  else if (!layer.matches(":popover-open")) {
+    try { layer.showPopover(); } catch { return; }
+  }
+  // A menu its stylesheet anchors to the right ("right: 0; left: auto") keeps
+  // that edge, as it did before it floated: read before any placing.
+  let end = !!alignEnd;
+  if (!end && typeof menu.computedStyleMap === "function") {
+    try { end = String(menu.computedStyleMap().get("left")) === "auto"; } catch { /* keep the start edge */ }
+  }
+  const gap = 4, margin = 8, least = 160;
+  let frame = 0;
+  // The trigger itself, when the anchor is a wrapper around it (an ActionMenu, a Popover's span).
+  const trigger = anchor.matches("[aria-haspopup]") ? anchor : anchor.querySelector("[aria-haspopup]") ?? anchor;
+  const place = () => {
+    frame = 0;
+    if (!layer.isConnected) { stop(); return; }
+    const a = trigger.getBoundingClientRect();
+    // As wide as the field at least (a select), never narrower than its own width.
+    if (matchWidth) menu.style.minWidth = `${Math.round(a.width)}px`;
+    menu.style.maxHeight = "";
+    const box = menu.getBoundingClientRect();
+    const below = window.innerHeight - a.bottom - gap - margin;
+    const above = a.top - gap - margin;
+    // Below the trigger when it fits, or when there is more room below than above.
+    const down = box.height <= below || below >= above;
+    const room = Math.max(down ? below : above, least);
+    if (box.height > room) menu.style.maxHeight = `${Math.round(room)}px`;
+    const height = Math.min(box.height, room);
+    const top = down ? a.bottom + gap : a.top - gap - height;
+    // From the trigger's start edge, or its end edge; switched when that side would run off the screen.
+    let left = end ? a.right - box.width : a.left;
+    if (!end && left + box.width > window.innerWidth - margin) left = a.right - box.width;
+    if (end && left < margin) left = a.left;
+    left = Math.max(margin, Math.min(left, window.innerWidth - margin - box.width));
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.left = `${Math.round(left)}px`;
+    menu.dataset.float = down ? "below" : "above";
+    menu.dataset.placed = "";
+  };
+  const later = () => { if (!frame) frame = requestAnimationFrame(place); };
+  // Escape closes the open menu first, wherever focus is (the trigger, the menu, a field of the form
+  // under it), and goes no further, so a dialog under the menu stays open.
+  const onKey = (event) => {
+    if (!layer.isConnected) { stop(); return; }
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    event.preventDefault();
+    layer.querySelector("[data-float-dismiss]")?.click();
+  };
+  const watch = typeof ResizeObserver === "function" ? new ResizeObserver(later) : null;
+  function stop() {
+    window.removeEventListener("resize", later);
+    window.removeEventListener("scroll", later, true);
+    document.removeEventListener("keydown", onKey, true);
+    watch?.disconnect();
+  }
+  place();
+  window.addEventListener("resize", later);
+  window.addEventListener("scroll", later, true);
+  document.addEventListener("keydown", onKey, true);
+  watch?.observe(menu);
+}
+
+export function scrollIntoView(element, block) {
   if (!element) return;
   // One frame later, so the panel has been laid out before we measure it.
   requestAnimationFrame(() => {
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
+    element.scrollIntoView({ behavior: "smooth", block: block || "start" });
   });
 }
 

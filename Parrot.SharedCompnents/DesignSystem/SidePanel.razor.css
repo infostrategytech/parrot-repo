@@ -76,7 +76,10 @@
   gap: var(--spacing-lg);
   overflow-y: auto;
   padding: var(--spacing-lg) var(--spacing-xl);
+  /* It still scrolls (wheel, trackpad, touch, keyboard); the bar itself stays out of the way (designer, 20 October 2026). */
+  scrollbar-width: none;
 }
+.ds-side-panel__body::-webkit-scrollbar { display: none; }
 
 .ds-side-panel__footer {
   display: flex;

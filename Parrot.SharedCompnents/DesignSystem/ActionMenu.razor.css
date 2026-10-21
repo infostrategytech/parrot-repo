@@ -24,9 +24,26 @@
   cursor: default;
 }
 
+/* The top layer: a transparent sheet over the screen (the browser's own popover styles undone). */
+.ds-action-menu__layer {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  overflow: visible;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+
+/* Placed by floatMenu; "right: 0" tells it to line up with the trigger's end edge. */
 .ds-action-menu__menu {
-  position: absolute;
-  top: calc(100% + var(--spacing-xs));
+  position: fixed;
+  top: 0;
   right: 0;
   z-index: calc(var(--ds-action-menu-layer) + 1);
   display: grid;
@@ -41,6 +58,4 @@
   animation: ds-action-menu-show var(--ds-action-menu-instant) var(--ds-motion-slow) forwards;
 }
 .ds-action-menu__menu[data-placed] { visibility: visible; animation: none; }
-/* No room below (the last rows of a list): it opens upward instead. */
-.ds-action-menu__menu[data-place="above"] { top: auto; bottom: calc(100% + var(--spacing-xs)); }
 @keyframes ds-action-menu-show { to { visibility: visible; } }

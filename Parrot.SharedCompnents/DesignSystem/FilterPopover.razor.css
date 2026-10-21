@@ -38,6 +38,9 @@
 }
 
 .filter-popover__trigger:hover { background: var(--colors-interaction-hover); }
+/* Saving a change: it waits, without looking switched off. */
+.filter-popover__trigger[aria-busy="true"] { cursor: progress; }
+.filter-popover__busy { display: grid; place-items: center; color: var(--colors-text-subtle); }
 .filter-popover__trigger[aria-expanded="true"] { border-color: var(--colors-brand-primary); }
 
 .filter-popover {
@@ -64,11 +67,30 @@
   cursor: default;
 }
 
+/* The top layer: a transparent sheet over the screen (the browser's own popover styles undone), with
+   the dismiss button under the menu and the menu placed by floatMenu. */
+.filter-popover__layer {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  overflow: visible;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+
 .filter-popover__menu {
-  position: absolute;
-  top: calc(100% + var(--spacing-xs));
+  position: fixed;
+  top: 0;
   left: 0;
   z-index: calc(var(--ds-popover-layer) + 1);
+  overflow-y: auto;
+  scrollbar-width: none;
   display: grid;
   gap: var(--spacing-2xs);
   min-width: var(--ds-popover-width);
@@ -79,6 +101,8 @@
   border-radius: var(--radius-radius-lg);
   box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
 }
+
+.filter-popover__menu::-webkit-scrollbar { display: none; }
 
 .filter-popover__menu > header {
   display: grid;
@@ -106,6 +130,22 @@
   width: var(--ds-popover-width);
   border-radius: var(--radius-radius-2xl);
   box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow), 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+}
+
+/* Quiet: a value changed in place. The words and a chevron, outlined only on hover or while open. */
+.filter-popover.is-quiet { justify-self: start; width: fit-content; max-width: 100%; }
+.filter-popover.is-quiet .filter-popover__trigger {
+  width: auto;
+  height: var(--spacing-3xl);
+  padding-inline: var(--spacing-sm);
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+}
+.filter-popover.is-quiet .filter-popover__trigger:hover,
+.filter-popover.is-quiet .filter-popover__trigger[aria-expanded="true"] {
+  background: var(--colors-surface-card);
+  border-color: var(--colors-surface-border);
 }
 
 .filter-popover.is-end-aligned .filter-popover__menu {

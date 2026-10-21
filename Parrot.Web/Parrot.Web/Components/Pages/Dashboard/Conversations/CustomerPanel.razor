@@ -8,10 +8,7 @@
    teammate act are shown; speculative CRM metrics stay out. *@
 <aside class="customer-panel" aria-label="Customer details">
     <header class="customer-panel__header">
-        <div>
-            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer details</Typography>
-            <Typography TextStyle="TextStyle.Small12Regular" As="p">Useful details for this conversation</Typography>
-        </div>
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer details</Typography>
         <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
                 aria-label="Close customer details" title="Close customer details" @onclick="OnClose">
             <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
@@ -27,12 +24,20 @@
             <span aria-hidden="true">·</span>
             <Typography TextStyle="TextStyle.Small12Regular" As="span">@(Conversation.Username is { Length: > 0 } ? "@" + Conversation.Username : Conversation.Sender)</Typography>
         </div>
+        @* Their own chat app, one tap away, under who they are rather than as a section of its own. *@
+        @if (Conversation.PlatformLink is { } link)
+        {
+            <a class="customer-profile__platform" href="@link.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"{link.ButtonLabel} (opens in a new tab)")">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@link.ButtonLabel</Typography>
+                <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
+            </a>
+        }
     </section>
 
     <div class="customer-panel__scroll">
-        <CustomerSection Title="Contact">
+        <CustomerSection Title="Details">
             <div class="customer-contact-list">
-                @* Each row copies its value; the whole row is intentionally the control. *@
+                @* Each contact row copies its value; the whole row is intentionally the control. *@
                 @if (Profile?.Email is { } email)
                 {
                     <RowButton aria-label="@($"Copy email {email}")" OnClick='() => CopyAsync("email", email)'>
@@ -56,22 +61,10 @@
                         <span><small>Location</small><strong>@Profile!.Location</strong></span>
                     </div>
                 }
-            </div>
-        </CustomerSection>
-
-        <CustomerSection Title="Conversation">
-            <div class="customer-contact-list">
                 <div>
                     <Icon Name="IconName.RiMessage2Fill" Size="IconSize.Sm" />
                     <span><small>Last message</small><strong>@DateTimeLabel(Conversation.UpdatedAt)</strong></span>
                 </div>
-                @if (FirstContact is { } first)
-                {
-                    <div>
-                        <Icon Name="IconName.RiCalendarCheckFill" Size="IconSize.Sm" />
-                        <span><small>@(Profile?.JoinedAt is null ? "First message" : "Customer since")</small><strong>@Date(first)</strong></span>
-                    </div>
-                }
                 @if (Conversation.ReplyWindowEndsAt is { } windowEnd)
                 {
                     <div>
@@ -79,23 +72,7 @@
                         <span><small>Reply window</small><strong>@ReplyWindowLabel.Describe(windowEnd, DateTime.UtcNow)</strong></span>
                     </div>
                 }
-                @if (LocalTime is { } local)
-                {
-                    <div>
-                        <Icon Name="IconName.RiGlobalFill" Size="IconSize.Sm" />
-                        <span><small>Local time</small><strong>@local</strong></span>
-                    </div>
-                }
             </div>
-            @if (Profile is { Tags.Count: > 0 })
-            {
-                <div class="customer-tags" aria-label="Tags">
-                    @foreach (var tag in Profile.Tags)
-                    {
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@tag</Typography>
-                    }
-                </div>
-            }
         </CustomerSection>
 
         <CustomerSection Title="Media & files" Count="@(_loaded && _next is null ? _items.Count : null)">
@@ -247,22 +224,6 @@
             }
         </CustomerSection>
 
-        @if (Conversation.PlatformLink is { } link)
-        {
-            <CustomerSection Title="Chat on their platform">
-                <div class="customer-tasks">
-                    <a href="@link.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"{link.ButtonLabel} (opens in a new tab)")">
-                        <span><ChannelGlyph Channel="@Conversation.Channel" Compact /></span>
-                        <span>
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@link.ButtonLabel</Typography>
-                            <Typography TextStyle="TextStyle.Small12Medium" As="small">@link.Hint(Conversation.CustomerName)</Typography>
-                        </span>
-                        <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
-                    </a>
-                </div>
-            </CustomerSection>
-        }
-
         @if (LatestInternalNote is { } note)
         {
             <CustomerSection Title="Latest internal note">
@@ -277,26 +238,9 @@
             </CustomerSection>
         }
 
-        @if (Profile is { RecentRequests.Count: > 0 })
-        {
-            <CustomerSection Title="Recent task requests" Count="@Profile.RecentRequests.Count">
-                <div class="customer-tasks">
-                    @foreach (var request in Profile.RecentRequests.Take(3))
-                    {
-                        <a href="@TaskUrl(request.Id)" aria-label="@($"Open task request {request.Id}")">
-                            <span><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span>
-                            <span>
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@request.Id</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="small">@Date(request.PlacedAt)</Typography>
-                            </span>
-                            <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" /></span>
-                        </a>
-                    }
-                </div>
-            </CustomerSection>
-        }
     </div>
 </aside>
+
 
 @code {
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
@@ -371,22 +315,6 @@
 
     public void Dispose() { _cts.Cancel(); _cts.Dispose(); }
 
-    // The customer's first message, when the whole thread is loaded (the earliest loaded one is not the first otherwise).
-    private DateTime? FirstContact => Profile?.JoinedAt
-        ?? (Conversation.HistoryLoaded && Conversation.NextBefore is null
-            ? Conversation.Messages.Where(m => m.Kind != MessageKind.Note).Select(m => (DateTime?)m.ReceivedAt).Min()
-            : null);
-
-    private string? LocalTime
-    {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(Profile?.TimeZone)) return null;
-            try { return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(Profile.TimeZone)).ToString("h:mm tt", CultureInfo.InvariantCulture); }
-            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { return null; }
-        }
-    }
-
     private static string DateTimeLabel(DateTime date) => date.ToLocalTime().ToString("d MMM yyyy, h:mm tt", CultureInfo.InvariantCulture);
 
     private string? _copied;
@@ -408,7 +336,6 @@
 
     private static string Date(DateTime date) => date.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture);
     private static string NoteDate(DateTime date) => date.ToLocalTime().ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture);
-    private static string TaskUrl(string id) => $"/dashboard/task-requests/{Uri.EscapeDataString(id)}";
 
     private static string ChannelLabel(string channel) => channel switch
     {

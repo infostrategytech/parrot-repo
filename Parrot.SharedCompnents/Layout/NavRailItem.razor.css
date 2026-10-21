@@ -54,6 +54,8 @@
   cursor: not-allowed;
 }
 
+.nav-item__glyph { display: grid; flex: none; place-items: center; }
+
 ::deep .nav-item__label {
   min-width: 0;
   overflow: hidden;

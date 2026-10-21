@@ -25,7 +25,6 @@
             <button type="button"
                     class="sidebar__brand-toggle"
                     aria-label="Expand sidebar"
-                    data-tooltip="Expand sidebar"
                     @onclick="Shell.Toggle">
                 <span class="sidebar__mark" aria-hidden="true"><CadenceMark Size="26" Tight /></span>
                 <span class="sidebar__brand-toggle-icon" aria-hidden="true">
@@ -65,7 +64,8 @@
         {
             <NavRailItem Entry="entry"
                          IsActive="@(Current?.Label == entry.Label)"
-                         Badge="@(entry.Label == "Inbox" ? InboxUnread : null)" />
+                         Badge="@(entry.Label == "Inbox" ? InboxUnread : null)"
+                         BadgeMeaning="unread messages" />
         }
 
         @* Knowledge, Help and Settings follow the pages in the same list and
@@ -139,8 +139,6 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender) await Interop.FollowRailTooltipsAsync(_rail);
-
         // Just opened: take the focus, so Esc and Tab work from the rail.
         if (_wasCollapsed && !Shell.Collapsed) await _rail.FocusAsync();
         _wasCollapsed = Shell.Collapsed;
