@@ -1,0 +1,121 @@
+/* A row of the Tasks table, and its column names (is-head). */
+.task-row {
+  /* Gaps in the token set: no border-width or compact-tile size, and the columns (with the assignee's,
+     for a team) are this table's own.
+     How long a task just added stays lit. */
+  --ds-tasks-hairline: 1px;
+  --ds-tasks-icon: 36px;
+  --ds-tasks-due: 120px;
+  --ds-tasks-status: 176px;
+  --ds-tasks-assignee: 168px;
+  --ds-tasks-columns: minmax(0, 2.6fr) minmax(0, 1fr) minmax(0, 1.2fr) var(--ds-tasks-due) var(--ds-tasks-status);
+  --ds-task-row-fresh: 2.4s;
+
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--ds-tasks-columns);
+  gap: var(--spacing-xl);
+  align-items: center;
+  padding: var(--spacing-lg) var(--spacing-md);
+  border-bottom: var(--ds-tasks-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+  transition: background var(--ds-motion-fast) ease;
+}
+.task-row.has-team { --ds-tasks-columns: minmax(0, 2.4fr) minmax(0, 0.9fr) minmax(0, 1.1fr) var(--ds-tasks-due) var(--ds-tasks-assignee) var(--ds-tasks-status); }
+.task-row:last-child { border-bottom-color: transparent; }
+.task-row:hover,
+.task-row.is-open { background: var(--colors-interaction-hover); }
+.task-row.is-head { padding-block: var(--spacing-md); color: var(--colors-text-muted); border-radius: var(--radius-radius-none, 0); }
+.task-row.is-head:hover { background: transparent; }
+.task-row.is-fresh { animation: task-row-fresh var(--ds-task-row-fresh) ease-out; }
+@keyframes task-row-fresh {
+  from { background: var(--colors-accent-brand-subtle); }
+  to { background: transparent; }
+}
+.task-row > *,
+.task-row__facts > * { min-width: 0; }
+.task-row__facts { display: contents; }
+.task-row ::deep p { margin: var(--spacing-none); }
+
+.task-row__task { display: flex; gap: var(--spacing-md); align-items: center; }
+.task-row__words { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+
+/* The title's button covers the row, so a click anywhere opens the task. */
+.task-row__words ::deep .task-row__title {
+  justify-content: start;
+  min-height: auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+  text-align: start;
+  background: transparent;
+}
+.task-row__words ::deep .task-row__title::after { position: absolute; inset: 0; content: ""; border-radius: var(--radius-radius-lg); }
+.task-row__words ::deep .task-row__title:focus-visible { outline: none; }
+.task-row__words ::deep .task-row__title:focus-visible::after { outline: var(--ds-tasks-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-tasks-hairline) * -1); }
+.task-row.is-closed .task-row__words ::deep .task-row__title { color: var(--colors-text-secondary); }
+
+.task-row__words ::deep .task-row__meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); color: var(--colors-text-muted); }
+.task-row__words ::deep .task-row__urgent { color: var(--colors-text-destructive); }
+
+.task-row__customer { display: grid; gap: var(--spacing-2xs); }
+.task-row__customer ::deep .task-row__name { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.task-row__customer ::deep .task-row__channel { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.task-row ::deep .task-row__muted { color: var(--colors-text-muted); }
+
+.task-row__due ::deep .task-row__late { color: var(--colors-text-destructive); }
+.task-row__due ::deep .task-row__today { color: var(--colors-feedback-warning-text); }
+.task-row__due ::deep .task-row__date { color: var(--colors-text-secondary); }
+
+/* The menus: above the title's cover, so they can be used on their own; an open one above the rows after it. */
+.task-row__status,
+.task-row__assignee { position: relative; z-index: 1; }
+.task-row.is-menu-open .task-row__status,
+.task-row.is-menu-open .task-row__assignee { z-index: 2; }
+/* Their words line up with their column's name. The status is the table's last column: it sits against the
+   right edge, its heading too, so the table ends where its content does (designer, 21 October 2026). */
+.task-row__assignee ::deep .filter-popover.is-quiet { margin-left: calc(var(--spacing-sm) * -1); }
+.task-row__status { display: flex; justify-content: flex-end; }
+.task-row__status ::deep .filter-popover.is-quiet { margin-right: calc(var(--spacing-sm) * -1); }
+.task-row.is-head > ::deep :last-child { justify-self: end; }
+/* Who raised it, under the title: only where its column folds away. */
+.task-row__words ::deep .task-row__meta-by { display: none; }
+
+/* A smaller laptop (and a tablet, whose rows stack): six columns are too many to scan, so "Raised by" folds under the title (with the
+   agent's look still beside its name) and the other columns keep their room (designer, 21 October 2026). */
+@media (max-width: 1280px) {
+  .task-row { --ds-tasks-columns: minmax(0, 2.6fr) minmax(0, 1.2fr) var(--ds-tasks-due) var(--ds-tasks-status); }
+  .task-row.has-team { --ds-tasks-columns: minmax(0, 2.4fr) minmax(0, 1.1fr) var(--ds-tasks-due) var(--ds-tasks-assignee) var(--ds-tasks-status); }
+  .task-row__by,
+  .task-row.is-head .task-row__facts > ::deep :first-child { display: none; }
+  .task-row__words ::deep .task-row__meta-by { display: inline-flex; }
+}
+
+/* A tablet or phone: the task and its status on top, then who raised it, the customer and the due date in one line. */
+@media (max-width: 1024px) {
+  .task-row.is-head { display: none; }
+  .task-row {
+    /* The status column, narrower on a tablet (no column-width token). */
+    --ds-tasks-status: 176px;
+
+    grid-template-columns: minmax(0, 1fr) var(--ds-tasks-status);
+    gap: var(--spacing-sm) var(--spacing-md);
+  }
+  .task-row__facts {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: var(--spacing-xs) var(--spacing-lg);
+    align-items: center;
+    padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md));
+  }
+  .task-row__customer { display: inline-flex; gap: var(--spacing-sm); align-items: center; }
+  .task-row__assignee { grid-column: 1 / -1; grid-row: 3; padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md)); }
+  .task-row__assignee ::deep .filter-popover.is-quiet { margin-left: var(--spacing-none); }
+}
+
+@media (max-width: 760px) {
+  .task-row { grid-template-columns: minmax(0, 1fr); }
+  .task-row__status { grid-row: 4; justify-content: flex-start; padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md)); }
+  .task-row__status ::deep .filter-popover.is-quiet { margin-right: var(--spacing-none); }
+}

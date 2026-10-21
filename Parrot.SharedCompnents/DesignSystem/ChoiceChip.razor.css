@@ -1,0 +1,22 @@
+.ds-choice-chip {
+  /* Missing from the token set: no border-width scale. */
+  --ds-choice-chip-hairline: 1px;
+
+  display: inline-flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-height: var(--spacing-3xl);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-card);
+  border: var(--ds-choice-chip-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast) ease, background var(--ds-motion-fast) ease;
+}
+.ds-choice-chip:has(.ds-choice-chip__leading) { padding-left: var(--spacing-xs); }
+.ds-choice-chip:hover:not(:disabled) { border-color: var(--colors-accent-brand-border); }
+.ds-choice-chip.is-on { color: var(--colors-text-primary); background: var(--colors-accent-brand-subtle); border-color: var(--colors-brand-primary); }
+.ds-choice-chip:disabled { color: var(--colors-interaction-disabled-foreground); cursor: not-allowed; }
+.ds-choice-chip:focus-visible { outline: var(--ds-choice-chip-hairline) solid var(--colors-brand-primary); outline-offset: var(--ds-choice-chip-hairline); }
+.ds-choice-chip__leading { display: grid; place-items: center; }

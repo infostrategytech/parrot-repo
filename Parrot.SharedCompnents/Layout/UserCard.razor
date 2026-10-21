@@ -12,7 +12,7 @@
 <div class="user-card-wrap">
     <button type="button"
             class="user-card"
-            data-tooltip="@Name"
+            aria-label="@($"Account: {Name}")"
             aria-haspopup="@(ChildContent is null ? null : "menu")"
             aria-expanded="@(ChildContent is null ? null : _open.ToString().ToLowerInvariant())"
             @onclick="Toggle">

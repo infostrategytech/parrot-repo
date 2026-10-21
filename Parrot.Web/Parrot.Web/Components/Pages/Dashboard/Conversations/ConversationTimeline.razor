@@ -197,6 +197,10 @@
     [Parameter] public EventCallback OnChanged { get; set; }
     [Parameter] public EventCallback OnCustomerDetails { get; set; }
 
+    /// <summary>A line to open at, instead of the newest: brought into view with what came before it above, and lit, once.</summary>
+    [Parameter] public string? FocusMessageId { get; set; }
+    private string? _focused;
+
     private readonly CancellationTokenSource _lifetime = new();
     private ElementReference _scrollElement;
     private ElementReference _composerElement;
@@ -286,6 +290,14 @@
         {
             try { _reserve = await Interop.ReserveUnderAsync(_scrollElement, _composerElement, "--ds-timeline-composer-reserve"); }
             catch (JSException) { _reserve = NoReserve.Instance; }
+        }
+        // Opened at one line (where a task was raised): there, not the newest.
+        if (FocusMessageId is { } focus && focus != _focused && _items.TryGetValue(focus, out var target) && VisibleMessages.Any(m => m.Id == focus))
+        {
+            _focused = focus;
+            _scrollPending = false;
+            _ = target.ShowAsync("center");
+            return;
         }
         if (!_scrollPending) return;
         _scrollPending = false;

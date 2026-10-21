@@ -1,0 +1,128 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using System.Globalization
+
+@* A date, and optionally a time (designer, 20 October 2026: a due date needs a calendar, and some work
+   is due at a set hour). Quick choices first, as most work is due today, tomorrow or next week; then the
+   month; then the time. It knows nothing of time zones: the caller says what today is, and joins the
+   date and time in the business's own zone. *@
+<div class="ds-calendar">
+    <div class="ds-calendar__quick" role="group" aria-label="Quick choices">
+        <button type="button" class="ds-calendar__chip @(Date == Today ? "is-on" : null)" @onclick="() => PickAsync(Today)">
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">Today</Typography>
+        </button>
+        <button type="button" class="ds-calendar__chip @(Date == Today.AddDays(1) ? "is-on" : null)" @onclick="() => PickAsync(Today.AddDays(1))">
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">Tomorrow</Typography>
+        </button>
+        <button type="button" class="ds-calendar__chip @(Date == Today.AddDays(7) ? "is-on" : null)" @onclick="() => PickAsync(Today.AddDays(7))">
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">Next week</Typography>
+        </button>
+        @if (AllowNone)
+        {
+            <button type="button" class="ds-calendar__chip @(Date is null ? "is-on" : null)" @onclick="() => PickAsync(null)">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">No date</Typography>
+            </button>
+        }
+    </div>
+
+    <div class="ds-calendar__head">
+        <button type="button" class="ds-calendar__step is-back" aria-label="Previous month" @onclick="() => _month = _month.AddMonths(-1)">
+            <Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" />
+        </button>
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@_month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</Typography>
+        <button type="button" class="ds-calendar__step" aria-label="Next month" @onclick="() => _month = _month.AddMonths(1)">
+            <Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" />
+        </button>
+    </div>
+
+    <div class="ds-calendar__grid" role="grid" aria-label="@_month.ToString("MMMM yyyy", CultureInfo.InvariantCulture)">
+        @foreach (var day in WeekDays)
+        {
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-calendar__weekday" aria-hidden="true">@day</Typography>
+        }
+        @foreach (var day in Days)
+        {
+            var current = day;
+            var inMonth = current.Month == _month.Month;
+            <button type="button"
+                    class="@DayClass(current, inMonth)"
+                    aria-label="@current.ToString("dddd d MMMM yyyy", CultureInfo.InvariantCulture)"
+                    aria-pressed="@(Date == current ? "true" : "false")"
+                    @onclick="() => PickAsync(current)">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@current.Day</Typography>
+            </button>
+        }
+    </div>
+
+    @if (AllowTime && Date is not null)
+    {
+        <div class="ds-calendar__time">
+            <Input FloatingLabel="Time (optional)" Type="time" Value="@(Time?.ToString("HH:mm", CultureInfo.InvariantCulture))"
+                   ValueChanged="SetTimeAsync" />
+            @if (Time is not null)
+            {
+                <button type="button" class="ds-calendar__chip" @onclick="() => SetTimeAsync(null)">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">No time</Typography>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>The chosen day; null for none.</summary>
+    [Parameter] public DateOnly? Date { get; set; }
+    [Parameter] public EventCallback<DateOnly?> DateChanged { get; set; }
+
+    /// <summary>The chosen time on that day; null for "any time that day".</summary>
+    [Parameter] public TimeOnly? Time { get; set; }
+    [Parameter] public EventCallback<TimeOnly?> TimeChanged { get; set; }
+
+    /// <summary>Today, in the business's own zone: the caller knows it, the component doesn't.</summary>
+    [Parameter, EditorRequired] public DateOnly Today { get; set; }
+
+    [Parameter] public bool AllowTime { get; set; } = true;
+    [Parameter] public bool AllowNone { get; set; } = true;
+
+    private static readonly string[] WeekDays = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"];
+    private DateOnly _month;
+    private bool _started;
+
+    protected override void OnParametersSet()
+    {
+        // The month of the chosen day, or this month; it then moves only when asked.
+        if (_started) return;
+        var start = Date ?? Today;
+        _month = new DateOnly(start.Year, start.Month, 1);
+        _started = true;
+    }
+
+    // Six rows from the Monday on or before the first, so every month has the same height.
+    private IEnumerable<DateOnly> Days
+    {
+        get
+        {
+            var offset = ((int)_month.DayOfWeek + 6) % 7;
+            var first = _month.AddDays(-offset);
+            return Enumerable.Range(0, 42).Select(first.AddDays);
+        }
+    }
+
+    private string DayClass(DateOnly day, bool inMonth) => string.Join(" ", new[]
+    {
+        "ds-calendar__day",
+        inMonth ? null : "is-outside",
+        day == Today ? "is-today" : null,
+        day < Today ? "is-past" : null,
+        Date == day ? "is-on" : null,
+    }.Where(c => c is not null));
+
+    private async Task PickAsync(DateOnly? day)
+    {
+        if (day is { } chosen) _month = new DateOnly(chosen.Year, chosen.Month, 1);
+        await DateChanged.InvokeAsync(day);
+        if (day is null && Time is not null) await TimeChanged.InvokeAsync(null);
+    }
+
+    private Task SetTimeAsync(string? value) =>
+        TimeChanged.InvokeAsync(TimeOnly.TryParse(value, CultureInfo.InvariantCulture, out var time) ? time : null);
+}

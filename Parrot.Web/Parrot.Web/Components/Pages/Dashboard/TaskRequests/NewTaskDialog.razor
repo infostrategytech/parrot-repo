@@ -1,0 +1,519 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using System.Globalization
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@inject ITaskStore Store
+@inject Parrot.Web.Services.UserClock Clock
+@inject ToastService Toasts
+
+@* Adding a task is one sentence (designer, 20 October 2026: busy owners, not technical; it must still
+   cover every case). The type is guessed from the words and changed with one tap; everything else is
+   optional and only opens when asked for: the customer (or someone the Inbox doesn't know) and where,
+   a due date and time, items and charges, who's on it, urgent. Editing a task uses this same form, so a
+   person can enter everything an agent can, and correct what either got wrong.
+   The type, the customer and Products & Services open as popovers that float over the form, placed
+   wherever there is room (designer, 21 October 2026: a popover never pushes the form, and is never cut
+   off); customers and items are found by searching. *@
+<Dialog Open="Open"
+        Title="@(Editing is null ? "New task" : "Edit task")"
+        Subtitle="@Subtitle"
+        Dismissible
+        Size="DialogSize.Wide"
+        ConfirmLabel="@(Editing is null ? "Add task" : "Save changes")"
+        BusyLabel="Saving"
+        Busy="_saving"
+        OnCancel="CloseAsync"
+        OnConfirm="SaveAsync">
+    <GlyphContent><Icon Name="@(Editing is null ? IconName.RiClipboardFill : IconName.RiPencilFill)" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <div class="new-task">
+            <div class="new-task__what">
+                <TextArea Id="new-task-what" Value="@_text" ValueChanged="OnText" Rows="2" AutoGrow MaxLength="600"
+                          AriaLabel="What needs doing?" Placeholder="What needs doing? For example: Send Kemi a quote for 80 guests" />
+                @if (_tried && !HasText)
+                {
+                    <InlineError Message="Say what needs doing." />
+                }
+                <div class="new-task__type">
+                    <Popover Title="Type" Subtitle="What the task is about" Role="menu"
+                             Open="@(_openMenu == KindMenu)" OpenChanged="@(open => _openMenu = open ? KindMenu : null)">
+                        <Anchor>
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="new-task__type-toggle" aria-haspopup="menu"
+                                    aria-expanded="@(_openMenu == KindMenu ? "true" : "false")" @onclick="() => Toggle(KindMenu)">
+                                <IconLeft><TaskKindMark Kind="_kind" Small /></IconLeft>
+                                <ChildContent>@TaskWords.Label(_kind)</ChildContent>
+                                <IconRight><Icon Name="IconName.RiArrowDownSLine" /></IconRight>
+                            </Button>
+                        </Anchor>
+                        <ChildContent>
+                            @foreach (var kind in TaskWords.Kinds)
+                            {
+                                var current = kind;
+                                <PopoverOption Label="@TaskWords.Label(current)" Description="@TaskWords.Describe(current)"
+                                               Active="@(_kind == current)" OnSelect="() => PickKind(current)">
+                                    <Leading><TaskKindMark Kind="current" Small /></Leading>
+                                </PopoverOption>
+                            }
+                        </ChildContent>
+                    </Popover>
+                    @if (!_kindPicked && HasText)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="new-task__muted">Guessed from your words</Typography>
+                    }
+                </div>
+            </div>
+
+                        @if (Duplicate is { } open)
+            {
+                <InlineError Tone="InlineErrorTone.Info" Message="@($"{open.Customer!.Name} already has an open task: “{open.Title}”. You can still add this one.")" />
+            }
+
+            @if (_showCustomer)
+            {
+                <section class="new-task__add">
+                    <header>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(Customer is null ? "Customer" : "Where")</Typography>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove" @onclick="RemoveCustomer">
+                            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                        </Button>
+                    </header>
+                    @if (Customer is null)
+                    {
+                        <SelectField FloatingLabel="Who it's for" Value="@CustomerValue" IconLeft="CustomerMark" MenuRole="dialog"
+                                     Open="@(_openMenu == CustomerMenu)" OpenChanged="@(open => _openMenu = open ? CustomerMenu : null)">
+                            <SearchPick TItem="TaskCustomer" Plain Items="_customers" Label="c => c.Name" Detail="c => TaskWords.Channel(c.Channel)"
+                                        Placeholder="Search your customers" AriaLabel="Search your customers" OnPick="PickCustomer"
+                                        EmptyText="No conversations yet.">
+                                <Leading Context="person"><PetalAvatar Seed="@(person.ConversationId ?? person.Name)" Initials="@Initials.From(person.Name)" Size="AvatarSize.Sm" /></Leading>
+                                <Footer>
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="PickWalkIn">
+                                        <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
+                                        <ChildContent>Someone not in your Inbox</ChildContent>
+                                    </Button>
+                                </Footer>
+                            </SearchPick>
+                        </SelectField>
+                        @if (_walkIn)
+                        {
+                            <div class="new-task__pair">
+                                <Input FloatingLabel="Their name" Value="@_walkName" ValueChanged="value => _walkName = value ?? string.Empty" maxlength="80"
+                                       Error="@(_tried && _walkName.Trim().Length == 0)" HelperText="@(_tried && _walkName.Trim().Length == 0 ? "Add their name." : null)" />
+                                <Input FloatingLabel="Phone (optional)" Type="tel" Value="@_walkPhone" ValueChanged="value => _walkPhone = value ?? string.Empty" maxlength="20" />
+                            </div>
+                        }
+                    }
+                    <Input FloatingLabel="Address (optional)" Value="@_address" ValueChanged="value => _address = value ?? string.Empty" maxlength="160"
+                           HelperText="Where to deliver, or where it happens." />
+                </section>
+            }
+
+            @if (_showItems)
+            {
+                <section class="new-task__add">
+                    <header>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Items</Typography>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove the items" @onclick="RemoveItems">
+                            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                        </Button>
+                    </header>
+                    @foreach (var row in _items.Where(r => !r.Charge))
+                    {
+                        var current = row;
+                        <div class="new-task__item">
+                            <Input FloatingLabel="Item" Value="@current.Name" ValueChanged="value => current.Name = value ?? string.Empty" maxlength="80" />
+                            <Input FloatingLabel="Qty" Value="@current.Quantity" ValueChanged="value => current.Quantity = value ?? string.Empty" inputmode="numeric" maxlength="4" />
+                            <Input FloatingLabel="Price (optional)" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" inputmode="numeric" maxlength="12"
+                                   Error="@(current.Price.Length > 0 && Money(current.Price) is null)" />
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {current.Name}")" @onclick="() => _items.Remove(current)">
+                                <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                            </Button>
+                        </div>
+                    }
+                    @* Charges: amounts on top of the items, such as a delivery fee or a commission (designer). *@
+                    @foreach (var row in _items.Where(r => r.Charge))
+                    {
+                        var current = row;
+                        <div class="new-task__item is-charge">
+                            <Input FloatingLabel="Charge, such as Delivery fee" Value="@current.Name" ValueChanged="value => current.Name = value ?? string.Empty" maxlength="60" />
+                            <Input FloatingLabel="Amount" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" inputmode="numeric" maxlength="12"
+                                   Error="@(current.Price.Length > 0 && Money(current.Price) is null)" />
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {current.Name}")" @onclick="() => _items.Remove(current)">
+                                <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                            </Button>
+                        </div>
+                    }
+                    <div class="new-task__item-actions">
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _items.Add(new ItemRow())">
+                            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                            <ChildContent>Add item</ChildContent>
+                        </Button>
+                        @if (_catalog.Count > 0)
+                        {
+                            <Popover Title="Products & Services" Subtitle="Add one with its price" Wide
+                                     Open="@(_openMenu == ItemMenu)" OpenChanged="@(open => _openMenu = open ? ItemMenu : null)">
+                                <Anchor>
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-haspopup="dialog"
+                                            aria-expanded="@(_openMenu == ItemMenu ? "true" : "false")" @onclick="() => Toggle(ItemMenu)">
+                                        <IconLeft><Icon Name="IconName.RiShoppingBag3Fill" /></IconLeft>
+                                        <ChildContent>From Products &amp; Services</ChildContent>
+                                    </Button>
+                                </Anchor>
+                                <ChildContent>
+                                    <SearchPick TItem="TaskItem" Plain Items="_catalog" Label="e => e.Name" Detail="e => e.Price is { } price ? TaskWords.Naira(price) : (string?)null"
+                                                Placeholder="Search Products & Services" AriaLabel="Search Products & Services" OnPick="AddFromCatalog"
+                                                EmptyText="Nothing in Products & Services yet." />
+                                </ChildContent>
+                            </Popover>
+                        }
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _items.Add(new ItemRow { Charge = true })">
+                            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                            <ChildContent>Add a charge</ChildContent>
+                        </Button>
+                    </div>
+                    @if (LinesTotal is { } total)
+                    {
+                        <div class="new-task__total">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(_kind == TaskKind.Quote ? "Estimate" : "Total")</Typography>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@TaskWords.Naira(total)</Typography>
+                        </div>
+                    }
+                    else
+                    {
+                        <Input FloatingLabel="Amount (optional)" PrefixText="₦" Value="@_amount" ValueChanged="value => _amount = value ?? string.Empty" inputmode="numeric" maxlength="12"
+                               HelperText="@(_amount.Length > 0 && Money(_amount) is null ? "Use numbers only, such as 17500." : "When there are no prices: the whole amount, if you know it.")"
+                               Error="@(_amount.Length > 0 && Money(_amount) is null)" />
+                    }
+                </section>
+            }
+
+            @if (_showAssign)
+            {
+                <section class="new-task__add">
+                    <header>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Assign to</Typography>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Remove" @onclick="() => { _showAssign = false; _assignee = null; }">
+                            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                        </Button>
+                    </header>
+                    <div class="new-task__people" role="group" aria-label="Assign to">
+                        @foreach (var member in _team.OrderBy(m => m.Id == Store.Me.Id ? 0 : 1))
+                        {
+                            var current = member;
+                            <ChoiceChip Selected="@(_assignee?.Id == current.Id)" OnClick="() => _assignee = current">
+                                <Leading><PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /></Leading>
+                                <ChildContent>@(current.Id == Store.Me.Id ? $"{current.Name} (you)" : current.Name)</ChildContent>
+                            </ChoiceChip>
+                        }
+                    </div>
+                </section>
+            }
+
+            @* What isn't added yet, one tap each; urgent is a tick. *@
+            <div class="new-task__adds">
+                @if (!_showCustomer)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _showCustomer = true">
+                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                        <ChildContent>@(Customer is null ? "Customer" : "Address")</ChildContent>
+                    </Button>
+                }
+                @* The due date opens its calendar straight from the button, floating over the form; once set, the
+                   button says when, and "No date" in the calendar takes it off. *@
+                @if (Editing is null)
+                {
+                    <Popover Title="Due" Subtitle="When it needs to be done" Class="new-task__due"
+                             Open="@(_openMenu == DueMenu)" OpenChanged="@(open => _openMenu = open ? DueMenu : null)">
+                        <Anchor>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-haspopup="dialog"
+                                    aria-expanded="@(_openMenu == DueMenu ? "true" : "false")" @onclick="() => Toggle(DueMenu)">
+                                <IconLeft><Icon Name="@(_dueDay is null ? IconName.RiAddFill : IconName.RiCalendarCheckFill)" /></IconLeft>
+                                <ChildContent>@(DueValue is { } due ? $"Due {due}" : "Due date")</ChildContent>
+                            </Button>
+                        </Anchor>
+                        <ChildContent>
+                            <CalendarPicker Today="Clock.Today" Date="_dueDay" DateChanged="PickDueDay" Time="_dueTime" TimeChanged="time => _dueTime = time" />
+                        </ChildContent>
+                    </Popover>
+                }
+                @if (!_showItems)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="ShowItems">
+                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                        <ChildContent>Items</ChildContent>
+                    </Button>
+                }
+                @if (Editing is null && _team.Count > 1 && !_showAssign)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _showAssign = true">
+                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                        <ChildContent>Assign</ChildContent>
+                    </Button>
+                }
+                @if (Editing is null)
+                {
+                    <Checkbox State="@(_urgent ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                              StateChanged="state => _urgent = state == CheckboxState.Checked" Label="Urgent" Class="new-task__urgent" />
+                }
+            </div>
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+
+    /// <summary>Opened from a conversation: the task is for this customer.</summary>
+    [Parameter] public TaskCustomer? Customer { get; set; }
+
+
+    /// <summary>Editing this task, rather than adding one.</summary>
+    [Parameter] public TaskRequest? Editing { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<TaskRequest> OnCreated { get; set; }
+
+    private sealed class ItemRow
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Quantity { get; set; } = "1";
+        public string Price { get; set; } = string.Empty;
+        public string? Note { get; set; }
+        public bool Charge { get; set; }
+    }
+
+    private bool _wasOpen;
+    private string _text = string.Empty;
+    private TaskKind _kind = TaskKind.Other;
+    private const string KindMenu = "kind", CustomerMenu = "customer", ItemMenu = "item", DueMenu = "due";
+    private string? _openMenu;
+    private bool _kindPicked;
+    private bool _showCustomer, _showItems, _showAssign;
+    private TaskCustomer? _customer;
+    private bool _walkIn;
+    private string _walkName = string.Empty, _walkPhone = string.Empty, _address = string.Empty, _amount = string.Empty;
+    private List<ItemRow> _items = [];
+    private DateOnly? _dueDay;
+    private TimeOnly? _dueTime;
+    private TaskPerson? _assignee;
+    private bool _urgent, _tried, _saving;
+    private IReadOnlyList<TaskCustomer> _customers = [];
+    private IReadOnlyList<TaskItem> _catalog = [];
+    private IReadOnlyList<TaskPerson> _team = [];
+    private IReadOnlyList<TaskRequest> _open = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Each time it opens, it starts from the task being edited, or empty.
+        if (Open && !_wasOpen)
+        {
+            Reset();
+            _team = await Store.TeamAsync();
+            _open = (await Store.ListAsync()).Where(t => t.IsOpen).ToList();
+            if (Customer is null) _customers = await Store.CustomersAsync();
+            try { _catalog = await Store.ItemsAsync(); }
+            catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException) { _catalog = []; }
+            if (Editing is { } task) Fill(task);
+        }
+        _wasOpen = Open;
+    }
+
+    private void Reset()
+    {
+        _text = _walkName = _walkPhone = _address = _amount = string.Empty;
+        _kind = TaskKind.Other;
+        _kindPicked = _showCustomer = _showItems = _showAssign = _walkIn = _urgent = _tried = _saving = false;
+        _openMenu = null;
+        _customer = null;
+        _items = [];
+        _dueDay = null;
+        _dueTime = null;
+        _assignee = null;
+    }
+
+    // Editing: everything a person can enter, as it is now; what has a value is already open.
+    private void Fill(TaskRequest task)
+    {
+        _text = task.Summary is { Length: > 0 } summary ? $"{task.Title}\n{summary}" : task.Title;
+        _kind = task.Kind;
+        _kindPicked = true;
+        if (task.Customer is { } customer)
+        {
+            _showCustomer = true;
+            if (customer.ConversationId is null) { _walkIn = true; _walkName = customer.Name; _walkPhone = customer.Contact ?? string.Empty; }
+            else _customer = customer;
+        }
+        if (task.Address is { Length: > 0 } address) { _showCustomer = true; _address = address; }
+        if (task.Lines.Count > 0 || task.Total is not null)
+        {
+            _showItems = true;
+            _items = task.Lines.Select(line => new ItemRow
+            {
+                Name = line.Name,
+                Quantity = line.Quantity.ToString(CultureInfo.InvariantCulture),
+                Price = line.Price?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty,
+                Note = line.Note,
+                Charge = line.Charge,
+            }).ToList();
+            if (task.Lines.All(line => line.Price is null) && task.Total is { } total) _amount = total.ToString("0.##", CultureInfo.InvariantCulture);
+        }
+    }
+
+    private string? Subtitle => Editing is not null
+        ? "Change anything that's wrong. The status, who's on it and the due date change on the task itself."
+        : Customer is { } fixedFor ? $"For {fixedFor.Name}, from their conversation." : "Say what needs doing. Add anything else only if it helps.";
+
+    private string? CustomerValue => _customer is { } chosen ? $"{chosen.Name} · {TaskWords.Channel(chosen.Channel)}"
+        : _walkIn ? "Someone not in your Inbox" : null;
+
+    // "Today", "Tomorrow, 5pm", "Friday": said as the list and the panel say it.
+    private string? DueValue => _dueDay is { } day
+        ? TaskWords.Due(TaskWords.DueMoment(day, _dueTime, Clock.Zone), _dueTime is not null, DateTime.UtcNow, Clock.Zone).Text
+        : null;
+
+    // "No date" takes the time off with the day.
+    private void PickDueDay(DateOnly? day)
+    {
+        _dueDay = day;
+        if (day is null) _dueTime = null;
+    }
+
+    private RenderFragment? CustomerMark => _customer is { } chosen
+        ? @<PetalAvatar Seed="@(chosen.ConversationId ?? chosen.Name)" Initials="@Initials.From(chosen.Name)" Size="AvatarSize.Sm" />
+        : _walkIn ? @<Icon Name="IconName.RiUserAddFill" /> : null;
+
+    private bool HasText => _text.Trim().Length > 0;
+
+    // Another open task for the same customer: said, never blocked.
+    private TaskRequest? Duplicate
+    {
+        get
+        {
+            var id = (Customer ?? _customer)?.ConversationId;
+            return id is null ? null : _open.FirstOrDefault(t => t.Customer?.ConversationId == id && t.Id != Editing?.Id);
+        }
+    }
+
+    private void OnText(string? value)
+    {
+        _text = value ?? string.Empty;
+        // The type follows the words until the person picks one.
+        if (!_kindPicked) _kind = TaskWords.Guess(_text);
+    }
+
+    // One popover open at a time.
+    private void Toggle(string menu) => _openMenu = _openMenu == menu ? null : menu;
+
+    private void PickKind(TaskKind kind)
+    {
+        _kind = kind;
+        _kindPicked = true;
+        _openMenu = null;
+    }
+
+    private void PickCustomer(TaskCustomer customer)
+    {
+        _customer = customer;
+        _walkIn = false;
+        _openMenu = null;
+    }
+
+    private void PickWalkIn()
+    {
+        _customer = null;
+        _walkIn = true;
+        _openMenu = null;
+    }
+
+    private void RemoveCustomer()
+    {
+        _showCustomer = false;
+        _customer = null;
+        _walkIn = false;
+        _walkName = _walkPhone = _address = string.Empty;
+    }
+
+    private void ShowItems()
+    {
+        _showItems = true;
+        if (_items.Count == 0) _items.Add(new ItemRow());
+    }
+
+    private void RemoveItems()
+    {
+        _showItems = false;
+        _openMenu = null;
+        _items = [];
+        _amount = string.Empty;
+    }
+
+    private void AddFromCatalog(TaskItem entry)
+    {
+        _openMenu = null;
+        var empty = _items.FirstOrDefault(row => !row.Charge && row.Name.Trim().Length == 0);
+        var row = empty ?? new ItemRow();
+        row.Name = entry.Name;
+        row.Price = entry.Price?.ToString("0.##", CultureInfo.InvariantCulture) ?? string.Empty;
+        if (empty is null) _items.Add(row);
+    }
+
+    /// <summary>An amount typed loosely: "17,500", "₦17500" and "17500" are the same.</summary>
+    private static decimal? Money(string text) =>
+        decimal.TryParse(text.Replace(",", "").Replace("₦", "").Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var value) && value >= 0 ? value : null;
+
+    // Items first, then charges, each as typed; an empty row is left out.
+    private IReadOnlyList<TaskLine> Lines => _items
+        .OrderBy(row => row.Charge)
+        .Where(row => row.Name.Trim().Length > 0)
+        .Select(row => new TaskLine(row.Name.Trim(), !row.Charge && int.TryParse(row.Quantity, out var quantity) && quantity > 0 ? quantity : 1, Money(row.Price), row.Note, row.Charge))
+        .ToList();
+
+    private decimal? LinesTotal => Lines.Any(line => line.Price is not null) ? Lines.Sum(line => (line.Price ?? 0) * line.Quantity) : null;
+
+    private TaskCustomer? ChosenCustomer => Customer ?? (_walkIn
+        ? (_walkName.Trim().Length > 0 ? new TaskCustomer(_walkName.Trim(), "", _walkPhone.Trim().Length > 0 ? _walkPhone.Trim() : null) : null)
+        : _customer);
+
+    private bool Valid => HasText
+        && (!_walkIn || _walkName.Trim().Length > 0)
+        && _items.All(row => row.Price.Length == 0 || Money(row.Price) is not null)
+        && (_amount.Length == 0 || Money(_amount) is not null);
+
+    private Task CloseAsync() => OnClose.InvokeAsync();
+
+    private async Task SaveAsync()
+    {
+        _tried = true;
+        if (!Valid) return;
+        var (title, rest) = TaskWords.Split(_text);
+        var draft = new TaskDraft(
+            _kind, title, rest, ChosenCustomer, _address,
+            Lines, LinesTotal ?? Money(_amount),
+            _urgent,
+            _dueDay is { } day ? TaskWords.DueMoment(day, _dueTime, Clock.Zone) : null,
+            _dueDay is not null && _dueTime is not null,
+            _assignee);
+        _saving = true;
+        try
+        {
+            if (Editing is { } task)
+            {
+                await Store.EditAsync(task.Id, draft);
+                Toasts.Show("Changes saved.");
+                await OnCreated.InvokeAsync(task);
+            }
+            else
+            {
+                var created = await Store.CreateAsync(draft);
+                Toasts.Show("Task added.");
+                await OnCreated.InvokeAsync(created);
+            }
+        }
+        catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException)
+        {
+            Toasts.ShowError(Editing is null ? "Couldn't add the task. Try again." : "Couldn't save the changes. Try again.");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

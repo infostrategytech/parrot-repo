@@ -1,0 +1,23 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One choice among a few, all shown at once (a task's type, who's on it): a rounded chip, tinted when
+   chosen. For a handful of visible options where a menu would hide them, or could be cut off by a form
+   that scrolls. *@
+<button type="button" class="ds-choice-chip @(Selected ? "is-on" : null) @Class" aria-pressed="@(Selected ? "true" : "false")"
+        disabled="@Disabled" @onclick="OnClick">
+    @if (Leading is not null)
+    {
+        <span class="ds-choice-chip__leading" aria-hidden="true">@Leading</span>
+    }
+    <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChildContent</Typography>
+</button>
+
+@code {
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnClick { get; set; }
+    /// <summary>A small mark before the words: an avatar, a tinted icon.</summary>
+    [Parameter] public RenderFragment? Leading { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

@@ -1,0 +1,70 @@
+/* A calendar: quick choices, the month as a grid, then the time. */
+.ds-calendar {
+  /* Missing from the token set: no day-cell, border-width or calendar-width size. In a wide form it
+     keeps a calendar's own width rather than spreading its days apart. */
+  --ds-calendar-day: 34px;
+  --ds-calendar-hairline: 1px;
+  --ds-calendar-width: 320px;
+
+  display: grid;
+  width: min(var(--ds-calendar-width), 100%);
+  gap: var(--spacing-md);
+  color: var(--colors-text-primary);
+}
+
+.ds-calendar__quick { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+.ds-calendar__chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--spacing-3xl);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-card);
+  border: var(--ds-calendar-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+.ds-calendar__chip:hover { border-color: var(--colors-accent-brand-border); }
+.ds-calendar__chip.is-on { color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); border-color: var(--colors-brand-primary); }
+
+.ds-calendar__head { display: flex; align-items: center; justify-content: space-between; }
+.ds-calendar__step {
+  display: grid;
+  place-items: center;
+  width: var(--ds-calendar-day);
+  height: var(--ds-calendar-day);
+  color: var(--colors-text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+.ds-calendar__step:hover { background: var(--colors-interaction-hover); }
+/* The design system has a right chevron only: the back step mirrors it. */
+.ds-calendar__step.is-back { transform: scaleX(-1); }
+
+.ds-calendar__grid { display: grid; grid-template-columns: repeat(7, var(--ds-calendar-day)); gap: var(--spacing-2xs); justify-content: space-between; }
+.ds-calendar__grid ::deep .ds-calendar__weekday { display: grid; place-items: center; height: var(--spacing-xl); color: var(--colors-text-muted); }
+.ds-calendar__day {
+  display: grid;
+  place-items: center;
+  width: var(--ds-calendar-day);
+  height: var(--ds-calendar-day);
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+  background: transparent;
+  border: var(--ds-calendar-hairline) solid transparent;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+.ds-calendar__day:hover { background: var(--colors-interaction-hover); }
+.ds-calendar__day.is-outside,
+.ds-calendar__day.is-past { color: var(--colors-text-subtle); }
+.ds-calendar__day.is-today { border-color: var(--colors-accent-brand-border); }
+.ds-calendar__day.is-on { color: var(--colors-accent-brand-on-solid); background: var(--colors-brand-primary); }
+.ds-calendar__day:focus-visible,
+.ds-calendar__chip:focus-visible,
+.ds-calendar__step:focus-visible { outline: var(--ds-calendar-hairline) solid var(--colors-brand-primary); outline-offset: var(--ds-calendar-hairline); }
+
+.ds-calendar__time { display: flex; gap: var(--spacing-sm); align-items: center; }
+.ds-calendar__time > ::deep :first-child { flex: 1; }
