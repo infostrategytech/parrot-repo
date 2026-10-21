@@ -22,7 +22,7 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
         if (message.Platform == MessagingPlatform.Instagram)
         {
             int instagramUpdated = await db.InstagramConnections
-                .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
+                .Where(c => c.Id == message.ConnectionId && c.WorkspaceId == message.OwnerUserId
                     && c.DisabledAt == null && c.WebhookVerifiedAt != null && c.AccountId == message.ChannelId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UpdatedAt, now), cancellationToken);
             if (instagramUpdated > 0) return;
@@ -31,10 +31,10 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
             // consumer; any other mismatch is a real fault and is retried.
             var account = await db.InstagramConnections.AsNoTracking()
                 .Where(c => c.Id == message.ConnectionId)
-                .Select(c => new { c.OwnerUserId, c.AccountId, c.DisabledAt })
+                .Select(c => new { c.WorkspaceId, c.AccountId, c.DisabledAt })
                 .SingleOrDefaultAsync(cancellationToken);
             if (account is not null && account.DisabledAt.HasValue
-                && account.OwnerUserId == message.OwnerUserId && account.AccountId == message.ChannelId)
+                && account.WorkspaceId == message.OwnerUserId && account.AccountId == message.ChannelId)
                 return;
             throw new InvalidOperationException("Instagram message was stored, but its account connection did not match PostgreSQL.");
         }
@@ -42,7 +42,7 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
         if (message.Platform == MessagingPlatform.Facebook)
         {
             int facebookUpdated = await db.FacebookConnections
-                .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
+                .Where(c => c.Id == message.ConnectionId && c.WorkspaceId == message.OwnerUserId
                     && c.DisabledAt == null && c.WebhookVerifiedAt != null && c.PageId == message.ChannelId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UpdatedAt, now), cancellationToken);
             if (facebookUpdated > 0) return;
@@ -51,10 +51,10 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
             // consumer; any other mismatch is a real fault and is retried, then dead-lettered.
             var page = await db.FacebookConnections.AsNoTracking()
                 .Where(c => c.Id == message.ConnectionId)
-                .Select(c => new { c.OwnerUserId, c.PageId, c.DisabledAt })
+                .Select(c => new { c.WorkspaceId, c.PageId, c.DisabledAt })
                 .SingleOrDefaultAsync(cancellationToken);
             if (page is not null && page.DisabledAt.HasValue
-                && page.OwnerUserId == message.OwnerUserId && page.PageId == message.ChannelId)
+                && page.WorkspaceId == message.OwnerUserId && page.PageId == message.ChannelId)
                 return;
             throw new InvalidOperationException("Facebook message was stored, but its Page connection did not match PostgreSQL.");
         }
@@ -62,7 +62,7 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
         if (message.Platform == MessagingPlatform.TikTok)
         {
             int tikTokUpdated = await db.TikTokConnections
-                .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
+                .Where(c => c.Id == message.ConnectionId && c.WorkspaceId == message.OwnerUserId
                     && c.DisabledAt == null && c.TikTokOpenId == message.ChannelId)
                 .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.UpdatedAt, now), cancellationToken);
             if (tikTokUpdated == 0)
@@ -71,7 +71,7 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
         }
 
         int updated = await db.WhatsAppConnections
-            .Where(c => c.Id == message.ConnectionId && c.OwnerUserId == message.OwnerUserId
+            .Where(c => c.Id == message.ConnectionId && c.WorkspaceId == message.OwnerUserId
                 && c.DisabledAt == null && c.WebhookVerifiedAt != null
                 && c.WhatsAppBusinessAccountId == message.ExternalAccountId && c.PhoneNumberId == message.ChannelId
                 && c.FirstMessageReceivedAt == null)
@@ -86,13 +86,13 @@ public sealed class ConnectionMessageReceipt : IConnectionMessageReceipt
             .Where(c => c.Id == message.ConnectionId)
             .Select(c => new
             {
-                c.OwnerUserId, c.DisabledAt, c.WebhookVerifiedAt, c.FirstMessageReceivedAt,
+                c.WorkspaceId, c.DisabledAt, c.WebhookVerifiedAt, c.FirstMessageReceivedAt,
                 c.WhatsAppBusinessAccountId, c.PhoneNumberId,
             })
             .SingleOrDefaultAsync(cancellationToken);
         if (connection is null)
             throw new InvalidOperationException("Message was stored in MongoDB, but its WhatsApp connection was not found in PostgreSQL. Check that the API and message worker use the same ConnectionStrings__DefaultConnection.");
-        if (connection.OwnerUserId != message.OwnerUserId
+        if (connection.WorkspaceId != message.OwnerUserId
             || connection.WhatsAppBusinessAccountId != message.ExternalAccountId
             || connection.PhoneNumberId != message.ChannelId)
             throw new InvalidOperationException("Message was stored in MongoDB, but its owner or Meta account IDs do not match the PostgreSQL connection. Receipt was not recorded.");

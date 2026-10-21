@@ -188,7 +188,7 @@ public class WhatsAppWebhookService : IWhatsAppWebhookService
             connection.Id,
             payload.Entry.Count);
 
-        await ProcessEventAsync(payload, rawBody, connection.Id, connection.OwnerUserId, cancellationToken);
+        await ProcessEventAsync(payload, rawBody, connection.Id, connection.WorkspaceId, cancellationToken);
         return true;
     }
 

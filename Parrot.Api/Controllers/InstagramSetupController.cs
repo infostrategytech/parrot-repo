@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -15,7 +15,7 @@ namespace Parrot.Api.Rest.Controllers;
 [Monitor(Area = "instagram.setup")]
 public sealed class InstagramSetupController(IInstagramConnectionService connections) : ControllerBase
 {
-    private string? Owner => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+    private string? Owner => User.WorkspaceId();
 
     // GET /api/instagram/setup - the callback URL and verify token, creating the connection if needed.
     [HttpGet]

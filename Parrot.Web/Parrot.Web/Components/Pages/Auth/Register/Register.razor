@@ -247,7 +247,7 @@
         if (Busy) return;
         _facebookBusy = true;
 
-        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        var apiBaseUrl = (Configuration["ApiSettings:PublicBaseUrl"] ?? Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
         Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/facebook", forceLoad: true);
     }
 
@@ -256,7 +256,7 @@
         if (Busy) return;
         _googleBusy = true;
 
-        var apiBaseUrl = (Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
+        var apiBaseUrl = (Configuration["ApiSettings:PublicBaseUrl"] ?? Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
         Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);
     }
 

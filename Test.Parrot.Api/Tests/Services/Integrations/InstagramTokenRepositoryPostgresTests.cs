@@ -38,9 +38,11 @@ public class InstagramTokenRepositoryPostgresTests : IAsyncLifetime
         await using ApplicationDbContext db = new(_options!);
         ApplicationUser user = new() { UserName = $"{name}@example.com", Email = $"{name}@example.com" };
         db.Users.Add(user);
+        // A tenant's first workspace takes the user's id, as sign-in makes it.
+        db.Workspaces.Add(new Workspace { Id = user.Id, OwnerId = user.Id });
         InstagramConnection account = new()
         {
-            OwnerUserId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = $"1784140000000{Random.Shared.Next(1000, 9999)}",
+            WorkspaceId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = $"1784140000000{Random.Shared.Next(1000, 9999)}",
             Username = name, WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = token,
             AccessTokenRenewedAt = renewedAt, AccessTokenExpiresAt = renewedAt.AddDays(60),
             AccessTokenRejectedAt = rejectedAt, DisabledAt = disabledAt,
@@ -92,7 +94,7 @@ public class InstagramTokenRepositoryPostgresTests : IAsyncLifetime
         InstagramConnectionRepository repository = new(db);
         Assert.True(await repository.SaveRenewedTokenAsync(account.Id, "enc:token", "enc:renewed", now, now.AddDays(60)));
         await repository.MarkTokenRejectedAsync(account.Id, "enc:renewed", now);
-        await repository.SaveAccountAsync(account.Id, account.OwnerUserId, account.AccountId!, "renewed", "enc:pasted", now.AddDays(60));
+        await repository.SaveAccountAsync(account.Id, account.WorkspaceId, account.AccountId!, "renewed", "enc:pasted", now.AddDays(60));
 
         InstagramConnection stored = await db.InstagramConnections.AsNoTracking().SingleAsync(c => c.Id == account.Id);
         Assert.Equal("enc:pasted", stored.AccessTokenEncrypted);

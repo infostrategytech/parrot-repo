@@ -40,7 +40,7 @@ public class TikTokWebhookTests
 
         _connection = new TikTokConnection
         {
-            Id = _connectionId, OwnerUserId = "owner-1", AppId = "7123456789",
+            Id = _connectionId, WorkspaceId = "owner-1", AppId = "7123456789",
             AppSecretEncrypted = _protector.Protect(Secret), TikTokOpenId = Business, DisplayName = "Parrot Test",
         };
         _connections.Setup(c => c.GetActiveByIdentifierAsync("reference", It.IsAny<CancellationToken>()))

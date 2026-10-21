@@ -147,7 +147,7 @@ public sealed class FacebookWebhookService : IFacebookWebhookService
             return false;
         }
 
-        FacebookPageRegistration registration = new FacebookPageRegistration(connection.Id, connection.OwnerUserId, connection.PageId!);
+        FacebookPageRegistration registration = new FacebookPageRegistration(connection.Id, connection.WorkspaceId, connection.PageId!);
 
         _logger.LogInformation(
             "Facebook webhook accepted. ConnectionId={ConnectionId} Entries={EntryCount}",

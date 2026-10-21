@@ -24,7 +24,7 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
 
         IQueryable<Customer> query = db.Customers
             .Include(c => c.Identities)
-            .Where(c => c.OwnerUserId == ownerUserId);
+            .Where(c => c.WorkspaceId == ownerUserId);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -58,7 +58,7 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
         return await db.Customers
             .Include(c => c.Identities)
-            .FirstOrDefaultAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, ct);
+            .FirstOrDefaultAsync(c => c.Id == id && c.WorkspaceId == ownerUserId, ct);
     }
 
     public async Task<Customer> CreateAsync(Customer customer, CancellationToken ct)
@@ -95,7 +95,7 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         // New sender: create customer + identity in one transaction.
         Customer customer = new()
         {
-            OwnerUserId = ownerUserId,
+            WorkspaceId = ownerUserId,
             Name = name,
             Stage = "Customer",
             LastSeenAt = seenAt,
@@ -166,7 +166,7 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
         Customer? customer = await db.Customers
             .Include(c => c.Identities)
-            .FirstOrDefaultAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, ct);
+            .FirstOrDefaultAsync(c => c.Id == id && c.WorkspaceId == ownerUserId, ct);
         if (customer is null) return null;
         customer.Stage = stage;
         customer.UpdatedAt = DateTime.UtcNow;
@@ -180,7 +180,7 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
         Customer? customer = await db.Customers
             .Include(c => c.Identities)
-            .FirstOrDefaultAsync(c => c.Id == id && c.OwnerUserId == ownerUserId, ct);
+            .FirstOrDefaultAsync(c => c.Id == id && c.WorkspaceId == ownerUserId, ct);
         if (customer is null) return null;
         customer.Tags = tags;
         customer.UpdatedAt = DateTime.UtcNow;

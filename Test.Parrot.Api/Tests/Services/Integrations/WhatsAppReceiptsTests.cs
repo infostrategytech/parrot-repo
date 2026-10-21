@@ -27,7 +27,7 @@ public class WhatsAppReceiptsTests
 
     private readonly WhatsAppConnection _connection = new()
     {
-        OwnerUserId = "owner-1", Name = "Shop", VerifyTokenEncrypted = "x", WhatsAppBusinessAccountId = "waba-1",
+        WorkspaceId = "owner-1", Name = "Shop", VerifyTokenEncrypted = "x", WhatsAppBusinessAccountId = "waba-1",
         PhoneNumberId = "phone-1", WebhookVerifiedAt = DateTime.UtcNow,
     };
     private readonly Mock<IDeliveryReceipts> _receipts = new();

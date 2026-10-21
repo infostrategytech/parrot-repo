@@ -30,15 +30,15 @@ public class ChannelReadReceiptsTests
 
     private readonly WhatsAppConnection _whatsAppConnection = new()
     {
-        OwnerUserId = Owner, Name = "Shop", VerifyTokenEncrypted = "x", PhoneNumberId = "phone-1", AccessTokenEncrypted = "enc-wa",
+        WorkspaceId = Owner, Name = "Shop", VerifyTokenEncrypted = "x", PhoneNumberId = "phone-1", AccessTokenEncrypted = "enc-wa",
     };
     private readonly FacebookConnection _page = new()
     {
-        OwnerUserId = Owner, VerifyTokenEncrypted = "x", PageId = "page-1", AccessTokenEncrypted = "enc-fb",
+        WorkspaceId = Owner, VerifyTokenEncrypted = "x", PageId = "page-1", AccessTokenEncrypted = "enc-fb",
     };
     private readonly InstagramConnection _account = new()
     {
-        OwnerUserId = Owner, VerifyTokenEncrypted = "x", AccountId = "ig-1", AccessTokenEncrypted = "enc-ig",
+        WorkspaceId = Owner, VerifyTokenEncrypted = "x", AccountId = "ig-1", AccessTokenEncrypted = "enc-ig",
     };
 
     public ChannelReadReceiptsTests()

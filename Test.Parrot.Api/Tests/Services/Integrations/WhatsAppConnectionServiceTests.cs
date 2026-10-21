@@ -191,7 +191,7 @@ public class WhatsAppConnectionServiceTests
         WhatsAppConnectionSetupResponse result = await CreateService().CreateAsync("owner", new() { Name = " Support " });
 
         Assert.NotNull(saved);
-        Assert.Equal("owner", saved.OwnerUserId);
+        Assert.Equal("owner", saved.WorkspaceId);
         Assert.Equal("Support", saved.Name);
         Assert.Matches("^[a-f0-9]{64}$", saved.WebhookIdentifier);
         Assert.Matches("^[a-f0-9]{64}$", result.VerifyToken);
@@ -486,7 +486,7 @@ public class WhatsAppConnectionServiceTests
 
     private WhatsAppConnection Connection() => new()
     {
-        OwnerUserId = "owner",
+        WorkspaceId = "owner",
         Name = "Support",
         VerifyTokenEncrypted = _protector.Protect("correct-token"),
     };

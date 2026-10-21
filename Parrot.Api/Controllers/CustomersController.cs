@@ -1,6 +1,6 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Parrot.Api.Security;
 using Parrot.Application.Customers;
 using Parrot.Domain.Exceptions;
 
@@ -12,7 +12,8 @@ namespace Parrot.Api.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 public sealed class CustomersController(CustomerService customers) : ControllerBase
 {
-    private string Owner => User.FindFirstValue(ClaimTypes.NameIdentifier)
+    // Customers belong to the workspace the session works in.
+    private string Owner => User.WorkspaceId()
         ?? throw new UnauthorizedException("Sign in to continue.");
 
     [HttpGet]

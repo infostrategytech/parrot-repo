@@ -11,16 +11,20 @@ using Parrot.Application.Email;
 using Parrot.Application.FeatureFlags;
 using Parrot.Application.Models;
 using Parrot.Application.Utils;
+using Parrot.Domain.Entities;
 
 namespace Test.Parrot.Api.Tests.Services.Auth;
 
 // The catalog service trusts these two claims for tenant isolation and authorisation.
 public class CatalogClaimsTests
 {
+    // Each workspace has its own catalog, so the catalog tenant is the workspace
+    // the session works in — not the user, who may own several.
     [Fact]
-    public void Issued_tokens_carry_tenant_id_and_catalog_scopes()
+    public void Issued_tokens_carry_the_workspace_as_tenant_id_and_catalog_scopes()
     {
-        ApplicationUser user = new ApplicationUser { Id = Guid.NewGuid().ToString(), Email = "owner@example.com", UserName = "owner@example.com", BusinessName = "Acme" };
+        ApplicationUser user = new ApplicationUser { Id = Guid.NewGuid().ToString(), Email = "owner@example.com", UserName = "owner@example.com" };
+        Workspace workspace = new Workspace { Id = Guid.NewGuid().ToString(), OwnerId = user.Id, Name = "Acme" };
         IEnumerable<Claim>? captured = null;
         Mock<IJwtHelper> jwt = new Mock<IJwtHelper>();
         jwt.Setup(j => j.GetDefaultExpiration()).Returns(DateTime.UtcNow.AddHours(1));
@@ -30,11 +34,16 @@ public class CatalogClaimsTests
 
         object service = CreateService(jwt.Object);
         MethodInfo build = service.GetType().GetMethod("BuildAuthResponse", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        AuthResponse response = (AuthResponse)build.Invoke(service, [user])!;
+        AuthResponse response = (AuthResponse)build.Invoke(service, [user, workspace])!;
 
         Assert.Equal("token", response.Token);
         Assert.NotNull(captured);
-        Assert.Contains(captured!, c => c.Type == "tenant_id" && c.Value == user.Id);
+        Assert.Contains(captured!, c => c.Type == "tenant_id" && c.Value == workspace.Id);
+        Assert.Contains(captured!, c => c.Type == "workspace_id" && c.Value == workspace.Id);
+        Assert.Contains(captured!, c => c.Type == "workspace_name" && c.Value == "Acme");
+        Assert.Contains(captured!, c => c.Type == "sub" && c.Value == user.Id);
+        Assert.Equal(workspace.Id, response.WorkspaceId);
+        Assert.Equal("Acme", response.BusinessName);
         Claim scope = Assert.Single(captured!, c => c.Type == "scope");
         string[] scopes = scope.Value.Split(' ');
         Assert.Contains("catalog:read", scopes);

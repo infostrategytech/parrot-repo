@@ -104,7 +104,7 @@ public sealed class AiOperationsService(
         Dictionary<string, AgentActivityRecord> turns = LatestPerTurn(related.Where(r => r.Type == AgentActivityTypes.TurnCompleted))
             .Where(t => t.TurnId is not null)
             .ToDictionary(t => t.TurnId!, StringComparer.Ordinal);
-        IReadOnlyList<Agent> owned = await agents.GetByUserIdAsync(ownerUserId);
+        IReadOnlyList<Agent> owned = await agents.GetByWorkspaceAsync(ownerUserId);
         Dictionary<string, string> names = owned.ToDictionary(a => a.Id.ToString(), a => a.Name, StringComparer.OrdinalIgnoreCase);
         string fallbackName = owned.Count == 1 ? owned[0].Name : "Your agent";
 

@@ -7,7 +7,8 @@ public class WhatsAppConnection
 {
     public Guid Id { get; set; } = Guid.NewGuid();
 
-    public required string OwnerUserId { get; set; }
+    // The workspace the connection belongs to.
+    public required string WorkspaceId { get; set; }
 
     public required string Name { get; set; }
 

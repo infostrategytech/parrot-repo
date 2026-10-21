@@ -8,6 +8,8 @@ namespace Parrot.Infrastructure.Data;
 
 public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 {
+    public DbSet<Workspace> Workspaces => Set<Workspace>();
+
     public DbSet<Agent> Agents => Set<Agent>();
 
     public DbSet<WhatsAppConnection> WhatsAppConnections => Set<WhatsAppConnection>();
@@ -51,6 +53,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(u => u.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
         });
 
+        // The id is text like an Identity user id, which a tenant's first
+        // workspace reuses, and like the owner columns that point at it.
+        builder.Entity<Workspace>(entity =>
+        {
+            entity.HasKey(w => w.Id);
+            entity.Property(w => w.OwnerId).IsRequired();
+            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(w => w.OwnerId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(w => w.Name).HasMaxLength(256);
+            entity.Property(w => w.LogoUrl).HasMaxLength(2048);
+            entity.Property(w => w.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(w => w.OwnerId);
+        });
+
         builder.Entity<FeatureFlag>(entity =>
         {
             entity.HasKey(f => f.Key);
@@ -65,9 +81,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(a => a.Name).HasMaxLength(256).IsRequired();
             entity.Property(a => a.Description).HasMaxLength(2000).IsRequired();
             entity.Property(a => a.MascotUrl).HasMaxLength(2048).IsRequired();
-            entity.Property(a => a.UserId).IsRequired();
+            entity.Property(a => a.WorkspaceId).IsRequired();
             entity.Property(a => a.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.HasIndex(a => a.UserId);
+            entity.HasIndex(a => a.WorkspaceId);
 
             // The channel keys as one comma-separated text column: a handful
             // of short words per agent, read whole and matched in memory. The
@@ -89,11 +105,13 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(a => a.Version).HasDefaultValue(1);
         });
 
+        // A connection belongs to a workspace. A tenant's first workspace has
+        // the user's id, so rows from before workspaces still point right.
         builder.Entity<WhatsAppConnection>(entity =>
         {
             entity.HasKey(c => c.Id);
-            entity.Property(c => c.OwnerUserId).IsRequired();
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+            entity.Property(c => c.WorkspaceId).IsRequired();
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.Property(c => c.Name).HasMaxLength(128).IsRequired();
             entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
@@ -105,7 +123,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Ignore(c => c.SetupStatus);
             entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
-            entity.HasIndex(c => c.OwnerUserId);
+            entity.HasIndex(c => c.WorkspaceId);
             entity.HasIndex(c => c.PhoneNumberId).IsUnique()
                 .HasFilter("\"PhoneNumberId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
         });
@@ -113,8 +131,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<FacebookConnection>(entity =>
         {
             entity.HasKey(c => c.Id);
-            entity.Property(c => c.OwnerUserId).IsRequired();
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+            entity.Property(c => c.WorkspaceId).IsRequired();
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
             entity.Property(c => c.VerifyTokenEncrypted).IsRequired();
@@ -123,7 +141,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
-            entity.HasIndex(c => c.OwnerUserId).IsUnique()
+            entity.HasIndex(c => c.WorkspaceId).IsUnique()
                 .HasFilter("\"DisabledAt\" IS NULL");
             entity.HasIndex(c => c.PageId).IsUnique()
                 .HasFilter("\"PageId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
@@ -132,8 +150,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<TikTokConnection>(entity =>
         {
             entity.HasKey(c => c.Id);
-            entity.Property(c => c.OwnerUserId).IsRequired();
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+            entity.Property(c => c.WorkspaceId).IsRequired();
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
             entity.Property(c => c.AppId).HasMaxLength(64).IsRequired();
@@ -143,7 +161,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(c => c.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
-            entity.HasIndex(c => c.OwnerUserId).IsUnique()
+            entity.HasIndex(c => c.WorkspaceId).IsUnique()
                 .HasFilter("\"DisabledAt\" IS NULL");
             entity.HasIndex(c => c.TikTokOpenId).IsUnique()
                 .HasFilter("\"TikTokOpenId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
@@ -152,8 +170,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<InstagramConnection>(entity =>
         {
             entity.HasKey(c => c.Id);
-            entity.Property(c => c.OwnerUserId).IsRequired();
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+            entity.Property(c => c.WorkspaceId).IsRequired();
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.Property(c => c.WebhookIdentifier).HasMaxLength(64).IsRequired();
             entity.Property(c => c.VerifyTokenEncrypted).IsRequired();
@@ -163,7 +181,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(c => c.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.HasIndex(c => c.WebhookIdentifier).IsUnique();
             // One active Instagram connection per user, and one per Instagram account across Parrot.
-            entity.HasIndex(c => c.OwnerUserId).IsUnique()
+            entity.HasIndex(c => c.WorkspaceId).IsUnique()
                 .HasFilter("\"DisabledAt\" IS NULL");
             entity.HasIndex(c => c.AccountId).IsUnique()
                 .HasFilter("\"AccountId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
@@ -172,8 +190,8 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         builder.Entity<Customer>(entity =>
         {
             entity.HasKey(c => c.Id);
-            entity.Property(c => c.OwnerUserId).IsRequired();
-            entity.HasOne<ApplicationUser>().WithMany().HasForeignKey(c => c.OwnerUserId)
+            entity.Property(c => c.WorkspaceId).IsRequired();
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(c => c.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
             entity.Property(c => c.Name).HasMaxLength(256).IsRequired();
             entity.Property(c => c.Email).HasMaxLength(256);
@@ -195,7 +213,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
                 .IsRequired()
                 .HasDefaultValueSql("''");
 
-            entity.HasIndex(c => c.OwnerUserId);
+            entity.HasIndex(c => c.WorkspaceId);
             entity.HasMany(c => c.Identities).WithOne(i => i.Customer).HasForeignKey(i => i.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
         });

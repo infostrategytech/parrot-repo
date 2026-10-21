@@ -78,7 +78,7 @@ public class InstagramPipelineTests : IAsyncLifetime
 
     private static InstagramConnection Connection(DateTime? disabledAt = null) => new()
     {
-        Id = ConnectionId, OwnerUserId = Owner, VerifyTokenEncrypted = "enc:verify", AccountId = AccountId,
+        Id = ConnectionId, WorkspaceId = Owner, VerifyTokenEncrypted = "enc:verify", AccountId = AccountId,
         Username = "omaskitchen", WebhookVerifiedAt = DateTime.UtcNow, AccessTokenEncrypted = "enc:IGAAtoken",
         AppSecretEncrypted = $"enc:{Secret}", DisabledAt = disabledAt,
     };

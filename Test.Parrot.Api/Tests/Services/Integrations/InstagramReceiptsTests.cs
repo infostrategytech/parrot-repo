@@ -28,7 +28,7 @@ public class InstagramReceiptsTests
         Mock<IInstagramConnectionRepository> connections = new();
         connections.Setup(c => c.GetActiveByIdentifierAsync("ref", It.IsAny<CancellationToken>())).ReturnsAsync(new InstagramConnection
         {
-            Id = _connectionId, OwnerUserId = "owner-1", VerifyTokenEncrypted = "enc", AccountId = AccountId, WebhookVerifiedAt = DateTime.UtcNow,
+            Id = _connectionId, WorkspaceId = "owner-1", VerifyTokenEncrypted = "enc", AccountId = AccountId, WebhookVerifiedAt = DateTime.UtcNow,
         });
         InstagramWebhookService service = new(
             Options.Create(new InstagramSettings()),

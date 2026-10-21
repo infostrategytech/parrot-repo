@@ -5,6 +5,7 @@ using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Domain.Enums;
 using Parrot.Infrastructure.MessageBus;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Realtime;
 
@@ -26,7 +27,7 @@ public static class DevelopmentRealtimeEndpoints
         app.MapPost("/api/dev/realtime/persisted", async (
             StubRequest? request, ClaimsPrincipal user, IMessageBus bus, IOptions<KafkaSettings> kafka, CancellationToken ct) =>
         {
-            string owner = user.FindFirstValue(ClaimTypes.NameIdentifier) ?? user.FindFirstValue("sub")!;
+            string owner = user.WorkspaceId()!;
             string conversationKey = request?.ConversationKey ?? "whatsapp:2348012345678:2349011112222";
             DateTime now = DateTime.UtcNow;
 

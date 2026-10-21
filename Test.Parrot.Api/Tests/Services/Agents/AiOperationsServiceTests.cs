@@ -22,10 +22,10 @@ public class AiOperationsServiceTests
 
     public AiOperationsServiceTests()
     {
-        _agents.Setup(a => a.GetByUserIdAsync(Owner)).ReturnsAsync(
+        _agents.Setup(a => a.GetByWorkspaceAsync(Owner)).ReturnsAsync(
         [
-            new Agent { Id = Guid.Parse(Nova), UserId = Owner, Name = "Nova", Description = "", MascotUrl = "x" },
-            new Agent { Id = Guid.Parse(Atlas), UserId = Owner, Name = "Atlas", Description = "", MascotUrl = "x" },
+            new Agent { Id = Guid.Parse(Nova), WorkspaceId = Owner, Name = "Nova", Description = "", MascotUrl = "x" },
+            new Agent { Id = Guid.Parse(Atlas), WorkspaceId = Owner, Name = "Atlas", Description = "", MascotUrl = "x" },
         ]);
         _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, new FixedTimeProvider(Now));
     }

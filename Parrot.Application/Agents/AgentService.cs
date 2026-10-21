@@ -36,13 +36,13 @@ public class AgentService : IAgentService
         _logger = logger;
     }
 
-    public async Task<AgentResponse> CreateAsync(string userId, AgentInfo request)
+    public async Task<AgentResponse> CreateAsync(string workspaceId, AgentInfo request)
     {
         Validate(request);
 
         Agent agent = new()
         {
-            UserId = userId,
+            WorkspaceId = workspaceId,
             Name = request.Name.Trim(),
             Description = request.Description,
             MascotUrl = request.MascotUrl,
@@ -59,19 +59,19 @@ public class AgentService : IAgentService
         return ToResponse(agent);
     }
 
-    public async Task<IReadOnlyList<AgentResponse>> GetAllAsync(string userId)
+    public async Task<IReadOnlyList<AgentResponse>> GetAllAsync(string workspaceId)
     {
-        IReadOnlyList<Agent> agents = await _repository.GetByUserIdAsync(userId);
+        IReadOnlyList<Agent> agents = await _repository.GetByWorkspaceAsync(workspaceId);
         return agents.Select(ToResponse).ToList();
     }
 
-    public async Task<AgentResponse> GetByIdAsync(string userId, Guid agentId) =>
-        ToResponse(await OwnedAsync(userId, agentId));
+    public async Task<AgentResponse> GetByIdAsync(string workspaceId, Guid agentId) =>
+        ToResponse(await OwnedAsync(workspaceId, agentId));
 
-    public async Task<AgentResponse> UpdateAsync(string userId, Guid agentId, AgentInfo request)
+    public async Task<AgentResponse> UpdateAsync(string workspaceId, Guid agentId, AgentInfo request)
     {
         Validate(request);
-        Agent agent = await OwnedAsync(userId, agentId);
+        Agent agent = await OwnedAsync(workspaceId, agentId);
 
         agent.Name = request.Name.Trim();
         agent.Description = request.Description;
@@ -86,9 +86,9 @@ public class AgentService : IAgentService
         return ToResponse(agent);
     }
 
-    public async Task<AgentResponse> SetLiveAsync(string userId, Guid agentId, bool on)
+    public async Task<AgentResponse> SetLiveAsync(string workspaceId, Guid agentId, bool on)
     {
-        Agent agent = await OwnedAsync(userId, agentId);
+        Agent agent = await OwnedAsync(workspaceId, agentId);
 
         agent.IsActive = on;
         // The owner has decided about it, so it is a draft no longer, whichever way the switch went.
@@ -100,9 +100,9 @@ public class AgentService : IAgentService
         return ToResponse(agent);
     }
 
-    public async Task DeleteAsync(string userId, Guid agentId)
+    public async Task DeleteAsync(string workspaceId, Guid agentId)
     {
-        Agent agent = await OwnedAsync(userId, agentId);
+        Agent agent = await OwnedAsync(workspaceId, agentId);
 
         agent.IsActive = false;
         agent.DeletedAt = DateTime.UtcNow;
@@ -155,7 +155,7 @@ public class AgentService : IAgentService
         agent.UpdatedAt = DateTime.UtcNow;
     }
 
-    private async Task<Agent> OwnedAsync(string userId, Guid agentId)
+    private async Task<Agent> OwnedAsync(string workspaceId, Guid agentId)
     {
         Agent agent = await _repository.GetByIdAsync(agentId)
             ?? throw new NotFoundException($"Agent {agentId} not found.");
@@ -163,7 +163,7 @@ public class AgentService : IAgentService
         if (agent.DeletedAt is not null)
             throw new NotFoundException($"Agent {agentId} not found.");
 
-        if (agent.UserId != userId)
+        if (agent.WorkspaceId != workspaceId)
             throw new ForbiddenException("You do not have access to this agent.");
 
         return agent;
@@ -173,7 +173,7 @@ public class AgentService : IAgentService
     {
         AgentConfigChangedEvent changed = new()
         {
-            TenantId = agent.UserId,
+            TenantId = agent.WorkspaceId,
             OccurredAt = DateTimeOffset.UtcNow,
             CorrelationId = Activity.Current?.TraceId.ToString(),
             Payload = new AgentConfigChangedPayload
@@ -189,7 +189,7 @@ public class AgentService : IAgentService
         try
         {
             // Keyed by tenant, as the orchestrator keys its own events, so one tenant's events stay in order.
-            await _bus.PublishAsync(_kafka.AgentEventsTopic, agent.UserId, changed);
+            await _bus.PublishAsync(_kafka.AgentEventsTopic, agent.WorkspaceId, changed);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -88,7 +88,7 @@ public class CustomerServiceTests
     public async Task GetAsync_ExistingCustomer_ReturnsDetail()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Test User", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Test User", Stage = "Customer" });
 
         CustomerDetailResponse result = await _service.GetAsync(Owner, id, CancellationToken.None);
 
@@ -109,7 +109,7 @@ public class CustomerServiceTests
     {
         // Another owner's customer must be indistinguishable from a missing row.
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = "other-owner", Name = "Theirs", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = "other-owner", Name = "Theirs", Stage = "Customer" });
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.GetAsync(Owner, id, CancellationToken.None));
@@ -129,7 +129,7 @@ public class CustomerServiceTests
         Assert.Equal("New Lead", result.Stage);
         Assert.Contains("VIP", result.Tags);
         Assert.Single(_repository.Created);
-        Assert.Equal(Owner, _repository.Created[0].OwnerUserId);
+        Assert.Equal(Owner, _repository.Created[0].WorkspaceId);
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public class CustomerServiceTests
     public async Task UpdateStageAsync_ValidStage_UpdatesAndReturns()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
 
         CustomerDetailResponse result = await _service.UpdateStageAsync(Owner, id, "Vip", CancellationToken.None);
 
@@ -187,7 +187,7 @@ public class CustomerServiceTests
     public async Task UpdateStageAsync_InvalidStage_ThrowsValidationException()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             _service.UpdateStageAsync(Owner, id, "Unknown", CancellationToken.None));
@@ -197,7 +197,7 @@ public class CustomerServiceTests
     public async Task UpdateStageAsync_AnotherOwnersId_ThrowsNotFoundException()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = "other", Name = "Theirs", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = "other", Name = "Theirs", Stage = "Customer" });
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.UpdateStageAsync(Owner, id, "Vip", CancellationToken.None));
@@ -209,7 +209,7 @@ public class CustomerServiceTests
     public async Task UpdateTagsAsync_SetsTags()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
 
         CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["VIP", "Consumer"], CancellationToken.None);
 
@@ -220,7 +220,7 @@ public class CustomerServiceTests
     public async Task UpdateTagsAsync_TrimsAndDeduplicatesCaseInsensitive()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
 
         CustomerDetailResponse result = await _service.UpdateTagsAsync(Owner, id, ["  VIP  ", "vip", "Consumer"], CancellationToken.None);
 
@@ -234,7 +234,7 @@ public class CustomerServiceTests
     public async Task UpdateTagsAsync_InvalidTag_ThrowsValidationException()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = Owner, Name = "Ada", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             _service.UpdateTagsAsync(Owner, id, ["VIP", "NotATag"], CancellationToken.None));
@@ -244,7 +244,7 @@ public class CustomerServiceTests
     public async Task UpdateTagsAsync_AnotherOwnersId_ThrowsNotFoundException()
     {
         Guid id = Guid.NewGuid();
-        _repository.Seed(new Customer { Id = id, OwnerUserId = "other", Name = "Theirs", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = id, WorkspaceId = "other", Name = "Theirs", Stage = "Customer" });
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
             _service.UpdateTagsAsync(Owner, id, ["VIP"], CancellationToken.None));
@@ -270,13 +270,13 @@ public class CustomerServiceTests
         public Task<(List<Customer> Items, int Total)> ListAsync(
             string ownerUserId, string? search, string? stage, string? channel, int skip, int take, CancellationToken ct)
         {
-            List<Customer> results = [.. Store.Where(c => c.OwnerUserId == ownerUserId).Skip(skip).Take(take)];
+            List<Customer> results = [.. Store.Where(c => c.WorkspaceId == ownerUserId).Skip(skip).Take(take)];
             return Task.FromResult((results, results.Count));
         }
 
         public Task<Customer?> FindAsync(string ownerUserId, Guid id, CancellationToken ct)
         {
-            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.OwnerUserId == ownerUserId);
+            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.WorkspaceId == ownerUserId);
             return Task.FromResult(customer);
         }
 
@@ -289,14 +289,14 @@ public class CustomerServiceTests
 
         public Task<Customer?> UpdateStageAsync(string ownerUserId, Guid id, string stage, CancellationToken ct)
         {
-            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.OwnerUserId == ownerUserId);
+            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.WorkspaceId == ownerUserId);
             if (customer is not null) customer.Stage = stage;
             return Task.FromResult(customer);
         }
 
         public Task<Customer?> UpdateTagsAsync(string ownerUserId, Guid id, List<string> tags, CancellationToken ct)
         {
-            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.OwnerUserId == ownerUserId);
+            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.WorkspaceId == ownerUserId);
             if (customer is not null) customer.Tags = tags;
             return Task.FromResult(customer);
         }

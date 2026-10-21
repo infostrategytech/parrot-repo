@@ -100,7 +100,7 @@ public sealed class TikTokWebhookService(
             ReceivedAt = time.GetUtcNow().UtcDateTime,
             CorrelationId = InboundMessagePublisher.CurrentCorrelationId(),
             ConnectionId = connection.Id,
-            OwnerUserId = connection.OwnerUserId,
+            OwnerUserId = connection.WorkspaceId,
         };
 
         logger.LogInformation("TikTok webhook accepted. ConnectionId={ConnectionId}", connection.Id);

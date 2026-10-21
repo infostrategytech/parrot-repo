@@ -29,7 +29,7 @@ public class FacebookReceiptsTests
         Mock<IFacebookConnectionRepository> connections = new();
         connections.Setup(c => c.GetActiveByIdentifierAsync("reference", It.IsAny<CancellationToken>())).ReturnsAsync(new FacebookConnection
         {
-            Id = _connectionId, OwnerUserId = "owner-1", VerifyTokenEncrypted = "encrypted", PageId = PageId,
+            Id = _connectionId, WorkspaceId = "owner-1", VerifyTokenEncrypted = "encrypted", PageId = PageId,
             PageName = "Oma's Kitchen", WebhookVerifiedAt = DateTime.UtcNow,
         });
         return new FacebookWebhookService(

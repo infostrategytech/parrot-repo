@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
 using Parrot.Api.Utils;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Application.Profile;
@@ -32,19 +32,20 @@ public class ProfileController : ControllerBase
 
     [HttpGet("profile")]
     [EndpointSummary("Read the signed-in account's profile")]
-    [EndpointDescription("The account as the setup screen and settings page should draw it: first and last name, email, business name, logo, phone number in international display form, and setupComplete — true once a business name has been saved.")]
+    [EndpointDescription("The account as the setup screen and settings page should draw it: first and last name, email, the active workspace's business name and logo, phone number in international display form, and setupComplete — true once a business name has been saved.")]
     [ProducesResponseType(typeof(ProfileResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ProfileResponse>> GetAsync()
     {
-        string? userId = CurrentUserId();
-        if (userId is null)
+        string? userId = User.UserId();
+        string? workspaceId = User.WorkspaceId();
+        if (userId is null || workspaceId is null)
         {
             return Unauthorized();
         }
 
-        return Ok(await _profileService.GetAsync(userId));
+        return Ok(await _profileService.GetAsync(userId, workspaceId));
     }
 
     [HttpPut("profile")]
@@ -57,13 +58,14 @@ public class ProfileController : ControllerBase
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status409Conflict)]
     public async Task<ActionResult<ProfileResponse>> UpdateAsync([FromBody] UpdateProfileRequest request)
     {
-        string? userId = CurrentUserId();
-        if (userId is null)
+        string? userId = User.UserId();
+        string? workspaceId = User.WorkspaceId();
+        if (userId is null || workspaceId is null)
         {
             return Unauthorized();
         }
 
-        return Ok(await _profileService.UpdateAsync(userId, request));
+        return Ok(await _profileService.UpdateAsync(userId, workspaceId, request));
     }
 
     /// <summary>
@@ -83,7 +85,7 @@ public class ProfileController : ControllerBase
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     public async Task<ActionResult<ImageUploadResponse>> UploadImageAsync(IFormFile? file)
     {
-        string? userId = CurrentUserId();
+        string? userId = User.UserId();
         if (userId is null)
         {
             return Unauthorized();
@@ -100,7 +102,4 @@ public class ProfileController : ControllerBase
 
         return Ok(new ImageUploadResponse(url));
     }
-
-    private string? CurrentUserId() =>
-        User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
 }

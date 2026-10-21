@@ -1,13 +1,13 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Application.Agents;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Agents;
-using Parrot.Application.Models;
+using Parrot.Application.Workspaces;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
 namespace Parrot.Api.Controllers;
@@ -22,7 +22,7 @@ namespace Parrot.Api.Controllers;
 [Authorize(Policy = ServiceScopes.PolicyName)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "internal.agents")]
-public sealed class InternalAgentsController(IAgentService agents, UserManager<ApplicationUser> users) : ControllerBase
+public sealed class InternalAgentsController(IAgentService agents, IWorkspaceRepository workspaces) : ControllerBase
 {
     /// <summary>The turned-on agent answering a channel for the tenant, with the business name its persona uses.</summary>
     /// <remarks>
@@ -47,7 +47,7 @@ public sealed class InternalAgentsController(IAgentService agents, UserManager<A
             });
         }
 
-        ApplicationUser? user = await users.FindByIdAsync(owner);
+        Workspace? workspace = await workspaces.GetByIdAsync(owner);
         return Ok(new AgentResolution(
             agent.Id.ToString(),
             agent.Name,
@@ -55,11 +55,12 @@ public sealed class InternalAgentsController(IAgentService agents, UserManager<A
             agent.Channels,
             agent.Settings,
             agent.Version,
-            user?.BusinessName,
+            workspace?.Name,
             owner));
     }
 
     // A service token names the tenant explicitly; its subject is the same id.
+    // The tenant here is the owner every row is keyed by: the workspace.
     private string Tenant() =>
         User.FindFirstValue(ServiceScopes.TenantClaim)
         ?? User.FindFirstValue(ClaimTypes.NameIdentifier)

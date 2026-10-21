@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
@@ -6,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
 using Parrot.Application.Messaging;
 using Parrot.Domain.Exceptions;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Controllers;
 
@@ -33,8 +33,8 @@ public sealed class MessageHistoryController(IMessageHistory history) : Controll
         Converters = { new JsonStringEnumConverter() },
     };
 
-    // From the token, never the request: only the signed-in user's messages are read.
-    private string Owner => User.FindFirstValue(ClaimTypes.NameIdentifier)
+    // From the token, never the request: only the session's workspace's messages are read.
+    private string Owner => User.WorkspaceId()
         ?? throw new UnauthorizedException("Sign in to continue.");
 
     /// <summary>The messages after <paramref name="after"/>, oldest first, with the cursor for the next page.</summary>

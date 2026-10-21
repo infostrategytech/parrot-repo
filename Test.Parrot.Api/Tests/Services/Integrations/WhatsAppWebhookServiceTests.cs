@@ -408,7 +408,7 @@ public class WhatsAppWebhookServiceTests
     private static WhatsAppConnection NewConnection(Guid id) => new()
     {
         Id = id,
-        OwnerUserId = "owner-1",
+        WorkspaceId = "owner-1",
         Name = "Support",
         VerifyTokenEncrypted = "encrypted",
         WebhookVerifiedAt = DateTime.UtcNow,

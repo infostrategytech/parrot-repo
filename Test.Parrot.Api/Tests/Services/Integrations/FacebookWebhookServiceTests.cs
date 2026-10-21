@@ -33,7 +33,7 @@ public class FacebookWebhookServiceTests
             .ReturnsAsync(new FacebookConnection
             {
                 Id = _connectionId,
-                OwnerUserId = "owner-1",
+                WorkspaceId = "owner-1",
                 VerifyTokenEncrypted = "encrypted",
                 PageId = PageId,
                 PageName = "Oma's Kitchen",
