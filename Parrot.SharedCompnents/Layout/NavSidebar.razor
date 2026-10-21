@@ -64,8 +64,8 @@
         {
             <NavRailItem Entry="entry"
                          IsActive="@(Current?.Label == entry.Label)"
-                         Badge="@(entry.Label == "Inbox" ? InboxUnread : null)"
-                         BadgeMeaning="unread messages" />
+                         Badge="@(entry.Label switch { "Inbox" => InboxUnread, "Tasks" => TasksNeedYou, _ => null })"
+                         BadgeMeaning="@(entry.Label == "Tasks" ? "need you" : "unread messages")" />
         }
 
         @* Knowledge, Help and Settings follow the pages in the same list and
@@ -131,6 +131,9 @@
     /// interrupting navigation over.
     /// </summary>
     [Parameter] public int? InboxUnread { get; set; }
+
+    /// <summary>How many tasks need the business now (not the ones waiting on a customer). Null means no badge.</summary>
+    [Parameter] public int? TasksNeedYou { get; set; }
 
     private NavEntry? Current => NavMap.Match(new Uri(Nav.Uri).AbsolutePath);
 

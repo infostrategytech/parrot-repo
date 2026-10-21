@@ -1,0 +1,23 @@
+.task-status {
+  /* No dot size in the token set. */
+  --ds-task-status-dot: 8px;
+
+  display: flex;
+  min-width: 0;
+}
+::deep .task-status__dot {
+  display: block;
+  width: var(--ds-task-status-dot);
+  height: var(--ds-task-status-dot);
+  background: var(--colors-text-muted);
+  border-radius: var(--radius-radius-full);
+}
+/* The trigger's dot takes the task's state; each option's dot its own. */
+.task-status.is-info ::deep .filter-popover__leading .task-status__dot,
+::deep .task-status__dot.is-info { background: var(--colors-feedback-info-text); }
+.task-status.is-brand ::deep .filter-popover__leading .task-status__dot,
+::deep .task-status__dot.is-brand { background: var(--colors-brand-primary); }
+.task-status.is-warning ::deep .filter-popover__leading .task-status__dot,
+::deep .task-status__dot.is-warning { background: var(--colors-feedback-warning-text); }
+.task-status.is-success ::deep .filter-popover__leading .task-status__dot,
+::deep .task-status__dot.is-success { background: var(--colors-feedback-success-text); }
