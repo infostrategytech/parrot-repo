@@ -2,33 +2,33 @@
 @using Parrot.Web.Features.Dashboard.Workspace
 @inject AuthState AuthState
 @inject IWorkspaceSetupService WorkspaceSetup
-@inject WorkspaceCreationState WorkspaceCreation
-@inject WorkspaceDirectoryState WorkspaceDirectory
+@inject WorkspacePrompt Prompt
 @inject NavigationManager Nav
 @implements IDisposable
 
-@* The workspace welcome card: the first thing a new account sees, over the
-   dashboard. It asks for the business name (required) and, optionally, a
-   logo. Sign-up deliberately does not ask for the name; it is asked for here,
-   once the person is inside.
+@* The workspace card, in two moments. First, the welcome: the first thing a
+   new account sees, naming the workspace it was given. It opens only while
+   the current workspace has no name, so anyone who already set one up never
+   sees it. Second, "Create workspace" from the switcher: the same card makes
+   another workspace and moves the session into it. Either way it asks for the
+   business name (required) and, optionally, a logo. The phone number is the
+   person's, not the business's, and lives on the profile.
 
-   It opens automatically when the signed-in business has no name yet, or on
-   request when an existing owner chooses Add another workspace. Aurora's
-   Original design: the channels flowing into the OmniAI hub, over a slow
-   colour wash. *@
+   Aurora's Original design: the channels flowing into the OmniAI hub, over a
+   slow colour wash. *@
 
-<Dialog Open="@WorkspaceCreation.IsOpen"
-        Title="Welcome to OmniAI"
+<Dialog Open="@_open"
+        Title="@Title"
         TitleVisuallyHidden="true"
-        Dismissible="@WorkspaceCreation.IsAdditionalWorkspace"
-        ConfirmLabel="Create Workspace"
+        ConfirmLabel="@(_another ? "Create Workspace" : "Get Started")"
         ConfirmFullWidth="true"
         FitToScreen="true"
-        BusyLabel="Creating Workspace…"
+        BusyLabel="@(_another ? "Creating Workspace…" : "Saving…")"
         Busy="@_creating"
         ConfirmDisabled="@(!CanCreateWorkspace)"
-        OnConfirm="CreateWorkspaceAsync"
-        OnCancel="@CancelCallback">
+        Dismissible="@_another"
+        OnCancel="@(_another ? EventCallback.Factory.Create(this, Close) : default)"
+        OnConfirm="CreateWorkspaceAsync">
     <AmbientBackground>
         <div class="workspace-dialog-gradient @(HasEnteredBusinessName ? "has-business-name" : null)">
             <span class="workspace-dialog-gradient__wash wash-cyan"></span>
@@ -69,17 +69,19 @@
 
             <div class="workspace-dialog__intro">
                 <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h2" Class="workspace-dialog__title" aria-hidden="true">
-                    Welcome to OmniAI
+                    @Title
                 </Typography>
                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-                    Start with your business name. You can add your logo now or later.
+                    @(_another
+                        ? "Each workspace is its own business, with its own channels, agents and conversations."
+                        : "Start with your business name. You can add your logo now or later.")
                 </Typography>
             </div>
 
             @* A form of one text field, so Enter submits it the way the button
                does. The dialog's own button sits outside it, in the footer. *@
             <form class="workspace-name-form" novalidate @onsubmit="CreateWorkspaceAsync" @onsubmit:preventDefault="true">
-                <Input FloatingLabel="Business Name"
+                <Input FloatingLabel="Name"
                        Id="workspace-business-name"
                        @bind-Value="_businessName"
                        @bind-Value:after="() => _businessNameError = null"
@@ -89,24 +91,6 @@
                     <IconLeft>
                         <Icon Name="IconName.RiStore2Fill" Size="IconSize.Sm" />
                     </IconLeft>
-                </Input>
-
-                @* Optional. Nigeria only for now, so the country code is fixed:
-                   the Input prefix slot from the Figma "Phone Number with
-                   Prefix" variant, with the country's flag. *@
-                <Input FloatingLabel="Phone Number (Optional)"
-                       Id="workspace-phone"
-                       Type="tel"
-                       PrefixText="@NigeriaDialCode"
-                       @bind-Value="_phone"
-                       @bind-Value:after="() => _phoneError = null"
-                       Error="@(!string.IsNullOrEmpty(_phoneError))"
-                       HelperText="@_phoneError"
-                       inputmode="tel"
-                       autocomplete="tel-national">
-                    <PrefixIcon>
-                        <CountryFlag Code="NG" />
-                    </PrefixIcon>
                 </Input>
             </form>
 
@@ -168,7 +152,6 @@
 
 @code {
     private const long MaxLogoBytes = 2 * 1024 * 1024;
-    private const string NigeriaDialCode = "+234";
     private static readonly HashSet<string> AcceptedLogoTypes = ["image/png", "image/jpeg", "image/webp"];
 
     // Deliberately no parameters. The dashboard behind redraws every second for
@@ -177,10 +160,11 @@
     // none, the card only redraws for its own changes. The page learns the
     // workspace exists from AuthState.OnChange, which SaveAsync raises.
 
+    private bool _open;
+    // True when opened from the switcher to make another workspace.
+    private bool _another;
     private string? _businessName;
     private string? _businessNameError;
-    private string? _phone;
-    private string? _phoneError;
     private WorkspaceLogo? _logo;
     private string? _readingName;
     private bool _reading;
@@ -191,23 +175,34 @@
     private bool HasEnteredBusinessName => !string.IsNullOrWhiteSpace(_businessName);
     private bool CanCreateWorkspace => !_creating && !_reading && HasEnteredBusinessName;
 
-    private EventCallback CancelCallback => WorkspaceCreation.IsAdditionalWorkspace
-        ? EventCallback.Factory.Create(this, CancelAdditionalWorkspace)
-        : default;
+    private string Title => _another ? "Create a workspace" : "Welcome to OmniAI";
 
     protected override void OnInitialized()
     {
-        WorkspaceCreation.Changed += OnWorkspaceCreationChanged;
-        WorkspaceCreation.EnsureFirstWorkspace(
-            AuthState.IsAuthenticated && string.IsNullOrWhiteSpace(AuthState.CurrentUser?.BusinessName));
+        _open = AuthState.IsAuthenticated && string.IsNullOrWhiteSpace(AuthState.CurrentUser?.BusinessName);
+        Prompt.CreateRequested += OpenForAnother;
     }
 
-    private void OnWorkspaceCreationChanged() => _ = InvokeAsync(StateHasChanged);
-
-    private void CancelAdditionalWorkspace()
+    private void OpenForAnother() => _ = InvokeAsync(() =>
     {
-        ResetForm();
-        WorkspaceCreation.Close();
+        // The welcome comes first: a workspace still unnamed is finished before another is made.
+        if (_open) return;
+
+        _businessName = null;
+        _businessNameError = null;
+        _logo = null;
+        _logoError = null;
+        _createError = null;
+        _another = true;
+        _open = true;
+        StateHasChanged();
+    });
+
+    private void Close()
+    {
+        if (_creating) return;
+        _open = false;
+        _another = false;
     }
 
     private async Task HandleLogoSelectedAsync(InputFileChangeEventArgs args)
@@ -250,25 +245,6 @@
         }
     }
 
-    /// <summary>
-    /// A Nigerian number as E.164 (+234 and ten digits). Accepts it the ways
-    /// people type it: 0801 234 5678, 801-234-5678, +234 801 234 5678. Empty is
-    /// fine: the field is optional.
-    /// </summary>
-    private static bool TryNormalisePhone(string? input, out string? e164)
-    {
-        e164 = null;
-        var digits = new string((input ?? "").Where(char.IsAsciiDigit).ToArray());
-        if (digits.Length == 0) return true;
-
-        if (digits.StartsWith("234")) digits = digits[3..];
-        if (digits.StartsWith("0")) digits = digits[1..];
-        if (digits.Length != 10) return false;
-
-        e164 = NigeriaDialCode + digits;
-        return true;
-    }
-
     private void RemoveLogo()
     {
         _logo = null;
@@ -287,43 +263,21 @@
         }
 
         _businessNameError = null;
-        if (!TryNormalisePhone(_phone, out var phone))
-        {
-            _phoneError = "Enter a valid Nigerian phone number, like 0801 234 5678.";
-            return;
-        }
-
-        _phoneError = null;
         _createError = null;
         _creating = true;
         try
         {
-            if (WorkspaceCreation.IsAdditionalWorkspace)
+            if (_another)
             {
-                _createError = "Creating another workspace is not available yet. Your current workspace has not been changed.";
+                await WorkspaceSetup.CreateAndSwitchAsync(name, _logo);
+                // A fresh circuit, so nothing the old workspace loaded (its
+                // inbox, agents, channels, live connection) is carried over.
+                Nav.NavigateTo("/dashboard", forceLoad: true, replace: true);
                 return;
             }
 
-            var addedWorkspace = WorkspaceCreation.IsAdditionalWorkspace;
-            if (addedWorkspace)
-            {
-                WorkspaceDirectory.AddLocal(name, _logo?.DataUrl);
-            }
-            else
-            {
-                await WorkspaceSetup.SaveAsync(name, phone, _logo);
-            }
-            WorkspaceCreation.Close();
-            ResetForm();
-
-            // Production will add the workspace returned by its create endpoint.
-            // The demo keeps both identities in its session list.
-            if (addedWorkspace) Nav.NavigateTo("/dashboard");
-        }
-        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.Conflict)
-        {
-            // The only conflict here: another account already has this number.
-            _phoneError = ex.UserMessage;
+            await WorkspaceSetup.SaveAsync(name, _logo);
+            _open = false;
         }
         catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
         {
@@ -331,7 +285,9 @@
         }
         catch (Exception)
         {
-            _createError = "We could not create your workspace. Try again.";
+            _createError = _another
+                ? "We could not create your workspace. Try again."
+                : "We could not save your business details. Try again.";
         }
         finally
         {
@@ -339,18 +295,5 @@
         }
     }
 
-    private void ResetForm()
-    {
-        _businessName = null;
-        _businessNameError = null;
-        _phone = null;
-        _phoneError = null;
-        _logo = null;
-        _readingName = null;
-        _reading = false;
-        _logoError = null;
-        _createError = null;
-    }
-
-    public void Dispose() => WorkspaceCreation.Changed -= OnWorkspaceCreationChanged;
+    public void Dispose() => Prompt.CreateRequested -= OpenForAnother;
 }

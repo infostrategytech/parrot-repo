@@ -1,9 +1,9 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
 using Parrot.Application.Agents;
 using Parrot.Domain.Exceptions;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Controllers;
 
@@ -19,7 +19,7 @@ namespace Parrot.Api.Controllers;
 [Monitor(Area = "orientation")]
 public sealed class OrientationController(IOrientationClient orientation) : ControllerBase
 {
-    private string Owner => User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub")
+    private string Owner => User.WorkspaceId()
         ?? throw new UnauthorizedException("Sign in to continue.");
 
     [HttpPost("voice/session")]

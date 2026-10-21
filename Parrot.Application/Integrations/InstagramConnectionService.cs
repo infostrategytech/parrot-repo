@@ -16,21 +16,21 @@ public sealed class InstagramConnectionService(
     IInstagramAccountApi instagram,
     IOptions<InstagramSettings> options) : IInstagramConnectionService
 {
-    public async Task<InstagramSetupResponse> GetSetupAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task<InstagramSetupResponse> GetSetupAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
 
         // Validated before the insert so a misconfigured server cannot leave orphaned connection rows behind.
         string baseUrl = RequireBaseUrl();
 
-        InstagramConnection? connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken);
+        InstagramConnection? connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken);
         string verifyToken;
         if (connection is null)
         {
             verifyToken = NewCredential();
             connection = new InstagramConnection
             {
-                OwnerUserId = ownerUserId,
+                WorkspaceId = workspaceId,
                 VerifyTokenEncrypted = protector.Protect(verifyToken),
             };
             await repository.AddAsync(connection, cancellationToken);
@@ -79,9 +79,9 @@ public sealed class InstagramConnectionService(
     // account's user_id, which differs from the id a token exchange shows, and a typed id that is off
     // by a digit would silently refuse every message. Subscribing here is the step businesses most
     // often miss; without it Meta sends nothing. Nothing is saved unless both calls succeed.
-    public async Task SaveAccountAsync(string ownerUserId, InstagramAccountRequest request, CancellationToken cancellationToken = default)
+    public async Task SaveAccountAsync(string workspaceId, InstagramAccountRequest request, CancellationToken cancellationToken = default)
     {
-        InstagramConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        InstagramConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("Start Instagram webhook setup before saving the account.");
         if (connection.DisabledAt.HasValue || connection.WebhookVerifiedAt is null)
             throw new ConflictException("Verify the Instagram webhook in Meta before saving the account.");
@@ -101,14 +101,14 @@ public sealed class InstagramConnectionService(
         }
 
         // A token from the App Dashboard lasts 60 days; the renewer keeps it going from here.
-        await repository.SaveAccountAsync(connection.Id, ownerUserId, account.AccountId, account.Username,
+        await repository.SaveAccountAsync(connection.Id, workspaceId, account.AccountId, account.Username,
             protector.Protect(token), DateTime.UtcNow + InstagramTokenRenewer.Lifetime, cancellationToken);
     }
 
     // Allowed before verification, so it can be saved alongside the callback URL in one sitting.
-    public async Task SaveAppSecretAsync(string ownerUserId, AppSecretRequest request, CancellationToken cancellationToken = default)
+    public async Task SaveAppSecretAsync(string workspaceId, AppSecretRequest request, CancellationToken cancellationToken = default)
     {
-        InstagramConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        InstagramConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("Start Instagram webhook setup before saving the app secret.");
         if (connection.DisabledAt.HasValue)
             throw new ConflictException("This Instagram connection is disabled.");
@@ -116,14 +116,14 @@ public sealed class InstagramConnectionService(
         if (!WebhookSignature.IsAppSecret(secret))
             throw new ValidationException(
                 "Enter the Instagram app secret from Instagram > API setup with Instagram login in your Meta app: 32 letters and numbers. It is not the App Secret under App settings > Basic.");
-        await repository.SaveAppSecretAsync(connection.Id, ownerUserId, protector.Protect(secret), cancellationToken);
+        await repository.SaveAppSecretAsync(connection.Id, workspaceId, protector.Protect(secret), cancellationToken);
     }
 
-    public async Task DisableAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task DisableAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        InstagramConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        InstagramConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("There is no Instagram connection to disconnect.");
-        await repository.DisableAsync(connection.Id, ownerUserId, DateTime.UtcNow, cancellationToken);
+        await repository.DisableAsync(connection.Id, workspaceId, DateTime.UtcNow, cancellationToken);
     }
 
     private static string NewCredential() =>

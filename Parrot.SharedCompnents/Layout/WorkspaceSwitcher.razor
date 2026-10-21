@@ -1,12 +1,12 @@
 @namespace Parrot.SharedComponents.Layout
 
-@* Which business you are working in. Its own component rather than forty lines
+@* Which workspace you are working in. Its own component rather than forty lines
    inside the rail, because it owns state — an open menu — and the rail does
    not need to know about it.
 
-   Parrot signs a person into one business, so the menu lists that one and the
-   trigger can never change it; the control keeps its shape so the day a second
-   business exists nothing moves. *@
+   The host passes the workspaces it can switch between and is told which one
+   was picked; switching itself is the host's business. A host that passes no
+   list gets the current workspace alone, and no add button without OnAdd. *@
 
 <div class="workspace">
     <button type="button"
@@ -36,44 +36,46 @@
 
         <div class="workspace__menu" role="menu" @onkeydown="OnKeyDown">
             <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="workspace__menu-label ds-overline">
-                Workspaces
+                Your workspaces
             </Typography>
 
-            @foreach (var workspace in MenuWorkspaces)
+            @foreach (var option in Options)
             {
-                var isActive = workspace.Id == CurrentWorkspaceId;
+                bool current = option.Id == Id;
                 <button type="button"
                         role="menuitemradio"
-                        aria-checked="@isActive.ToString().ToLowerInvariant()"
-                        class="workspace__option @(isActive ? "is-active" : null)"
-                        @onclick="() => SelectWorkspaceAsync(workspace.Id)">
-                    <PetalAvatar Seed="@workspace.Id"
-                                 Initials="@DesignSystem.Initials.From(workspace.Name)"
-                                 ImageUrl="@workspace.LogoUrl" />
+                        aria-checked="@current.ToString().ToLowerInvariant()"
+                        class="workspace__option @(current ? "is-active" : null)"
+                        disabled="@(Switching && !current)"
+                        @onclick="() => SelectAsync(option)">
+                    <PetalAvatar Seed="@option.Id" Initials="@DesignSystem.Initials.From(option.Name)" ImageUrl="@option.LogoUrl" />
                     <span class="workspace__identity">
-                        <Typography TextStyle="TextStyle.Small12Medium" As="strong">@workspace.Name</Typography>
-                        @if (!string.IsNullOrWhiteSpace(workspace.Plan))
+                        <Typography TextStyle="TextStyle.Small12Medium" As="strong">@option.Name</Typography>
+                        @if (current && !string.IsNullOrWhiteSpace(Plan))
                         {
-                            <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="workspace__eyebrow">@workspace.Plan</Typography>
+                            <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="workspace__eyebrow">@Plan</Typography>
                         }
                     </span>
-                    @if (isActive)
+                    @if (current)
                     {
                         <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                     }
                 </button>
             }
 
-            <button type="button" class="workspace__add" role="menuitem" @onclick="AddWorkspaceAsync">
-                <Icon Name="IconName.RiAddFill" Size="IconSize.Sm" />
-                <Typography TextStyle="TextStyle.Small12Medium" As="span">Add another workspace</Typography>
-            </button>
+            @if (OnAdd.HasDelegate)
+            {
+                <button type="button" class="workspace__add" role="menuitem" disabled="@Switching" @onclick="AddAsync">
+                    <Icon Name="IconName.RiAddFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Create workspace</Typography>
+                </button>
+            }
         </div>
     }
 </div>
 
 @code {
-    /// <summary>A stable id for the business — never its display name.</summary>
+    /// <summary>A stable id for the current workspace — never its display name.</summary>
     [Parameter] public string Id { get; set; } = "";
 
     [Parameter] public string Name { get; set; } = "";
@@ -86,15 +88,17 @@
     /// <summary>Optional. The business logo, shown in place of the initials.</summary>
     [Parameter] public string? LogoUrl { get; set; }
 
-    /// <summary>Starts the host application's create-workspace flow.</summary>
-    [Parameter] public EventCallback OnAddWorkspace { get; set; }
+    /// <summary>Optional. Every workspace to offer, the current one among them.</summary>
+    [Parameter] public IReadOnlyList<WorkspaceOption>? Workspaces { get; set; }
 
-    /// <summary>Every workspace available to the person. Falls back to the active one when omitted.</summary>
-    [Parameter] public IReadOnlyList<WorkspaceMenuItem>? Workspaces { get; set; }
+    /// <summary>Raised with the id of another workspace the person picked.</summary>
+    [Parameter] public EventCallback<string> OnSwitch { get; set; }
 
-    [Parameter] public string? ActiveWorkspaceId { get; set; }
+    /// <summary>Raised by "Create workspace". Without it the button is not shown.</summary>
+    [Parameter] public EventCallback OnAdd { get; set; }
 
-    [Parameter] public EventCallback<string> OnSelectWorkspace { get; set; }
+    /// <summary>True while the host is switching; the other options are disabled meanwhile.</summary>
+    [Parameter] public bool Switching { get; set; }
 
     private bool _open;
 
@@ -102,22 +106,20 @@
 
     private string InitialsOrDefault => Initials ?? DesignSystem.Initials.From(Name);
 
-    private string CurrentWorkspaceId => ActiveWorkspaceId ?? Id;
+    // The list the host gave, or the current workspace alone when it gave none.
+    private IReadOnlyList<WorkspaceOption> Options =>
+        Workspaces is { Count: > 0 } list ? list : [new WorkspaceOption(Id, Name, LogoUrl)];
 
-    private IReadOnlyList<WorkspaceMenuItem> MenuWorkspaces => Workspaces is { Count: > 0 }
-        ? Workspaces
-        : [new WorkspaceMenuItem(Id, Name, Plan, LogoUrl)];
-
-    private async Task AddWorkspaceAsync()
+    private async Task SelectAsync(WorkspaceOption option)
     {
         _open = false;
-        await OnAddWorkspace.InvokeAsync();
+        if (option.Id != Id && OnSwitch.HasDelegate) await OnSwitch.InvokeAsync(option.Id);
     }
 
-    private async Task SelectWorkspaceAsync(string id)
+    private async Task AddAsync()
     {
         _open = false;
-        if (id != CurrentWorkspaceId) await OnSelectWorkspace.InvokeAsync(id);
+        await OnAdd.InvokeAsync();
     }
 
     private void OnKeyDown(KeyboardEventArgs args)

@@ -7,7 +7,8 @@ namespace Parrot.Domain.Entities;
 public sealed class TikTokConnection
 {
     public Guid Id { get; set; } = Guid.NewGuid();
-    public required string OwnerUserId { get; set; }
+    // The workspace the connection belongs to.
+    public required string WorkspaceId { get; set; }
 
     // Per-connection webhook reference. The callback URL registered with TikTok ends in it,
     // so events route by an indexed lookup before the signature is checked with this app's secret.

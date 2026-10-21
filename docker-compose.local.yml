@@ -319,6 +319,9 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       ApiSettings__BaseUrl: http://parrot-api:8080/
+      # The API as the browser reaches it: "Continue with Google/Facebook" sends the browser here,
+      # and the container's own address above means nothing outside Docker.
+      ApiSettings__PublicBaseUrl: http://localhost:5222/
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
       # Must match the API's: with it on, agents live in the API and can be turned on.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}

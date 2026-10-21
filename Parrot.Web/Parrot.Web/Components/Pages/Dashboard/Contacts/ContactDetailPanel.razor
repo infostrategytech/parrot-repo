@@ -1,6 +1,8 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
 @implements IAsyncDisposable
 @inject AuroraInterop Interop
+@inject Parrot.Web.Services.CustomerClient CustomerClient
+@using Parrot.Web.Services
 
 @* A customer, in a panel over the list. The frame is Aurora's editor drawer
    (a card lifted off the right edge, focus trapped and returned) and the
@@ -11,17 +13,17 @@
 {
     <div class="panel-backdrop" @onmousedown="OnClose">
         <aside class="customer-panel"
-               aria-label="Customer 360"
+               aria-label="Customer details"
                tabindex="-1"
                @ref="_card"
                @onkeydown="OnKeyDown"
                @onmousedown:stopPropagation="true">
             <header class="customer-panel__header">
                 <div>
-                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer 360</Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer details</Typography>
                     <Typography TextStyle="TextStyle.Small12Regular" As="p">Everything you know about this customer</Typography>
                 </div>
-                <button type="button" aria-label="Close Customer 360" title="Close Customer 360" @onclick="OnClose">
+                <button type="button" aria-label="Close customer details" title="Close customer details" @onclick="OnClose">
                     <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
                 </button>
             </header>
@@ -74,92 +76,159 @@
                     </ContactSection>
                 }
 
+                <ContactSection Title="Stage">
+                    <SelectField FloatingLabel="Stage"
+                                 Value="@ContactCopy.Stage(_stage)"
+                                 Open="@(_openPanelMenu == "stage")"
+                                 OpenChanged="@(open => _openPanelMenu = open ? "stage" : null)"
+                                 Disabled="@_stageSaving">
+                        @foreach (string s in Stages)
+                        {
+                            string sv = s;
+                            <PopoverOption Label="@ContactCopy.Stage(sv)"
+                                           Active="@(_stage == sv)"
+                                           OnSelect="() => SelectStageAsync(sv)" />
+                        }
+                    </SelectField>
+                    @if (_stageError is not null)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Regular" As="p" Class="customer-field-error">@_stageError</Typography>
+                    }
+                </ContactSection>
+
+                <ContactSection Title="Tags" Count="@(_tags.Count == 0 ? null : _tags.Count)">
+                    <div class="customer-tags">
+                        <div class="customer-tags__options">
+                            @foreach (string option in TagOptions)
+                            {
+                                string opt = option;
+                                bool selected = _tags.Contains(opt, StringComparer.OrdinalIgnoreCase);
+                                <button type="button"
+                                        class="@($"customer-tags__option{(selected ? " is-selected" : "")}")"
+                                        aria-pressed="@selected"
+                                        disabled="@_tagsSaving"
+                                        @onclick="() => ToggleTagAsync(opt)">
+                                    <Typography TextStyle="TextStyle.Small12Regular" As="span">@opt</Typography>
+                                </button>
+                            }
+                        </div>
+                        @if (_tagsError is not null)
+                        {
+                            <Typography TextStyle="TextStyle.Small10Regular" As="p" Class="customer-field-error">@_tagsError</Typography>
+                        }
+                    </div>
+                </ContactSection>
+
                 <ContactSection Title="Connected identities" Count="@IdentityCount">
                     <div class="customer-identities">
-                        @if (Contact.HasWhatsApp)
+                        @foreach (ContactIdentity identity in Contact.Identities)
                         {
+                            string platformName = ChannelLinks.PlatformName(identity.Platform);
+                            string cssClass = $"customer-identities__mark customer-identities__mark--{identity.Platform}";
+                            IconName icon = IdentityIcon(identity.Platform);
+                            string display = identity.Username is { Length: > 0 } ? identity.Username : identity.Sender;
+                            ChannelLink? link = ChannelLinks.For(identity.Platform, identity.Sender, null, identity.Username);
                             <div>
-                                <span class="customer-identities__mark customer-identities__mark--whatsapp">
-                                    <Icon Name="IconName.RiWhatsappFill" Size="IconSize.Sm" Label="WhatsApp" />
+                                <span class="@cssClass">
+                                    <Icon Name="@icon" Size="IconSize.Sm" Label="@platformName" />
                                 </span>
                                 <span>
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.WhatsAppNumber</Typography>
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">WhatsApp Business</Typography>
-                                </span>
-                            </div>
-                        }
-                        @if (Contact.HasInstagram)
-                        {
-                            <div>
-                                <span class="customer-identities__mark customer-identities__mark--instagram">
-                                    <Icon Name="IconName.RiInstagramFill" Size="IconSize.Sm" Label="Instagram" />
-                                </span>
-                                <span>
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.InstagramHandle</Typography>
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">Instagram</Typography>
+                                    @if (link is not null)
+                                    {
+                                        <a href="@link.Url" target="_blank" rel="noopener noreferrer" class="customer-identity__link" title="@link.ButtonLabel">
+                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@display</Typography>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@display</Typography>
+                                    }
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@platformName</Typography>
                                 </span>
                             </div>
                         }
                         @if (!string.IsNullOrWhiteSpace(Contact.ChannelIdentifier))
                         {
+                            string? manualPlatform = string.IsNullOrWhiteSpace(Contact.ChannelPlatform) ? null : Contact.ChannelPlatform;
+                            string manualPlatformName = manualPlatform is not null ? ChannelLinks.PlatformName(manualPlatform) : "Channel";
+                            string manualCssClass = manualPlatform is not null
+                                ? $"customer-identities__mark customer-identities__mark--{manualPlatform}"
+                                : "customer-identities__mark";
+                            IconName manualIcon = manualPlatform is not null ? IdentityIcon(manualPlatform) : IconName.RiLinksFill;
+                            ChannelLink? manualLink = manualPlatform == "whatsapp"
+                                ? ChannelLinks.For("whatsapp", Contact.ChannelIdentifier, null)
+                                : manualPlatform == "instagram"
+                                    ? ChannelLinks.For("instagram", "", null, Contact.ChannelIdentifier.TrimStart('@'))
+                                    : null;
                             <div>
-                                <span class="customer-identities__mark">
-                                    <Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" />
+                                <span class="@manualCssClass">
+                                    <Icon Name="@manualIcon" Size="IconSize.Sm" Label="@manualPlatformName" />
                                 </span>
                                 <span>
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">Channel identifier</Typography>
+                                    @if (manualLink is not null)
+                                    {
+                                        <a href="@manualLink.Url" target="_blank" rel="noopener noreferrer" class="customer-identity__link" title="@manualLink.ButtonLabel">
+                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
+                                    }
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@manualPlatformName · manually added</Typography>
                                 </span>
                             </div>
                         }
                     </div>
                     <div class="customer-identities__link">
-                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small">
-                            <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
-                            <ChildContent>Link another account</ChildContent>
-                        </Button>
+                        @if (!_linkingAccount)
+                        {
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _linkingAccount = true">
+                                <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
+                                <ChildContent>Link another account</ChildContent>
+                            </Button>
+                        }
+                        else
+                        {
+                            <div class="customer-link-form">
+                                <SelectField FloatingLabel="Platform"
+                                             Value="@ChannelLabel(_linkPlatform)"
+                                             Open="@(_openPanelMenu == "link-platform")"
+                                             OpenChanged="@(open => _openPanelMenu = open ? "link-platform" : null)">
+                                    @foreach (ChannelOption ch in LinkChannels)
+                                    {
+                                        string chKey = ch.Key;
+                                        <PopoverOption Label="@ch.Label"
+                                                       Active="@(_linkPlatform == chKey)"
+                                                       OnSelect="() => { _linkPlatform = chKey; _openPanelMenu = null; }" />
+                                    }
+                                </SelectField>
+                                @if (_linkPlatform is not null)
+                                {
+                                    <Input FloatingLabel="@LinkHandleLabel(_linkPlatform)"
+                                           HelperText="@LinkHandleHint(_linkPlatform)"
+                                           @bind-Value="_linkIdentifier" />
+                                }
+                                @if (_linkError is not null)
+                                {
+                                    <Typography TextStyle="TextStyle.Small10Regular" As="p" Class="customer-field-error">@_linkError</Typography>
+                                }
+                                <div class="customer-link-form__actions">
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                                            disabled="@_linkSaving"
+                                            @onclick="CancelLinkAccount">Cancel</Button>
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small"
+                                            Busy="@_linkSaving"
+                                            disabled="@(string.IsNullOrWhiteSpace(_linkIdentifier) || _linkPlatform is null)"
+                                            @onclick="SaveLinkAccountAsync">Save</Button>
+                                </div>
+                            </div>
+                        }
                     </div>
                 </ContactSection>
 
-                <ContactSection Title="Recent task requests" Count="@(Contact.Orders.Count == 0 ? null : Contact.Orders.Count)">
-                    @if (Contact.Orders.Count == 0)
-                    {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No task requests yet.</Typography>
-                    }
-                    else
-                    {
-                        <div class="customer-orders">
-                            @foreach (var order in PagedOrders)
-                            {
-                                <div class="customer-orders__row">
-                                    <span><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span>
-                                    <span>
-                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@order.OrderId</Typography>
-                                        <Typography TextStyle="TextStyle.Small10Regular" As="small">@order.Item · @order.DateCreated</Typography>
-                                    </span>
-                                    <span>
-                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@order.Amount</Typography>
-                                        <StatusBadge Tone="@ContactCopy.OrderTone(order.Status)" Glyph="@ContactCopy.OrderGlyph(order.Status)">@order.Status</StatusBadge>
-                                    </span>
-                                </div>
-                            }
-                        </div>
-
-                        @if (TotalOrderPages > 1)
-                        {
-                            <footer class="customer-orders__pagination">
-                                <Typography TextStyle="TextStyle.Small10Regular" As="span">
-                                    Showing @OrderStart–@OrderEnd of @TotalOrders
-                                </Typography>
-                                <div>
-                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
-                                            disabled="@(_orderPage == 1)" @onclick="() => _orderPage--">Previous</Button>
-                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
-                                            disabled="@(_orderPage == TotalOrderPages)" @onclick="() => _orderPage++">Next</Button>
-                                </div>
-                            </footer>
-                        }
-                    }
+                <ContactSection Title="Recent task requests">
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No task requests yet.</Typography>
                 </ContactSection>
 
                 <div class="customer-since">
@@ -174,39 +243,78 @@
 }
 
 @code {
+    private static readonly string[] Stages = ["New Lead", "Interested", "Customer", "Vip"];
+    private static readonly string[] TagOptions = ["Business", "Consumer", "New client", "Returning client", "VIP", "VVIP"];
+
+    private sealed record ChannelOption(string Key, string Label);
+    private static readonly ChannelOption[] LinkChannels =
+    [
+        new("whatsapp", "WhatsApp"),
+        new("instagram", "Instagram"),
+        new("facebook", "Messenger"),
+        new("tiktok", "TikTok"),
+    ];
+
     [Parameter] public Contact? Contact { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<Contact> OnUpdated { get; set; }
 
     private ElementReference _card;
     private IAsyncDisposable? _trap;
     private bool _wasOpen;
     private string? _copied;
 
-    private int _orderPage = 1;
-    private int _orderPageSize = 3;
+    // Stage editing
+    private string _stage = string.Empty;
+    private bool _stageSaving;
+    private string? _stageError;
+    private string? _openPanelMenu;
 
-    private int IdentityCount =>
-        (Contact?.HasWhatsApp == true ? 1 : 0) +
-        (Contact?.HasInstagram == true ? 1 : 0) +
-        (string.IsNullOrWhiteSpace(Contact?.ChannelIdentifier) ? 0 : 1);
+    // Tag editing
+    private List<string> _tags = [];
+    private bool _tagsSaving;
+    private string? _tagsError;
 
-    private int TotalOrders => Contact?.Orders.Count ?? 0;
-    private int TotalOrderPages => Math.Max(1, (int)Math.Ceiling(TotalOrders / (double)_orderPageSize));
-    private int OrderStart => TotalOrders == 0 ? 0 : (_orderPage - 1) * _orderPageSize + 1;
-    private int OrderEnd => Math.Min(_orderPage * _orderPageSize, TotalOrders);
-    private IEnumerable<ContactOrder> PagedOrders => Contact?.Orders
-        .Skip((_orderPage - 1) * _orderPageSize)
-        .Take(_orderPageSize) ?? Enumerable.Empty<ContactOrder>();
+    // Link account form
+    private bool _linkingAccount;
+    private string? _linkPlatform;
+    private string _linkIdentifier = string.Empty;
+    private bool _linkSaving;
+    private string? _linkError;
+
+    private Guid? _loadedId;
+
+    // Count of identities the panel header shows — real linked + manually added.
+    private int? IdentityCount
+    {
+        get
+        {
+            int count = (Contact?.Identities.Count ?? 0) + (!string.IsNullOrWhiteSpace(Contact?.ChannelIdentifier) ? 1 : 0);
+            return count == 0 ? null : count;
+        }
+    }
 
     protected override void OnParametersSet()
     {
-        _orderPage = 1;
-        _copied = null;
+        if (Contact?.Id != _loadedId)
+        {
+            _loadedId = Contact?.Id;
+            _stage = Contact?.Stage ?? string.Empty;
+            _tags = Contact is not null ? [.. Contact.Tags] : [];
+            _copied = null;
+            _stageError = null;
+            _tagsError = null;
+            _openPanelMenu = null;
+            _linkingAccount = false;
+            _linkPlatform = null;
+            _linkIdentifier = string.Empty;
+            _linkError = null;
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        var open = Contact is not null;
+        bool open = Contact is not null;
         if (open && !_wasOpen)
         {
             _wasOpen = true;
@@ -219,6 +327,169 @@
             await ReleaseTrapAsync();
         }
     }
+
+    private async Task SelectStageAsync(string stage)
+    {
+        _openPanelMenu = null;
+        if (stage == _stage) return;
+        string previous = _stage;
+        _stage = stage;
+        _stageSaving = true;
+        _stageError = null;
+        StateHasChanged();
+        try
+        {
+            CustomerDetailDto updated = await CustomerClient.UpdateStageAsync(Contact!.Id, stage, CancellationToken.None);
+            await OnUpdated.InvokeAsync(ApplyDetail(Contact, updated));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _stage = previous;
+            _stageError = ex.Message;
+        }
+        finally
+        {
+            _stageSaving = false;
+        }
+    }
+
+    private async Task ToggleTagAsync(string tag)
+    {
+        List<string> newTags = _tags.Contains(tag, StringComparer.OrdinalIgnoreCase)
+            ? [.. _tags.Where(t => !t.Equals(tag, StringComparison.OrdinalIgnoreCase))]
+            : [.. _tags, tag];
+        await SaveTagsAsync(newTags);
+    }
+
+    private async Task SaveTagsAsync(List<string> newTags)
+    {
+        _tagsSaving = true;
+        _tagsError = null;
+        StateHasChanged();
+        try
+        {
+            CustomerDetailDto updated = await CustomerClient.UpdateTagsAsync(Contact!.Id, newTags, CancellationToken.None);
+            _tags = [.. updated.Tags];
+            await OnUpdated.InvokeAsync(ApplyDetail(Contact, updated));
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _tagsError = ex.Message;
+        }
+        finally
+        {
+            _tagsSaving = false;
+        }
+    }
+
+    private static Contact ApplyDetail(Contact contact, CustomerDetailDto dto) => new()
+    {
+        Id = contact.Id,
+        Name = dto.Name,
+        Email = dto.Email ?? string.Empty,
+        Phone = dto.Phone ?? string.Empty,
+        Stage = dto.Stage,
+        Tags = dto.Tags,
+        Identities = contact.Identities,
+        HasWhatsApp = contact.HasWhatsApp,
+        HasInstagram = contact.HasInstagram,
+        WhatsAppNumber = contact.WhatsAppNumber,
+        InstagramHandle = contact.InstagramHandle,
+        LastInteraction = contact.LastInteraction,
+        LastInteractionChannel = contact.LastInteractionChannel,
+        OrderCount = contact.OrderCount,
+        Orders = contact.Orders,
+        ChannelPlatform = dto.ChannelPlatform,
+        ChannelIdentifier = dto.ChannelIdentifier ?? string.Empty,
+    };
+
+    private static string? ChannelLabel(string? platform) => platform switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Messenger",
+        "tiktok" => "TikTok",
+        _ => null,
+    };
+
+    private static string LinkHandleLabel(string platform) => platform switch
+    {
+        "whatsapp" => "Phone number",
+        "instagram" => "Instagram handle or profile URL",
+        "facebook" => "Facebook profile URL",
+        "tiktok" => "TikTok username or profile URL",
+        _ => "Channel identifier",
+    };
+
+    private static string LinkHandleHint(string platform) => platform switch
+    {
+        "whatsapp" => "Include country code, e.g. +2348012345678",
+        "instagram" => "@username or instagram.com/username",
+        "facebook" => "facebook.com/username or profile URL",
+        "tiktok" => "@username or tiktok.com/@username",
+        _ => "A username or profile URL",
+    };
+
+    private void CancelLinkAccount()
+    {
+        _linkingAccount = false;
+        _linkPlatform = null;
+        _linkIdentifier = string.Empty;
+        _linkError = null;
+    }
+
+    private async Task SaveLinkAccountAsync()
+    {
+        if (Contact is null || _linkPlatform is null || string.IsNullOrWhiteSpace(_linkIdentifier)) return;
+        _linkSaving = true;
+        _linkError = null;
+        StateHasChanged();
+        try
+        {
+            CustomerDetailDto updated = await CustomerClient.UpdateChannelIdentifierAsync(
+                Contact.Id, _linkPlatform, _linkIdentifier.Trim(), CancellationToken.None);
+            Contact updatedContact = ApplyLinkIdentifier(ApplyDetail(Contact, updated), _linkPlatform, _linkIdentifier.Trim());
+            CancelLinkAccount();
+            await OnUpdated.InvokeAsync(updatedContact);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _linkError = ex.Message;
+        }
+        finally
+        {
+            _linkSaving = false;
+        }
+    }
+
+    private static Contact ApplyLinkIdentifier(Contact contact, string platform, string identifier) => new()
+    {
+        Id = contact.Id,
+        Name = contact.Name,
+        Email = contact.Email,
+        Phone = contact.Phone,
+        Stage = contact.Stage,
+        Tags = contact.Tags,
+        Identities = contact.Identities,
+        HasWhatsApp = contact.HasWhatsApp,
+        HasInstagram = contact.HasInstagram,
+        WhatsAppNumber = contact.WhatsAppNumber,
+        InstagramHandle = contact.InstagramHandle,
+        LastInteraction = contact.LastInteraction,
+        LastInteractionChannel = contact.LastInteractionChannel,
+        OrderCount = contact.OrderCount,
+        Orders = contact.Orders,
+        ChannelPlatform = platform,
+        ChannelIdentifier = identifier,
+    };
+
+    private static IconName IdentityIcon(string platform) => platform switch
+    {
+        "whatsapp" => IconName.RiWhatsappFill,
+        "instagram" => IconName.RiInstagramFill,
+        "tiktok" => IconName.RiTiktokFill,
+        _ => IconName.RiFacebookCircleFill,
+    };
 
     private async Task CopyAsync(string which, string value)
     {
@@ -234,7 +505,7 @@
     private async Task ReleaseTrapAsync()
     {
         if (_trap is null) return;
-        var trap = _trap;
+        IAsyncDisposable trap = _trap;
         _trap = null;
         await trap.DisposeAsync();
     }

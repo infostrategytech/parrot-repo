@@ -86,9 +86,11 @@ public class MetaContactNamesTests : IAsyncLifetime
         await using ApplicationDbContext db = new(_options!);
         ApplicationUser user = new() { UserName = "owner@example.com", Email = "owner@example.com" };
         db.Users.Add(user);
+        // A tenant's first workspace takes the user's id, as sign-in makes it.
+        db.Workspaces.Add(new Workspace { Id = user.Id, OwnerId = user.Id });
         FacebookConnection page = new()
         {
-            OwnerUserId = user.Id, VerifyTokenEncrypted = "encrypted", PageId = "185860297939218",
+            WorkspaceId = user.Id, VerifyTokenEncrypted = "encrypted", PageId = "185860297939218",
             AccessTokenEncrypted = "page-token", WebhookVerifiedAt = DateTime.UtcNow, DisabledAt = disabledAt,
         };
         db.FacebookConnections.Add(page);
@@ -101,9 +103,11 @@ public class MetaContactNamesTests : IAsyncLifetime
         await using ApplicationDbContext db = new(_options!);
         ApplicationUser user = new() { UserName = "ig@example.com", Email = "ig@example.com" };
         db.Users.Add(user);
+        // A tenant's first workspace takes the user's id, as sign-in makes it.
+        db.Workspaces.Add(new Workspace { Id = user.Id, OwnerId = user.Id });
         InstagramConnection account = new()
         {
-            OwnerUserId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = "17841400000000000",
+            WorkspaceId = user.Id, VerifyTokenEncrypted = "encrypted", AccountId = "17841400000000000",
             AccessTokenEncrypted = "ig-token", WebhookVerifiedAt = DateTime.UtcNow,
         };
         db.InstagramConnections.Add(account);

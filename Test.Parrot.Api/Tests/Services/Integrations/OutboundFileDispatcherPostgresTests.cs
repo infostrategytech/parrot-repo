@@ -48,6 +48,8 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
         await db.Database.EnsureCreatedAsync();
         ApplicationUser user = new() { UserName = "owner@example.com", Email = "owner@example.com" };
         db.Users.Add(user);
+        // A tenant's first workspace takes the user's id, as sign-in makes it.
+        db.Workspaces.Add(new Workspace { Id = user.Id, OwnerId = user.Id });
         await db.SaveChangesAsync();
         _owner = user.Id;
 
@@ -71,7 +73,7 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
     {
         WhatsAppConnection connection = new()
         {
-            OwnerUserId = _owner, Name = "Shop", VerifyTokenEncrypted = "v", PhoneNumberId = "phone-1", AccessTokenEncrypted = "enc",
+            WorkspaceId = _owner, Name = "Shop", VerifyTokenEncrypted = "v", PhoneNumberId = "phone-1", AccessTokenEncrypted = "enc",
             WebhookVerifiedAt = DateTime.UtcNow,
         };
         tweak?.Invoke(connection);
@@ -83,7 +85,7 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
 
     private async Task<FacebookConnection> PageAsync(Action<FacebookConnection>? tweak = null)
     {
-        FacebookConnection page = new() { OwnerUserId = _owner, VerifyTokenEncrypted = "v", PageId = "page-1", AccessTokenEncrypted = "enc", WebhookVerifiedAt = DateTime.UtcNow };
+        FacebookConnection page = new() { WorkspaceId = _owner, VerifyTokenEncrypted = "v", PageId = "page-1", AccessTokenEncrypted = "enc", WebhookVerifiedAt = DateTime.UtcNow };
         tweak?.Invoke(page);
         await using ApplicationDbContext db = new(_options!);
         db.FacebookConnections.Add(page);

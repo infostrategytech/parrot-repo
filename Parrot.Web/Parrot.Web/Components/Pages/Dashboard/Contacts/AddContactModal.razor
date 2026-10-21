@@ -1,7 +1,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
 
-@* A new contact, in Aurora's Dialog. The form keeps its own draft and hands it
-   back on save, so a half-typed name cannot leak into the list behind it. *@
+@* A new contact, in Aurora's Dialog. Channel is chosen first; the matching
+   identifier field appears based on what was picked. *@
 
 <Dialog Open="Visible"
         Title="Add contact"
@@ -19,35 +19,62 @@
             <div class="contact-form__full">
                 <Input FloatingLabel="Full name" @bind-Value="_contact.Name" maxlength="80" required />
             </div>
-            <Input FloatingLabel="Email address" Type="email" HelperText="Optional" @bind-Value="_contact.Email" />
-            <Input FloatingLabel="Phone number" Type="tel" HelperText="Optional" @bind-Value="_contact.Phone" />
             <div class="contact-form__full">
-                <Input FloatingLabel="Channel identifier"
-                       HelperText="@("A phone number or an @handle")"
-                       @bind-Value="_contact.ChannelIdentifier" />
+                <Input FloatingLabel="Email address" Type="email" HelperText="Optional" @bind-Value="_contact.Email" />
             </div>
-
+            <div class="contact-form__full">
+                <SelectField FloatingLabel="Channel"
+                             Value="@ChannelLabel(_contact.ChannelPlatform)"
+                             Open="@(_openMenu == "channel")"
+                             OpenChanged="@(open => _openMenu = open ? "channel" : null)">
+                    @foreach (ChannelOption ch in Channels)
+                    {
+                        string chKey = ch.Key;
+                        <PopoverOption Label="@ch.Label"
+                                       Active="@(_contact.ChannelPlatform == chKey)"
+                                       OnSelect="() => SelectChannel(chKey)" />
+                    }
+                </SelectField>
+            </div>
+            @if (_contact.ChannelPlatform == "whatsapp")
+            {
+                <div class="contact-form__full">
+                    <Input FloatingLabel="Phone number"
+                           Type="tel"
+                           HelperText="Include country code, e.g. +2348012345678"
+                           @bind-Value="_contact.Phone" />
+                </div>
+            }
+            else if (_contact.ChannelPlatform is "instagram" or "facebook" or "tiktok")
+            {
+                <div class="contact-form__full">
+                    <Input FloatingLabel="@HandleLabel(_contact.ChannelPlatform)"
+                           HelperText="@HandleHint(_contact.ChannelPlatform)"
+                           @bind-Value="_contact.ChannelIdentifier" />
+                </div>
+            }
             <SelectField FloatingLabel="Stage"
                          Value="@(string.IsNullOrEmpty(_contact.Stage) ? null : ContactCopy.Stage(_contact.Stage))"
                          Open="@(_openMenu == "stage")"
                          OpenChanged="@(open => _openMenu = open ? "stage" : null)">
-                @foreach (var stage in Stages)
+                @foreach (string stage in Stages)
                 {
-                    <PopoverOption Label="@ContactCopy.Stage(stage)"
-                                   Active="@(_contact.Stage == stage)"
-                                   OnSelect="() => SelectStage(stage)" />
+                    string sv = stage;
+                    <PopoverOption Label="@ContactCopy.Stage(sv)"
+                                   Active="@(_contact.Stage == sv)"
+                                   OnSelect="() => SelectStage(sv)" />
                 }
             </SelectField>
-
             <SelectField FloatingLabel="Tag"
                          Value="@(string.IsNullOrEmpty(_tag) ? null : _tag)"
                          Open="@(_openMenu == "tag")"
                          OpenChanged="@(open => _openMenu = open ? "tag" : null)">
-                @foreach (var tag in Tags)
+                @foreach (string tag in Tags)
                 {
-                    <PopoverOption Label="@tag"
-                                   Active="@(_tag == tag)"
-                                   OnSelect="() => SelectTag(tag)" />
+                    string tv = tag;
+                    <PopoverOption Label="@tv"
+                                   Active="@(_tag == tv)"
+                                   OnSelect="() => SelectTag(tv)" />
                 }
             </SelectField>
         </div>
@@ -56,7 +83,16 @@
 
 @code {
     private static readonly string[] Stages = ["New Lead", "Interested", "Customer", "Vip"];
-    private static readonly string[] Tags = ["VIP", "Frequent buyer"];
+    private static readonly string[] Tags = ["Business", "Consumer", "New client", "Returning client", "VIP", "VVIP"];
+
+    private sealed record ChannelOption(string Key, string Label);
+    private static readonly ChannelOption[] Channels =
+    [
+        new("whatsapp", "WhatsApp"),
+        new("instagram", "Instagram"),
+        new("facebook", "Messenger"),
+        new("tiktok", "TikTok"),
+    ];
 
     [Parameter] public bool Visible { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
@@ -69,15 +105,21 @@
 
     protected override void OnParametersSet()
     {
-        // Fill the form once, when it opens. Doing it on every parameter change
-        // would discard what someone had typed the moment the page re-rendered.
         if (Visible && !_wasVisible)
         {
-            _contact = new Contact { HasWhatsApp = true, HasInstagram = true };
+            _contact = new Contact();
             _tag = string.Empty;
             _openMenu = null;
         }
         _wasVisible = Visible;
+    }
+
+    private void SelectChannel(string channel)
+    {
+        _contact.ChannelPlatform = channel;
+        _contact.Phone = string.Empty;
+        _contact.ChannelIdentifier = string.Empty;
+        _openMenu = null;
     }
 
     private void SelectStage(string stage)
@@ -91,6 +133,31 @@
         _tag = tag;
         _openMenu = null;
     }
+
+    private static string? ChannelLabel(string? platform) => platform switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Messenger",
+        "tiktok" => "TikTok",
+        _ => null,
+    };
+
+    private static string HandleLabel(string? platform) => platform switch
+    {
+        "instagram" => "Instagram handle or profile URL",
+        "facebook" => "Facebook profile URL",
+        "tiktok" => "TikTok username or profile URL",
+        _ => "Channel identifier",
+    };
+
+    private static string HandleHint(string? platform) => platform switch
+    {
+        "instagram" => "@username or instagram.com/username",
+        "facebook" => "facebook.com/username or profile URL",
+        "tiktok" => "@username or tiktok.com/@username",
+        _ => "A username or profile URL",
+    };
 
     private async Task HandleSave()
     {

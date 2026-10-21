@@ -3,6 +3,9 @@ using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
+using Parrot.Application.DTOs.Workspaces;
+using Parrot.Application.Workspaces;
+using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
 namespace Parrot.Application.Profile;
@@ -10,36 +13,29 @@ namespace Parrot.Application.Profile;
 public class ProfileService : IProfileService
 {
     private readonly UserManager<ApplicationUser> _userManager;
+    private readonly IWorkspaceService _workspaces;
     private readonly IAppLogger<ProfileService> _logger;
 
     public ProfileService(
         UserManager<ApplicationUser> userManager,
+        IWorkspaceService workspaces,
         IAppLogger<ProfileService> logger)
     {
         _userManager = userManager;
+        _workspaces = workspaces;
         _logger = logger;
     }
 
-    public async Task<ProfileResponse> GetAsync(string userId)
+    public async Task<ProfileResponse> GetAsync(string userId, string workspaceId)
     {
         ApplicationUser user = await FindOrThrowAsync(userId);
-        return ToResponse(user);
+        Workspace workspace = await _workspaces.GetOwnedAsync(userId, workspaceId);
+        return ToResponse(user, workspace);
     }
 
-    public async Task<ProfileResponse> UpdateAsync(string userId, UpdateProfileRequest request)
+    public async Task<ProfileResponse> UpdateAsync(string userId, string workspaceId, UpdateProfileRequest request)
     {
         ApplicationUser user = await FindOrThrowAsync(userId);
-
-        if (request.BusinessName is not null)
-        {
-            string name = request.BusinessName.Trim();
-            if (name.Length is < 1 or > 256)
-            {
-                throw new ValidationException(AuthMessages.BusinessNameTooLong);
-            }
-
-            user.BusinessName = name;
-        }
 
         if (request.FirstName is not null)
         {
@@ -51,17 +47,21 @@ public class ProfileService : IProfileService
             user.LastName = ToOptionalName(request.LastName);
         }
 
-        // The URL is kept on the account as it arrives. Where the file itself
-        // lives is the upload endpoint's business, not this one's. An empty
-        // string is the image being removed.
-        if (request.LogoUrl is not null)
-        {
-            user.LogoUrl = ToOptionalLogoUrl(request.LogoUrl);
-        }
-
         if (request.CountryCode is not null || request.Number is not null)
         {
             ApplyPhone(user, request);
+        }
+
+        // The business name and logo are the workspace's; the rest is the person's.
+        // The person's fields have all been checked by now, so a bad phone number
+        // is refused before the workspace is touched.
+        if (request.BusinessName is not null || request.LogoUrl is not null)
+        {
+            await _workspaces.UpdateAsync(userId, workspaceId, new UpdateWorkspaceRequest
+            {
+                Name = request.BusinessName,
+                LogoUrl = request.LogoUrl,
+            });
         }
 
         IdentityResult result = await _userManager.UpdateAsync(user);
@@ -80,19 +80,19 @@ public class ProfileService : IProfileService
             _logger.LogInformation("Profile updated for {UserId}", userId);
         }
 
-        return ToResponse(user);
+        return ToResponse(user, await _workspaces.GetOwnedAsync(userId, workspaceId));
     }
 
-    private static ProfileResponse ToResponse(ApplicationUser user) =>
+    private static ProfileResponse ToResponse(ApplicationUser user, Workspace workspace) =>
         new(
             user.Id,
             user.Email ?? string.Empty,
             user.FirstName,
             user.LastName,
-            user.BusinessName,
-            user.LogoUrl,
+            workspace.Name,
+            workspace.LogoUrl,
             PhoneNormalizer.ToDisplay(user.PhoneDialCode, user.PhoneNumber),
-            user.BusinessName is not null);
+            workspace.Name is not null);
 
     // Blank means cleared, so a name can be removed as well as changed.
     private static string? ToOptionalName(string value)
@@ -104,20 +104,6 @@ public class ProfileService : IProfileService
         }
 
         return name.Length == 0 ? null : name;
-    }
-
-    private static string? ToOptionalLogoUrl(string value)
-    {
-        string url = value.Trim();
-        if (url.Length == 0)
-        {
-            return null;
-        }
-
-        bool isWebUrl = Uri.TryCreate(url, UriKind.Absolute, out Uri? uri)
-            && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
-
-        return isWebUrl ? url : throw new ValidationException(AuthMessages.InvalidLogoUrl);
     }
 
     private void ApplyPhone(ApplicationUser user, UpdateProfileRequest request)

@@ -3,10 +3,13 @@
 @using Parrot.Web.Features.Dashboard.AiAgents
 @inject AuthState AuthState
 @inject BusinessKind Kind
+@using Parrot.Web.Features.Dashboard.Workspace
+@inject WorkspaceClient Workspaces
 @inject ToastService Toasts
 
-@* Business-level configuration. The workspace name is the business name the
-   session carries; the slug has no value in Parrot yet and stays empty. *@
+@* Business-level configuration for the workspace the session is in. Only the
+   name is saved today; the slug, currency, time zone and description have no
+   home in Parrot yet and are not sent. *@
 
 <SettingsCard Title="Workspace settings" Description="Business-level configuration and identity.">
     <ChildContent>
@@ -67,7 +70,11 @@
         </div>
     </ChildContent>
     <Footer>
-        <Button @onclick="SaveAsync">Save</Button>
+        @if (_saveError is not null)
+        {
+            <InlineError Message="@_saveError" />
+        }
+        <Button Busy="@_saving" disabled="@_saving" @onclick="SaveAsync">Save</Button>
     </Footer>
 </SettingsCard>
 
@@ -83,6 +90,8 @@
     private string? _openMenu;
     private string? _industry;
     private bool _guessed;
+    private bool _saving;
+    private string? _saveError;
 
     private string KindHelp => _guessed
         ? "Our guess, from what you've told your AI. Change it if it's not right."
@@ -95,12 +104,38 @@
         _guessed = Kind.IsGuess;
     }
 
-    // Saves the kind of business (for the session until the backend keeps it); the other fields have no store yet.
-    private Task SaveAsync()
+    // Saves the name (the API) and the kind of business (for the session until the backend keeps it);
+    // the other fields have no store yet.
+    private async Task SaveAsync()
     {
-        Kind.Choose(_industry);
-        _guessed = false;
-        Toasts.Show("Kind of business saved. Your agents use it from now on.");
-        return Task.CompletedTask;
+        _saveError = null;
+        string name = _name.Trim();
+        if (name.Length == 0)
+        {
+            _saveError = "Enter a workspace name.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            // Updates the session as well, so the switcher shows the new name at once.
+            _name = (await Workspaces.UpdateCurrentAsync(name, logoUrl: null)).Name ?? name;
+            Kind.Choose(_industry);
+            _guessed = false;
+            Toasts.Show("Workspace saved. Your agents use its kind of business from now on.");
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            _saveError = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _saveError = "We could not save your workspace. Try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 }

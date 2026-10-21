@@ -94,7 +94,7 @@ public class SsoController : ControllerBase
         // Business name and logo are filled in by the setup step after sign-in,
         // so both are optional here and the callback must not assume them.
         string redirectUrl = string.Format(
-            "{0}/sso-callback?token={1}&expiresAt={2}&userId={3}&email={4}&businessName={5}&logoUrl={6}&phoneNumber={7}",
+            "{0}/sso-callback?token={1}&expiresAt={2}&userId={3}&email={4}&businessName={5}&logoUrl={6}&phoneNumber={7}&workspaceId={8}",
             _frontendSettings.BaseUrl,
             Uri.EscapeDataString(authResponse.Token),
             Uri.EscapeDataString(authResponse.ExpiresAt.ToString("O")),
@@ -102,7 +102,8 @@ public class SsoController : ControllerBase
             Uri.EscapeDataString(authResponse.Email),
             Uri.EscapeDataString(authResponse.BusinessName ?? string.Empty),
             Uri.EscapeDataString(authResponse.LogoUrl ?? string.Empty),
-            Uri.EscapeDataString(authResponse.PhoneNumber ?? string.Empty));
+            Uri.EscapeDataString(authResponse.PhoneNumber ?? string.Empty),
+            Uri.EscapeDataString(authResponse.WorkspaceId));
 
         return Redirect(redirectUrl);
     }

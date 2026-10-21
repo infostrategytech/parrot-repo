@@ -1,4 +1,3 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
@@ -7,6 +6,7 @@ using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Api.Monitoring;
 using Parrot.Domain.Exceptions;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -25,7 +25,7 @@ public sealed class TikTokSetupController(
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         return Ok(await connections.GetSetupAsync(owner, cancellationToken));
     }
@@ -34,7 +34,7 @@ public sealed class TikTokSetupController(
     [HttpPut("app")]
     public async Task<IActionResult> SaveApp([FromBody] TikTokAppRequest request, CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         await connections.SaveAppAsync(owner, request, cancellationToken);
         return NoContent();
@@ -44,7 +44,7 @@ public sealed class TikTokSetupController(
     [HttpGet("authorize")]
     public async Task<IActionResult> Authorize(CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         return Ok(await connections.GetAuthorizationAsync(owner, cancellationToken));
     }
@@ -82,7 +82,7 @@ public sealed class TikTokSetupController(
     [HttpPost("disable")]
     public async Task<IActionResult> Disable(CancellationToken cancellationToken)
     {
-        string? owner = User.FindFirstValue(ClaimTypes.NameIdentifier) ?? User.FindFirstValue("sub");
+        string? owner = User.WorkspaceId();
         if (string.IsNullOrWhiteSpace(owner)) return Unauthorized();
         await connections.DisableAsync(owner, cancellationToken);
         return NoContent();

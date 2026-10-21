@@ -51,7 +51,7 @@ public sealed class OutboundFileDispatcher(
             case MessagingPlatform.WhatsApp:
             {
                 WhatsAppConnection? connection = await db.WhatsAppConnections.AsNoTracking().SingleOrDefaultAsync(
-                    c => c.Id == connectionId && c.OwnerUserId == reply.OwnerUserId && c.DisabledAt == null, cancellationToken);
+                    c => c.Id == connectionId && c.WorkspaceId == reply.OwnerUserId && c.DisabledAt == null, cancellationToken);
                 if (connection is null || string.IsNullOrWhiteSpace(connection.PhoneNumberId)) return new FileDispatchResult(null, "connection");
                 string? token = Token(connection.AccessTokenEncrypted, whatsAppProtector.Unprotect);
                 if (token is null) return new FileDispatchResult(null, "token");
@@ -74,7 +74,7 @@ public sealed class OutboundFileDispatcher(
             case MessagingPlatform.Facebook:
             {
                 FacebookConnection? page = await db.FacebookConnections.AsNoTracking().SingleOrDefaultAsync(
-                    c => c.Id == connectionId && c.OwnerUserId == reply.OwnerUserId && c.DisabledAt == null, cancellationToken);
+                    c => c.Id == connectionId && c.WorkspaceId == reply.OwnerUserId && c.DisabledAt == null, cancellationToken);
                 if (page is null || string.IsNullOrWhiteSpace(page.PageId)) return new FileDispatchResult(null, "connection");
                 string? token = Token(page.AccessTokenEncrypted, facebookProtector.Unprotect);
                 if (token is null) return new FileDispatchResult(null, "token");

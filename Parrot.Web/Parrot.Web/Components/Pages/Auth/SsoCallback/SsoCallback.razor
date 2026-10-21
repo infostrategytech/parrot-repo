@@ -48,6 +48,9 @@ else
     [SupplyParameterFromQuery]
     private string? logoUrl { get; set; }
 
+    [SupplyParameterFromQuery]
+    private string? workspaceId { get; set; }
+
     private string? _error;
     private AuthResponse? _session;
 
@@ -75,6 +78,9 @@ else
             ExpiresAt = parsedExpiry,
             UserId = userId,
             Email = email,
+            // An API from before workspaces sends none; the user's own id is
+            // their first workspace, which is what the API falls back to as well.
+            WorkspaceId = string.IsNullOrEmpty(workspaceId) ? userId : workspaceId,
             BusinessName = businessName,
             LogoUrl = string.IsNullOrEmpty(logoUrl) ? null : logoUrl,
         };

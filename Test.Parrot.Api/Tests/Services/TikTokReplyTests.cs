@@ -32,7 +32,7 @@ public class TikTokReplyTests
     {
         _connection = new TikTokConnection
         {
-            OwnerUserId = Owner, AppId = "7123456789", AppSecretEncrypted = _protector.Protect("app-secret"),
+            WorkspaceId = Owner, AppId = "7123456789", AppSecretEncrypted = _protector.Protect("app-secret"),
             TikTokOpenId = Business, DisplayName = "Parrot Test",
             AccessTokenEncrypted = _protector.Protect("access-token"), AccessTokenExpiresAt = Now.UtcDateTime.AddHours(12),
             RefreshTokenEncrypted = _protector.Protect("refresh-token"), RefreshTokenExpiresAt = Now.UtcDateTime.AddDays(20),
@@ -308,7 +308,7 @@ public class TikTokReplyTests
     [Fact]
     public async Task AConnectionNeverAuthorized_HasNoTokens()
     {
-        TikTokConnection fresh = new() { OwnerUserId = Owner, AppId = "1", AppSecretEncrypted = _protector.Protect("s") };
+        TikTokConnection fresh = new() { WorkspaceId = Owner, AppId = "1", AppSecretEncrypted = _protector.Protect("s") };
 
         await Assert.ThrowsAsync<ConflictException>(() => Tokens().GetAsync(fresh, default));
     }
@@ -329,7 +329,7 @@ public class TikTokReplyTests
         TikTokConnection c = _repository.Connection!;
         return new TikTokConnection
         {
-            Id = c.Id, OwnerUserId = c.OwnerUserId, WebhookIdentifier = c.WebhookIdentifier, AppId = c.AppId,
+            Id = c.Id, WorkspaceId = c.WorkspaceId, WebhookIdentifier = c.WebhookIdentifier, AppId = c.AppId,
             AppSecretEncrypted = c.AppSecretEncrypted, TikTokOpenId = c.TikTokOpenId, DisplayName = c.DisplayName,
             AccessTokenEncrypted = c.AccessTokenEncrypted, AccessTokenExpiresAt = c.AccessTokenExpiresAt,
             RefreshTokenEncrypted = c.RefreshTokenEncrypted, RefreshTokenExpiresAt = c.RefreshTokenExpiresAt,

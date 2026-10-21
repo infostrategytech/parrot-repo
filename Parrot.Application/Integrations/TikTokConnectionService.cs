@@ -20,20 +20,20 @@ public sealed class TikTokConnectionService(
     // How long the owner has to approve on TikTok's consent screen.
     private static readonly TimeSpan AuthorizationLifetime = TimeSpan.FromMinutes(15);
 
-    public async Task<TikTokSetupResponse> GetSetupAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task<TikTokSetupResponse> GetSetupAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         string baseUrl = RequireBaseUrl();
 
-        TikTokConnection? connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken);
+        TikTokConnection? connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken);
         return new TikTokSetupResponse(connection?.Id, RedirectUri(baseUrl), connection?.AppId,
             connection?.TikTokOpenId is not null, connection?.DisplayName,
             connection is { TikTokOpenId: not null, RefreshTokenExpiresAt: { } refreshExpires } && refreshExpires <= DateTime.UtcNow);
     }
 
-    public async Task SaveAppAsync(string ownerUserId, TikTokAppRequest request, CancellationToken cancellationToken = default)
+    public async Task SaveAppAsync(string workspaceId, TikTokAppRequest request, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         string baseUrl = RequireBaseUrl();
 
         string appId = request.AppId?.Trim() ?? string.Empty;
@@ -42,12 +42,12 @@ public sealed class TikTokConnectionService(
             throw new ValidationException("Enter the App ID from your TikTok app's Basic Information.");
         if (!IsCredential(appSecret))
             throw new ValidationException("Enter the App Secret from your TikTok app's Basic Information.");
-        if (await repository.GetByOwnerAsync(ownerUserId, cancellationToken) is not null)
+        if (await repository.GetByOwnerAsync(workspaceId, cancellationToken) is not null)
             throw new ConflictException("TikTok is already set up. Disconnect it to use a different app.");
 
         TikTokConnection connection = new()
         {
-            OwnerUserId = ownerUserId,
+            WorkspaceId = workspaceId,
             AppId = appId,
             AppSecretEncrypted = protector.Protect(appSecret),
         };
@@ -59,16 +59,16 @@ public sealed class TikTokConnectionService(
         await repository.AddAsync(connection, cancellationToken);
     }
 
-    public async Task<TikTokAuthorizationResponse> GetAuthorizationAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task<TikTokAuthorizationResponse> GetAuthorizationAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
         string baseUrl = RequireBaseUrl();
 
-        TikTokConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        TikTokConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("Save your TikTok app's App ID and App Secret first.");
 
         // The connection id is fixed length, so the owner id after it needs no escaping.
-        string state = protector.ProtectState($"{connection.Id:N}{ownerUserId}", AuthorizationLifetime);
+        string state = protector.ProtectState($"{connection.Id:N}{workspaceId}", AuthorizationLifetime);
         string url = TikTokSettings.RequireSecureUrl(options.Value.AuthorizeUrl, nameof(TikTokSettings.AuthorizeUrl))
             + $"?client_key={Uri.EscapeDataString(connection.AppId)}"
             + "&response_type=code"
@@ -84,8 +84,8 @@ public sealed class TikTokConnectionService(
             throw new ValidationException("TikTok did not return an authorization. Start again.");
         string baseUrl = RequireBaseUrl();
 
-        (Guid connectionId, string ownerUserId) = OpenState(state);
-        TikTokConnection? connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken);
+        (Guid connectionId, string workspaceId) = OpenState(state);
+        TikTokConnection? connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken);
         if (connection is null || connection.Id != connectionId)
             throw new ConflictException("This TikTok setup was disconnected. Start again.");
 
@@ -106,16 +106,16 @@ public sealed class TikTokConnectionService(
         string displayName = string.IsNullOrWhiteSpace(account.DisplayName) ? account.Username : account.DisplayName.Trim();
 
         DateTime now = DateTime.UtcNow;
-        await repository.SaveAccountAsync(connection.Id, ownerUserId, tokens.OpenId, displayName,
+        await repository.SaveAccountAsync(connection.Id, workspaceId, tokens.OpenId, displayName,
             protector.Protect(tokens.AccessToken), now + tokens.AccessTokenLifetime,
             protector.Protect(tokens.RefreshToken), now + tokens.RefreshTokenLifetime, cancellationToken);
     }
 
-    public async Task DisableAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task DisableAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        TikTokConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        TikTokConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("There is no TikTok connection to disconnect.");
-        await repository.DisableAsync(connection.Id, ownerUserId, DateTime.UtcNow, cancellationToken);
+        await repository.DisableAsync(connection.Id, workspaceId, DateTime.UtcNow, cancellationToken);
     }
 
     private (Guid ConnectionId, string OwnerUserId) OpenState(string state)

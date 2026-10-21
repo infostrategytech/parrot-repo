@@ -32,7 +32,7 @@ public sealed class TikTokReplyService(
         if (connection.TikTokOpenId is null)
             throw new ConflictException("Authorize TikTok in the channel's setup before sending.");
 
-        string owner = connection.OwnerUserId;
+        string owner = connection.WorkspaceId;
         MessageDocument? existing = await store.FindRequestAsync(owner, request.RequestId, ct);
         if (existing is not null) return ConversationService.Match(existing, connection.Id, recipient, request.Text);
 

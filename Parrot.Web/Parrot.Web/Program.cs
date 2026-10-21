@@ -79,9 +79,10 @@ builder.Services.AddScoped<ChannelStatusLoader>();
 builder.Services.AddScoped<IBusinessSetupService, BusinessSetupService>();
 // The account's profile, for the welcome card and the settings page.
 builder.Services.AddScoped<ProfileClient>();
+// The owner's workspaces, for the switcher, the welcome card and the settings page.
+builder.Services.AddScoped<WorkspaceClient>();
 builder.Services.AddScoped<IWorkspaceSetupService, WorkspaceSetupService>();
-builder.Services.AddScoped<WorkspaceCreationState>();
-builder.Services.AddScoped<WorkspaceDirectoryState>();
+builder.Services.AddScoped<WorkspacePrompt>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {
@@ -107,6 +108,7 @@ builder.Services.AddScoped<AuroraInterop>();
 builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddScoped<ConversationClient>();
+builder.Services.AddScoped<CustomerClient>();
 builder.Services.AddScoped<InboxUnreadState>();
 // The API has none of the extra inbox actions yet, so the inbox hides them.
 builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();

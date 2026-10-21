@@ -11,10 +11,10 @@ namespace Parrot.Infrastructure.SocialMediaIntegrations;
 public sealed class TikTokConnectionRepository(ApplicationDbContext db) : ITikTokConnectionRepository
 {
     // Reads this owner's active connection.
-    public async Task<TikTokConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task<TikTokConnection?> GetByOwnerAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
         return await db.TikTokConnections.AsNoTracking()
-            .SingleOrDefaultAsync(c => c.OwnerUserId == ownerUserId && c.DisabledAt == null, cancellationToken);
+            .SingleOrDefaultAsync(c => c.WorkspaceId == workspaceId && c.DisabledAt == null, cancellationToken);
     }
 
     // Indexed lookup on the webhook reference.
@@ -35,10 +35,10 @@ public sealed class TikTokConnectionRepository(ApplicationDbContext db) : ITikTo
         }
     }
 
-    public async Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt,
+    public async Task<bool> DisableAsync(Guid id, string workspaceId, DateTime disabledAt,
         CancellationToken cancellationToken = default) =>
         await db.TikTokConnections
-            .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+            .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(c => c.DisabledAt, disabledAt)
                 .SetProperty(c => c.UpdatedAt, disabledAt), cancellationToken) == 1;
@@ -57,7 +57,7 @@ public sealed class TikTokConnectionRepository(ApplicationDbContext db) : ITikTo
                 .SetProperty(c => c.UpdatedAt, DateTime.UtcNow), cancellationToken) == 1;
 
     // Writes the account and tokens in one statement; the WHERE clause enforces ownership.
-    public async Task SaveAccountAsync(Guid id, string ownerUserId, string tikTokOpenId, string displayName,
+    public async Task SaveAccountAsync(Guid id, string workspaceId, string tikTokOpenId, string displayName,
         string encryptedAccessToken, DateTime accessTokenExpiresAt,
         string encryptedRefreshToken, DateTime refreshTokenExpiresAt,
         CancellationToken cancellationToken = default)
@@ -65,7 +65,7 @@ public sealed class TikTokConnectionRepository(ApplicationDbContext db) : ITikTo
         try
         {
             int updated = await db.TikTokConnections
-                .Where(c => c.Id == id && c.OwnerUserId == ownerUserId && c.DisabledAt == null)
+                .Where(c => c.Id == id && c.WorkspaceId == workspaceId && c.DisabledAt == null)
                 .ExecuteUpdateAsync(setters => setters
                     .SetProperty(c => c.TikTokOpenId, tikTokOpenId)
                     .SetProperty(c => c.DisplayName, displayName)

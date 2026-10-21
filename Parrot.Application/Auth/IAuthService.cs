@@ -20,4 +20,7 @@ public interface IAuthService
     Task ChangePasswordAsync(string userId, ChangePasswordRequest request);
 
     Task<AuthResponse> ExternalLoginAsync(string email, string provider, string providerKey);
+
+    /// <summary>A new session working in <paramref name="workspaceId"/>, which the user has to own.</summary>
+    Task<AuthResponse> SwitchWorkspaceAsync(string userId, string workspaceId);
 }

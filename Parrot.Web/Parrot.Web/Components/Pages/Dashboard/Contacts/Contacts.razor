@@ -1,7 +1,12 @@
 @page "/dashboard/contacts"
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@implements IAsyncDisposable
 @using Parrot.Web.Components.Pages.Dashboard.Contacts
+@using Parrot.Web.Services
+@using Parrot.Web.Services.Realtime
+@inject CustomerClient CustomerClient
+@inject RealtimeClient Realtime
 
 <PageTitle>Customers · OmniAI</PageTitle>
 
@@ -72,7 +77,21 @@
         </div>
     </section>
 
-    @if (TotalCount == 0)
+    @if (_error is not null)
+    {
+        <EmptyState Glyph="IconName.RiAlertFill"
+                    Title="Something went wrong"
+                    Description="@_error">
+            <Action>
+                <Button Variant="ButtonVariant.Secondary" @onclick="LoadAsync">Retry</Button>
+            </Action>
+        </EmptyState>
+    }
+    else if (_loading)
+    {
+        <div class="contacts__loading" aria-busy="true" aria-label="Loading customers"></div>
+    }
+    else if (_total == 0)
     {
         <EmptyState Glyph="IconName.RiSearch2Fill"
                     Title="No matching customers"
@@ -98,7 +117,7 @@
                 </div>
 
                 <div class="contacts__table-body">
-                    @foreach (var contact in PagedContacts)
+                    @foreach (Contact contact in _contacts)
                     {
                         <ContactRow Contact="contact" OnOpen="() => OpenDetail(contact)" />
                     }
@@ -107,20 +126,20 @@
 
             <footer class="contacts__pagination">
                 <Typography TextStyle="TextStyle.Small12Regular" As="span">
-                    Showing @PageStart–@PageEnd of @TotalCount
+                    Showing @PageStart–@PageEnd of @_total
                 </Typography>
                 <div class="contacts__pagination-controls">
                     <Button Variant="ButtonVariant.Secondary"
                             Size="ButtonSize.Small"
                             disabled="@(CurrentPage == 1)"
-                            @onclick="() => _page = Math.Max(1, CurrentPage - 1)">Previous</Button>
+                            @onclick="() => GoToPage(Math.Max(1, CurrentPage - 1))">Previous</Button>
                     <Typography TextStyle="TextStyle.Small12Regular" As="span">
                         Page @CurrentPage of @TotalPages
                     </Typography>
                     <Button Variant="ButtonVariant.Secondary"
                             Size="ButtonSize.Small"
                             disabled="@(CurrentPage == TotalPages)"
-                            @onclick="() => _page = Math.Min(TotalPages, CurrentPage + 1)">Next</Button>
+                            @onclick="() => GoToPage(Math.Min(TotalPages, CurrentPage + 1))">Next</Button>
                 </div>
             </footer>
         </section>
@@ -129,7 +148,7 @@
 
 <AddContactModal Visible="_showAdd" OnCancel="CloseModals" OnSave="HandleAddContact" />
 <ImportContactModal Visible="_showImport" OnCancel="CloseModals" />
-<ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" />
+<ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" OnUpdated="HandleContactUpdated" />
 
 @code {
     private static readonly string[] Columns = ["Name", "Channels", "Last interaction", "Tags", "Orders", "Stage"];
@@ -142,113 +161,194 @@
     private string _channelFilter = string.Empty;
     private string? _openDropdown;
     private int _page = 1;
-    private int _pageSize = 10;
+    private const int PageSize = 50;
+
+    private List<Contact> _contacts = [];
+    private int _total;
+    private bool _loading;
+    private string? _error;
 
     private record FilterOption(string Value, string Label);
 
-    private List<FilterOption> _stageOptions = new()
-    {
+    private List<FilterOption> _stageOptions =
+    [
         new("", "All stages"),
         new("New Lead", "New Lead"),
-        new("Interested","Interested"),
+        new("Interested", "Interested"),
         new("Customer", "Customer"),
         new("Vip", "VIP"),
-    };
+    ];
 
-    private List<FilterOption> _channelOptions = new()
-    {
+    private List<FilterOption> _channelOptions =
+    [
         new("", "All channels"),
         new("whatsapp", "WhatsApp"),
         new("instagram", "Instagram"),
-    };
+        new("facebook", "Messenger"),
+        new("tiktok", "TikTok"),
+    ];
 
     private string StageLabel => _stageOptions.FirstOrDefault(o => o.Value == _stageFilter)?.Label ?? "All stages";
     private string ChannelLabel => _channelOptions.FirstOrDefault(o => o.Value == _channelFilter)?.Label ?? "All channels";
 
-    private void SelectStage(string val) { _stageFilter = val; _openDropdown = null; _page = 1; }
-    private void SelectChannel(string val) { _channelFilter = val; _openDropdown = null; _page = 1; }
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_total / (double)PageSize));
+    private int CurrentPage => Math.Min(_page, TotalPages);
+    private int PageStart => _total == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
+    private int PageEnd => Math.Min(CurrentPage * PageSize, _total);
 
-    private void OnSearchInput(ChangeEventArgs args)
+    protected override async Task OnInitializedAsync()
+    {
+        Realtime.MessageReceived += OnMessageReceived;
+        Realtime.Reconnected += OnReconnected;
+        await LoadAsync();
+        await Realtime.StartAsync();
+    }
+
+    private async Task SelectStage(string val)
+    {
+        _stageFilter = val;
+        _openDropdown = null;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task SelectChannel(string val)
+    {
+        _channelFilter = val;
+        _openDropdown = null;
+        _page = 1;
+        await LoadAsync();
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs args)
     {
         _search = args.Value?.ToString() ?? string.Empty;
         _page = 1;
+        await LoadAsync();
     }
 
-    private void ClearFilters()
+    private async Task ClearFilters()
     {
         _search = string.Empty;
         _stageFilter = string.Empty;
         _channelFilter = string.Empty;
         _page = 1;
+        await LoadAsync();
     }
 
-    private List<Contact> _contacts = new()
+    private async Task GoToPage(int page)
     {
-        new() { Name = "Michael Wong", AvatarUrl = "assets/images/avatars/avatar-1.png", HasWhatsApp = true, HasInstagram =
-true,
-WhatsAppNumber = "+2348012345678", InstagramHandle = "@john_doe", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "whatsapp", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "Vip", Orders =
-new(){ new(){ OrderId="TR - 4592", Item="Jollof rice x 2", Amount="₦7,000", Status="Pending", DateCreated="12 Oct, 2025 • 10:30 AM"}, new(){ OrderId="TR - 4591", Item="Chicken & Chips", Amount="₦6,000", Status="Completed", DateCreated="12 Oct, 2025 • 10:30 AM"}, new(){ OrderId="TR - 4590", Item="Fried rice +2 more", Amount="₦15,000", Status="Cancelled",
-DateCreated="12 Oct, 2025 • 10:30 AM"} } },
-        new() { Name = "Cody Fisher", AvatarUrl = "assets/images/avatars/avatar-2.png", HasWhatsApp = true, HasInstagram = true,
-WhatsAppNumber = "+2348012345679", InstagramHandle = "@cody_f", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "whatsapp", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "New Lead"   },
-        new() { Name = "Annette Black", AvatarUrl = "assets/images/avatars/avatar-3.png", HasWhatsApp = true, HasInstagram =
-true, WhatsAppNumber = "+2348012345680", InstagramHandle = "@annette", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "instagram", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "Interested" },
-        new() { Name = "Cameron Williamson", AvatarUrl = "assets/images/avatars/avatar-4.png", HasWhatsApp = true, HasInstagram
-=
-true, WhatsAppNumber = "+2348012345681", InstagramHandle = "@cameron", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "whatsapp", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "Customer"   },
-        new() { Name = "Arlene McCoy", AvatarUrl = "assets/images/avatars/avatar-5.png", HasWhatsApp = true, HasInstagram =
-true,
-WhatsAppNumber = "+2348012345682", InstagramHandle = "@arlene", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "whatsapp", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "Vip"        },
-        new() { Name = "Albert Flores", AvatarUrl = "assets/images/avatars/avatar-6.png", HasWhatsApp = true, HasInstagram =
-true, WhatsAppNumber = "+2348012345683", InstagramHandle = "@albert", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "whatsapp", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "New Lead"   },
-        new() { Name = "Courtney Henry", AvatarUrl = "assets/images/avatars/avatar-7.png", HasWhatsApp = true, HasInstagram =
-true, WhatsAppNumber = "+2348012345684", InstagramHandle = "@courtney", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "instagram", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "New Lead"   },
-        new() { Name = "Bessie Cooper", AvatarUrl = "assets/images/avatars/avatar-8.png", HasWhatsApp = true, HasInstagram =
-true, WhatsAppNumber = "+2348012345685", InstagramHandle = "@bessie", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "whatsapp", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "Customer"   },
-        new() { Name = "Darlene Robertson", AvatarUrl = "assets/images/avatars/avatar-1.png", HasWhatsApp = true, HasInstagram =
-true, WhatsAppNumber = "+2348012345686", InstagramHandle = "@darlene", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "whatsapp", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "Vip"        },
-        new() { Name = "Brooklyn Simmons", AvatarUrl = "assets/images/avatars/avatar-5.png", HasWhatsApp = true, HasInstagram =
-true, WhatsAppNumber = "+2348012345687", InstagramHandle = "@brooklyn", LastInteraction = "5 minutes ago",
-LastInteractionChannel = "instagram", Tags = new(){"VIP","Frequent buyer"}, OrderCount = 24, Stage = "Customer"   },
+        _page = page;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        StateHasChanged();
+        try
+        {
+            int skip = (CurrentPage - 1) * PageSize;
+            CustomerPageDto page = await CustomerClient.ListAsync(
+                _search.Length > 0 ? _search : null,
+                _stageFilter.Length > 0 ? _stageFilter : null,
+                _channelFilter.Length > 0 ? _channelFilter : null,
+                skip, PageSize, CancellationToken.None);
+            _contacts = [.. page.Items.Select(ToContact)];
+            _total = page.Total;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = "Could not load customers. Check your connection and try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static Contact ToContact(CustomerListItemDto dto) => new()
+    {
+        Id = dto.Id,
+        Name = dto.Name,
+        Stage = dto.Stage,
+        Tags = dto.Tags,
+        LastInteraction = dto.LastSeenAt.HasValue ? FormatRelative(dto.LastSeenAt.Value) : "—",
+        LastInteractionChannel = dto.LastSeenChannel ?? string.Empty,
+        HasWhatsApp = dto.Identities.Any(i => i.Platform == "whatsapp"),
+        HasInstagram = dto.Identities.Any(i => i.Platform == "instagram"),
+        WhatsAppNumber = dto.Identities.FirstOrDefault(i => i.Platform == "whatsapp")?.Sender ?? string.Empty,
+        InstagramHandle = dto.Identities.FirstOrDefault(i => i.Platform == "instagram")?.Username ?? string.Empty,
+        Identities = [.. dto.Identities.Select(i => new ContactIdentity(i.ConnectionId, i.Platform, i.Sender, i.Username))],
+        // Phone/ChannelPlatform/ChannelIdentifier are not in the list DTO; they load when the detail panel opens.
     };
 
-    private List<Contact> FilteredContacts => _contacts
-        .Where(c => string.IsNullOrEmpty(_search) ||
-                    c.Name.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                    c.Phone.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                    c.Tags.Any(t => t.Contains(_search, StringComparison.OrdinalIgnoreCase)))
-        .Where(c => string.IsNullOrEmpty(_stageFilter) || c.Stage == _stageFilter)
-        .Where(c => string.IsNullOrEmpty(_channelFilter) ||
-                    (_channelFilter == "whatsapp" && c.HasWhatsApp) ||
-                    (_channelFilter == "instagram" && c.HasInstagram))
-        .ToList();
-
-    private int TotalCount => FilteredContacts.Count;
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(TotalCount / (double)_pageSize));
-    private int CurrentPage => Math.Min(_page, TotalPages);
-    private int PageStart => TotalCount == 0 ? 0 : (CurrentPage - 1) * _pageSize + 1;
-    private int PageEnd => Math.Min(CurrentPage * _pageSize, TotalCount);
-    private IEnumerable<Contact> PagedContacts => FilteredContacts.Skip((CurrentPage - 1) * _pageSize).Take(_pageSize);
+    private static string FormatRelative(DateTime utc)
+    {
+        TimeSpan diff = DateTime.UtcNow - utc;
+        if (diff.TotalMinutes < 2) return "just now";
+        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} minutes ago";
+        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} hours ago";
+        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} days ago";
+        return utc.ToLocalTime().ToString("d MMM yyyy");
+    }
 
     private void OpenDetail(Contact c) => _selectedContact = c;
     private void CloseDetail() => _selectedContact = null;
     private void CloseModals() { _showAdd = false; _showImport = false; }
 
-    private void HandleAddContact(Contact c)
+    private void HandleContactUpdated(Contact updated)
     {
-        c.HasWhatsApp = true;
-        c.HasInstagram = true;
-        c.OrderCount = 0;
-        _contacts.Insert(0, c);
-        CloseModals();
+        int idx = _contacts.FindIndex(c => c.Id == updated.Id);
+        if (idx >= 0) _contacts[idx] = updated;
+        _selectedContact = updated;
+    }
+
+    private async Task HandleAddContact(Contact draft)
+    {
+        try
+        {
+            await CustomerClient.CreateAsync(new CreateCustomerDto(
+                draft.Name,
+                string.IsNullOrWhiteSpace(draft.Email) ? null : draft.Email,
+                string.IsNullOrWhiteSpace(draft.Phone) ? null : draft.Phone,
+                string.IsNullOrWhiteSpace(draft.Stage) ? null : draft.Stage,
+                draft.Tags.Count > 0 ? draft.Tags : null,
+                string.IsNullOrWhiteSpace(draft.ChannelPlatform) ? null : draft.ChannelPlatform,
+                string.IsNullOrWhiteSpace(draft.ChannelIdentifier) ? null : draft.ChannelIdentifier), CancellationToken.None);
+            CloseModals();
+            await LoadAsync();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private Task OnMessageReceived(Parrot.Application.Messaging.StoredMessage message) =>
+        InvokeAsync(async () =>
+        {
+            // Outgoing replies are not new customers — skip them.
+            if (message.Outgoing) return;
+
+            // If this sender is already in the list, nothing to do.
+            bool known = _contacts.Any(c =>
+                c.Identities.Any(i =>
+                    i.ConnectionId == message.ConnectionId &&
+                    i.Sender == message.Sender));
+            if (known) return;
+
+            // New sender — reload so the new customer row appears.
+            await LoadAsync();
+        });
+
+    private Task OnReconnected() => InvokeAsync(LoadAsync);
+
+    public ValueTask DisposeAsync()
+    {
+        Realtime.MessageReceived -= OnMessageReceived;
+        Realtime.Reconnected -= OnReconnected;
+        return ValueTask.CompletedTask;
     }
 }

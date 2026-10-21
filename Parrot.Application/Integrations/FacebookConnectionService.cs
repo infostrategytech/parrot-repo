@@ -14,21 +14,21 @@ public sealed class FacebookConnectionService(
     IOptions<FacebookSettings> options) : IFacebookConnectionService
 {
     // Creates the connection and its verify token on first call; afterwards replays the same credentials.
-    public async Task<FacebookSetupResponse> GetSetupAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task<FacebookSetupResponse> GetSetupAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
 
         // Validated before the insert so a misconfigured server cannot leave orphaned connection rows behind.
         string baseUrl = RequireBaseUrl();
 
-        FacebookConnection? connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken);
+        FacebookConnection? connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken);
         string verifyToken;
         if (connection is null)
         {
             verifyToken = NewCredential();
             connection = new FacebookConnection
             {
-                OwnerUserId = ownerUserId,
+                WorkspaceId = workspaceId,
                 VerifyTokenEncrypted = protector.Protect(verifyToken),
             };
             await repository.AddAsync(connection, cancellationToken);
@@ -73,38 +73,38 @@ public sealed class FacebookConnectionService(
     }
 
     // Validates the token shape and encrypts it; rejects Pages saved before webhook verification.
-    public async Task SavePageAsync(string ownerUserId, FacebookPageRequest request, CancellationToken cancellationToken = default)
+    public async Task SavePageAsync(string workspaceId, FacebookPageRequest request, CancellationToken cancellationToken = default)
     {
-        FacebookConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        FacebookConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("Start Facebook webhook setup before saving the Page.");
         if (connection.DisabledAt.HasValue || connection.WebhookVerifiedAt is null)
             throw new ConflictException("Verify the Facebook webhook in Meta before saving the Page.");
         string token = request.AccessToken.Trim();
         if (token.Any(char.IsWhiteSpace) || token.Any(char.IsControl))
             throw new ValidationException("Enter a valid Page access token.");
-        await repository.SavePageAsync(connection.Id, ownerUserId, request.PageId, request.PageName.Trim(),
+        await repository.SavePageAsync(connection.Id, workspaceId, request.PageId, request.PageName.Trim(),
             protector.Protect(token), cancellationToken);
     }
 
-    public async Task DisableAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task DisableAsync(string workspaceId, CancellationToken cancellationToken = default)
     {
-        FacebookConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        FacebookConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("There is no Facebook connection to disconnect.");
-        await repository.DisableAsync(connection.Id, ownerUserId, DateTime.UtcNow, cancellationToken);
+        await repository.DisableAsync(connection.Id, workspaceId, DateTime.UtcNow, cancellationToken);
     }
 
     // Manual setup: the customer's own Meta app signs this connection's webhooks with it. Allowed
     // before verification, so it can be saved alongside the callback URL in one sitting.
-    public async Task SaveAppSecretAsync(string ownerUserId, AppSecretRequest request, CancellationToken cancellationToken = default)
+    public async Task SaveAppSecretAsync(string workspaceId, AppSecretRequest request, CancellationToken cancellationToken = default)
     {
-        FacebookConnection connection = await repository.GetByOwnerAsync(ownerUserId, cancellationToken)
+        FacebookConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("Start Facebook webhook setup before saving the App Secret.");
         if (connection.DisabledAt.HasValue)
             throw new ConflictException("This Facebook connection is disabled.");
         string secret = request.AppSecret?.Trim() ?? string.Empty;
         if (!WebhookSignature.IsAppSecret(secret))
             throw new ValidationException("Enter the App Secret from your Meta app's App settings > Basic: 32 letters and numbers.");
-        await repository.SaveAppSecretAsync(connection.Id, ownerUserId, protector.Protect(secret), cancellationToken);
+        await repository.SaveAppSecretAsync(connection.Id, workspaceId, protector.Protect(secret), cancellationToken);
     }
 
     private static string NewCredential() =>

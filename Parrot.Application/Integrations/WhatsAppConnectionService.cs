@@ -30,10 +30,10 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         }
     }
 
-    public async Task<WhatsAppConnectionSetupResponse> CreateAsync(string ownerUserId, CreateWhatsAppConnectionRequest request)
+    public async Task<WhatsAppConnectionSetupResponse> CreateAsync(string workspaceId, CreateWhatsAppConnectionRequest request)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
-        WhatsAppConnection? existing = await FindExistingAsync(ownerUserId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(workspaceId);
+        WhatsAppConnection? existing = await FindExistingAsync(workspaceId);
         if (existing is not null)
             return Resume(existing);
         string name = request.Name?.Trim() ?? string.Empty;
@@ -45,7 +45,7 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         string verifyToken = NewCredential();
         WhatsAppConnection connection = new()
         {
-            OwnerUserId = ownerUserId,
+            WorkspaceId = workspaceId,
             Name = name,
             VerifyTokenEncrypted = _protector.Protect(verifyToken),
             WhatsAppBusinessAccountId = Normalize(request.WhatsAppBusinessAccountId, 64),
@@ -59,15 +59,15 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         catch (ConflictException)
         {
             // Another tab may have created the owner's connection while this request was running.
-            existing = await FindExistingAsync(ownerUserId);
+            existing = await FindExistingAsync(workspaceId);
             if (existing is null) throw;
             return Resume(existing);
         }
         return ToSetup(connection, verifyToken);
     }
 
-    private async Task<WhatsAppConnection?> FindExistingAsync(string ownerUserId) =>
-        (await _repository.GetByOwnerAsync(ownerUserId))
+    private async Task<WhatsAppConnection?> FindExistingAsync(string workspaceId) =>
+        (await _repository.GetByOwnerAsync(workspaceId))
         .OrderBy(c => c.DisabledAt.HasValue)
         .ThenBy(c => c.CreatedAt).ThenBy(c => c.Id).FirstOrDefault();
 
@@ -78,18 +78,18 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         return ToSetup(connection, _protector.Unprotect(connection.VerifyTokenEncrypted));
     }
 
-    public async Task<IReadOnlyList<WhatsAppConnectionResponse>> GetAllAsync(string ownerUserId)
+    public async Task<IReadOnlyList<WhatsAppConnectionResponse>> GetAllAsync(string workspaceId)
     {
-        IReadOnlyList<WhatsAppConnection> connections = await _repository.GetByOwnerAsync(ownerUserId);
+        IReadOnlyList<WhatsAppConnection> connections = await _repository.GetByOwnerAsync(workspaceId);
         return connections.Select(ToResponse).ToList();
     }
 
-    public async Task<WhatsAppConnectionResponse> GetByIdAsync(string ownerUserId, Guid id) =>
-        ToResponse(await GetOwnedAsync(ownerUserId, id));
+    public async Task<WhatsAppConnectionResponse> GetByIdAsync(string workspaceId, Guid id) =>
+        ToResponse(await GetOwnedAsync(workspaceId, id));
 
-    public async Task<WhatsAppConnectionSetupResponse> GetSetupAsync(string ownerUserId, Guid id)
+    public async Task<WhatsAppConnectionSetupResponse> GetSetupAsync(string workspaceId, Guid id)
     {
-        WhatsAppConnection connection = await GetOwnedAsync(ownerUserId, id);
+        WhatsAppConnection connection = await GetOwnedAsync(workspaceId, id);
         if (connection.DisabledAt.HasValue)
         {
             throw new ConflictException("This WhatsApp connection is disabled.");
@@ -98,41 +98,41 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         return ToSetup(connection, _protector.Unprotect(connection.VerifyTokenEncrypted));
     }
 
-    public async Task DisableAsync(string ownerUserId, Guid id)
+    public async Task DisableAsync(string workspaceId, Guid id)
     {
-        await GetOwnedAsync(ownerUserId, id);
-        await _repository.DisableAsync(id, ownerUserId, DateTime.UtcNow);
+        await GetOwnedAsync(workspaceId, id);
+        await _repository.DisableAsync(id, workspaceId, DateTime.UtcNow);
     }
 
-    public async Task ConfigureAccountAsync(string ownerUserId, Guid id, WhatsAppAccountRequest request)
+    public async Task ConfigureAccountAsync(string workspaceId, Guid id, WhatsAppAccountRequest request)
     {
-        await GetOwnedAsync(ownerUserId, id);
+        await GetOwnedAsync(workspaceId, id);
         if (!IsMetaId(request.WhatsAppBusinessAccountId) || !IsMetaId(request.PhoneNumberId))
             throw new ValidationException("Enter valid numeric Meta business account and phone number IDs (up to 64 digits).");
-        await _repository.ConfigureAccountAsync(id, ownerUserId, request.WhatsAppBusinessAccountId, request.PhoneNumberId);
+        await _repository.ConfigureAccountAsync(id, workspaceId, request.WhatsAppBusinessAccountId, request.PhoneNumberId);
     }
 
-    public async Task SaveAccessTokenAsync(string ownerUserId, Guid id, WhatsAppAccessTokenRequest request)
+    public async Task SaveAccessTokenAsync(string workspaceId, Guid id, WhatsAppAccessTokenRequest request)
     {
-        WhatsAppConnection connection = await GetOwnedAsync(ownerUserId, id);
+        WhatsAppConnection connection = await GetOwnedAsync(workspaceId, id);
         if (connection.DisabledAt.HasValue)
             throw new ConflictException("This WhatsApp connection is disabled.");
         string token = request.AccessToken?.Trim() ?? string.Empty;
         if (token.Length is 0 or > 8192 || token.Any(char.IsWhiteSpace) || token.Any(char.IsControl))
             throw new ValidationException("Enter a valid access token of up to 8192 characters.");
-        await _repository.SaveAccessTokenAsync(id, ownerUserId, _protector.Protect(token));
+        await _repository.SaveAccessTokenAsync(id, workspaceId, _protector.Protect(token));
     }
 
     // Manual setup: the customer's own Meta app signs this connection's webhooks with it.
-    public async Task SaveAppSecretAsync(string ownerUserId, Guid id, AppSecretRequest request)
+    public async Task SaveAppSecretAsync(string workspaceId, Guid id, AppSecretRequest request)
     {
-        WhatsAppConnection connection = await GetOwnedAsync(ownerUserId, id);
+        WhatsAppConnection connection = await GetOwnedAsync(workspaceId, id);
         if (connection.DisabledAt.HasValue)
             throw new ConflictException("This WhatsApp connection is disabled.");
         string secret = request.AppSecret?.Trim() ?? string.Empty;
         if (!WebhookSignature.IsAppSecret(secret))
             throw new ValidationException("Enter the App Secret from your Meta app's App settings > Basic: 32 letters and numbers.");
-        await _repository.SaveAppSecretAsync(id, ownerUserId, _protector.Protect(secret));
+        await _repository.SaveAppSecretAsync(id, workspaceId, _protector.Protect(secret));
     }
 
     private static bool IsMetaId(string? value) =>
@@ -182,8 +182,8 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         return normalized;
     }
 
-    private async Task<WhatsAppConnection> GetOwnedAsync(string ownerUserId, Guid id) =>
-        await _repository.GetByOwnerAndIdAsync(ownerUserId, id)
+    private async Task<WhatsAppConnection> GetOwnedAsync(string workspaceId, Guid id) =>
+        await _repository.GetByOwnerAndIdAsync(workspaceId, id)
         ?? throw new NotFoundException("WhatsApp connection not found.");
 
     private WhatsAppConnectionSetupResponse ToSetup(WhatsAppConnection connection, string token) => new()

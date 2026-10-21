@@ -51,14 +51,9 @@
        a workspace or an account card rather than with invented ones. *@
     @if (!string.IsNullOrWhiteSpace(WorkspaceName))
     {
-        <WorkspaceSwitcher Id="@WorkspaceId"
-                           Name="@WorkspaceName"
-                           Plan="@WorkspacePlan"
-                           LogoUrl="@WorkspaceLogoUrl"
-                           Workspaces="@Workspaces"
-                           ActiveWorkspaceId="@ActiveWorkspaceId"
-                           OnSelectWorkspace="@OnSelectWorkspace"
-                           OnAddWorkspace="@OnAddWorkspace" />
+        <WorkspaceSwitcher Id="@WorkspaceId" Name="@WorkspaceName" Plan="@WorkspacePlan" LogoUrl="@WorkspaceLogoUrl"
+                           Workspaces="@Workspaces" OnSwitch="@OnWorkspaceSwitch" OnAdd="@OnWorkspaceAdd"
+                           Switching="@WorkspaceSwitching" />
     }
 
     <nav class="sidebar__nav" aria-label="Primary navigation">
@@ -106,13 +101,14 @@
 
     [Parameter] public string? WorkspaceLogoUrl { get; set; }
 
-    [Parameter] public EventCallback OnAddWorkspace { get; set; }
+    /// <summary>Optional. The workspaces the switcher offers; see <see cref="WorkspaceSwitcher"/>.</summary>
+    [Parameter] public IReadOnlyList<WorkspaceOption>? Workspaces { get; set; }
 
-    [Parameter] public IReadOnlyList<WorkspaceMenuItem>? Workspaces { get; set; }
+    [Parameter] public EventCallback<string> OnWorkspaceSwitch { get; set; }
 
-    [Parameter] public string? ActiveWorkspaceId { get; set; }
+    [Parameter] public EventCallback OnWorkspaceAdd { get; set; }
 
-    [Parameter] public EventCallback<string> OnSelectWorkspace { get; set; }
+    [Parameter] public bool WorkspaceSwitching { get; set; }
 
     [Parameter] public string UserName { get; set; } = "";
 

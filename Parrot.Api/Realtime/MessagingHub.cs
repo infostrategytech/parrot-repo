@@ -1,14 +1,14 @@
-using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Parrot.Application.Realtime;
+using Parrot.Api.Security;
 
 namespace Parrot.Api.Realtime;
 
 /// <summary>
-/// The CRM's realtime connection. Connecting marks the signed-in user online
-/// in Redis, <see cref="Heartbeat"/> keeps them online, and disconnecting takes
-/// them off. Persisted messages are pushed to their connections from the
+/// The CRM's realtime connection. Connecting marks the session's workspace online
+/// in Redis, <see cref="Heartbeat"/> keeps it online, and disconnecting takes
+/// it off. Persisted messages are pushed to their connections from the
 /// server; clients only listen, and fetch anything they missed from history.
 ///
 /// Every Redis call is best-effort. Redis being down must not refuse or drop
@@ -47,11 +47,11 @@ public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<Messaging
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
-        string userId = UserId();
+        string owner = Owner();
         try
         {
             // Not ConnectionAborted: it has already fired for a closed connection.
-            await sessions.RemoveAsync(userId, Context.ConnectionId, CancellationToken.None);
+            await sessions.RemoveAsync(owner, Context.ConnectionId, CancellationToken.None);
             logger.LogDebug("session.removed ConnectionId={ConnectionId}", Context.ConnectionId);
         }
         catch (Exception ex)
@@ -67,7 +67,7 @@ public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<Messaging
     {
         try
         {
-            await sessions.RegisterAsync(UserId(), Context.ConnectionId, Context.ConnectionAborted);
+            await sessions.RegisterAsync(Owner(), Context.ConnectionId, Context.ConnectionAborted);
             logger.LogDebug("{Step} ConnectionId={ConnectionId}", step, Context.ConnectionId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
@@ -77,9 +77,9 @@ public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<Messaging
         }
     }
 
-    // [Authorize] guarantees a principal; the claim names match the controllers'.
-    private string UserId() =>
-        Context.User?.FindFirstValue(ClaimTypes.NameIdentifier)
-        ?? Context.User?.FindFirstValue("sub")
-        ?? throw new HubException("User ID claim not found.");
+    // Pushes go to a workspace's open sessions, so a connection registers under
+    // the workspace its token works in. [Authorize] guarantees a principal.
+    private string Owner() =>
+        Context.User?.WorkspaceId()
+        ?? throw new HubException("Workspace claim not found.");
 }

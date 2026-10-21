@@ -56,7 +56,7 @@ public sealed class TikTokAccessTokens(
     // The access token now on record, if it is good.
     private async Task<string?> StoredAsync(TikTokConnection connection, CancellationToken cancellationToken)
     {
-        TikTokConnection? latest = await repository.GetByOwnerAsync(connection.OwnerUserId, cancellationToken);
+        TikTokConnection? latest = await repository.GetByOwnerAsync(connection.WorkspaceId, cancellationToken);
         return latest is { AccessTokenEncrypted: not null, AccessTokenExpiresAt: { } expires }
             && latest.Id == connection.Id && expires > time.GetUtcNow().UtcDateTime
                 ? Read(latest.AccessTokenEncrypted)

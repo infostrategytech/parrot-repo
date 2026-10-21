@@ -196,7 +196,7 @@ public class MessageMetricsTests : IDisposable
 
     private static WhatsAppConnection Connection(string waba = "waba-1") => new()
     {
-        OwnerUserId = "owner-1",
+        WorkspaceId = "owner-1",
         Name = "Shop",
         VerifyTokenEncrypted = "x",
         WhatsAppBusinessAccountId = waba,

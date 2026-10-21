@@ -5,7 +5,7 @@ namespace Parrot.Application.Integrations;
 public interface IInstagramConnectionRepository
 {
     // The owner's active connection, or null.
-    Task<InstagramConnection?> GetByOwnerAsync(string ownerUserId, CancellationToken cancellationToken = default);
+    Task<InstagramConnection?> GetByOwnerAsync(string workspaceId, CancellationToken cancellationToken = default);
 
     // Webhook routing by ?ref=; only active connections.
     Task<InstagramConnection?> GetActiveByIdentifierAsync(string identifier, CancellationToken cancellationToken = default);
@@ -17,7 +17,7 @@ public interface IInstagramConnectionRepository
 
     // The account the token belongs to, and the token, encrypted; a fresh token, so it counts as just
     // renewed, runs out at expiresAt, and is no longer refused.
-    Task SaveAccountAsync(Guid id, string ownerUserId, string accountId, string username, string encryptedAccessToken,
+    Task SaveAccountAsync(Guid id, string workspaceId, string accountId, string username, string encryptedAccessToken,
         DateTime expiresAt, CancellationToken cancellationToken = default);
 
     // Active connections whose token was last renewed (or saved) at or before renewBefore and has not
@@ -33,11 +33,11 @@ public interface IInstagramConnectionRepository
     // Instagram refused the token: the owner must paste a new one.
     Task MarkTokenRejectedAsync(Guid id, string encryptedAccessToken, DateTime rejectedAt, CancellationToken cancellationToken = default);
 
-    Task SaveAppSecretAsync(Guid id, string ownerUserId, string encryptedSecret, CancellationToken cancellationToken = default);
+    Task SaveAppSecretAsync(Guid id, string workspaceId, string encryptedSecret, CancellationToken cancellationToken = default);
 
     // Whether the connection is the owner's, disabled or not: its conversations stay readable.
-    Task<bool> IsOwnedByAsync(Guid id, string ownerUserId, CancellationToken cancellationToken = default);
+    Task<bool> IsOwnedByAsync(Guid id, string workspaceId, CancellationToken cancellationToken = default);
 
     // Its ?ref= stops routing webhooks at once.
-    Task<bool> DisableAsync(Guid id, string ownerUserId, DateTime disabledAt, CancellationToken cancellationToken = default);
+    Task<bool> DisableAsync(Guid id, string workspaceId, DateTime disabledAt, CancellationToken cancellationToken = default);
 }

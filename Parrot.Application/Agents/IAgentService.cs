@@ -4,20 +4,20 @@ namespace Parrot.Application.Agents;
 
 public interface IAgentService
 {
-    Task<AgentResponse> CreateAsync(string userId, AgentInfo request);
+    Task<AgentResponse> CreateAsync(string workspaceId, AgentInfo request);
 
-    Task<IReadOnlyList<AgentResponse>> GetAllAsync(string userId);
+    Task<IReadOnlyList<AgentResponse>> GetAllAsync(string workspaceId);
 
-    Task<AgentResponse> GetByIdAsync(string userId, Guid agentId);
+    Task<AgentResponse> GetByIdAsync(string workspaceId, Guid agentId);
 
     /// <summary>Saves everything about an existing agent except whether it is on; see <see cref="SetLiveAsync"/>.</summary>
-    Task<AgentResponse> UpdateAsync(string userId, Guid agentId, AgentInfo request);
+    Task<AgentResponse> UpdateAsync(string workspaceId, Guid agentId, AgentInfo request);
 
     /// <summary>Turns an agent on or off. Either way it stops being a draft: the owner has decided about it.</summary>
-    Task<AgentResponse> SetLiveAsync(string userId, Guid agentId, bool on);
+    Task<AgentResponse> SetLiveAsync(string workspaceId, Guid agentId, bool on);
 
     /// <summary>Deletes an agent for the owner. The row stays, marked deleted, so past activity still names it.</summary>
-    Task DeleteAsync(string userId, Guid agentId);
+    Task DeleteAsync(string workspaceId, Guid agentId);
 
     /// <summary>The turned-on agent answering <paramref name="channel"/> for the owner, or null when none does.</summary>
     Task<AgentResponse?> ResolveForChannelAsync(string ownerUserId, string channel);
