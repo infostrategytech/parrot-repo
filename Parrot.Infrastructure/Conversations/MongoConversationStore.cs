@@ -30,6 +30,11 @@ public sealed class MongoConversationStore : IConversationStore
     public Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct) =>
         SummariesAsync(Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.ConnectionId != null), skip, take, ct);
 
+    // The filter is applied before grouping and paging, so a page is full of reachable conversations.
+    public Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, IReadOnlySet<Guid> connections, int skip, int take, CancellationToken ct) =>
+        SummariesAsync(Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.ConnectionId != null)
+            & Builders<MessageDocument>.Filter.In(x => x.ConnectionId, connections.Select(c => (Guid?)c)), skip, take, ct);
+
     public async Task<IReadOnlyList<ConversationSummary>> FindAsync(
         string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct)
     {

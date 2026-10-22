@@ -66,7 +66,24 @@ public static class CatalogAuthentication
                     jwt.TokenValidationParameters.IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(options.Secret!));
                     jwt.TokenValidationParameters.ValidAlgorithms = [SecurityAlgorithms.HmacSha256];
                 }
+
+                if (!string.IsNullOrWhiteSpace(options.AccessCheckUrl))
+                {
+                    jwt.Events = new JwtBearerEvents { OnTokenValidated = CheckSessionAccessAsync };
+                }
             });
+
+        if (!string.IsNullOrWhiteSpace(options.AccessCheckUrl))
+        {
+            services.AddMemoryCache();
+            services.AddSingleton(options);
+            services.AddSingleton<SessionAccessCheck>();
+            services.AddHttpClient(SessionAccessCheck.HttpClientName, client =>
+            {
+                client.BaseAddress = new Uri(options.AccessCheckUrl.TrimEnd('/') + "/");
+                client.Timeout = TimeSpan.FromSeconds(5);
+            });
+        }
 
         services.AddAuthorizationBuilder()
             // Deny by default: every request needs a verified token carrying a tenant.
@@ -81,6 +98,38 @@ public static class CatalogAuthentication
             .AddPolicy(CatalogPolicies.AiTools, p => Scope(p, CatalogScopes.AiTools));
 
         return services;
+    }
+
+    // A session token's scopes are replaced with the member's current ones, or
+    // the request is refused when they no longer have the workspace.
+    private static async Task CheckSessionAccessAsync(TokenValidatedContext context)
+    {
+        if (context.Principal is not { } principal || !SessionAccessCheck.Applies(principal))
+        {
+            return;
+        }
+
+        string? raw = context.SecurityToken switch
+        {
+            Microsoft.IdentityModel.JsonWebTokens.JsonWebToken jwt => jwt.EncodedToken,
+            System.IdentityModel.Tokens.Jwt.JwtSecurityToken jwt => jwt.RawData,
+            _ => null,
+        };
+        if (raw is null)
+        {
+            context.Fail("The session could not be read.");
+            return;
+        }
+
+        SessionAccessCheck check = context.HttpContext.RequestServices.GetRequiredService<SessionAccessCheck>();
+        SessionAccessCheck.Verdict verdict = await check.CheckAsync(principal, raw, context.HttpContext.RequestAborted);
+        if (verdict.RefusedBecause is { } reason)
+        {
+            context.Fail(reason);
+            return;
+        }
+
+        SessionAccessCheck.ApplyScopes(principal, verdict.CatalogScopes!);
     }
 
     public static Guid? TenantIdOf(ClaimsPrincipal user)

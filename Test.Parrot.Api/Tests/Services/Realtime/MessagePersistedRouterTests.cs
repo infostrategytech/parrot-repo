@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -28,7 +29,7 @@ public class MessagePersistedRouterTests
     {
         Mock<IHubContext<MessagingHub>> hub = new();
         hub.SetupGet(h => h.Clients).Returns(_clients.Object);
-        return new MessagePersistedRouter(_sessions, hub.Object, NullLogger<MessagePersistedRouter>.Instance);
+        return new MessagePersistedRouter(_sessions, hub.Object, new PassThroughAudience(), NullLogger<MessagePersistedRouter>.Instance);
     }
 
     private static MessagePersisted Persisted(string? owner = Owner) => new()

@@ -49,6 +49,21 @@ public static class ConversationKey
         value.Any(char.IsAsciiDigit)
         && value.All(c => char.IsAsciiDigit(c) || c is '+' or ' ' or '-' or '(' or ')');
 
+    /// <summary>The platform a key was made for, from its prefix, or null for something that is not a key.</summary>
+    public static MessagingPlatform? PlatformOf(string key)
+    {
+        string prefix = key.Split(':', 2)[0];
+        foreach (MessagingPlatform platform in Enum.GetValues<MessagingPlatform>())
+        {
+            if (Prefix(platform) == prefix)
+            {
+                return platform;
+            }
+        }
+
+        return null;
+    }
+
     private static string Prefix(MessagingPlatform platform) => platform switch
     {
         MessagingPlatform.WhatsApp => "whatsapp",

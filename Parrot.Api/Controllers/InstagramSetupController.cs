@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
-using Parrot.Api.Security;
+using Parrot.Application.Teams;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -13,6 +14,7 @@ namespace Parrot.Api.Rest.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 // Manual Instagram setup for the signed-in business; the public webhook lives in InstagramWebhookController.
 [Monitor(Area = "instagram.setup")]
+[RequireChannel(WorkspaceChannels.Instagram)]
 public sealed class InstagramSetupController(IInstagramConnectionService connections) : ControllerBase
 {
     private string? Owner => User.WorkspaceId();
@@ -25,6 +27,7 @@ public sealed class InstagramSetupController(IInstagramConnectionService connect
     // PUT /api/instagram/setup/account - the access token; Parrot reads the account and subscribes it.
     [Monitor("instagram.setup.account", SlowMs = 3000)] // waits on graph.instagram.com
     [HttpPut("account")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> SaveAccount([FromBody] InstagramAccountRequest request, CancellationToken cancellationToken)
     {
         if (Owner is not { Length: > 0 } owner) return Unauthorized();
@@ -34,6 +37,7 @@ public sealed class InstagramSetupController(IInstagramConnectionService connect
 
     // PUT /api/instagram/setup/app-secret - the Instagram app secret that signs this account's webhooks.
     [HttpPut("app-secret")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> SaveAppSecret([FromBody] AppSecretRequest request, CancellationToken cancellationToken)
     {
         if (Owner is not { Length: > 0 } owner) return Unauthorized();
@@ -43,6 +47,7 @@ public sealed class InstagramSetupController(IInstagramConnectionService connect
 
     // POST /api/instagram/setup/disable - its webhooks are refused from now on.
     [HttpPost("disable")]
+    [RequirePermission(WorkspacePermissions.ChannelsDisconnect)]
     public async Task<IActionResult> Disable(CancellationToken cancellationToken)
     {
         if (Owner is not { Length: > 0 } owner) return Unauthorized();

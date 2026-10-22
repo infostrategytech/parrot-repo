@@ -15,4 +15,5 @@ public static class RateLimitPolicies
     public const string InstagramWebhook = "webhooks:instagram";
     public const string FileSend = "uploads:file-send";
     public const string ImageUpload = "uploads:image";
+    public const string TeamInvite = "team:invite";
 }

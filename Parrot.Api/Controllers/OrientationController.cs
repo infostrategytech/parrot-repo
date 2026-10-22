@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
-using Parrot.Application.Agents;
-using Parrot.Domain.Exceptions;
 using Parrot.Api.Security;
+using Parrot.Application.Agents;
+using Parrot.Application.Teams;
+using Parrot.Domain.Exceptions;
 
 namespace Parrot.Api.Controllers;
 
@@ -23,6 +24,7 @@ public sealed class OrientationController(IOrientationClient orientation) : Cont
         ?? throw new UnauthorizedException("Sign in to continue.");
 
     [HttpPost("voice/session")]
+    [RequirePermission(WorkspacePermissions.WorkspaceManage)]
     public async Task<ActionResult<OrientationVoiceSession>> StartVoice(CancellationToken cancellationToken) =>
         Ok(await orientation.StartVoiceSessionAsync(Owner, cancellationToken));
 }

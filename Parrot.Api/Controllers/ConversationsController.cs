@@ -2,13 +2,14 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
-using Parrot.Application.Conversations;
-using Parrot.Application.Integrations;
-using Parrot.Domain.Exceptions;
 using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
-using Parrot.Api.Utils;
 using Parrot.Api.Security;
+using Parrot.Api.Utils;
+using Parrot.Application.Conversations;
+using Parrot.Application.Integrations;
+using Parrot.Application.Teams;
+using Parrot.Domain.Exceptions;
 
 namespace Parrot.Api.Controllers;
 
@@ -17,25 +18,31 @@ namespace Parrot.Api.Controllers;
 [Route("api/conversations")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "conversations")]
+[RequirePermission(WorkspacePermissions.ConversationsView)]
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram) : ControllerBase
 {
-    // The workspace owns the conversations; what has been read, and who wrote
-    // a note, belong to the person signed in.
+    // The workspace owns the conversations; what has been read, what is pinned
+    // or set aside, and who wrote a note, belong to the person signed in.
     private string Owner => User.WorkspaceId()
         ?? throw new UnauthorizedException("Sign in to continue.");
 
     private string Reader => User.UserId()
         ?? throw new UnauthorizedException("Sign in to continue.");
 
+    // The connections a channel-limited team member reaches; null for everyone else.
+    private IReadOnlySet<Guid>? Reach => HttpContext.WorkspaceAccess().AllowedConnections;
+
     [HttpGet]
     public async Task<IActionResult> List(int skip = 0, int take = 50, CancellationToken cancellationToken = default)
     {
         take = Math.Clamp(take, 1, 100);
         skip = Math.Max(0, skip);
-        IReadOnlyList<ConversationSummary> page = await store.ListAsync(Owner, skip, take, cancellationToken);
-        IReadOnlyDictionary<(Guid Connection, string Sender), ConversationFlags> marks = await flags.ListAsync(Owner, cancellationToken);
+        IReadOnlyList<ConversationSummary> page = Reach is { } reach
+            ? await store.ListAsync(Owner, reach, skip, take, cancellationToken)
+            : await store.ListAsync(Owner, skip, take, cancellationToken);
+        IReadOnlyDictionary<(Guid Connection, string Sender), ConversationFlags> marks = await ReachableFlagsAsync(cancellationToken);
 
         // Pinned conversations lead the first page wherever they fall in the newest-first order, so a pin older
         // than the page is still there. A page that holds one already is not repeated by it.
@@ -77,7 +84,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
         ReadAdvance? read = await reads.MarkReadAsync(Owner, Reader, connectionId, sender, request.UpToMessageId, cancellationToken);
-        await flags.SetMarkedUnreadAsync(Owner, connectionId, sender, false, cancellationToken);
+        await flags.SetMarkedUnreadAsync(Reader, connectionId, sender, false, cancellationToken);
 
         // Only when this moved the position: a repeat must not tell the channel again.
         if (read is not null) await channelReads.SendAsync(Owner, read, cancellationToken);
@@ -91,7 +98,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromBody] SetMarkedUnreadRequest request, CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        await flags.SetMarkedUnreadAsync(Owner, connectionId, sender, request.MarkedUnread, cancellationToken);
+        await flags.SetMarkedUnreadAsync(Reader, connectionId, sender, request.MarkedUnread, cancellationToken);
         return Ok(new UnreadSummary(await TotalUnreadAsync(cancellationToken)));
     }
 
@@ -100,7 +107,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromBody] SetPinnedRequest request, CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        await flags.SetPinnedAsync(Owner, connectionId, sender, request.Pinned, cancellationToken);
+        await flags.SetPinnedAsync(Reader, connectionId, sender, request.Pinned, cancellationToken);
         return Ok(new SetPinnedRequest(request.Pinned));
     }
 
@@ -113,6 +120,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     }
 
     [HttpPost("{connectionId:guid}/notes")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
     public async Task<IActionResult> AddNote(Guid connectionId, [FromQuery] string sender,
         [FromBody] AddNoteRequest request, CancellationToken cancellationToken)
     {
@@ -126,6 +134,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     }
 
     [HttpDelete("{connectionId:guid}/notes/{noteId}")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
     public async Task<IActionResult> DeleteNote(Guid connectionId, string noteId, [FromQuery] string sender, CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
@@ -137,8 +146,8 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     // the inbox badge counts what the agent has set aside to come back to.
     private async Task<int> TotalUnreadAsync(CancellationToken ct)
     {
-        int total = await reads.TotalUnreadAsync(Owner, Reader, ct);
-        List<(Guid Connection, string Sender)> marked = [.. (await flags.ListAsync(Owner, ct)).Where(f => f.Value.MarkedUnread).Select(f => f.Key)];
+        int total = await reads.TotalUnreadAsync(Owner, Reader, Reach, ct);
+        List<(Guid Connection, string Sender)> marked = [.. (await ReachableFlagsAsync(ct)).Where(f => f.Value.MarkedUnread).Select(f => f.Key)];
         if (marked.Count == 0) return total;
         IReadOnlyDictionary<(Guid, string), int> counts = await reads.CountUnreadAsync(Owner, Reader, marked, ct);
         return total + marked.Count(m => counts.GetValueOrDefault(m) == 0);
@@ -163,27 +172,42 @@ public sealed class ConversationsController(IConversationStore store, IConversat
 
     [Monitor("conversations.send", SlowMs = 3000)] // waits on the WhatsApp Cloud API or TikTok
     [HttpPost("{connectionId:guid}/messages")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
     public async Task<IActionResult> Send(Guid connectionId, [FromQuery] string sender,
-        [FromBody] SendReplyRequest request, CancellationToken cancellationToken) =>
-        Ok(await service.SendAsync(Owner, connectionId, sender, request, cancellationToken));
+        [FromBody] SendReplyRequest request, CancellationToken cancellationToken)
+    {
+        HttpContext.RequireReach(connectionId);
+        return Ok(await service.SendAsync(Owner, connectionId, sender, request, cancellationToken));
+    }
 
     // A picture or document for the customer, with an optional caption. The same request id makes a retry safe.
     [Monitor("conversations.send_file", SlowMs = 5000)]
     [HttpPost("{connectionId:guid}/attachments")]
     [RequestSizeLimit(ConversationService.MaxDocumentBytes + 1024 * 1024)]
     [EnableRateLimiting(RateLimitPolicies.FileSend)]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
     public async Task<IActionResult> SendFile(Guid connectionId, [FromQuery] string sender, [FromForm] SendFileForm form,
         CancellationToken cancellationToken)
     {
+        HttpContext.RequireReach(connectionId);
         if (form.File is not { } upload) throw new ValidationException("Attach a file to send.");
         ConversationMessage sent = await service.SendFileAsync(Owner, connectionId, sender, form.RequestId, form.Caption,
             new OutgoingFile(upload.FileName, upload.ContentType, upload.Length, upload.OpenReadStream), cancellationToken, form.ReplyToMessageId);
         return Ok(mediaLinks.Sign(sent));
     }
 
+    // The person's pins and marks, without conversations on channels their grant does not reach.
+    private async Task<IReadOnlyDictionary<(Guid Connection, string Sender), ConversationFlags>> ReachableFlagsAsync(CancellationToken ct)
+    {
+        IReadOnlyDictionary<(Guid Connection, string Sender), ConversationFlags> all = await flags.ListAsync(Reader, ct);
+        return Reach is { } reach ? all.Where(f => reach.Contains(f.Key.Connection)).ToDictionary() : all;
+    }
+
     // A thread can be on a WhatsApp number, a Facebook Page, the TikTok account or an Instagram account.
+    // A channel the person's grant does not reach answers as not found, like one that does not exist.
     private async Task EnsureConnectionOwnedAsync(Guid connectionId, CancellationToken cancellationToken)
     {
+        HttpContext.RequireReach(connectionId);
         if (await connections.GetByOwnerAndIdAsync(Owner, connectionId) is null
             && !await facebook.IsOwnedByAsync(connectionId, Owner, cancellationToken)
             && (await tikTokConnections.GetByOwnerAsync(Owner, cancellationToken))?.Id != connectionId

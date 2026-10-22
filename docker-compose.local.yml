@@ -403,6 +403,9 @@ services:
       JwtSettings__Secret: ${JWT_SECRET:-parrot-local-development-secret-change-me}
       JwtSettings__Issuer: ParrotApi
       JwtSettings__Audience: ParrotApp
+      # Each request with a Parrot session token is checked against the member's
+      # current access, so a removed member or a changed role applies at once.
+      Catalog__Auth__AccessCheckUrl: http://parrot-api:8080/
     ports:
       - "5240:8080"
     depends_on:

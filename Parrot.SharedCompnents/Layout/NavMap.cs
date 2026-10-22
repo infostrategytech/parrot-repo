@@ -5,11 +5,17 @@ namespace Parrot.SharedComponents.Layout;
 /// <param name="Path">The route. Null means the item renders but does not navigate.</param>
 /// <param name="Label">What the rail reads, and what the page is called everywhere else.</param>
 /// <param name="Glyph">Its icon in the rail.</param>
+/// <param name="AnyPermission">
+/// Permission keys, any one of which opens the page for a team member. Null is
+/// everyone. The owner can open every page. The API checks the same rules on
+/// every request; this only keeps the rail to what the person can use.
+/// </param>
 public sealed record NavEntry(
     string? Path,
     string Label,
     IconName Glyph,
-    string? CompactLabel = null);
+    string? CompactLabel = null,
+    IReadOnlyList<string>? AnyPermission = null);
 
 /// <summary>
 /// The navigation, as data. One table drives the rail, the active state and
@@ -27,19 +33,21 @@ public static class NavMap
     public static readonly IReadOnlyList<NavEntry> Primary =
     [
         new("/dashboard", "Overview", IconName.RiHome5Fill, "Overview"),
-        new("/dashboard/conversations", "Inbox", IconName.RiInbox2Fill, "Inbox"),
-        new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill, "Customers"),
-        new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products"),
-        new("/dashboard/tasks", "Tasks", IconName.RiClipboardFill, "Tasks"),
-        new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels"),
-        new("/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI"),
+        new("/dashboard/conversations", "Inbox", IconName.RiInbox2Fill, "Inbox", ["conversations.view"]),
+        new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill, "Customers", ["conversations.view"]),
+        new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products",
+            ["catalog.view", "catalog.categories", "catalog.items.add", "catalog.items.edit", "catalog.items.delete", "catalog.availability"]),
+        // The team's customer work queue: whoever works conversations, and the Analyst's task reports.
+        new("/dashboard/tasks", "Tasks", IconName.RiClipboardFill, "Tasks", ["conversations.view", "conversations.take-over", "analytics.tasks"]),
+        new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels", ["channels.connect", "channels.disconnect"]),
+        new("/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI", ["analytics.dashboard", "conversations.take-over"]),
         new(null, "Campaigns", IconName.RiMegaphoneFill, "Campaigns"),
-        new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill, "Insights")
+        new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill, "Insights", ["analytics.qa", "analytics.summaries"])
     ];
 
     public static readonly IReadOnlyList<NavEntry> Footer =
     [
-        new("/dashboard/knowledge", "Knowledge", IconName.RiBookOpenFill, "Knowledge"),
+        new("/dashboard/knowledge", "Knowledge", IconName.RiBookOpenFill, "Knowledge", ["agents.create", "agents.edit", "workspace.manage"]),
         new(null, "Help Centre", IconName.RiQuestionFill, "Help"),
         new("/dashboard/settings", "Settings", IconName.RiSettings4Fill, "Settings")
     ];

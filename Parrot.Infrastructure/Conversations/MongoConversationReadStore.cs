@@ -74,7 +74,10 @@ public sealed class MongoConversationReadStore : IConversationReadStore
             conversations.Select(c => (c.Connection, c.Sender, Watermark(marks, c.Connection, c.Sender))).ToList(), ct);
     }
 
-    public async Task<int> TotalUnreadAsync(string owner, string reader, CancellationToken ct)
+    public Task<int> TotalUnreadAsync(string owner, string reader, CancellationToken ct) =>
+        TotalUnreadAsync(owner, reader, null, ct);
+
+    public async Task<int> TotalUnreadAsync(string owner, string reader, IReadOnlySet<Guid>? connections, CancellationToken ct)
     {
         Dictionary<(Guid, string), ObjectId> marks = await LoadMarksAsync(reader, ct);
 
@@ -94,6 +97,7 @@ public sealed class MongoConversationReadStore : IConversationReadStore
         foreach (BsonDocument row in latest)
         {
             Guid connection = Guid.Parse(row["_id"]["connection"].AsString);
+            if (connections is not null && !connections.Contains(connection)) continue;
             string sender = row["_id"]["sender"].AsString;
             ObjectId after = Watermark(marks, connection, sender);
             if (row["newest"].AsObjectId.CompareTo(after) > 0) behind.Add((connection, sender, after));

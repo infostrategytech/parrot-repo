@@ -29,7 +29,9 @@
     private bool _ready, _endingSession, _disposed;
 
     private bool IsPublicPath() => PublicPaths.Contains(new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant())
-        || new Uri(Nav.Uri).AbsolutePath == "/";
+        || new Uri(Nav.Uri).AbsolutePath == "/"
+        // An invite link is opened before signing in; the page itself asks for it.
+        || new Uri(Nav.Uri).AbsolutePath.StartsWith("/invite/", StringComparison.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {

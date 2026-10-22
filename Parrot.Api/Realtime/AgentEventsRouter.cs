@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.SignalR;
 using Parrot.Application.Agents;
+using Parrot.Application.Messaging;
+using Parrot.Application.Teams;
 using Parrot.Application.Realtime;
 
 namespace Parrot.Api.Realtime;
@@ -20,6 +22,7 @@ public sealed class AgentEventsRouter(
     IAgentActivityStore activity,
     IOnlineSessionStore sessions,
     IHubContext<MessagingHub> hub,
+    IRealtimeAudience audience,
     TimeProvider clock,
     ILogger<AgentEventsRouter> logger)
 {
@@ -58,6 +61,13 @@ public sealed class AgentEventsRouter(
         try
         {
             connections = await sessions.GetConnectionsAsync(record.OwnerUserId, cancellationToken);
+
+            // The AI operations screens: for whoever reads the figures or decides approvals,
+            // on the channel the conversation is on.
+            Domain.Enums.MessagingPlatform? platform = record.ConversationKey is { } key ? ConversationKey.PlatformOf(key) : null;
+            connections = await audience.FilterAsync(record.OwnerUserId, connections, a =>
+                (a.Can(WorkspacePermissions.AnalyticsDashboard) || a.Can(WorkspacePermissions.ConversationsTakeOver))
+                && (platform is { } p ? a.CanReach(p) : a.AllChannels));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

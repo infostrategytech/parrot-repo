@@ -34,7 +34,7 @@ public class CatalogClaimsTests
 
         object service = CreateService(jwt.Object);
         MethodInfo build = service.GetType().GetMethod("BuildAuthResponse", BindingFlags.Instance | BindingFlags.NonPublic)!;
-        AuthResponse response = (AuthResponse)build.Invoke(service, [user, workspace])!;
+        AuthResponse response = (AuthResponse)build.Invoke(service, [user, global::Parrot.Application.Teams.WorkspaceAccess.ForOwner(workspace)])!;
 
         Assert.Equal("token", response.Token);
         Assert.NotNull(captured);

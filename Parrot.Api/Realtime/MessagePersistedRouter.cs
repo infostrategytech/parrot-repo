@@ -18,6 +18,7 @@ namespace Parrot.Api.Realtime;
 public sealed class MessagePersistedRouter(
     IOnlineSessionStore sessions,
     IHubContext<MessagingHub> hub,
+    IRealtimeAudience audience,
     ILogger<MessagePersistedRouter> logger)
 {
     public async Task RouteAsync(MessagePersisted persisted, CancellationToken cancellationToken)
@@ -40,6 +41,7 @@ public sealed class MessagePersistedRouter(
         try
         {
             connections = await sessions.GetConnectionsAsync(message.OwnerUserId, cancellationToken);
+            connections = await audience.ForConversationAsync(message.OwnerUserId, connections, message.ConnectionId);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

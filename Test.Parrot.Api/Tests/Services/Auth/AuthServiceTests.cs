@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Hosting;
@@ -84,7 +85,7 @@ public class AuthServiceTests
             _userManagerMock.Object,
             _passwordHasherMock.Object,
             _jwtHelperMock.Object,
-            new WorkspaceService(_workspaces, Mock.Of<IAppLogger<WorkspaceService>>()),
+            TeamFixture.Workspaces(_workspaces),
             _emailServiceMock.Object,
             _featureFlagsMock.Object,
             emailSettings,
@@ -621,7 +622,9 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task RegisterAsync_WhenVerificationSwitchedOff_CreatesAConfirmedAccount_AndSignsIn()
+    // Signed in at once, but the address is not marked proved: only a code, Google or
+    // Facebook, or an invite link does that, and an invite relies on it.
+    public async Task RegisterAsync_WhenVerificationSwitchedOff_SignsIn_WithoutMarkingTheAddressProved()
     {
         RequireVerification(false);
         ApplicationUser? created = null;
@@ -643,7 +646,7 @@ public class AuthServiceTests
         Assert.NotNull(response);
         Assert.Equal("test-jwt-token", response.Token);
         Assert.NotNull(created);
-        Assert.True(created.EmailConfirmed);
+        Assert.False(created.EmailConfirmed);
         _emailServiceMock.Verify(
             e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
@@ -671,7 +674,7 @@ public class AuthServiceTests
     }
 
     [Fact]
-    public async Task LoginAsync_WhenVerificationSwitchedOff_LetsAnUnverifiedAccountIn_AndConfirmsIt()
+    public async Task LoginAsync_WhenVerificationSwitchedOff_LetsAnUnverifiedAccountIn_WithoutConfirmingIt()
     {
         RequireVerification(false);
         ApplicationUser user = CreateUser(emailConfirmed: false);
@@ -684,8 +687,8 @@ public class AuthServiceTests
         AuthResponse response = await _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "correct" });
 
         Assert.Equal("test-jwt-token", response.Token);
-        Assert.True(user.EmailConfirmed);
-        _userManagerMock.Verify(m => m.UpdateAsync(user), Times.Once);
+        Assert.False(user.EmailConfirmed);
+        _userManagerMock.Verify(m => m.UpdateAsync(user), Times.Never);
         _emailServiceMock.Verify(
             e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);

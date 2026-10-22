@@ -20,8 +20,14 @@ public class ApplicationUser : IdentityUser
     // type 08012345678 or 2348012345678 and reach the same row.
     public string? PhoneDialCode { get; set; }
 
-    /// <summary>The workspace switched to last, where the next sign-in lands. Null before the first.</summary>
+    /// <summary>The workspace switched to last, where the next sign-in lands unless a default is set. Null before the first.</summary>
     public string? LastWorkspaceId { get; set; }
+
+    /// <summary>
+    /// "When I sign in": null resumes where the person left off (<see cref="LastWorkspaceId"/>);
+    /// a workspace id always opens that one, while they can still reach it.
+    /// </summary>
+    public string? DefaultWorkspaceId { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

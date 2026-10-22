@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Middleware;
-using Parrot.Application.Integrations;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
+using Parrot.Application.Integrations;
+using Parrot.Application.Teams;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -20,6 +22,7 @@ public class IntegrationsController : ControllerBase
     }
 
     [HttpGet("business-webhook/{messagingPlatform}")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     [ProducesResponseType(typeof(object), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
     public IActionResult GetWebhookUrl(string messagingPlatform)

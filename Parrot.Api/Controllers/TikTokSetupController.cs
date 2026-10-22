@@ -1,12 +1,13 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
+using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
-using Parrot.Api.Monitoring;
+using Parrot.Application.Teams;
 using Parrot.Domain.Exceptions;
-using Parrot.Api.Security;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -16,6 +17,7 @@ namespace Parrot.Api.Rest.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 // Authenticated setup endpoints for TikTok, plus the OAuth callback TikTok redirects the browser to.
 [Monitor(Area = "tiktok.setup", SlowMs = 3000)] // round trips to TikTok
+[RequireChannel(WorkspaceChannels.TikTok)]
 public sealed class TikTokSetupController(
     ITikTokConnectionService connections,
     IOptions<FrontendSettings> frontend,
@@ -32,6 +34,7 @@ public sealed class TikTokSetupController(
 
     // PUT /api/tiktok/setup/app - saves the customer's TikTok app and registers its webhook with TikTok.
     [HttpPut("app")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> SaveApp([FromBody] TikTokAppRequest request, CancellationToken cancellationToken)
     {
         string? owner = User.WorkspaceId();
@@ -42,6 +45,7 @@ public sealed class TikTokSetupController(
 
     // GET /api/tiktok/setup/authorize - the TikTok consent URL to send the browser to.
     [HttpGet("authorize")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> Authorize(CancellationToken cancellationToken)
     {
         string? owner = User.WorkspaceId();
@@ -80,6 +84,7 @@ public sealed class TikTokSetupController(
 
     // POST /api/tiktok/setup/disable - disconnects the account; its webhooks are refused from now on.
     [HttpPost("disable")]
+    [RequirePermission(WorkspacePermissions.ChannelsDisconnect)]
     public async Task<IActionResult> Disable(CancellationToken cancellationToken)
     {
         string? owner = User.WorkspaceId();

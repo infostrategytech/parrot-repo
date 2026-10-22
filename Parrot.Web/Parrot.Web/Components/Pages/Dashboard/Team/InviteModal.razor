@@ -1,91 +1,249 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Team
+@using Parrot.Web.Features.Dashboard.Team
 
-@* An invitation, in Aurora's Dialog. The role picks the permissions; each
-   one is a real Checkbox so it can be adjusted before the invite goes. *@
+@* An invitation, or a member's access, in Aurora's Dialog. A person can be
+   given access to one workspace, several, or all of them; in each, a role and
+   the channels they see. The role decides the permissions: built-in roles are
+   fixed, and anything different is a role of the owner's own, made under
+   Roles. A workspace's own access is used there instead of "All workspaces",
+   so access can be narrowed in one place. *@
 
 <Dialog Open="true"
-        Title="Invite team member"
-        ConfirmLabel="Send invitation"
-        ConfirmDisabled="@(!_canSend)"
-        OnConfirm="HandleSend"
+        Title="@(Member is null ? "Invite team member" : $"Access for {MemberName}")"
+        ConfirmLabel="@(Member is null ? "Send invitation" : "Save access")"
+        BusyLabel="@(Member is null ? "Sending…" : "Saving…")"
+        Busy="@_saving"
+        ConfirmDisabled="@(!CanSave)"
+        OnConfirm="SaveAsync"
         OnCancel="OnCancel">
     <GlyphContent><Icon Name="IconName.RiUserAddFill" Size="IconSize.Md" /></GlyphContent>
     <Body>
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="invite__lede">
-            They will receive an email invitation to join your workspace.
+            @(Member is null
+                ? "They will get an email with a link to join. Choose where they work and what they can see."
+                : "Changes apply on their next action in the workspace.")
         </Typography>
 
-        <div class="invite__form">
-            <Input FloatingLabel="Full name" @bind-Value="_fullName" maxlength="80" required />
-            <Input FloatingLabel="Email address" Type="email" @bind-Value="_email" required />
+        @if (Member is null)
+        {
+            <div class="invite__form">
+                <Input FloatingLabel="Full name" Id="invite-full-name" @bind-Value="_fullName" maxlength="80" required />
+                <Input FloatingLabel="Email address" Id="invite-email" Type="email" @bind-Value="_email" required />
+            </div>
+        }
 
-            <SelectField FloatingLabel="Workspace role"
-                         Value="@(string.IsNullOrEmpty(_selectedRole) ? null : _selectedRole)"
-                         Open="_roleOpen"
-                         OpenChanged="@(open => _roleOpen = open)">
-                @foreach (var role in WorkspaceRoles.All)
-                {
-                    <PopoverOption Label="@role"
-                                   Active="@(_selectedRole == role)"
-                                   OnSelect="() => SelectRole(role)" />
-                }
-            </SelectField>
-        </div>
-
-        <section class="invite__permissions">
-            <Typography TextStyle="TextStyle.Small12Semibold" As="h3">Role permissions</Typography>
-            @if (string.IsNullOrEmpty(_selectedRole))
-            {
-                <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="invite__placeholder">
-                    Select a role to define permissions.
-                </Typography>
-            }
-            else
-            {
-                <div class="invite__permission-list">
-                    @foreach (var perm in _permissions)
+        @foreach (GrantDraft grant in _grants)
+        {
+            <section class="invite__permissions" aria-label="@WorkspaceLabel(grant.WorkspaceId)">
+                <div class="invite__grant-head">
+                    <SelectField FloatingLabel="Workspace"
+                                 Value="@WorkspaceLabel(grant.WorkspaceId)"
+                                 Open="grant.WorkspaceOpen"
+                                 OpenChanged="@(open => grant.WorkspaceOpen = open)">
+                        @foreach ((string? id, string label) in WorkspaceChoices(grant))
+                        {
+                            <PopoverOption Label="@label"
+                                           Active="@(grant.WorkspaceId == id)"
+                                           OnSelect="() => { grant.WorkspaceId = id; grant.WorkspaceOpen = false; }" />
+                        }
+                    </SelectField>
+                    @if (_grants.Count > 1)
                     {
-                        <Checkbox State="@(perm.Enabled ? CheckboxState.Checked : CheckboxState.Unchecked)"
-                                  StateChanged="@(state => perm.Enabled = state == CheckboxState.Checked)"
-                                  Label="@perm.Label" />
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _grants.Remove(grant)">Remove</Button>
                     }
                 </div>
-            }
-        </section>
+
+                <SelectField FloatingLabel="Role"
+                             Value="@(RoleFor(grant) is { } chosen ? RoleLabel(chosen) : null)"
+                             Open="grant.RoleOpen"
+                             OpenChanged="@(open => grant.RoleOpen = open)">
+                    @foreach (TeamRole role in Catalog.Roles)
+                    {
+                        <PopoverOption Label="@RoleLabel(role)"
+                                       Active="@(grant.RoleId == role.Id)"
+                                       OnSelect="() => { grant.RoleId = role.Id; grant.RoleOpen = false; }" />
+                    }
+                </SelectField>
+
+                <Typography TextStyle="TextStyle.Small12Semibold" As="h3">Permissions</Typography>
+                @if (RoleFor(grant) is not { } picked)
+                {
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="invite__placeholder">
+                        Select a role to see what it allows.
+                    </Typography>
+                }
+                else
+                {
+                    <ul class="invite__role-permissions">
+                        @foreach (TeamOption permission in Catalog.Permissions.Where(p => picked.Permissions.Contains(p.Key)))
+                        {
+                            <li>@permission.Label</li>
+                        }
+                    </ul>
+                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="invite__placeholder">
+                        @(picked.IsCustom
+                            ? "Your own role: change it under Roles, and everyone holding it gets the change."
+                            : "Built-in roles cannot be changed. To adjust one, duplicate it under Roles.")
+                    </Typography>
+                }
+
+                <Typography TextStyle="TextStyle.Small12Semibold" As="h3">Channels</Typography>
+                <div class="invite__permission-list">
+                    <Checkbox State="@(grant.AllChannels ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                              StateChanged="@(state => grant.AllChannels = state == CheckboxState.Checked)"
+                              Label="All channels"
+                              Description="Includes channels connected later." />
+                    @if (!grant.AllChannels)
+                    {
+                        @foreach (TeamOption channel in Catalog.Channels)
+                        {
+                            <Checkbox State="@(grant.Channels.Contains(channel.Key) ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                                      StateChanged="@(state => Toggle(grant.Channels, channel.Key, state))"
+                                      Label="@channel.Label" />
+                        }
+                    }
+                </div>
+            </section>
+        }
+
+        @if (WorkspaceChoices(null).Any())
+        {
+            <div class="invite__add">
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="AddGrant">
+                    <IconLeft><Icon Name="IconName.RiAddFill" Size="IconSize.Sm" /></IconLeft>
+                    <ChildContent>Add access to another workspace</ChildContent>
+                </Button>
+            </div>
+        }
+
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" />
+        }
     </Body>
 </Dialog>
 
 @code {
+    private const string AllWorkspaces = "All workspaces";
+
+    [Parameter, EditorRequired] public TeamCatalog Catalog { get; set; } = default!;
+    [Parameter, EditorRequired] public IReadOnlyList<TeamWorkspace> Workspaces { get; set; } = [];
+
+    /// <summary>A member whose access is being changed; null to invite someone new.</summary>
+    [Parameter] public TeamMember? Member { get; set; }
+
     [Parameter] public EventCallback OnCancel { get; set; }
-    [Parameter] public EventCallback<TeamMember> OnSend { get; set; }
 
-    string _fullName = string.Empty;
-    string _email = string.Empty;
-    string _selectedRole = string.Empty;
-    bool _roleOpen;
-    List<RolePermission> _permissions = [];
+    /// <summary>Raised once the invite was sent or the access saved.</summary>
+    [Parameter] public EventCallback OnSaved { get; set; }
 
-    bool _canSend => !string.IsNullOrWhiteSpace(_fullName)
-        && !string.IsNullOrWhiteSpace(_email)
-        && !string.IsNullOrEmpty(_selectedRole);
+    [Inject] private TeamClient Team { get; set; } = default!;
 
-    void SelectRole(string role)
+    private sealed class GrantDraft
     {
-        _selectedRole = role;
-        _permissions = WorkspaceRoles.GetPermissions(_selectedRole);
-        _roleOpen = false;
+        public string? WorkspaceId { get; set; }
+        public string RoleId { get; set; } = "";
+        public bool AllChannels { get; set; } = true;
+        public List<string> Channels { get; } = [];
+        public bool WorkspaceOpen { get; set; }
+        public bool RoleOpen { get; set; }
     }
 
-    async Task HandleSend()
+    private readonly List<GrantDraft> _grants = [];
+    private string _fullName = "";
+    private string _email = "";
+    private bool _saving;
+    private string? _error;
+
+    private string MemberName => Member?.FullName ?? Member?.Email ?? "";
+
+    private bool CanSave =>
+        !_saving
+        && (Member is not null || (!string.IsNullOrWhiteSpace(_fullName) && !string.IsNullOrWhiteSpace(_email)))
+        && _grants.Count > 0
+        && _grants.All(g => RoleFor(g) is not null && (g.AllChannels || g.Channels.Count > 0));
+
+    protected override void OnInitialized()
     {
-        if (!_canSend) return;
-        var member = new TeamMember
+        if (Member is null)
         {
-            Id = Guid.NewGuid().ToString(),
-            FullName = _fullName,
-            Email = _email,
-            Role = _selectedRole
-        };
-        await OnSend.InvokeAsync(member);
+            // Most invites are for one workspace, so the first is chosen to start with.
+            _grants.Add(new GrantDraft { WorkspaceId = Workspaces.Count == 1 ? null : Workspaces.FirstOrDefault()?.Id });
+            return;
+        }
+
+        foreach (TeamGrant grant in Member.Grants)
+        {
+            GrantDraft draft = new() { WorkspaceId = grant.WorkspaceId, RoleId = grant.RoleId, AllChannels = grant.Channels.Count == 0 };
+            draft.Channels.AddRange(grant.Channels);
+            _grants.Add(draft);
+        }
+    }
+
+    private string WorkspaceLabel(string? id) =>
+        id is null ? AllWorkspaces : Workspaces.FirstOrDefault(w => w.Id == id)?.Name ?? "Unnamed workspace";
+
+    // A workspace, or "all", can be chosen once across the form.
+    private IEnumerable<(string? Id, string Label)> WorkspaceChoices(GrantDraft? editing)
+    {
+        HashSet<string?> taken = _grants.Where(g => g != editing).Select(g => g.WorkspaceId).ToHashSet();
+        if (!taken.Contains(null)) yield return (null, AllWorkspaces);
+        foreach (TeamWorkspace workspace in Workspaces.Where(w => !taken.Contains(w.Id)))
+        {
+            yield return (workspace.Id, workspace.Name ?? "Unnamed workspace");
+        }
+    }
+
+    private TeamRole? RoleFor(GrantDraft grant) => Catalog.Roles.FirstOrDefault(r => r.Id == grant.RoleId);
+
+    // A custom role can share a built-in's name, so it always says it is custom.
+    private static string RoleLabel(TeamRole role) => role.IsCustom ? $"{role.Name} · Custom" : role.Name;
+
+    private static void Toggle(List<string> keys, string key, CheckboxState state)
+    {
+        keys.Remove(key);
+        if (state == CheckboxState.Checked) keys.Add(key);
+    }
+
+    private void AddGrant()
+    {
+        (string? id, _) = WorkspaceChoices(null).First();
+        _grants.Add(new GrantDraft { WorkspaceId = id });
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            List<GrantRequest> grants = _grants
+                .Select(g => new GrantRequest(g.WorkspaceId, g.RoleId, g.AllChannels ? [] : [.. g.Channels]))
+                .ToList();
+
+            if (Member is null)
+            {
+                await Team.InviteAsync(_fullName.Trim(), _email.Trim(), grants);
+            }
+            else
+            {
+                await Team.UpdateMemberAsync(Member.UserId, grants);
+            }
+
+            await OnSaved.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _error = Member is null ? "We could not send the invite. Try again." : "We could not save their access. Try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 }

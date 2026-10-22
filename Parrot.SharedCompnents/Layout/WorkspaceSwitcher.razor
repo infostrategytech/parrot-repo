@@ -6,7 +6,11 @@
 
    The host passes the workspaces it can switch between and is told which one
    was picked; switching itself is the host's business. A host that passes no
-   list gets the current workspace alone, and no add button without OnAdd. *@
+   list gets the current workspace alone, and no add button without OnAdd.
+
+   One login reaches every business the person works in: their own workspaces
+   come first, then each other business under its own heading, and every
+   workspace is tagged with how they work there (Owner, or their role). *@
 
 <div class="workspace">
     <button type="button"
@@ -35,13 +39,18 @@
                 @onclick="() => _open = false"></button>
 
         <div class="workspace__menu" role="menu" @onkeydown="OnKeyDown">
+            @foreach (var group in Options.GroupBy(o => o.Group))
+            {
             <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="workspace__menu-label ds-overline">
-                Workspaces
+                @(group.Key ?? "Your workspaces")
             </Typography>
 
-            @foreach (var option in Options)
+            @foreach (var option in group)
             {
                 bool current = option.Id == Id;
+                @* The row holds two buttons side by side (a button cannot hold another):
+                   switch to it, and pin it as the workspace sign-in always opens. *@
+                <div class="workspace__row">
                 <button type="button"
                         role="menuitemradio"
                         aria-checked="@current.ToString().ToLowerInvariant()"
@@ -51,16 +60,38 @@
                     <PetalAvatar Seed="@option.Id" Initials="@DesignSystem.Initials.From(option.Name)" ImageUrl="@option.LogoUrl" />
                     <span class="workspace__identity">
                         <Typography TextStyle="TextStyle.Small12Medium" As="strong">@option.Name</Typography>
+                        @if (!string.IsNullOrWhiteSpace(option.Tag))
+                        {
+                            <Typography TextStyle="TextStyle.Small10Medium" As="small" Class="@($"workspace__tag {(option.Tag == "Owner" ? "is-owner" : null)}")">@option.Tag</Typography>
+                        }
                         @if (current && !string.IsNullOrWhiteSpace(Plan))
                         {
                             <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="workspace__eyebrow">@Plan</Typography>
                         }
                     </span>
+                    @if (option.IsDefault)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Medium" As="small" Class="workspace__default">Default</Typography>
+                    }
                     @if (current)
                     {
                         <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                     }
                 </button>
+                @if (OnSetDefault.HasDelegate)
+                {
+                    <button type="button"
+                            class="workspace__pin @(option.IsDefault ? "is-default" : null)"
+                            aria-pressed="@option.IsDefault.ToString().ToLowerInvariant()"
+                            aria-label="@(option.IsDefault ? $"Stop always opening {option.Name}; resume where you left off" : $"Always open {option.Name} when you sign in")"
+                            title="@(option.IsDefault ? "Default on sign-in. Click to resume where you left off instead." : "Open this when you sign in")"
+                            disabled="@Switching"
+                            @onclick="() => SetDefaultAsync(option)">
+                        <Icon Name="IconName.RiPushpin2Fill" Size="IconSize.Sm" />
+                    </button>
+                }
+                </div>
+            }
             }
 
             @if (OnAdd.HasDelegate)
@@ -97,6 +128,13 @@
     /// <summary>Raised by "Create workspace". Without it the button is not shown.</summary>
     [Parameter] public EventCallback OnAdd { get; set; }
 
+    /// <summary>
+    /// Raised to pin a workspace as the one sign-in always opens, with its id,
+    /// or with null to unpin and resume where the person left off. Without it
+    /// no pin is shown.
+    /// </summary>
+    [Parameter] public EventCallback<string?> OnSetDefault { get; set; }
+
     /// <summary>True while the host is switching; the other options are disabled meanwhile.</summary>
     [Parameter] public bool Switching { get; set; }
 
@@ -115,6 +153,9 @@
         _open = false;
         if (option.Id != Id && OnSwitch.HasDelegate) await OnSwitch.InvokeAsync(option.Id);
     }
+
+    private async Task SetDefaultAsync(WorkspaceOption option) =>
+        await OnSetDefault.InvokeAsync(option.IsDefault ? null : option.Id);
 
     private async Task AddAsync()
     {

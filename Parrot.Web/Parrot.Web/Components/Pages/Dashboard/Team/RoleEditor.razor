@@ -1,0 +1,104 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Team
+@using Parrot.Web.Features.Dashboard.Team
+
+@* One of the owner's own roles: a name and its permissions. Built-in roles
+   never open here; they are duplicated into a role of the owner's own first.
+   Saving changes what everyone holding the role may do, on their next action. *@
+
+<Dialog Open="true"
+        Title="@(Role is null ? "Create a role" : $"Edit {Role.Name}")"
+        ConfirmLabel="@(Role is null ? "Create role" : "Save role")"
+        BusyLabel="Saving…"
+        Busy="@_saving"
+        ConfirmDisabled="@(!CanSave)"
+        OnConfirm="SaveAsync"
+        OnCancel="OnCancel">
+    <GlyphContent><Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="invite__lede">
+            @(Role is { Holders: > 0 }
+                ? $"{Role.Holders} {(Role.Holders == 1 ? "person holds" : "people hold")} this role. Changes apply on their next action."
+                : "Only your team sees your roles. The name can match a built-in role; yours are always marked Custom.")
+        </Typography>
+
+        <div class="invite__form">
+            <Input FloatingLabel="Role name" Id="role-name" @bind-Value="_name" maxlength="64" required />
+        </div>
+
+        <section class="invite__permissions" aria-label="Permissions">
+            <Typography TextStyle="TextStyle.Small12Semibold" As="h3">Permissions</Typography>
+            <div class="invite__permission-list">
+                @foreach (TeamOption permission in Catalog.Permissions)
+                {
+                    <Checkbox State="@(_permissions.Contains(permission.Key) ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                              StateChanged="@(state => Toggle(permission.Key, state))"
+                              Label="@permission.Label" />
+                }
+            </div>
+        </section>
+
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" />
+        }
+    </Body>
+</Dialog>
+
+@code {
+    [Parameter, EditorRequired] public TeamCatalog Catalog { get; set; } = default!;
+
+    /// <summary>One of the owner's own roles to change; null to create one.</summary>
+    [Parameter] public TeamRole? Role { get; set; }
+
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    [Parameter] public EventCallback OnSaved { get; set; }
+
+    [Inject] private TeamClient Team { get; set; } = default!;
+
+    private readonly HashSet<string> _permissions = [];
+    private string? _name;
+    private bool _saving;
+    private string? _error;
+
+    private bool CanSave => !_saving && !string.IsNullOrWhiteSpace(_name) && _permissions.Count > 0;
+
+    protected override void OnInitialized()
+    {
+        _name = Role?.Name;
+        if (Role is not null) _permissions.UnionWith(Role.Permissions);
+    }
+
+    private void Toggle(string key, CheckboxState state)
+    {
+        if (state == CheckboxState.Checked) _permissions.Add(key);
+        else _permissions.Remove(key);
+    }
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            // In the catalog's order, so the role reads the same wherever it is shown.
+            List<string> permissions = Catalog.Permissions.Select(p => p.Key).Where(_permissions.Contains).ToList();
+            if (Role is null) await Team.CreateRoleAsync(_name!.Trim(), permissions);
+            else await Team.UpdateRoleAsync(Role.Id, _name!.Trim(), permissions);
+            await OnSaved.InvokeAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _error = "We could not save the role. Try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

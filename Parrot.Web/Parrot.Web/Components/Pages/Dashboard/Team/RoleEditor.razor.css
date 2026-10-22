@@ -1,0 +1,25 @@
+/* The role editor: the invite dialog's form and well, for a name and its permissions. */
+
+::deep .invite__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.invite__form {
+  display: grid;
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+}
+
+.invite__permissions {
+  display: grid;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.invite__permissions ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+.invite__permission-list {
+  display: grid;
+  gap: var(--spacing-sm);
+}

@@ -1,3 +1,5 @@
+using Parrot.Domain.Entities;
+using Parrot.Application.Teams;
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
@@ -26,7 +28,12 @@ public class MessageHistoryControllerTests
         {
             ControllerContext = new ControllerContext
             {
-                HttpContext = new DefaultHttpContext { User = new ClaimsPrincipal(identity) },
+                // As WorkspaceAccessFilter leaves it: the owner, who reaches every channel.
+                HttpContext = new DefaultHttpContext
+                {
+                    User = new ClaimsPrincipal(identity),
+                    Items = { [typeof(WorkspaceAccess)] = WorkspaceAccess.ForOwner(new Workspace { Id = userId ?? "none", OwnerId = userId ?? "none" }) },
+                },
             },
         };
     }

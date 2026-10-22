@@ -28,6 +28,7 @@ public interface ICustomerRepository
         string? channel,
         int skip,
         int take,
+        IReadOnlySet<Guid>? connections,
         CancellationToken ct);
 
     Task<Customer?> FindAsync(string ownerUserId, Guid id, CancellationToken ct);

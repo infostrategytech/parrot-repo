@@ -52,7 +52,7 @@
     {
         <WorkspaceSwitcher Id="@WorkspaceId" Name="@WorkspaceName" Plan="@WorkspacePlan" LogoUrl="@WorkspaceLogoUrl"
                            Workspaces="@Workspaces" OnSwitch="@OnWorkspaceSwitch" OnAdd="@OnWorkspaceAdd"
-                           Switching="@WorkspaceSwitching" />
+                           Switching="@WorkspaceSwitching" OnSetDefault="@OnWorkspaceSetDefault" />
     }
 
     <nav class="sidebar__nav" aria-label="Primary navigation">
@@ -60,7 +60,7 @@
             Workspace
         </Typography>
 
-        @foreach (var entry in NavMap.Primary)
+        @foreach (var entry in NavMap.Primary.Where(Allowed))
         {
             <NavRailItem Entry="entry"
                          IsActive="@(Current?.Label == entry.Label)"
@@ -71,7 +71,7 @@
         @* Knowledge, Help and Settings follow the pages in the same list and
            scroll with them; only the account stays at the foot. *@
         <div class="sidebar__divider" role="presentation"></div>
-        @foreach (var entry in NavMap.Footer)
+        @foreach (var entry in NavMap.Footer.Where(Allowed))
         {
             <NavRailItem Entry="entry" IsActive="@(Current?.Label == entry.Label)" Compact />
         }
@@ -110,6 +110,9 @@
 
     [Parameter] public bool WorkspaceSwitching { get; set; }
 
+    /// <summary>Pins (an id) or unpins (null) the workspace sign-in always opens; see WorkspaceSwitcher.OnSetDefault.</summary>
+    [Parameter] public EventCallback<string?> OnWorkspaceSetDefault { get; set; }
+
     [Parameter] public string UserName { get; set; } = "";
 
     /// <summary>Optional second line under the person's name. Null hides it.</summary>
@@ -136,6 +139,11 @@
     [Parameter] public int? TasksNeedYou { get; set; }
 
     private NavEntry? Current => NavMap.Match(new Uri(Nav.Uri).AbsolutePath);
+
+    /// <summary>Optional. Whether the person may open an entry; without it every entry shows.</summary>
+    [Parameter] public Func<NavEntry, bool>? IsAllowed { get; set; }
+
+    private bool Allowed(NavEntry entry) => IsAllowed?.Invoke(entry) ?? true;
 
     private ElementReference _rail;
     private bool _wasCollapsed = true;

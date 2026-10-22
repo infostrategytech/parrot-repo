@@ -62,6 +62,9 @@
     </Footer>
 </SettingsCard>
 
+@* Where sign-in lands: the last workspace, or one chosen to always open. *@
+<SignInPreference />
+
 @code {
     private const long MaxImageBytes = 1024 * 1024;
     private static readonly HashSet<string> AcceptedImageTypes = ["image/png", "image/jpeg", "image/gif"];
