@@ -15,13 +15,20 @@ public class EmailService : IEmailService
         _settings = settings.Value;
     }
 
-    public async Task SendEmailAsync(string toEmail, string subject, string htmlBody)
+    public Task SendEmailAsync(string toEmail, string subject, string htmlBody) =>
+        SendAsync(toEmail, subject, new TextPart("html") { Text = htmlBody });
+
+    // multipart/alternative: clients show the HTML, and fall back to the text.
+    public Task SendEmailAsync(string toEmail, string subject, string htmlBody, string textBody) =>
+        SendAsync(toEmail, subject, new BodyBuilder { HtmlBody = htmlBody, TextBody = textBody }.ToMessageBody());
+
+    private async Task SendAsync(string toEmail, string subject, MimeEntity body)
     {
         MimeMessage message = new MimeMessage();
         message.From.Add(new MailboxAddress(_settings.FromName, _settings.FromAddress));
         message.To.Add(MailboxAddress.Parse(toEmail));
         message.Subject = subject;
-        message.Body = new TextPart("html") { Text = htmlBody };
+        message.Body = body;
 
         using SmtpClient client = new SmtpClient();
         SecureSocketOptions socketOptions = _settings.UseStartTls

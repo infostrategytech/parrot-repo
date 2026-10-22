@@ -1,4 +1,3 @@
-using System.Net;
 using System.Security.Cryptography;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
@@ -644,22 +643,32 @@ public sealed class TeamService : ITeamService
 
         IReadOnlyList<Workspace> workspaces = await _workspaces.ListByOwnerAsync(invite.OwnerId);
         ApplicationUser? inviter = await _userManager.FindByIdAsync(inviterUserId);
-        string inviterName = inviter is null ? "Your team" : FullName(inviter) ?? inviter.Email!;
-        string teamName = workspaces.FirstOrDefault()?.Name ?? "their team";
-        string where = string.Join(", ", WorkspaceNames(invite.Grants, workspaces));
+        Dictionary<Guid, OwnerRole> roles = await RoleBookAsync(invite.OwnerId);
+        Workspace? first = workspaces.FirstOrDefault(w => !string.IsNullOrWhiteSpace(w.Name));
 
-        // Every value a person typed is encoded: a workspace name is not markup.
-        string body = $"""
-            <h2>Join {WebUtility.HtmlEncode(teamName)} on OmniAI</h2>
-            <p>Hi {WebUtility.HtmlEncode(invite.FullName)},</p>
-            <p>{WebUtility.HtmlEncode(inviterName)} has invited you to work in {WebUtility.HtmlEncode(where)}.</p>
-            <p><a href="{WebUtility.HtmlEncode(link)}">Accept the invite</a></p>
-            <p>Accept to sign in with {WebUtility.HtmlEncode(invite.Email)}, or to set up your login if you do not have one yet. The link works for 7 days, until {invite.ExpiresAt:d MMMM yyyy}.</p>
-            """;
+        // Each grant as the person will meet it: where, as what, on which channels.
+        List<InviteEmailAccess> access = invite.Grants.Select(g => new InviteEmailAccess(
+            g.WorkspaceId is null ? AllWorkspaces : workspaces.FirstOrDefault(w => w.Id == g.WorkspaceId)?.Name ?? "A workspace",
+            g.CustomRoleId is { } custom ? roles.GetValueOrDefault(custom)?.Name ?? "A role" : WorkspaceRoles.FindById(g.SystemRole)?.Name ?? "A role",
+            g.Channels.Count == 0
+                ? "All channels"
+                : string.Join(", ", g.Channels.Select(c => WorkspaceChannels.All.FirstOrDefault(k => k.Key == c)?.Label ?? c)))).ToList();
+
+        string baseUrl = _emailSettings.BaseUrl.TrimEnd('/');
+        InviteEmailModel email = new(
+            first?.Name ?? "their team",
+            first?.LogoUrl,
+            inviter is null ? "Your team" : FullName(inviter) ?? inviter.Email!,
+            invite.FullName,
+            invite.Email,
+            access,
+            link,
+            invite.ExpiresAt,
+            $"{baseUrl}/brand/omniai-logo-512.png");
 
         try
         {
-            await _email.SendEmailAsync(invite.Email, $"Join {teamName} on OmniAI", body);
+            await _email.SendEmailAsync(invite.Email, InviteEmail.Subject(email), InviteEmail.Html(email), InviteEmail.Text(email));
         }
         catch (Exception ex)
         {
