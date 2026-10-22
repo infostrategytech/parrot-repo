@@ -1,77 +1,568 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@using Microsoft.AspNetCore.Components.Forms
+@using Parrot.Web.Services
+@using Parrot.Web.Features.Dashboard.Customers
 @inject AuroraInterop Interop
+@inject CustomerClient CustomerClient
+@inject ICustomerListReader Reader
 
-@* Import, in Aurora's Dialog. The file input is hidden because no styling
-   makes a native one match the product; the dropzone forwards a click to it
-   the way Aurora's Products page does for its CSV import. Only the file's
-   name travels — nothing is uploaded anywhere yet. *@
-
+@* Importing customers (designer, 22 October 2026: most small businesses don't know what a CSV is). One place
+   to bring in the list they already keep: a photo of their customer book or a screenshot of their contacts
+   (where a reading service exists), a spreadsheet, their phone's contacts file, or a list pasted from anywhere.
+   What was found is checked and can be corrected, row by row, before anything is added: a misread number would
+   message a stranger. Then the ready rows are added one by one through the customers API, with progress, and
+   anything that couldn't be added is listed with Try again. A whole-list import belongs to the API
+   (customers-backend-requests). *@
 <Dialog Open="Visible"
-        Title="Import contacts"
-        ConfirmLabel="Import contacts"
-        OnConfirm="OnCancel"
-        OnCancel="OnCancel">
+        Title="Import customers"
+        Subtitle="@Subtitle"
+        Size="DialogSize.Wide"
+        Dismissible="@(_stage is Stage.Choose or Stage.Reading)"
+        HideFooter="@(_stage is Stage.Choose or Stage.Reading)"
+        ConfirmLabel="@ConfirmLabel"
+        ConfirmDisabled="@ConfirmDisabled"
+        BusyLabel="Adding"
+        Busy="_adding"
+        CancelLabel="@CancelLabel"
+        OnConfirm="ConfirmAsync"
+        OnCancel="CancelAsync">
     <GlyphContent><Icon Name="IconName.RiUploadCloud2Fill" Size="IconSize.Md" /></GlyphContent>
     <Body>
-        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="import__lede">
-            Upload a CSV file to add multiple customers to your CRM.
-        </Typography>
+        <div class="import">
+            @switch (_stage)
+            {
+                case Stage.Choose or Stage.Reading:
+                    @if (_stage == Stage.Reading)
+                    {
+                        <LoadingState Title="@(_source == Source.Photo ? "Reading your photo…" : "Reading your list…")"
+                                      Description="This takes a few seconds. You'll check everything before it's added." />
+                    }
+                    @* The file input covers the drop zone, invisible, so a dropped file reaches it, and a click on the
+                       zone chooses one: the documented exception to building from components (no styling makes a
+                       native file input fit, and on a phone it's what offers the camera). The buttons sit above it.
+                       It stays on the page, hidden, while a file is read: the browser sends the file through it. *@
+                    <div class="import__drop @(_dragging ? "is-dragging" : null)" hidden="@(_stage == Stage.Reading)"
+                         @ondragenter="() => _dragging = true" @ondragleave="() => _dragging = false" @ondrop="() => _dragging = false">
+                        <InputFile @ref="_fileInput" OnChange="ReadFileAsync" accept="@Accept" class="import__file" tabindex="-1" aria-hidden="true" />
+                        <span class="import__drop-mark"><Icon Name="IconName.RiUploadCloud2Fill" Size="IconSize.Md" /></span>
+                        <span class="import__drop-words">
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@(Reader.CanReadPhotos ? "Drop a photo, screenshot or file" : "Drop a file, or paste a list")</Typography>
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="import__secondary">
+                                @(Reader.CanReadPhotos ? "Your customer book, phone contacts, Excel or CSV" : "Excel, CSV or your phone's contacts")
+                            </Typography>
+                        </span>
+                        <span class="import__drop-actions">
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="ChooseFileAsync">
+                                <IconLeft><Icon Name="@(Reader.CanReadPhotos ? IconName.RiImageFill : IconName.RiFileExcel2Fill)" /></IconLeft>
+                                <ChildContent>Choose a file</ChildContent>
+                            </Button>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _stage = Stage.Paste">
+                                <IconLeft><Icon Name="IconName.RiClipboardFill" /></IconLeft>
+                                <ChildContent>Paste a list</ChildContent>
+                            </Button>
+                        </span>
+                    </div>
+                    @if (_stage == Stage.Choose && _problem is not null)
+                    {
+                        <InlineError Message="@_problem" />
+                    }
+                    <div class="import__template" hidden="@(_stage == Stage.Reading)">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="import__secondary">Using a spreadsheet?</Typography>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="import__template-link" @onclick="DownloadTemplateAsync">Download a template</Button>
+                    </div>
+                    break;
 
-        <div class="import__template">
-            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="DownloadTemplateAsync">
-                <IconLeft><Icon Name="IconName.RiFileTextFill" /></IconLeft>
-                <ChildContent>Download template</ChildContent>
-            </Button>
-            <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="import__hint">
-                Template columns: Name, Phone, Email
-            </Typography>
+                case Stage.Paste:
+                    <TextArea @bind-Value="_pasted" Rows="9" AriaLabel="Your list" Class="import__paste"
+                              Placeholder="@("Ada Obi  0803 555 1234\nKemi's Kitchen, 0805 220 4418, kemi@example.com\nTunde Bakare\n0812 345 6789")" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="import__secondary">
+                        One customer a line, in any order: a name, a number, an email. Copied from WhatsApp, your notes or a spreadsheet.
+                    </Typography>
+                    @if (_problem is not null)
+                    {
+                        <InlineError Message="@_problem" />
+                    }
+                    break;
+
+                case Stage.Review:
+                    <div class="import__source">
+                        <span class="import__source-mark"><Icon Name="@SourceIcon" Size="IconSize.Sm" /></span>
+                        <span class="import__source-words">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@FoundLine</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="import__secondary">@_sourceName</Typography>
+                        </span>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="StartAgain">Start again</Button>
+                    </div>
+
+                    @if (_source == Source.Photo)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="import__secondary">
+                            Read from a photo, so check each number: a wrong digit would message someone else.
+                        </Typography>
+                    }
+
+                    @if (NeedLook.Count > 0)
+                    {
+                        <section class="import__group" aria-label="Need a look">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="h3">@($"Need a look · {NeedLook.Count}")</Typography>
+                            <ul>
+                                @foreach (var draft in NeedLook)
+                                {
+                                    @Row(draft)
+                                }
+                            </ul>
+                        </section>
+                    }
+
+                    @if (ReadyRows.Count > 0)
+                    {
+                        <section class="import__group" aria-label="Ready to add">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="h3">@($"Ready to add · {ReadyRows.Count}")</Typography>
+                            <ul>
+                                @foreach (var draft in ReadyRows.Take(_showAllReady ? int.MaxValue : ReadyShown))
+                                {
+                                    @Row(draft)
+                                }
+                            </ul>
+                            @if (ReadyRows.Count > ReadyShown)
+                            {
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _showAllReady = !_showAllReady">
+                                    @(_showAllReady ? "Show fewer" : $"Show all {ReadyRows.Count}")
+                                </Button>
+                            }
+                        </section>
+                    }
+
+                    @if (NeedLook.Count > 0 && Ready.Count > 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="import__secondary">
+                            @(NeedLook.Count == 1 ? "The one that needs a look won't be added until it's fixed." : $"The {NeedLook.Count} that need a look won't be added until they're fixed.")
+                        </Typography>
+                    }
+                    break;
+
+                case Stage.Adding:
+                    <ProgressBar Value="_done" Max="_queue.Count" Label="@($"Adding {Math.Min(_done + 1, _queue.Count)} of {_queue.Count}…")" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="import__secondary">Keep this open until it's done.</Typography>
+                    break;
+
+                default:
+                    <div class="import__done">
+                        <span class="import__done-mark @(_failed.Count > 0 ? "is-partial" : null)">
+                            <Icon Name="@(_failed.Count > 0 ? IconName.RiErrorWarningFill : IconName.RiCheckFill)" Size="IconSize.Md" />
+                        </span>
+                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@(_added == 1 ? "1 customer added" : $"{_added} customers added")</Typography>
+                        @if (_failed.Count > 0)
+                        {
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="import__secondary">@(_failed.Count == 1 ? "1 couldn't be added." : $"{_failed.Count} couldn't be added.")</Typography>
+                        }
+                    </div>
+                    @if (_failed.Count > 0)
+                    {
+                        <section class="import__group">
+                            <ul>
+                                @foreach (var (draft, why) in _failed)
+                                {
+                                    <li class="import__row">
+                                        <span class="import__row-words">
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@draft.Name</Typography>
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="import__problem">@why</Typography>
+                                        </span>
+                                    </li>
+                                }
+                            </ul>
+                        </section>
+                    }
+                    break;
+            }
         </div>
-
-        <InputFile @ref="_fileInput" OnChange="HandleFile" accept=".csv" class="sr-only" />
-        <button type="button" class="@(string.IsNullOrEmpty(_fileName) ? "import__dropzone" : "import__dropzone is-ready")" @onclick="PickFile">
-            <span class="import__dropzone-icon">
-                <Icon Name="@(string.IsNullOrEmpty(_fileName) ? IconName.RiUploadCloud2Fill : IconName.RiCheckFill)" Size="IconSize.Md" />
-            </span>
-            @if (string.IsNullOrEmpty(_fileName))
-            {
-                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Click to upload a CSV file</Typography>
-                <Typography TextStyle="TextStyle.Small12Regular" As="small">or drag and drop</Typography>
-            }
-            else
-            {
-                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@_fileName</Typography>
-                <Typography TextStyle="TextStyle.Small12Regular" As="small">Click to choose a different file</Typography>
-            }
-        </button>
     </Body>
 </Dialog>
 
 @code {
     [Parameter] public bool Visible { get; set; }
-    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
 
+    /// <summary>Some were added: the page reloads its list (with how many).</summary>
+    [Parameter] public EventCallback<int> OnImported { get; set; }
+
+    private enum Stage { Choose, Paste, Reading, Review, Adding, Done }
+    private enum Source { Photo, File, Paste }
+
+    // Past this many ready rows, the rest wait behind "Show all".
+    private const int ReadyShown = 20;
+
+    private Stage _stage = Stage.Choose;
+    private Source _source;
+    private string _sourceName = "", _pasted = "";
+    private bool _wasVisible, _dragging, _adding, _showAllReady;
+    private string? _problem;
     private InputFile? _fileInput;
-    private string _fileName = string.Empty;
-    private bool _wasVisible;
+    private List<ImportDraft> _drafts = [];
+    private Dictionary<int, List<string>> _problems = [];
+    // Which group each row shows in, decided when the list is read and each time a row is done with, so a row
+    // being corrected doesn't jump away mid-edit.
+    private HashSet<int> _lookIds = [];
+    private int? _editing;
+    private IReadOnlySet<string> _known = new HashSet<string>();
+    private List<ImportDraft> _queue = [];
+    private int _done, _added;
+    private List<(ImportDraft Draft, string Why)> _failed = [];
+
+    private List<ImportDraft> NeedLook => _drafts.Where(draft => _lookIds.Contains(draft.Id)).ToList();
+    private List<ImportDraft> ReadyRows => _drafts.Where(draft => !_lookIds.Contains(draft.Id)).ToList();
+    // What's added: every row with nothing to fix now, wherever it shows.
+    private List<ImportDraft> Ready => _drafts.Where(draft => ProblemsOf(draft).Count == 0).ToList();
 
     protected override void OnParametersSet()
     {
-        if (Visible && !_wasVisible) _fileName = string.Empty;
+        // Each time it opens, it starts at the beginning.
+        if (Visible && !_wasVisible) Reset();
         _wasVisible = Visible;
     }
 
-    private const string TemplateCsv = "data:text/csv;charset=utf-8,Name%2CPhone%2CEmail%0A";
+    private void Reset()
+    {
+        _stage = Stage.Choose;
+        _problem = null;
+        _sourceName = _pasted = "";
+        _drafts = [];
+        _problems = [];
+        _lookIds = [];
+        _editing = null;
+        _queue = [];
+        _failed = [];
+        _done = _added = 0;
+        _dragging = _adding = _showAllReady = false;
+    }
 
-    private Task DownloadTemplateAsync() =>
-        Interop.DownloadAsync(TemplateCsv, "contacts-template.csv");
+    private string Accept => string.Join(",", CustomerImport.SheetExtensions.Concat(
+        ["text/csv", "text/vcard", "text/x-vcard", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"])
+        .Concat(Reader.CanReadPhotos ? CustomerImport.PhotoTypes : []));
 
-    private async Task PickFile()
+    private string Subtitle => _stage switch
+    {
+        Stage.Choose => "You'll check everything before it's added.",
+        Stage.Paste => "Paste names and numbers from WhatsApp, your notes or anywhere.",
+        Stage.Reading => "Finding your customers.",
+        Stage.Review => "Check what was found before anything is added.",
+        Stage.Adding => "Adding your customers.",
+        _ => _failed.Count == 0 ? "All done." : "Done, with a few to look at.",
+    };
+
+    private string ConfirmLabel => _stage switch
+    {
+        Stage.Paste => "Read the list",
+        Stage.Review => Ready.Count == 1 ? "Add 1 customer" : $"Add {Ready.Count} customers",
+        Stage.Done when _failed.Count > 0 => "Try those again",
+        Stage.Done => "Import more",
+        _ => "Add customers",
+    };
+
+    private string CancelLabel => _stage switch
+    {
+        Stage.Paste => "Back",
+        Stage.Done => "Close",
+        _ => "Cancel",
+    };
+
+    private bool ConfirmDisabled => _stage switch
+    {
+        Stage.Paste => _pasted.Trim().Length == 0,
+        Stage.Review => Ready.Count == 0,
+        _ => false,
+    };
+
+    private IconName SourceIcon => _source switch
+    {
+        Source.Photo => IconName.RiImageFill,
+        Source.Paste => IconName.RiClipboardFill,
+        _ => IconName.RiFileExcel2Fill,
+    };
+
+    private string FoundLine => _drafts.Count == 1 ? "1 customer found" : $"{_drafts.Count} customers found";
+
+    private List<string> ProblemsOf(ImportDraft draft) => _problems.TryGetValue(draft.Id, out var list) ? list : [];
+
+    // ── Choosing ──
+
+    private async Task ChooseFileAsync()
     {
         if (_fileInput?.Element is { } element) await Interop.ClickAsync(element);
     }
 
-    private void HandleFile(InputFileChangeEventArgs e)
+    private async Task DownloadTemplateAsync()
     {
-        _fileName = e.File?.Name ?? string.Empty;
+        var url = "data:text/csv;charset=utf-8," + Uri.EscapeDataString(CustomerImport.Template);
+        await Interop.DownloadAsync(url, "customers-template.csv");
+    }
+
+    private async Task ReadFileAsync(InputFileChangeEventArgs args)
+    {
+        _problem = null;
+        _dragging = false;
+        var file = args.File;
+        var extension = Path.GetExtension(file.Name).ToLowerInvariant();
+        var photo = file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+        if (photo && !Reader.CanReadPhotos)
+        {
+            _problem = "Reading photos isn't available yet. Choose a spreadsheet or contacts file, or paste the list.";
+            return;
+        }
+        if (!photo && !CustomerImport.SheetExtensions.Contains(extension))
+        {
+            _problem = Reader.CanReadPhotos
+                ? "That kind of file can't be read. Choose a photo, a spreadsheet (Excel or CSV) or a contacts file (.vcf)."
+                : "That kind of file can't be read. Choose a spreadsheet (Excel or CSV) or a contacts file (.vcf).";
+            return;
+        }
+        var limit = photo ? CustomerImport.MaxPhotoBytes : extension == ".xlsx" ? CustomerImport.MaxSheetBytes : CustomerImport.MaxTextBytes;
+        if (file.Size > limit)
+        {
+            _problem = $"That file is bigger than {limit / (1024 * 1024)} MB. {(photo ? "Try a smaller photo." : "Split it and import it in parts.")}";
+            return;
+        }
+
+        _source = photo ? Source.Photo : Source.File;
+        _sourceName = photo ? "From your photo" : file.Name;
+        _stage = Stage.Reading;
+        StateHasChanged();
+        try
+        {
+            // The file is copied before it's read: a workbook is a zip, which needs to move back and forth.
+            using var copy = new MemoryStream();
+            await using (var stream = file.OpenReadStream(limit)) await stream.CopyToAsync(copy);
+            copy.Position = 0;
+            var (entries, problem) = photo
+                ? CustomerImport.Checked([.. await Reader.ReadPhotoAsync(copy, file.ContentType)], "customers we could read in that photo")
+                : CustomerImport.ReadFile(copy, file.Name);
+            if (problem is not null)
+            {
+                _problem = photo && entries.Count == 0
+                    ? "We couldn't find any customers in that photo. Try a clearer photo, flat and in good light, or paste the list."
+                    : problem;
+                _stage = Stage.Choose;
+                return;
+            }
+            await ReviewAsync(entries);
+        }
+        catch (Exception exception) when (exception is IOException or HttpRequestException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            _problem = photo ? "That photo couldn't be read. Try again, or paste the list." : "The file couldn't be read. Try again, or save it again.";
+            _stage = Stage.Choose;
+        }
+    }
+
+    private async Task ReadPastedAsync()
+    {
+        _problem = null;
+        var (entries, problem) = CustomerImport.Checked(CustomerImport.ReadText(_pasted), "names or numbers in what you pasted");
+        if (problem is not null) { _problem = problem; return; }
+        _source = Source.Paste;
+        _sourceName = "From what you pasted";
+        _stage = Stage.Reading;
+        StateHasChanged();
+        try
+        {
+            await ReviewAsync(entries);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _problem = "The list couldn't be checked. Check your connection and try again.";
+            _stage = Stage.Paste;
+        }
+    }
+
+    private async Task ReviewAsync(IReadOnlyList<ImportEntry> entries)
+    {
+        _known = await KnownPhonesAsync();
+        _drafts = entries.Select((entry, index) => new ImportDraft(index + 1, entry)).ToList();
+        _editing = null;
+        _showAllReady = false;
+        Recheck(regroup: true);
+        _stage = Stage.Review;
+    }
+
+    // The numbers of customers already in the list (digits only), so a row for one of them isn't added twice.
+    // Read page by page, up to 2,000; a whole-list import in the API would check this itself.
+    private async Task<IReadOnlySet<string>> KnownPhonesAsync()
+    {
+        var known = new HashSet<string>();
+        for (var skip = 0; skip < 2000; skip += 100)
+        {
+            var page = await CustomerClient.ListAsync(null, null, null, skip, 100, CancellationToken.None);
+            foreach (var identity in page.Items.SelectMany(item => item.Identities).Where(identity => identity.Platform == "whatsapp"))
+                known.Add(identity.Sender.TrimStart('+'));
+            if (skip + 100 >= page.Total) break;
+        }
+        return known;
+    }
+
+    // ── Reviewing ──
+
+    private void Recheck(bool regroup = false)
+    {
+        _problems = ImportReview.Problems(_drafts, _known);
+        if (regroup) _lookIds = [.. _drafts.Where(draft => ProblemsOf(draft).Count > 0).Select(draft => draft.Id)];
+    }
+
+    private void Edit(ImportDraft draft)
+    {
+        if (_editing is not null && _editing != draft.Id) Recheck(regroup: true);
+        _editing = draft.Id;
+    }
+
+    private void DoneEditing()
+    {
+        _editing = null;
+        Recheck(regroup: true);
+    }
+
+    private void Change(ImportDraft draft, string field, string? value)
+    {
+        value ??= "";
+        if (field == "name") draft.Name = value;
+        else if (field == "phone")
+        {
+            // A number typed again is the owner's, not the photo's.
+            if (value != draft.Phone) draft.NeedsCheck = false;
+            draft.Phone = value;
+        }
+        else draft.Email = value;
+        Recheck();
+    }
+
+    private void ItsRight(ImportDraft draft)
+    {
+        draft.NeedsCheck = false;
+        Recheck(regroup: _editing is null);
+    }
+
+    private void Remove(ImportDraft draft)
+    {
+        _drafts.Remove(draft);
+        if (_editing == draft.Id) _editing = null;
+        Recheck(regroup: _editing is null);
+        if (_drafts.Count == 0) StartAgain();
+    }
+
+    private void StartAgain()
+    {
+        var source = _source;
+        Reset();
+        if (source == Source.Paste) _stage = Stage.Paste;
+    }
+
+    private RenderFragment Row(ImportDraft draft) => __builder =>
+    {
+        var problems = ProblemsOf(draft);
+        var number = draft.Number;
+        var editing = _editing == draft.Id;
+        // One element in both modes: two in turn under one key lose their classes when they swap.
+        <li class="import__row @(editing ? "is-editing" : problems.Count > 0 ? "has-problem" : null)" @key="draft.Id">
+        @if (editing)
+        {
+                <div class="import__fields">
+                    <Input FloatingLabel="Name" Value="@draft.Name" ValueChanged='value => Change(draft, "name", value)' maxlength="120"
+                           Error="@(draft.Name.Trim().Length == 0)" />
+                    <Input FloatingLabel="WhatsApp number" Type="tel" Value="@draft.Phone" ValueChanged='value => Change(draft, "phone", value)' maxlength="24"
+                           Error="@(CustomerImport.Phone(draft.Phone).Problem is not null)"
+                           HelperText="@(CustomerImport.Phone(draft.Phone) is { Local: true, Number: { } saved } ? $"Saved as {CustomerImport.Display(saved)}" : CustomerImport.Phone(draft.Phone).Problem)" />
+                    <Input FloatingLabel="Email (optional)" Type="email" Value="@draft.Email" ValueChanged='value => Change(draft, "email", value)' maxlength="200"
+                           Error="@(draft.Email.Trim().Length > 0 && !CustomerImport.IsEmail(draft.Email))" />
+                </div>
+                <div class="import__row-foot">
+                    @if (problems.Count > 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="import__problem">@string.Join(" · ", problems)</Typography>
+                    }
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="DoneEditing">Done</Button>
+                </div>
+        }
+        else
+        {
+                <span class="import__row-words">
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="@(draft.Name.Trim().Length > 0 ? null : "import__muted")">@(draft.Name.Trim().Length > 0 ? draft.Name.Trim() : "No name")</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="import__secondary">
+                        @string.Join(" · ", new[] { number is not null ? CustomerImport.Display(number) : draft.Phone.Trim().Length > 0 ? draft.Phone.Trim() : null, draft.Email.Trim().Length > 0 ? draft.Email.Trim() : null }.Where(part => part is not null))
+                    </Typography>
+                    @if (problems.Count > 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="import__problem">@string.Join(" · ", problems)</Typography>
+                    }
+                </span>
+                <span class="import__row-actions">
+                    @if (draft.NeedsCheck && number is not null)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => ItsRight(draft)">It's right</Button>
+                    }
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Edit {(draft.Name.Trim().Length > 0 ? draft.Name.Trim() : "this row")}")" @onclick="() => Edit(draft)">
+                        <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                    </Button>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {(draft.Name.Trim().Length > 0 ? draft.Name.Trim() : "this row")}")" @onclick="() => Remove(draft)">
+                        <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                    </Button>
+                </span>
+        }
+        </li>
+    };
+
+    // ── Adding ──
+
+    private async Task ConfirmAsync()
+    {
+        if (_stage == Stage.Paste) await ReadPastedAsync();
+        else if (_stage == Stage.Review)
+        {
+            _editing = null;
+            Recheck();
+            await AddAsync(Ready);
+        }
+        else if (_stage == Stage.Done && _failed.Count > 0) await AddAsync(_failed.Select(failed => failed.Draft).ToList());
+        else if (_stage == Stage.Done) Reset();
+    }
+
+    // One by one, through the customers API: each saved as it goes, so a failure loses only that row.
+    private async Task AddAsync(List<ImportDraft> drafts)
+    {
+        _queue = drafts;
+        _failed = [];
+        _done = 0;
+        _adding = true;
+        _stage = Stage.Adding;
+        var addedNow = 0;
+        foreach (var draft in drafts)
+        {
+            try
+            {
+                var number = draft.Number;
+                await CustomerClient.CreateAsync(new CreateCustomerDto(draft.Name.Trim(), draft.Address, number, null, null,
+                    number is not null ? "whatsapp" : null, null), CancellationToken.None);
+                addedNow++;
+            }
+            catch (ApiException exception) { _failed.Add((draft, exception.UserMessage)); }
+            catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException or TaskCanceledException)
+            {
+                _failed.Add((draft, "Couldn't reach the server"));
+            }
+            _done++;
+            StateHasChanged();
+        }
+        _added += addedNow;
+        _adding = false;
+        _stage = Stage.Done;
+        if (addedNow > 0) await OnImported.InvokeAsync(addedNow);
+    }
+
+    private Task CancelAsync()
+    {
+        if (_adding) return Task.CompletedTask;
+        if (_stage == Stage.Paste)
+        {
+            _problem = null;
+            _stage = Stage.Choose;
+            return Task.CompletedTask;
+        }
+        return OnClose.InvokeAsync();
     }
 }

@@ -2,353 +2,433 @@
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
 @implements IAsyncDisposable
-@using Parrot.Web.Components.Pages.Dashboard.Contacts
 @using Parrot.Web.Services
 @using Parrot.Web.Services.Realtime
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+@using Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
 @inject CustomerClient CustomerClient
+@inject ConversationClient Conversations
 @inject RealtimeClient Realtime
+@inject ITaskStore Tasks
+@inject NavigationManager Nav
+@inject ToastService Toasts
+@inject UserClock Clock
 
 <PageTitle>Customers · OmniAI</PageTitle>
 
-@* The customer list. Layout follows Aurora's Products page: content capped
-   and centred, a toolbar of tabs-free filters beside a search box, and a
-   grid table whose middle columns are fixed so every row lines up. *@
-
-<div class="contacts">
-    <header class="contacts__header">
-        <div class="contacts__heading">
+@* Customers (designer, 21 October 2026, after two audits): a simple directory of everyone who messages the
+   business: who they are, where they message you, when they last did and what's open for them. A row opens
+   Customer details, the same panel as the Inbox's, with their conversation and tasks one tap away. No stages
+   or tags: most small businesses don't sort customers that way (their data stays in the API). The list comes
+   from the customers API as the developers wired it, and moves with live messages. *@
+<div class="customers">
+    <header class="customers__header">
+        <div class="customers__heading">
             <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Customers</Typography>
-            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="contacts__lede">
-                Everyone who has messaged you, with the channels, tags and task requests behind each name.
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="customers__lede">
+                Everyone who has messaged your business, and anyone you've added or imported.
             </Typography>
         </div>
-
-        <div class="contacts__actions">
-            <Button Variant="ButtonVariant.Secondary" @onclick="() => _showImport = true">
+        <div class="customers__actions">
+            <Button Variant="ButtonVariant.Secondary" @onclick="() => _importing = true">
                 <IconLeft><Icon Name="IconName.RiUploadCloud2Fill" /></IconLeft>
-                <ChildContent>Import CSV</ChildContent>
+                <ChildContent>Import customers</ChildContent>
             </Button>
-            <Button @onclick="() => _showAdd = true">
+            <Button @onclick="() => _adding = true">
                 <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-                <ChildContent>Add contact</ChildContent>
+                <ChildContent>Add customer</ChildContent>
             </Button>
         </div>
     </header>
 
-    <section class="contacts__controls">
-        <div class="contacts__search">
-            <Icon Name="IconName.RiSearch2Fill" Size="IconSize.Sm" />
-            <input class="@TextStyle.BodySmallRegular.ToClassName()"
-                   type="search"
-                   placeholder="Search by name, phone, username or tag"
-                   aria-label="Search customers"
-                   value="@_search"
-                   @oninput="OnSearchInput" />
-        </div>
-
-        <div class="contacts__controls-right">
-            <FilterPopover Label="@StageLabel"
-                           Title="Stage"
-                           Subtitle="Filter by where each customer is"
-                           Open='@(_openDropdown == "stage")'
-                           OpenChanged="@(open => _openDropdown = open ? "stage" : null)">
-                @foreach (var opt in _stageOptions)
-                {
-                    var val = opt.Value;
-                    <PopoverOption Label="@opt.Label"
-                                   Active="@(_stageFilter == val)"
-                                   OnSelect="() => SelectStage(val)" />
-                }
-            </FilterPopover>
-
-            <FilterPopover Label="@ChannelLabel"
-                           Title="Channels"
-                           Subtitle="Filter by where they message you"
-                           Open='@(_openDropdown == "channel")'
-                           OpenChanged="@(open => _openDropdown = open ? "channel" : null)">
-                @foreach (var opt in _channelOptions)
-                {
-                    var val = opt.Value;
-                    <PopoverOption Label="@opt.Label"
-                                   Active="@(_channelFilter == val)"
-                                   OnSelect="() => SelectChannel(val)" />
-                }
-            </FilterPopover>
-        </div>
-    </section>
-
-    @if (_error is not null)
+    @if (_rows is null && _error is null)
     {
-        <EmptyState Glyph="IconName.RiAlertFill"
-                    Title="Something went wrong"
-                    Description="@_error">
-            <Action>
-                <Button Variant="ButtonVariant.Secondary" @onclick="LoadAsync">Retry</Button>
-            </Action>
-        </EmptyState>
+        <section class="customers__card">
+            <LoadingState Glyph="IconName.RiContactsBook3Fill" Title="Getting your customers" />
+        </section>
     }
-    else if (_loading)
+    else if (_rows is null)
     {
-        <div class="contacts__loading" aria-busy="true" aria-label="Loading customers"></div>
+        <section class="customers__card">
+            <EmptyState Glyph="IconName.RiAlertFill" Title="Your customers couldn't be loaded" Description="Check your connection and try again.">
+                <Action><Button Variant="ButtonVariant.Secondary" @onclick="() => LoadAsync()">Try again</Button></Action>
+            </EmptyState>
+        </section>
     }
-    else if (_total == 0)
+    else if (_total == 0 && !Filtered)
     {
-        <EmptyState Glyph="IconName.RiSearch2Fill"
-                    Title="No matching customers"
-                    Description="Try a different search or clear one of the filters.">
-            <Action>
-                <Button Variant="ButtonVariant.Secondary" @onclick="ClearFilters">Clear filters</Button>
-            </Action>
-        </EmptyState>
+        @* The first time: nobody yet, and how people get here. *@
+        <section class="customers__card">
+            <EmptyState Glyph="IconName.RiContactsBook3Fill" Title="No customers yet"
+                        Description="Everyone who messages your business on a connected channel shows up here. You can also add someone yourself, or import a list.">
+                <Action>
+                    <Button @onclick="() => _adding = true">
+                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                        <ChildContent>Add customer</ChildContent>
+                    </Button>
+                    <Button Variant="ButtonVariant.Secondary" @onclick="() => _importing = true">Import customers</Button>
+                </Action>
+            </EmptyState>
+        </section>
     }
     else
     {
-        <section class="contacts__table-wrap">
-            <div class="contacts__table" role="table" aria-label="Customers">
-                <div class="contacts__table-head" role="row">
-                    @foreach (var column in Columns)
-                    {
-                        <Typography TextStyle="TextStyle.Small10Semibold"
-                                    As="span"
-                                    Class="ds-overline"
-                                    role="columnheader">@column</Typography>
-                    }
-                    <span role="columnheader" aria-label="Actions"></span>
-                </div>
+        <section class="customers__controls">
+            <SearchField Value="@_search" ValueChanged="OnSearch" Placeholder="Search by name, number or username"
+                         AriaLabel="Search customers" Class="customers__search" />
+            <FilterPopover Label="@ChannelName(_channel)" Title="Channel" Subtitle="Where they message you" AlignEnd
+                           Open="_channelOpen" OpenChanged="open => _channelOpen = open">
+                <PopoverOption Label="All channels" Active="@(_channel is null)" OnSelect="() => PickChannelAsync(null)" />
+                @foreach (var channel in ChannelOptions)
+                {
+                    var current = channel;
+                    <PopoverOption Label="@ChannelName(current)" Active="@(_channel == current)" OnSelect="() => PickChannelAsync(current)">
+                        <Leading><ChannelGlyph Channel="@current" Compact /></Leading>
+                    </PopoverOption>
+                }
+            </FilterPopover>
+        </section>
 
-                <div class="contacts__table-body">
-                    @foreach (Contact contact in _contacts)
+        <section class="customers__card @(_refreshing ? "is-refreshing" : null)" aria-busy="@(_refreshing ? "true" : null)">
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error">
+                    <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => LoadAsync()">Try again</Button></Action>
+                </InlineError>
+            }
+            @if (_total == 0)
+            {
+                <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiSearch2Fill" Title="No customers match"
+                            Description="Try another name, number or username, or another channel.">
+                    <Action><Button Variant="ButtonVariant.Secondary" @onclick="ClearAsync">Clear the search</Button></Action>
+                </EmptyState>
+            }
+            else
+            {
+                <div class="customers__table" role="table" aria-label="Customers">
+                    <ContactRow Head ShowTasks="@Tasks.Available" />
+                    @foreach (var row in _rows)
                     {
-                        <ContactRow Contact="contact" OnOpen="() => OpenDetail(contact)" />
+                        var current = row;
+                        <ContactRow @key="current.Id" Item="current" Now="_now" Zone="Clock.Zone" ShowTasks="@Tasks.Available"
+                                    OpenTasks="@OpenTasksFor(current)" Fresh="@(_fresh == current.Id)" Open="@(_open?.Id == current.Id)"
+                                    Added="@AddedFor(current)" OnOpen="() => OpenAsync(current)" />
                     }
                 </div>
-            </div>
-
-            <footer class="contacts__pagination">
-                <Typography TextStyle="TextStyle.Small12Regular" As="span">
-                    Showing @PageStart–@PageEnd of @_total
-                </Typography>
-                <div class="contacts__pagination-controls">
-                    <Button Variant="ButtonVariant.Secondary"
-                            Size="ButtonSize.Small"
-                            disabled="@(CurrentPage == 1)"
-                            @onclick="() => GoToPage(Math.Max(1, CurrentPage - 1))">Previous</Button>
-                    <Typography TextStyle="TextStyle.Small12Regular" As="span">
-                        Page @CurrentPage of @TotalPages
-                    </Typography>
-                    <Button Variant="ButtonVariant.Secondary"
-                            Size="ButtonSize.Small"
-                            disabled="@(CurrentPage == TotalPages)"
-                            @onclick="() => GoToPage(Math.Min(TotalPages, CurrentPage + 1))">Next</Button>
-                </div>
-            </footer>
+                <Pagination Class="customers__pages" Page="_page" PageChanged="GoToPageAsync" Total="_total" PageSize="PageSize" AriaLabel="Pages of customers" />
+            }
         </section>
     }
 </div>
 
-<AddContactModal Visible="_showAdd" OnCancel="CloseModals" OnSave="HandleAddContact" />
-<ImportContactModal Visible="_showImport" OnCancel="CloseModals" />
-<ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" OnUpdated="HandleContactUpdated" />
+@* Customer details: the Inbox's panel, in a side panel over the list. Their conversation is the main action. *@
+<SidePanel Open="@(_open is not null)" Title="Customer details" OnClose="Close" CloseLabel="Close customer details" Class="customers__panel">
+    <ChildContent>
+        @if (_view is { } view)
+        {
+            <CustomerPanel Customer="view" Embedded Open="true" OnPreview="item => _media = item"
+                           OnAddTask="() => _taskOpen = true" OnOpenConversation="OpenConversation" />
+        }
+    </ChildContent>
+    <Footer>
+        @if (_view?.Primary is { HasConversation: true } primary)
+        {
+            <div class="customers__panel-footer">
+                <Button @onclick="() => OpenConversation(primary)">
+                    <IconLeft><Icon Name="IconName.RiMessage2Fill" /></IconLeft>
+                    <ChildContent>Open conversation</ChildContent>
+                </Button>
+            </div>
+        }
+    </Footer>
+</SidePanel>
+
+<MediaViewer Item="_media" OnClose="() => _media = null" />
+
+@if (_view?.Primary is { HasConversation: true } taskFor)
+{
+    <NewTaskDialog Open="_taskOpen" Customer="@(new TaskCustomer(_view.Name, taskFor.Platform, taskFor.Handle, taskFor.ConversationId))"
+                   OnClose="() => _taskOpen = false" OnCreated="TaskAddedAsync" />
+}
+
+<AddContactModal Visible="_adding" OnClose="() => _adding = false" OnAdded="AddedAsync" OnExisting="ExistingAsync" />
+<ImportContactModal Visible="_importing" OnClose="() => _importing = false" OnImported="ImportedAsync" />
 
 @code {
-    private static readonly string[] Columns = ["Name", "Channels", "Last interaction", "Tags", "Orders", "Stage"];
+    private const int PageSize = 25;
+    private static readonly string[] ChannelOptions = ["whatsapp", "instagram", "facebook", "tiktok"];
 
-    private bool _showAdd;
-    private bool _showImport;
-    private Contact? _selectedContact;
-    private string _search = string.Empty;
-    private string _stageFilter = string.Empty;
-    private string _channelFilter = string.Empty;
-    private string? _openDropdown;
-    private int _page = 1;
-    private const int PageSize = 50;
-
-    private List<Contact> _contacts = [];
+    private List<CustomerListItemDto>? _rows;
     private int _total;
-    private bool _loading;
+    private int _page = 1;
+    private string _search = string.Empty;
+    private string? _channel;
+    private bool _channelOpen, _refreshing, _adding, _importing, _taskOpen;
     private string? _error;
+    private DateTime _now = DateTime.UtcNow;
+    private Guid? _fresh;
+    // What was entered for people added by hand (where they message you, their number or username), by customer.
+    private readonly Dictionary<Guid, CustomerDetailDto> _added = new();
+    private CancellationTokenSource? _loading;
+    private IReadOnlyList<TaskRequest> _tasks = [];
 
-    private record FilterOption(string Value, string Label);
+    // The open customer, and the panel's view of them (from the row first, then their full details).
+    private CustomerListItemDto? _open;
+    private CustomerView? _view;
+    private MediaViewerItem? _media;
 
-    private List<FilterOption> _stageOptions =
-    [
-        new("", "All stages"),
-        new("New Lead", "New Lead"),
-        new("Interested", "Interested"),
-        new("Customer", "Customer"),
-        new("Vip", "VIP"),
-    ];
-
-    private List<FilterOption> _channelOptions =
-    [
-        new("", "All channels"),
-        new("whatsapp", "WhatsApp"),
-        new("instagram", "Instagram"),
-        new("facebook", "Messenger"),
-        new("tiktok", "TikTok"),
-    ];
-
-    private string StageLabel => _stageOptions.FirstOrDefault(o => o.Value == _stageFilter)?.Label ?? "All stages";
-    private string ChannelLabel => _channelOptions.FirstOrDefault(o => o.Value == _channelFilter)?.Label ?? "All channels";
-
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(_total / (double)PageSize));
-    private int CurrentPage => Math.Min(_page, TotalPages);
-    private int PageStart => _total == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
-    private int PageEnd => Math.Min(CurrentPage * PageSize, _total);
+    private bool Filtered => _search.Trim().Length > 0 || _channel is not null;
 
     protected override async Task OnInitializedAsync()
     {
+        await Clock.ReadAsync();
         Realtime.MessageReceived += OnMessageReceived;
         Realtime.Reconnected += OnReconnected;
-        await LoadAsync();
+        Tasks.Changed += OnTasksChanged;
+        await Task.WhenAll(LoadAsync(), LoadTasksAsync());
         await Realtime.StartAsync();
     }
 
-    private async Task SelectStage(string val)
+    // The list for the search, the channel and the page. A newer load cancels an older one, so a late answer
+    // never replaces a newer search; the table stays on screen while it loads (designer's audit).
+    private async Task LoadAsync(int delayMs = 0)
     {
-        _stageFilter = val;
-        _openDropdown = null;
-        _page = 1;
-        await LoadAsync();
-    }
-
-    private async Task SelectChannel(string val)
-    {
-        _channelFilter = val;
-        _openDropdown = null;
-        _page = 1;
-        await LoadAsync();
-    }
-
-    private async Task OnSearchInput(ChangeEventArgs args)
-    {
-        _search = args.Value?.ToString() ?? string.Empty;
-        _page = 1;
-        await LoadAsync();
-    }
-
-    private async Task ClearFilters()
-    {
-        _search = string.Empty;
-        _stageFilter = string.Empty;
-        _channelFilter = string.Empty;
-        _page = 1;
-        await LoadAsync();
-    }
-
-    private async Task GoToPage(int page)
-    {
-        _page = page;
-        await LoadAsync();
-    }
-
-    private async Task LoadAsync()
-    {
-        _loading = true;
-        _error = null;
-        StateHasChanged();
+        _loading?.Cancel();
+        var mine = _loading = new CancellationTokenSource();
+        var token = mine.Token;
         try
         {
-            int skip = (CurrentPage - 1) * PageSize;
-            CustomerPageDto page = await CustomerClient.ListAsync(
-                _search.Length > 0 ? _search : null,
-                _stageFilter.Length > 0 ? _stageFilter : null,
-                _channelFilter.Length > 0 ? _channelFilter : null,
-                skip, PageSize, CancellationToken.None);
-            _contacts = [.. page.Items.Select(ToContact)];
+            if (delayMs > 0) await Task.Delay(delayMs, token);
+            _refreshing = _rows is not null;
+            StateHasChanged();
+            var page = await CustomerClient.ListAsync(
+                _search.Trim().Length > 0 ? _search.Trim() : null, null, _channel,
+                (_page - 1) * PageSize, PageSize, token);
+            if (token.IsCancellationRequested) return;
+            _rows = page.Items;
             _total = page.Total;
+            _now = DateTime.UtcNow;
+            _error = null;
+            _ = ReadAddedAsync(page.Items, token);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) { return; }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
         {
-            _error = "Could not load customers. Check your connection and try again.";
+            if (token.IsCancellationRequested) return;
+            _error = "The list couldn't be refreshed. Check your connection and try again.";
         }
         finally
         {
-            _loading = false;
+            if (_loading == mine) _refreshing = false;
         }
+        StateHasChanged();
     }
 
-    private static Contact ToContact(CustomerListItemDto dto) => new()
+    // The list doesn't carry what was entered for someone added by hand (customers-backend-requests, request 2):
+    // read it for those rows on this page, once each. A row that can't be read just shows less.
+    private async Task ReadAddedAsync(IReadOnlyList<CustomerListItemDto> rows, CancellationToken token)
     {
-        Id = dto.Id,
-        Name = dto.Name,
-        Stage = dto.Stage,
-        Tags = dto.Tags,
-        LastInteraction = dto.LastSeenAt.HasValue ? FormatRelative(dto.LastSeenAt.Value) : "—",
-        LastInteractionChannel = dto.LastSeenChannel ?? string.Empty,
-        HasWhatsApp = dto.Identities.Any(i => i.Platform == "whatsapp"),
-        HasInstagram = dto.Identities.Any(i => i.Platform == "instagram"),
-        WhatsAppNumber = dto.Identities.FirstOrDefault(i => i.Platform == "whatsapp")?.Sender ?? string.Empty,
-        InstagramHandle = dto.Identities.FirstOrDefault(i => i.Platform == "instagram")?.Username ?? string.Empty,
-        Identities = [.. dto.Identities.Select(i => new ContactIdentity(i.ConnectionId, i.Platform, i.Sender, i.Username))],
-        // Phone/ChannelPlatform/ChannelIdentifier are not in the list DTO; they load when the detail panel opens.
+        var missing = rows.Where(row => row.Identities.Count == 0 && !_added.ContainsKey(row.Id)).ToList();
+        if (missing.Count == 0) return;
+        var read = await Task.WhenAll(missing.Select(async row =>
+        {
+            try { return await CustomerClient.GetAsync(row.Id, token); }
+            catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException or OperationCanceledException) { return null; }
+        }));
+        if (token.IsCancellationRequested) return;
+        foreach (var detail in read.OfType<CustomerDetailDto>()) _added[detail.Id] = detail;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private CustomerDetailDto? AddedFor(CustomerListItemDto row) =>
+        row.Identities.Count == 0 && _added.TryGetValue(row.Id, out var detail) ? detail : null;
+
+    private Task OnSearch(string? value)
+    {
+        _search = value ?? string.Empty;
+        _page = 1;
+        // Once they stop typing, not on every letter.
+        return LoadAsync(300);
+    }
+
+    private Task PickChannelAsync(string? channel)
+    {
+        _channel = channel;
+        _channelOpen = false;
+        _page = 1;
+        return LoadAsync();
+    }
+
+    private Task ClearAsync()
+    {
+        _search = string.Empty;
+        _channel = null;
+        _page = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _page = page;
+        return LoadAsync();
+    }
+
+    // ── What's open for each customer (when tasks can be kept) ──
+
+    private async Task LoadTasksAsync()
+    {
+        if (!Tasks.Available) return;
+        try { _tasks = await Tasks.ListAsync(); }
+        catch (Exception exception) when (exception is HttpRequestException or NotSupportedException) { _tasks = []; }
+    }
+
+    private void OnTasksChanged() => _ = InvokeAsync(async () => { await LoadTasksAsync(); StateHasChanged(); });
+
+    private int OpenTasksFor(CustomerListItemDto row)
+    {
+        var ids = row.Identities.Select(identity => $"{identity.ConnectionId}:{identity.Sender}").ToHashSet();
+        return _tasks.Count(task => task.IsOpen && task.Customer?.ConversationId is { } id && ids.Contains(id));
+    }
+
+    // ── Customer details ──
+
+    private async Task OpenAsync(CustomerListItemDto row)
+    {
+        _open = row;
+        _view = View(row, null, null);
+        _taskOpen = false;
+        StateHasChanged();
+        // Their full details (email, phone, a channel added by hand) and the latest internal note.
+        CustomerDetailDto? detail = null;
+        CustomerNote? note = null;
+        try { detail = await CustomerClient.GetAsync(row.Id, CancellationToken.None); }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException) { }
+        if (_view?.Primary is { HasConversation: true } primary)
+        {
+            try
+            {
+                var notes = await Conversations.NotesAsync(primary.ConnectionId, primary.Sender, CancellationToken.None);
+                note = notes.OrderByDescending(n => n.CreatedAt).Select(n => new CustomerNote(n.AuthorName, n.CreatedAt, n.Text)).FirstOrDefault();
+            }
+            catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException) { }
+        }
+        if (_open?.Id != row.Id) return;
+        _view = View(row, detail, note);
+        StateHasChanged();
+    }
+
+    private void Close()
+    {
+        _open = null;
+        _view = null;
+        _taskOpen = false;
+    }
+
+    // A customer as Customer details shows them: where they wrote last first; a channel added by hand (no
+    // conversation yet) after the ones they've used.
+    private static CustomerView View(CustomerListItemDto row, CustomerDetailDto? detail, CustomerNote? note)
+    {
+        var channels = row.Identities
+            .OrderByDescending(identity => identity.Platform == row.LastSeenChannel)
+            .ThenByDescending(identity => identity.LinkedAt)
+            .Select(identity => new CustomerChannel(identity.Platform,
+                CustomerChannel.HandleFor(identity.Platform, identity.Sender, identity.Username) ?? ChannelName(identity.Platform),
+                identity.ConnectionId, identity.Sender, null, identity.Username))
+            .ToList();
+        if (detail?.ChannelIdentifier is { Length: > 0 } manual && channels.All(channel => channel.Platform != (detail.ChannelPlatform ?? "whatsapp")))
+        {
+            var platform = detail.ChannelPlatform ?? "whatsapp";
+            channels.Add(new CustomerChannel(platform, manual, Guid.Empty, manual, null, platform == "whatsapp" ? null : manual.TrimStart('@')));
+        }
+        else if (detail?.Phone is { Length: > 0 } added && detail.ChannelPlatform == "whatsapp" && channels.All(channel => channel.Platform != "whatsapp"))
+        {
+            channels.Add(new CustomerChannel("whatsapp", added, Guid.Empty, added));
+        }
+        var phone = detail?.Phone ?? row.Identities.FirstOrDefault(identity => identity.Platform == "whatsapp")?.Sender;
+        // Added by hand or imported: by you, until the API says who (customers-backend-requests, request 10).
+        var addedBy = row.Identities.Count == 0 ? new CustomerAdded("You", row.CreatedAt) : null;
+        return new CustomerView(row.Id.ToString(), row.Name, Initials.From(row.Name), channels,
+            detail?.Email, phone, null, row.LastSeenAt, null, note, Added: addedBy);
+    }
+
+    private void OpenConversation(CustomerChannel channel) =>
+        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(channel.ConversationId)}");
+
+    private Task TaskAddedAsync(TaskRequest task)
+    {
+        _taskOpen = false;
+        Toasts.Show(new ToastMessage("Task added.", ActionLabel: "View", OnAction: () => Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.Id)}")));
+        return Task.CompletedTask;
+    }
+
+    // ── Adding and importing ──
+
+    private async Task AddedAsync(CustomerDetailDto added)
+    {
+        _adding = false;
+        _added[added.Id] = added;
+        Toasts.Show($"{added.Name} added.");
+        _page = 1;
+        await LoadAsync();
+        _fresh = added.Id;
+    }
+
+    // Add customer found them already: their details instead of a second of them.
+    private Task ExistingAsync(CustomerListItemDto existing)
+    {
+        _adding = false;
+        return OpenAsync(existing);
+    }
+
+    private async Task ImportedAsync(int count)
+    {
+        _page = 1;
+        await LoadAsync();
+        if (count > 0) Toasts.Show(count == 1 ? "1 customer added." : $"{count} customers added.");
+    }
+
+    // ── Live: a customer who writes again moves up with the time it happened; a new one appears ──
+
+    private Task OnMessageReceived(Parrot.Application.Messaging.StoredMessage message) => InvokeAsync(async () =>
+    {
+        if (message.Outgoing || _rows is null) return;
+        var index = _rows.FindIndex(row => row.Identities.Any(identity => identity.ConnectionId == message.ConnectionId && identity.Sender == message.Sender));
+        if (index < 0)
+        {
+            await LoadAsync();
+            return;
+        }
+        var at = message.SentAt ?? message.PersistedAt;
+        var platform = message.Platform.ToString().ToLowerInvariant();
+        var moved = _rows[index] with { LastSeenAt = at, LastSeenChannel = platform };
+        _rows.RemoveAt(index);
+        // The list is newest first: on the first page with nothing filtered, they move to the top.
+        if (_page == 1 && !Filtered) _rows.Insert(0, moved); else _rows.Insert(index, moved);
+        _now = DateTime.UtcNow;
+        if (_open?.Id == moved.Id)
+        {
+            _open = moved;
+            if (_view is not null) _view = _view with { LastMessageAt = at };
+        }
+        StateHasChanged();
+    });
+
+    private Task OnReconnected() => InvokeAsync(() => LoadAsync());
+
+    private static string ChannelName(string? channel) => channel switch
+    {
+        null => "All channels",
+        "facebook" => "Messenger",
+        _ => ChannelLinks.PlatformName(channel),
     };
-
-    private static string FormatRelative(DateTime utc)
-    {
-        TimeSpan diff = DateTime.UtcNow - utc;
-        if (diff.TotalMinutes < 2) return "just now";
-        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} minutes ago";
-        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} hours ago";
-        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} days ago";
-        return utc.ToLocalTime().ToString("d MMM yyyy");
-    }
-
-    private void OpenDetail(Contact c) => _selectedContact = c;
-    private void CloseDetail() => _selectedContact = null;
-    private void CloseModals() { _showAdd = false; _showImport = false; }
-
-    private void HandleContactUpdated(Contact updated)
-    {
-        int idx = _contacts.FindIndex(c => c.Id == updated.Id);
-        if (idx >= 0) _contacts[idx] = updated;
-        _selectedContact = updated;
-    }
-
-    private async Task HandleAddContact(Contact draft)
-    {
-        try
-        {
-            await CustomerClient.CreateAsync(new CreateCustomerDto(
-                draft.Name,
-                string.IsNullOrWhiteSpace(draft.Email) ? null : draft.Email,
-                string.IsNullOrWhiteSpace(draft.Phone) ? null : draft.Phone,
-                string.IsNullOrWhiteSpace(draft.Stage) ? null : draft.Stage,
-                draft.Tags.Count > 0 ? draft.Tags : null,
-                string.IsNullOrWhiteSpace(draft.ChannelPlatform) ? null : draft.ChannelPlatform,
-                string.IsNullOrWhiteSpace(draft.ChannelIdentifier) ? null : draft.ChannelIdentifier), CancellationToken.None);
-            CloseModals();
-            await LoadAsync();
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _error = ex.Message;
-        }
-    }
-
-    private Task OnMessageReceived(Parrot.Application.Messaging.StoredMessage message) =>
-        InvokeAsync(async () =>
-        {
-            // Outgoing replies are not new customers — skip them.
-            if (message.Outgoing) return;
-
-            // If this sender is already in the list, nothing to do.
-            bool known = _contacts.Any(c =>
-                c.Identities.Any(i =>
-                    i.ConnectionId == message.ConnectionId &&
-                    i.Sender == message.Sender));
-            if (known) return;
-
-            // New sender — reload so the new customer row appears.
-            await LoadAsync();
-        });
-
-    private Task OnReconnected() => InvokeAsync(LoadAsync);
 
     public ValueTask DisposeAsync()
     {
         Realtime.MessageReceived -= OnMessageReceived;
         Realtime.Reconnected -= OnReconnected;
+        Tasks.Changed -= OnTasksChanged;
+        _loading?.Cancel();
         return ValueTask.CompletedTask;
     }
 }

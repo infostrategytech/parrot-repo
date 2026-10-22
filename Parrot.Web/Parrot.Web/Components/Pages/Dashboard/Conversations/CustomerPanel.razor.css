@@ -8,6 +8,12 @@
   background: var(--colors-surface-card);
 }
 
+/* Embedded (the Customers page): inside a side panel that frames, heads and scrolls it. */
+.customer-panel.is-embedded { display: block; height: auto; overflow: visible; background: transparent; }
+.customer-panel.is-embedded .customer-panel__scroll { overflow: visible; }
+.customer-panel.is-embedded .customer-profile { padding-inline: var(--spacing-none); }
+.customer-panel.is-embedded .customer-panel__scroll ::deep .customer-section { padding-inline: var(--spacing-none); }
+
 .customer-panel__header { display: flex; align-items: center; justify-content: space-between; min-height: var(--spacing-5xl); padding-inline: var(--spacing-xl); border-bottom: var(--ds-hairline) solid var(--colors-surface-border); }
 .customer-panel__header ::deep .ds-button { flex: 0 0 auto; }
 
@@ -45,6 +51,8 @@
 .customer-contact-list > ::deep .ds-row-button > svg:first-child,
 .customer-contact-list > div > ::deep svg { color: var(--colors-brand-primary); }
 .customer-contact-list > ::deep .ds-row-button > svg:last-child { color: var(--colors-text-muted); }
+/* A channel they message you on: its mark, the channel and how they appear there, and Open. */
+.customer-contact-list > .customer-channel { grid-template-columns: var(--spacing-2xl) minmax(0, 1fr) auto; }
 .customer-contact-list span { display: grid; gap: var(--spacing-2xs); min-width: 0; }
 .customer-contact-list small { color: var(--colors-text-muted); }
 .customer-contact-list strong { overflow: hidden; color: var(--colors-text-secondary); font-weight: inherit; text-overflow: ellipsis; white-space: nowrap; }

@@ -1,169 +1,200 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@using Parrot.Web.Services
+@using Parrot.Web.Features.Dashboard.Customers
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+@inject CustomerClient CustomerClient
 
-@* A new contact, in Aurora's Dialog. Channel is chosen first; the matching
-   identifier field appears based on what was picked. *@
-
+@* Adding a customer by hand (designer, 21 October 2026): their name, where they message you and how they
+   appear there, and an email if you have one. No stage or tag. Saved through the customers API. The server
+   doesn't yet join someone added here to their conversation when they first write (customers-backend-requests,
+   request 1), nor stop a second customer with the same number (request 4): someone who already messages you
+   from that number or username is found here first, and opened instead. *@
 <Dialog Open="Visible"
-        Title="Add contact"
-        ConfirmLabel="Save contact"
-        ConfirmDisabled="@string.IsNullOrWhiteSpace(_contact.Name)"
-        OnConfirm="HandleSave"
-        OnCancel="OnCancel">
+        Title="Add customer"
+        Subtitle="Someone you want to keep track of or message."
+        ConfirmLabel="Add customer"
+        BusyLabel="Adding"
+        Busy="_saving"
+        OnConfirm="SaveAsync"
+        OnCancel="CloseAsync">
     <GlyphContent><Icon Name="IconName.RiUserAddFill" Size="IconSize.Md" /></GlyphContent>
     <Body>
-        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="contact-form__lede">
-            Create a new contact for a customer you want to track or message.
-        </Typography>
+        <div class="add-customer">
+            <Input FloatingLabel="Their name" @bind-Value="_name" maxlength="120"
+                   Error="@(_tried && _name.Trim().Length == 0)" HelperText="@(_tried && _name.Trim().Length == 0 ? "Add their name." : null)" />
 
-        <div class="contact-form">
-            <div class="contact-form__full">
-                <Input FloatingLabel="Full name" @bind-Value="_contact.Name" maxlength="80" required />
-            </div>
-            <div class="contact-form__full">
-                <Input FloatingLabel="Email address" Type="email" HelperText="Optional" @bind-Value="_contact.Email" />
-            </div>
-            <div class="contact-form__full">
-                <SelectField FloatingLabel="Channel"
-                             Value="@ChannelLabel(_contact.ChannelPlatform)"
-                             Open="@(_openMenu == "channel")"
-                             OpenChanged="@(open => _openMenu = open ? "channel" : null)">
-                    @foreach (ChannelOption ch in Channels)
-                    {
-                        string chKey = ch.Key;
-                        <PopoverOption Label="@ch.Label"
-                                       Active="@(_contact.ChannelPlatform == chKey)"
-                                       OnSelect="() => SelectChannel(chKey)" />
-                    }
-                </SelectField>
-            </div>
-            @if (_contact.ChannelPlatform == "whatsapp")
-            {
-                <div class="contact-form__full">
-                    <Input FloatingLabel="Phone number"
-                           Type="tel"
-                           HelperText="Include country code, e.g. +2348012345678"
-                           @bind-Value="_contact.Phone" />
-                </div>
-            }
-            else if (_contact.ChannelPlatform is "instagram" or "facebook" or "tiktok")
-            {
-                <div class="contact-form__full">
-                    <Input FloatingLabel="@HandleLabel(_contact.ChannelPlatform)"
-                           HelperText="@HandleHint(_contact.ChannelPlatform)"
-                           @bind-Value="_contact.ChannelIdentifier" />
-                </div>
-            }
-            <SelectField FloatingLabel="Stage"
-                         Value="@(string.IsNullOrEmpty(_contact.Stage) ? null : ContactCopy.Stage(_contact.Stage))"
-                         Open="@(_openMenu == "stage")"
-                         OpenChanged="@(open => _openMenu = open ? "stage" : null)">
-                @foreach (string stage in Stages)
+            <SelectField FloatingLabel="Where they message you" Value="@ChannelName(_channel)"
+                         Open="_channelOpen" OpenChanged="open => _channelOpen = open">
+                @foreach (var channel in Channels)
                 {
-                    string sv = stage;
-                    <PopoverOption Label="@ContactCopy.Stage(sv)"
-                                   Active="@(_contact.Stage == sv)"
-                                   OnSelect="() => SelectStage(sv)" />
+                    var current = channel;
+                    <PopoverOption Label="@ChannelName(current)" Active="@(_channel == current)" OnSelect="() => PickChannel(current)">
+                        <Leading><ChannelGlyph Channel="@current" Compact /></Leading>
+                    </PopoverOption>
                 }
             </SelectField>
-            <SelectField FloatingLabel="Tag"
-                         Value="@(string.IsNullOrEmpty(_tag) ? null : _tag)"
-                         Open="@(_openMenu == "tag")"
-                         OpenChanged="@(open => _openMenu = open ? "tag" : null)">
-                @foreach (string tag in Tags)
-                {
-                    string tv = tag;
-                    <PopoverOption Label="@tv"
-                                   Active="@(_tag == tv)"
-                                   OnSelect="() => SelectTag(tv)" />
-                }
-            </SelectField>
+
+            @if (_channel == "whatsapp")
+            {
+                <Input FloatingLabel="WhatsApp number" Type="tel" @bind-Value="_handle" maxlength="20"
+                       Error="@(PhoneProblem is not null)" HelperText="@(PhoneProblem ?? PhoneHint)" />
+            }
+            else
+            {
+                <Input FloatingLabel="@HandleLabel(_channel)" @bind-Value="_handle" maxlength="120" HelperText="@HandleHint(_channel)" />
+            }
+
+            <Input FloatingLabel="Email (optional)" Type="email" @bind-Value="_email" maxlength="200"
+                   Error="@(EmailProblem is not null)" HelperText="@EmailProblem" />
+
+            @if (Existing is { } existing)
+            {
+                <InlineError Tone="InlineErrorTone.Warning" Message="@($"{existing.Name} already messages you from this {(_channel == "whatsapp" ? "number" : "username")}.")">
+                    <Action>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => OnExisting.InvokeAsync(existing)">@($"Open {existing.Name}")</Button>
+                    </Action>
+                </InlineError>
+            }
+
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" />
+            }
         </div>
     </Body>
 </Dialog>
 
 @code {
-    private static readonly string[] Stages = ["New Lead", "Interested", "Customer", "Vip"];
-    private static readonly string[] Tags = ["Business", "Consumer", "New client", "Returning client", "VIP", "VVIP"];
-
-    private sealed record ChannelOption(string Key, string Label);
-    private static readonly ChannelOption[] Channels =
-    [
-        new("whatsapp", "WhatsApp"),
-        new("instagram", "Instagram"),
-        new("facebook", "Messenger"),
-        new("tiktok", "TikTok"),
-    ];
-
     [Parameter] public bool Visible { get; set; }
-    [Parameter] public EventCallback OnCancel { get; set; }
-    [Parameter] public EventCallback<Contact> OnSave { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
 
-    private Contact _contact = new();
-    private string _tag = string.Empty;
-    private string? _openMenu;
-    private bool _wasVisible;
+    /// <summary>Added: the page reloads its list and says so.</summary>
+    [Parameter] public EventCallback<CustomerDetailDto> OnAdded { get; set; }
+
+    /// <summary>They're already a customer: the page opens their details instead.</summary>
+    [Parameter] public EventCallback<CustomerListItemDto> OnExisting { get; set; }
+
+    private static readonly string[] Channels = ["whatsapp", "instagram", "facebook", "tiktok"];
+
+    private string _name = "", _handle = "", _email = "", _channel = "whatsapp";
+    private bool _channelOpen, _tried, _saving, _wasVisible;
+    private string? _error;
+    // Someone found with the number or username as it was typed when Add customer was pressed.
+    private (string Key, CustomerListItemDto Customer)? _existing;
 
     protected override void OnParametersSet()
     {
+        // Each time it opens, it starts empty.
         if (Visible && !_wasVisible)
         {
-            _contact = new Contact();
-            _tag = string.Empty;
-            _openMenu = null;
+            _name = _handle = _email = "";
+            _channel = "whatsapp";
+            _tried = _saving = false;
+            _error = null;
+            _existing = null;
         }
         _wasVisible = Visible;
     }
 
-    private void SelectChannel(string channel)
+    // Only a WhatsApp number is checked as one: a username is left as typed.
+    private string? PhoneProblem => _tried && _channel == "whatsapp" && _handle.Trim().Length > 0 ? CustomerImport.Phone(_handle).Problem : null;
+    // As people write it (0803 555 1234); a local number says what it will be saved as.
+    private string PhoneHint => CustomerImport.Phone(_handle) is { Local: true, Number: { } saved }
+        ? $"Saved as {CustomerImport.Display(saved)}."
+        : "Such as 0803 555 1234, or with the country code.";
+
+    private string? EmailProblem => _tried && _email.Trim().Length > 0 && !CustomerImport.IsEmail(_email) ? "That email doesn't look right." : null;
+
+    // Shown while the number or username is still the one that was found.
+    private CustomerListItemDto? Existing =>
+        _existing is { } found && found.Key == Key(_channel == "whatsapp" ? CustomerImport.Phone(_handle).Number : null, _handle.Trim().Length > 0 ? _handle : null)
+            ? found.Customer : null;
+
+    private string? Key(string? phone, string? handle) =>
+        _channel == "whatsapp" ? phone?.TrimStart('+') : handle?.Trim().TrimStart('@').ToLowerInvariant();
+
+    // Someone who already messages you from this number or username, as their channel shows them. A Facebook
+    // profile link can't be matched, and a check that can't run never stops the add.
+    private async Task<CustomerListItemDto?> ExistingAsync(string? phone, string? handle)
     {
-        _contact.ChannelPlatform = channel;
-        _contact.Phone = string.Empty;
-        _contact.ChannelIdentifier = string.Empty;
-        _openMenu = null;
+        if (_channel == "facebook" || Key(phone, handle) is not { Length: > 0 } key) return null;
+        try
+        {
+            var page = await CustomerClient.ListAsync(key, null, _channel, 0, 20, CancellationToken.None);
+            return page.Items.FirstOrDefault(item => item.Identities.Any(identity => identity.Platform == _channel && (_channel == "whatsapp"
+                ? identity.Sender.TrimStart('+') == key
+                : string.Equals(identity.Username?.TrimStart('@'), key, StringComparison.OrdinalIgnoreCase))));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        {
+            return null;
+        }
     }
 
-    private void SelectStage(string stage)
+    private void PickChannel(string channel)
     {
-        _contact.Stage = stage;
-        _openMenu = null;
+        _channel = channel;
+        _handle = "";
+        _channelOpen = false;
     }
 
-    private void SelectTag(string tag)
+    private async Task SaveAsync()
     {
-        _tag = tag;
-        _openMenu = null;
+        _tried = true;
+        if (_name.Trim().Length == 0 || PhoneProblem is not null || EmailProblem is not null) return;
+        var phone = _channel == "whatsapp" ? CustomerImport.Phone(_handle).Number : null;
+        var handle = _channel != "whatsapp" && _handle.Trim().Length > 0 ? _handle.Trim() : null;
+        _saving = true;
+        _error = null;
+        try
+        {
+            if (await ExistingAsync(phone, handle) is { } existing)
+            {
+                _existing = (Key(phone, handle)!, existing);
+                return;
+            }
+            _existing = null;
+            var added = await CustomerClient.CreateAsync(new CreateCustomerDto(
+                _name.Trim(),
+                _email.Trim().Length > 0 ? _email.Trim() : null,
+                phone,
+                null,
+                null,
+                phone is not null || handle is not null ? _channel : null,
+                handle), CancellationToken.None);
+            await OnAdded.InvokeAsync(added);
+        }
+        catch (ApiException exception)
+        {
+            _error = exception.UserMessage;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        {
+            _error = "They couldn't be added. Check your connection and try again.";
+        }
+        finally
+        {
+            _saving = false;
+        }
     }
 
-    private static string? ChannelLabel(string? platform) => platform switch
+    private Task CloseAsync() => _saving ? Task.CompletedTask : OnClose.InvokeAsync();
+
+    private static string ChannelName(string channel) => channel == "facebook" ? "Messenger" : ChannelLinks.PlatformName(channel);
+
+    private static string HandleLabel(string channel) => channel switch
     {
-        "whatsapp" => "WhatsApp",
-        "instagram" => "Instagram",
-        "facebook" => "Messenger",
-        "tiktok" => "TikTok",
-        _ => null,
+        "instagram" => "Instagram username (optional)",
+        "facebook" => "Facebook profile link (optional)",
+        "tiktok" => "TikTok username (optional)",
+        _ => "How they appear there (optional)",
     };
 
-    private static string HandleLabel(string? platform) => platform switch
+    private static string HandleHint(string channel) => channel switch
     {
-        "instagram" => "Instagram handle or profile URL",
-        "facebook" => "Facebook profile URL",
-        "tiktok" => "TikTok username or profile URL",
-        _ => "Channel identifier",
+        "instagram" => "Such as @adireLagos.",
+        "facebook" => "Such as facebook.com/adire.lagos.",
+        "tiktok" => "Such as @adireLagos.",
+        _ => "",
     };
-
-    private static string HandleHint(string? platform) => platform switch
-    {
-        "instagram" => "@username or instagram.com/username",
-        "facebook" => "facebook.com/username or profile URL",
-        "tiktok" => "@username or tiktok.com/@username",
-        _ => "A username or profile URL",
-    };
-
-    private async Task HandleSave()
-    {
-        if (string.IsNullOrWhiteSpace(_contact.Name)) return;
-        if (!string.IsNullOrWhiteSpace(_tag))
-            _contact.Tags.Add(_tag);
-        await OnSave.InvokeAsync(_contact);
-    }
 }

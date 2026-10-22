@@ -1,87 +1,133 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
 @using Parrot.Web.Services
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+@using Parrot.Web.Features.Dashboard.TaskRequests
 
-@* One customer. The columns are set by the table that contains it; this file
-   styles what sits inside each cell. Mirrors Aurora's ProductRow. *@
-
-<article class="contact-row" role="row" @onclick="OnOpen">
-    <div class="contact-row__name" role="cell">
-        <PetalAvatar Seed="@Contact.Id.ToString()" Initials="@Initials.From(Contact.Name)" Size="AvatarSize.Sm" />
-        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@Contact.Name</Typography>
-    </div>
-
-    <div class="contact-row__channels" role="cell">
-        @foreach (ContactIdentity identity in Contact.Identities)
+@* One customer (designer, 21 October 2026): who, where they message you, when they last did, and what's open
+   for them. The name is the way in: a button stretched over the whole row, so a click anywhere opens Customer
+   details and the keyboard reaches it once, as a Tasks row does. Open tasks shows only when tasks can be kept.
+   Someone added by hand shows the channel entered for them; who added them is in Customer details. *@
+@if (Head)
+{
+    @* The table's column names, drawn by the row so the two always share their columns. *@
+    <div class="customer-row is-head @(ShowTasks ? "has-tasks" : null)" role="row">
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Customer</Typography>
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Channels</Typography>
+        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Last message</Typography>
+        @if (ShowTasks)
         {
-            ChannelLink? link = ChannelLinks.For(identity.Platform, identity.Sender, null, identity.Username);
-            string cssClass = $"contact-row__mark contact-row__mark--{identity.Platform}";
-            IconName icon = PlatformIcon(identity.Platform);
-            string label = ChannelLinks.PlatformName(identity.Platform);
-            @if (link is not null)
+            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Open tasks</Typography>
+        }
+    </div>
+}
+else if (Item is { } customer)
+{
+    <div class="customer-row @(ShowTasks ? "has-tasks" : null) @(Open ? "is-open" : null) @(Fresh ? "is-fresh" : null)" role="row">
+        <div class="customer-row__who" role="cell">
+            <PetalAvatar Seed="@customer.Id.ToString()" Initials="@Initials.From(customer.Name)" Size="AvatarSize.Sm" />
+            <span class="customer-row__words">
+                <RowButton Class="customer-row__name" OnClick="OnOpen" aria-label="@($"Open {customer.Name}'s details")">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@customer.Name</Typography>
+                </RowButton>
+                @if (Handle(customer, Added) is { } handle)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="customer-row__muted">@handle</Typography>
+                }
+            </span>
+        </div>
+
+        @* One line under the name on a tablet; columns on a desktop. *@
+        <div class="customer-row__facts">
+            <div class="customer-row__channels" role="cell">
+                @foreach (var platform in Platforms(customer, Added))
+                {
+                    <span class="customer-row__channel" title="@ChannelLinks.PlatformName(platform)">
+                        <ChannelGlyph Channel="@platform" Compact />
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChannelName(platform)</Typography>
+                    </span>
+                }
+                @if (customer.Identities.Count == 0 && Added is { ChannelPlatform: null or "" })
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="customer-row__muted">No channel yet</Typography>
+                }
+            </div>
+
+            <div class="customer-row__when" role="cell">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="@(customer.LastSeenAt is null ? "customer-row__muted" : null)">
+                    @(customer.LastSeenAt is { } at ? TaskWords.Ago(at, Now, Zone) : "No messages yet")
+                </Typography>
+            </div>
+
+            @if (ShowTasks)
             {
-                <a class="@cssClass"
-                   href="@link.Url"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   title="@link.ButtonLabel"
-                   @onclick:stopPropagation="true">
-                    <Icon Name="@icon" Size="IconSize.Sm" Label="@label" />
-                </a>
+                <div class="customer-row__tasks @(OpenTasks == 0 ? "is-none" : null)" role="cell">
+                    @if (OpenTasks > 0)
+                    {
+                        <span class="customer-row__count">
+                            <Icon Name="IconName.RiClipboardFill" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(OpenTasks == 1 ? "1 open" : $"{OpenTasks} open")</Typography>
+                        </span>
+                    }
+                    else
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="customer-row__muted">None</Typography>
+                    }
+                </div>
             }
-            else
-            {
-                <span class="@cssClass" title="@label">
-                    <Icon Name="@icon" Size="IconSize.Sm" Label="@label" />
-                </span>
-            }
-        }
+        </div>
     </div>
-
-    <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="contact-row__last" role="cell">
-        @Contact.LastInteraction
-    </Typography>
-
-    <div class="contact-row__tags" role="cell">
-        @foreach (var tag in Contact.Tags)
-        {
-            <StatusBadge Tone="StatusTone.Neutral">@tag</StatusBadge>
-        }
-    </div>
-
-    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose Class="contact-row__orders" role="cell">
-        @Contact.OrderCount
-    </Typography>
-
-    <div class="contact-row__stage" role="cell">
-        @if (!string.IsNullOrEmpty(Contact.Stage))
-        {
-            <StatusBadge Tone="@ContactCopy.StageTone(Contact.Stage)">@ContactCopy.Stage(Contact.Stage)</StatusBadge>
-        }
-    </div>
-
-    <div class="contact-row__actions" role="cell">
-        @* A plain control rather than a Button: the table wants a 32px circle
-           that sits inside the row, and none of the Button sizes is that. *@
-        <button type="button"
-                class="contact-row__open"
-                aria-label="@($"View {Contact.Name}")"
-                @onclick="OnOpen"
-                @onclick:stopPropagation="true">
-            <Icon Name="IconName.RiEyeFill" Size="IconSize.Sm" />
-        </button>
-    </div>
-</article>
+}
 
 @code {
-    [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
+    [Parameter] public CustomerListItemDto? Item { get; set; }
+
+    /// <summary>The column names instead of a customer.</summary>
+    [Parameter] public bool Head { get; set; }
+
+    /// <summary>Tasks can be kept: the Open tasks column shows.</summary>
+    [Parameter] public bool ShowTasks { get; set; }
+    [Parameter] public int OpenTasks { get; set; }
+
+    [Parameter] public DateTime Now { get; set; } = DateTime.UtcNow;
+    [Parameter] public TimeZoneInfo Zone { get; set; } = TimeZoneInfo.Local;
+
+    /// <summary>Their details are open beside the list.</summary>
+    [Parameter] public bool Open { get; set; }
+
+    /// <summary>Just added: lit for a moment.</summary>
+    [Parameter] public bool Fresh { get; set; }
 
     [Parameter] public EventCallback OnOpen { get; set; }
 
-    private static IconName PlatformIcon(string platform) => platform switch
+    /// <summary>
+    /// For someone added by hand: what was entered (where they message you, their number or username). The list
+    /// doesn't carry it yet (customers-backend-requests, request 2), so the page reads it for these rows only.
+    /// </summary>
+    [Parameter] public CustomerDetailDto? Added { get; set; }
+
+    // Where they message you: the channels they've written from, or the one entered when they were added.
+    private static IEnumerable<string> Platforms(CustomerListItemDto customer, CustomerDetailDto? added) =>
+        customer.Identities.Count > 0
+            ? customer.Identities.Select(identity => identity.Platform).Distinct()
+            : added?.ChannelPlatform is { Length: > 0 } platform ? [platform] : [];
+
+    // How to tell two people with one name apart: where they wrote last, as that channel shows them; for someone
+    // added by hand, the number or username entered.
+    private static string? Handle(CustomerListItemDto customer, CustomerDetailDto? added)
     {
-        "whatsapp" => IconName.RiWhatsappFill,
-        "instagram" => IconName.RiInstagramFill,
-        "tiktok" => IconName.RiTiktokFill,
-        _ => IconName.RiFacebookCircleFill,
-    };
+        var identity = customer.Identities.FirstOrDefault(i => i.Platform == customer.LastSeenChannel) ?? customer.Identities.FirstOrDefault();
+        var handle = identity is not null
+            ? CustomerChannel.HandleFor(identity.Platform, identity.Sender, identity.Username)
+            : added switch
+            {
+                { ChannelPlatform: "whatsapp", Phone: { Length: > 0 } phone } => phone,
+                { ChannelPlatform: { Length: > 0 } platform, ChannelIdentifier: { Length: > 0 } entered } =>
+                    CustomerChannel.HandleFor(platform, entered, entered.TrimStart('@')),
+                _ => null,
+            };
+        // A Messenger name the same as theirs says nothing new.
+        return handle == customer.Name ? null : handle;
+    }
+
+    private static string ChannelName(string platform) => platform == "facebook" ? "Messenger" : ChannelLinks.PlatformName(platform);
 }

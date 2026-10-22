@@ -169,6 +169,8 @@ builder.Services.AddScoped<QaInsightsState>();
 // Tasks: until the backend keeps them (tasks-backend-requests), the page says they are on the way and
 // nothing is made up. Before this, every workspace saw the same sample requests.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore, Parrot.Web.Features.Dashboard.TaskRequests.UnavailableTaskStore>();
+// No service reads a photo of a customer list yet, so Import offers files and pasting only (customers-backend-requests).
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Customers.ICustomerListReader, Parrot.Web.Features.Dashboard.Customers.UnavailableCustomerListReader>();
 // The person's own time zone, read from their browser, so "Today" is their today.
 builder.Services.AddScoped<Parrot.Web.Services.UserClock>();
 builder.Services.AddScoped<TeamState>();

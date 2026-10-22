@@ -1,13 +1,2 @@
-::deep .contact-form__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
-
-.contact-form {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-lg);
-  align-items: start;
-  margin-top: var(--spacing-lg);
-  /* Allow SelectField popovers to overflow the dialog body */
-  overflow: visible;
-}
-
-.contact-form__full { grid-column: 1 / -1; }
+/* Adding a customer: one column of fields, the dialog's own rhythm. */
+.add-customer { display: grid; gap: var(--spacing-md); text-align: start; }

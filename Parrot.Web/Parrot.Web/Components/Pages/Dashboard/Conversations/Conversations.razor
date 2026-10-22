@@ -335,7 +335,7 @@
                 <div id="customer-details-panel"
                      class="@($"inbox-customer {(_customerOpen ? "is-open" : "")}")"
                      aria-hidden="@(!_customerOpen)" inert="@(!_customerOpen)">
-                    <CustomerPanel Conversation="@_selected" Open="@_customerOpen" OnClose="CloseCustomerDetailsAsync"
+                    <CustomerPanel Customer="@CustomerView.From(_selected)" Open="@_customerOpen" OnClose="CloseCustomerDetailsAsync"
                                    OnPreview="item => _panelMedia = item" OnAddTask="StartTask" />
                 </div>
             </div>
