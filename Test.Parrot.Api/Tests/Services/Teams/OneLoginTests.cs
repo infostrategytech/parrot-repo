@@ -57,8 +57,8 @@ public class OneLoginTests
         Mock<IWebHostEnvironment> env = new();
         env.SetupGet(e => e.EnvironmentName).Returns("Production");
         Mock<IEmailService> email = new();
-        email.Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string, string>((_, _, body) => _sentBody = body).Returns(Task.CompletedTask);
+        email.Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string, string>((_, _, html, _) => _sentBody = html).Returns(Task.CompletedTask);
         return new TeamService(_team, _workspaces, access, _users.Object, email.Object,
             Options.Create(new EmailSettings { SmtpHost = "s", SmtpUser = "u", SmtpPassword = "p", FromAddress = "f@x.com", FromName = "O", BaseUrl = "https://app" }),
             env.Object, TeamFixture.InviteTokens(), TimeProvider.System, Mock.Of<IAppLogger<TeamService>>());

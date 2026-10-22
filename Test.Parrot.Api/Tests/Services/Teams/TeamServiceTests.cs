@@ -38,8 +38,8 @@ public class TeamServiceTests
         _users.Setup(u => u.FindByEmailAsync(It.IsAny<string>()))
             .ReturnsAsync((string email) => _accounts.Values.FirstOrDefault(a => a.NormalizedEmail == email.ToUpperInvariant()));
         Account(Owner, "owner@example.com", "Oma");
-        _email.Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
-            .Callback<string, string, string>((_, _, body) => _sentBody = body)
+        _email.Setup(e => e.SendEmailAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()))
+            .Callback<string, string, string, string>((_, _, html, _) => _sentBody = html)
             .Returns(Task.CompletedTask);
     }
 
