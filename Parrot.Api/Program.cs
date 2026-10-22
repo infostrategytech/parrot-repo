@@ -409,6 +409,8 @@ builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
+builder.Services.AddScoped<IConnectionRepository, ConnectionRepository>();
+builder.Services.AddScoped<IConnectionService, ConnectionService>();
 builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
