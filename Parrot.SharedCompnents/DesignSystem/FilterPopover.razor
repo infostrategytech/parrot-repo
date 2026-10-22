@@ -1,4 +1,6 @@
 @namespace Parrot.SharedComponents.DesignSystem
+@inject AuroraInterop Interop
+@implements IDisposable
 
 @* This component is the whole argument for the rebuild in one file.
 
@@ -10,40 +12,58 @@
    Dismissal here is a full-screen transparent button behind the menu. No JS
    interop, no document listener to leak, and it works with a keyboard because
    it is a real button. The open state is owned by the caller so that a row of
-   filters can close one another. *@
+   filters can close one another.
+
+   The menu is drawn in the browser's top layer and placed against the trigger
+   (designer, 21 October 2026: popovers must know where they are): below it,
+   or above when there is more room there, kept on screen, and never cut off
+   by a table, a side panel or a dialog that scrolls. *@
 
 <div class="@ClassName">
     <button type="button"
+            @ref="_trigger"
             class="filter-popover__trigger"
             aria-expanded="@Open.ToString().ToLowerInvariant()"
             aria-haspopup="menu"
+            aria-busy="@(Busy ? "true" : null)"
+            disabled="@Busy"
             @onclick="ToggleAsync">
         @if (Leading is not null)
         {
             <span class="filter-popover__leading" aria-hidden="true">@Leading</span>
         }
-        <Typography TextStyle="TextStyle.Small12Medium" As="span">@Label</Typography>
-        <Icon Name="IconName.RiArrowDownSLine" />
+        <Typography TextStyle="LabelStyle" As="span">@Label</Typography>
+        @if (_showDots)
+        {
+            <span class="filter-popover__busy" aria-hidden="true"><CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="16" /></span>
+        }
+        else
+        {
+            <Icon Name="IconName.RiArrowDownSLine" />
+        }
     </button>
 
     @if (Open)
     {
-        @* Rendered before the menu so the menu stacks above it. *@
-        <button type="button"
-                class="filter-popover__dismiss"
-                tabindex="-1"
-                aria-hidden="true"
-                @onclick="CloseAsync"></button>
+        <div class="filter-popover__layer" popover="manual" @ref="_layer">
+            @* Rendered before the menu so the menu stacks above it. *@
+            <button type="button"
+                    class="filter-popover__dismiss"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    data-float-dismiss
+                    @onclick="CloseAsync"></button>
 
-        <div class="filter-popover__menu" role="menu" aria-label="@Title" @onkeydown="OnKeyDown">
-            <header>
-                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
-                @if (!string.IsNullOrWhiteSpace(Subtitle))
-                {
-                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
-                }
-            </header>
-            @ChildContent
+            <div class="filter-popover__menu" role="menu" aria-label="@Title" @onkeydown="OnKeyDown" @ref="_menu">
+                <header>
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
+                    }
+                </header>
+                @ChildContent
+            </div>
         </div>
     }
 </div>
@@ -62,7 +82,22 @@
     /// <summary>Opens the menu from the trigger's trailing edge, for controls near a panel boundary.</summary>
     [Parameter] public bool AlignEnd { get; set; }
 
+    /// <summary>
+    /// A value that can be changed in place, such as a status in a table row or a property in a panel:
+    /// no outline until hovered or open, and only as wide as its words, so a column of them stays calm.
+    /// </summary>
+    [Parameter] public bool Quiet { get; set; }
+
+    /// <summary>The trigger's text style: the toolbar's small type by default; a property among body-size values matches them.</summary>
+    [Parameter] public TextStyle LabelStyle { get; set; } = TextStyle.Small12Medium;
+
     [Parameter] public string? Class { get; set; }
+
+    /// <summary>
+    /// A change made from this menu is saving: the trigger waits (no second change on top of the first)
+    /// and, if it takes a moment, shows the relay dots where the chevron is.
+    /// </summary>
+    [Parameter] public bool Busy { get; set; }
 
     [Parameter, EditorRequired] public bool Open { get; set; }
 
@@ -78,8 +113,59 @@
     {
         "filter-popover",
         AlignEnd ? "is-end-aligned" : null,
+        Quiet ? "is-quiet" : null,
         Class
     }.Where(value => !string.IsNullOrWhiteSpace(value)));
+
+    private ElementReference _trigger, _layer, _menu;
+    private bool _floating;
+
+    // As Button: the dots only after 300ms (anything faster shows none), then for 600ms at least.
+    private const int ShowAfterMs = 300;
+    private const int HoldForMs = 600;
+    private bool _showDots, _disposed;
+    private DateTime _shownAt;
+    private int _generation;
+
+    protected override void OnParametersSet()
+    {
+        var generation = ++_generation;
+        if (Busy && !_showDots) _ = ShowAfterDelayAsync(generation);
+        else if (!Busy && _showDots) _ = HideAfterHoldAsync(generation);
+    }
+
+    private async Task ShowAfterDelayAsync(int generation)
+    {
+        await Task.Delay(ShowAfterMs);
+        if (_disposed || generation != _generation || !Busy) return;
+        _showDots = true;
+        _shownAt = DateTime.UtcNow;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task HideAfterHoldAsync(int generation)
+    {
+        var remaining = HoldForMs - (int)(DateTime.UtcNow - _shownAt).TotalMilliseconds;
+        if (remaining > 0) await Task.Delay(remaining);
+        if (_disposed || generation != _generation || Busy) return;
+        _showDots = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose() => _disposed = true;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!Open) { _floating = false; return; }
+        if (_floating) return;
+        _floating = true;
+        // The page can be left between the render and this call; nothing to place then.
+        try { await Interop.FloatMenuAsync(_layer, _trigger, _menu, AlignEnd); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+        catch (TaskCanceledException) { }
+    }
 
     private Task ToggleAsync() => OpenChanged.InvokeAsync(!Open);
 

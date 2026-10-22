@@ -11,11 +11,14 @@
 {
     @* A divider across the thread: what kind of event it is, what happened,
        and when, together between two rules. *@
-    <div class="message-system" role="note">
+    <div class="message-system @(_highlighted ? "is-highlighted" : null)" role="note" @ref="_element">
         <span class="message-system__event">
             <span class="message-system__glyph" aria-hidden="true"><Icon Name="@SystemGlyph" Size="IconSize.Sm" /></span>
-            <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@Message.Text</Typography>
-            <Typography TextStyle="TextStyle.Small12Regular" As="time">@TimeLabel</Typography>
+            @* The words and their time as one run of text, so the time follows the last word wherever it wraps. *@
+            <span class="message-system__words">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@Message.Text</Typography>
+                <Typography TextStyle="TextStyle.Small12Regular" As="time">@TimeLabel</Typography>
+            </span>
         </span>
     </div>
 }
@@ -125,8 +128,11 @@ else
                         title="@(quote.Id is null ? null : "Go to the original message")"
                         @onclick="() => OnJumpTo.InvokeAsync(quote.Id!)">
                     <ChildContent>
-                        <Typography TextStyle="TextStyle.Small10Semibold" As="strong">@QuoteLabels.Author(quote, CustomerName)</Typography>
-                        <Typography TextStyle="TextStyle.Small12Regular" As="span">@QuoteLabels.Text(quote)</Typography>
+                        <span class="message-quote__glyph" aria-hidden="true"><Icon Name="IconName.RiReplyFill" Size="IconSize.Sm" /></span>
+                        <span class="message-quote__text">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@QuoteLabels.Author(quote, CustomerName)</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@QuoteLabels.Text(quote)</Typography>
+                        </span>
                     </ChildContent>
                 </Button>
             }
@@ -294,6 +300,7 @@ else
     [Parameter] public bool CanReply { get; set; }
     /// <summary>Reply to this message: the composer quotes it.</summary>
     [Parameter] public EventCallback<ConvMessage> OnReply { get; set; }
+    /// <summary>Tasks can be kept: a customer's message offers to become one.</summary>
     /// <summary>A quote was chosen: the thread scrolls to the quoted message, by its id.</summary>
     [Parameter] public EventCallback<string> OnJumpTo { get; set; }
 
@@ -317,12 +324,17 @@ else
     }
 
     /// <summary>Brings this message into view and marks it for a moment, as WhatsApp does when a quote is chosen.</summary>
-    public async Task ShowAsync()
+    /// <summary>Brought into view and lit: at the top ("start"), or "center" with what came before it above.</summary>
+    public async Task ShowAsync(string block = "start")
     {
-        await Interop.ScrollIntoViewAsync(_element);
+        await Interop.ScrollIntoViewAsync(_element, block);
         _highlighted = true;
         StateHasChanged();
-        await Task.Delay(1600);
+        // Again once photos above it have loaded and pushed it down.
+        await Task.Delay(450);
+        try { await Interop.ScrollIntoViewAsync(_element, block); }
+        catch (JSException) { }
+        await Task.Delay(1150);
         _highlighted = false;
         // The thread may have moved on (another conversation) in the meantime.
         try { StateHasChanged(); }
@@ -367,7 +379,7 @@ else
     // taking or giving back the conversation, knowledge, or a task request.
     private IconName SystemGlyph => Message.Text switch
     {
-        var t when t.Contains("task request", StringComparison.OrdinalIgnoreCase) => IconName.RiClipboardFill,
+        var t when t.Contains("task request", StringComparison.OrdinalIgnoreCase) || t.Contains("raised a task", StringComparison.OrdinalIgnoreCase) => IconName.RiClipboardFill,
         var t when t.Contains("knowledge", StringComparison.OrdinalIgnoreCase) => IconName.RiBookAiFill,
         var t when t.Contains("resumed", StringComparison.OrdinalIgnoreCase) || t.Contains("returned", StringComparison.OrdinalIgnoreCase) => IconName.RiRobot3Fill,
         var t when t.Contains("assign", StringComparison.OrdinalIgnoreCase) || t.Contains("took over", StringComparison.OrdinalIgnoreCase)

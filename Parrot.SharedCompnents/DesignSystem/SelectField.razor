@@ -1,4 +1,5 @@
 @namespace Parrot.SharedComponents.DesignSystem
+@inject AuroraInterop Interop
 
 @* A choice, shaped like a field.
 
@@ -13,6 +14,7 @@
 
 <div class="@ClassName">
     <div class="select-field__box"
+         @ref="_box"
          role="button"
          tabindex="0"
          aria-haspopup="listbox"
@@ -36,14 +38,19 @@
 
     @if (Open)
     {
-        <button type="button"
-                class="select-field__dismiss"
-                tabindex="-1"
-                aria-hidden="true"
-                @onclick="CloseAsync"></button>
+        @* Above everything, at least as wide as the field, placed below it or above it where there is room:
+           a dialog or a panel that scrolls can't cut it off (see FilterPopover). *@
+        <div class="select-field__layer" popover="manual" @ref="_layer">
+            <button type="button"
+                    class="select-field__dismiss"
+                    tabindex="-1"
+                    aria-hidden="true"
+                    data-float-dismiss
+                    @onclick="CloseAsync"></button>
 
-        <div class="select-field__menu" role="listbox" aria-label="@FloatingLabel">
-            @ChildContent
+            <div class="select-field__menu" role="@MenuRole" aria-label="@FloatingLabel" @ref="_menu">
+                @ChildContent
+            </div>
         </div>
     }
 
@@ -72,6 +79,25 @@
     [Parameter] public bool Error { get; set; }
 
     [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>"listbox" for a list of options; "dialog" when the menu holds its own search.</summary>
+    [Parameter] public string MenuRole { get; set; } = "listbox";
+
+    private ElementReference _box, _layer, _menu;
+    private bool _floating;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!Open) { _floating = false; return; }
+        if (_floating) return;
+        _floating = true;
+        // The page can be left between the render and this call; nothing to place then.
+        try { await Interop.FloatMenuAsync(_layer, _box, _menu, matchWidth: true); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+        catch (TaskCanceledException) { }
+    }
 
     private bool HasValue => !string.IsNullOrWhiteSpace(Value);
 

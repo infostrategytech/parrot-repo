@@ -9,17 +9,18 @@
    page yet stays a disabled button. *@
 @if (IsPlaceholder)
 {
-    <button type="button" class="@ClassName" data-tooltip="@Tooltip" disabled aria-disabled="true">@Content</button>
+    <button type="button" class="@ClassName" aria-label="@Tooltip" disabled aria-disabled="true">@Content</button>
 }
 else
 {
-    <a href="@Entry.Path" class="@ClassName" data-tooltip="@Tooltip" aria-current="@(IsActive ? "page" : null)">@Content</a>
+    <a href="@Entry.Path" class="@ClassName" aria-label="@Tooltip" aria-current="@(IsActive ? "page" : null)">@Content</a>
 }
 
 @code {
     private RenderFragment Content => __builder =>
     {
-        <Icon Name="Entry.Glyph" Size="IconSize.Sm" />
+        @* The icon's own pill: on the compact rail, hover and the current page light this, not the whole row. *@
+        <span class="nav-item__glyph"><Icon Name="Entry.Glyph" Size="IconSize.Sm" /></span>
         <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="nav-item__label">
             @Entry.Label
         </Typography>
@@ -31,7 +32,7 @@ else
             <Typography TextStyle="TextStyle.Small10Semibold"
                         As="em"
                         Class="nav-item__count"
-                        aria-label="@($"{Badge} unread messages")">
+                        aria-label="@($"{Badge} {BadgeMeaning}")">
                 @Badge
             </Typography>
         }
@@ -41,19 +42,21 @@ else
 
     [Parameter] public bool IsActive { get; set; }
 
-    /// <summary>Only the inbox carries one today. Null hides it entirely.</summary>
+    /// <summary>The inbox's unread messages, or the tasks that need you. Null hides it entirely.</summary>
     [Parameter] public int? Badge { get; set; }
+
+    /// <summary>What the count is of, read out and shown on hover ("unread messages", "need you").</summary>
+    [Parameter] public string BadgeMeaning { get; set; } = "unread messages";
 
     /// <summary>Compact rows for the footer group.</summary>
     [Parameter] public bool Compact { get; set; }
 
     private bool IsPlaceholder => Entry.Path is null;
 
-    // Collapsed, the label is hidden, so the tooltip is the only name this item
-    // has. The badge rides along so a count still means something when narrow.
+    // What a screen reader says: the full name (the rail shows a short one) and what its count is of.
     private string Tooltip => IsPlaceholder
         ? Entry.Label + " — not in this demo"
-        : Badge is > 0 ? $"{Entry.Label} · {Badge} unread" : Entry.Label;
+        : Badge is > 0 ? $"{Entry.Label} · {Badge} {BadgeMeaning}" : Entry.Label;
 
     private string ClassName
     {

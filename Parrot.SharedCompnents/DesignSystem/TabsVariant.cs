@@ -17,5 +17,12 @@ public enum TabsVariant
     /// page's sections, such as an agent's settings (designer, 14 October
     /// 2026). On a narrow screen the row scrolls sideways.
     /// </summary>
-    Underline
+    Underline,
+
+    /// <summary>
+    /// A page's views, as Products &amp; Services and Settings draw them (designer, 20 October 2026): a
+    /// darker tray on the page, tabs as wide as their words, the chosen one a raised card in full-strength
+    /// text, counts as small chips that take the brand colour when chosen. Put the label in a Typography.
+    /// </summary>
+    Tray
 }

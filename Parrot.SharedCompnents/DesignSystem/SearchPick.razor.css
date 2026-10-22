@@ -1,0 +1,47 @@
+/* A search with its matches under it, in the flow of the page. */
+.ds-search-pick {
+  /* Missing from the token set: no border-width scale. */
+  --ds-search-pick-hairline: 1px;
+
+  display: grid;
+  gap: var(--spacing-xs);
+}
+.ds-search-pick__list {
+  display: grid;
+  gap: var(--spacing-2xs);
+  margin: var(--spacing-none);
+  padding: var(--spacing-xs);
+  list-style: none;
+  background: var(--colors-surface-card);
+  border: var(--ds-search-pick-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.ds-search-pick__option {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-primary);
+  text-align: start;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-md);
+  cursor: pointer;
+}
+.ds-search-pick__option.is-active,
+.ds-search-pick__option:hover { background: var(--colors-interaction-hover); }
+.ds-search-pick__leading { display: grid; flex: none; place-items: center; }
+.ds-search-pick__words { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.ds-search-pick__words ::deep .ds-search-pick__detail { color: var(--colors-text-muted); }
+.ds-search-pick__none { padding: var(--spacing-sm) var(--spacing-md); color: var(--colors-text-muted); }
+.ds-search-pick__footer { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+
+/* Plain, in a floating menu: the menu is the card, so the matches sit straight in it, with the footer
+   over a hairline. */
+.ds-search-pick.is-plain { gap: var(--spacing-xs); }
+.ds-search-pick.is-plain .ds-search-pick__list { padding: var(--spacing-none); background: transparent; border: 0; }
+.ds-search-pick.is-plain .ds-search-pick__footer {
+  padding-top: var(--spacing-sm);
+  border-top: var(--ds-search-pick-hairline) solid var(--colors-surface-border);
+}

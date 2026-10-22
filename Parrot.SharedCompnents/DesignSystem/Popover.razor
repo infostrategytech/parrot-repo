@@ -1,0 +1,75 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@inject AuroraInterop Interop
+
+@* Floating content anchored to any trigger: a list of choices, a search, a calendar (designer, 21 October
+   2026: "a popover must still be a popover; it shouldn't push the modal"). It is drawn in the browser's
+   top layer, so a dialog or a side panel that scrolls can't cut it off, and it never moves what's under
+   it. The trigger is the caller's own Button, so it looks like every other button, and Open is the
+   caller's, as FilterPopover's is. A click anywhere else or Escape closes it, and Escape leaves a dialog
+   underneath open. *@
+<span class="ds-popover @Class" @ref="_anchor">
+    @Anchor
+    @if (Open)
+    {
+        <div class="ds-popover__layer" popover="manual" @ref="_layer">
+            @* The click-away layer: a full-screen transparent button, the documented exception to building
+               from components. *@
+            <button type="button" class="ds-popover__dismiss" tabindex="-1" aria-hidden="true" data-float-dismiss
+                    @onclick="CloseAsync"></button>
+            <div class="ds-popover__panel @(Wide ? "is-wide" : null)" role="@Role" aria-label="@Title" @ref="_panel">
+                <header>
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
+                    }
+                </header>
+                @ChildContent
+            </div>
+        </div>
+    }
+</span>
+
+@code {
+    /// <summary>The trigger: usually a Button whose click toggles Open.</summary>
+    [Parameter, EditorRequired] public RenderFragment? Anchor { get; set; }
+
+    /// <summary>The panel's heading, and its accessible name.</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>"menu" for a list of choices; "dialog" (the default) for anything with its own fields, such as a search.</summary>
+    [Parameter] public string Role { get; set; } = "dialog";
+
+    /// <summary>Lines the panel up with the trigger's trailing edge, for a trigger near the right of a panel.</summary>
+    [Parameter] public bool AlignEnd { get; set; }
+
+    /// <summary>Room for a search and its matches, rather than a short list.</summary>
+    [Parameter] public bool Wide { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter, EditorRequired] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    private ElementReference _anchor, _layer, _panel;
+    private bool _floating;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!Open) { _floating = false; return; }
+        if (_floating) return;
+        _floating = true;
+        // The page can be left between the render and this call; nothing to place then.
+        try { await Interop.FloatMenuAsync(_layer, _anchor, _panel, AlignEnd); }
+        catch (JSException) { }
+        catch (JSDisconnectedException) { }
+        catch (InvalidOperationException) { }
+        catch (TaskCanceledException) { }
+    }
+
+    private Task CloseAsync() => OpenChanged.InvokeAsync(false);
+}

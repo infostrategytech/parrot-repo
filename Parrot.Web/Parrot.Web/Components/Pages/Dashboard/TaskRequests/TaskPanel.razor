@@ -1,0 +1,412 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@inject ITaskStore Store
+@inject Parrot.Web.Services.UserClock Clock
+@inject NavigationManager Nav
+@inject ToastService Toasts
+@using Parrot.Web.Features.Dashboard.AiAgents.State
+
+@* One task, over the list (the list stays the context). Its facts first, as one aligned list: the ones
+   that change as the work moves are changed right there (status, who's on it, due, urgent); the rest
+   (what it is, the customer, where, the items) through Edit, with the same fields as adding a task.
+   Then what's needed, what was asked for, and the updates: the team's lines and what happened, as one
+   timeline. Replying to the customer is the footer's first action. *@
+<SidePanel Open="@(Item is not null)" Title="@(Item?.Title ?? "")" Eyebrow="@Eyebrow" OnClose="OnClose" CloseLabel="Close task" Class="task-panel">
+    <ChildContent>
+        @if (Item is { } task)
+        {
+            <div class="task-panel__body">
+                <dl class="task-panel__props">
+                    <div class="task-panel__prop">
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Status</Typography></dt>
+                        <dd>
+                            <TaskStatusMenu State="task.State" LabelStyle="TextStyle.BodySmallMedium" Busy="@_saving.Contains("state")" Open='@(_openMenu == "state")'
+                                            OpenChanged="@(open => _openMenu = open ? "state" : null)"
+                                            OnState="state => SetStateAsync(task, state)" />
+                        </dd>
+                    </div>
+                    @if (Team.Count > 1)
+                    {
+                        <div class="task-panel__prop">
+                            <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Assignee</Typography></dt>
+                            <dd>
+                                <TaskAssigneeMenu Assignee="task.Assignee" Team="Team" Me="Store.Me" Busy="@_saving.Contains("assign")"
+                                                  Open='@(_openMenu == "assign")' OpenChanged="@(open => _openMenu = open ? "assign" : null)"
+                                                  OnAssign="person => AssignAsync(task, person)" />
+                            </dd>
+                        </div>
+                    }
+                    <div class="task-panel__prop">
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Due</Typography></dt>
+                        <dd class="@DueClass(task)">
+                            <FilterPopover Label="@TaskWords.Due(task.DueAt, task.DueHasTime, Now, Clock.Zone).Text" Title="Due" Subtitle="When it needs to be done"
+                                           Quiet LabelStyle="TextStyle.BodySmallMedium" Class="task-panel__due-menu" Busy="@_saving.Contains("due")"
+                                           Open='@(_openMenu == "due")' OpenChanged="@(open => _openMenu = open ? "due" : null)">
+                                <Leading><Icon Name="IconName.RiCalendarCheckFill" Size="IconSize.Sm" /></Leading>
+                                <ChildContent>
+                                    <CalendarPicker Today="Clock.Today" Date="DueDay(task)" Time="DueTime(task)"
+                                                    DateChanged="day => SetDueAsync(task, day, DueTime(task))"
+                                                    TimeChanged="time => SetDueAsync(task, DueDay(task), time)" />
+                                </ChildContent>
+                            </FilterPopover>
+                        </dd>
+                    </div>
+                    <div class="task-panel__prop">
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Urgent</Typography></dt>
+                        <dd><Toggle Checked="task.Urgent" CheckedChanged="urgent => SetUrgentAsync(task, urgent)" Disabled="@_saving.Contains("urgent")" Size="ToggleSize.Sm" AriaLabel="Urgent" /></dd>
+                    </div>
+                    <div class="task-panel__prop">
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Raised by</Typography></dt>
+                        <dd>
+                            <TaskRaisedBy Item="task" Look="@Look" />
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-panel__muted">@TaskWords.Ago(task.RaisedAt, Now, Clock.Zone)</Typography>
+                        </dd>
+                    </div>
+                    <div class="task-panel__prop">
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Customer</Typography></dt>
+                        <dd>
+                            @if (task.Customer is { } customer)
+                            {
+                                <span class="task-panel__customer">
+                                    <PetalAvatar Seed="@(customer.ConversationId ?? customer.Name)" Initials="@Initials.From(customer.Name)" Size="AvatarSize.Sm" />
+                                    @if (customer.ConversationId is not null)
+                                    {
+                                        <a href="@ConversationUrl(task)" title="Open the conversation">
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@customer.Name</Typography>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@customer.Name</Typography>
+                                    }
+                                </span>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-panel__muted">
+                                    @string.Join(" · ", new[] { TaskWords.Channel(customer.Channel), customer.Contact }.Where(part => !string.IsNullOrWhiteSpace(part)))
+                                </Typography>
+                            }
+                            else
+                            {
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__muted">No customer</Typography>
+                            }
+                        </dd>
+                    </div>
+                    @if (task.Address is { Length: > 0 } address)
+                    {
+                        <div class="task-panel__prop">
+                            <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Where</Typography></dt>
+                            <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@address</Typography></dd>
+                        </div>
+                    }
+                </dl>
+
+                <section class="task-panel__section">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">What's needed</Typography>
+                    @if (task.Summary is { Length: > 0 } summary)
+                    {
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="task-panel__text">@summary</Typography>
+                    }
+                    else
+                    {
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="task-panel__muted">Nothing more was added. The title says it.</Typography>
+                    }
+                </section>
+
+                @if (task.Lines.Count > 0 || task.Total is not null)
+                {
+                    <section class="task-panel__section">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">@TaskWords.DetailsTitle(task.Kind)</Typography>
+                        @* Its own subtle card: the items, then any charges, then the total. *@
+                        <div class="task-panel__order">
+                            @if (task.Lines.Any(line => !line.Charge))
+                            {
+                                <ul class="task-panel__lines">
+                                    @foreach (var line in task.Lines.Where(line => !line.Charge))
+                                    {
+                                        <li>
+                                            <span class="task-panel__line-name">
+                                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@line.Name</Typography>
+                                                @if (line.Note is { Length: > 0 } note)
+                                                {
+                                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-panel__muted">@note</Typography>
+                                                }
+                                            </span>
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-panel__qty">× @line.Quantity</Typography>
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__amount">@(line.Price is { } price ? TaskWords.Naira(price * line.Quantity) : "")</Typography>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                            @if (task.Lines.Any(line => line.Charge))
+                            {
+                                <ul class="task-panel__charges">
+                                    @foreach (var charge in task.Lines.Where(line => line.Charge))
+                                    {
+                                        <li>
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@charge.Name</Typography>
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__amount">@(charge.Price is { } price ? TaskWords.Naira(price) : "")</Typography>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                            @if (task.Total is { } total)
+                            {
+                                <div class="task-panel__total">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(task.Kind == TaskKind.Quote ? "Estimate" : "Total")</Typography>
+                                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">@TaskWords.Naira(total)</Typography>
+                                </div>
+                            }
+                        </div>
+                        @if (task.Total is not null)
+                        {
+                            @* Recorded, never claimed: the panel doesn't know whether money arrived. *@
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="task-panel__muted">
+                                Payments aren't tracked here yet. Check them in your bank app.
+                            </Typography>
+                        }
+                    </section>
+                }
+
+                @* Notes for the team only, as the Inbox's internal notes are: never sent to the customer, and
+                   not read by the agents. What happened to the task is its own trail, under them. *@
+                <section class="task-panel__section">
+                    <div class="task-panel__heading">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Internal notes</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="task-panel__muted">Only your team sees these. They're never sent to the customer.</Typography>
+                    </div>
+                    <div class="task-panel__compose">
+                        <TextArea Value="@_update" ValueChanged="value => _update = value" Rows="1" MaxLength="1000" AutoGrow
+                                  AriaLabel="Add a note for your team" Placeholder="Add a note, such as “Called her, she'll pay on Friday”" />
+                        @if (!string.IsNullOrWhiteSpace(_update))
+                        {
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="_posting" @onclick="() => PostAsync(task)">
+                                <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                                <ChildContent>Add note</ChildContent>
+                            </Button>
+                        }
+                    </div>
+                    @if (task.History.Any(entry => entry.Update is not null))
+                    {
+                        <ol class="task-panel__notes">
+                            @foreach (var entry in task.History.Where(entry => entry.Update is not null))
+                            {
+                                <li>
+                                    <PetalAvatar Seed="@entry.Who" Initials="@Initials.From(entry.Who)" Size="AvatarSize.Sm" />
+                                    <div>
+                                        <span class="task-panel__note-head">
+                                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@entry.Who</Typography>
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="time" Class="task-panel__muted">@TaskWords.Ago(entry.At, Now, Clock.Zone)</Typography>
+                                        </span>
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@entry.Update</Typography>
+                                    </div>
+                                </li>
+                            }
+                        </ol>
+                    }
+                </section>
+
+                <section class="task-panel__section">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Activity</Typography>
+                    <ol class="task-panel__history">
+                        @foreach (var entry in Events(task).Take(_allHistory ? int.MaxValue : 5))
+                        {
+                            <li>
+                                <span class="task-panel__event-dot" aria-hidden="true"></span>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@Sentence(entry)</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="time" Class="task-panel__muted">@TaskWords.Ago(entry.At, Now, Clock.Zone)</Typography>
+                            </li>
+                        }
+                    </ol>
+                    @if (Events(task).Count() > 5)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="task-panel__more" @onclick="() => _allHistory = !_allHistory">
+                            @(_allHistory ? "Show less" : $"Show all {Events(task).Count()}")
+                        </Button>
+                    }
+                </section>
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        @if (Item is { } task)
+        {
+            <div class="task-panel__footer">
+                <Button Variant="ButtonVariant.Ghost" @onclick="() => _editing = true">
+                    <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                    <ChildContent>Edit</ChildContent>
+                </Button>
+                <div class="task-panel__footer-main">
+                    @if (task.Customer?.ConversationId is not null && !task.IsClosed)
+                    {
+                        @* A quote with something in it says what the reply is for; either way the conversation opens
+                           where the task was raised, and the person writes, pastes or attaches their own. *@
+                        @if (task.Kind == TaskKind.Quote && (task.Lines.Count > 0 || task.Total is not null))
+                        {
+                            <Button Variant="ButtonVariant.Secondary" @onclick="() => OpenConversation(task)">
+                                <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                                <ChildContent>Send quote</ChildContent>
+                            </Button>
+                        }
+                        else
+                        {
+                            <Button Variant="ButtonVariant.Secondary" @onclick="() => OpenConversation(task)">
+                                <IconLeft><Icon Name="IconName.RiMessage2Fill" /></IconLeft>
+                                <ChildContent>@($"Reply to {task.Customer.Name}")</ChildContent>
+                            </Button>
+                        }
+                    }
+                    @if (task.IsClosed)
+                    {
+                        <Button Busy="@_saving.Contains("state")" @onclick="() => SetStateAsync(task, TaskState.Open)">Reopen</Button>
+                    }
+                    else
+                    {
+                        <Button Busy="@_saving.Contains("state")" @onclick="() => SetStateAsync(task, TaskState.Done)">
+                            <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
+                            <ChildContent>Mark done</ChildContent>
+                        </Button>
+                    }
+                </div>
+            </div>
+        }
+    </Footer>
+</SidePanel>
+
+<NewTaskDialog Open="@(_editing && Item is not null)" Editing="Item" OnClose="() => _editing = false" OnCreated="_ => _editing = false" />
+
+@code {
+    [Parameter] public TaskRequest? Item { get; set; }
+
+    /// <summary>The look of the agent that raised it (null for a person).</summary>
+    [Parameter] public string? Look { get; set; }
+
+    /// <summary>The team; the assignee shows once there are two people or more.</summary>
+    [Parameter] public IReadOnlyList<TaskPerson> Team { get; set; } = [];
+
+    [Parameter] public DateTime Now { get; set; } = DateTime.UtcNow;
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    private string? _openMenu;
+
+    // Changes saving now ("state", "assign", "due", "urgent"): their controls wait until it's done.
+    private readonly HashSet<string> _saving = [];
+
+    // A change saved, or said that it wasn't, with Try again (designer, 21 October 2026). Nothing on screen
+    // changes until the server has it, so a failure leaves the task as it was.
+    private async Task<bool> SaveAsync(string key, Func<Task> change, string failed, Func<Task> retry)
+    {
+        if (!_saving.Add(key)) return false;
+        try
+        {
+            await change();
+            return true;
+        }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception))
+        {
+            Toasts.Show(new ToastMessage(failed, "Check your connection and try again.", ToastStatus.Error, "Try again", () => _ = InvokeAsync(retry)));
+            return false;
+        }
+        finally
+        {
+            _saving.Remove(key);
+        }
+    }
+    private string? _update;
+    private string? _for;
+    private bool _posting;
+    private bool _allHistory;
+    private bool _editing;
+
+    protected override void OnParametersSet()
+    {
+        // A different task: an empty update box, the history folded.
+        if (Item?.Id != _for)
+        {
+            _for = Item?.Id;
+            _update = null;
+            _allHistory = false;
+            _openMenu = null;
+            _editing = false;
+        }
+    }
+
+    private string? Eyebrow => Item is { } task ? $"{TaskWords.Label(task.Kind)} · {task.Id}" : null;
+
+    private DateOnly? DueDay(TaskRequest task) => task.DueAt is { } due ? DateOnly.FromDateTime(Clock.ToLocal(due)) : null;
+    private TimeOnly? DueTime(TaskRequest task) => task.DueAt is { } due && task.DueHasTime ? TimeOnly.FromDateTime(Clock.ToLocal(due)) : null;
+
+    private string DueClass(TaskRequest task) => TaskWords.Due(task.DueAt, task.DueHasTime, Now, Clock.Zone).Tone switch
+    {
+        StatusTone.Danger => "task-panel__due is-late",
+        StatusTone.Warning => "task-panel__due is-today",
+        _ => task.DueAt is null ? "task-panel__due is-none" : "task-panel__due",
+    };
+
+    // What happened to it, without the notes (they have their own section).
+    private static IEnumerable<TaskEvent> Events(TaskRequest task) => task.History.Where(entry => entry.Update is null);
+
+    // "Kora raised it from Kemi's Kitchen's conversation", "Adaeze moved it to In progress".
+    private static string Sentence(TaskEvent entry) =>
+        entry.What.Length == 0 ? entry.Who : $"{entry.Who} {char.ToLowerInvariant(entry.What[0])}{entry.What[1..]}";
+
+    private async Task SetStateAsync(TaskRequest task, TaskState state)
+    {
+        _openMenu = null;
+        var before = task.State;
+        if (before == state) return;
+        if (!await SaveAsync("state", () => Store.SetStateAsync(task.Id, state), TaskWords.StateFailed(state, task.IsClosed), () => SetStateAsync(task, state))) return;
+        if (state == TaskState.Done)
+            Toasts.Show(new ToastMessage("Marked done.", ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(() => UndoStateAsync(task, before))));
+        else if (state == TaskState.Cancelled)
+            Toasts.Show(new ToastMessage("Cancelled the task.", ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(() => UndoStateAsync(task, before))));
+        else if (before is TaskState.Done or TaskState.Cancelled)
+            Toasts.Show("Opened again.");
+    }
+
+    private Task UndoStateAsync(TaskRequest task, TaskState before) =>
+        SaveAsync("state", () => Store.SetStateAsync(task.Id, before), "Couldn't undo that.", () => UndoStateAsync(task, before));
+
+    private async Task AssignAsync(TaskRequest task, TaskPerson? person)
+    {
+        _openMenu = null;
+        if (task.Assignee?.Id == person?.Id) return;
+        await SaveAsync("assign", () => Store.AssignAsync(task.Id, person), TaskWords.AssignFailed(person, Store.Me.Id), () => AssignAsync(task, person));
+    }
+
+    // A day keeps the time it had; no day takes the time off too.
+    private Task SetDueAsync(TaskRequest task, DateOnly? day, TimeOnly? time) =>
+        SaveAsync("due", () => Store.SetDueAsync(task.Id, day is { } chosen ? TaskWords.DueMoment(chosen, time, Clock.Zone) : null, day is not null && time is not null),
+            "Couldn't change the due date.", () => SetDueAsync(task, day, time));
+
+    private Task SetUrgentAsync(TaskRequest task, bool urgent) =>
+        SaveAsync("urgent", () => Store.SetUrgentAsync(task.Id, urgent), urgent ? "Couldn't mark it urgent." : "Couldn't take Urgent off.", () => SetUrgentAsync(task, urgent));
+
+    // A note that doesn't save stays in the box, so nothing typed is lost.
+    private async Task PostAsync(TaskRequest task)
+    {
+        if (string.IsNullOrWhiteSpace(_update) || _posting) return;
+        _posting = true;
+        try
+        {
+            await Store.PostUpdateAsync(task.Id, _update);
+            _update = null;
+        }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception))
+        {
+            Toasts.Show(new ToastMessage("Couldn't add the note.", "Your words are still in the box. Try again.", ToastStatus.Error, "Try again", () => _ = InvokeAsync(() => PostAsync(task))));
+        }
+        finally
+        {
+            _posting = false;
+        }
+    }
+
+
+    // The task's conversation, opened where the task was raised when the thread says so (the newest otherwise).
+    private static string ConversationUrl(TaskRequest task)
+    {
+        var url = $"/dashboard/conversations/{Uri.EscapeDataString(task.Customer!.ConversationId!)}";
+        return task.RaisedInMessageId is { } line ? $"{url}?message={Uri.EscapeDataString(line)}" : url;
+    }
+
+    private void OpenConversation(TaskRequest task) => Nav.NavigateTo(ConversationUrl(task));
+}

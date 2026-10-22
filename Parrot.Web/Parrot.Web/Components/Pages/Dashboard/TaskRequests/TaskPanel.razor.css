@@ -1,0 +1,117 @@
+/* A task's panel: its facts as one aligned list, then sections divided by hairlines, one rhythm throughout. */
+.task-panel__body {
+  /* Gaps in the token set: no border-width, label-column, dot or calendar-menu size. */
+  --ds-task-panel-hairline: 1px;
+  --ds-task-panel-label: 112px;
+  --ds-task-panel-dot: 6px;
+  --ds-task-panel-calendar: 300px;
+
+  display: grid;
+  color: var(--colors-text-primary);
+}
+.task-panel__body ::deep p,
+.task-panel__body ::deep h3,
+.task-panel__body dl,
+.task-panel__body dd,
+.task-panel__body ul,
+.task-panel__body ol,
+.task-panel__body figure,
+.task-panel__body blockquote { margin: var(--spacing-none); }
+.task-panel__body ::deep .task-panel__muted { color: var(--colors-text-muted); }
+
+/* The facts: a fixed column of names, the values lined up beside them. */
+.task-panel__props { display: grid; gap: var(--spacing-2xs); padding-bottom: var(--spacing-xl); }
+.task-panel__prop {
+  display: grid;
+  grid-template-columns: var(--ds-task-panel-label) minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: center;
+  min-height: var(--spacing-4xl);
+}
+.task-panel__prop dt { color: var(--colors-text-muted); }
+.task-panel__prop dd { display: flex; flex-wrap: wrap; gap: var(--spacing-xs) var(--spacing-md); align-items: center; min-width: 0; }
+/* A quiet menu's words line up with the plain values under it. */
+.task-panel__prop dd ::deep .filter-popover.is-quiet { margin-left: calc(var(--spacing-sm) * -1); }
+.task-panel__due.is-late ::deep .filter-popover__trigger { color: var(--colors-text-destructive); }
+.task-panel__due.is-today ::deep .filter-popover__trigger { color: var(--colors-feedback-warning-text); }
+.task-panel__due.is-none ::deep .filter-popover__trigger { color: var(--colors-text-muted); }
+/* The calendar opens in the due date's menu, a little wider than a list of choices. */
+.task-panel__due ::deep .task-panel__due-menu .filter-popover__menu { width: var(--ds-task-panel-calendar); padding: var(--spacing-md); }
+.task-panel__customer { display: inline-flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+.task-panel__customer a { color: var(--colors-text-primary); text-decoration: none; }
+.task-panel__customer a:hover { color: var(--colors-text-link); text-decoration: underline; text-underline-offset: var(--spacing-2xs); }
+
+.task-panel__section {
+  display: grid;
+  gap: var(--spacing-md);
+  padding-block: var(--spacing-xl);
+  border-top: var(--ds-task-panel-hairline) solid var(--colors-surface-border);
+}
+.task-panel__section:last-child { padding-bottom: var(--spacing-sm); }
+.task-panel__section ::deep .task-panel__text { color: var(--colors-text-secondary); }
+
+/* What was asked for, in its own subtle card: each item with its note, the quantity, the amount at the
+   right edge; then the charges; then the total. */
+.task-panel__order {
+  display: grid;
+  padding: var(--spacing-xs) var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  /* Outlined as well as filled: in dark mode the muted fill is the panel's own colour. */
+  border: var(--ds-task-panel-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.task-panel__lines { display: grid; padding: var(--spacing-none); list-style: none; }
+.task-panel__lines li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--spacing-lg);
+  align-items: baseline;
+  padding-block: var(--spacing-md);
+  border-bottom: var(--ds-task-panel-hairline) solid var(--colors-surface-border);
+}
+.task-panel__line-name { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.task-panel__charges { display: grid; gap: var(--spacing-sm); margin: var(--spacing-none); padding: var(--spacing-md) var(--spacing-none); list-style: none; border-bottom: var(--ds-task-panel-hairline) solid var(--colors-surface-border); }
+.task-panel__charges li { display: flex; gap: var(--spacing-lg); align-items: baseline; justify-content: space-between; color: var(--colors-text-secondary); }
+.task-panel__lines ::deep .task-panel__qty { color: var(--colors-text-muted); }
+.task-panel__lines ::deep .task-panel__amount { min-width: var(--spacing-5xl); text-align: end; }
+.task-panel__total { display: flex; align-items: baseline; justify-content: space-between; gap: var(--spacing-lg); padding-block: var(--spacing-md); }
+/* The last item's rule gives way to the total's own space. */
+.task-panel__order > :last-child.task-panel__lines li:last-child { border-bottom: none; }
+
+/* Internal notes: a heading that says who sees them, a box to add one, then the notes, each with who
+   wrote it. */
+.task-panel__heading { display: grid; gap: var(--spacing-sm); }
+.task-panel__compose { display: grid; gap: var(--spacing-sm); justify-items: end; }
+.task-panel__compose > ::deep :first-child { justify-self: stretch; }
+.task-panel__notes { display: grid; gap: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-none) var(--spacing-none); list-style: none; }
+.task-panel__notes li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--spacing-md); align-items: start; }
+.task-panel__notes li > div { display: grid; gap: var(--spacing-xs); color: var(--colors-text-primary); }
+.task-panel__note-head { display: flex; gap: var(--spacing-sm); align-items: baseline; }
+
+/* Activity: what happened, quietly, one line each. */
+.task-panel__history { display: grid; gap: var(--spacing-md); padding: var(--spacing-none); list-style: none; }
+.task-panel__history li {
+  display: grid;
+  grid-template-columns: var(--spacing-2xl) minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: baseline;
+  color: var(--colors-text-secondary);
+}
+.task-panel__history li ::deep time { flex: none; }
+.task-panel__event-dot {
+  justify-self: center;
+  width: var(--ds-task-panel-dot);
+  height: var(--ds-task-panel-dot);
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.task-panel__section ::deep .task-panel__more { justify-self: start; margin-left: calc(var(--spacing-sm) * -1); }
+
+/* Cancel on the left, quietly; reply and finish on the right. */
+.task-panel__footer { display: flex; gap: var(--spacing-md); align-items: center; justify-content: space-between; width: 100%; }
+.task-panel__footer-main { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: flex-end; margin-left: auto; }
+
+@media (max-width: 760px) {
+  .task-panel__prop { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-2xs); padding-block: var(--spacing-xs); }
+  .task-panel__footer { flex-wrap: wrap; }
+}

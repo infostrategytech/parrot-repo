@@ -82,6 +82,13 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// Opens a hidden file input. The browser only raises the picker for a
     /// genuine click on the input, so a styled button has to forward one.
     /// </summary>
+    /// <summary>The browser's time zone (an IANA id), or null when it can't say.</summary>
+    public async Task<string?> TimeZoneAsync()
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<string?>("timeZone");
+    }
+
     public async Task ClickAsync(ElementReference element)
     {
         var module = await _module.Value;
@@ -176,6 +183,7 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// now put in it with the focus and caret, or null. Call once, on the
     /// field's first render.
     /// </summary>
+    [Obsolete("The rail has no hover tooltips (designer, 21 October 2026).")]
     public async Task FollowRailTooltipsAsync(ElementReference rail)
     {
         var module = await _module.Value;
@@ -220,16 +228,29 @@ public sealed class AuroraInterop : IAsyncDisposable
     }
 
     /// <summary>Opens a menu upward when it would not fit below (see placeMenu).</summary>
+    [Obsolete("Menus float in the top layer now: FloatMenuAsync places them and keeps them on screen.")]
     public async Task PlaceMenuAsync(ElementReference menu)
     {
         var module = await _module.Value;
         await module.InvokeVoidAsync("placeMenu", menu);
     }
 
-    public async Task ScrollIntoViewAsync(ElementReference element)
+    /// <summary>
+    /// Draws a menu in the browser's top layer against its trigger, so a dialog or a panel that scrolls
+    /// can't cut it off (see floatMenu). <paramref name="layer"/> carries the popover attribute;
+    /// <paramref name="menu"/> is what gets placed inside it.
+    /// </summary>
+    public async Task FloatMenuAsync(ElementReference layer, ElementReference anchor, ElementReference menu, bool alignEnd = false, bool matchWidth = false)
     {
         var module = await _module.Value;
-        await module.InvokeVoidAsync("scrollIntoView", element);
+        await module.InvokeVoidAsync("floatMenu", layer, anchor, menu, alignEnd, matchWidth);
+    }
+
+    /// <summary>Scrolls an element into view: to the top ("start", the default), or "center".</summary>
+    public async Task ScrollIntoViewAsync(ElementReference element, string block = "start")
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("scrollIntoView", element, block);
     }
 
     public async Task<string?> ReadStorageAsync(string key)
