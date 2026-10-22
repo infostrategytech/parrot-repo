@@ -1,0 +1,33 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+
+@* Who raised a task: an agent with the look the business chose for it (so it's recognised at a
+   glance), or a person with their initials. *@
+<span class="task-by @(Compact ? "is-compact" : null)">
+    @if (Look is { } look)
+    {
+        <img class="task-by__look" src="@look" alt="" />
+    }
+    else if (!Compact)
+    {
+        @* A person, in a line of text: their name says it. *@
+        <PetalAvatar Seed="@Item.RaisedBy" Initials="@Initials.From(Item.RaisedBy)" Size="AvatarSize.Sm" />
+    }
+    @if (ShowName)
+    {
+        <Typography TextStyle="@(Compact ? TextStyle.Small12Medium : TextStyle.BodySmallMedium)" As="span" Class="task-by__name">@Item.RaisedBy</Typography>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public TaskRequest Item { get; set; } = default!;
+
+    /// <summary>The agent's look (an image); null for a person.</summary>
+    [Parameter] public string? Look { get; set; }
+
+    /// <summary>False for the avatar alone, where a sentence says the name.</summary>
+    [Parameter] public bool ShowName { get; set; } = true;
+
+    /// <summary>Small, inside a line of text (a row's details under its title).</summary>
+    [Parameter] public bool Compact { get; set; }
+}

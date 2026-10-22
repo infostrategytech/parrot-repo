@@ -13,6 +13,7 @@
 @inject Parrot.Web.Services.FeedbackService Feedback
 @inject Parrot.Web.Services.Realtime.RealtimeClient Realtime
 @inject Parrot.Web.Services.InboxUnreadState Unread
+@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
 
 <PageTitle>Inbox · OmniAI</PageTitle>
 
@@ -311,6 +312,10 @@
                                         OnClick="() => TogglePinAsync(_selected)" />
                         <ActionMenuItem Label="Mark as unread" Glyph="IconName.RiMailFill" OnClick="MarkSelectedUnreadAsync" />
                         <ActionMenuItem Label="Copy conversation ID" Glyph="IconName.RiFileCopyFill" OnClick="CopyConversationIdAsync" />
+                        @if (Tasks.Available)
+                        {
+                            <ActionMenuItem Label="Create task" Glyph="IconName.RiClipboardFill" OnClick="StartTask" />
+                        }
                     </ActionMenu>
                 </div>
             </header>
@@ -319,7 +324,7 @@
                     <ConversationTimeline @key="_selected.Id" Conversation="@_selected"
                                           AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" Busy="@_busy"
                                           OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" OnChanged="RefreshAsync"
-                                          OnCustomerDetails="OpenCustomerDetailsAsync" />
+                                          OnCustomerDetails="OpenCustomerDetailsAsync" FocusMessageId="@FocusMessage" />
                 </div>
 
                 @* A raw full-area button is intentional: it is the drawer's
@@ -331,7 +336,7 @@
                      class="@($"inbox-customer {(_customerOpen ? "is-open" : "")}")"
                      aria-hidden="@(!_customerOpen)" inert="@(!_customerOpen)">
                     <CustomerPanel Conversation="@_selected" Open="@_customerOpen" OnClose="CloseCustomerDetailsAsync"
-                                   OnPreview="item => _panelMedia = item" />
+                                   OnPreview="item => _panelMedia = item" OnAddTask="StartTask" />
                 </div>
             </div>
         }
@@ -341,8 +346,32 @@
 @* Outside the drawer: it scrolls and slides, and would confine a full-screen viewer to itself. *@
 <MediaViewer Item="_panelMedia" OnClose="() => _panelMedia = null" />
 
+@* A task for the open conversation: from its menu, or from the customer details. *@
+@if (_selected is not null)
+{
+    <Parrot.Web.Components.Pages.Dashboard.TaskRequests.NewTaskDialog Open="_taskOpen" Customer="TaskCustomer(_selected)"
+                                                                      OnClose="() => _taskOpen = false" OnCreated="TaskAddedAsync" />
+}
+
 @code {
+    private bool _taskOpen;
+    private void StartTask() => _taskOpen = true;
+
+    private static Parrot.Web.Features.Dashboard.TaskRequests.TaskCustomer TaskCustomer(ConversationItem conversation) =>
+        new(conversation.CustomerName, conversation.Channel,
+            conversation.Username is { Length: > 0 } username ? "@" + username : conversation.Sender, conversation.Id);
+
+    private Task TaskAddedAsync(Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest task)
+    {
+        _taskOpen = false;
+        Toasts.Show(new ToastMessage("Task added.", ActionLabel: "View", OnAction: () => Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.Id)}")));
+        return Task.CompletedTask;
+    }
+
     [Parameter] public string? ConversationId { get; set; }
+
+    /// <summary>Opened at one line of the thread (a task's Reply: where the task was raised), brought into view and lit.</summary>
+    [SupplyParameterFromQuery(Name = "message")] public string? FocusMessage { get; set; }
 
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConversationFilters _filters = new();

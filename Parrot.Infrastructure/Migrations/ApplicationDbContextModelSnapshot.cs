@@ -361,6 +361,18 @@ namespace Parrot.Infrastructure.Migrations
                         .HasColumnType("text")
                         .HasDefaultValueSql("''");
 
+                    b.Property<string>("ChannelIdentifier")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ChannelPlatform")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Phone")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<DateTime?>("UpdatedAt")
                         .HasColumnType("timestamp with time zone");
 

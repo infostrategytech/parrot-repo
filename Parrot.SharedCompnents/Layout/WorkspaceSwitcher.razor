@@ -17,7 +17,7 @@
             class="workspace__trigger"
             aria-expanded="@_open.ToString().ToLowerInvariant()"
             aria-haspopup="menu"
-            data-tooltip="@Name"
+            aria-label="@($"Workspace: {Name}")"
             @onclick="() => _open = !_open">
         <PetalAvatar Seed="@Seed" Initials="@InitialsOrDefault" ImageUrl="@LogoUrl" />
         <span class="workspace__identity">
@@ -98,7 +98,7 @@
             {
                 <button type="button" class="workspace__add" role="menuitem" disabled="@Switching" @onclick="AddAsync">
                     <Icon Name="IconName.RiAddFill" Size="IconSize.Sm" />
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Create workspace</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Add another workspace</Typography>
                 </button>
             }
         </div>

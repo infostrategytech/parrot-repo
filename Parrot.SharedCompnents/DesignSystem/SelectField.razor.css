@@ -25,6 +25,8 @@
   --ds-select-motion: 160ms;
   --ds-select-float-leading: 12px;
   --ds-select-menu: 268px;
+  /* Room for a search and its matches in the menu, still short of the screen. */
+  --ds-select-menu-tall: 440px;
   --ds-select-layer: 60;
 }
 
@@ -144,6 +146,33 @@
   border-radius: var(--radius-radius-lg);
   box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
 }
+
+/* The top layer: a transparent sheet over the screen (the browser's own popover styles undone); floatMenu
+   places the menu under the field or above it, at least as wide as it. */
+.select-field__layer {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  overflow: visible;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+.select-field__layer .select-field__dismiss { position: absolute; }
+.select-field__layer .select-field__menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: var(--ds-select-menu);
+  max-height: var(--ds-select-menu-tall);
+  scrollbar-width: none;
+}
+.select-field__layer .select-field__menu::-webkit-scrollbar { display: none; }
 
 .select-field__helper { color: var(--colors-text-muted); }
 

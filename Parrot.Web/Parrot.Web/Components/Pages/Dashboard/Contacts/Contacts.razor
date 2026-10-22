@@ -281,6 +281,7 @@
         WhatsAppNumber = dto.Identities.FirstOrDefault(i => i.Platform == "whatsapp")?.Sender ?? string.Empty,
         InstagramHandle = dto.Identities.FirstOrDefault(i => i.Platform == "instagram")?.Username ?? string.Empty,
         Identities = [.. dto.Identities.Select(i => new ContactIdentity(i.ConnectionId, i.Platform, i.Sender, i.Username))],
+        // Phone/ChannelPlatform/ChannelIdentifier are not in the list DTO; they load when the detail panel opens.
     };
 
     private static string FormatRelative(DateTime utc)
@@ -313,7 +314,9 @@
                 string.IsNullOrWhiteSpace(draft.Email) ? null : draft.Email,
                 string.IsNullOrWhiteSpace(draft.Phone) ? null : draft.Phone,
                 string.IsNullOrWhiteSpace(draft.Stage) ? null : draft.Stage,
-                draft.Tags.Count > 0 ? draft.Tags : null), CancellationToken.None);
+                draft.Tags.Count > 0 ? draft.Tags : null,
+                string.IsNullOrWhiteSpace(draft.ChannelPlatform) ? null : draft.ChannelPlatform,
+                string.IsNullOrWhiteSpace(draft.ChannelIdentifier) ? null : draft.ChannelIdentifier), CancellationToken.None);
             CloseModals();
             await LoadAsync();
         }

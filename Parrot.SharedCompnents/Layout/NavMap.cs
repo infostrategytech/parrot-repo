@@ -37,7 +37,8 @@ public static class NavMap
         new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill, "Customers", ["conversations.view"]),
         new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products",
             ["catalog.view", "catalog.categories", "catalog.items.add", "catalog.items.edit", "catalog.items.delete", "catalog.availability"]),
-        new("/dashboard/task-requests", "Task Requests", IconName.RiClipboardFill, "Requests", ["analytics.tasks"]),
+        // The team's customer work queue: whoever works conversations, and the Analyst's task reports.
+        new("/dashboard/tasks", "Tasks", IconName.RiClipboardFill, "Tasks", ["conversations.view", "conversations.take-over", "analytics.tasks"]),
         new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels", ["channels.connect", "channels.disconnect"]),
         new("/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI", ["analytics.dashboard", "conversations.take-over"]),
         new(null, "Campaigns", IconName.RiMegaphoneFill, "Campaigns"),
@@ -55,7 +56,7 @@ public static class NavMap
 
     /// <summary>
     /// The entry a URL belongs to, by longest matching path — so
-    /// /dashboard/task-requests/TR-001 still highlights Task Requests, and
+    /// /dashboard/tasks/OM-12031 still highlights Tasks, and
     /// /dashboard/catalog is Products rather than Overview.
     /// </summary>
     public static NavEntry? Match(string path)

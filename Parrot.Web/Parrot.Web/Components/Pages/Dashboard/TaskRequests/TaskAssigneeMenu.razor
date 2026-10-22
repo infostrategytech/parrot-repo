@@ -1,0 +1,55 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+
+@* Who is on a task, changed in place: on a row of the list and in the task's panel. Only drawn once
+   the business has a team; a solo owner never sees it. *@
+<div class="task-assignee">
+    <FilterPopover Label="@(Assignee is { } who ? (who.Id == Me.Id ? $"{who.Name} (you)" : who.Name) : "Unassigned")"
+                   Title="Assign to"
+                   Subtitle="Who is on it"
+                   Quiet
+                   LabelStyle="LabelStyle"
+                   AlignEnd="AlignEnd"
+                   Class="@(Assignee is null ? "is-nobody" : null)"
+                   Busy="Busy"
+                   Open="Open"
+                   OpenChanged="OpenChanged">
+        <Leading>
+            @if (Assignee is { } person)
+            {
+                <PetalAvatar Seed="@person.Id" Initials="@Initials.From(person.Name)" Size="AvatarSize.Sm" />
+            }
+            else
+            {
+                <Icon Name="IconName.RiUserAddFill" Size="IconSize.Sm" />
+            }
+        </Leading>
+        <ChildContent>
+            @foreach (var member in Team.OrderBy(m => m.Id == Me.Id ? 0 : 1))
+            {
+                var current = member;
+                <PopoverOption Label="@current.Name" Description="@(current.Id == Me.Id ? "You" : null)"
+                               Active="@(Assignee?.Id == current.Id)" OnSelect="() => OnAssign.InvokeAsync(current)">
+                    <Leading><PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /></Leading>
+                </PopoverOption>
+            }
+            <PopoverOption Label="Unassigned" Description="Nobody yet" Active="@(Assignee is null)" OnSelect="() => OnAssign.InvokeAsync(null)" />
+        </ChildContent>
+    </FilterPopover>
+</div>
+
+@code {
+    [Parameter] public TaskPerson? Assignee { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<TaskPerson> Team { get; set; } = [];
+    [Parameter, EditorRequired] public TaskPerson Me { get; set; } = default!;
+    [Parameter] public bool AlignEnd { get; set; }
+
+    /// <summary>A change is saving: the menu waits.</summary>
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public TextStyle LabelStyle { get; set; } = TextStyle.BodySmallMedium;
+
+    /// <summary>Owned by the caller, so one menu on the page closes another.</summary>
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public EventCallback<TaskPerson?> OnAssign { get; set; }
+}

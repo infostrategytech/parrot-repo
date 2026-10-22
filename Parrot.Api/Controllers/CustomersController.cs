@@ -76,4 +76,15 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
         CustomerDetailResponse response = await customers.UpdateTagsAsync(Owner, id, request.Tags, cancellationToken);
         return Ok(response);
     }
+
+    [HttpPut("{id:guid}/channel")]
+    public async Task<IActionResult> UpdateChannelIdentifier(
+        Guid id,
+        [FromBody] UpdateChannelIdentifierRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        CustomerDetailResponse response = await customers.UpdateChannelIdentifierAsync(
+            Owner, id, request.ChannelPlatform, request.ChannelIdentifier, cancellationToken);
+        return Ok(response);
+    }
 }

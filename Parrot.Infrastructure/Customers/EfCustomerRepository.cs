@@ -196,6 +196,21 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         return customer;
     }
 
+    public async Task<Customer?> UpdateChannelIdentifierAsync(
+        string ownerUserId, Guid id, string? channelPlatform, string? channelIdentifier, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        Customer? customer = await db.Customers
+            .Include(c => c.Identities)
+            .FirstOrDefaultAsync(c => c.Id == id && c.WorkspaceId == ownerUserId, ct);
+        if (customer is null) return null;
+        customer.ChannelPlatform = channelPlatform;
+        customer.ChannelIdentifier = channelIdentifier;
+        customer.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync(ct);
+        return customer;
+    }
+
     private static bool IsIdentityConflict(DbUpdateException ex) =>
         ex.InnerException is PostgresException
         {

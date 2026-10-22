@@ -120,7 +120,7 @@ public class CustomerServiceTests
     [Fact]
     public async Task CreateAsync_ValidRequest_CreatesAndReturnsCustomer()
     {
-        CreateCustomerRequest request = new("Ada Lovelace", "ada@example.com", null, "New Lead", ["VIP"]);
+        CreateCustomerRequest request = new("Ada Lovelace", "ada@example.com", null, "New Lead", ["VIP"], null, null);
 
         CustomerDetailResponse result = await _service.CreateAsync(Owner, request, CancellationToken.None);
 
@@ -135,7 +135,7 @@ public class CustomerServiceTests
     [Fact]
     public async Task CreateAsync_NullStage_DefaultsToCustomer()
     {
-        CreateCustomerRequest request = new("Buyer", null, null, null, null);
+        CreateCustomerRequest request = new("Buyer", null, null, null, null, null, null);
 
         CustomerDetailResponse result = await _service.CreateAsync(Owner, request, CancellationToken.None);
 
@@ -145,7 +145,7 @@ public class CustomerServiceTests
     [Fact]
     public async Task CreateAsync_EmptyName_ThrowsValidationException()
     {
-        CreateCustomerRequest request = new("  ", null, null, null, null);
+        CreateCustomerRequest request = new("  ", null, null, null, null, null, null);
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             _service.CreateAsync(Owner, request, CancellationToken.None));
@@ -154,7 +154,7 @@ public class CustomerServiceTests
     [Fact]
     public async Task CreateAsync_InvalidStage_ThrowsValidationException()
     {
-        CreateCustomerRequest request = new("Ada", null, null, "Hacked", null);
+        CreateCustomerRequest request = new("Ada", null, null, "Hacked", null, null, null);
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             _service.CreateAsync(Owner, request, CancellationToken.None));
@@ -163,7 +163,7 @@ public class CustomerServiceTests
     [Fact]
     public async Task CreateAsync_InvalidTag_ThrowsValidationException()
     {
-        CreateCustomerRequest request = new("Ada", null, null, null, ["NotATag"]);
+        CreateCustomerRequest request = new("Ada", null, null, null, ["NotATag"], null, null);
 
         await Assert.ThrowsAsync<ValidationException>(() =>
             _service.CreateAsync(Owner, request, CancellationToken.None));
@@ -298,6 +298,17 @@ public class CustomerServiceTests
         {
             Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.WorkspaceId == ownerUserId);
             if (customer is not null) customer.Tags = tags;
+            return Task.FromResult(customer);
+        }
+
+        public Task<Customer?> UpdateChannelIdentifierAsync(string ownerUserId, Guid id, string? channelPlatform, string? channelIdentifier, CancellationToken ct)
+        {
+            Customer? customer = Store.FirstOrDefault(c => c.Id == id && c.WorkspaceId == ownerUserId);
+            if (customer is not null)
+            {
+                customer.ChannelPlatform = channelPlatform;
+                customer.ChannelIdentifier = channelIdentifier;
+            }
             return Task.FromResult(customer);
         }
 

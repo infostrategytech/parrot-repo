@@ -28,4 +28,13 @@ public class Customer
     public string? LastSeenChannel { get; set; }
 
     public List<CustomerIdentity> Identities { get; set; } = [];
+
+    /// <summary>Phone number stored at contact creation time, before any WhatsApp message arrives.</summary>
+    public string? Phone { get; set; }
+
+    /// <summary>Platform of the manually specified identifier: whatsapp, instagram, facebook or tiktok.</summary>
+    public string? ChannelPlatform { get; set; }
+
+    /// <summary>Phone number or @handle stored at creation time as free text; matched when a real message arrives.</summary>
+    public string? ChannelIdentifier { get; set; }
 }

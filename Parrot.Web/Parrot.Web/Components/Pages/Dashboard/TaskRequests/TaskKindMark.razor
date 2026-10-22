@@ -1,0 +1,15 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+
+@* A task's kind as a small tinted tile: a little colour makes a list of tasks easy to scan, as the
+   agents' jobs are. The words say the kind too, so colour is never the only signal. *@
+<span class="task-kind @TaskWords.Tint(Kind) @(Small ? "is-small" : null)" aria-hidden="true">
+    <Icon Name="@TaskWords.Icon(Kind)" Size="IconSize.Sm" />
+</span>
+
+@code {
+    [Parameter, EditorRequired] public TaskKind Kind { get; set; }
+
+    /// <summary>The menu's size, beside an option's words.</summary>
+    [Parameter] public bool Small { get; set; }
+}

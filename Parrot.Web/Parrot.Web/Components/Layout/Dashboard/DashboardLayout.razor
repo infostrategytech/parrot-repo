@@ -3,6 +3,7 @@
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Nav
 @inject Parrot.Web.Services.InboxUnreadState Unread
+@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
 @inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceClient Workspaces
 @inject Parrot.Web.Features.Dashboard.Team.PendingInvite PendingInvite
 @inject Parrot.Web.Features.Dashboard.Workspace.WorkspacePrompt WorkspacePrompt
@@ -29,7 +30,8 @@
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
-          InboxUnread="@Unread.Total">
+          InboxUnread="@Unread.Total"
+          TasksNeedYou="@_tasksNeedYou">
     <UserMenu>
         <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
         <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
@@ -91,6 +93,7 @@
     {
         AuthState.OnChange += AuthChanged;
         Unread.Changed += UnreadChanged;
+        Tasks.Changed += TasksChanged;
     }
 
     // The rail's inbox badge is the number of unread customer messages. It is kept here, not by
@@ -109,6 +112,7 @@
 
         await RefreshAccessAsync();
         await Unread.StartAsync();
+        await CountTasksAsync();
         await LoadWorkspacesAsync();
     }
 
@@ -199,6 +203,22 @@
         }
     }
 
+    // The rail's Tasks badge: everything that needs the business now. Kept here for the same reason as the inbox's.
+    private int? _tasksNeedYou;
+
+    private async Task CountTasksAsync()
+    {
+        if (!Tasks.Available) return;
+        // With a team, what's yours or nobody's yet; alone, everything that needs acting on.
+        var team = await Tasks.TeamAsync();
+        var me = Tasks.Me.Id;
+        var count = (await Tasks.ListAsync()).Count(task => task.NeedsAction && (team.Count < 2 || task.Assignee is null || task.Assignee.Id == me));
+        _tasksNeedYou = count == 0 ? null : count;
+        StateHasChanged();
+    }
+
+    private void TasksChanged() => _ = InvokeAsync(CountTasksAsync);
+
     private void UnreadChanged() => _ = InvokeAsync(StateHasChanged);
 
     // Signing in starts the count; signing out clears it. A renamed workspace
@@ -238,5 +258,6 @@
     {
         AuthState.OnChange -= AuthChanged;
         Unread.Changed -= UnreadChanged;
+        Tasks.Changed -= TasksChanged;
     }
 }

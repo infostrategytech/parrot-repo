@@ -1,0 +1,19 @@
+.task-kind {
+  /* No compact-tile size in the token set. */
+  --ds-task-kind: 36px;
+
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-task-kind);
+  height: var(--ds-task-kind);
+  border-radius: var(--radius-radius-lg);
+}
+.task-kind.is-small { width: var(--spacing-2xl); height: var(--spacing-2xl); border-radius: var(--radius-radius-md); }
+
+.task-kind.is-order { color: var(--colors-accent-teal-text); background: var(--colors-accent-teal-subtle); }
+.task-kind.is-quote { color: var(--colors-accent-violet-text); background: var(--colors-accent-violet-subtle); }
+.task-kind.is-booking { color: var(--colors-accent-orange-text); background: var(--colors-accent-orange-subtle); }
+.task-kind.is-issue { color: var(--colors-accent-amber-text); background: var(--colors-accent-amber-subtle); }
+.task-kind.is-callback { color: var(--colors-accent-cyan-text); background: var(--colors-accent-cyan-subtle); }
+.task-kind.is-other { color: var(--colors-icon-brand); background: var(--colors-accent-brand-subtle); }

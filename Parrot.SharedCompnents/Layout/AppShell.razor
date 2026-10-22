@@ -27,6 +27,7 @@
                 UserImageUrl="@UserImageUrl"
                 InboxUnread="@InboxUnread"
                 IsAllowed="@IsAllowed"
+                TasksNeedYou="@TasksNeedYou"
                 UserMenu="@UserMenu" />
 
     @if (!Shell.Collapsed)
@@ -73,6 +74,7 @@
     [Parameter] public string? UserImageUrl { get; set; }
     [Parameter] public RenderFragment? UserMenu { get; set; }
     [Parameter] public int? InboxUnread { get; set; }
+    [Parameter] public int? TasksNeedYou { get; set; }
 
     private DotNetObjectReference<AppShellState>? _shellRef;
     private IAsyncDisposable? _mediaSubscription;

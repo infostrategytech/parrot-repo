@@ -9,7 +9,6 @@ using Parrot.Web.Features.Dashboard.Contacts.State;
 using Parrot.Web.Components.Pages.Dashboard.BusinessSetup.Services;
 using Parrot.Web.Components.Pages.Dashboard.Conversations;
 using Parrot.Web.Features.Dashboard.QaInsights.State;
-using Parrot.Web.Features.Dashboard.TaskRequests.State;
 using Parrot.Web.Features.Dashboard.Workspace;
 using Parrot.Web.Features.Profile;
 using Parrot.Web.Features.Dashboard.Team.State;
@@ -157,6 +156,9 @@ builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentBrief
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IJobInterview, Parrot.Web.Features.Dashboard.AiAgents.UnavailableJobInterview>();
 // The business's knowledge as facts (what an agent uses): no API for it yet.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory, Parrot.Web.Features.Dashboard.Knowledge.UnavailableKnowledgeMemory>();
+// The kind of business, once for the business; and which agents have been tested (both for the session).
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.BusinessKind>();
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.AgentReadiness>();
 // Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
 builder.Services.AddScoped<CatalogState>();
@@ -164,7 +166,11 @@ builder.Services.AddScoped<ChannelsState>();
 builder.Services.AddScoped<ContactsState>();
 builder.Services.AddScoped<ConversationsState>();
 builder.Services.AddScoped<QaInsightsState>();
-builder.Services.AddScoped<TaskRequestsState>();
+// Tasks: until the backend keeps them (tasks-backend-requests), the page says they are on the way and
+// nothing is made up. Before this, every workspace saw the same sample requests.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore, Parrot.Web.Features.Dashboard.TaskRequests.UnavailableTaskStore>();
+// The person's own time zone, read from their browser, so "Today" is their today.
+builder.Services.AddScoped<Parrot.Web.Services.UserClock>();
 builder.Services.AddScoped<TeamState>();
 
 WebApplication app = builder.Build();
