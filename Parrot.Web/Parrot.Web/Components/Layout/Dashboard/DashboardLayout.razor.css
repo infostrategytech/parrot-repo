@@ -1,0 +1,7 @@
+
+/* A page the person's role does not reach: the message sits where the page would. */
+.dashboard-no-access {
+  display: grid;
+  place-items: center;
+  padding-block: var(--spacing-5xl);
+}

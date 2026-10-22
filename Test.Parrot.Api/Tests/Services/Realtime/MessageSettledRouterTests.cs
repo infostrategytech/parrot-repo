@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
@@ -28,7 +29,7 @@ public class MessageSettledRouterTests
     {
         Mock<IHubContext<MessagingHub>> hub = new();
         hub.SetupGet(h => h.Clients).Returns(_clients.Object);
-        return new MessageSettledRouter(_sessions, hub.Object, NullLogger<MessageSettledRouter>.Instance);
+        return new MessageSettledRouter(_sessions, hub.Object, new PassThroughAudience(), NullLogger<MessageSettledRouter>.Instance);
     }
 
     private static MessageSettled Settled(string kind = SettledKinds.Media, string owner = Owner) => new()

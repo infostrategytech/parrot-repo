@@ -268,7 +268,7 @@ public class CustomerServiceTests
         }
 
         public Task<(List<Customer> Items, int Total)> ListAsync(
-            string ownerUserId, string? search, string? stage, string? channel, int skip, int take, CancellationToken ct)
+            string ownerUserId, string? search, string? stage, string? channel, int skip, int take, IReadOnlySet<Guid>? connections, CancellationToken ct)
         {
             List<Customer> results = [.. Store.Where(c => c.WorkspaceId == ownerUserId).Skip(skip).Take(take)];
             return Task.FromResult((results, results.Count));

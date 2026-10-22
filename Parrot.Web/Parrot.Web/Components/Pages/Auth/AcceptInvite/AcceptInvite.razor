@@ -1,0 +1,231 @@
+@page "/invite/{Token}"
+@layout AuthPanelLayout
+@using Parrot.Web.Features.Dashboard.Team
+@inject NavigationManager Navigation
+@inject AuthState AuthState
+@inject TeamClient TeamApi
+@inject PendingInvite Pending
+@inject TokenStorageService TokenStorage
+@implements IDisposable
+
+<PageTitle>Join a Team · OmniAI</PageTitle>
+
+@* Where an invite email's link lands. It says whose team it is before anyone
+   signs in. One login works everywhere, so:
+   - no account for the invited address: set a name and password here, and the
+     account is made, joined and signed in at once (the link proves the address);
+   - an account already: sign in (the link is remembered meanwhile, and the
+     dashboard brings them back) and join with one click. *@
+
+@if (_preview is null && _error is null)
+{
+    <LoadingState />
+}
+else if (_preview is null)
+{
+    <div class="account-panel__intro">
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">This Invite Link Does Not Work</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@_error</Typography>
+    </div>
+    <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="@(() => Navigation.NavigateTo("/login"))">Go to Sign In</Button>
+}
+else
+{
+    <div class="account-panel__intro">
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Join @_preview.TeamName</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            @_preview.InvitedBy invited <strong>@_preview.Email</strong> to work in @string.Join(", ", _preview.Workspaces).
+        </Typography>
+        @if (_preview.Status == "pending")
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@DaysLeft(_preview.ExpiresAt)</Typography>
+        }
+    </div>
+
+    @if (_preview.Status != "pending" && !(_preview.Status == "accepted" && AuthState.IsAuthenticated))
+    {
+        <InlineError Message="@StatusMessage(_preview.Status)" />
+    }
+    else if (!AuthState.IsAuthenticated && !_preview.HasAccount)
+    {
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            Set up your OmniAI login for @_preview.Email. You will use it for this team and any other you join.
+        </Typography>
+        <form class="account-panel__form" novalidate @onsubmit="SignUpAsync" @onsubmit:preventDefault="true">
+            @* The address is the invite's: shown, not editable. Opening the link proved it, so the login starts verified. *@
+            <Input FloatingLabel="Email address" Id="invite-email" Type="email" Value="@_preview.Email" readonly autocomplete="username" />
+            <Input FloatingLabel="First name" Id="invite-first-name" @bind-Value="_firstName" autocomplete="given-name" />
+            <Input FloatingLabel="Last name" Id="invite-last-name" @bind-Value="_lastName" autocomplete="family-name" />
+            <PasswordInput FloatingLabel="Create Password" Id="invite-password" IsNew @bind-Value="_password" />
+            <PasswordInput FloatingLabel="Confirm Password" Id="invite-confirm-password" ShowStrength="false" @bind-Value="_confirm"
+                           ErrorText="@(_confirm is { Length: > 0 } && _confirm != _password ? "The passwords do not match." : null)" />
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" />
+            }
+            <Button Size="ButtonSize.Large" Type="ButtonType.Submit" Class="account-panel__primary" Busy="@_accepting"
+                    disabled="@(!CanSignUp)">Create Login and Join</Button>
+        </form>
+        <Button Size="ButtonSize.Large" Variant="ButtonVariant.Ghost" Class="account-panel__primary" @onclick="@(() => GoAsync("/login"))">
+            Sign in with Google or Facebook instead
+        </Button>
+    }
+    else if (!AuthState.IsAuthenticated)
+    {
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            You already have an OmniAI login for @_preview.Email. Sign in to join the team.
+        </Typography>
+        <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="@(() => GoAsync("/login"))">Sign In</Button>
+    }
+    else
+    {
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" />
+        }
+        <Button Size="ButtonSize.Large" Class="account-panel__primary" Busy="@_accepting" @onclick="AcceptAsync">Join the Team</Button>
+        @if (!string.Equals(AuthState.CurrentUser?.Email, _preview.Email, StringComparison.OrdinalIgnoreCase))
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>
+                You are signed in as @AuthState.CurrentUser?.Email. Only @_preview.Email can accept this invite.
+            </Typography>
+            <Button Size="ButtonSize.Large" Variant="ButtonVariant.Secondary" Class="account-panel__primary" @onclick="SignOutAsync">Sign In With Another Account</Button>
+        }
+    }
+}
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    // Back from signing in after choosing Accept in the email.
+    [SupplyParameterFromQuery] public bool Resume { get; set; }
+
+    private InvitePreview? _preview;
+    private string? _error;
+    private bool _accepting;
+    private string? _firstName;
+    private string? _lastName;
+    private string? _password;
+    private string? _confirm;
+
+    private bool CanSignUp => !_accepting && !string.IsNullOrWhiteSpace(_firstName)
+        && !string.IsNullOrEmpty(_password) && _password == _confirm;
+
+    // The session is restored from the browser after the first render, so the
+    // page redraws once Routes has loaded it.
+    protected override void OnInitialized() => AuthState.OnChange += Redraw;
+
+    private void Redraw() => _ = InvokeAsync(StateHasChanged);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _preview = await TeamApi.PreviewAsync(Token);
+
+            // The name the owner typed, split once, as a starting point.
+            string[] name = _preview.FullName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            _firstName = name.ElementAtOrDefault(0);
+            _lastName = name.ElementAtOrDefault(1);
+
+            // They already said yes in the email: join now, if this is the invited login.
+            if (Resume && _preview.Status == "pending" && AuthState.IsAuthenticated
+                && string.Equals(AuthState.CurrentUser?.Email, _preview.Email, StringComparison.OrdinalIgnoreCase))
+            {
+                await AcceptAsync();
+                return;
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _error = "We could not read this invite. Check the link, or ask for a new one.";
+        }
+
+        StateHasChanged();
+    }
+
+    // From the link's own expiry: the token is a JWT that says when it stops working.
+    private static string DaysLeft(DateTime expiresAt)
+    {
+        int days = (int)Math.Ceiling((expiresAt - DateTime.UtcNow).TotalDays);
+        return days <= 1 ? "This invite expires within a day." : $"This invite expires in {days} days.";
+    }
+
+    private static string StatusMessage(string status) => status switch
+    {
+        "accepted" => "This invite has already been used. Sign in to reach the team.",
+        "revoked" => "This invite was withdrawn. Ask the owner for a new one.",
+        "expired" => "This invite has expired. Ask the owner for a new one.",
+        _ => "This invite cannot be used.",
+    };
+
+    // Kept in the browser, so the person comes back here after signing in or
+    // up, however long that takes (a verification email, Google or Facebook).
+    private async Task GoAsync(string path)
+    {
+        await Pending.RememberAsync(Token);
+        Navigation.NavigateTo(path);
+    }
+
+    private async Task AcceptAsync()
+    {
+        _accepting = true;
+        _error = null;
+        try
+        {
+            await TeamApi.AcceptAsync(Token);
+            // A fresh circuit in the team's workspace, as switching does.
+            Navigation.NavigateTo("/dashboard", forceLoad: true, replace: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _error = "We could not add you to the team. Try again.";
+        }
+        finally
+        {
+            _accepting = false;
+        }
+    }
+
+    private async Task SignUpAsync()
+    {
+        if (!CanSignUp) return;
+        _accepting = true;
+        _error = null;
+        try
+        {
+            await TeamApi.SignUpAsync(Token, _firstName!.Trim(), _lastName?.Trim(), _password!);
+            Navigation.NavigateTo("/dashboard", forceLoad: true, replace: true);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _error = "We could not create your login. Try again.";
+        }
+        finally
+        {
+            _accepting = false;
+        }
+    }
+
+    private async Task SignOutAsync()
+    {
+        await TokenStorage.ClearAsync();
+        AuthState.ClearUser();
+        await GoAsync("/login");
+    }
+
+    public void Dispose() => AuthState.OnChange -= Redraw;
+}

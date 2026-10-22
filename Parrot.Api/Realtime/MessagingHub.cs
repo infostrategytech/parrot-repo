@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Parrot.Application.Realtime;
+using Parrot.Application.Teams;
 using Parrot.Api.Security;
 
 namespace Parrot.Api.Realtime;
@@ -14,9 +15,17 @@ namespace Parrot.Api.Realtime;
 /// Every Redis call is best-effort. Redis being down must not refuse or drop
 /// the connection: the client simply misses live pushes until its next
 /// heartbeat finds Redis back, and recovers the gap from history.
+///
+/// Only someone who can still reach the token's workspace stays connected:
+/// access is checked on connecting and on every heartbeat, and each push is
+/// narrowed to the people allowed to see it (<see cref="RealtimeAudience"/>).
 /// </summary>
 [Authorize]
-public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<MessagingHub> logger) : Hub
+public sealed class MessagingHub(
+    IOnlineSessionStore sessions,
+    IWorkspaceAccessService access,
+    RealtimeAudience audience,
+    ILogger<MessagingHub> logger) : Hub
 {
     public const string Path = "/hubs/messaging";
 
@@ -34,6 +43,7 @@ public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<Messaging
 
     public override async Task OnConnectedAsync()
     {
+        if (!await StillAllowedAsync()) return;
         await RegisterAsync("session.registered");
         await base.OnConnectedAsync();
     }
@@ -43,10 +53,30 @@ public sealed class MessagingHub(IOnlineSessionStore sessions, ILogger<Messaging
     /// re-registers rather than only renewing, so a client reconnected after
     /// a Redis restart is back online on its next beat.
     /// </summary>
-    public Task Heartbeat() => RegisterAsync("session.renewed");
+    public async Task Heartbeat()
+    {
+        if (await StillAllowedAsync()) await RegisterAsync("session.renewed");
+    }
+
+    // A member removed from the workspace is disconnected rather than left to hear its pushes.
+    private async Task<bool> StillAllowedAsync()
+    {
+        string? userId = Context.User?.UserId();
+        string? workspaceId = Context.User?.WorkspaceId();
+        if (userId is null || workspaceId is null || await access.GetAsync(userId, workspaceId) is null)
+        {
+            logger.LogInformation("session.refused ConnectionId={ConnectionId} Outcome=no_workspace_access", Context.ConnectionId);
+            Context.Abort();
+            return false;
+        }
+
+        audience.Register(Context.ConnectionId, userId, workspaceId);
+        return true;
+    }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
     {
+        audience.Remove(Context.ConnectionId);
         string owner = Owner();
         try
         {

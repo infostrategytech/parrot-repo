@@ -3,9 +3,10 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
-using Parrot.Application.Messaging;
-using Parrot.Domain.Exceptions;
 using Parrot.Api.Security;
+using Parrot.Application.Messaging;
+using Parrot.Application.Teams;
+using Parrot.Domain.Exceptions;
 
 namespace Parrot.Api.Controllers;
 
@@ -22,6 +23,7 @@ namespace Parrot.Api.Controllers;
 [Route("api/conversations/history")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "conversations")]
+[RequirePermission(WorkspacePermissions.ConversationsView)]
 public sealed class MessageHistoryController(IMessageHistory history) : ControllerBase
 {
     public const int DefaultPageSize = 50;
@@ -52,7 +54,9 @@ public sealed class MessageHistoryController(IMessageHistory history) : Controll
         if (string.IsNullOrWhiteSpace(key) || after < 0)
             throw new ValidationException("Supply a conversation key and a sequence of 0 or more to read after.");
 
-        MessageHistoryPage page = await history.GetAfterAsync(Owner, key, after, limit, cancellationToken);
+        MessageHistoryPage page = ConversationKey.PlatformOf(key) is { } platform && HttpContext.WorkspaceAccess().CanReach(platform)
+            ? await history.GetAfterAsync(Owner, key, after, limit, cancellationToken)
+            : new MessageHistoryPage { Messages = [] };
 
         // The live push's wire format (platform as text, camelCase), so the
         // client reads a recovered message and a pushed one the same way.

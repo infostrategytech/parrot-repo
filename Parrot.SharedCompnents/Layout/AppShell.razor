@@ -19,12 +19,14 @@
                 OnWorkspaceSwitch="@OnWorkspaceSwitch"
                 OnWorkspaceAdd="@OnWorkspaceAdd"
                 WorkspaceSwitching="@WorkspaceSwitching"
+                OnWorkspaceSetDefault="@OnWorkspaceSetDefault"
                 UserName="@UserName"
                 UserRole="@UserRole"
                 UserInitials="@UserInitials"
                 UserSeed="@UserSeed"
                 UserImageUrl="@UserImageUrl"
                 InboxUnread="@InboxUnread"
+                IsAllowed="@IsAllowed"
                 UserMenu="@UserMenu" />
 
     @if (!Shell.Collapsed)
@@ -60,6 +62,10 @@
     [Parameter] public EventCallback<string> OnWorkspaceSwitch { get; set; }
     [Parameter] public EventCallback OnWorkspaceAdd { get; set; }
     [Parameter] public bool WorkspaceSwitching { get; set; }
+    [Parameter] public EventCallback<string?> OnWorkspaceSetDefault { get; set; }
+    /// <summary>Optional. Whether the person may open a rail entry; see NavEntry.AnyPermission.</summary>
+    [Parameter] public Func<NavEntry, bool>? IsAllowed { get; set; }
+
     [Parameter] public string UserName { get; set; } = "";
     [Parameter] public string? UserRole { get; set; }
     [Parameter] public string UserInitials { get; set; } = "";

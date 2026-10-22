@@ -37,16 +37,22 @@ public sealed class CustomerService(ICustomerRepository repository)
         string? channel,
         int skip,
         int take,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlySet<Guid>? connections = null)
     {
-        (List<Customer> items, int total) = await repository.ListAsync(ownerUserId, search, stage, channel, skip, take, ct);
+        (List<Customer> items, int total) = await repository.ListAsync(ownerUserId, search, stage, channel, skip, take, connections, ct);
         return new CustomerPageResponse([.. items.Select(ToListItem)], total);
     }
 
-    public async Task<CustomerDetailResponse> GetAsync(string ownerUserId, Guid id, CancellationToken ct)
+    /// <param name="connections">
+    /// For a team member limited to some channels: a customer who has written on
+    /// none of these is not found. Null is every connection.
+    /// </param>
+    public async Task<CustomerDetailResponse> GetAsync(string ownerUserId, Guid id, CancellationToken ct, IReadOnlySet<Guid>? connections = null)
     {
         Customer? customer = await repository.FindAsync(ownerUserId, id, ct);
-        if (customer is null) throw new NotFoundException("Customer not found.");
+        if (customer is null || connections is not null && !customer.Identities.Any(i => connections.Contains(i.ConnectionId)))
+            throw new NotFoundException("Customer not found.");
         return ToDetail(customer);
     }
 

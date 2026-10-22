@@ -2,7 +2,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using Microsoft.Extensions.DependencyInjection;
 using Parrot.Api.Realtime;
+using Test.Parrot.Api.Tests.Services.Teams;
+using Test.Parrot.Api.Tests.Services.Workspaces;
 using StackExchange.Redis;
 
 namespace Test.Parrot.Api.Tests.Services.Realtime;
@@ -12,6 +15,10 @@ public class MessagingHubTests
     private const string User = "user-1";
 
     private readonly FakeOnlineSessionStore _sessions = new();
+    private readonly FakeWorkspaceRepository _workspaces = new();
+    private readonly FakeTeamRepository _team = new();
+
+    public MessagingHubTests() => _workspaces.Seed(User, User);
 
     private MessagingHub Hub(string connectionId)
     {
@@ -20,7 +27,11 @@ public class MessagingHubTests
         context.SetupGet(c => c.User).Returns(new ClaimsPrincipal(new ClaimsIdentity(
             [new Claim(ClaimTypes.NameIdentifier, User)], "Bearer")));
         context.SetupGet(c => c.ConnectionAborted).Returns(CancellationToken.None);
-        return new MessagingHub(_sessions, NullLogger<MessagingHub>.Instance) { Context = context.Object };
+        RealtimeAudience audience = new(Mock.Of<IServiceScopeFactory>(), NullLogger<RealtimeAudience>.Instance);
+        return new MessagingHub(_sessions, TeamFixture.Access(_workspaces, _team), audience, NullLogger<MessagingHub>.Instance)
+        {
+            Context = context.Object,
+        };
     }
 
     [Fact]

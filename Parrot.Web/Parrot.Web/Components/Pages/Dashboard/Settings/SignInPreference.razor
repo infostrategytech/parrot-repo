@@ -1,0 +1,70 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Dashboard.Workspace
+@inject WorkspaceClient Workspaces
+@inject ToastService Toasts
+
+@* "When I sign in": come back to the workspace you were in last (the default),
+   or always open one you choose. The same choice as the pin in the workspace
+   switcher. Losing access to the chosen one falls back to resuming. *@
+
+<SettingsCard Title="When you sign in" Description="Choose which workspace opens. Signing out or a session expiring does not change it.">
+    @if (_workspaces is null)
+    {
+        <Skeleton />
+    }
+    else
+    {
+        <SelectField FloatingLabel="Open"
+                     Value="@Label(Current)"
+                     Open="_open"
+                     OpenChanged="@(open => _open = open)">
+            <PopoverOption Label="@Resume" Active="@(Current is null)" OnSelect="() => ChooseAsync(null)" />
+            @foreach (WorkspaceSummary workspace in _workspaces.Where(w => !string.IsNullOrWhiteSpace(w.Name)))
+            {
+                <PopoverOption Label="@Label(workspace)" Active="@(workspace.IsDefault)" OnSelect="() => ChooseAsync(workspace)" />
+            }
+        </SelectField>
+    }
+</SettingsCard>
+
+@code {
+    private const string Resume = "Where I left off";
+
+    private IReadOnlyList<WorkspaceSummary>? _workspaces;
+    private bool _open;
+
+    private WorkspaceSummary? Current => _workspaces?.FirstOrDefault(w => w.IsDefault);
+
+    // Another business's workspace says whose it is: two businesses can both have a "Main".
+    private static string Label(WorkspaceSummary? workspace) =>
+        workspace is null ? Resume
+        : workspace.Role == "Owner" || workspace.TeamName is null ? $"Always {workspace.Name}"
+        : $"Always {workspace.Name} ({workspace.TeamName})";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _workspaces = await Workspaces.ListAsync();
+        }
+        catch (Exception)
+        {
+            _workspaces = [];
+        }
+    }
+
+    private async Task ChooseAsync(WorkspaceSummary? workspace)
+    {
+        _open = false;
+        try
+        {
+            await Workspaces.SetDefaultAsync(workspace?.Id);
+            _workspaces = await Workspaces.ListAsync();
+            Toasts.Show(workspace is null ? "You will come back where you left off" : $"{workspace.Name} opens when you sign in");
+        }
+        catch (Exception)
+        {
+            Toasts.ShowError("We could not change where you sign in. Try again.");
+        }
+    }
+}

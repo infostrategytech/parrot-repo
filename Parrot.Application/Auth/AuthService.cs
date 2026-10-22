@@ -9,6 +9,7 @@ using Parrot.Application.Email;
 using Parrot.Application.FeatureFlags;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
+using Parrot.Application.Teams;
 using Parrot.Application.Utils;
 using Parrot.Application.Workspaces;
 using Parrot.Domain.Entities;
@@ -21,7 +22,6 @@ public class AuthService : IAuthService
     // Claim names the catalog service validates (see Parrot.Catalog.Application.Security.CatalogClaims).
     private const string CatalogTenantClaim = "tenant_id";
     private const string ScopeClaim = "scope";
-    private const string CatalogOwnerScopes = "catalog:read catalog:write catalog:publish catalog:admin";
 
     private const string InvalidCodeMessage = AuthMessages.InvalidCode;
     private const string TooManyCodesMessage = AuthMessages.TooManyCodes;
@@ -113,9 +113,9 @@ public class AuthService : IAuthService
                 throw new EmailNotVerifiedException();
             }
 
-            // Verification is switched off: let them in and stop asking.
-            user.EmailConfirmed = true;
-            await _userManager.UpdateAsync(user);
+            // Verification is switched off: let them in, but the address stays
+            // unconfirmed. EmailConfirmed means the address was proved (a code,
+            // Google or Facebook, an invite link), which an invite relies on.
         }
 
         await _userManager.ResetAccessFailedCountAsync(user);
@@ -156,7 +156,9 @@ public class AuthService : IAuthService
         {
             UserName = request.Email,
             Email = request.Email,
-            EmailConfirmed = !requireVerification,
+            // Not proved yet, even with verification switched off: signing in does
+            // not need it then, but an invite link can still prove it later.
+            EmailConfirmed = false,
         };
 
         IdentityResult result = await _userManager.CreateAsync(user, request.Password);
@@ -508,9 +510,10 @@ public class AuthService : IAuthService
         ApplicationUser user = await _userManager.FindByIdAsync(userId)
             ?? throw new NotFoundException("Account not found.");
 
-        // Throws not-found for a workspace the user does not own, before
-        // anything is saved or issued.
-        Workspace workspace = await _workspaces.GetOwnedAsync(userId, workspaceId);
+        // Throws not-found for a workspace the user neither owns nor belongs
+        // to, before anything is saved or issued.
+        WorkspaceAccess access = await _workspaces.GetAccessibleAsync(userId, workspaceId);
+        Workspace workspace = access.Workspace;
 
         if (user.LastWorkspaceId != workspace.Id)
         {
@@ -523,7 +526,7 @@ public class AuthService : IAuthService
             _logger.LogInformation("Switched to workspace {WorkspaceId}", workspace.Id);
         }
 
-        return BuildAuthResponse(user, workspace);
+        return BuildAuthResponse(user, access);
     }
 
     private async Task<AuthResponse> BuildAuthResponseAsync(ApplicationUser user) =>
@@ -531,15 +534,21 @@ public class AuthService : IAuthService
 
     // A session works in one workspace at a time. Switching issues a new token
     // rather than letting a request name the workspace, so every request is
-    // scoped by a claim that was checked against ownership when it was signed.
-    private AuthResponse BuildAuthResponse(ApplicationUser user, Workspace workspace)
+    // scoped by a claim that was checked against access when it was signed.
+    // Access is checked again on every request, so a removed member's token
+    // stops working at once.
+    private AuthResponse BuildAuthResponse(ApplicationUser user, WorkspaceAccess access)
     {
+        Workspace workspace = access.Workspace;
         List<Claim> claims =
         [
             new Claim(JwtRegisteredClaimNames.Sub, user.Id),
             new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new Claim(WorkspaceClaims.WorkspaceId, workspace.Id),
+            new Claim(WorkspaceClaims.WorkspaceRole, access.Role),
+            new Claim(WorkspaceClaims.Permissions, WorkspacePermissions.Abbreviate(access)),
+            new Claim(WorkspaceClaims.Channels, WorkspaceChannels.Abbreviate(access)),
         ];
 
         if (!string.IsNullOrEmpty(workspace.Name))
@@ -549,11 +558,16 @@ public class AuthService : IAuthService
 
         // The catalog service keys every row to a tenant and reads it from this claim
         // alone. Each workspace has its own catalog, so the workspace id is the catalog
-        // tenant id; the workspace's owner administers it. The AI agent gets
-        // catalog:ai-tools through a separate service token, never through a user
-        // session (docs/catalog/adr/ADR-003-auth-tenant-and-scopes.md).
+        // tenant id; the owner administers it and a member gets the scopes their
+        // catalog permissions add up to. The AI agent gets catalog:ai-tools through
+        // a separate service token, never through a user session
+        // (docs/catalog/adr/ADR-003-auth-tenant-and-scopes.md).
         claims.Add(new Claim(CatalogTenantClaim, workspace.Id));
-        claims.Add(new Claim(ScopeClaim, CatalogOwnerScopes));
+        string catalogScopes = WorkspacePermissions.CatalogScopes(access);
+        if (catalogScopes.Length > 0)
+        {
+            claims.Add(new Claim(ScopeClaim, catalogScopes));
+        }
 
         DateTime expiresAt = _jwtHelper.GetDefaultExpiration();
         string token = _jwtHelper.GenerateToken(claims, expiresAt);
@@ -566,7 +580,9 @@ public class AuthService : IAuthService
             workspace.Name,
             workspace.LogoUrl,
             PhoneNormalizer.ToDisplay(user.PhoneDialCode, user.PhoneNumber),
-            workspace.Id);
+            workspace.Id,
+            access.Role,
+            WorkspacePermissions.Effective(access));
     }
 
     // People type "222 222" as readily as "222222"; only the digits matter.

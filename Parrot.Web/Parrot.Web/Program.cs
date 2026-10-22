@@ -83,6 +83,9 @@ builder.Services.AddScoped<ProfileClient>();
 builder.Services.AddScoped<WorkspaceClient>();
 builder.Services.AddScoped<IWorkspaceSetupService, WorkspaceSetupService>();
 builder.Services.AddScoped<WorkspacePrompt>();
+// The owner's team, and invite links opened before signing in.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.TeamClient>();
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.PendingInvite>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {

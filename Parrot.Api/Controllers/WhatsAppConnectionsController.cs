@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Parrot.Application.DTOs.Integrations;
-using Parrot.Application.Integrations;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
+using Parrot.Application.DTOs.Integrations;
+using Parrot.Application.Integrations;
+using Parrot.Application.Teams;
 
 namespace Parrot.Api.Controllers;
 
@@ -12,6 +13,7 @@ namespace Parrot.Api.Controllers;
 [Route("api/whatsapp/connections")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "whatsapp.connections")]
+[RequireChannel(WorkspaceChannels.WhatsApp)]
 public class WhatsAppConnectionsController : ControllerBase
 {
     private readonly IWhatsAppConnectionService _service;
@@ -22,6 +24,7 @@ public class WhatsAppConnectionsController : ControllerBase
     }
 
     [HttpPost]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> Create([FromBody] CreateWhatsAppConnectionRequest request)
     {
         WhatsAppConnectionSetupResponse result = await _service.CreateAsync(Owner(), request);
@@ -38,6 +41,7 @@ public class WhatsAppConnectionsController : ControllerBase
     public async Task<IActionResult> GetSetup(Guid id) => Ok(await _service.GetSetupAsync(Owner(), id));
 
     [HttpPost("{id:guid}/disable")]
+    [RequirePermission(WorkspacePermissions.ChannelsDisconnect)]
     public async Task<IActionResult> Disable(Guid id)
     {
         await _service.DisableAsync(Owner(), id);
@@ -45,6 +49,7 @@ public class WhatsAppConnectionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/account")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> ConfigureAccount(Guid id, [FromBody] WhatsAppAccountRequest request)
     {
         await _service.ConfigureAccountAsync(Owner(), id, request);
@@ -52,6 +57,7 @@ public class WhatsAppConnectionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/access-token")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> SaveAccessToken(Guid id, [FromBody] WhatsAppAccessTokenRequest request)
     {
         await _service.SaveAccessTokenAsync(Owner(), id, request);
@@ -59,6 +65,7 @@ public class WhatsAppConnectionsController : ControllerBase
     }
 
     [HttpPut("{id:guid}/app-secret")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> SaveAppSecret(Guid id, [FromBody] AppSecretRequest request)
     {
         await _service.SaveAppSecretAsync(Owner(), id, request);

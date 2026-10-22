@@ -2,11 +2,12 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Parrot.Api.Middleware;
+using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
+using Parrot.Api.Utils;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
-using Parrot.Api.Middleware;
-using Parrot.Api.Utils;
-using Parrot.Api.Monitoring;
 
 namespace Parrot.Api.Controllers;
 
@@ -112,6 +113,7 @@ public class AuthController : ControllerBase
     }
 
     [Authorize]
+    [AllowWithoutWorkspace]
     [HttpPost("change-password")]
     [EndpointSummary("Change the password of the signed-in account")]
     [EndpointDescription("Needs a session. The current password has to match and the new one has to satisfy the password policy: 8 to 128 characters. A missing session is a 401, an account that has since gone is a 404.")]

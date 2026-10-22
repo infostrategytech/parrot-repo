@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using Moq;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Workspaces;
@@ -23,7 +24,7 @@ public class WorkspaceServiceTests
             .Setup(l => l.BeginEntityScope(It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Mock.Of<IDisposable>());
 
-        _sut = new WorkspaceService(_repository, logger.Object);
+        _sut = TeamFixture.Workspaces(_repository, logger.Object);
     }
 
     // ---------------------------------------------------------------------------
@@ -126,7 +127,7 @@ public class WorkspaceServiceTests
     {
         ApplicationUser user = new() { Id = Tenant, BusinessName = "Oma's Kitchen", LogoUrl = "https://cdn.example.com/logo.png" };
 
-        Workspace workspace = await _sut.ResolveForSignInAsync(user);
+        Workspace workspace = (await _sut.ResolveForSignInAsync(user)).Workspace;
 
         // The user's own id, so whatever the account wrote before still belongs to it.
         Assert.Equal(Tenant, workspace.Id);
@@ -143,7 +144,7 @@ public class WorkspaceServiceTests
         _repository.Seed("second", Tenant, createdAt: DateTime.UtcNow.AddDays(-1));
         ApplicationUser user = new() { Id = Tenant, LastWorkspaceId = "second" };
 
-        Workspace workspace = await _sut.ResolveForSignInAsync(user);
+        Workspace workspace = (await _sut.ResolveForSignInAsync(user)).Workspace;
 
         Assert.Equal("second", workspace.Id);
     }
@@ -157,7 +158,7 @@ public class WorkspaceServiceTests
         _repository.Seed("theirs", "another-tenant");
         ApplicationUser user = new() { Id = Tenant, LastWorkspaceId = "theirs" };
 
-        Workspace workspace = await _sut.ResolveForSignInAsync(user);
+        Workspace workspace = (await _sut.ResolveForSignInAsync(user)).Workspace;
 
         Assert.Equal("first", workspace.Id);
     }

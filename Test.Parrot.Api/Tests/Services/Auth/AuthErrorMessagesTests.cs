@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
@@ -61,7 +62,7 @@ public class AuthErrorMessagesTests
             _userManagerMock.Object,
             _passwordHasherMock.Object,
             _jwtHelperMock.Object,
-            new WorkspaceService(_workspaces, Mock.Of<IAppLogger<WorkspaceService>>()),
+            TeamFixture.Workspaces(_workspaces),
             _emailServiceMock.Object,
             _featureFlagsMock.Object,
             Options.Create(new EmailSettings

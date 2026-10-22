@@ -26,3 +26,26 @@
   display: grid;
   gap: var(--spacing-sm);
 }
+
+/* One well per workspace the person is given access to. */
+.invite__grant-head {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+.invite__grant-head > ::deep :first-child { flex: 1 1 auto; min-width: 0; }
+
+.invite__add {
+  display: flex;
+  margin-top: var(--spacing-lg);
+}
+
+/* The chosen role's permissions: read here, changed under Roles. */
+.invite__role-permissions {
+  display: grid;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  padding-left: var(--spacing-lg);
+  color: var(--colors-text-secondary);
+}

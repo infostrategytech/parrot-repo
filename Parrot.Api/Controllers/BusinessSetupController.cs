@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Parrot.Application.Integrations.BusinessEnrichment;
 using Parrot.Api.Monitoring;
+using Parrot.Api.Security;
+using Parrot.Application.Integrations.BusinessEnrichment;
+using Parrot.Application.Teams;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -19,6 +21,7 @@ public class BusinessSetupController : ControllerBase
     }
 
     [HttpPost("enrich")]
+    [RequirePermission(WorkspacePermissions.WorkspaceManage)]
     [ProducesResponseType(typeof(BusinessEnrichmentResult), StatusCodes.Status200OK)]
     public async Task<IActionResult> Enrich([FromBody] BusinessEnrichmentRequest request, CancellationToken cancellationToken)
     {

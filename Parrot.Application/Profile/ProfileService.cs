@@ -3,6 +3,7 @@ using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
+using Parrot.Application.Teams;
 using Parrot.Application.DTOs.Workspaces;
 using Parrot.Application.Workspaces;
 using Parrot.Domain.Entities;
@@ -29,8 +30,8 @@ public class ProfileService : IProfileService
     public async Task<ProfileResponse> GetAsync(string userId, string workspaceId)
     {
         ApplicationUser user = await FindOrThrowAsync(userId);
-        Workspace workspace = await _workspaces.GetOwnedAsync(userId, workspaceId);
-        return ToResponse(user, workspace);
+        WorkspaceAccess access = await _workspaces.GetAccessibleAsync(userId, workspaceId);
+        return ToResponse(user, access.Workspace);
     }
 
     public async Task<ProfileResponse> UpdateAsync(string userId, string workspaceId, UpdateProfileRequest request)
@@ -57,6 +58,12 @@ public class ProfileService : IProfileService
         // is refused before the workspace is touched.
         if (request.BusinessName is not null || request.LogoUrl is not null)
         {
+            WorkspaceAccess access = await _workspaces.GetAccessibleAsync(userId, workspaceId);
+            if (!access.IsOwner)
+            {
+                throw new ForbiddenException("Only the workspace owner can change its name or logo.");
+            }
+
             await _workspaces.UpdateAsync(userId, workspaceId, new UpdateWorkspaceRequest
             {
                 Name = request.BusinessName,
@@ -80,7 +87,7 @@ public class ProfileService : IProfileService
             _logger.LogInformation("Profile updated for {UserId}", userId);
         }
 
-        return ToResponse(user, await _workspaces.GetOwnedAsync(userId, workspaceId));
+        return ToResponse(user, (await _workspaces.GetAccessibleAsync(userId, workspaceId)).Workspace);
     }
 
     private static ProfileResponse ToResponse(ApplicationUser user, Workspace workspace) =>
@@ -146,6 +153,39 @@ public class ProfileService : IProfileService
 
         user.PhoneDialCode = dialCode;
         user.PhoneNumber = national;
+    }
+
+    public async Task<string?> GetDefaultWorkspaceAsync(string userId) =>
+        (await FindOrThrowAsync(userId)).DefaultWorkspaceId;
+
+    public async Task SetDefaultWorkspaceAsync(string userId, string? workspaceId)
+    {
+        ApplicationUser user = await FindOrThrowAsync(userId);
+
+        // Not found unless they can reach it, the same answer as switching gives.
+        if (workspaceId is not null)
+        {
+            await _workspaces.GetAccessibleAsync(userId, workspaceId);
+        }
+
+        if (user.DefaultWorkspaceId == workspaceId)
+        {
+            return;
+        }
+
+        user.DefaultWorkspaceId = workspaceId;
+        IdentityResult result = await _userManager.UpdateAsync(user);
+        if (!result.Succeeded)
+        {
+            throw new ValidationException(result.Errors.Select(e => e.Description));
+        }
+
+        using (_logger.BeginEntityScope("User", user.Id))
+        {
+            _logger.LogInformation(workspaceId is null
+                ? "Sign-in set to resume the last workspace"
+                : "Sign-in set to always open workspace {WorkspaceId}", workspaceId);
+        }
     }
 
     private async Task<ApplicationUser> FindOrThrowAsync(string userId)

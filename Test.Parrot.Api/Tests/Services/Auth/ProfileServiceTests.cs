@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using Microsoft.AspNetCore.Identity;
 using Moq;
 using Parrot.Application.Auth;
@@ -37,7 +38,7 @@ public class ProfileServiceTests
 
         _sut = new ProfileService(
             _userManagerMock.Object,
-            new WorkspaceService(_workspaces, workspaceLogger.Object),
+            TeamFixture.Workspaces(_workspaces, workspaceLogger.Object),
             _loggerMock.Object);
     }
 

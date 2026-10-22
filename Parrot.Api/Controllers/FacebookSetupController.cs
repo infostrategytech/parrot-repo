@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Parrot.Application.DTOs.Integrations;
-using Parrot.Application.Integrations;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
+using Parrot.Application.DTOs.Integrations;
+using Parrot.Application.Integrations;
+using Parrot.Application.Teams;
 
 namespace Parrot.Api.Rest.Controllers;
 
@@ -13,6 +14,7 @@ namespace Parrot.Api.Rest.Controllers;
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 // Authenticated setup endpoints for Messenger; the public webhook lives in FacebookWebhookController.
 [Monitor(Area = "facebook.setup")]
+[RequireChannel(WorkspaceChannels.Facebook)]
 public sealed class FacebookSetupController(IFacebookConnectionService connections) : ControllerBase
 {
     // GET /api/facebook/setup - returns webhook URL and verify token, creating the connection if needed.
@@ -26,6 +28,7 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
 
     // PUT /api/facebook/setup/page - saves the Page ID, name and access token after verification.
     [HttpPut("page")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> SavePage([FromBody] FacebookPageRequest request, CancellationToken cancellationToken)
     {
         string? owner = User.WorkspaceId();
@@ -36,6 +39,7 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
 
     // POST /api/facebook/setup/disable - disconnects the Page; its webhooks are refused from now on.
     [HttpPost("disable")]
+    [RequirePermission(WorkspacePermissions.ChannelsDisconnect)]
     public async Task<IActionResult> Disable(CancellationToken cancellationToken)
     {
         string? owner = User.WorkspaceId();
@@ -46,6 +50,7 @@ public sealed class FacebookSetupController(IFacebookConnectionService connectio
 
     // PUT /api/facebook/setup/app-secret - manual setup: the App Secret of the customer's own Meta app.
     [HttpPut("app-secret")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> SaveAppSecret([FromBody] AppSecretRequest request, CancellationToken cancellationToken)
     {
         string? owner = User.WorkspaceId();
