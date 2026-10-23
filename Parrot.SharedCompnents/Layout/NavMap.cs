@@ -33,21 +33,19 @@ public static class NavMap
     public static readonly IReadOnlyList<NavEntry> Primary =
     [
         new("/dashboard", "Overview", IconName.RiHome5Fill, "Overview"),
-        new("/dashboard/conversations", "Inbox", IconName.RiInbox2Fill, "Inbox", ["conversations.view"]),
-        new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill, "Customers", ["conversations.view"]),
-        new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products",
-            ["catalog.view", "catalog.categories", "catalog.items.add", "catalog.items.edit", "catalog.items.delete", "catalog.availability"]),
-        // The team's customer work queue: whoever works conversations, and the Analyst's task reports.
-        new("/dashboard/tasks", "Tasks", IconName.RiClipboardFill, "Tasks", ["conversations.view", "conversations.take-over", "analytics.tasks"]),
-        new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels", ["channels.connect", "channels.disconnect"]),
-        new("/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI", ["analytics.dashboard", "conversations.take-over"]),
+        new("/dashboard/conversations", "Inbox", IconName.RiInbox2Fill, "Inbox", AccessRules.For(AccessRules.Inbox)),
+        new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill, "Customers", AccessRules.For(AccessRules.Customers)),
+        new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products", AccessRules.For(AccessRules.Catalog)),
+        new("/dashboard/tasks", "Tasks", IconName.RiClipboardFill, "Tasks", AccessRules.For(AccessRules.Tasks)),
+        new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels", AccessRules.For(AccessRules.Channels)),
+        new("/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI", AccessRules.For(AccessRules.Agents)),
         new(null, "Campaigns", IconName.RiMegaphoneFill, "Campaigns"),
-        new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill, "Insights", ["analytics.qa", "analytics.summaries"])
+        new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill, "Insights", AccessRules.For(AccessRules.Insights))
     ];
 
     public static readonly IReadOnlyList<NavEntry> Footer =
     [
-        new("/dashboard/knowledge", "Knowledge", IconName.RiBookOpenFill, "Knowledge", ["agents.create", "agents.edit", "workspace.manage"]),
+        new("/dashboard/knowledge", "Knowledge", IconName.RiBookOpenFill, "Knowledge", AccessRules.For(AccessRules.Knowledge)),
         new(null, "Help Centre", IconName.RiQuestionFill, "Help"),
         new("/dashboard/settings", "Settings", IconName.RiSettings4Fill, "Settings")
     ];

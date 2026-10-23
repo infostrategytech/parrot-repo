@@ -34,7 +34,10 @@
           TasksNeedYou="@_tasksNeedYou">
     <UserMenu>
         <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
-        <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
+        @if (AuthState.CurrentUser?.Allows(AccessRules.Team) ?? false)
+        {
+            <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
+        }
         <UserMenuItem Label="Business setup" Glyph="IconName.RiStore2Fill" Href="/dashboard/business-setup" />
         <UserMenuItem Label="@(_loggingOut ? "Signing out…" : "Sign out")"
                       Glyph="IconName.RiUserSharedFill"
@@ -47,20 +50,9 @@
         }
     </UserMenu>
     <ChildContent>
-        @* A page the person's role does not reach, opened by its address: say so
-           here rather than letting each of its calls fail. *@
-        @if (NavMap.Match(new Uri(Nav.Uri).AbsolutePath) is { } page && !CanOpen(page))
-        {
-            <div class="dashboard-no-access">
-                <EmptyState Glyph="IconName.RiLockFill"
-                            Title="@($"{page.Label} is not part of your role")"
-                            Description="Ask the workspace owner if you need it." />
-            </div>
-        }
-        else
-        {
-            @Body
-        }
+        @* Pages the person's role does not reach never get here: the router
+           swaps them for the no-access screen (RequiresAccessAttribute). *@
+        @Body
     </ChildContent>
 </AppShell>
 

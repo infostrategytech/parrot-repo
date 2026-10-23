@@ -1,5 +1,6 @@
 @page "/dashboard/conversations"
 @page "/dashboard/conversations/{ConversationId}"
+@attribute [RequiresAccess(AccessRules.Inbox)]
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @layout DashboardLayout
 @implements IDisposable

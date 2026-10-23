@@ -179,7 +179,9 @@
 
     protected override void OnInitialized()
     {
-        _open = AuthState.IsAuthenticated && string.IsNullOrWhiteSpace(AuthState.CurrentUser?.BusinessName);
+        // Naming the business is the owner's; a team member in a workspace not named yet is not asked.
+        _open = AuthState.IsAuthenticated && AuthState.CurrentUser is { IsOwner: true }
+            && string.IsNullOrWhiteSpace(AuthState.CurrentUser.BusinessName);
         Prompt.CreateRequested += OpenForAnother;
     }
 

@@ -7,7 +7,9 @@
     <Found Context="routeData">
         @if (IsPublicPath() || (_ready && !_endingSession && AuthState.IsAuthenticated))
         {
-            <RouteView RouteData="routeData" DefaultLayout="typeof(Layout.Dashboard.DashboardLayout)" />
+            @* A page the person's role does not reach is never rendered: the
+               no-access screen takes its place, in the same layout. *@
+            <RouteView RouteData="Permitted(routeData)" DefaultLayout="typeof(Layout.Dashboard.DashboardLayout)" />
             <FocusOnNavigate RouteData="routeData" Selector="h1" />
         }
         else
@@ -27,6 +29,19 @@
     ];
     private readonly CancellationTokenSource _lifetime = new();
     private bool _ready, _endingSession, _disposed;
+
+    // The page's RequiresAccess rule, checked against the session before it renders.
+    private RouteData Permitted(RouteData routeData)
+    {
+        if (System.Reflection.CustomAttributeExtensions.GetCustomAttribute<Parrot.Web.Features.Auth.RequiresAccessAttribute>(routeData.PageType) is not { } needs
+            || AuthState.CurrentUser is not { } user
+            || user.Allows(needs.Rule))
+        {
+            return routeData;
+        }
+
+        return new RouteData(typeof(Pages.NoAccess), new Dictionary<string, object?>());
+    }
 
     private bool IsPublicPath() => PublicPaths.Contains(new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant())
         || new Uri(Nav.Uri).AbsolutePath == "/"

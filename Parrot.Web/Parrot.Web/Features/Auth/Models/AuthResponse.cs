@@ -36,4 +36,7 @@ public class AuthResponse
     public bool IsOwner => string.IsNullOrEmpty(Role) || Role == "Owner";
 
     public bool Can(string permission) => IsOwner || Permissions.Contains(permission);
+
+    /// <summary>Whether this session passes an access rule (Parrot.SharedComponents.Layout.AccessRules).</summary>
+    public bool Allows(string rule) => Parrot.SharedComponents.Layout.AccessRules.Allows(rule, IsOwner, Can);
 }
