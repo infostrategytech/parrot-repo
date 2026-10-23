@@ -1,0 +1,6 @@
+/* The message sits where the page would have been. */
+.no-access {
+  display: grid;
+  place-items: center;
+  padding-block: var(--spacing-5xl);
+}

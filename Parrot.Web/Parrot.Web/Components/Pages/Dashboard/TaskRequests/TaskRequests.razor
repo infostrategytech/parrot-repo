@@ -2,6 +2,7 @@
 @page "/dashboard/tasks/{TaskId}"
 @page "/dashboard/task-requests"
 @page "/dashboard/task-requests/{TaskId}"
+@attribute [RequiresAccess(AccessRules.Tasks)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
 @using Parrot.Web.Features.Dashboard.TaskRequests

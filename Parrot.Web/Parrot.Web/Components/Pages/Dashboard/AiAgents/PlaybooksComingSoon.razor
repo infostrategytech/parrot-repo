@@ -2,6 +2,7 @@
 @page "/dashboard/ai-agents/{AgentId}/playbooks/{PlaybookId}"
 @page "/ai-operations/{AgentId}/builder"
 @page "/dashboard/ai-agents/{AgentId}/builder"
+@attribute [RequiresAccess(AccessRules.AgentEdit)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject NavigationManager Nav

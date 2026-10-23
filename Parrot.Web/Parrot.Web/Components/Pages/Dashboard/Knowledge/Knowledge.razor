@@ -1,4 +1,5 @@
 @page "/dashboard/knowledge"
+@attribute [RequiresAccess(AccessRules.Knowledge)]
 @layout DashboardLayout
 @inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
 @inject Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview Preview
