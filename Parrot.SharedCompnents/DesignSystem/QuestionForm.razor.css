@@ -1,9 +1,8 @@
 /* A short form in the composer's own surface, like a ChoicePrompt: the same
-   fill, edge, corner and lift, and the same rows, one question under another. */
+   fill, edge, corner and lift, one question under another. Each question's own
+   look (option rows, fields) is DynamicQuestion's. */
 .question-form {
-  /* Gaps in the token set: the tick box / ring size and its line, as in ChoicePrompt. */
-  --ds-question-form-mark: 18px;
-  --ds-question-form-ring: 1.5px;
+  /* Gap in the token set: the shadow's blur. */
   --ds-question-form-shadow: 36px;
 
   display: grid;
@@ -21,76 +20,23 @@
 .question-form__head ::deep h3,
 .question-form__head ::deep p { margin: var(--spacing-none); }
 ::deep .question-form__muted { color: var(--colors-text-muted); }
+.question-form__head ::deep .question-form__progress { margin-top: var(--spacing-xs); }
 
-.question-form__question {
+/* What approving will change: added lines with a +, the lines they replace muted and struck through. */
+.question-form__changes {
   display: grid;
-  gap: var(--spacing-sm);
-  min-width: 0;
-  margin: var(--spacing-none);
-  padding: var(--spacing-none);
-  border: 0;
-}
-
-.question-form__question legend {
-  margin-bottom: var(--spacing-sm);
-  padding: var(--spacing-none);
-  color: var(--colors-text-primary);
-}
-
-/* Choices side by side, each at least as wide as its words (so a label never breaks
-   between lines unless it's longer than the row), filling each row evenly. */
-.question-form__options {
-  /* Missing from the token set: the width a choice starts from before it grows. */
-  --ds-question-form-choice: 160px;
-
-  display: flex;
-  flex-wrap: wrap;
   gap: var(--spacing-xs);
-}
-.question-form__other { flex: 1 1 100%; }
-
-.question-form__options ::deep .question-form__option {
-  display: grid;
-  flex: 1 1 var(--ds-question-form-choice);
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--spacing-sm);
-  align-items: center;
-  min-width: min(100%, max-content);
-  min-height: var(--spacing-4xl);
-  padding: var(--spacing-xs) var(--spacing-md);
-  text-align: left;
-  border: var(--ds-hairline) solid var(--colors-surface-border);
+  margin: var(--spacing-none);
+  padding: var(--spacing-md);
+  list-style: none;
+  background: var(--colors-surface-muted);
   border-radius: var(--radius-radius-lg);
 }
-
-.question-form__options ::deep .question-form__option:hover { background: var(--colors-interaction-hover); }
-.question-form__options ::deep .question-form__option.is-picked {
-  background: var(--colors-accent-brand-subtle);
-  border-color: var(--colors-accent-brand-border);
-}
-.question-form__options ::deep .question-form__option:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 var(--ds-question-form-ring) var(--colors-interaction-focus);
-}
-
-.question-form__text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
-.question-form__text ::deep small { color: var(--colors-text-muted); }
-
-/* A tick box for several, a ring for one. */
-.question-form__mark {
-  display: grid;
-  place-items: center;
-  width: var(--ds-question-form-mark);
-  height: var(--ds-question-form-mark);
-  color: var(--colors-text-on-primary);
-  box-shadow: inset 0 0 0 var(--ds-question-form-ring) var(--colors-surface-input);
-}
-.question-form__mark.is-box { border-radius: var(--radius-radius-sm); }
-.question-form__mark.is-ring { border-radius: var(--radius-radius-full); }
-.question-form__options ::deep .is-picked .question-form__mark {
-  background: var(--colors-brand-primary);
-  box-shadow: inset 0 0 0 var(--ds-question-form-ring) var(--colors-brand-primary);
-}
+.question-form__change { display: flex; gap: var(--spacing-sm); align-items: flex-start; }
+.question-form__change ::deep svg { flex: none; margin-top: var(--spacing-2xs); }
+.question-form__change.is-added { color: var(--colors-text-primary); }
+.question-form__change.is-added ::deep svg { color: var(--colors-feedback-success-text); }
+.question-form__change.is-replaced { color: var(--colors-text-muted); }
 
 /* An answer given already, to read: the question over the answer, Change on
    the right; answers to check sit closer together than questions to answer. */
@@ -119,7 +65,7 @@
   padding-top: var(--spacing-md);
   border-top: var(--ds-hairline) solid var(--colors-surface-border);
 }
-.question-form__start { display: flex; gap: var(--spacing-sm); align-items: center; }
+.question-form__start { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
 .question-form__end { display: flex; gap: var(--spacing-sm); margin-left: auto; }
 
 @keyframes question-form-in {

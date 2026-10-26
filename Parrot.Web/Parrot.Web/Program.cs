@@ -156,6 +156,9 @@ builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentBrief
 // Getting to know the job (its topics, questions and approvals) needs the AI: until the agents API
 // can read, hear and conclude, the job description is written from the owner's first answer.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IJobInterview, Parrot.Web.Features.Dashboard.AiAgents.UnavailableJobInterview>();
+// Generated forms (the dynamic form): none until the backend's endpoints exist; then swap in
+// Parrot.Web.Features.DynamicForms.ApiDynamicFormSource here (dynamic-form-backend-requests).
+builder.Services.AddScoped<Parrot.Web.Features.DynamicForms.IDynamicFormSource, Parrot.Web.Features.DynamicForms.UnavailableDynamicFormSource>();
 // The business's knowledge as facts (what an agent uses): no API for it yet.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory, Parrot.Web.Features.Dashboard.Knowledge.UnavailableKnowledgeMemory>();
 // The kind of business, once for the business; and which agents have been tested (both for the session).

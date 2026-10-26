@@ -1,0 +1,371 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using System.Globalization
+
+@* One question, drawn by the component its kind calls for (designer, 27 October 2026: the mapping in one place,
+   dynamic-form-contract.md, section 2). The components themselves don't know about forms; this is the only
+   place that decides which one draws which kind, so a new kind is one more case here and every form has it.
+   A kind not built yet arrives as Text (the reader's fallback), so no question ever fails to show.
+
+   The question is the group's legend; where a component already says the question (a tick box, a list of
+   tags, photos), it says it instead. "(optional)" follows an optional question; there are no asterisks.
+   The form says when to show an error (Error); this shows it where the component shows it, or under it. *@
+
+@switch (Question.Kind)
+{
+    case FormQuestionKind.Note:
+        <div class="dynamic-question__note" role="note">
+            <Icon Name="IconName.RiInformationFill" Size="IconSize.Sm" Class="dynamic-question__note-icon" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@Question.Question</Typography>
+        </div>
+        break;
+
+    default:
+        <fieldset class="@(Error is null ? "dynamic-question" : "dynamic-question has-error")" disabled="@Busy" aria-label="@(ShowsLegend ? null : Question.Question)" tabindex="-1" @ref="_group" @onfocusout="LeaveAsync">
+            @if (ShowsLegend)
+            {
+                <legend class="@TextStyle.BodySmallSemibold.ToClassName()">
+                    @Question.Question
+                    @if (Question.Required == false)
+                    {
+                        <span class="dynamic-question__optional @TextStyle.BodySmallMedium.ToClassName()"> (optional)</span>
+                    }
+                </legend>
+            }
+
+            @switch (Question.Kind)
+            {
+                case FormQuestionKind.One:
+                case FormQuestionKind.Many:
+                case FormQuestionKind.YesNo:
+                    var many = Question.Kind == FormQuestionKind.Many;
+                    <div class="dynamic-question__options" role="@(many ? "group" : "radiogroup")" aria-label="@Question.Question">
+                        @foreach (var option in Choices)
+                        {
+                            var label = option.Label;
+                            @Row(many, Answer.Picked.Contains(label), label, Described(option), () => ToggleAsync(label))
+                        }
+                        @if (Question.AllowOther && Question.Kind != FormQuestionKind.YesNo)
+                        {
+                            @Row(true, _otherOpen, "Something else", null, ToggleOtherAsync)
+                            if (_otherOpen)
+                            {
+                                <div class="dynamic-question__other">
+                                    <TextArea @ref="_box" Value="@(Answer.Text ?? string.Empty)" ValueChanged="SetOtherAsync"
+                                              Placeholder="@(Question.Placeholder ?? "Tell me in your own words")" AriaLabel="@($"{Question.Question}: something else")"
+                                              Rows="1" MaxLength="300" AutoGrow />
+                                </div>
+                            }
+                        }
+                    </div>
+                    break;
+
+                case FormQuestionKind.Consent:
+                    <Checkbox State="@(Answer.Agreed == true ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                              StateChanged="state => SetAsync(FormAnswer.None with { Agreed = state == CheckboxState.Checked })"
+                              Label="@Question.Question" Description="@Question.Helper" Disabled="Busy" />
+                    break;
+
+                case FormQuestionKind.Select:
+                    <SelectField FloatingLabel="@(Question.Header ?? "Choose one")" Value="@Answer.Picked.FirstOrDefault()"
+                                 Open="_menuOpen" OpenChanged="open => _menuOpen = open"
+                                 Error="@(Error is not null)" HelperText="@(Error ?? Question.Helper)" Disabled="Busy">
+                        @foreach (var option in Choices)
+                        {
+                            var label = option.Label;
+                            <PopoverOption Label="@label" Description="@Described(option)" Active="@Answer.Picked.Contains(label)" OnSelect="() => PickAsync(label)" />
+                        }
+                    </SelectField>
+                    break;
+
+                case FormQuestionKind.Search:
+                    @if (Answer.Picked.FirstOrDefault() is { } chosen && !_searching)
+                    {
+                        <div class="dynamic-question__chosen">
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@chosen</Typography>
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" aria-label="@($"Change: {Question.Question}")" @onclick="() => _searching = true">Change</Button>
+                        </div>
+                    }
+                    else
+                    {
+                        <SearchPick TItem="ChoicePromptOption" Items="Choices" Label="option => option.Label" Detail="Described"
+                                    Placeholder="@(Question.Placeholder ?? "Search")" AriaLabel="@Question.Question" AutoFocus="_searching"
+                                    OnPick="option => PickAsync(option.Label)" />
+                    }
+                    break;
+
+                case FormQuestionKind.Chips:
+                    <div class="dynamic-question__chips" role="group" aria-label="@Question.Question">
+                        @foreach (var option in Choices)
+                        {
+                            var label = option.Label;
+                            <ChoiceChip Selected="@Answer.Picked.Contains(label)" Disabled="Busy" OnClick="() => ToggleAsync(label)">@label</ChoiceChip>
+                        }
+                    </div>
+                    break;
+
+                case FormQuestionKind.Tags:
+                    <TagInput Label="@QuestionWords" Values="@(Answer.Items ?? [])"
+                              ValuesChanged="items => SetAsync(FormAnswer.None with { Items = items })"
+                              Placeholder="@(Question.Placeholder ?? "Type one and press Enter")" HelperText="@(Error ?? Question.Helper)"
+                              MaxLength="@(Question.MaxLength ?? 40)" MaxItems="@(Question.Max is { } mostTags ? (int)mostTags : 20)" />
+                    break;
+
+                case FormQuestionKind.Date:
+                case FormQuestionKind.DateTime:
+                    <Popover Title="@(Question.Header ?? (Question.Kind == FormQuestionKind.DateTime ? "Pick a date and time" : "Pick a date"))"
+                             Open="_menuOpen" OpenChanged="open => _menuOpen = open" Class="dynamic-question__date">
+                        <Anchor>
+                            <Button Variant="ButtonVariant.Secondary" disabled="@Busy" aria-haspopup="dialog" aria-expanded="@(_menuOpen ? "true" : "false")"
+                                    Class="@(Answer.Date is null ? "dynamic-question__date-trigger is-empty" : "dynamic-question__date-trigger")" @onclick="() => _menuOpen = !_menuOpen">
+                                <IconLeft><Icon Name="IconName.RiCalendarCheckFill" /></IconLeft>
+                                <ChildContent>@DateWords</ChildContent>
+                            </Button>
+                        </Anchor>
+                        <ChildContent>
+                            <CalendarPicker Today="Today" Date="Answer.Date" DateChanged="PickDateAsync"
+                                            Time="Answer.Time" TimeChanged="time => SetAsync(Answer with { Time = time })"
+                                            AllowTime="@(Question.Kind == FormQuestionKind.DateTime)" AllowNone="@(Question.Required != true)" />
+                        </ChildContent>
+                    </Popover>
+                    break;
+
+                case FormQuestionKind.Photos:
+                    <PhotoPicker Label="@QuestionWords" Photos="@(Answer.Files ?? [])"
+                                 PhotosChanged="photos => SetAsync(FormAnswer.None with { Files = photos })"
+                                 Max="@(Question.Max is { } mostPhotos ? (int)mostPhotos : 4)" HelperText="@(Error ?? Question.Helper)" />
+                    break;
+
+                case FormQuestionKind.Short:
+                case FormQuestionKind.Email:
+                case FormQuestionKind.Url:
+                case FormQuestionKind.Phone:
+                case FormQuestionKind.Money:
+                case FormQuestionKind.Number:
+                    <Input @ref="_input" FloatingLabel="@FieldLabel" Value="@Answer.Text" ValueChanged="TypedAsync" Type="@FieldType"
+                           PrefixText="@Prefix" PrefixIcon="@(Question.Kind == FormQuestionKind.Phone ? Flag : null)"
+                           Error="@(Error is not null)" HelperText="@(Error ?? FieldHelper)" Disabled="Busy" @attributes="FieldAttributes" />
+                    break;
+
+                default:
+                    @* Text, and any kind drawn as text. *@
+                    <TextArea @ref="_box" Value="@(Answer.Text ?? string.Empty)" ValueChanged="text => SetAsync(FormAnswer.None with { Text = text })"
+                              AriaLabel="@Question.Question" Placeholder="@(Question.Placeholder ?? "Type your answer")"
+                              Rows="2" AutoGrow MaxLength="@(Question.MaxLength ?? 300)" Class="@(Error is null ? null : "is-error")" />
+                    break;
+            }
+
+            @if (!HelperInField)
+            {
+                @if (Error is { } error)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="dynamic-question__error" role="alert">@error</Typography>
+                }
+                else if (Question.Helper is { Length: > 0 } hint && Question.Kind != FormQuestionKind.Consent)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="dynamic-question__helper">@hint</Typography>
+                }
+            }
+        </fieldset>
+        break;
+}
+
+@code {
+    [Parameter, EditorRequired] public FormQuestion Question { get; set; } = default!;
+
+    [Parameter] public FormAnswer Answer { get; set; } = FormAnswer.None;
+
+    [Parameter] public EventCallback<FormAnswer> AnswerChanged { get; set; }
+
+    /// <summary>The owner left the question (to check it, once it's been changed).</summary>
+    [Parameter] public EventCallback OnLeave { get; set; }
+
+    /// <summary>What's wrong, to show now; the form decides when (dynamic-form-contract.md, section 5).</summary>
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Today, in the business's own calendar, for the date picker.</summary>
+    [Parameter] public DateOnly Today { get; set; } = DateOnly.FromDateTime(DateTime.Now);
+
+    private ElementReference _group;
+    private TextArea? _box;
+    private Input? _input;
+    private bool _otherOpen, _menuOpen, _searching, _started;
+
+    private static readonly IReadOnlyList<ChoicePromptOption> YesNo = [new("Yes"), new("No")];
+
+    // The components that say the question themselves, and those that show the helper and error themselves.
+    private bool ShowsLegend => Question.Kind is not (FormQuestionKind.Consent or FormQuestionKind.Tags or FormQuestionKind.Photos);
+
+    private bool HelperInField => Question.Kind is FormQuestionKind.Short or FormQuestionKind.Email or FormQuestionKind.Url or FormQuestionKind.Phone
+        or FormQuestionKind.Money or FormQuestionKind.Number or FormQuestionKind.Select or FormQuestionKind.Tags or FormQuestionKind.Photos;
+
+    // The recommended answer first; the rest as sent.
+    private IReadOnlyList<ChoicePromptOption> Choices =>
+        [.. (Question.Kind == FormQuestionKind.YesNo && (Question.Options?.Count ?? 0) == 0 ? YesNo : Question.Options ?? []).OrderBy(option => option.Recommended ? 0 : 1)];
+
+    // Where the component says the question itself: with "(optional)" as the other questions say it.
+    private string QuestionWords => Question.Required == false ? $"{Question.Question} (optional)" : Question.Question;
+
+    private static string? Described(ChoicePromptOption option) =>
+        option.Recommended ? (option.Description is { Length: > 0 } line ? $"Recommended · {line}" : "Recommended") : option.Description;
+
+    private string FieldLabel => Question.Header ?? Question.Kind switch
+    {
+        FormQuestionKind.Email => "Email address",
+        FormQuestionKind.Url => "Link",
+        FormQuestionKind.Phone => "Phone number",
+        FormQuestionKind.Money => "Amount",
+        FormQuestionKind.Number => "Number",
+        _ => "Your answer",
+    };
+
+    private string FieldType => Question.Kind switch
+    {
+        FormQuestionKind.Email => "email",
+        FormQuestionKind.Url => "url",
+        FormQuestionKind.Phone => "tel",
+        _ => "text",
+    };
+
+    private string? Prefix => Question.Kind switch
+    {
+        FormQuestionKind.Phone => "+234",
+        FormQuestionKind.Money => "₦",
+        _ => null,
+    };
+
+    private static readonly RenderFragment Flag = @<CountryFlag Code="NG" Decorative />;
+
+    // The keyboard and autofill each kind wants, and its length.
+    private IReadOnlyDictionary<string, object> FieldAttributes => Question.Kind switch
+    {
+        FormQuestionKind.Email => new Dictionary<string, object> { ["inputmode"] = "email", ["autocomplete"] = "email", ["maxlength"] = 254 },
+        FormQuestionKind.Url => new Dictionary<string, object> { ["inputmode"] = "url", ["autocomplete"] = "url", ["maxlength"] = 500 },
+        FormQuestionKind.Phone => new Dictionary<string, object> { ["inputmode"] = "tel", ["autocomplete"] = "tel", ["maxlength"] = 20 },
+        FormQuestionKind.Money => new Dictionary<string, object> { ["inputmode"] = "decimal", ["maxlength"] = 18 },
+        FormQuestionKind.Number => new Dictionary<string, object> { ["inputmode"] = "numeric", ["maxlength"] = 12 },
+        _ => new Dictionary<string, object> { ["maxlength"] = Question.MaxLength ?? 120 },
+    };
+
+    // A whole number is said back as it'll be saved; an example stands in for a helper when there's none.
+    private string? FieldHelper =>
+        Question.Kind == FormQuestionKind.Phone && Answer.Phone is { } whole ? $"Saved as {FormRules.SayPhone(whole)}"
+        : Question.Helper ?? (Question.Placeholder is { Length: > 0 } example ? $"Such as {example}" : null);
+
+    private string DateWords => Answer.Date is { } date
+        ? date.ToString("d MMM yyyy", CultureInfo.InvariantCulture) + (Answer.Time is { } time ? ", " + time.ToString("h:mm tt", CultureInfo.InvariantCulture) : string.Empty)
+        : Question.Kind == FormQuestionKind.DateTime ? "Pick a date and time" : "Pick a date";
+
+    protected override void OnParametersSet()
+    {
+        // "Something else" starts open when the answer already has their own words.
+        if (_started) return;
+        _started = true;
+        _otherOpen = Question.Kind is FormQuestionKind.One or FormQuestionKind.Many && !string.IsNullOrWhiteSpace(Answer.Text);
+    }
+
+    /// <summary>Takes the focus: its field, or the group (to bring an error into view).</summary>
+    public async Task FocusAsync()
+    {
+        if (_input is not null) await _input.FocusAsync();
+        else if (_box is not null) await _box.FocusAsync();
+        else await _group.FocusAsync();
+    }
+
+    private RenderFragment Row(bool many, bool picked, string label, string? description, Func<Task> toggle) => __builder =>
+    {
+        <RowButton Class="@($"dynamic-question__option {(picked ? "is-picked" : null)}")" Disabled="@Busy"
+                   role="@(many ? "checkbox" : "radio")" aria-checked="@(picked ? "true" : "false")" OnClick="toggle">
+            <span class="@($"dynamic-question__mark {(many ? "is-box" : "is-ring")}")" aria-hidden="true">
+                @if (picked)
+                {
+                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                }
+            </span>
+            <span class="dynamic-question__text">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@label</Typography>
+                @if (description is { Length: > 0 })
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@description</Typography>
+                }
+            </span>
+        </RowButton>
+    };
+
+    private Task SetAsync(FormAnswer answer) => AnswerChanged.InvokeAsync(answer);
+
+    // One choice: a row replaces the other pick (and their own words), and again clears it. Several: each toggles.
+    private Task ToggleAsync(string label)
+    {
+        if (Busy) return Task.CompletedTask;
+        var picked = Answer.Picked.ToList();
+        var text = Answer.Text;
+        if (!picked.Remove(label))
+        {
+            if (Question.Kind != FormQuestionKind.Many)
+            {
+                picked.Clear();
+                text = null;
+                _otherOpen = false;
+            }
+            picked.Add(label);
+        }
+        return SetAsync(FormAnswer.None with { Picked = InOrder(picked), Text = text });
+    }
+
+    private Task PickAsync(string label)
+    {
+        _menuOpen = false;
+        _searching = false;
+        return SetAsync(FormAnswer.None with { Picked = [label] });
+    }
+
+    // "Something else": opens a box for their own words (one choice: in place of a pick); again, closes it and clears them.
+    private async Task ToggleOtherAsync()
+    {
+        if (Busy) return;
+        if (_otherOpen)
+        {
+            _otherOpen = false;
+            await SetAsync(FormAnswer.None with { Picked = Answer.Picked });
+            return;
+        }
+        _otherOpen = true;
+        await SetAsync(FormAnswer.None with { Picked = Question.Kind == FormQuestionKind.One ? [] : Answer.Picked, Text = Answer.Text });
+        StateHasChanged();
+        await Task.Yield();
+        if (_box is not null) await _box.FocusAsync();
+    }
+
+    private Task SetOtherAsync(string? text) => SetAsync(FormAnswer.None with { Picked = Answer.Picked, Text = text });
+
+    // Typed: kept as typed, with what it reads as (a whole phone number, a number).
+    private Task TypedAsync(string? typed) => Question.Kind switch
+    {
+        FormQuestionKind.Phone => SetAsync(FormAnswer.None with { Text = typed, Phone = FormRules.WholePhone(typed) }),
+        FormQuestionKind.Money or FormQuestionKind.Number => SetAsync(FormAnswer.None with { Text = typed, Number = FormRules.ReadNumber(typed) }),
+        _ => SetAsync(FormAnswer.None with { Text = typed }),
+    };
+
+    private async Task PickDateAsync(DateOnly? date)
+    {
+        // A date alone is picked in one go; with a time, the panel stays for the time.
+        if (Question.Kind == FormQuestionKind.Date) _menuOpen = false;
+        await SetAsync(Answer with { Picked = [], Date = date, Time = date is null ? null : Answer.Time });
+        await OnLeave.InvokeAsync();
+    }
+
+    // Left: an amount shows grouped (45,000); then the form checks it.
+    private async Task LeaveAsync()
+    {
+        if (Question.Kind is FormQuestionKind.Money or FormQuestionKind.Number && Answer.Number is { } number)
+        {
+            var grouped = FormRules.Grouped(number);
+            if (grouped != Answer.Text) await SetAsync(Answer with { Text = grouped });
+        }
+        await OnLeave.InvokeAsync();
+    }
+
+    private IReadOnlyList<string> InOrder(List<string> picked) => [.. Choices.Select(option => option.Label).Where(picked.Contains)];
+}

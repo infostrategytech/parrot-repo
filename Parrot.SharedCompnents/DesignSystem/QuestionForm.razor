@@ -1,18 +1,22 @@
 @namespace Parrot.SharedComponents.DesignSystem
+@using System.Globalization
 
-@* A few questions at once, each with the control it needs (one choice, several,
-   or a few words), the way an AI asks for what it still needs to know (Claude's
-   design form, for one). The caller chooses the questions and may fill some in
-   already, as answers to check. Submit hands back every answer; "Decide for me"
-   hands back the same, for the caller to fill what is left with its defaults.
-   The rows look like a ChoicePrompt's, so a single question and a short form
-   read as the same voice.
+@* A few questions at once, each with the control it needs, the way an AI asks for what it still needs to know
+   (Claude's design form, for one). The caller chooses the questions and may fill some in already, as answers to
+   check. Submit hands back every answer; "Decide for me" hands back the same, for the caller to fill what is
+   left with its defaults. The rows look like a ChoicePrompt's, so a single question and a short form read as
+   the same voice.
 
-   To check rather than fill (Review): an answer already given shows as one
-   line, the question over the answer, with Change to open it. "Something
-   else" is the last choice; its box opens only once it is picked. A caller
-   can put something to read above the questions (Lead), and its own actions
-   on the left of the foot (Secondary, in place of "Decide for me"). *@
+   The dynamic form (designer, 27 October 2026; dynamic-form-contract.md, section 3) draws through this too:
+   each question through DynamicQuestion, the one place that maps a kind to its component. Around them: the
+   step it is (progress), what approving will change, and the actions ("Decide for me", "Skip for now",
+   "Cancel"). Answers are checked only once the owner presses the main action, or leaves a question they've
+   changed; the first one wrong takes the focus. While saving, everything is locked; if saving fails, it says so
+   above the actions with Try again, and nothing they entered is lost.
+
+   To check rather than fill (Review): an answer already given shows as one line, the question over the answer,
+   with Change to open it. A caller can put something to read above the questions (Lead), and its own actions on
+   the left of the foot (Secondary, in place of the others). *@
 
 <section class="question-form @Class" aria-labelledby="@_titleId">
     <header class="question-form__head">
@@ -21,7 +25,32 @@
         {
             <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="question-form__muted">@subtitle</Typography>
         }
+        @if (Step is { } step && Steps is { } steps && steps > 1)
+        {
+            <ProgressBar Value="step" Max="steps" Label="@($"Step {step} of {steps}")" Class="question-form__progress" />
+        }
     </header>
+
+    @if (Changes is { IsEmpty: false } changes)
+    {
+        @* What approving will do: lines added, and the lines they replace. *@
+        <ul class="question-form__changes" aria-label="What will change">
+            @foreach (var line in changes.Added)
+            {
+                <li class="question-form__change is-added">
+                    <Icon Name="IconName.RiAddFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose><span class="sr-only">Adding: </span>@line</Typography>
+                </li>
+            }
+            @foreach (var line in changes.Replaced)
+            {
+                <li class="question-form__change is-replaced">
+                    <Icon Name="IconName.RiSubtractFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>Instead of <s>@line</s></Typography>
+                </li>
+            }
+        </ul>
+    }
 
     @Lead
 
@@ -42,38 +71,16 @@
             </div>
             continue;
         }
-        <fieldset class="question-form__question" disabled="@Busy" @key="@($"ask-{current.Id}")">
-            <legend class="@TextStyle.BodySmallSemibold.ToClassName()">@current.Question</legend>
-            @if (current.Kind == FormQuestionKind.Text)
-            {
-                <TextArea @ref="_boxes[current.Id]" Value="@(answer.Text ?? string.Empty)" ValueChanged="value => SetTextAsync(current, value)" AriaLabel="@current.Question"
-                          Placeholder="@(current.Placeholder ?? "Type your answer")" Rows="2" AutoGrow MaxLength="300" />
-            }
-            else
-            {
-                var many = current.Kind == FormQuestionKind.Many;
-                var other = _other.Contains(current.Id);
-                <div class="question-form__options" role="@(many ? "group" : "radiogroup")" aria-label="@current.Question">
-                    @foreach (var option in current.Options ?? [])
-                    {
-                        var label = option.Label;
-                        @Choice(many, answer.Picked.Contains(label), label, option.Description, () => ToggleAsync(current, label))
-                    }
-                    @if (current.AllowOther)
-                    {
-                        @Choice(many, other, "Something else", null, () => ToggleOtherAsync(current))
-                        if (other)
-                        {
-                            <div class="question-form__other">
-                                <TextArea @ref="_boxes[current.Id]" Value="@(answer.Text ?? string.Empty)" ValueChanged="value => SetOtherAsync(current, value)"
-                                          Placeholder="@(current.Placeholder ?? "Tell me in your own words")" AriaLabel="@($"{current.Question}: something else")"
-                                          Rows="1" MaxLength="300" AutoGrow Class="question-form__other-input" />
-                            </div>
-                        }
-                    }
-                </div>
-            }
-        </fieldset>
+        <DynamicQuestion @key="@($"ask-{current.Id}")" @ref="_fields[current.Id]"
+                         Question="current" Answer="answer" AnswerChanged="value => SetAsync(current, value)"
+                         OnLeave="() => Leave(current)" Error="@ShownError(current)" Busy="Busy" Today="@(Today ?? DateOnly.FromDateTime(DateTime.Now))" />
+    }
+
+    @if (SaveError is { Length: > 0 } failed)
+    {
+        <InlineError Message="@failed">
+            <Action><Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@Busy" @onclick="SubmitAsync">Try again</Button></Action>
+        </InlineError>
     }
 
     <footer class="question-form__foot">
@@ -81,9 +88,22 @@
         {
             <span class="question-form__start">@Secondary</span>
         }
-        else if (OnDecide.HasDelegate)
+        else if (OnDecide.HasDelegate || OnSkip.HasDelegate || OnCancel.HasDelegate)
         {
-            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="DecideAsync">@DecideLabel</Button>
+            <span class="question-form__start">
+                @if (OnDecide.HasDelegate)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="DecideAsync">@DecideLabel</Button>
+                }
+                @if (OnSkip.HasDelegate)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="SkipAsync">@SkipLabel</Button>
+                }
+                @if (OnCancel.HasDelegate)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="OnCancel">@CancelLabel</Button>
+                }
+            </span>
         }
         <span class="question-form__end">
             <Button Busy="@Busy" @onclick="SubmitAsync">@SubmitLabel</Button>
@@ -94,11 +114,13 @@
 @code {
     private readonly string _titleId = $"question-form-{Guid.NewGuid():N}";
     private readonly Dictionary<string, FormAnswer> _answers = [];
-    // Questions shown as an answer to check, and those with "Something else" open.
+    // Questions shown as an answer to check; questions changed, and those left after a change (checked from then on).
     private readonly HashSet<string> _checking = [];
-    private readonly HashSet<string> _other = [];
-    private readonly Dictionary<string, TextArea> _boxes = [];
+    private readonly HashSet<string> _changed = [];
+    private readonly HashSet<string> _left = [];
+    private readonly Dictionary<string, DynamicQuestion> _fields = [];
     private string? _for, _focus;
+    private bool _tried;
 
     [Parameter, EditorRequired] public string Title { get; set; } = "";
 
@@ -112,23 +134,48 @@
     /// <summary>An answer already given shows as one line to read, with Change to open its question.</summary>
     [Parameter] public bool Review { get; set; }
 
+    /// <summary>What approving will change, shown above the questions.</summary>
+    [Parameter] public FormChanges? Changes { get; set; }
+
+    /// <summary>Which step of how many this is, shown as progress (with more than one step).</summary>
+    [Parameter] public int? Step { get; set; }
+
+    [Parameter] public int? Steps { get; set; }
+
     /// <summary>Something to read above the questions (what is about to change, say).</summary>
     [Parameter] public RenderFragment? Lead { get; set; }
 
-    /// <summary>The caller's own actions on the left of the foot, in place of "Decide for me".</summary>
+    /// <summary>The caller's own actions on the left of the foot, in place of "Decide for me", "Skip for now" and "Cancel".</summary>
     [Parameter] public RenderFragment? Secondary { get; set; }
 
     [Parameter] public string SubmitLabel { get; set; } = "Send";
 
     [Parameter] public string DecideLabel { get; set; } = "Decide for me";
 
+    [Parameter] public string SkipLabel { get; set; } = "Skip for now";
+
+    [Parameter] public string CancelLabel { get; set; } = "Cancel";
+
+    /// <summary>Saving: everything is locked, and the main action shows it's working.</summary>
     [Parameter] public bool Busy { get; set; }
 
-    /// <summary>Every answer, by question id; questions left unanswered have <see cref="FormAnswer.None"/>.</summary>
+    /// <summary>Saving failed: said above the actions, with Try again (which sends the same answers).</summary>
+    [Parameter] public string? SaveError { get; set; }
+
+    /// <summary>Today, in the business's own calendar, for date questions.</summary>
+    [Parameter] public DateOnly? Today { get; set; }
+
+    /// <summary>Every answer, by question id, once each is right; questions left unanswered have <see cref="FormAnswer.None"/>.</summary>
     [Parameter] public EventCallback<IReadOnlyDictionary<string, FormAnswer>> OnSubmit { get; set; }
 
-    /// <summary>The same answers, for the caller to fill the rest; omit it and there is no "Decide for me".</summary>
+    /// <summary>The same answers, unchecked, for the caller to fill the rest; omit it and there is no "Decide for me".</summary>
     [Parameter] public EventCallback<IReadOnlyDictionary<string, FormAnswer>> OnDecide { get; set; }
+
+    /// <summary>The answers so far, unchecked; omit it and there is no "Skip for now".</summary>
+    [Parameter] public EventCallback<IReadOnlyDictionary<string, FormAnswer>> OnSkip { get; set; }
+
+    /// <summary>Omit it and there is no "Cancel".</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
 
     /// <summary>Every answer, each time one changes (to keep them if the form goes away).</summary>
     [Parameter] public EventCallback<IReadOnlyDictionary<string, FormAnswer>> OnChange { get; set; }
@@ -143,52 +190,54 @@
         _for = key;
         _answers.Clear();
         _checking.Clear();
-        _other.Clear();
+        _changed.Clear();
+        _left.Clear();
+        _tried = false;
         foreach (var question in Questions)
         {
             var given = Answers is not null && Answers.TryGetValue(question.Id, out var known) ? known : FormAnswer.None;
             _answers[question.Id] = given;
-            if (!given.IsEmpty) _checking.Add(question.Id);
-            if (question.Kind != FormQuestionKind.Text && !string.IsNullOrWhiteSpace(given.Text)) _other.Add(question.Id);
+            if (!given.IsEmpty && question.Kind != FormQuestionKind.Note) _checking.Add(question.Id);
         }
     }
 
-    // A box just opened takes the typing.
+    // A question just opened, or the first one wrong, takes the focus.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (_focus is { } id && _boxes.TryGetValue(id, out var box))
+        if (_focus is { } id && _fields.TryGetValue(id, out var field))
         {
             _focus = null;
-            await box.FocusAsync();
+            await field.FocusAsync();
         }
     }
-
-    private RenderFragment Choice(bool many, bool picked, string label, string? description, Func<Task> toggle) => __builder =>
-    {
-        <RowButton Class="@($"question-form__option {(picked ? "is-picked" : null)}")" Disabled="@Busy"
-                   role="@(many ? "checkbox" : "radio")" aria-checked="@(picked ? "true" : "false")" OnClick="toggle">
-            <span class="@($"question-form__mark {(many ? "is-box" : "is-ring")}")" aria-hidden="true">
-                @if (picked)
-                {
-                    <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
-                }
-            </span>
-            <span class="question-form__text">
-                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@label</Typography>
-                @if (description is { Length: > 0 })
-                {
-                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@description</Typography>
-                }
-            </span>
-        </RowButton>
-    };
 
     private FormAnswer AnswerOf(string id) => _answers.TryGetValue(id, out var answer) ? answer : FormAnswer.None;
 
-    // An answer, read back: its choices, then their own words.
+    // Shown once the main action was pressed, or once a changed question was left.
+    private string? ShownError(FormQuestion question) =>
+        _tried || _left.Contains(question.Id) ? FormRules.Check(question, AnswerOf(question.Id)) : null;
+
+    // An answer, read back: its choices and their own words, or what it holds.
     private static string Said(FormQuestion question, FormAnswer answer)
     {
         var parts = answer.Picked.ToList();
+        switch (question.Kind)
+        {
+            case FormQuestionKind.Money when answer.Number is { } amount:
+                return "₦" + FormRules.Grouped(amount);
+            case FormQuestionKind.Number when answer.Number is { } count:
+                return FormRules.Grouped(count);
+            case FormQuestionKind.Phone when answer.Phone is { } phone:
+                return FormRules.SayPhone(phone);
+            case FormQuestionKind.Consent:
+                return answer.Agreed == true ? "Yes" : "No";
+            case FormQuestionKind.Date or FormQuestionKind.DateTime when answer.Date is { } date:
+                return date.ToString("d MMM yyyy", CultureInfo.InvariantCulture) + (answer.Time is { } time ? ", " + time.ToString("h:mm tt", CultureInfo.InvariantCulture) : string.Empty);
+            case FormQuestionKind.Tags:
+                return string.Join(", ", answer.Items ?? []);
+            case FormQuestionKind.Photos:
+                return (answer.Files?.Count ?? 0) == 1 ? "1 photo" : $"{answer.Files?.Count ?? 0} photos";
+        }
         if (!string.IsNullOrWhiteSpace(answer.Text)) parts.Add(answer.Text.Trim());
         return string.Join(", ", parts);
     }
@@ -196,56 +245,39 @@
     private void Open(FormQuestion question)
     {
         _checking.Remove(question.Id);
-        if (question.Kind == FormQuestionKind.Text) _focus = question.Id;
-    }
-
-    private Task ToggleAsync(FormQuestion question, string label)
-    {
-        if (Busy) return Task.CompletedTask;
-        var answer = AnswerOf(question.Id);
-        var picked = answer.Picked.ToList();
-        var text = answer.Text;
-        if (!picked.Remove(label))
-        {
-            if (question.Kind == FormQuestionKind.One)
-            {
-                // One choice: a picked row replaces their own words.
-                picked.Clear();
-                text = null;
-                _other.Remove(question.Id);
-            }
-            picked.Add(label);
-        }
-        return SetAsync(question, new(InOrder(question, picked), text));
-    }
-
-    // "Something else": opens a box for their own words (one choice: in place of a picked row); again, closes it.
-    private Task ToggleOtherAsync(FormQuestion question)
-    {
-        if (Busy) return Task.CompletedTask;
-        var answer = AnswerOf(question.Id);
-        if (_other.Remove(question.Id)) return SetAsync(question, new(answer.Picked, null));
-        _other.Add(question.Id);
         _focus = question.Id;
-        return SetAsync(question, new(question.Kind == FormQuestionKind.One ? [] : answer.Picked, answer.Text));
     }
-
-    private Task SetTextAsync(FormQuestion question, string? value) => SetAsync(question, new([], value));
-
-    private Task SetOtherAsync(FormQuestion question, string? value) => SetAsync(question, new(AnswerOf(question.Id).Picked, value));
 
     private Task SetAsync(FormQuestion question, FormAnswer answer)
     {
         _answers[question.Id] = answer;
+        _changed.Add(question.Id);
         return OnChange.InvokeAsync(Snapshot());
     }
 
-    private static IReadOnlyList<string> InOrder(FormQuestion question, List<string> picked) =>
-        (question.Options ?? []).Select(option => option.Label).Where(picked.Contains).ToList();
+    private void Leave(FormQuestion question)
+    {
+        if (_changed.Contains(question.Id)) _left.Add(question.Id);
+    }
 
     private IReadOnlyDictionary<string, FormAnswer> Snapshot() => new Dictionary<string, FormAnswer>(_answers);
 
-    private Task SubmitAsync() => OnSubmit.InvokeAsync(Snapshot());
+    // The main action checks every answer first; the first one wrong opens (if it was a line to check) and takes the focus.
+    private async Task SubmitAsync()
+    {
+        if (Busy) return;
+        _tried = true;
+        var wrong = Questions.FirstOrDefault(question => FormRules.Check(question, AnswerOf(question.Id)) is not null);
+        if (wrong is not null)
+        {
+            _checking.Remove(wrong.Id);
+            _focus = wrong.Id;
+            return;
+        }
+        await OnSubmit.InvokeAsync(Snapshot());
+    }
 
     private Task DecideAsync() => OnDecide.InvokeAsync(Snapshot());
+
+    private Task SkipAsync() => OnSkip.InvokeAsync(Snapshot());
 }

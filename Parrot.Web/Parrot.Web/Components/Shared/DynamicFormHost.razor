@@ -1,0 +1,132 @@
+@using Parrot.Web.Features.DynamicForms
+@using Parrot.Web.Services
+@inject IDynamicFormSource Forms
+@inject ToastService Toasts
+@inject UserClock Clock
+@inject ILogger<DynamicFormHost> Log
+
+@* A flow of generated forms, ready to drop on a page (designer, 27 October 2026): <DynamicFormHost Flow="agent-setup"
+   SubjectId="@agentId" OnDone="..." />. It asks for the first form, draws it (QuestionForm, each question through
+   DynamicQuestion), sends the answers when the owner approves, decides or skips, and shows the next form, until
+   the flow is done. While the next step is being prepared it says so; if a step can't be fetched or saved it
+   says that plainly, with Try again, and nothing the owner entered is lost. A confirmation goes in a toast.
+   Until the backend's endpoints exist (IDynamicFormSource), it says the step isn't ready yet. *@
+
+@if (!Forms.Available)
+{
+    <EmptyState Glyph="IconName.RiTimeFill" Size="EmptyStateSize.Panel" Title="This step isn't ready yet"
+                Description="It will ask you a few questions here once it's set up." />
+}
+else if (_loading)
+{
+    <LoadingState Title="Getting the next step" Description="This takes a moment." />
+}
+else if (_loadFailed)
+{
+    <InlineError Message="We couldn't get the next step. Check your connection and try again.">
+        <Action><Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="StartAsync">Try again</Button></Action>
+    </InlineError>
+}
+else if (_form is { } form)
+{
+    <QuestionForm @key="form.Id"
+                  Title="@form.Title"
+                  Subtitle="@form.Subtitle"
+                  Questions="form.Questions"
+                  Answers="form.Prefilled"
+                  Review="@(form.Prefilled.Count > 0)"
+                  Changes="form.Changes"
+                  Step="form.Step"
+                  Steps="form.Steps"
+                  SubmitLabel="@form.SubmitLabel"
+                  OnSubmit="answers => SendAsync(answers, DynamicFormEnd.Submitted)"
+                  OnDecide="@(form.AllowDecide ? EventCallback.Factory.Create<IReadOnlyDictionary<string, FormAnswer>>(this, answers => SendAsync(answers, DynamicFormEnd.Decided)) : default)"
+                  OnSkip="@(form.AllowSkip ? EventCallback.Factory.Create<IReadOnlyDictionary<string, FormAnswer>>(this, answers => SendAsync(answers, DynamicFormEnd.Skipped)) : default)"
+                  OnCancel="OnCancel"
+                  Busy="_sending"
+                  SaveError="@_saveError"
+                  Today="Clock.Today"
+                  Class="@Class" />
+}
+
+@code {
+    /// <summary>The flow the forms belong to ("agent-setup", "knowledge").</summary>
+    [Parameter, EditorRequired] public string Flow { get; set; } = "";
+
+    /// <summary>What they're about: an agent's or a topic's id.</summary>
+    [Parameter] public string? SubjectId { get; set; }
+
+    /// <summary>The flow is done, with its confirmation (already shown in a toast), if any.</summary>
+    [Parameter] public EventCallback<string?> OnDone { get; set; }
+
+    /// <summary>Omit it and there is no "Cancel".</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private DynamicForm? _form;
+    private bool _loading, _loadFailed, _sending;
+    private string? _saveError;
+    private string? _for;
+
+    private DynamicFormRequest Request => new(Flow, SubjectId);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{Flow}|{SubjectId}";
+        if (key == _for || !Forms.Available) return;
+        _for = key;
+        await StartAsync();
+    }
+
+    private async Task StartAsync()
+    {
+        _loading = true;
+        _loadFailed = false;
+        _form = null;
+        try
+        {
+            await ShowAsync(await Forms.StartAsync(Request));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or DynamicFormException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            Log.LogWarning(exception, "The first form of {Flow} couldn't be fetched.", Flow);
+            _loadFailed = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SendAsync(IReadOnlyDictionary<string, FormAnswer> answers, DynamicFormEnd ended)
+    {
+        if (_form is not { } form || _sending) return;
+        _sending = true;
+        _saveError = null;
+        try
+        {
+            await ShowAsync(await Forms.SendAsync(Request, DynamicFormWriter.Write(form, answers, ended)));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or DynamicFormException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            // The form stays as it was, with everything they entered.
+            Log.LogWarning(exception, "The answers to {Form} couldn't be saved.", form.Id);
+            _saveError = "That didn't save. Check your connection and try again.";
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    // The next form, or the end of the flow.
+    private async Task ShowAsync(DynamicFormStep step)
+    {
+        if (step.Problems is { Count: > 0 } problems)
+            Log.LogWarning("Form {Form} of {Flow} was read with changes: {Problems}", step.Form?.Id, Flow, string.Join(" ", problems));
+        if (step.Message is { Length: > 0 } message) Toasts.Show(message);
+        _form = step.Form;
+        if (step.Form is null) await OnDone.InvokeAsync(step.Message);
+    }
+}

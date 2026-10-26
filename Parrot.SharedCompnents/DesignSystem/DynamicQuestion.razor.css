@@ -1,0 +1,116 @@
+/* One question: a group named by its question, the control, and a line under it for a helper or an error.
+   Option rows as a ChoicePrompt's (moved here from QuestionForm, unchanged). */
+.dynamic-question {
+  /* Gaps in the token set: the tick box / ring size and its line, as in ChoicePrompt; the width a choice starts from. */
+  --ds-dynamic-question-mark: 18px;
+  --ds-dynamic-question-ring: 1.5px;
+  --ds-dynamic-question-choice: 160px;
+
+  display: grid;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  border: 0;
+  outline: none;
+}
+
+.dynamic-question legend {
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+}
+.dynamic-question__optional { color: var(--colors-text-muted); }
+
+.dynamic-question ::deep .dynamic-question__helper,
+.dynamic-question ::deep .dynamic-question__error { margin: var(--spacing-none); }
+.dynamic-question ::deep .dynamic-question__helper { color: var(--colors-text-muted); }
+.dynamic-question ::deep .dynamic-question__error { color: var(--colors-feedback-destructive-text); }
+
+/* Choices side by side, each at least as wide as its words, filling each row evenly. */
+.dynamic-question__options { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+.dynamic-question__other { flex: 1 1 100%; }
+
+.dynamic-question__options ::deep .dynamic-question__option {
+  display: grid;
+  flex: 1 1 var(--ds-dynamic-question-choice);
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-sm);
+  align-items: center;
+  min-width: min(100%, max-content);
+  min-height: var(--spacing-4xl);
+  padding: var(--spacing-xs) var(--spacing-md);
+  text-align: left;
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.dynamic-question__options ::deep .dynamic-question__option:hover { background: var(--colors-interaction-hover); }
+.dynamic-question__options ::deep .dynamic-question__option.is-picked {
+  background: var(--colors-accent-brand-subtle);
+  border-color: var(--colors-accent-brand-border);
+}
+.dynamic-question__options ::deep .dynamic-question__option:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 var(--ds-dynamic-question-ring) var(--colors-interaction-focus);
+}
+.dynamic-question__options ::deep .dynamic-question__option:disabled { cursor: not-allowed; }
+
+.dynamic-question__text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.dynamic-question__text ::deep small { color: var(--colors-text-muted); }
+
+/* A tick box for several, a ring for one. */
+.dynamic-question__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-dynamic-question-mark);
+  height: var(--ds-dynamic-question-mark);
+  color: var(--colors-text-on-primary);
+  box-shadow: inset 0 0 0 var(--ds-dynamic-question-ring) var(--colors-surface-input);
+}
+.dynamic-question__mark.is-box { border-radius: var(--radius-radius-sm); }
+.dynamic-question__mark.is-ring { border-radius: var(--radius-radius-full); }
+.dynamic-question__options ::deep .is-picked .dynamic-question__mark {
+  background: var(--colors-brand-primary);
+  box-shadow: inset 0 0 0 var(--ds-dynamic-question-ring) var(--colors-brand-primary);
+}
+
+/* A text answer with something wrong: its edge says so, as a field's does. */
+.dynamic-question ::deep .is-error textarea,
+.dynamic-question ::deep textarea.is-error { border-color: var(--colors-feedback-destructive-border); }
+
+/* Something wrong with a choice: its rows, chips or date button take the error edge, as a field does. */
+.dynamic-question.has-error .dynamic-question__options ::deep .dynamic-question__option:not(.is-picked),
+.dynamic-question.has-error ::deep .ds-choice-chip,
+.dynamic-question.has-error ::deep .dynamic-question__date-trigger { border-color: var(--colors-feedback-destructive-border); }
+
+/* Chips: a wrapping row. */
+.dynamic-question__chips { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); }
+
+/* Search: once chosen, the choice to read, with Change. */
+.dynamic-question__chosen {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+  min-height: var(--spacing-4xl);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+
+/* A date: the button says it, or what to do, quieter. */
+.dynamic-question ::deep .dynamic-question__date { justify-self: start; }
+.dynamic-question ::deep .dynamic-question__date-trigger.is-empty { color: var(--colors-text-muted); }
+
+/* Something to read, with no answer: a quiet rounded panel, never a coloured edge. */
+.dynamic-question__note {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  padding: var(--spacing-md);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+.dynamic-question__note ::deep p { margin: var(--spacing-none); }
+.dynamic-question__note ::deep .dynamic-question__note-icon { flex: none; color: var(--colors-text-muted); }
