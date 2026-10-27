@@ -227,9 +227,9 @@ services:
       EmailSettings__FromAddress: ${SMTP_FROM_ADDRESS:-no-reply@${APP_DOMAIN}}
       EmailSettings__FromName: ${SMTP_FROM_NAME:-Parrot}
       EmailSettings__BaseUrl: ${PUBLIC_SCHEME:-https}://${APP_DOMAIN}
-      # Off lets anyone sign up without proving they own the address. Turn it
-      # on as soon as the SMTP settings above deliver mail.
-      FeatureFlags__RequireEmailVerification: ${REQUIRE_EMAIL_VERIFICATION:-false}
+      # On by default, and the FeatureFlags row (seeded on at startup) wins over it.
+      # Off lets anyone sign up without proving they own the address.
+      FeatureFlags__RequireEmailVerification: ${REQUIRE_EMAIL_VERIFICATION:-true}
       # The app writes to the bucket over the compose network; the URLs it
       # hands back are read by the browser through nginx. A "-" default (no
       # colon) lets STORAGE_SERVICE_URL be set to empty, which is how the app
