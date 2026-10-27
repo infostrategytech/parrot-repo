@@ -95,7 +95,9 @@
     minmax(var(--ds-contacts-col-name), 1.4fr)
     minmax(var(--ds-contacts-col-channels), 1fr)
     var(--ds-contacts-col-last)
-    var(--ds-contacts-col-tasks);
+    var(--ds-contacts-col-tasks)
+    var(--ds-contacts-col-orders)
+    var(--ds-contacts-col-actions);
   gap: var(--spacing-md);
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
@@ -108,6 +110,8 @@
   --ds-contacts-col-channels: 140px;
   --ds-contacts-col-last: 140px;
   --ds-contacts-col-tasks: 110px;
+  --ds-contacts-col-orders: 72px;
+  --ds-contacts-col-actions: 40px;
   --ds-contacts-head-min: 45px;
 }
 

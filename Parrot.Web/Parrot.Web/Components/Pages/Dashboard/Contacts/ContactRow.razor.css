@@ -48,3 +48,28 @@
 .contact-row__tasks { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-secondary); }
 .contact-row__tasks > ::deep svg { color: var(--colors-icon-brand); }
 .contact-row__tasks ::deep .contact-row__none { color: var(--colors-text-muted); }
+
+::deep .contact-row__orders { color: var(--colors-text-secondary); }
+
+.contact-row__actions { position: relative; z-index: 1; display: flex; justify-content: flex-end; }
+
+.contact-row__view {
+  /* No token for a compact round control. */
+  --ds-row-view: 32px;
+
+  display: grid;
+  place-items: center;
+  width: var(--ds-row-view);
+  height: var(--ds-row-view);
+  padding: var(--spacing-none);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border: 0;
+  border-radius: var(--radius-radius-full);
+  cursor: pointer;
+}
+
+.contact-row__view:hover {
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+}

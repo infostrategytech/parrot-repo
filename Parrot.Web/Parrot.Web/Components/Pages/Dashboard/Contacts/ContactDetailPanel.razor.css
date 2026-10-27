@@ -91,3 +91,42 @@
 @keyframes panel-in {
   from { transform: translateX(100%); }
 }
+
+/* Media section — reuses .customer-media-grid / .customer-media-tile from CustomerPanel.razor.css */
+.contact-media__loading { pointer-events: none; }
+.contact-media__skeleton {
+  /* --ds-skeleton-duration: no token exists yet; 1.4s matches Aurora's other skeletons */
+  --ds-skeleton-duration: 1.4s;
+  aspect-ratio: 1;
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-md);
+  animation: contact-media-pulse var(--ds-skeleton-duration) ease-in-out infinite;
+}
+@keyframes contact-media-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.contact-media__files { display: grid; gap: var(--spacing-xs); margin-top: var(--spacing-sm); }
+.contact-media__file {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-xs);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.contact-media__file:last-child { border-bottom-color: transparent; }
+.contact-media__file-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-md);
+}
+.contact-media__file-words { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; color: inherit; text-decoration: none; }
+.contact-media__file-words ::deep strong { color: var(--colors-text-primary); overflow-wrap: anywhere; }
+.contact-media__file-words ::deep small { color: var(--colors-text-muted); }
+.customer-muted { color: var(--colors-text-muted); }

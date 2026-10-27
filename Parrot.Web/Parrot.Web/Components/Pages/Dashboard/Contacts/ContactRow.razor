@@ -47,6 +47,22 @@
             <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="contact-row__none">@(OpenTasks is null ? "—" : "None")</Typography>
         }
     </div>
+
+    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose Class="contact-row__orders" role="cell">
+        @Contact.OrderCount
+    </Typography>
+
+    <div class="contact-row__actions" role="cell">
+        @* A plain control rather than a Button: the table wants a 32px circle that sits inside the row,
+           and none of the Button sizes is that. Above the name's cover, which opens the same panel. *@
+        <button type="button"
+                class="contact-row__view"
+                aria-label="@($"View {Contact.Name}")"
+                tabindex="-1"
+                @onclick="OnOpen">
+            <Icon Name="IconName.RiEyeFill" Size="IconSize.Sm" />
+        </button>
+    </div>
 </article>
 
 @code {

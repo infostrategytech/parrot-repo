@@ -1,0 +1,26 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* How far along something is (designer, 21 October 2026: importing customers one by one). A track and its
+   fill, with the words above it saying what it counts ("Adding 12 of 48"). Announced as a progress bar. *@
+<div class="ds-progress @Class">
+    @if (!string.IsNullOrWhiteSpace(Label))
+    {
+        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="ds-progress__label">@Label</Typography>
+    }
+    <div class="ds-progress__track" role="progressbar" aria-valuemin="0" aria-valuemax="@Max" aria-valuenow="@Value"
+         aria-label="@(Label ?? "Progress")">
+        <div class="ds-progress__fill" style="@($"inline-size: {Percent}%")"></div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int Value { get; set; }
+    [Parameter] public int Max { get; set; } = 100;
+
+    /// <summary>What it counts, shown above the bar and read out with it.</summary>
+    [Parameter] public string? Label { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private string Percent => (Max <= 0 ? 0 : Math.Clamp(Value * 100.0 / Max, 0, 100)).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+}

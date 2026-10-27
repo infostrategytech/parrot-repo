@@ -27,7 +27,7 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
         string? stage = null,
         string? channel = null,
         int skip = 0,
-        int take = 50,
+        int take = 15,
         CancellationToken cancellationToken = default)
     {
         take = Math.Clamp(take, 1, 100);
