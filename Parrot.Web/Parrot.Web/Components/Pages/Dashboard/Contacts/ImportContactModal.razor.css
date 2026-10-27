@@ -1,62 +1,144 @@
-/* The dropzone is a control with a dashed edge, drawn in the same tints as
-   Aurora's editor kind cards: muted at rest, brand when a file is chosen. */
-
-::deep .import__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
-
-.import__template {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-  align-items: center;
-  margin-top: var(--spacing-lg);
-}
-
-::deep .import__hint { color: var(--colors-text-subtle); }
-
-.import__dropzone {
-  display: grid;
-  justify-items: center;
-  gap: var(--spacing-xs);
-  width: 100%;
-  min-height: var(--ds-import-dropzone-min);
-  margin-top: var(--spacing-lg);
-  padding: var(--spacing-xl);
-  color: var(--colors-text-primary);
-  text-align: center;
-  background: var(--colors-surface-muted);
-  border: var(--ds-import-hairline) dashed var(--colors-surface-border);
-  border-radius: var(--radius-radius-xl);
-  cursor: pointer;
-}
-
-.import__dropzone {
-  /* Gaps in the token set: no border-width or control-size scale. */
+/* Importing customers: one place to bring a list in (the drop zone, or a pasted list), then what was found,
+   to check and correct, then adding. */
+.import {
+  /* Gaps in the token set: no border-width scale, drop-zone height or review-list height. */
   --ds-import-hairline: 1px;
-  --ds-import-dropzone-min: 140px;
-  --ds-import-icon: 40px;
+  --ds-import-drop: 232px;
+  --ds-import-list: min(52vh, 480px);
+  --ds-import-measure: 460px;
+
+  display: grid;
+  gap: var(--spacing-lg);
+  color: var(--colors-text-primary);
+  text-align: start;
 }
+.import ::deep p,
+.import ::deep h3 { margin: var(--spacing-none); }
+.import ::deep .import__muted { color: var(--colors-text-muted); }
+.import ::deep .import__secondary { color: var(--colors-text-secondary); }
+.import ::deep .import__problem { color: var(--colors-feedback-warning-text); }
 
-.import__dropzone:hover { background: var(--colors-interaction-hover); }
-
-.import__dropzone.is-ready {
-  border-color: var(--colors-brand-primary);
-  background: var(--colors-accent-brand-subtle);
+/* The drop zone: the dialog's surface with a dashed edge, never grey (grey reads as disabled). A dropped file, or a click
+   anywhere but the buttons, reaches the invisible file input under them. */
+.import__drop {
+  position: relative;
+  display: grid;
+  gap: var(--spacing-xl);
+  place-items: center;
+  align-content: center;
+  min-height: var(--ds-import-drop);
+  padding: var(--spacing-3xl) var(--spacing-xl);
+  text-align: center;
+  /* The dialog's own surface, in light and dark. */
+  background: transparent;
+  border: var(--ds-import-hairline) dashed var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+  transition: border-color var(--ds-motion-fast) ease, background var(--ds-motion-fast) ease;
 }
-
-.import__dropzone-icon {
+.import__drop[hidden],
+.import__template[hidden] { display: none; }
+.import__drop:hover,
+.import__drop.is-dragging { background: var(--colors-accent-brand-subtle); border-color: var(--colors-brand-primary); }
+.import__drop ::deep .import__file { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.import__drop-mark {
+  position: relative;
   display: grid;
   place-items: center;
-  width: var(--ds-import-icon);
-  height: var(--ds-import-icon);
-  margin-bottom: var(--spacing-xs);
-  color: var(--colors-text-secondary);
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
+  pointer-events: none;
+}
+.import__drop-words { position: relative; display: grid; gap: var(--spacing-2xs); justify-items: center; max-width: var(--ds-import-measure); margin-top: calc(var(--spacing-sm) * -1); pointer-events: none; }
+.import__drop-words ::deep strong { color: var(--colors-text-primary); }
+/* Above the file input, so they're buttons, not a way to choose a file. */
+.import__drop-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: center; }
+
+/* The template: a quiet line under the zone, for the few who use a spreadsheet. */
+.import__template { display: flex; flex-wrap: wrap; gap: var(--spacing-2xs); align-items: center; justify-content: center; }
+/* Read as a link in the sentence, not a second button row. */
+.import__template ::deep .import__template-link { padding-inline: var(--spacing-xs); color: var(--colors-brand-primary); }
+
+.import ::deep .import__paste textarea { font-variant-numeric: tabular-nums; }
+
+/* What was found: where from, then what needs a look, then what's ready. */
+.import__source {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  /* An edge too: in dark mode the muted fill is the dialog's own (a gap in the token set). */
+  border: var(--ds-import-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.import__source-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
+  color: var(--colors-brand-primary);
   background: var(--colors-surface-card);
   border-radius: var(--radius-radius-full);
 }
+.import__source-words { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.import__source-words ::deep strong { color: var(--colors-text-primary); }
 
-.import__dropzone.is-ready .import__dropzone-icon {
-  color: var(--colors-brand-primary-foreground);
-  background: var(--colors-brand-primary);
+.import__group { display: grid; gap: var(--spacing-xs); }
+.import__group ::deep h3 { color: var(--colors-text-secondary); }
+.import__group ul {
+  display: grid;
+  max-height: var(--ds-import-list);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  overflow-y: auto;
+  list-style: none;
 }
+.import__group ::deep > .ds-button { justify-self: start; }
 
-.import__dropzone ::deep small { color: var(--colors-text-muted); }
+.import__row {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-xs);
+  border-bottom: var(--ds-import-hairline) solid var(--colors-surface-border);
+}
+.import__row:last-child { border-bottom-color: transparent; }
+.import__row-words { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.import__row-words ::deep span { overflow-wrap: anywhere; }
+.import__row-actions { display: flex; flex: none; gap: var(--spacing-2xs); align-items: center; }
+
+/* A row being corrected: its fields side by side, then what's still wrong and Done. */
+.import__row.is-editing {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--colors-surface-muted);
+  border: var(--ds-import-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.import__fields { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: var(--spacing-sm); }
+.import__row-foot { display: flex; gap: var(--spacing-md); align-items: center; justify-content: flex-end; }
+.import__row-foot ::deep .import__problem { flex: 1; }
+
+/* Done: how many, said once. */
+.import__done { display: grid; gap: var(--spacing-xs); justify-items: center; padding-block: var(--spacing-xl); text-align: center; }
+.import__done-mark {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  margin-bottom: var(--spacing-xs);
+  color: var(--colors-feedback-success-text);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-full);
+}
+.import__done-mark.is-partial { color: var(--colors-feedback-warning-text); background: var(--colors-feedback-warning-subtle); }
+
+@media (max-width: 760px) {
+  .import__fields { grid-template-columns: minmax(0, 1fr); }
+  .import__row { align-items: flex-start; }
+}

@@ -111,6 +111,8 @@ builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddScoped<ConversationClient>();
 builder.Services.AddScoped<CustomerClient>();
+// No photo-reading service yet; photos are not offered in the import modal until one exists.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Customers.ICustomerListReader, Parrot.Web.Features.Dashboard.Customers.UnavailableCustomerListReader>();
 builder.Services.AddScoped<InboxUnreadState>();
 // The API has none of the extra inbox actions yet, so the inbox hides them.
 builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
