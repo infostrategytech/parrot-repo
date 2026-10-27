@@ -41,23 +41,23 @@
         @Contact.LastInteraction
     </Typography>
 
-    <div class="contact-row__tags" role="cell">
+    @* <div class="contact-row__tags" role="cell">
         @foreach (var tag in Contact.Tags)
         {
             <StatusBadge Tone="StatusTone.Neutral">@tag</StatusBadge>
         }
-    </div>
+    </div> *@
 
     <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose Class="contact-row__orders" role="cell">
         @Contact.OrderCount
     </Typography>
 
-    <div class="contact-row__stage" role="cell">
+    @* <div class="contact-row__stage" role="cell">
         @if (!string.IsNullOrEmpty(Contact.Stage))
         {
             <StatusBadge Tone="@ContactCopy.StageTone(Contact.Stage)">@ContactCopy.Stage(Contact.Stage)</StatusBadge>
         }
-    </div>
+    </div> *@
 
     <div class="contact-row__actions" role="cell">
         @* A plain control rather than a Button: the table wants a 32px circle

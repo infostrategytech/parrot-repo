@@ -152,7 +152,7 @@
 <ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" OnUpdated="HandleContactUpdated" />
 
 @code {
-    private static readonly string[] Columns = ["Name", "Channels", "Last interaction", "Tags", "Orders", "Stage"];
+    private static readonly string[] Columns = ["Name", "Channels", "Last interaction", /* "Tags", */ "Orders" /* , "Stage" */];
 
     private bool _showAdd;
     private bool _showImport;
