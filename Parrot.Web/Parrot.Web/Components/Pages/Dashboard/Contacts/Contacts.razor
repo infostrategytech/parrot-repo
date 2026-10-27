@@ -6,32 +6,39 @@
 @using Parrot.Web.Components.Pages.Dashboard.Contacts
 @using Parrot.Web.Services
 @using Parrot.Web.Services.Realtime
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@using Parrot.Web.Components.Pages.Dashboard.TaskRequests
 @inject CustomerClient CustomerClient
 @inject RealtimeClient Realtime
+@inject ITaskStore Tasks
+@inject UserClock Clock
+@inject ToastService Toasts
+@inject NavigationManager Nav
 
 <PageTitle>Customers · OmniAI</PageTitle>
 
 @* The customer list. Layout follows Aurora's Products page: content capped
-   and centred, a toolbar of tabs-free filters beside a search box, and a
-   grid table whose middle columns are fixed so every row lines up. *@
+   and centred, search and the channel filter on the right, and a grid table
+   whose columns are fixed so every row lines up. Each customer shows what's
+   open for them, and their panel adds a task (designer, 27 October 2026). *@
 
 <div class="contacts">
     <header class="contacts__header">
         <div class="contacts__heading">
             <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Customers</Typography>
             <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="contacts__lede">
-                Everyone who has messaged you, with the channels, tags and task requests behind each name.
+                Everyone who has messaged your business, and anyone you've added or imported.
             </Typography>
         </div>
 
         <div class="contacts__actions">
             <Button Variant="ButtonVariant.Secondary" @onclick="() => _showImport = true">
                 <IconLeft><Icon Name="IconName.RiUploadCloud2Fill" /></IconLeft>
-                <ChildContent>Import CSV</ChildContent>
+                <ChildContent>Import customers</ChildContent>
             </Button>
             <Button @onclick="() => _showAdd = true">
                 <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-                <ChildContent>Add contact</ChildContent>
+                <ChildContent>Add customer</ChildContent>
             </Button>
         </div>
     </header>
@@ -41,41 +48,25 @@
             <Icon Name="IconName.RiSearch2Fill" Size="IconSize.Sm" />
             <input class="@TextStyle.BodySmallRegular.ToClassName()"
                    type="search"
-                   placeholder="Search by name, phone, username or tag"
+                   placeholder="Search by name, number or username"
                    aria-label="Search customers"
                    value="@_search"
                    @oninput="OnSearchInput" />
         </div>
 
-        <div class="contacts__controls-right">
-            <FilterPopover Label="@StageLabel"
-                           Title="Stage"
-                           Subtitle="Filter by where each customer is"
-                           Open='@(_openDropdown == "stage")'
-                           OpenChanged="@(open => _openDropdown = open ? "stage" : null)">
-                @foreach (var opt in _stageOptions)
-                {
-                    var val = opt.Value;
-                    <PopoverOption Label="@opt.Label"
-                                   Active="@(_stageFilter == val)"
-                                   OnSelect="() => SelectStage(val)" />
-                }
-            </FilterPopover>
-
-            <FilterPopover Label="@ChannelLabel"
-                           Title="Channels"
-                           Subtitle="Filter by where they message you"
-                           Open='@(_openDropdown == "channel")'
-                           OpenChanged="@(open => _openDropdown = open ? "channel" : null)">
-                @foreach (var opt in _channelOptions)
-                {
-                    var val = opt.Value;
-                    <PopoverOption Label="@opt.Label"
-                                   Active="@(_channelFilter == val)"
-                                   OnSelect="() => SelectChannel(val)" />
-                }
-            </FilterPopover>
-        </div>
+        <FilterPopover Label="@ChannelLabel"
+                       Title="Channels"
+                       Subtitle="Filter by where they message you"
+                       Open='@(_openDropdown == "channel")'
+                       OpenChanged="@(open => _openDropdown = open ? "channel" : null)">
+            @foreach (var opt in _channelOptions)
+            {
+                var val = opt.Value;
+                <PopoverOption Label="@opt.Label"
+                               Active="@(_channelFilter == val)"
+                               OnSelect="() => SelectChannel(val)" />
+            }
+        </FilterPopover>
     </section>
 
     @if (_error is not null)
@@ -114,13 +105,12 @@
                                     Class="ds-overline"
                                     role="columnheader">@column</Typography>
                     }
-                    <span role="columnheader" aria-label="Actions"></span>
                 </div>
 
                 <div class="contacts__table-body">
                     @foreach (Contact contact in _contacts)
                     {
-                        <ContactRow Contact="contact" OnOpen="() => OpenDetail(contact)" />
+                        <ContactRow Contact="contact" OpenTasks="OpenTasksFor(contact)" Now="_now" Zone="Clock.Zone" OnOpen="() => OpenDetail(contact)" />
                     }
                 </div>
             </div>
@@ -149,16 +139,23 @@
 
 <AddContactModal Visible="_showAdd" OnCancel="CloseModals" OnSave="HandleAddContact" />
 <ImportContactModal Visible="_showImport" OnCancel="CloseModals" />
-<ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" OnUpdated="HandleContactUpdated" />
+<ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" Behind="_taskOpen"
+                    OnAddTask="() => _taskOpen = true" OnPreview="item => _panelMedia = item" />
+
+@* Over the panel, not inside it: the panel scrolls and slides, and would confine them to itself. *@
+<MediaViewer Item="_panelMedia" OnClose="() => _panelMedia = null" />
+@if (_selectedContact is { } forTask)
+{
+    <NewTaskDialog Open="_taskOpen" Customer="TaskCustomerFor(forTask)" OnClose="() => _taskOpen = false" OnCreated="TaskAddedAsync" />
+}
 
 @code {
-    private static readonly string[] Columns = ["Name", "Channels", "Last interaction", "Tags", "Orders", "Stage"];
+    private static readonly string[] Columns = ["Customer", "Channels", "Last message", "Open tasks"];
 
     private bool _showAdd;
     private bool _showImport;
     private Contact? _selectedContact;
     private string _search = string.Empty;
-    private string _stageFilter = string.Empty;
     private string _channelFilter = string.Empty;
     private string? _openDropdown;
     private int _page = 1;
@@ -171,15 +168,6 @@
 
     private record FilterOption(string Value, string Label);
 
-    private List<FilterOption> _stageOptions =
-    [
-        new("", "All stages"),
-        new("New Lead", "New Lead"),
-        new("Interested", "Interested"),
-        new("Customer", "Customer"),
-        new("Vip", "VIP"),
-    ];
-
     private List<FilterOption> _channelOptions =
     [
         new("", "All channels"),
@@ -189,7 +177,6 @@
         new("tiktok", "TikTok"),
     ];
 
-    private string StageLabel => _stageOptions.FirstOrDefault(o => o.Value == _stageFilter)?.Label ?? "All stages";
     private string ChannelLabel => _channelOptions.FirstOrDefault(o => o.Value == _channelFilter)?.Label ?? "All channels";
 
     private int TotalPages => Math.Max(1, (int)Math.Ceiling(_total / (double)PageSize));
@@ -197,21 +184,58 @@
     private int PageStart => _total == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
     private int PageEnd => Math.Min(CurrentPage * PageSize, _total);
 
+    // Their open tasks, for the Open tasks column; null while tasks can't be kept.
+    private IReadOnlyList<TaskRequest>? _openTasks;
+    private DateTime _now = DateTime.UtcNow;
+    private bool _taskOpen;
+    private MediaViewerItem? _panelMedia;
+
     protected override async Task OnInitializedAsync()
     {
         Realtime.MessageReceived += OnMessageReceived;
         Realtime.Reconnected += OnReconnected;
-        await LoadAsync();
+        Tasks.Changed += OnTasksChanged;
+        Clock.Changed += OnClockChanged;
+        await Task.WhenAll(LoadAsync(), LoadTasksAsync());
         await Realtime.StartAsync();
     }
 
-    private async Task SelectStage(string val)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _stageFilter = val;
-        _openDropdown = null;
-        _page = 1;
-        await LoadAsync();
+        if (firstRender) await Clock.ReadAsync();
     }
+
+    private async Task LoadTasksAsync()
+    {
+        if (!Tasks.Available) return;
+        try { _openTasks = [.. (await Tasks.ListAsync()).Where(task => !task.IsClosed)]; }
+        // The column says "—" rather than the page failing over a count.
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { }
+    }
+
+    private int? OpenTasksFor(Contact contact)
+    {
+        if (_openTasks is null) return null;
+        var conversations = contact.ConversationIds;
+        var unlinked = contact.Identities.Count == 0 ? contact.Name : null;
+        return _openTasks.Count(task => TaskWords.IsFor(task, conversations, unlinked));
+    }
+
+    // A new task is for the conversation they last wrote in, so it shows in the inbox beside it.
+    private static TaskCustomer TaskCustomerFor(Contact contact) => contact.Primary is { } primary
+        ? new(contact.Name, primary.Platform, ContactCopy.Handle(primary), $"{primary.ConnectionId}:{primary.Sender}")
+        : new(contact.Name, contact.ChannelPlatform ?? "", contact.ChannelIdentifier is { Length: > 0 } reach ? reach : null);
+
+    private Task TaskAddedAsync(TaskRequest task)
+    {
+        _taskOpen = false;
+        Toasts.Show(new ToastMessage("Task added.", ActionLabel: "View", OnAction: () => Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.Id)}")));
+        return Task.CompletedTask;
+    }
+
+    private void OnTasksChanged() => _ = InvokeAsync(async () => { await LoadTasksAsync(); StateHasChanged(); });
+
+    private void OnClockChanged() => _ = InvokeAsync(() => { _now = DateTime.UtcNow; StateHasChanged(); });
 
     private async Task SelectChannel(string val)
     {
@@ -231,7 +255,6 @@
     private async Task ClearFilters()
     {
         _search = string.Empty;
-        _stageFilter = string.Empty;
         _channelFilter = string.Empty;
         _page = 1;
         await LoadAsync();
@@ -253,11 +276,12 @@
             int skip = (CurrentPage - 1) * PageSize;
             CustomerPageDto page = await CustomerClient.ListAsync(
                 _search.Length > 0 ? _search : null,
-                _stageFilter.Length > 0 ? _stageFilter : null,
+                null,
                 _channelFilter.Length > 0 ? _channelFilter : null,
                 skip, PageSize, CancellationToken.None);
             _contacts = [.. page.Items.Select(ToContact)];
             _total = page.Total;
+            _now = DateTime.UtcNow;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
@@ -275,7 +299,7 @@
         Name = dto.Name,
         Stage = dto.Stage,
         Tags = dto.Tags,
-        LastInteraction = dto.LastSeenAt.HasValue ? FormatRelative(dto.LastSeenAt.Value) : "—",
+        LastSeenAt = dto.LastSeenAt,
         LastInteractionChannel = dto.LastSeenChannel ?? string.Empty,
         HasWhatsApp = dto.Identities.Any(i => i.Platform == "whatsapp"),
         HasInstagram = dto.Identities.Any(i => i.Platform == "instagram"),
@@ -285,26 +309,9 @@
         // Phone/ChannelPlatform/ChannelIdentifier are not in the list DTO; they load when the detail panel opens.
     };
 
-    private static string FormatRelative(DateTime utc)
-    {
-        TimeSpan diff = DateTime.UtcNow - utc;
-        if (diff.TotalMinutes < 2) return "just now";
-        if (diff.TotalMinutes < 60) return $"{(int)diff.TotalMinutes} minutes ago";
-        if (diff.TotalHours < 24) return $"{(int)diff.TotalHours} hours ago";
-        if (diff.TotalDays < 7) return $"{(int)diff.TotalDays} days ago";
-        return utc.ToLocalTime().ToString("d MMM yyyy");
-    }
-
     private void OpenDetail(Contact c) => _selectedContact = c;
-    private void CloseDetail() => _selectedContact = null;
+    private void CloseDetail() { _selectedContact = null; _taskOpen = false; }
     private void CloseModals() { _showAdd = false; _showImport = false; }
-
-    private void HandleContactUpdated(Contact updated)
-    {
-        int idx = _contacts.FindIndex(c => c.Id == updated.Id);
-        if (idx >= 0) _contacts[idx] = updated;
-        _selectedContact = updated;
-    }
 
     private async Task HandleAddContact(Contact draft)
     {
@@ -350,6 +357,8 @@
     {
         Realtime.MessageReceived -= OnMessageReceived;
         Realtime.Reconnected -= OnReconnected;
+        Tasks.Changed -= OnTasksChanged;
+        Clock.Changed -= OnClockChanged;
         return ValueTask.CompletedTask;
     }
 }

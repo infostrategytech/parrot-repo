@@ -42,19 +42,14 @@
 
 /* ── Controls ────────────────────────────────────────────────────────────── */
 
+/* Search and the channel filter, on the right above the table. */
 .contacts__controls {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-md);
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: var(--spacing-lg);
-}
-
-.contacts__controls-right {
-  display: flex;
   gap: var(--spacing-sm);
   align-items: center;
+  justify-content: flex-end;
+  margin-bottom: var(--spacing-lg);
 }
 
 .contacts__search {
@@ -83,8 +78,10 @@
 
 /* ── Table ───────────────────────────────────────────────────────────────── */
 
+/* The rows sit inside the card, their lines short of its edge (designer, 27 October 2026). */
 .contacts__table-wrap {
   overflow: hidden;
+  padding: var(--spacing-xs) var(--spacing-md);
   background: var(--colors-surface-card);
   border: var(--ds-contacts-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-2xl);
@@ -95,13 +92,10 @@
 .contacts__table ::deep .contact-row {
   display: grid;
   grid-template-columns:
-    minmax(var(--ds-contacts-col-name), 1.6fr)
-    var(--ds-contacts-col-channels)
+    minmax(var(--ds-contacts-col-name), 1.4fr)
+    minmax(var(--ds-contacts-col-channels), 1fr)
     var(--ds-contacts-col-last)
-    minmax(var(--ds-contacts-col-tags), 1fr)
-    var(--ds-contacts-col-orders)
-    var(--ds-contacts-col-stage)
-    var(--ds-contacts-col-actions);
+    var(--ds-contacts-col-tasks);
   gap: var(--spacing-md);
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
@@ -111,23 +105,18 @@
   /* No token scale describes a table column; these are measured against the
      longest real value in each. */
   --ds-contacts-col-name: 200px;
-  --ds-contacts-col-channels: 96px;
+  --ds-contacts-col-channels: 140px;
   --ds-contacts-col-last: 140px;
-  --ds-contacts-col-tags: 180px;
-  --ds-contacts-col-orders: 72px;
-  --ds-contacts-col-stage: 110px;
-  --ds-contacts-col-actions: 38px;
+  --ds-contacts-col-tasks: 110px;
   --ds-contacts-head-min: 45px;
 }
 
 .contacts__table-head {
   min-height: var(--ds-contacts-head-min);
   color: var(--colors-text-muted);
-  background: var(--colors-surface-background);
-  border-bottom: var(--ds-contacts-hairline) solid var(--colors-surface-border);
 }
 
-.contacts__table ::deep .contact-row + .contact-row {
+.contacts__table ::deep .contact-row {
   border-top: var(--ds-contacts-hairline) solid var(--colors-surface-border);
 }
 
@@ -137,9 +126,8 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-lg);
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: var(--spacing-md);
   color: var(--colors-text-muted);
-  background: var(--colors-surface-background);
   border-top: var(--ds-contacts-hairline) solid var(--colors-surface-border);
 }
 
@@ -156,7 +144,6 @@
   .contacts__table-wrap { overflow-x: auto; }
   .contacts__table {
     min-width: calc(var(--ds-contacts-col-name) + var(--ds-contacts-col-channels) + var(--ds-contacts-col-last)
-      + var(--ds-contacts-col-tags) + var(--ds-contacts-col-orders) + var(--ds-contacts-col-stage)
-      + var(--ds-contacts-col-actions) + var(--spacing-md) * 8);
+      + var(--ds-contacts-col-tasks) + var(--spacing-md) * 5);
   }
 }

@@ -149,7 +149,6 @@ else
     private static string DueClass(StatusTone? tone) => tone switch
     {
         StatusTone.Danger => "task-row__late",
-        StatusTone.Warning => "task-row__today",
         _ => "task-row__date",
     };
 }

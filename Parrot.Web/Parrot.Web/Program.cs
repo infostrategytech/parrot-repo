@@ -166,9 +166,8 @@ builder.Services.AddScoped<ChannelsState>();
 builder.Services.AddScoped<ContactsState>();
 builder.Services.AddScoped<ConversationsState>();
 builder.Services.AddScoped<QaInsightsState>();
-// Tasks: until the backend keeps them (tasks-backend-requests), the page says they are on the way and
-// nothing is made up. Before this, every workspace saw the same sample requests.
-builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore, Parrot.Web.Features.Dashboard.TaskRequests.UnavailableTaskStore>();
+// Tasks, as the API keeps them for the session's workspace.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore, Parrot.Web.Features.Dashboard.TaskRequests.ApiTaskStore>();
 // The person's own time zone, read from their browser, so "Today" is their today.
 builder.Services.AddScoped<Parrot.Web.Services.UserClock>();
 builder.Services.AddScoped<TeamState>();

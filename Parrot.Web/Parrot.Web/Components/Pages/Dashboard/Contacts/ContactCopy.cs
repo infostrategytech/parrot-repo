@@ -40,6 +40,17 @@ public static class ContactCopy
         _ => IconName.RiInformationFill
     };
 
+    /// <summary>
+    /// How they are reached on a channel, under their name: "@damiade", "+2348064192084". Null for an id that is
+    /// not an address (Messenger's, or TikTok's without a handle).
+    /// </summary>
+    public static string? Handle(ContactIdentity identity) => identity switch
+    {
+        { Username: { Length: > 0 } username } => "@" + username.TrimStart('@'),
+        { Platform: "whatsapp", Sender: { Length: > 0 } number } => number.StartsWith('+') ? number : "+" + number,
+        _ => null,
+    };
+
     public static string Channel(string channel) => channel switch
     {
         "whatsapp" => "WhatsApp",

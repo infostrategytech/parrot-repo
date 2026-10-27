@@ -7,7 +7,11 @@
   display: inline-flex;
   gap: var(--spacing-sm);
   align-items: center;
+  /* Kept to its cell: an inline box is as wide as its name, so a long one ran into the Customer column
+     instead of ending in an ellipsis. */
+  max-width: 100%;
   min-width: 0;
+  vertical-align: middle;
 }
 .task-by__look {
   flex: none;

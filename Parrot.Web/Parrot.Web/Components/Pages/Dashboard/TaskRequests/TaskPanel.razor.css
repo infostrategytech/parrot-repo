@@ -33,7 +33,6 @@
 /* A quiet menu's words line up with the plain values under it. */
 .task-panel__prop dd ::deep .filter-popover.is-quiet { margin-left: calc(var(--spacing-sm) * -1); }
 .task-panel__due.is-late ::deep .filter-popover__trigger { color: var(--colors-text-destructive); }
-.task-panel__due.is-today ::deep .filter-popover__trigger { color: var(--colors-feedback-warning-text); }
 .task-panel__due.is-none ::deep .filter-popover__trigger { color: var(--colors-text-muted); }
 /* The calendar opens in the due date's menu, a little wider than a list of choices. */
 .task-panel__due ::deep .task-panel__due-menu .filter-popover__menu { width: var(--ds-task-panel-calendar); padding: var(--spacing-md); }
