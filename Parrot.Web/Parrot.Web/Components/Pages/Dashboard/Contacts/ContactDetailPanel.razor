@@ -2,7 +2,9 @@
 @implements IAsyncDisposable
 @inject AuroraInterop Interop
 @inject Parrot.Web.Services.CustomerClient CustomerClient
+@inject Parrot.Web.Services.ConversationClient ConversationClient
 @using Parrot.Web.Services
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
 
 @* A customer, in a panel over the list. The frame is Aurora's editor drawer
    (a card lifted off the right edge, focus trapped and returned) and the
@@ -227,6 +229,88 @@
                     </div>
                 </ContactSection>
 
+                <ContactSection Title="Media &amp; files" Count="@(_mediaLoading ? null : _media.Count > 0 ? _media.Count : null)">
+                    @if (_mediaLoading)
+                    {
+                        <div class="customer-media-grid contact-media__loading" aria-busy="true">
+                            @for (int i = 0; i < 6; i++)
+                            {
+                                <span class="contact-media__skeleton"></span>
+                            }
+                        </div>
+                    }
+                    else if (_media.Count == 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No media shared yet.</Typography>
+                    }
+                    else
+                    {
+                        List<InboxMediaItemDto> visuals = [.. _media.Where(m => m.Media.IsVisual)];
+                        List<InboxMediaItemDto> files = [.. _media.Where(m => !m.Media.IsVisual && !m.Media.IsLink)];
+
+                        @if (visuals.Count > 0)
+                        {
+                            <div class="customer-media-grid">
+                                @foreach (InboxMediaItemDto item in visuals)
+                                {
+                                    InboxMediaDto file = item.Media;
+                                    @if (!file.Available)
+                                    {
+                                        <span class="customer-media-tile is-unavailable" title="@($"{MediaLabels.Name(file)}: {MediaLabels.Unavailable(file)}")">
+                                            <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
+                                        </span>
+                                    }
+                                    else if (file.Kind == "video")
+                                    {
+                                        <a class="customer-media-tile is-video" href="@file.Url" target="_blank" rel="noopener noreferrer"
+                                           aria-label="@($"Open {MediaLabels.Name(file)}")">
+                                            <video src="@file.Url" preload="none"></video>
+                                            <span aria-hidden="true"><Icon Name="IconName.RiPlayFill" Size="IconSize.Sm" /></span>
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <button type="button" class='@($"customer-media-tile {(file.Kind == "sticker" ? "is-sticker" : null)}")'
+                                                aria-label='@($"Open {MediaLabels.Name(file)}")'
+                                                @onclick='() => _preview = new MediaViewerItem(file.Url!, MediaLabels.Name(file), Contact!.Name, Contact.Id.ToString(), Initials.From(Contact.Name), item.ReceivedAt.ToLocalTime().ToString("d MMM yyyy"))'>
+                                            <img src="@file.Url" alt="@MediaLabels.Name(file)" loading="lazy" />
+                                        </button>
+                                    }
+                                }
+                            </div>
+                        }
+
+                        @if (files.Count > 0)
+                        {
+                            <div class="contact-media__files">
+                                @foreach (InboxMediaItemDto item in files)
+                                {
+                                    InboxMediaDto file = item.Media;
+                                    <div class="contact-media__file">
+                                        <span class="contact-media__file-icon"><Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" /></span>
+                                        @if (file.Url is { } url)
+                                        {
+                                            <a href="@(url)?download=true" download="@MediaLabels.Name(file)" class="contact-media__file-words">
+                                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
+                                                <Typography TextStyle="TextStyle.Small10Regular" As="small">@MediaLabels.Type(file)@(MediaLabels.Size(file.SizeBytes) is { Length: > 0 } size ? $" · {size}" : "")</Typography>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="contact-media__file-words">
+                                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
+                                                <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="customer-muted">@MediaLabels.Unavailable(file)</Typography>
+                                            </span>
+                                        }
+                                    </div>
+                                }
+                            </div>
+                        }
+                    }
+                </ContactSection>
+
+                <MediaViewer Item="_preview" OnClose="() => _preview = null" />
+
                 <ContactSection Title="Recent task requests">
                     <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No task requests yet.</Typography>
                 </ContactSection>
@@ -284,6 +368,12 @@
 
     private Guid? _loadedId;
 
+    // Media
+    private List<InboxMediaItemDto> _media = [];
+    private bool _mediaLoading;
+    private Guid? _loadedMediaId;
+    private MediaViewerItem? _preview;
+
     // Count of identities the panel header shows — real linked + manually added.
     private int? IdentityCount
     {
@@ -309,6 +399,36 @@
             _linkPlatform = null;
             _linkIdentifier = string.Empty;
             _linkError = null;
+            // Reset media so it loads fresh for the new contact.
+            _media = [];
+            _loadedMediaId = null;
+            _preview = null;
+        }
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Contact is null || Contact.Id == _loadedMediaId || Contact.Identities.Count == 0) return;
+        _loadedMediaId = Contact.Id;
+        _mediaLoading = true;
+        try
+        {
+            List<InboxMediaItemDto> all = [];
+            foreach (ContactIdentity identity in Contact.Identities)
+            {
+                InboxMediaPageDto page = await ConversationClient.MediaAsync(
+                    identity.ConnectionId, identity.Sender, null, CancellationToken.None);
+                all.AddRange(page.Items);
+            }
+            _media = [.. all.OrderByDescending(m => m.ReceivedAt)];
+        }
+        catch
+        {
+            // Non-critical — the panel still works without media.
+        }
+        finally
+        {
+            _mediaLoading = false;
         }
     }
 
