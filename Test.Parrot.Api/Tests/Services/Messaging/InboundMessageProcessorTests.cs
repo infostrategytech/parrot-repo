@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Parrot.Application.Agents;
+using Parrot.Application.Customers;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
@@ -181,15 +182,21 @@ public class InboundMessageProcessorTests
             Task.FromResult(isLive);
     }
 
+    private sealed class FakeTenantIdLookup(string? ownerId) : ITenantIdLookup
+    {
+        public Task<string?> FindOwnerIdAsync(string workspaceId, CancellationToken ct) =>
+            Task.FromResult(ownerId);
+    }
+
     private InboundMessageProcessor Processor(
         IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null,
         IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false,
-        IAgentChannelLookup? agentChannelLookup = null) => new(
+        IAgentChannelLookup? agentChannelLookup = null, ITenantIdLookup? tenantIdLookup = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
         _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia,
-        customerRepository: null, agentChannelLookup: agentChannelLookup);
+        customerRepository: null, agentChannelLookup: agentChannelLookup, tenantIdLookup: tenantIdLookup);
 
     private const string Psid = "6215837091842310";
 
@@ -666,11 +673,22 @@ public class InboundMessageProcessorTests
     [Fact]
     public async Task ProcessAsync_PublishesWorkspaceIdTenantIdAndConnectionId()
     {
+        await Processor(tenantIdLookup: new FakeTenantIdLookup("root-account-1"))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        StoredMessage data = _publisher.Published.Single().Data;
+        Assert.Equal("user-1", data.WorkspaceId);    // workspace id (OwnerUserId on the message)
+        Assert.Equal("root-account-1", data.TenantId); // root user account from workspace lookup
+        Assert.Equal(Connection, data.ConnectionId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithoutTenantLookup_TenantIdFallsBackToWorkspaceId()
+    {
         await Processor().ProcessAsync(Inbound(), CancellationToken.None);
 
         StoredMessage data = _publisher.Published.Single().Data;
         Assert.Equal("user-1", data.WorkspaceId);
         Assert.Equal("user-1", data.TenantId);
-        Assert.Equal(Connection, data.ConnectionId);
     }
 }

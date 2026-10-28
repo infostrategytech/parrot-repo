@@ -50,10 +50,10 @@ public sealed record StoredMessage
     /// <summary>The CRM user to deliver it to.</summary>
     public string? OwnerUserId { get; init; }
 
-    /// <summary>The workspace that owns this conversation. Equal to <see cref="OwnerUserId"/> in the current model.</summary>
+    /// <summary>The specific business workspace that owns this conversation.</summary>
     public string? WorkspaceId { get; init; }
 
-    /// <summary>The tenant identity for this conversation. Equal to <see cref="WorkspaceId"/> in the current model.</summary>
+    /// <summary>The root user account that owns the workspace.</summary>
     public string? TenantId { get; init; }
 
     /// <summary>True for a reply the business sent, false for a customer's message.</summary>

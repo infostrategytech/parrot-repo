@@ -40,7 +40,8 @@ public sealed class InboundMessageProcessor(
     IMediaJobPublisher? mediaJobs = null,
     bool deferMedia = false,
     ICustomerRepository? customerRepository = null,
-    IAgentChannelLookup? agentChannelLookup = null)
+    IAgentChannelLookup? agentChannelLookup = null,
+    ITenantIdLookup? tenantIdLookup = null)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -87,10 +88,11 @@ public sealed class InboundMessageProcessor(
             // Only now, with the write in place. If this throws, the message comes
             // round again, takes the duplicate path and is announced then.
             CommsType commsType = await ResolveCommsTypeAsync(stored, cancellationToken);
+            string? tenantId = await ResolveTenantIdAsync(stored, cancellationToken);
             MessagePersisted persisted = new MessagePersisted
             {
                 Source = inbound.Source,
-                Data = stored.ToStoredMessage() with { CommsType = commsType },
+                Data = stored.ToStoredMessage() with { CommsType = commsType, TenantId = tenantId },
                 CorrelationId = inbound.CorrelationId,
             };
             await TimedAsync("publish", () => publisher.PublishAsync(persisted, cancellationToken), "publish_failed");
@@ -311,6 +313,12 @@ public sealed class InboundMessageProcessor(
         {
             return reply;
         }
+    }
+
+    private async Task<string?> ResolveTenantIdAsync(MessageDocument stored, CancellationToken ct)
+    {
+        if (tenantIdLookup is null || stored.OwnerUserId is null) return stored.OwnerUserId;
+        return await tenantIdLookup.FindOwnerIdAsync(stored.OwnerUserId, ct) ?? stored.OwnerUserId;
     }
 
     private async Task<CommsType> ResolveCommsTypeAsync(MessageDocument stored, CancellationToken ct)
