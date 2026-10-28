@@ -76,6 +76,9 @@ public sealed record StoredMessage
 
     /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
     public Parrot.Application.Conversations.MessageQuote? ReplyTo { get; init; }
+
+    /// <summary>The direction and intent of the message relative to the AI agent.</summary>
+    public CommsType CommsType { get; init; } = CommsType.UserToTenant;
 }
 
 /// <param name="Kind">See <see cref="MediaKinds"/>.</param>

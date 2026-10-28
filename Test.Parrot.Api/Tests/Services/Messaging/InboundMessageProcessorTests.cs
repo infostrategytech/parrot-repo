@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
+using Parrot.Application.Agents;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
@@ -174,13 +175,21 @@ public class InboundMessageProcessorTests
         }
     }
 
+    private sealed class FakeAgentChannelLookup(bool isLive) : IAgentChannelLookup
+    {
+        public Task<bool> IsAgentLiveAsync(string workspaceId, string channel, CancellationToken ct) =>
+            Task.FromResult(isLive);
+    }
+
     private InboundMessageProcessor Processor(
         IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null,
-        IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false) => new(
+        IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false,
+        IAgentChannelLookup? agentChannelLookup = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
-        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia);
+        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia,
+        customerRepository: null, agentChannelLookup: agentChannelLookup);
 
     private const string Psid = "6215837091842310";
 
@@ -626,5 +635,31 @@ public class InboundMessageProcessorTests
         MessageReplyTo quote = _store.Documents.Single(d => d.MessageId == "whatsapp:wamid.A").ReplyTo!;
         Assert.Equal("wamid.UNKNOWN", quote.ProviderMessageId);
         Assert.Null(quote.MessageId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_InboundWithLiveAgent_PublishesUserToAgent()
+    {
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToAgent, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_InboundWithNoLiveAgent_PublishesUserToTenant()
+    {
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: false))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToTenant, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithoutAgentLookup_InboundDefaultsToUserToTenant()
+    {
+        await Processor().ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToTenant, _publisher.Published.Single().Data.CommsType);
     }
 }
