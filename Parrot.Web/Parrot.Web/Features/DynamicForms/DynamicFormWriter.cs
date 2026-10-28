@@ -14,6 +14,7 @@ namespace Parrot.Web.Features.DynamicForms;
 /// - phone (always whole: +2348035551234), number (number and money, in naira), agreed (consent),
 ///   items (tags), files (photos), date (yyyy-MM-dd) and time (HH:mm, 24-hour).
 /// A question left empty is an empty Value ({}). A note has no answer and isn't included.
+/// changed lists the questions that came pre-filled (a value) and that the owner changed.
 /// "Decide for me" and "Skip for now" aren't checked first, so an answer that doesn't read as its kind
 /// (a phone number that isn't whole, an amount that isn't one) is sent as their words instead.
 /// </summary>
@@ -28,10 +29,16 @@ public static class DynamicFormWriter
     public static JsonObject Result(DynamicForm form, IReadOnlyDictionary<string, FormAnswer> answers, DynamicFormEnd ended)
     {
         var values = new JsonObject();
+        var changed = new JsonArray();
         foreach (var question in form.Questions)
         {
             if (question.Kind == FormQuestionKind.Note) continue;
-            values[question.Id] = Value(question, answers.TryGetValue(question.Id, out var answer) ? answer : FormAnswer.None);
+            var value = Value(question, answers.TryGetValue(question.Id, out var answer) ? answer : FormAnswer.None);
+            values[question.Id] = value;
+            // A pre-filled answer the owner changed (designer, 28 October 2026), so the AI knows what was corrected
+            // rather than confirmed, without comparing every value itself.
+            if (form.Prefilled.TryGetValue(question.Id, out var given) && Value(question, given).ToJsonString(Json) != value.ToJsonString(Json))
+                changed.Add(JsonValue.Create(question.Id));
         }
         return new JsonObject
         {
@@ -43,6 +50,7 @@ public static class DynamicFormWriter
                 _ => "submitted",
             },
             ["answers"] = values,
+            ["changed"] = changed,
         };
     }
 

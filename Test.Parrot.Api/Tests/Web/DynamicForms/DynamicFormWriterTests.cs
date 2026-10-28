@@ -29,6 +29,48 @@ public class DynamicFormWriterTests
     }
 
     [Fact]
+    public void Changed_ListsOnlyPrefilledAnswersTheOwnerChanged()
+    {
+        var questions = new FormQuestion[]
+        {
+            new("name", "Q", FormQuestionKind.Short),
+            new("sells", "Q", FormQuestionKind.Many, [new("Clothing"), new("Fabric")], AllowOther: true),
+            new("city", "Q", FormQuestionKind.Short),
+            new("fee", "Q", FormQuestionKind.Money),
+        };
+        var prefilled = new Dictionary<string, FormAnswer>
+        {
+            ["name"] = new([], "Adire Lagos"),
+            ["sells"] = new(["Clothing"], null),
+            ["city"] = new([], "Lagos"),
+        };
+        var form = new DynamicForm("form-1", "T", null, null, questions, prefilled, "Save", true, true, null, null);
+        var answers = new Dictionary<string, FormAnswer>
+        {
+            ["name"] = new([], "Adire Lagos Ltd"),
+            ["sells"] = new(["Clothing"], "Tie-dye classes"),
+            ["city"] = new([], "Lagos"),
+            ["fee"] = FormAnswer.None with { Number = 3500m, Text = "3,500" },
+        };
+
+        var result = JsonNode.Parse(DynamicFormWriter.Write(form, answers, DynamicFormEnd.Submitted))!;
+
+        // The name was corrected and "Something else" added to what it sells; the city was confirmed; the fee wasn't pre-filled.
+        Assert.Equal("""["name","sells"]""", result["changed"]!.ToJsonString(DynamicFormWriter.Json));
+        Assert.Equal("""{"picked":["Clothing"],"text":"Tie-dye classes"}""", result["answers"]!["sells"]!.ToJsonString(DynamicFormWriter.Json));
+    }
+
+    [Fact]
+    public void Changed_IsEmpty_WhenNothingWasPrefilled()
+    {
+        var form = Form(new FormQuestion("q", "Q", FormQuestionKind.Text));
+
+        var result = JsonNode.Parse(DynamicFormWriter.Write(form, new Dictionary<string, FormAnswer> { ["q"] = new([], "Hello") }, DynamicFormEnd.Submitted))!;
+
+        Assert.Equal("[]", result["changed"]!.ToJsonString(DynamicFormWriter.Json));
+    }
+
+    [Fact]
     public void Choices_ComeBackPicked_InTheOrderShown_WithTheirOwnWords()
     {
         var form = Form(new FormQuestion("pay", "Q", FormQuestionKind.Many, [new("Card"), new("Transfer")], AllowOther: true));

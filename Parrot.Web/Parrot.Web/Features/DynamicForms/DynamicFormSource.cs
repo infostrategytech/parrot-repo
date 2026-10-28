@@ -22,10 +22,11 @@ public sealed class DynamicFormException(IReadOnlyList<string> problems)
 }
 
 /// <summary>
-/// Where generated forms come from and where their answers go (designer, 27 October 2026): the one place the
-/// backend plugs in. The screens only ever ask for the first form of a flow, and send the answers to get the
-/// next. Registered in Program.cs: <see cref="UnavailableDynamicFormSource"/> until the backend's endpoints
-/// exist, then <see cref="ApiDynamicFormSource"/> (dynamic-form-backend-requests).
+/// Where generated forms come from and where their answers go (designer, 27 October 2026): the one place the AI
+/// service plugs in. The AI runs the conversation, decides when a form is due, and exposes both endpoints
+/// (28 October). The screens only ever ask for the first form of a flow, and send the answers to get the next.
+/// Registered in Program.cs: <see cref="UnavailableDynamicFormSource"/> until those endpoints exist, then
+/// <see cref="ApiDynamicFormSource"/> (dynamic-form-reader-writer.md).
 /// </summary>
 public interface IDynamicFormSource
 {
@@ -39,7 +40,7 @@ public interface IDynamicFormSource
     Task<DynamicFormStep> SendAsync(DynamicFormRequest request, string result, CancellationToken cancellationToken = default);
 }
 
-/// <summary>Until the backend's endpoints exist: there are no generated forms, said plainly.</summary>
+/// <summary>Until the AI service's endpoints exist: there are no generated forms, said plainly.</summary>
 public sealed class UnavailableDynamicFormSource : IDynamicFormSource
 {
     public bool Available => false;
@@ -52,8 +53,8 @@ public sealed class UnavailableDynamicFormSource : IDynamicFormSource
 }
 
 /// <summary>
-/// The backend's endpoints, as proposed in dynamic-form-backend-requests (change the two paths here if they
-/// differ). Both take { flow, subjectId } and answer with the next step: { form, message } where form is a Form
+/// The AI service's endpoints (designer, 28 October 2026), as proposed in dynamic-form-reader-writer.md (change
+/// the two paths here if they differ). Both take { flow, subjectId } and answer with the next step: { form, message } where form is a Form
 /// (dynamic-form-schema.json) or null when the flow is done. A bare Form is read too. Sending also carries
 /// { result }, the FormResult.
 /// </summary>
