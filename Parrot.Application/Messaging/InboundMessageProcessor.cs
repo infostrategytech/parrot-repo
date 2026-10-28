@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
 using Parrot.Application.Agents;
+using Parrot.Application.Conversations;
 using Parrot.Application.Customers;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
@@ -41,7 +42,8 @@ public sealed class InboundMessageProcessor(
     bool deferMedia = false,
     ICustomerRepository? customerRepository = null,
     IAgentChannelLookup? agentChannelLookup = null,
-    ITenantIdLookup? tenantIdLookup = null)
+    ITenantIdLookup? tenantIdLookup = null,
+    IHumanTakeoverStore? humanTakeover = null)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -327,7 +329,14 @@ public sealed class InboundMessageProcessor(
         if (agentChannelLookup is null || stored.OwnerUserId is null) return CommsType.UserToTenant;
         string channel = stored.Platform.ToString().ToLowerInvariant();
         bool isLive = await agentChannelLookup.IsAgentLiveAsync(stored.OwnerUserId, channel, ct);
-        return isLive ? CommsType.UserToAgent : CommsType.UserToTenant;
+        if (!isLive) return CommsType.UserToTenant;
+        // Agent is live: if a human has taken over this conversation, the message still goes to a human.
+        if (humanTakeover is not null && stored.ConnectionId.HasValue && stored.From is not null)
+        {
+            bool taken = await humanTakeover.IsActiveAsync(stored.OwnerUserId, stored.ConnectionId.Value, stored.From, ct);
+            if (taken) return CommsType.UserToTenant;
+        }
+        return CommsType.UserToAgent;
     }
 
     // Carries a failed stage's reason to the one place that counts it; the

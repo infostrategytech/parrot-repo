@@ -4,6 +4,7 @@ using Parrot.Infrastructure.SocialMediaIntegrations;
 using Moq;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
 using Parrot.Domain.Entities;
@@ -846,5 +847,86 @@ public class ConversationServiceTests
 
         Assert.Equal("accepted", sent.Status);
         Assert.Empty(jobs.Published);
+    }
+
+    private sealed class FakeHumanTakeoverStore : IHumanTakeoverStore
+    {
+        private readonly HashSet<(string Owner, Guid Connection, string Sender)> _active = new();
+
+        public List<(string Owner, Guid Connection, string Sender)> SetCalls { get; } = new();
+        public List<(string Owner, Guid Connection, string Sender)> ClearCalls { get; } = new();
+
+        public Task SetAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        {
+            SetCalls.Add((owner, connection, sender));
+            _active.Add((owner, connection, sender));
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        {
+            ClearCalls.Add((owner, connection, sender));
+            _active.Remove((owner, connection, sender));
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
+            Task.FromResult(_active.Contains((owner, connection, sender)));
+    }
+
+    private sealed class NullAppLogger : IAppLogger<ConversationService>
+    {
+        public void LogDebug(string message, params object?[] args) { }
+        public void LogInformation(string message, params object?[] args) { }
+        public void LogWarning(string message, params object?[] args) { }
+        public void LogWarning(Exception exception, string message, params object?[] args) { }
+        public void LogError(string message, params object?[] args) { }
+        public void LogError(Exception exception, string message, params object?[] args) { }
+        public IDisposable BeginEntityScope(string entityType, string entityId) => new NullScope();
+        private sealed class NullScope : IDisposable { public void Dispose() { } }
+    }
+
+    private ConversationService CreateWithTakeover(FakeHumanTakeoverStore store)
+    {
+        _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
+        return new ConversationService(_store, _connections.Object, _sender.Object,
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(),
+            receipts: _receipts.Object, humanTakeover: store, logger: new NullAppLogger());
+    }
+
+    [Fact]
+    public async Task SendAsync_AfterSuccessfulSend_SetsTakeoverFlag()
+    {
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.reply");
+        FakeHumanTakeoverStore takeover = new();
+
+        await CreateWithTakeover(takeover).SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "Hello"), default);
+
+        Assert.Single(takeover.SetCalls);
+        (string owner, Guid connection, string sender) = takeover.SetCalls[0];
+        Assert.Equal(Owner, owner);
+        Assert.Equal(_connection.Id, connection);
+        Assert.Equal(Recipient, sender);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenConnectionNotFound_DoesNotSetTakeoverFlag()
+    {
+        _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync((WhatsAppConnection?)null);
+        _pages.Setup(x => x.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync((FacebookConnection?)null);
+        _instagramAccounts.Setup(x => x.GetByOwnerAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync((InstagramConnection?)null);
+        FakeHumanTakeoverStore takeover = new();
+        ConversationService service = new ConversationService(_store, _connections.Object, _sender.Object,
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(),
+            humanTakeover: takeover, logger: new NullAppLogger());
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            service.SendAsync(Owner, _connection.Id, Recipient, new SendReplyRequest(Guid.NewGuid(), "Hi"), default));
+
+        Assert.Empty(takeover.SetCalls);
     }
 }

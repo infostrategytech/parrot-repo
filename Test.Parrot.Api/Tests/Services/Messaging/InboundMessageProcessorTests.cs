@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
 using Parrot.Application.Agents;
+using Parrot.Application.Conversations;
 using Parrot.Application.Customers;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
@@ -188,15 +189,40 @@ public class InboundMessageProcessorTests
             Task.FromResult(ownerId);
     }
 
+    private sealed class FakeHumanTakeoverStore : IHumanTakeoverStore
+    {
+        private readonly HashSet<(string Owner, Guid Connection, string Sender)> _active = new();
+
+        public Task SetAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        {
+            _active.Add((owner, connection, sender));
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        {
+            _active.Remove((owner, connection, sender));
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
+            Task.FromResult(_active.Contains((owner, connection, sender)));
+
+        public void Activate(string owner, Guid connection, string sender) =>
+            _active.Add((owner, connection, sender));
+    }
+
     private InboundMessageProcessor Processor(
         IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null,
         IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false,
-        IAgentChannelLookup? agentChannelLookup = null, ITenantIdLookup? tenantIdLookup = null) => new(
+        IAgentChannelLookup? agentChannelLookup = null, ITenantIdLookup? tenantIdLookup = null,
+        IHumanTakeoverStore? humanTakeover = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
         _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia,
-        customerRepository: null, agentChannelLookup: agentChannelLookup, tenantIdLookup: tenantIdLookup);
+        customerRepository: null, agentChannelLookup: agentChannelLookup, tenantIdLookup: tenantIdLookup,
+        humanTakeover: humanTakeover);
 
     private const string Psid = "6215837091842310";
 
@@ -690,5 +716,38 @@ public class InboundMessageProcessorTests
         StoredMessage data = _publisher.Published.Single().Data;
         Assert.Equal("user-1", data.WorkspaceId);
         Assert.Equal("user-1", data.TenantId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LiveAgentAndHumanTookOver_PublishesUserToTenant()
+    {
+        FakeHumanTakeoverStore takeover = new();
+        takeover.Activate("user-1", Connection, "2348012345678");
+
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true), humanTakeover: takeover)
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToTenant, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LiveAgentAndNoHumanTakeover_PublishesUserToAgent()
+    {
+        FakeHumanTakeoverStore takeover = new();
+
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true), humanTakeover: takeover)
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToAgent, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LiveAgentWithoutTakeoverStore_PublishesUserToAgent()
+    {
+        // No takeover store: the takeover check is skipped and the agent gets the message.
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToAgent, _publisher.Published.Single().Data.CommsType);
     }
 }

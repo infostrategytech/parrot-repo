@@ -50,6 +50,7 @@ builder.Services.AddSingleton<IConnectionMessageReceipt, ConnectionMessageReceip
 builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
 builder.Services.AddSingleton<IAgentChannelLookup, EfAgentChannelLookup>();
 builder.Services.AddSingleton<ITenantIdLookup, EfTenantIdLookup>();
+builder.Services.AddSingleton<IHumanTakeoverStore, MongoHumanTakeoverStore>();
 
 // Messenger and Instagram webhooks name the customer only by id; the worker asks Meta for the name
 // with the connection's token, so it reads the API's key ring (never writing to it).
