@@ -1,72 +1,65 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
 @using Parrot.Web.Services
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+@using Parrot.Web.Features.Dashboard.TaskRequests
 
-@* One customer. The columns are set by the table that contains it; this file
-   styles what sits inside each cell. Mirrors Aurora's ProductRow. *@
-
-<article class="contact-row" role="row" @onclick="OnOpen">
+@* One customer: who they are and how to reach them, where they message from, when they last did, and
+   what's open for them (designer, 27 October 2026). The columns are set by the table that contains it;
+   this file styles what sits inside each cell. The name is the way in: a button that stretches over the
+   whole row, so a click anywhere opens the customer and the keyboard reaches it once, as a task's row. *@
+<article class="contact-row" role="row">
     <div class="contact-row__name" role="cell">
         <PetalAvatar Seed="@Contact.Id.ToString()" Initials="@Initials.From(Contact.Name)" Size="AvatarSize.Sm" />
-        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@Contact.Name</Typography>
+        <span class="contact-row__who">
+            <RowButton Class="contact-row__open" OnClick="OnOpen" aria-label="@($"View {Contact.Name}")">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@Contact.Name</Typography>
+            </RowButton>
+            @if (Contact.Primary is { } primary && ContactCopy.Handle(primary) is { } handle)
+            {
+                <Typography TextStyle="TextStyle.Small12Regular" As="span" Class="contact-row__handle">@handle</Typography>
+            }
+        </span>
     </div>
 
     <div class="contact-row__channels" role="cell">
-        @foreach (ContactIdentity identity in Contact.Identities)
+        @foreach (var platform in Contact.Identities.Select(identity => identity.Platform).Distinct())
         {
-            ChannelLink? link = ChannelLinks.For(identity.Platform, identity.Sender, null, identity.Username);
-            string cssClass = $"contact-row__mark contact-row__mark--{identity.Platform}";
-            IconName icon = PlatformIcon(identity.Platform);
-            string label = ChannelLinks.PlatformName(identity.Platform);
-            @if (link is not null)
-            {
-                <a class="@cssClass"
-                   href="@link.Url"
-                   target="_blank"
-                   rel="noopener noreferrer"
-                   title="@link.ButtonLabel"
-                   @onclick:stopPropagation="true">
-                    <Icon Name="@icon" Size="IconSize.Sm" Label="@label" />
-                </a>
-            }
-            else
-            {
-                <span class="@cssClass" title="@label">
-                    <Icon Name="@icon" Size="IconSize.Sm" Label="@label" />
-                </span>
-            }
+            <span class="contact-row__channel">
+                <ChannelGlyph Channel="@platform" Compact />
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChannelLinks.PlatformName(platform)</Typography>
+            </span>
         }
     </div>
 
-    <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="contact-row__last" role="cell">
-        @Contact.LastInteraction
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="contact-row__last" role="cell">
+        @(Contact.LastSeenAt is { } seen ? TaskWords.Ago(seen, Now, Zone) : "—")
     </Typography>
 
-    @* <div class="contact-row__tags" role="cell">
-        @foreach (var tag in Contact.Tags)
+    <div class="contact-row__tasks" role="cell">
+        @if (OpenTasks is > 0)
         {
-            <StatusBadge Tone="StatusTone.Neutral">@tag</StatusBadge>
+            <Icon Name="IconName.RiClipboardFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{OpenTasks} open")</Typography>
         }
-    </div> *@
+        else
+        {
+            @* Nothing open, or tasks are not kept yet. *@
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="contact-row__none">@(OpenTasks is null ? "—" : "None")</Typography>
+        }
+    </div>
 
     <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose Class="contact-row__orders" role="cell">
         @Contact.OrderCount
     </Typography>
 
-    @* <div class="contact-row__stage" role="cell">
-        @if (!string.IsNullOrEmpty(Contact.Stage))
-        {
-            <StatusBadge Tone="@ContactCopy.StageTone(Contact.Stage)">@ContactCopy.Stage(Contact.Stage)</StatusBadge>
-        }
-    </div> *@
-
     <div class="contact-row__actions" role="cell">
-        @* A plain control rather than a Button: the table wants a 32px circle
-           that sits inside the row, and none of the Button sizes is that. *@
+        @* A plain control rather than a Button: the table wants a 32px circle that sits inside the row,
+           and none of the Button sizes is that. Above the name's cover, which opens the same panel. *@
         <button type="button"
-                class="contact-row__open"
+                class="contact-row__view"
                 aria-label="@($"View {Contact.Name}")"
-                @onclick="OnOpen"
-                @onclick:stopPropagation="true">
+                tabindex="-1"
+                @onclick="OnOpen">
             <Icon Name="IconName.RiEyeFill" Size="IconSize.Sm" />
         </button>
     </div>
@@ -75,13 +68,13 @@
 @code {
     [Parameter, EditorRequired] public Contact Contact { get; set; } = default!;
 
-    [Parameter] public EventCallback OnOpen { get; set; }
+    /// <summary>How many of their tasks are still open; null while tasks can't be kept.</summary>
+    [Parameter] public int? OpenTasks { get; set; }
 
-    private static IconName PlatformIcon(string platform) => platform switch
-    {
-        "whatsapp" => IconName.RiWhatsappFill,
-        "instagram" => IconName.RiInstagramFill,
-        "tiktok" => IconName.RiTiktokFill,
-        _ => IconName.RiFacebookCircleFill,
-    };
+    [Parameter] public DateTime Now { get; set; } = DateTime.UtcNow;
+
+    /// <summary>The person's own time zone: "yesterday" is their yesterday.</summary>
+    [Parameter] public TimeZoneInfo Zone { get; set; } = TimeZoneInfo.Local;
+
+    [Parameter] public EventCallback OnOpen { get; set; }
 }

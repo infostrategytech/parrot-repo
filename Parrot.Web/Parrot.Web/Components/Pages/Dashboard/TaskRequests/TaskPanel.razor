@@ -337,7 +337,6 @@
     private string DueClass(TaskRequest task) => TaskWords.Due(task.DueAt, task.DueHasTime, Now, Clock.Zone).Tone switch
     {
         StatusTone.Danger => "task-panel__due is-late",
-        StatusTone.Warning => "task-panel__due is-today",
         _ => task.DueAt is null ? "task-panel__due is-none" : "task-panel__due",
     };
 

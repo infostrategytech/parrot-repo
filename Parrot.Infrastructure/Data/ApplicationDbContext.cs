@@ -28,6 +28,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerIdentity> CustomerIdentities => Set<CustomerIdentity>();
 
+    public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
+    public DbSet<WorkTaskEvent> WorkTaskEvents => Set<WorkTaskEvent>();
+
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
     {
@@ -308,6 +311,64 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             // The primary deduplication guard: one row per (connection, sender) pair.
             entity.HasIndex(i => new { i.ConnectionId, i.Sender }).IsUnique();
             entity.HasIndex(i => i.CustomerId);
+        });
+
+        // A workspace's tasks, numbered 1 up within it. Kind and state are kept
+        // by name, so a value added later never shifts the ones stored.
+        builder.Entity<WorkTask>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Id).ValueGeneratedNever();
+            entity.Property(t => t.WorkspaceId).IsRequired();
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(t => t.Kind).HasConversion<string>().HasMaxLength(32);
+            entity.Property(t => t.State).HasConversion<string>().HasMaxLength(32);
+            entity.Property(t => t.Title).HasMaxLength(200).IsRequired();
+            entity.Property(t => t.Summary).HasMaxLength(2000);
+            entity.Property(t => t.CustomerName).HasMaxLength(120);
+            entity.Property(t => t.CustomerChannel).HasMaxLength(32);
+            entity.Property(t => t.CustomerContact).HasMaxLength(64);
+            entity.Property(t => t.CustomerSender).HasMaxLength(256);
+            entity.Property(t => t.Address).HasMaxLength(160);
+            entity.Property(t => t.RaisedBy).HasMaxLength(256).IsRequired();
+            entity.Property(t => t.RaisedById).HasMaxLength(64);
+            entity.Property(t => t.RaisedInMessageId).HasMaxLength(256);
+            entity.Property(t => t.AssigneeId).HasMaxLength(64);
+            entity.Property(t => t.AssigneeName).HasMaxLength(256);
+            entity.Property(t => t.Total).HasPrecision(18, 2);
+            entity.Ignore(t => t.IsClosed);
+
+            // The lines are copied in and only ever read whole, so one JSON document.
+            entity.Property(t => t.Lines)
+                .HasConversion(
+                    lines => JsonSerializer.Serialize(lines, (JsonSerializerOptions?)null),
+                    json => JsonSerializer.Deserialize<List<WorkTaskLine>>(json, (JsonSerializerOptions?)null) ?? new List<WorkTaskLine>(),
+                    new ValueComparer<List<WorkTaskLine>>(
+                        (left, right) => (left ?? new List<WorkTaskLine>()).SequenceEqual(right ?? new List<WorkTaskLine>()),
+                        lines => lines.Aggregate(0, (hash, line) => HashCode.Combine(hash, line.GetHashCode())),
+                        lines => lines.ToList()))
+                .HasColumnType("jsonb")
+                .IsRequired();
+
+            entity.HasIndex(t => new { t.WorkspaceId, t.Number }).IsUnique();
+            entity.HasIndex(t => new { t.WorkspaceId, t.State });
+            entity.HasIndex(t => new { t.ConnectionId, t.CustomerSender });
+            entity.HasMany(t => t.History).WithOne().HasForeignKey(e => e.TaskId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<WorkTaskEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Id).ValueGeneratedNever();
+            entity.Property(e => e.Action).HasMaxLength(32).IsRequired();
+            entity.Property(e => e.Who).HasMaxLength(256).IsRequired();
+            entity.Property(e => e.WhoId).HasMaxLength(64);
+            entity.Property(e => e.Value).HasMaxLength(256);
+            entity.Property(e => e.TargetId).HasMaxLength(64);
+            entity.Property(e => e.Note).HasMaxLength(1000);
+            entity.HasIndex(e => e.TaskId);
         });
     }
 

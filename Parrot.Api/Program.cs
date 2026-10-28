@@ -428,6 +428,8 @@ builder.Services.AddScoped<IConnectionRepository, ConnectionRepository>();
 builder.Services.AddScoped<IConnectionService, ConnectionService>();
 builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
 builder.Services.AddScoped<CustomerService>();
+builder.Services.AddSingleton<Parrot.Application.Tasks.IWorkTaskRepository, Parrot.Infrastructure.Tasks.EfWorkTaskRepository>();
+builder.Services.AddScoped<Parrot.Application.Tasks.TaskService>();
 builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
 
 // Calls to the orchestrator carry a short-lived service token for the owner.
@@ -637,6 +639,13 @@ if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
     db.Database.Migrate();
 }
 
+// Every flag gets its row (email verification on), so it can be flipped in the database. Rows already there are left alone.
+using (IServiceScope scope = app.Services.CreateScope())
+{
+    await Parrot.Infrastructure.FeatureFlags.FeatureFlagSeeder.SeedAsync(
+        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(), app.Logger);
+}
+
 // Off means anyone can create a working account without proving they own the
 // address: right for a deployment with no working mail, wrong for production.
 if (!builder.Configuration.GetValue("FeatureFlags:" + FeatureFlagKeys.RequireEmailVerification, true))
@@ -666,6 +675,9 @@ app.UseRawBodyCapture();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    // A browsable view of the same document, at /swagger.
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "Parrot API v1"));
 }
 
 if (!app.Environment.IsDevelopment())

@@ -1,0 +1,28 @@
+/* A customer's open tasks: room between the lines, the title in body weight, the kind beside its first line. */
+.customer-task-list {
+  /* Missing from the token set: an agent's look, inline with small type. */
+  --ds-customer-task-look: 18px;
+
+  display: grid;
+  gap: var(--spacing-sm);
+}
+.customer-task-list > a.customer-task {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-md) var(--spacing-sm);
+  margin-inline: calc(var(--spacing-sm) * -1);
+  color: var(--colors-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-radius-lg);
+}
+.customer-task-list > a.customer-task:hover { background: var(--colors-interaction-hover); }
+.customer-task__arrow { display: grid; place-items: center; align-self: center; color: var(--colors-text-muted); }
+.customer-task__words { display: grid; gap: var(--spacing-sm); min-width: 0; }
+.customer-task__words ::deep .customer-task__title { color: var(--colors-text-primary); }
+.customer-task__meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.customer-task__look { width: var(--ds-customer-task-look); height: var(--ds-customer-task-look); object-fit: cover; border-radius: var(--radius-radius-full); }
+.customer-task-list > ::deep .customer-empty { padding-block: var(--spacing-xs); color: var(--colors-text-muted); }
+.customer-task-list > a.customer-tasks__more { display: block; padding: var(--spacing-xs) var(--spacing-none); color: var(--colors-text-link); text-decoration: none; }
+.customer-task-list ::deep .customer-tasks__add { justify-self: start; margin-top: var(--spacing-sm); }
