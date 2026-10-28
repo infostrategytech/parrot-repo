@@ -12,7 +12,7 @@ namespace Parrot.Application.Messaging;
 /// </summary>
 public sealed record MessagePersisted
 {
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
 
     /// <summary>Where the message came from. Written as text on the wire, e.g. "whatsapp".</summary>
     required public MessagingPlatform Source { get; init; }
@@ -49,6 +49,12 @@ public sealed record StoredMessage
 
     /// <summary>The CRM user to deliver it to.</summary>
     public string? OwnerUserId { get; init; }
+
+    /// <summary>The workspace that owns this conversation. Equal to <see cref="OwnerUserId"/> in the current model.</summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>The tenant identity for this conversation. Equal to <see cref="WorkspaceId"/> in the current model.</summary>
+    public string? TenantId { get; init; }
 
     /// <summary>True for a reply the business sent, false for a customer's message.</summary>
     required public bool Outgoing { get; init; }

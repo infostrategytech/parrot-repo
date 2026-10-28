@@ -662,4 +662,15 @@ public class InboundMessageProcessorTests
 
         Assert.Equal(CommsType.UserToTenant, _publisher.Published.Single().Data.CommsType);
     }
+
+    [Fact]
+    public async Task ProcessAsync_PublishesWorkspaceIdTenantIdAndConnectionId()
+    {
+        await Processor().ProcessAsync(Inbound(), CancellationToken.None);
+
+        StoredMessage data = _publisher.Published.Single().Data;
+        Assert.Equal("user-1", data.WorkspaceId);
+        Assert.Equal("user-1", data.TenantId);
+        Assert.Equal(Connection, data.ConnectionId);
+    }
 }
