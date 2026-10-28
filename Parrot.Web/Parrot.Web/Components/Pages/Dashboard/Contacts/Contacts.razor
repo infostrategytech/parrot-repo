@@ -148,7 +148,7 @@
 </div>
 
 <AddContactModal Visible="_showAdd" OnCancel="CloseModals" OnSave="HandleAddContact" />
-<ImportContactModal Visible="_showImport" OnCancel="CloseModals" />
+<ImportContactModal Visible="_showImport" OnClose="CloseModals" />
 <ContactDetailPanel Contact="_selectedContact" OnClose="CloseDetail" OnUpdated="HandleContactUpdated" />
 
 @code {
