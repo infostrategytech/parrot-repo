@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using Parrot.Domain.Entities;
 using Parrot.SharedComponents.DesignSystem;
 using Parrot.Web.Components.Pages.Dashboard.AiAgents;
 
@@ -143,6 +144,40 @@ public static partial class TaskWords
         return AgentBuilderCopy.MascotImage(mascot);
     }
 
+    /// <summary>
+    /// What a history entry says happened, to follow who did it: "Kora raised it from Kemi's Kitchen's
+    /// conversation", "Adaeze moved it to In progress". The server records the change; the words are here.
+    /// </summary>
+    public static string What(Parrot.Application.Tasks.TaskEventResponse entry) => entry.Action switch
+    {
+        WorkTaskActions.Raised => entry.Value is { Length: > 0 } customer ? $"Raised it from {customer}'s conversation" : "Raised it",
+        WorkTaskActions.Added => "Added it",
+        WorkTaskActions.Edited => "Edited the details",
+        WorkTaskActions.State => Enum.TryParse<TaskState>(entry.Value, out var state)
+            ? state switch
+            {
+                TaskState.Done => "Marked it done",
+                TaskState.Cancelled => "Cancelled it",
+                _ => $"Moved it to {Label(state)}",
+            }
+            : "Changed the status",
+        WorkTaskActions.Assigned => entry.TargetId is not null && entry.TargetId == entry.WhoId ? "Took it on" : $"Gave it to {entry.Value}",
+        WorkTaskActions.Unassigned => "Unassigned it",
+        WorkTaskActions.Due => entry.Value == "cleared" ? "Took the due date off" : "Changed the due date",
+        WorkTaskActions.Urgent => entry.Value == "off" ? "Took Urgent off" : "Marked it urgent",
+        WorkTaskActions.Note => "Added a note",
+        _ => "Changed it",
+    };
+
+    /// <summary>
+    /// A task for this customer: raised from one of their conversations ("{connection}:{sender}"), or, for a
+    /// customer the Inbox doesn't know (<paramref name="unlinkedName"/>), added for them by name.
+    /// </summary>
+    public static bool IsFor(TaskRequest task, IReadOnlyCollection<string> conversations, string? unlinkedName = null) =>
+        task.Customer is { } customer && (customer.ConversationId is { } id
+            ? conversations.Contains(id)
+            : unlinkedName is not null && string.Equals(customer.Name, unlinkedName, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>"Raised by Kora" for an agent, "Added by Adaeze" for a person.</summary>
     public static string RaisedBy(TaskRequest task) => (task.RaisedByAgent ? "Raised by " : "Added by ") + task.RaisedBy;
 
@@ -160,7 +195,7 @@ public static partial class TaskWords
     }
 
     /// <summary>
-    /// When it's due, and how much that matters: late is a problem, today a heads-up. "Today, 5pm",
+    /// When it's due, and how much that matters: late or due today is a problem, as the design shows it. "Today, 5pm",
     /// "Tomorrow", "Thursday, 11am", "1 day late". By the person's own calendar, not the server's.
     /// </summary>
     public static (string Text, StatusTone? Tone) Due(DateTime? dueAt, bool hasTime, DateTime now, TimeZoneInfo zone)
@@ -169,12 +204,11 @@ public static partial class TaskWords
         var local = Local(due, zone);
         var days = (local.Date - Local(now, zone).Date).Days;
         var at = hasTime ? ", " + Hour(local) : "";
-        var late = days < 0 || (hasTime && due < now);
         return days switch
         {
             < -1 => ($"{-days} days late", StatusTone.Danger),
             -1 => ("1 day late", StatusTone.Danger),
-            0 => ("Today" + at, late ? StatusTone.Danger : StatusTone.Warning),
+            0 => ("Today" + at, StatusTone.Danger),
             1 => ("Tomorrow" + at, null),
             < 7 => (local.ToString("dddd", CultureInfo.InvariantCulture) + at, null),
             _ => (local.ToString("d MMM", CultureInfo.InvariantCulture) + at, null),

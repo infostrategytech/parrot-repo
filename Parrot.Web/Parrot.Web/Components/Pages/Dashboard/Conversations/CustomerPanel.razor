@@ -1,12 +1,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @using System.Globalization
 @inject AuroraInterop Interop
-@inject Parrot.Web.Services.ConversationClient Client
-@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
-@inject Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState Agents
-@using Parrot.Web.Features.Dashboard.TaskRequests
 @using Parrot.Web.Components.Pages.Dashboard.TaskRequests
-@implements IDisposable
 
 @* A focused reference for the current conversation. Only details that help a
    teammate act are shown; speculative CRM metrics stay out. *@
@@ -39,49 +34,7 @@
     </section>
 
     <div class="customer-panel__scroll">
-        @* What's open for this customer, and a way to add a task from here: the customer and the
-           conversation come with it (designer, 20 October 2026). First, as what needs doing for them
-           matters most here. Hidden until tasks can be kept. *@
-        @if (Tasks.Available)
-        {
-            <CustomerSection Title="Tasks" Count="@(OpenTasks.Count == 0 ? null : OpenTasks.Count)">
-                <div class="customer-task-list">
-                    @foreach (var task in OpenTasks.Take(3))
-                    {
-                        <a href="@TaskUrl(task.Id)" class="customer-task" aria-label="@($"Open task: {task.Title}")">
-                            <TaskKindMark Kind="task.Kind" Small />
-                            <span class="customer-task__words">
-                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="customer-task__title">@task.Title</Typography>
-                                @* Who raised it at a glance: an agent with the look the business chose for it (designer, 21 October 2026). *@
-                                <span class="customer-task__meta">
-                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{TaskWords.Label(task.State)} · {(task.RaisedByAgent ? "Raised by" : "Added by")}")</Typography>
-                                    @if (TaskWords.AgentLook(task, Agents.Agents) is { } look)
-                                    {
-                                        <img class="customer-task__look" src="@look" alt="" />
-                                    }
-                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@task.RaisedBy</Typography>
-                                </span>
-                            </span>
-                            <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" /></span>
-                        </a>
-                    }
-                    @if (OpenTasks.Count == 0)
-                    {
-                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="customer-empty">@($"Nothing open for {Conversation.CustomerName}.")</Typography>
-                    }
-                    else if (OpenTasks.Count > 3)
-                    {
-                        <a href="/dashboard/tasks" class="customer-tasks__more">
-                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@($"See all {OpenTasks.Count} in Tasks")</Typography>
-                        </a>
-                    }
-                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="customer-tasks__add" @onclick="OnAddTask">
-                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-                        <ChildContent>Add a task</ChildContent>
-                    </Button>
-                </div>
-            </CustomerSection>
-        }
+        <CustomerTasks ConversationIds="@(new[] { Conversation.Id })" CustomerName="@Conversation.CustomerName" Open="Open" OnAddTask="OnAddTask" />
 
         <CustomerSection Title="Details">
             <div class="customer-contact-list">
@@ -123,154 +76,9 @@
             </div>
         </CustomerSection>
 
-        <CustomerSection Title="Media & files" Count="@(_loaded && _next is null ? _items.Count : null)">
-            @if (_failed)
-            {
-                <div class="customer-media-state">
-                    <Typography TextStyle="TextStyle.Small12Regular" As="p">Media could not be loaded.</Typography>
-                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => LoadMediaAsync(true)">Try again</Button>
-                </div>
-            }
-            else if (!_loaded)
-            {
-                <div class="customer-media-grid" aria-busy="true">
-                    @for (var i = 0; i < 6; i++)
-                    {
-                        <Skeleton Shape="SkeletonShape.Block" />
-                    }
-                </div>
-            }
-            else if (_items.Count == 0)
-            {
-                <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">Photos, videos, voice notes and documents this customer sends will appear here.</Typography>
-            }
-            else
-            {
-                <Tabs Label="Media type" Variant="TabsVariant.Segmented" Class="customer-media-tabs">
-                    <Tab Selected="@(_tab == MediaTab.Media)" Count="@Visuals.Count().ToString()" OnClick="() => _tab = MediaTab.Media">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Media</Typography>
-                    </Tab>
-                    <Tab Selected="@(_tab == MediaTab.Files)" Count="@Files.Count().ToString()" OnClick="() => _tab = MediaTab.Files">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Files</Typography>
-                    </Tab>
-                    <Tab Selected="@(_tab == MediaTab.Links)" Count="@Links.Count().ToString()" OnClick="() => _tab = MediaTab.Links">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Links</Typography>
-                    </Tab>
-                </Tabs>
 
-                @if (_tab == MediaTab.Media)
-                {
-                    @if (!Visuals.Any())
-                    {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No photos or videos yet.</Typography>
-                    }
-                    else
-                    {
-                        <div class="customer-media-grid">
-                            @foreach (var item in Visuals)
-                            {
-                                var file = item.Media;
-                                @if (!file.Available)
-                                {
-                                    <span class="customer-media-tile is-unavailable" title="@($"{MediaLabels.Name(file)}: {MediaLabels.Unavailable(file)}")">
-                                        <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
-                                    </span>
-                                }
-                                else if (file.Kind == "video")
-                                {
-                                    @* The thread's viewer shows pictures only; a video opens in the browser's player. *@
-                                    <a class="customer-media-tile is-video" href="@file.Url" target="_blank" rel="noopener noreferrer"
-                                       aria-label="@($"Play video from {Date(item.ReceivedAt)}")">
-                                        <video src="@file.Url#t=0.1" preload="metadata" muted tabindex="-1" aria-hidden="true"></video>
-                                        <span aria-hidden="true"><Icon Name="IconName.RiPlayFill" Size="IconSize.Sm" /></span>
-                                    </a>
-                                }
-                                else
-                                {
-                                    <button type="button" class="@($"customer-media-tile {(file.Kind == "sticker" ? "is-sticker" : null)}")"
-                                            aria-label="@($"Open {MediaLabels.Name(file)} from {Date(item.ReceivedAt)}")"
-                                            @onclick="() => PreviewAsync(item)">
-                                        <img src="@file.Url" alt="" loading="lazy" />
-                                    </button>
-                                }
-                            }
-                        </div>
-                    }
-                }
-                else if (_tab == MediaTab.Files)
-                {
-                    @if (!Files.Any())
-                    {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No documents or audio yet.</Typography>
-                    }
-                    else
-                    {
-                        <div class="customer-tasks">
-                            @foreach (var item in Files)
-                            {
-                                var file = item.Media;
-                                @if (file.Kind is "audio" or "voice" && file.Available)
-                                {
-                                    <div class="customer-audio">
-                                        <Typography TextStyle="TextStyle.Small12Medium" As="small">@($"{MediaLabels.Name(file)} · {Date(item.ReceivedAt)}")</Typography>
-                                        <audio controls preload="none" src="@file.Url" aria-label="@MediaLabels.Name(file)"></audio>
-                                    </div>
-                                }
-                                else if (file.Available)
-                                {
-                                    <a href="@(file.Url + "?download=true")" download="@MediaLabels.Name(file)" aria-label="@($"Download {MediaLabels.Name(file)}")">
-                                        <span><Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" /></span>
-                                        <span>
-                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
-                                            <Typography TextStyle="TextStyle.Small12Medium" As="small">@FileDetail(item)</Typography>
-                                        </span>
-                                        <span class="customer-task__arrow"><Icon Name="IconName.RiDownload2Fill" Size="IconSize.Sm" /></span>
-                                    </a>
-                                }
-                                else
-                                {
-                                    <div class="customer-file-unavailable">
-                                        <span><Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" /></span>
-                                        <span>
-                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
-                                            <Typography TextStyle="TextStyle.Small12Medium" As="small">Could not be loaded · @Date(item.ReceivedAt)</Typography>
-                                        </span>
-                                    </div>
-                                }
-                            }
-                        </div>
-                    }
-                }
-                else
-                {
-                    @if (!Links.Any())
-                    {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No shared posts yet.</Typography>
-                    }
-                    else
-                    {
-                        <div class="customer-tasks">
-                            @foreach (var item in Links)
-                            {
-                                <a href="@item.Media.Url" target="_blank" rel="noopener noreferrer" aria-label="Open shared post (opens in a new tab)">
-                                    <span><Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" /></span>
-                                    <span>
-                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Shared post</Typography>
-                                        <Typography TextStyle="TextStyle.Small12Medium" As="small">@Date(item.ReceivedAt)</Typography>
-                                    </span>
-                                    <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
-                                </a>
-                            }
-                        </div>
-                    }
-                }
-
-                @if (_next is not null)
-                {
-                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="customer-media-more" Busy="@_loadingMore" @onclick="() => LoadMediaAsync(false)">Show older</Button>
-                }
-            }
-        </CustomerSection>
+        <CustomerMedia ConnectionId="Conversation.ConnectionId" Sender="@Conversation.Sender" Refresh="@MediaRefresh" Open="Open"
+                       CustomerName="@Conversation.CustomerName" Seed="@Conversation.Id" Initials="@Conversation.CustomerInitials" OnPreview="OnPreview" />
 
         @if (LatestInternalNote is { } note)
         {
@@ -285,113 +93,21 @@
                 </article>
             </CustomerSection>
         }
-
     </div>
 </aside>
-
 
 @code {
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
     [Parameter] public EventCallback OnClose { get; set; }
-    /// <summary>Whether the drawer is showing. The media list is only read while it is, so closed panels cost no calls.</summary>
+    /// <summary>Whether the drawer is showing. Its tasks and media are only read while it is, so closed panels cost no calls.</summary>
     [Parameter] public bool Open { get; set; }
     /// <summary>A picture was chosen: the inbox opens it full screen, outside this scrolling drawer.</summary>
     [Parameter] public EventCallback<MediaViewerItem> OnPreview { get; set; }
     /// <summary>Add a task for this customer: the inbox opens its own form, over the whole app rather than inside this drawer.</summary>
     [Parameter] public EventCallback OnAddTask { get; set; }
 
-    private enum MediaTab { Media, Files, Links }
-
-    private MediaTab _tab = MediaTab.Media;
-    private readonly List<InboxMediaItemDto> _items = [];
-    private string? _next;
-    private bool _loaded;
-    private bool _failed;
-    private bool _loadingMore;
-    private string? _loadedFor;
-    private CancellationTokenSource _cts = new();
-    private IEnumerable<InboxMediaItemDto> Visuals => _items.Where(i => i.Media.IsVisual);
-    private IEnumerable<InboxMediaItemDto> Files => _items.Where(i => !i.Media.IsVisual && !i.Media.IsLink);
-    private IEnumerable<InboxMediaItemDto> Links => _items.Where(i => i.Media.IsLink);
-
-    // Read again when the drawer opens on another customer, or when this thread gains a message with files.
-    protected override async Task OnParametersSetAsync()
-    {
-        if (!Open) return;
-        if (Tasks.Available && _tasksFor != Conversation.Id)
-        {
-            _tasksFor = Conversation.Id;
-            await LoadTasksAsync();
-        }
-        // Files that finish loading change the list without changing how many messages carry files.
-        var key = $"{Conversation.Id}:{Conversation.Messages.Count(m => m.Attachments.Count > 0)}:{Conversation.Messages.Sum(m => m.Attachments.Count(a => a.Status == "ready"))}";
-        if (key == _loadedFor) return;
-        var sameCustomer = _loadedFor?.StartsWith(Conversation.Id + ":", StringComparison.Ordinal) == true;
-        _loadedFor = key;
-        if (!sameCustomer)
-        {
-            _items.Clear(); _next = null; _loaded = false; _failed = false; _tab = MediaTab.Media;
-        }
-        await LoadMediaAsync(true);
-    }
-
-    private async Task LoadMediaAsync(bool fromStart)
-    {
-        var token = _cts.Token;
-        var forConversation = Conversation;
-        try
-        {
-            _failed = false;
-            if (!fromStart) _loadingMore = true;
-            var page = await Client.MediaAsync(forConversation.ConnectionId, forConversation.Sender, fromStart ? null : _next, token);
-            if (token.IsCancellationRequested || forConversation != Conversation) return;
-            if (fromStart) _items.Clear();
-            _items.AddRange(page.Items);
-            _next = page.NextBefore;
-            _loaded = true;
-        }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
-        {
-            if (!token.IsCancellationRequested) _failed = true;
-        }
-        finally
-        {
-            _loadingMore = false;
-        }
-    }
-
-    private Task PreviewAsync(InboxMediaItemDto item) => OnPreview.InvokeAsync(new MediaViewerItem(
-        item.Media.Url!, MediaLabels.Name(item.Media), Conversation.CustomerName, Conversation.Id, Conversation.CustomerInitials,
-        DateTimeLabel(item.ReceivedAt)));
-
-    private static string FileDetail(InboxMediaItemDto item) =>
-        string.Join(" · ", new[] { MediaLabels.Type(item.Media), MediaLabels.Size(item.Media.SizeBytes), Date(item.ReceivedAt) }.Where(part => part.Length > 0));
-
-    public void Dispose() { _cts.Cancel(); _cts.Dispose(); Tasks.Changed -= TasksChanged; }
-
-    // ── Tasks for this customer ──
-
-    private IReadOnlyList<TaskRequest> OpenTasks { get; set; } = [];
-    private string? _tasksFor;
-
-    protected override void OnInitialized() => Tasks.Changed += TasksChanged;
-
-    private void TasksChanged() => _ = InvokeAsync(async () => { await LoadTasksAsync(); StateHasChanged(); });
-
-    private async Task LoadTasksAsync()
-    {
-        if (!Tasks.Available) return;
-        // The agents' looks, for the tasks they raised.
-        try { await Agents.LoadAsync(); }
-        catch (Exception exception) when (Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState.IsFailure(exception)) { }
-        var id = Conversation.Id;
-        OpenTasks = (await Tasks.ListAsync())
-            .Where(task => task.Customer?.ConversationId == id && !task.IsClosed)
-            .OrderByDescending(task => task.Urgent)
-            .ThenByDescending(task => task.RaisedAt)
-            .ToList();
-    }
+    // Files that finish loading change the list without changing how many messages carry files.
+    private string MediaRefresh => $"{Conversation.Messages.Count(m => m.Attachments.Count > 0)}:{Conversation.Messages.Sum(m => m.Attachments.Count(a => a.Status == "ready"))}";
 
     private static string DateTimeLabel(DateTime date) => date.ToLocalTime().ToString("d MMM yyyy, h:mm tt", CultureInfo.InvariantCulture);
 
@@ -412,9 +128,7 @@
         if (_copied == field) _copied = null;
     }
 
-    private static string Date(DateTime date) => date.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture);
     private static string NoteDate(DateTime date) => date.ToLocalTime().ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture);
-    private static string TaskUrl(string id) => $"/dashboard/tasks/{Uri.EscapeDataString(id)}";
 
     private static string ChannelLabel(string channel) => channel switch
     {

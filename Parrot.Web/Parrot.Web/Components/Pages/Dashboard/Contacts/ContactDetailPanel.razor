@@ -2,18 +2,20 @@
 @implements IAsyncDisposable
 @inject AuroraInterop Interop
 @inject Parrot.Web.Services.CustomerClient CustomerClient
-@inject Parrot.Web.Services.ConversationClient ConversationClient
+@inject NavigationManager Nav
+@using System.Globalization
 @using Parrot.Web.Services
 @using Parrot.Web.Components.Pages.Dashboard.Conversations
+@using Parrot.Web.Components.Pages.Dashboard.TaskRequests
 
-@* A customer, in a panel over the list. The frame is Aurora's editor drawer
-   (a card lifted off the right edge, focus trapped and returned) and the
-   contents are Aurora's Customer 360 panel bound to what Parrot knows about
-   a contact. *@
+@* A customer, in a panel over the list. The frame is Aurora's editor drawer (a card lifted off the right
+   edge, focus trapped and returned); the contents are the inbox's customer details, so a customer reads
+   the same wherever they are opened: who they are, what's open for them, how to reach them and what they
+   have sent, then their conversation one tap away (designer, 27 October 2026). *@
 
 @if (Contact is not null)
 {
-    <div class="panel-backdrop" @onmousedown="OnClose">
+    <div class="@($"panel-backdrop {(Behind ? "is-behind" : null)}")" @onmousedown="OnClose">
         <aside class="customer-panel"
                aria-label="Customer details"
                tabindex="-1"
@@ -21,415 +23,129 @@
                @onkeydown="OnKeyDown"
                @onmousedown:stopPropagation="true">
             <header class="customer-panel__header">
-                <div>
-                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer details</Typography>
-                    <Typography TextStyle="TextStyle.Small12Regular" As="p">Everything you know about this customer</Typography>
-                </div>
+                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2">Customer details</Typography>
                 <button type="button" aria-label="Close customer details" title="Close customer details" @onclick="OnClose">
                     <Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" />
                 </button>
             </header>
 
-            <section class="customer-profile">
-                <PetalAvatar Seed="@Contact.Id.ToString()" Initials="@Initials.From(Contact.Name)" Size="AvatarSize.Lg" />
-                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Contact.Name</Typography>
-                <div>
-                    @if (!string.IsNullOrEmpty(Contact.Stage))
-                    {
-                        <StatusBadge Tone="@ContactCopy.StageTone(Contact.Stage)">@ContactCopy.Stage(Contact.Stage)</StatusBadge>
-                    }
-                    @foreach (var tag in Contact.Tags)
-                    {
-                        <StatusBadge Tone="StatusTone.Neutral">@tag</StatusBadge>
-                    }
-                </div>
-            </section>
-
             <div class="customer-panel__scroll">
-                <section class="customer-metrics" aria-label="Customer value">
-                    @* Parrot holds the request count only; the other two slots keep
-                       Aurora's em dash until there is a value behind them. *@
-                    <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">—</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Lifetime value</Typography></div>
-                    <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.OrderCount</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Requests</Typography></div>
-                    <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">—</Typography><Typography TextStyle="TextStyle.Small10Regular" As="span">Conversations</Typography></div>
+                <section class="customer-profile">
+                    <PetalAvatar Seed="@Contact.Id.ToString()" Initials="@Initials.From(Contact.Name)" Size="AvatarSize.Lg" />
+                    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Contact.Name</Typography>
+                    @if (Primary is { } primary)
+                    {
+                        <div>
+                            <ChannelGlyph Channel="@primary.Platform" Compact />
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChannelLinks.PlatformName(primary.Platform)</Typography>
+                            @if (ContactCopy.Handle(primary) is { } handle)
+                            {
+                                <span aria-hidden="true">·</span>
+                                <Typography TextStyle="TextStyle.Small12Regular" As="span">@handle</Typography>
+                            }
+                        </div>
+                        @* Their own chat app, one tap away, under who they are rather than as a section of its own. *@
+                        @if (ChannelLinks.For(primary.Platform, primary.Sender, null, primary.Username) is { } link)
+                        {
+                            <a class="customer-profile__platform" href="@link.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"{link.ButtonLabel} (opens in a new tab)")">
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span">@link.ButtonLabel</Typography>
+                                <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
+                            </a>
+                        }
+                    }
                 </section>
 
-                @if (!string.IsNullOrWhiteSpace(Contact.Email) || !string.IsNullOrWhiteSpace(Contact.Phone))
+                <CustomerTasks ConversationIds="Contact.ConversationIds" UnlinkedName="@(Contact.Identities.Count == 0 ? Contact.Name : null)"
+                               CustomerName="@Contact.Name" OnAddTask="OnAddTask" />
+
+                <CustomerSection Title="Details">
+                    <div class="customer-contact-list">
+                        @* Each contact row copies its value; the whole row is intentionally the control. *@
+                        @if (Email is { } email)
+                        {
+                            <RowButton aria-label="@($"Copy email {email}")" OnClick='() => CopyAsync("email", email)'>
+                                <Icon Name="IconName.RiMailFill" Size="IconSize.Sm" />
+                                <span><small>Email</small><strong>@email</strong></span>
+                                <Icon Name="@(_copied == "email" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
+                            </RowButton>
+                        }
+                        @if (Phone is { } phone)
+                        {
+                            <RowButton aria-label="@($"Copy phone {phone}")" OnClick='() => CopyAsync("phone", phone)'>
+                                <Icon Name="IconName.RiPhoneFill" Size="IconSize.Sm" />
+                                <span><small>Phone</small><strong>@phone</strong></span>
+                                <Icon Name="@(_copied == "phone" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
+                            </RowButton>
+                        }
+                        <div>
+                            <Icon Name="IconName.RiMessage2Fill" Size="IconSize.Sm" />
+                            <span><small>Last message</small><strong>@(Contact.LastSeenAt is { } seen ? DateTimeLabel(seen) : "None yet")</strong></span>
+                        </div>
+                    </div>
+                </CustomerSection>
+
+                @if (Primary is { } from)
                 {
-                    <ContactSection Title="Contact">
-                        <div class="customer-contact-list">
-                            @if (!string.IsNullOrWhiteSpace(Contact.Email))
-                            {
-                                <button type="button" @onclick='() => CopyAsync("email", Contact.Email)'>
-                                    <Icon Name="IconName.RiMailFill" Size="IconSize.Sm" />
-                                    <span><small>Email</small><strong>@Contact.Email</strong></span>
-                                    <Icon Name="@(_copied == "email" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
-                                </button>
-                            }
-                            @if (!string.IsNullOrWhiteSpace(Contact.Phone))
-                            {
-                                <button type="button" @onclick='() => CopyAsync("phone", Contact.Phone)'>
-                                    <Icon Name="IconName.RiPhoneFill" Size="IconSize.Sm" />
-                                    <span><small>Phone</small><strong>@Contact.Phone</strong></span>
-                                    <Icon Name="@(_copied == "phone" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
-                                </button>
-                            }
-                        </div>
-                    </ContactSection>
+                    <CustomerMedia ConnectionId="from.ConnectionId" Sender="@from.Sender" CustomerName="@Contact.Name"
+                                   Seed="@Contact.Id.ToString()" Initials="@Initials.From(Contact.Name)" OnPreview="OnPreview" />
                 }
-
-                <ContactSection Title="Stage">
-                    <SelectField FloatingLabel="Stage"
-                                 Value="@ContactCopy.Stage(_stage)"
-                                 Open="@(_openPanelMenu == "stage")"
-                                 OpenChanged="@(open => _openPanelMenu = open ? "stage" : null)"
-                                 Disabled="@_stageSaving">
-                        @foreach (string s in Stages)
-                        {
-                            string sv = s;
-                            <PopoverOption Label="@ContactCopy.Stage(sv)"
-                                           Active="@(_stage == sv)"
-                                           OnSelect="() => SelectStageAsync(sv)" />
-                        }
-                    </SelectField>
-                    @if (_stageError is not null)
-                    {
-                        <Typography TextStyle="TextStyle.Small10Regular" As="p" Class="customer-field-error">@_stageError</Typography>
-                    }
-                </ContactSection>
-
-                <ContactSection Title="Tags" Count="@(_tags.Count == 0 ? null : _tags.Count)">
-                    <div class="customer-tags">
-                        <div class="customer-tags__options">
-                            @foreach (string option in TagOptions)
-                            {
-                                string opt = option;
-                                bool selected = _tags.Contains(opt, StringComparer.OrdinalIgnoreCase);
-                                <button type="button"
-                                        class="@($"customer-tags__option{(selected ? " is-selected" : "")}")"
-                                        aria-pressed="@selected"
-                                        disabled="@_tagsSaving"
-                                        @onclick="() => ToggleTagAsync(opt)">
-                                    <Typography TextStyle="TextStyle.Small12Regular" As="span">@opt</Typography>
-                                </button>
-                            }
-                        </div>
-                        @if (_tagsError is not null)
-                        {
-                            <Typography TextStyle="TextStyle.Small10Regular" As="p" Class="customer-field-error">@_tagsError</Typography>
-                        }
-                    </div>
-                </ContactSection>
-
-                <ContactSection Title="Connected identities" Count="@IdentityCount">
-                    <div class="customer-identities">
-                        @foreach (ContactIdentity identity in Contact.Identities)
-                        {
-                            string platformName = ChannelLinks.PlatformName(identity.Platform);
-                            string cssClass = $"customer-identities__mark customer-identities__mark--{identity.Platform}";
-                            IconName icon = IdentityIcon(identity.Platform);
-                            string display = identity.Username is { Length: > 0 } ? identity.Username : identity.Sender;
-                            ChannelLink? link = ChannelLinks.For(identity.Platform, identity.Sender, null, identity.Username);
-                            <div>
-                                <span class="@cssClass">
-                                    <Icon Name="@icon" Size="IconSize.Sm" Label="@platformName" />
-                                </span>
-                                <span>
-                                    @if (link is not null)
-                                    {
-                                        <a href="@link.Url" target="_blank" rel="noopener noreferrer" class="customer-identity__link" title="@link.ButtonLabel">
-                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@display</Typography>
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@display</Typography>
-                                    }
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@platformName</Typography>
-                                </span>
-                            </div>
-                        }
-                        @if (!string.IsNullOrWhiteSpace(Contact.ChannelIdentifier))
-                        {
-                            string? manualPlatform = string.IsNullOrWhiteSpace(Contact.ChannelPlatform) ? null : Contact.ChannelPlatform;
-                            string manualPlatformName = manualPlatform is not null ? ChannelLinks.PlatformName(manualPlatform) : "Channel";
-                            string manualCssClass = manualPlatform is not null
-                                ? $"customer-identities__mark customer-identities__mark--{manualPlatform}"
-                                : "customer-identities__mark";
-                            IconName manualIcon = manualPlatform is not null ? IdentityIcon(manualPlatform) : IconName.RiLinksFill;
-                            ChannelLink? manualLink = manualPlatform == "whatsapp"
-                                ? ChannelLinks.For("whatsapp", Contact.ChannelIdentifier, null)
-                                : manualPlatform == "instagram"
-                                    ? ChannelLinks.For("instagram", "", null, Contact.ChannelIdentifier.TrimStart('@'))
-                                    : null;
-                            <div>
-                                <span class="@manualCssClass">
-                                    <Icon Name="@manualIcon" Size="IconSize.Sm" Label="@manualPlatformName" />
-                                </span>
-                                <span>
-                                    @if (manualLink is not null)
-                                    {
-                                        <a href="@manualLink.Url" target="_blank" rel="noopener noreferrer" class="customer-identity__link" title="@manualLink.ButtonLabel">
-                                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Contact.ChannelIdentifier</Typography>
-                                    }
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="small">@manualPlatformName · manually added</Typography>
-                                </span>
-                            </div>
-                        }
-                    </div>
-                    <div class="customer-identities__link">
-                        @if (!_linkingAccount)
-                        {
-                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _linkingAccount = true">
-                                <IconLeft><Icon Name="IconName.RiLinksFill" /></IconLeft>
-                                <ChildContent>Link another account</ChildContent>
-                            </Button>
-                        }
-                        else
-                        {
-                            <div class="customer-link-form">
-                                <SelectField FloatingLabel="Platform"
-                                             Value="@ChannelLabel(_linkPlatform)"
-                                             Open="@(_openPanelMenu == "link-platform")"
-                                             OpenChanged="@(open => _openPanelMenu = open ? "link-platform" : null)">
-                                    @foreach (ChannelOption ch in LinkChannels)
-                                    {
-                                        string chKey = ch.Key;
-                                        <PopoverOption Label="@ch.Label"
-                                                       Active="@(_linkPlatform == chKey)"
-                                                       OnSelect="() => { _linkPlatform = chKey; _openPanelMenu = null; }" />
-                                    }
-                                </SelectField>
-                                @if (_linkPlatform is not null)
-                                {
-                                    <Input FloatingLabel="@LinkHandleLabel(_linkPlatform)"
-                                           HelperText="@LinkHandleHint(_linkPlatform)"
-                                           @bind-Value="_linkIdentifier" />
-                                }
-                                @if (_linkError is not null)
-                                {
-                                    <Typography TextStyle="TextStyle.Small10Regular" As="p" Class="customer-field-error">@_linkError</Typography>
-                                }
-                                <div class="customer-link-form__actions">
-                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
-                                            disabled="@_linkSaving"
-                                            @onclick="CancelLinkAccount">Cancel</Button>
-                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small"
-                                            Busy="@_linkSaving"
-                                            disabled="@(string.IsNullOrWhiteSpace(_linkIdentifier) || _linkPlatform is null)"
-                                            @onclick="SaveLinkAccountAsync">Save</Button>
-                                </div>
-                            </div>
-                        }
-                    </div>
-                </ContactSection>
-
-                <ContactSection Title="Media &amp; files" Count="@(_mediaLoading ? null : _media.Count > 0 ? _media.Count : null)">
-                    @if (_mediaLoading)
-                    {
-                        <div class="customer-media-grid contact-media__loading" aria-busy="true">
-                            @for (int i = 0; i < 6; i++)
-                            {
-                                <span class="contact-media__skeleton"></span>
-                            }
-                        </div>
-                    }
-                    else if (_media.Count == 0)
-                    {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No media shared yet.</Typography>
-                    }
-                    else
-                    {
-                        List<InboxMediaItemDto> visuals = [.. _media.Where(m => m.Media.IsVisual)];
-                        List<InboxMediaItemDto> files = [.. _media.Where(m => !m.Media.IsVisual && !m.Media.IsLink)];
-
-                        @if (visuals.Count > 0)
-                        {
-                            <div class="customer-media-grid">
-                                @foreach (InboxMediaItemDto item in visuals)
-                                {
-                                    InboxMediaDto file = item.Media;
-                                    @if (!file.Available)
-                                    {
-                                        <span class="customer-media-tile is-unavailable" title="@($"{MediaLabels.Name(file)}: {MediaLabels.Unavailable(file)}")">
-                                            <Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" />
-                                        </span>
-                                    }
-                                    else if (file.Kind == "video")
-                                    {
-                                        <a class="customer-media-tile is-video" href="@file.Url" target="_blank" rel="noopener noreferrer"
-                                           aria-label="@($"Open {MediaLabels.Name(file)}")">
-                                            <video src="@file.Url" preload="none"></video>
-                                            <span aria-hidden="true"><Icon Name="IconName.RiPlayFill" Size="IconSize.Sm" /></span>
-                                        </a>
-                                    }
-                                    else
-                                    {
-                                        <button type="button" class='@($"customer-media-tile {(file.Kind == "sticker" ? "is-sticker" : null)}")'
-                                                aria-label='@($"Open {MediaLabels.Name(file)}")'
-                                                @onclick='() => _preview = new MediaViewerItem(file.Url!, MediaLabels.Name(file), Contact!.Name, Contact.Id.ToString(), Initials.From(Contact.Name), item.ReceivedAt.ToLocalTime().ToString("d MMM yyyy"))'>
-                                            <img src="@file.Url" alt="@MediaLabels.Name(file)" loading="lazy" />
-                                        </button>
-                                    }
-                                }
-                            </div>
-                        }
-
-                        @if (files.Count > 0)
-                        {
-                            <div class="contact-media__files">
-                                @foreach (InboxMediaItemDto item in files)
-                                {
-                                    InboxMediaDto file = item.Media;
-                                    <div class="contact-media__file">
-                                        <span class="contact-media__file-icon"><Icon Name="@MediaLabels.Glyph(file)" Size="IconSize.Sm" /></span>
-                                        @if (file.Url is { } url)
-                                        {
-                                            <a href="@(url)?download=true" download="@MediaLabels.Name(file)" class="contact-media__file-words">
-                                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
-                                                <Typography TextStyle="TextStyle.Small10Regular" As="small">@MediaLabels.Type(file)@(MediaLabels.Size(file.SizeBytes) is { Length: > 0 } size ? $" · {size}" : "")</Typography>
-                                            </a>
-                                        }
-                                        else
-                                        {
-                                            <span class="contact-media__file-words">
-                                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@MediaLabels.Name(file)</Typography>
-                                                <Typography TextStyle="TextStyle.Small10Regular" As="small" Class="customer-muted">@MediaLabels.Unavailable(file)</Typography>
-                                            </span>
-                                        }
-                                    </div>
-                                }
-                            </div>
-                        }
-                    }
-                </ContactSection>
-
-                <MediaViewer Item="_preview" OnClose="() => _preview = null" />
-
-                <ContactSection Title="Recent task requests">
-                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No task requests yet.</Typography>
-                </ContactSection>
-
-                <div class="customer-since">
-                    <Icon Name="IconName.RiTimeFill" Size="IconSize.Sm" />
-                    <Typography TextStyle="TextStyle.Small10Regular" As="span">
-                        Last interaction @Contact.LastInteraction via @ContactCopy.Channel(Contact.LastInteractionChannel)
-                    </Typography>
-                </div>
             </div>
+
+            @if (Primary is { } conversation)
+            {
+                <footer class="customer-panel__footer">
+                    <Button @onclick="() => OpenConversation(conversation)">
+                        <IconLeft><Icon Name="IconName.RiMessage2Fill" /></IconLeft>
+                        <ChildContent>Open conversation</ChildContent>
+                    </Button>
+                </footer>
+            }
         </aside>
     </div>
 }
 
 @code {
-    private static readonly string[] Stages = ["New Lead", "Interested", "Customer", "Vip"];
-    private static readonly string[] TagOptions = ["Business", "Consumer", "New client", "Returning client", "VIP", "VVIP"];
-
-    private sealed record ChannelOption(string Key, string Label);
-    private static readonly ChannelOption[] LinkChannels =
-    [
-        new("whatsapp", "WhatsApp"),
-        new("instagram", "Instagram"),
-        new("facebook", "Messenger"),
-        new("tiktok", "TikTok"),
-    ];
-
     [Parameter] public Contact? Contact { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
-    [Parameter] public EventCallback<Contact> OnUpdated { get; set; }
+
+    /// <summary>Add a task for this customer: the page opens its own form, over the whole app rather than inside this panel.</summary>
+    [Parameter] public EventCallback OnAddTask { get; set; }
+
+    /// <summary>A picture was chosen: the page opens it full screen, outside this scrolling panel.</summary>
+    [Parameter] public EventCallback<MediaViewerItem> OnPreview { get; set; }
+
+    /// <summary>A dialog is open over it (a new task): the panel steps under it.</summary>
+    [Parameter] public bool Behind { get; set; }
 
     private ElementReference _card;
     private IAsyncDisposable? _trap;
     private bool _wasOpen;
     private string? _copied;
 
-    // Stage editing
-    private string _stage = string.Empty;
-    private bool _stageSaving;
-    private string? _stageError;
-    private string? _openPanelMenu;
-
-    // Tag editing
-    private List<string> _tags = [];
-    private bool _tagsSaving;
-    private string? _tagsError;
-
-    // Link account form
-    private bool _linkingAccount;
-    private string? _linkPlatform;
-    private string _linkIdentifier = string.Empty;
-    private bool _linkSaving;
-    private string? _linkError;
-
+    // The list carries no email or phone; they are read when the panel opens.
+    private CustomerDetailDto? _detail;
     private Guid? _loadedId;
 
-    // Media
-    private List<InboxMediaItemDto> _media = [];
-    private bool _mediaLoading;
-    private Guid? _loadedMediaId;
-    private MediaViewerItem? _preview;
-
-    // Count of identities the panel header shows — real linked + manually added.
-    private int? IdentityCount
-    {
-        get
-        {
-            int count = (Contact?.Identities.Count ?? 0) + (!string.IsNullOrWhiteSpace(Contact?.ChannelIdentifier) ? 1 : 0);
-            return count == 0 ? null : count;
-        }
-    }
-
-    protected override void OnParametersSet()
-    {
-        if (Contact?.Id != _loadedId)
-        {
-            _loadedId = Contact?.Id;
-            _stage = Contact?.Stage ?? string.Empty;
-            _tags = Contact is not null ? [.. Contact.Tags] : [];
-            _copied = null;
-            _stageError = null;
-            _tagsError = null;
-            _openPanelMenu = null;
-            _linkingAccount = false;
-            _linkPlatform = null;
-            _linkIdentifier = string.Empty;
-            _linkError = null;
-            // Reset media so it loads fresh for the new contact.
-            _media = [];
-            _loadedMediaId = null;
-            _preview = null;
-        }
-    }
+    private ContactIdentity? Primary => Contact?.Primary;
+    private string? Email => _detail?.Email is { Length: > 0 } email ? email : null;
+    // WhatsApp's sender is the customer's number; on TikTok and Facebook it is an opaque id, not a phone.
+    private string? Phone => _detail?.Phone is { Length: > 0 } phone ? phone
+        : Contact?.Identities.FirstOrDefault(identity => identity.Platform == "whatsapp") is { } whatsapp ? ContactCopy.Handle(whatsapp) : null;
 
     protected override async Task OnParametersSetAsync()
     {
-        if (Contact is null || Contact.Id == _loadedMediaId || Contact.Identities.Count == 0) return;
-        _loadedMediaId = Contact.Id;
-        _mediaLoading = true;
+        if (Contact?.Id == _loadedId) return;
+        _loadedId = Contact?.Id;
+        _detail = null;
+        _copied = null;
+        if (Contact is not { } contact) return;
         try
         {
-            List<InboxMediaItemDto> all = [];
-            foreach (ContactIdentity identity in Contact.Identities)
-            {
-                InboxMediaPageDto page = await ConversationClient.MediaAsync(
-                    identity.ConnectionId, identity.Sender, null, CancellationToken.None);
-                all.AddRange(page.Items);
-            }
-            _media = [.. all.OrderByDescending(m => m.ReceivedAt)];
+            var detail = await CustomerClient.GetAsync(contact.Id, CancellationToken.None);
+            if (_loadedId == contact.Id) _detail = detail;
         }
-        catch
-        {
-            // Non-critical — the panel still works without media.
-        }
-        finally
-        {
-            _mediaLoading = false;
-        }
+        // The details are a nicety: without them the panel still shows the rest.
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException) { }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -448,178 +164,22 @@
         }
     }
 
-    private async Task SelectStageAsync(string stage)
-    {
-        _openPanelMenu = null;
-        if (stage == _stage) return;
-        string previous = _stage;
-        _stage = stage;
-        _stageSaving = true;
-        _stageError = null;
-        StateHasChanged();
-        try
-        {
-            CustomerDetailDto updated = await CustomerClient.UpdateStageAsync(Contact!.Id, stage, CancellationToken.None);
-            await OnUpdated.InvokeAsync(ApplyDetail(Contact, updated));
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _stage = previous;
-            _stageError = ex.Message;
-        }
-        finally
-        {
-            _stageSaving = false;
-        }
-    }
+    private void OpenConversation(ContactIdentity identity) =>
+        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString($"{identity.ConnectionId}:{identity.Sender}")}");
 
-    private async Task ToggleTagAsync(string tag)
-    {
-        List<string> newTags = _tags.Contains(tag, StringComparer.OrdinalIgnoreCase)
-            ? [.. _tags.Where(t => !t.Equals(tag, StringComparison.OrdinalIgnoreCase))]
-            : [.. _tags, tag];
-        await SaveTagsAsync(newTags);
-    }
-
-    private async Task SaveTagsAsync(List<string> newTags)
-    {
-        _tagsSaving = true;
-        _tagsError = null;
-        StateHasChanged();
-        try
-        {
-            CustomerDetailDto updated = await CustomerClient.UpdateTagsAsync(Contact!.Id, newTags, CancellationToken.None);
-            _tags = [.. updated.Tags];
-            await OnUpdated.InvokeAsync(ApplyDetail(Contact, updated));
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _tagsError = ex.Message;
-        }
-        finally
-        {
-            _tagsSaving = false;
-        }
-    }
-
-    private static Contact ApplyDetail(Contact contact, CustomerDetailDto dto) => new()
-    {
-        Id = contact.Id,
-        Name = dto.Name,
-        Email = dto.Email ?? string.Empty,
-        Phone = dto.Phone ?? string.Empty,
-        Stage = dto.Stage,
-        Tags = dto.Tags,
-        Identities = contact.Identities,
-        HasWhatsApp = contact.HasWhatsApp,
-        HasInstagram = contact.HasInstagram,
-        WhatsAppNumber = contact.WhatsAppNumber,
-        InstagramHandle = contact.InstagramHandle,
-        LastInteraction = contact.LastInteraction,
-        LastInteractionChannel = contact.LastInteractionChannel,
-        OrderCount = contact.OrderCount,
-        Orders = contact.Orders,
-        ChannelPlatform = dto.ChannelPlatform,
-        ChannelIdentifier = dto.ChannelIdentifier ?? string.Empty,
-    };
-
-    private static string? ChannelLabel(string? platform) => platform switch
-    {
-        "whatsapp" => "WhatsApp",
-        "instagram" => "Instagram",
-        "facebook" => "Messenger",
-        "tiktok" => "TikTok",
-        _ => null,
-    };
-
-    private static string LinkHandleLabel(string platform) => platform switch
-    {
-        "whatsapp" => "Phone number",
-        "instagram" => "Instagram handle or profile URL",
-        "facebook" => "Facebook profile URL",
-        "tiktok" => "TikTok username or profile URL",
-        _ => "Channel identifier",
-    };
-
-    private static string LinkHandleHint(string platform) => platform switch
-    {
-        "whatsapp" => "Include country code, e.g. +2348012345678",
-        "instagram" => "@username or instagram.com/username",
-        "facebook" => "facebook.com/username or profile URL",
-        "tiktok" => "@username or tiktok.com/@username",
-        _ => "A username or profile URL",
-    };
-
-    private void CancelLinkAccount()
-    {
-        _linkingAccount = false;
-        _linkPlatform = null;
-        _linkIdentifier = string.Empty;
-        _linkError = null;
-    }
-
-    private async Task SaveLinkAccountAsync()
-    {
-        if (Contact is null || _linkPlatform is null || string.IsNullOrWhiteSpace(_linkIdentifier)) return;
-        _linkSaving = true;
-        _linkError = null;
-        StateHasChanged();
-        try
-        {
-            CustomerDetailDto updated = await CustomerClient.UpdateChannelIdentifierAsync(
-                Contact.Id, _linkPlatform, _linkIdentifier.Trim(), CancellationToken.None);
-            Contact updatedContact = ApplyLinkIdentifier(ApplyDetail(Contact, updated), _linkPlatform, _linkIdentifier.Trim());
-            CancelLinkAccount();
-            await OnUpdated.InvokeAsync(updatedContact);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException)
-        {
-            _linkError = ex.Message;
-        }
-        finally
-        {
-            _linkSaving = false;
-        }
-    }
-
-    private static Contact ApplyLinkIdentifier(Contact contact, string platform, string identifier) => new()
-    {
-        Id = contact.Id,
-        Name = contact.Name,
-        Email = contact.Email,
-        Phone = contact.Phone,
-        Stage = contact.Stage,
-        Tags = contact.Tags,
-        Identities = contact.Identities,
-        HasWhatsApp = contact.HasWhatsApp,
-        HasInstagram = contact.HasInstagram,
-        WhatsAppNumber = contact.WhatsAppNumber,
-        InstagramHandle = contact.InstagramHandle,
-        LastInteraction = contact.LastInteraction,
-        LastInteractionChannel = contact.LastInteractionChannel,
-        OrderCount = contact.OrderCount,
-        Orders = contact.Orders,
-        ChannelPlatform = platform,
-        ChannelIdentifier = identifier,
-    };
-
-    private static IconName IdentityIcon(string platform) => platform switch
-    {
-        "whatsapp" => IconName.RiWhatsappFill,
-        "instagram" => IconName.RiInstagramFill,
-        "tiktok" => IconName.RiTiktokFill,
-        _ => IconName.RiFacebookCircleFill,
-    };
-
-    private async Task CopyAsync(string which, string value)
+    private async Task CopyAsync(string field, string value)
     {
         await Interop.CopyAsync(value);
-        _copied = which;
+        _copied = field;
+        await Task.Delay(1400);
+        if (_copied == field) _copied = null;
     }
+
+    private static string DateTimeLabel(DateTime date) => date.ToLocalTime().ToString("d MMM yyyy, h:mm tt", CultureInfo.InvariantCulture);
 
     private async Task OnKeyDown(KeyboardEventArgs args)
     {
-        if (args.Key == "Escape") await OnClose.InvokeAsync();
+        if (args.Key == "Escape" && !Behind) await OnClose.InvokeAsync();
     }
 
     private async Task ReleaseTrapAsync()
