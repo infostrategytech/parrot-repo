@@ -8,6 +8,7 @@ using Parrot.Application.Agents;
 using Parrot.Application.Conversations;
 using Parrot.Application.Customers;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
 using Parrot.Infrastructure.Agents;
@@ -98,14 +99,30 @@ builder.Services.AddSingleton<MediaJobProcessor>(sp => ActivatorUtilities.Create
 builder.Services.AddSingleton<IDeliveryReceipts, MongoDeliveryReceipts>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
+builder.Services.AddHttpClient<IInstagramSender, InstagramSender>();
 builder.Services.AddSingleton<IOutboundFileDispatcher>(sp => ActivatorUtilities.CreateInstance<OutboundFileDispatcher>(sp));
 builder.Services.AddSingleton<OutboundFileProcessor>(sp => ActivatorUtilities.CreateInstance<OutboundFileProcessor>(sp));
-// One program, three jobs: Worker:Roles says which this process does, so each can be deployed and scaled by itself.
+
+// Services required by AiReplyWorker: Omni-AI sends a text reply event; Parrot routes
+// it to the right channel and publishes MessagePersisted(AgentToUser). ConversationService
+// is scoped so its EF-based connection repositories each get a fresh DbContext per event.
+builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
+builder.Services.AddScoped<ApplicationDbContext>(sp =>
+    sp.GetRequiredService<IDbContextFactory<ApplicationDbContext>>().CreateDbContext());
+builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
+builder.Services.AddScoped<IFacebookConnectionRepository, FacebookConnectionRepository>();
+builder.Services.AddScoped<IInstagramConnectionRepository, InstagramConnectionRepository>();
+builder.Services.AddScoped(typeof(IAppLogger<>), typeof(AppLogger<>));
+builder.Services.AddScoped<ConversationService>();
+builder.Services.AddSingleton<AiReplyProcessor>();
+
+// One program, four jobs: Worker:Roles says which this process does, so each can be deployed and scaled by itself.
 WorkerRoles roles = WorkerRoleSettings.Parse(builder.Configuration[WorkerRoleSettings.Key]);
 builder.Services.AddSingleton(typeof(WorkerRoles), roles);
 if (roles.HasFlag(WorkerRoles.Messages)) builder.Services.AddHostedService<Worker>();
 if (roles.HasFlag(WorkerRoles.Media)) builder.Services.AddHostedService<MediaWorker>();
 if (roles.HasFlag(WorkerRoles.Outbound)) builder.Services.AddHostedService<OutboundWorker>();
+if (roles.HasFlag(WorkerRoles.AiReply)) builder.Services.AddHostedService<AiReplyWorker>();
 if (roles.HasFlag(WorkerRoles.Media | WorkerRoles.Outbound))
 {
     builder.Services.AddSingleton<PendingSweeper>(sp => ActivatorUtilities.CreateInstance<PendingSweeper>(sp));

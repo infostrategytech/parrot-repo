@@ -12,14 +12,15 @@ public enum WorkerRoles
     Messages = 1,
     Media = 2,
     Outbound = 4,
-    All = Messages | Media | Outbound,
+    AiReply = 8,
+    All = Messages | Media | Outbound | AiReply,
 }
 
 public static class WorkerRoleSettings
 {
     public const string Key = "Worker:Roles";
 
-    /// <summary>"messages", "media", "outbound" or "all", comma separated. Unset or empty is all. Anything else stops startup.</summary>
+    /// <summary>"messages", "media", "outbound", "aireplies" or "all", comma separated. Unset or empty is all. Anything else stops startup.</summary>
     public static WorkerRoles Parse(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return WorkerRoles.All;
@@ -33,7 +34,8 @@ public static class WorkerRoleSettings
                 "messages" => WorkerRoles.Messages,
                 "media" => WorkerRoles.Media,
                 "outbound" => WorkerRoles.Outbound,
-                _ => throw new InvalidOperationException($"{Key} has '{part}'; use messages, media, outbound or all."),
+                "aireplies" => WorkerRoles.AiReply,
+                _ => throw new InvalidOperationException($"{Key} has '{part}'; use messages, media, outbound, aireplies or all."),
             };
         }
 

@@ -424,7 +424,6 @@ builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
-builder.Services.AddSingleton<ITenantIdLookup, EfTenantIdLookup>();
 builder.Services.AddScoped<IConnectionRepository, ConnectionRepository>();
 builder.Services.AddScoped<IConnectionService, ConnectionService>();
 builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
@@ -497,7 +496,6 @@ builder.Services.AddHttpClient<IPasswordBreachChecker, PwnedPasswordsBreachCheck
 // Webhooks publish straight to Kafka and wait for it to confirm. One producer
 // for the whole process; the publisher is scoped like the webhook services.
 builder.Services.AddSingleton<IMessageBus, KafkaMessageBus>();
-builder.Services.AddSingleton<IMessagePersistedPublisher, KafkaMessagePersistedPublisher>();
 builder.Services.AddScoped<InboundMessagePublisher>();
 builder.Services.AddScoped<IWhatsAppWebhookService, WhatsAppWebhookService>();
 builder.Services.AddScoped<IFacebookWebhookService, FacebookWebhookService>();
