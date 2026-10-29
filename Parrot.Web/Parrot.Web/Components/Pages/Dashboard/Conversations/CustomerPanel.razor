@@ -162,8 +162,10 @@
                         <Icon Name="@(_copied == "email" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
                     </RowButton>
                 }
-                @if (Customer.Phone is { Length: > 0 } phone)
+                @if (Customer.Phone is { Length: > 0 } stored)
                 {
+                    @* With its +, as the channel line above writes it (designer, 29 October 2026). *@
+                    var phone = ContactText.Phone(stored).Number ?? stored;
                     <RowButton aria-label="@($"Copy phone {phone}")" OnClick='() => CopyAsync("phone", phone)'>
                         <Icon Name="IconName.RiPhoneFill" Size="IconSize.Sm" />
                         <span><Typography TextStyle="TextStyle.Small12Medium" As="small">Phone</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@phone</Typography></span>
