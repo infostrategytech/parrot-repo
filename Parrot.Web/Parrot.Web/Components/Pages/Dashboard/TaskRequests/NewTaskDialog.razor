@@ -97,7 +97,8 @@
                             <div class="new-task__pair">
                                 <Input FloatingLabel="Their name" Value="@_walkName" ValueChanged="value => _walkName = value ?? string.Empty" maxlength="80"
                                        Error="@(_tried && _walkName.Trim().Length == 0)" HelperText="@(_tried && _walkName.Trim().Length == 0 ? "Add their name." : null)" />
-                                <Input FloatingLabel="Phone (optional)" Type="tel" Value="@_walkPhone" ValueChanged="value => _walkPhone = value ?? string.Empty" maxlength="20" />
+                                <Input FloatingLabel="Phone (optional)" Numeric="NumericInputKind.Phone" Value="@_walkPhone" ValueChanged="value => _walkPhone = value ?? string.Empty" maxlength="20"
+                                       Error="@(WalkPhoneAdvice is not null)" HelperText="@WalkPhoneAdvice" />
                             </div>
                         }
                     }
@@ -120,8 +121,8 @@
                         var current = row;
                         <div class="new-task__item">
                             <Input FloatingLabel="Item" Value="@current.Name" ValueChanged="value => current.Name = value ?? string.Empty" maxlength="80" />
-                            <Input FloatingLabel="Qty" Value="@current.Quantity" ValueChanged="value => current.Quantity = value ?? string.Empty" inputmode="numeric" maxlength="4" />
-                            <Input FloatingLabel="Price (optional)" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" inputmode="numeric" maxlength="12"
+                            <Input FloatingLabel="Qty" Value="@current.Quantity" ValueChanged="value => current.Quantity = value ?? string.Empty" Numeric="NumericInputKind.Integer" maxlength="4" />
+                            <Input FloatingLabel="Price (optional)" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
                                    Error="@(current.Price.Length > 0 && Money(current.Price) is null)" />
                             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {current.Name}")" @onclick="() => _items.Remove(current)">
                                 <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
@@ -134,7 +135,7 @@
                         var current = row;
                         <div class="new-task__item is-charge">
                             <Input FloatingLabel="Charge, such as Delivery fee" Value="@current.Name" ValueChanged="value => current.Name = value ?? string.Empty" maxlength="60" />
-                            <Input FloatingLabel="Amount" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" inputmode="numeric" maxlength="12"
+                            <Input FloatingLabel="Amount" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
                                    Error="@(current.Price.Length > 0 && Money(current.Price) is null)" />
                             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {current.Name}")" @onclick="() => _items.Remove(current)">
                                 <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
@@ -178,7 +179,7 @@
                     }
                     else
                     {
-                        <Input FloatingLabel="Amount (optional)" PrefixText="₦" Value="@_amount" ValueChanged="value => _amount = value ?? string.Empty" inputmode="numeric" maxlength="12"
+                        <Input FloatingLabel="Amount (optional)" PrefixText="₦" Value="@_amount" ValueChanged="value => _amount = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
                                HelperText="@(_amount.Length > 0 && Money(_amount) is null ? "Use numbers only, such as 17500." : "When there are no prices: the whole amount, if you know it.")"
                                Error="@(_amount.Length > 0 && Money(_amount) is null)" />
                     }
@@ -472,8 +473,12 @@
         ? (_walkName.Trim().Length > 0 ? new TaskCustomer(_walkName.Trim(), "", _walkPhone.Trim().Length > 0 ? _walkPhone.Trim() : null) : null)
         : _customer);
 
+    // A walk-in's number, checked as every screen checks one (ContactText): only when given, once Add task is pressed.
+    private string? WalkPhoneAdvice => _tried && _walkIn ? ContactText.Phone(_walkPhone).Advice : null;
+
     private bool Valid => HasText
         && (!_walkIn || _walkName.Trim().Length > 0)
+        && (!_walkIn || ContactText.Phone(_walkPhone).Problem is null)
         && _items.All(row => row.Price.Length == 0 || Money(row.Price) is not null)
         && (_amount.Length == 0 || Money(_amount) is not null);
 

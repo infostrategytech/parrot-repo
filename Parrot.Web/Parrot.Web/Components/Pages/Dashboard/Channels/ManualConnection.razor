@@ -150,14 +150,14 @@
                     <Input FloatingLabel="Phone Number ID"
                            Value="@PhoneNumberId"
                            ValueChanged="PhoneNumberIdChanged"
-                           inputmode="numeric"
+                           Numeric="NumericInputKind.Integer"
                            maxlength="64"
                            HelperText="This is the ID shown in Meta, not your phone number." />
 
                     <Input FloatingLabel="WhatsApp Business Account ID"
                            Value="@BusinessAccountId"
                            ValueChanged="BusinessAccountIdChanged"
-                           inputmode="numeric"
+                           Numeric="NumericInputKind.Integer"
                            maxlength="64" />
 
                     @* type=password, autocomplete off, and cleared after

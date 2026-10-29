@@ -27,7 +27,7 @@
 
     @if (!string.IsNullOrWhiteSpace(Description))
     {
-        <Typography TextStyle="@(Size == EmptyStateSize.Page ? TextStyle.BodySmallMedium : TextStyle.Small12Regular)" As="p" Prose Class="empty-state__body">
+        <Typography TextStyle="@(Size == EmptyStateSize.Page ? TextStyle.BodySmallMedium : TextStyle.Small12Medium)" As="p" Prose Class="empty-state__body">
             @Description
         </Typography>
     }

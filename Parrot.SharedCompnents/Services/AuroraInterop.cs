@@ -157,6 +157,14 @@ public sealed class AuroraInterop : IAsyncDisposable
         return new Handle(handle);
     }
 
+    /// <summary>Opt-in numeric editing, enforced locally so server latency cannot move the caret.</summary>
+    public async Task<IAsyncDisposable> BindNumberInputAsync<T>(ElementReference input, DotNetObjectReference<T> target) where T : class
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("bindNumberInput", input, target);
+        return new Handle(handle);
+    }
+
     /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
     /// <summary>Inserts text at the field's caret (or over its selection) and returns the field's new text.</summary>
     public async Task<string?> InsertAtCaretAsync(ElementReference element, string text)
