@@ -81,7 +81,8 @@
 .ds-tabs--flat ::deep .ds-tab:disabled { cursor: not-allowed; opacity: var(--ds-tabs-disabled-opacity); }
 .ds-tabs--flat ::deep .ds-tab.is-active { color: var(--colors-text-primary); background: var(--colors-surface-muted); }
 
-/* Tray: a page's views (Products & Services, Settings, Tasks). A darker tray on the page; on a narrow
+/* Tray: a page's views (Products & Services, Settings, Tasks). A light tray, filled neutral subtle with no edge
+   (designer, 25 October 2026: the darker one was too heavy); the chosen view a raised white card. On a narrow
    screen it scrolls sideways without a bar rather than wrapping. */
 .ds-tabs--tray {
   /* Missing from the token set: no tab height (Products' and Settings' own). */
@@ -94,7 +95,7 @@
   padding: var(--spacing-xs);
   overflow-x: auto;
   scrollbar-width: none;
-  background: var(--colors-accent-neutral-border);
+  background: var(--colors-accent-neutral-subtle);
   border-radius: var(--radius-radius-full);
 }
 .ds-tabs--tray::-webkit-scrollbar { display: none; }
@@ -112,9 +113,10 @@
   border-radius: var(--radius-radius-full);
 }
 .ds-tabs--tray ::deep .ds-tab:hover:not(.is-active) { background: var(--colors-interaction-hover); }
+/* Raised: white on the light tray, and a step lighter than the tray in dark mode. */
 .ds-tabs--tray ::deep .ds-tab.is-active {
   color: var(--colors-text-primary);
-  background: var(--colors-surface-card);
+  background: var(--colors-surface-elevated);
   box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
 }
 .ds-tabs--tray ::deep .ds-tab__count {

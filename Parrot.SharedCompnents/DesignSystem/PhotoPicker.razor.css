@@ -1,0 +1,90 @@
+.ds-photo-picker { display: grid; gap: var(--spacing-sm); }
+
+.ds-photo-picker__head { display: flex; gap: var(--spacing-sm); align-items: baseline; color: var(--colors-text-primary); }
+::deep .ds-photo-picker__muted { color: var(--colors-text-muted); }
+
+.ds-photo-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--ds-photo-picker-tile), 1fr));
+  gap: var(--spacing-sm);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+.ds-photo-picker {
+  /* Gaps in the token set: no thumbnail-size, border-width or motion scale;
+     the hidden input keeps a 1px box so it stays focusable. */
+  --ds-photo-picker-tile: 112px;
+  --ds-photo-picker-hairline: 1px;
+  --ds-photo-picker-motion: 150ms;
+  --ds-photo-picker-hidden: 1px;
+}
+
+.ds-photo-picker__photo,
+.ds-photo-picker__add {
+  position: relative;
+  aspect-ratio: 1;
+  overflow: hidden;
+  border-radius: var(--radius-radius-xl);
+}
+
+.ds-photo-picker__photo {
+  background: var(--colors-surface-muted);
+  border: var(--ds-photo-picker-hairline) solid var(--colors-surface-border);
+}
+
+.ds-photo-picker__photo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* The first photo is the one customers see first. */
+.ds-photo-picker__cover {
+  position: absolute;
+  bottom: var(--spacing-xs);
+  left: var(--spacing-xs);
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+}
+
+.ds-photo-picker__menu { position: absolute; top: var(--spacing-xs); right: var(--spacing-xs); }
+
+/* The add tile: a dashed drop of the photo's own size. */
+.ds-photo-picker__add {
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: var(--spacing-xs);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border: var(--ds-photo-picker-hairline) dashed var(--colors-accent-neutral-border);
+  cursor: pointer;
+  transition: border-color var(--ds-photo-picker-motion) ease, color var(--ds-photo-picker-motion) ease, background-color var(--ds-photo-picker-motion) ease;
+}
+
+.ds-photo-picker__add:hover {
+  color: var(--colors-text-primary);
+  background: var(--colors-interaction-hover);
+  border-color: var(--colors-accent-brand-border);
+}
+
+.ds-photo-picker__add.is-busy { cursor: progress; }
+
+/* Keyboard focus lands on the hidden input; the tile shows the app's own ring. */
+.ds-photo-picker__add:has(:focus-visible) {
+  outline: var(--ds-focus-ring-width) solid
+    color-mix(in srgb, var(--colors-interaction-focus) var(--ds-focus-ring-strength), transparent);
+  outline-offset: var(--ds-focus-ring-offset);
+}
+
+::deep .ds-photo-picker__input {
+  position: absolute;
+  width: var(--ds-photo-picker-hidden);
+  height: var(--ds-photo-picker-hidden);
+  opacity: 0;
+  overflow: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-photo-picker__add { transition: none; }
+}

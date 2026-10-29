@@ -7,7 +7,8 @@
   height: var(--ds-search-field-height);
   padding-inline: var(--spacing-md);
   color: var(--colors-icon-muted);
-  background: var(--colors-surface-muted);
+  /* White, as every field is (designer, 25 October 2026), with the hairline edge that shows it on a white panel. */
+  background: var(--colors-surface-card);
   border: var(--ds-search-field-border) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-lg);
   cursor: text;
@@ -21,7 +22,7 @@
   --ds-search-field-motion: var(--ds-motion-fast);
 }
 
-.ds-search-field:hover { border-color: var(--colors-surface-border); }
+.ds-search-field:hover { border-color: var(--colors-surface-input); }
 
 .ds-search-field:focus-within {
   background: var(--colors-surface-card);
