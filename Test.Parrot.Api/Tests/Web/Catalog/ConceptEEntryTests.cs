@@ -44,8 +44,10 @@ public class ConceptEEntryTests
         Assert.Equal(new decimal?[] { null, null, null, 1200.25m, 12000m }, lines.Select(line => line.Price));
     }
 
+    // Variants are available or sold out, never counted (designer, 29 October 2026): an older item's counts become
+    // just that, and nothing else about it changes.
     [Fact]
-    public void MetadataEditPreservesLegacyOptions_StockAndStartingPrice()
+    public void MetadataEditPreservesLegacyOptions_StartingPrice_AndWhatIsSoldOut()
     {
         var item = Legacy();
         var form = new ItemForm { Item = item }; Init(form);
@@ -53,15 +55,18 @@ public class ConceptEEntryTests
         var result = form.CaptureDraft();
         Assert.Equal(PriceType.From, result.PriceType);
         Assert.Equal("per yard", result.PriceUnit);
-        Assert.True(result.TracksStock);
         Assert.Equal(item.Price, result.Price);
         Assert.Equal(JsonSerializer.Serialize(item.Options), JsonSerializer.Serialize(result.Options));
-        Assert.Equal(JsonSerializer.Serialize(item.Variants), JsonSerializer.Serialize(result.Variants));
+        Assert.Equal(["S", "M"], result.Variants.Select(variant => variant.Key));
+        Assert.True(result.Variants[0].IsAvailable);
+        Assert.False(result.Variants[1].IsAvailable);
+        Assert.All(result.Variants, variant => Assert.Null(variant.Stock));
+        Assert.False(result.TracksStock);
         Assert.Equal("Updated name", result.Name);
     }
 
     [Fact]
-    public void LegacyVariantPricesCanChangeWithoutLosingInventory()
+    public void LegacyVariantPricesChange_AndCountsBecomeAvailableOrSoldOut()
     {
         var item = Legacy(); var first = new ItemForm { Item = item }; Init(first);
         var values = first.CaptureState();
@@ -69,10 +74,19 @@ public class ConceptEEntryTests
         var edit = new ItemForm { Item = item, RestoredDraft = values }; Init(edit);
         var result = edit.CaptureDraft();
         Assert.Equal(1500m, result.Variants[0].Price);
-        Assert.Equal(4, result.Variants[0].Stock);
-        Assert.Equal(0, result.Variants[1].Stock);
+        Assert.True(result.Variants[0].IsAvailable);
+        Assert.False(result.Variants[1].IsAvailable);
+        Assert.All(result.Variants, variant => Assert.Null(variant.Stock));
         Assert.Equal("Size", result.Options[0].Name);
-        Assert.True(result.TracksStock);
+        Assert.False(result.TracksStock);
+    }
+
+    [Fact]
+    public void AVariant_HasNoStockField()
+    {
+        var form = new ItemForm { Item = Legacy() }; Init(form);
+        Assert.Null(typeof(ItemForm).GetField("_legacyStockTracking", BindingFlags.Instance | BindingFlags.NonPublic));
+        Assert.Null(typeof(ItemForm).GetField("_variantStocks", BindingFlags.Instance | BindingFlags.NonPublic));
     }
 
     [Fact]

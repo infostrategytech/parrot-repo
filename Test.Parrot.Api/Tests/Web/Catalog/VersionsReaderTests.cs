@@ -134,21 +134,36 @@ public class VersionsReaderTests
     }
 
     [Fact]
-    public void UpdatingFromAPost_CopiesOnlyItsVersions_AndKeepsStock()
+    // Variants are available or sold out, never counted (designer, 29 October 2026): a version already on the item
+    // keeps whether it's sold out (one counted to 0 is), and the item stops counting.
+    public void UpdatingFromAPost_CopiesOnlyItsVersions_AndKeepsWhatIsSoldOut()
     {
         var match = new CatalogEntry
         {
             Name = "Ankara two-piece set", TracksStock = true,
             Options = [new ItemOption { Name = PriceWords.VariantList, Values = ["UK 6 Blue", "UK 12 Blue"] }],
-            Variants = [new ItemVariant { Key = "UK 6 Blue", Price = 48000m, Stock = 4 }, new ItemVariant { Key = "UK 12 Blue", Price = 48000m, Stock = 2 }],
+            Variants = [new ItemVariant { Key = "UK 6 Blue", Price = 48000m, Stock = 0 }, new ItemVariant { Key = "UK 12 Blue", Price = 48000m, Stock = 2 }],
         };
         var from = Item("Ankara two-piece set\nUk 6 blue 50k\nUk 12 red 55k\nUk 14 yellow 64k");
 
         var updated = PostDraft.Onto(match, from);
 
         Assert.Equal(["UK 6 Blue", "UK 12 Red", "UK 14 Yellow"], updated.Variants.Select(variant => variant.Key));
-        Assert.Equal(4, updated.Variants[0].Stock);
-        Assert.Null(updated.Variants[1].Stock);
+        Assert.False(updated.Variants[0].IsAvailable);
+        Assert.True(updated.Variants[1].IsAvailable);
+        Assert.All(updated.Variants, variant => Assert.Null(variant.Stock));
+        Assert.False(updated.TracksStock);
         Assert.Equal(55000m, updated.Variants[1].Price);
+    }
+
+    [Fact]
+    public void ACountedItem_GivenVersionsByAPost_StaysAvailable()
+    {
+        var match = new CatalogEntry { Name = "Ankara two-piece set", TracksStock = true, Stock = 5, Price = 48000m };
+        var updated = PostDraft.Onto(match, Item("Ankara two-piece set\nUk 6 blue 50k\nUk 12 red 55k"));
+
+        Assert.False(updated.TracksStock);
+        Assert.Null(updated.Stock);
+        Assert.True(updated.AvailableNow);
     }
 }

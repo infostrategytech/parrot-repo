@@ -115,7 +115,7 @@ else
     /// <summary>Unsaved form values, including incomplete amounts, when moving between imported items.</summary>
     [Parameter] public DraftValues? RestoredDraft { get; set; }
 
-    public sealed record VersionDraft(string Name, string? Price, bool SoldOut, string? Stock = null);
+    public sealed record VersionDraft(string Name, string? Price, bool SoldOut);
     public sealed record DraftValues(List<string> Photos, string Name, CatalogKind Kind, string Description,
         string Category, string PriceType, string? Price, string Unit, string Availability,
         string Time, string? Stock, bool Update, bool HasVersions, List<VersionDraft> Versions);
@@ -135,7 +135,6 @@ else
         public string Name { get; set; } = "";
         public string? Price { get; set; }
         public bool SoldOut { get; set; }
-        public string? Stock { get; set; }
     }
 
     private static readonly CatalogKind[] Kinds = [CatalogKind.Product, CatalogKind.Food, CatalogKind.Service, CatalogKind.Digital];
@@ -153,7 +152,6 @@ else
     private string? _categoryError;
     private readonly List<string> _createdCategories = [];
     private bool _hasVersions;
-    private bool _legacyStockTracking;
     private List<VersionRow> _versions = [];
     private string _initialDraft = "";
     private bool _leaving, _allowNavigation;
@@ -248,7 +246,7 @@ else
         else if (Pricing == PriceVariants)
         {
             <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="item-form__muted">Add each variant the way you'd write it, such as UK 6 blue, with its price.</Typography>
-            <ul class="@($"item-form__versions{(_legacyStockTracking ? " has-stock" : null)}")" aria-label="Variants">
+            <ul class="item-form__versions" aria-label="Variants">
                 @for (var index = 0; index < _versions.Count; index++)
                 {
                     var row = _versions[index];
@@ -262,13 +260,6 @@ else
                                Value="@row.Price" ValueChanged="value => { row.Price = value; _error = null; }" @onfocusout="() => row.Price = Grouped(row.Price)"
                                Error="@(_tried && RowStarted(row) && RowPriceWrong(row))"
                                HelperText="@(_tried && RowStarted(row) && RowPriceWrong(row) ? "Enter a positive price, up to 2 decimals." : null)" />
-                        @if (_legacyStockTracking)
-                        {
-                            <Input @ref="_variantStocks[row.Id]" Class="item-form__variant-stock" FloatingLabel="Stock" Numeric="NumericInputKind.Integer" maxlength="6"
-                                   Value="@row.Stock" ValueChanged="value => SetStock(row, value)"
-                                   Error="@(_tried && RowStarted(row) && RowStockWrong(row))"
-                                   HelperText="@(_tried && RowStarted(row) && RowStockWrong(row) ? "Add stock, or mark sold out." : null)" />
-                        }
                         <span class="item-form__version-end">
                             @if (row.SoldOut)
                             {
@@ -443,7 +434,7 @@ else
     private bool PriceInvalid => Pricing == PriceSingle && (_price ?? string.Empty).Trim().Length > 0 && Money(_price) is not > 0;
     private bool RequiredPriceMissing => Pricing == PriceSingle && Money(_price) is not > 0;
     private Input? _stockField;
-    private readonly Dictionary<string, Input> _variantNames = [], _variantPrices = [], _variantStocks = [];
+    private readonly Dictionary<string, Input> _variantNames = [], _variantPrices = [];
 
     // A variant's name as it's kept: tidied spaces, and " / " (which joins combinations elsewhere) said with a space.
     private static string NameOf(VersionRow row) => string.Join(' ', row.Name.Replace(" / ", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries));
@@ -460,21 +451,6 @@ else
     // A sold-out variant can wait for its price; one customers can buy needs it.
     private bool RowPriceWrong(VersionRow row) =>
         (row.Price ?? string.Empty).Trim().Length > 0 ? Money(row.Price) is not > 0 : !row.SoldOut;
-
-    private bool RowStockWrong(VersionRow row) => _legacyStockTracking &&
-        (!string.IsNullOrWhiteSpace(row.Stock) && NumberText.Integer(row.Stock, 999999) is null
-            || !row.SoldOut && NumberText.Integer(row.Stock, 999999) is not > 0);
-
-    private void SetStock(VersionRow row, string? value)
-    {
-        var before = NumberText.Integer(row.Stock, 999999);
-        row.Stock = value; _error = null;
-        if (NumberText.Integer(value, 999999) is { } count)
-        {
-            if (count == 0) row.SoldOut = true;
-            else if (before is null or 0) row.SoldOut = false;
-        }
-    }
 
     private void SetName(VersionRow row, string? name)
     {
@@ -514,7 +490,6 @@ else
         if (rows.Any(row => (row.Price ?? string.Empty).Trim().Length > 0 && Money(row.Price) is not > 0)) return "Enter positive prices with up to 2 decimal places.";
         if (rows.Any(row => !row.SoldOut && Money(row.Price) is not > 0)) return "Add a price for every available variant.";
         if (!rows.Any(row => Money(row.Price) is > 0)) return "Add at least one variant price, even if all variants are sold out.";
-        if (rows.Any(RowStockWrong)) return "Add stock for each available variant, or mark it sold out.";
         return null;
     }
 
@@ -551,17 +526,15 @@ else
         _stock = item.TracksStock && !item.HasOptions && item.Stock is { } stock ? stock.ToString(CultureInfo.InvariantCulture) : null;
 
         // The variants it's sold in, one row each and only those. An older item's combinations ("M / Indigo") read
-        // as one name each ("M Indigo"); one counted to 0 reads as sold out.
+        // as one name each ("M Indigo"); one counted to 0 reads as sold out, and is no longer counted when saved.
         if (item.HasOptions)
         {
-            _legacyStockTracking = item.TracksStock;
             _hasVersions = true;
             _versions = [.. item.Variants.Select(variant => new VersionRow
             {
                 Name = variant.Key.Replace(" / ", " "),
                 Price = (variant.Price ?? item.Price) is { } amount ? Grouped(Amount(amount)) : null,
                 SoldOut = !variant.IsAvailable || item.TracksStock && variant.Stock is not > 0,
-                Stock = variant.Stock?.ToString(CultureInfo.InvariantCulture),
             })];
             _price = null;
         }
@@ -570,7 +543,7 @@ else
             _priceType = draft.Pricing == PriceAsk ? "ask" : item.PriceType == PriceType.From ? "from" : "fixed";
             _hasVersions = draft.Pricing == PriceVariants;
             _price = draft.Price; _stock = draft.Stock; _unit = draft.Unit;
-            _versions = [.. draft.Variants.Select(row => new VersionRow { Name = row.Name, Price = row.Price, SoldOut = row.SoldOut, Stock = row.Stock })];
+            _versions = [.. draft.Variants.Select(row => new VersionRow { Name = row.Name, Price = row.Price, SoldOut = row.SoldOut })];
         }
         if (RestoredDraft is { } restored)
         {
@@ -579,7 +552,7 @@ else
             _priceType = restored.PriceType; _price = restored.Price; _unit = restored.Unit;
             _now = restored.Availability; _time = restored.Time; _stock = restored.Stock; _update = restored.Update;
             _hasVersions = restored.HasVersions;
-            _versions = [.. restored.Versions.Select(row => new VersionRow { Name = row.Name, Price = row.Price, SoldOut = row.SoldOut, Stock = row.Stock })];
+            _versions = [.. restored.Versions.Select(row => new VersionRow { Name = row.Name, Price = row.Price, SoldOut = row.SoldOut })];
         }
         _initialDraft = System.Text.Json.JsonSerializer.Serialize(CaptureState());
     }
@@ -654,10 +627,8 @@ else
             _error = versions;
             var badName = UsableVersions.FirstOrDefault(row => NameOf(row).Length == 0 || Twice(row));
             var badPrice = UsableVersions.FirstOrDefault(RowPriceWrong);
-            var badStock = UsableVersions.FirstOrDefault(RowStockWrong);
             var field = badName is not null ? _variantNames.GetValueOrDefault(badName.Id)
-                : badPrice is not null ? _variantPrices.GetValueOrDefault(badPrice.Id)
-                : badStock is not null ? _variantStocks.GetValueOrDefault(badStock.Id) : _variantNames.Values.FirstOrDefault();
+                : badPrice is not null ? _variantPrices.GetValueOrDefault(badPrice.Id) : _variantNames.Values.FirstOrDefault();
             if (field is not null) await field.FocusAsync();
             return;
         }
@@ -693,7 +664,7 @@ else
         entry.EditorDraft = new CatalogEditorDraft
         {
             Pricing = Pricing, Price = _price, Stock = _stock, Unit = _unit,
-            Variants = [.. _versions.Select(row => new CatalogVariantDraft(row.Name, row.Price, row.SoldOut, row.Stock))],
+            Variants = [.. _versions.Select(row => new CatalogVariantDraft(row.Name, row.Price, row.SoldOut))],
         };
         _saving = _savingDraft = true;
         try { _error = await Save(entry, true); if (_error is null) _allowNavigation = true; }
@@ -704,7 +675,7 @@ else
 
     public DraftValues CaptureState() => new([.. _photos], _name, _kind, _description, _category,
         _priceType, _price, _unit, _now, _time, _stock, _update, _hasVersions,
-        [.. _versions.Select(row => new VersionDraft(row.Name, row.Price, row.SoldOut, row.Stock))]);
+        [.. _versions.Select(row => new VersionDraft(row.Name, row.Price, row.SoldOut))]);
 
     public bool HasChanges => _initialDraft != System.Text.Json.JsonSerializer.Serialize(CaptureState());
 
@@ -774,14 +745,12 @@ else
                 var before = original.Variants[index];
                 var variant = before.Copy();
                 if (Money(row.Price) != (before.Price ?? original.Price)) variant.Price = Money(row.Price);
-                var wasOut = !before.IsAvailable || original.TracksStock && before.Stock is not > 0;
-                if (row.SoldOut != wasOut) variant.IsAvailable = !row.SoldOut;
-                if (_legacyStockTracking) variant.Stock = NumberText.Integer(row.Stock, 999999);
+                // Sold out or available, as the row says; a count it had is dropped below.
+                variant.IsAvailable = !row.SoldOut;
+                variant.Stock = null;
                 return variant;
             })];
         }
-        else if (_legacyStockTracking && Pricing == PriceVariants)
-            for (var index = 0; index < versions.Count; index++) entry.Variants[index].Stock = NumberText.Integer(versions[index].Stock, 999999);
 
         entry.IsAvailable = _now != "out";
         entry.AvailabilityIsUnconfirmed = string.IsNullOrEmpty(_now);
@@ -796,9 +765,10 @@ else
         }
         else if (entry.HasOptions)
         {
-            // Variants are available or sold out, not counted.
-            entry.TracksStock = _legacyStockTracking;
+            // Variants are available or sold out, not counted (designer, 29 October 2026).
+            entry.TracksStock = false;
             entry.Stock = null;
+            foreach (var variant in entry.Variants) variant.Stock = null;
         }
 
         // Capturing values never approves them. The explicit Add/Save action validates and marks them live.

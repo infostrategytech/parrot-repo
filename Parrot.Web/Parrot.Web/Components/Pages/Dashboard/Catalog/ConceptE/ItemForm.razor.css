@@ -80,11 +80,6 @@
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
 }
-.item-form__versions.has-stock {
-  /* Gap in the token set: compact quantity column for legacy stock-tracked variants only. */
-  --ds-item-form-stock-width: 96px;
-  grid-template-columns: minmax(0, 1fr) var(--ds-item-form-version-price) var(--ds-item-form-stock-width) auto;
-}
 .item-form__version + .item-form__version { border-top: var(--ds-item-form-hairline) solid var(--colors-surface-border); }
 .item-form__version-end { display: inline-flex; gap: var(--spacing-xs); align-items: center; justify-self: end; }
 .item-form ::deep .item-form__add-variant { justify-self: start; margin-inline-start: calc(-1 * var(--spacing-sm)); }

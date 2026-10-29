@@ -68,14 +68,19 @@ public sealed class PostDraft
             if (from.Options.Count > 0)
             {
                 // The versions in the post, as written: never every combination of their values. A version
-                // already on the item keeps its stock and whether it's sold out.
+                // already on the item keeps whether it's sold out (one counted to 0 is). Variants are available or
+                // sold out, never counted (designer, 29 October 2026), so the item stops counting.
                 entry.Options = [.. from.Options.Select(option => option.Copy())];
                 var before = entry.Variants;
+                var counted = entry.TracksStock;
                 entry.Variants = [.. from.Variants.Select(variant =>
                 {
                     var kept = before.FirstOrDefault(other => string.Equals(other.Key, variant.Key, StringComparison.OrdinalIgnoreCase));
-                    return new ItemVariant { Key = variant.Key, Price = variant.Price, IsAvailable = kept?.IsAvailable ?? variant.IsAvailable, Stock = kept?.Stock };
+                    var available = kept is null ? variant.IsAvailable : kept.IsAvailable && (!counted || kept.Stock > 0);
+                    return new ItemVariant { Key = variant.Key, Price = variant.Price, IsAvailable = available };
                 })];
+                entry.TracksStock = false;
+                entry.Stock = null;
             }
             else
             {
