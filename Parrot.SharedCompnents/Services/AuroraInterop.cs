@@ -58,13 +58,24 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// handle is disposed. Intended for non-modal drawers and popovers that do
     /// not trap focus.
     /// </summary>
-    public async Task<IAsyncDisposable> BindEscapeAsync<T>(DotNetObjectReference<T> reference, string method)
+    public async Task<IAsyncDisposable> BindEscapeAsync<T>(DotNetObjectReference<T> reference, string method, ElementReference? owner = null)
         where T : class
     {
         var module = await _module.Value;
-        var handle = await module.InvokeAsync<IJSObjectReference>("bindEscape", reference, method);
+        var handle = await module.InvokeAsync<IJSObjectReference>("bindEscape", reference, method, owner);
         return new Handle(handle);
     }
+
+    /// <summary>Remembers a non-modal panel's trigger and restores it on disposal without trapping focus.</summary>
+    public async Task<IAsyncDisposable> RememberFocusAsync()
+    {
+        var module = await _module.Value;
+        return new Handle(await module.InvokeAsync<IJSObjectReference>("rememberFocus"));
+    }
+
+    /// <summary>Waits for a drawer's inert attribute to clear before focusing it after a server render.</summary>
+    public async Task<bool> FocusWhenInteractiveAsync(ElementReference element) =>
+        await (await _module.Value).InvokeAsync<bool>("focusWhenInteractive", element);
 
     /// <summary>
     /// Focuses the element on Ctrl+key (⌘+key on a Mac), for as long as the

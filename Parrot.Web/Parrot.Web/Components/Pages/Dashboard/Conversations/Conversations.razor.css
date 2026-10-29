@@ -20,7 +20,7 @@
      1500px up, close to the 320–380px support inboxes use. */
   --ds-inbox-queue: clamp(340px, 28vw, 420px);
   /* The customer panel keeps the width validated in React. */
-  --ds-inbox-customer: 380px;
+  --ds-inbox-customer: 420px;
   --ds-inbox-control: 40px;
   --ds-inbox-avatar: 44px;
   /* Missing from the token set: no conversation-row height token. */
