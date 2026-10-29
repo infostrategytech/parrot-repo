@@ -1,49 +1,37 @@
-/* The customer list. Copied from Aurora's ProductsPage.razor.css: content
-   capped at 1440 and centred, a fluid gutter, and a table whose middle
-   columns are fixed so every row lines up with the header. */
+/* Customers: laid out as Products & Services and Tasks are: the title, then search and the channel filter,
+   then the table in a white card. The gutter outside, then everything on one 1440 measure, centred. */
+.customers {
+  /* Gaps in the token set: no page-gutter, page-width, readable-measure, search-width or border-width scale.
+     The same values as the Tasks page. */
+  --ds-customers-gutter: clamp(28px, 4vw, 66px);
+  --ds-customers-max: 1440px;
+  --ds-customers-measure: 680px;
+  --ds-customers-search: 320px;
+  --ds-customers-hairline: 1px;
 
-.contacts {
-  padding: var(--spacing-4xl) var(--ds-contacts-gutter) var(--spacing-5xl);
+  display: grid;
+  padding: var(--spacing-4xl) var(--ds-customers-gutter) var(--spacing-6xl);
+  color: var(--colors-text-primary);
 }
 
-.contacts > * {
-  width: min(var(--ds-contacts-max), 100%);
-  margin-inline: auto;
-}
+.customers > ::deep * { width: min(var(--ds-customers-max), 100%); min-width: 0; margin-inline: auto; }
+.customers ::deep p,
+.customers ::deep h1 { margin: var(--spacing-none); }
 
-.contacts {
-  /* Gaps in the token set: no page-gutter, content-width, control-height or
-     border-width scale. The gutter and cap are Aurora's Products page's. */
-  --ds-contacts-gutter: clamp(28px, 4vw, 66px);
-  --ds-contacts-max: 1440px;
-  --ds-contacts-hairline: 1px;
-  --ds-contacts-control: 41px;
-  --ds-contacts-search: 300px;
-  --ds-contacts-measure: 650px;
-}
-
-.contacts__header {
+/* The title and its line on the left; the actions level with the line's foot. */
+.customers__header {
   display: flex;
+  gap: var(--spacing-3xl);
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--spacing-4xl);
   margin-bottom: var(--spacing-2xl);
 }
+.customers__heading { display: grid; gap: var(--spacing-sm); }
+.customers__heading ::deep .customers__lede { max-width: var(--ds-customers-measure); color: var(--colors-text-secondary); }
+.customers__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
 
-.contacts__heading { display: grid; gap: var(--spacing-sm); }
-::deep .contacts__lede { max-width: var(--ds-contacts-measure); color: var(--colors-text-muted); }
-
-.contacts__actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--spacing-sm);
-  align-items: center;
-}
-
-/* ── Controls ────────────────────────────────────────────────────────────── */
-
-/* Search and the channel filter, on the right above the table. */
-.contacts__controls {
+/* Search, then the channel filter, on the right: where Tasks and Products & Services keep theirs. */
+.customers__controls {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-sm);
@@ -51,103 +39,18 @@
   justify-content: flex-end;
   margin-bottom: var(--spacing-lg);
 }
+.customers__controls ::deep .customers__search { width: var(--ds-customers-search); }
 
-.contacts__search {
-  display: flex;
-  gap: var(--spacing-sm);
-  align-items: center;
-  width: var(--ds-contacts-search);
-  height: var(--ds-contacts-control);
-  padding: var(--spacing-none) var(--spacing-md);
-  color: var(--colors-text-subtle);
-  background: var(--colors-surface-card);
-  border: var(--ds-contacts-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-full);
+/* The table, its card and its pages are the shared DataTable's (designer, 28 October 2026). */
+
+.customers__panel-footer { display: flex; justify-content: flex-end; width: 100%; }
+
+@media (max-width: 1024px) {
+  /* The actions under the title, side by side, rather than squeezed beside it. */
+  .customers__header { flex-direction: column; align-items: flex-start; gap: var(--spacing-lg); }
+  .customers__controls ::deep .customers__search { flex: 1; width: auto; }
 }
 
-.contacts__search:focus-within { border-color: var(--colors-brand-primary); }
-
-.contacts__search input {
-  flex: 1;
-  min-width: 0;
-  color: var(--colors-text-secondary);
-  background: transparent;
-  border: 0;
-  outline: 0;
-}
-
-/* ── Table ───────────────────────────────────────────────────────────────── */
-
-/* The rows sit inside the card, their lines short of its edge (designer, 27 October 2026). */
-.contacts__table-wrap {
-  overflow: hidden;
-  padding: var(--spacing-xs) var(--spacing-md);
-  background: var(--colors-surface-card);
-  border: var(--ds-contacts-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-2xl);
-  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
-}
-
-.contacts__table-head,
-.contacts__table ::deep .contact-row {
-  display: grid;
-  grid-template-columns:
-    minmax(var(--ds-contacts-col-name), 1.4fr)
-    minmax(var(--ds-contacts-col-channels), 1fr)
-    var(--ds-contacts-col-last)
-    var(--ds-contacts-col-tasks)
-    var(--ds-contacts-col-orders)
-    var(--ds-contacts-col-actions);
-  gap: var(--spacing-md);
-  align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.contacts {
-  /* No token scale describes a table column; these are measured against the
-     longest real value in each. */
-  --ds-contacts-col-name: 200px;
-  --ds-contacts-col-channels: 140px;
-  --ds-contacts-col-last: 140px;
-  --ds-contacts-col-tasks: 110px;
-  --ds-contacts-col-orders: 72px;
-  --ds-contacts-col-actions: 40px;
-  --ds-contacts-head-min: 45px;
-}
-
-.contacts__table-head {
-  min-height: var(--ds-contacts-head-min);
-  color: var(--colors-text-muted);
-}
-
-.contacts__table ::deep .contact-row {
-  border-top: var(--ds-contacts-hairline) solid var(--colors-surface-border);
-}
-
-.contacts__pagination {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-lg);
-  padding: var(--spacing-md);
-  color: var(--colors-text-muted);
-  border-top: var(--ds-contacts-hairline) solid var(--colors-surface-border);
-}
-
-.contacts__pagination-controls {
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
-}
-
-/* Tablets (below 1180px, designer, 14 October 2026): the columns keep their
-   widths and the table scrolls sideways inside its card, rather than cutting
-   off its last columns. The card's rounded edge stays. */
-@media not all and (min-width: 1180px) {
-  .contacts__table-wrap { overflow-x: auto; }
-  .contacts__table {
-    min-width: calc(var(--ds-contacts-col-name) + var(--ds-contacts-col-channels) + var(--ds-contacts-col-last)
-      + var(--ds-contacts-col-tasks) + var(--spacing-md) * 5);
-  }
+@media (max-width: 760px) {
+  .customers__header { align-items: stretch; }
 }

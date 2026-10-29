@@ -32,7 +32,11 @@ public sealed record CustomerDetailDto(
     DateTime CreatedAt,
     string? Phone,
     string? ChannelPlatform,
-    string? ChannelIdentifier);
+    string? ChannelIdentifier)
+{
+    /// <summary>Optional profile location, when supplied by the API; never inferred from a channel or phone.</summary>
+    public string? Location { get; init; }
+}
 
 public sealed record CreateCustomerDto(
     string Name,

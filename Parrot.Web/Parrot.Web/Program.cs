@@ -111,6 +111,8 @@ builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddScoped<ConversationClient>();
 builder.Services.AddScoped<CustomerClient>();
+// Linking a customer's profiles (reversible) stays hidden until the API has the links endpoints (customers-backend-requests).
+builder.Services.AddSingleton<ICustomerLinks, UnavailableCustomerLinks>();
 // No photo-reading service yet; photos are not offered in the import modal until one exists.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Customers.ICustomerListReader, Parrot.Web.Features.Dashboard.Customers.UnavailableCustomerListReader>();
 builder.Services.AddScoped<InboxUnreadState>();

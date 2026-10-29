@@ -37,7 +37,7 @@ public sealed class CustomerClient(HttpClient http, AuthState auth)
         DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private async Task<T> RequestAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
+    internal async Task<T> RequestAsync<T>(HttpMethod method, string path, object? body, CancellationToken ct)
     {
         string token = auth.IsAuthenticated ? auth.CurrentUser!.Token : throw new InvalidOperationException("Sign in to continue.");
         using HttpRequestMessage request = new(method, path);

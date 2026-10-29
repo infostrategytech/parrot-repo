@@ -43,6 +43,10 @@ export function trapFocus(container, escapeTarget, escapeMethod) {
   }
 
   function onKeyDown(event) {
+    // A confirmation can sit inside a side panel. Let the innermost dialog own
+    // its Escape/Tab keys, so dismissing it never dismisses the customer's panel too.
+    const innerDialog = event.target.closest?.('[role="dialog"]');
+    if (event.defaultPrevented || (innerDialog && innerDialog !== container && container.contains(innerDialog))) return;
     if (event.key === "Escape") {
       if (escapeTarget && escapeMethod) escapeTarget.invokeMethodAsync(escapeMethod);
       return;
@@ -131,9 +135,11 @@ export function bindFocusShortcut(element, key) {
 
 // Non-modal drawers do not trap focus, but Escape should still dismiss them
 // regardless of where focus currently sits on the page.
-export function bindEscape(dotNetRef, method) {
+export function bindEscape(dotNetRef, method, owner) {
   const onKeyDown = event => {
     if (event.key !== "Escape") return;
+    // A contextual drawer must not close underneath a child viewer, form or menu.
+    if (owner && (event.defaultPrevented || event.target?.closest?.('[role="dialog"], [role="menu"], [role="listbox"]'))) return;
     dotNetRef.invokeMethodAsync(method);
   };
   document.addEventListener("keydown", onKeyDown);
@@ -142,6 +148,31 @@ export function bindEscape(dotNetRef, method) {
       document.removeEventListener("keydown", onKeyDown);
     }
   };
+}
+
+export function rememberFocus() {
+  const trigger = document.activeElement;
+  return { release() { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); } };
+}
+
+export function focusWhenInteractive(element) {
+  return new Promise(resolve => {
+    if (!element?.isConnected) { resolve(false); return; }
+    let timer;
+    const observer = new MutationObserver(tryFocus);
+    function finish(focused) { observer.disconnect(); clearTimeout(timer); resolve(focused); }
+    function tryFocus() {
+      if (!element.isConnected) { finish(false); return; }
+      if (element.closest('[inert]')) return;
+      element.focus({ preventScroll: true });
+      finish(document.activeElement === element);
+    }
+    // Blazor Server can run an earlier render's callback while the opening batch is still travelling.
+    // Observe the actual browser state; never remove inert ourselves or move focus into a closed drawer.
+    observer.observe(element, { attributes: true, attributeFilter: ['inert'] });
+    timer = setTimeout(() => finish(false), 1000);
+    tryFocus();
+  });
 }
 
 
@@ -680,7 +711,7 @@ export async function copyText(value) {
 
 export async function downloadFile(url, fileName) {
   try {
-    // Same-origin credentials allow protected OmniAI media without ever
+    // Same-origin credentials allow protected yára media without ever
     // forwarding session cookies to an external channel URL.
     const response = await fetch(url, { credentials: "same-origin" });
     if (!response.ok) return false;
