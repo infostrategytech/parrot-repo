@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using Microsoft.AspNetCore.DataProtection;
 using Parrot.Infrastructure.SocialMediaIntegrations;
 using Moq;
+using Parrot.Application.Agents;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Logging;
@@ -886,6 +887,22 @@ public class ConversationServiceTests
         private sealed class NullScope : IDisposable { public void Dispose() { } }
     }
 
+    private sealed class FakeMessagePersistedPublisher : IMessagePersistedPublisher
+    {
+        public List<MessagePersisted> Published { get; } = new();
+        public Task PublishAsync(MessagePersisted persisted, CancellationToken cancellationToken = default)
+        {
+            Published.Add(persisted);
+            return Task.CompletedTask;
+        }
+    }
+
+    private sealed class FakeTenantIdLookup(string? ownerId) : ITenantIdLookup
+    {
+        public Task<string?> FindOwnerIdAsync(string workspaceId, CancellationToken ct) =>
+            Task.FromResult(ownerId);
+    }
+
     private ConversationService CreateWithTakeover(FakeHumanTakeoverStore store)
     {
         _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
@@ -893,6 +910,16 @@ public class ConversationServiceTests
             _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
             _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(),
             receipts: _receipts.Object, humanTakeover: store, logger: new NullAppLogger());
+    }
+
+    private ConversationService CreateForAgentReply(FakeMessagePersistedPublisher publisher, FakeHumanTakeoverStore? takeover = null)
+    {
+        _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
+        return new ConversationService(_store, _connections.Object, _sender.Object,
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(),
+            receipts: _receipts.Object, humanTakeover: takeover, logger: new NullAppLogger(),
+            publisher: publisher, tenantLookup: new FakeTenantIdLookup("root-account-1"));
     }
 
     [Fact]
@@ -926,6 +953,37 @@ public class ConversationServiceTests
 
         await Assert.ThrowsAsync<NotFoundException>(() =>
             service.SendAsync(Owner, _connection.Id, Recipient, new SendReplyRequest(Guid.NewGuid(), "Hi"), default));
+
+        Assert.Empty(takeover.SetCalls);
+    }
+
+    [Fact]
+    public async Task SendAgentReplyAsync_PublishesAgentToUserEvent()
+    {
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.agent-reply");
+        FakeMessagePersistedPublisher publisher = new();
+
+        await CreateForAgentReply(publisher).SendAgentReplyAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "Here's the answer"), default);
+
+        MessagePersisted published = Assert.Single(publisher.Published);
+        Assert.Equal(CommsType.AgentToUser, published.Data.CommsType);
+        Assert.Equal("root-account-1", published.Data.TenantId);
+        Assert.Equal(Owner, published.Data.WorkspaceId);
+        Assert.True(published.Data.Outgoing);
+    }
+
+    [Fact]
+    public async Task SendAgentReplyAsync_DoesNotSetHumanTakeoverFlag()
+    {
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.agent-reply");
+        FakeHumanTakeoverStore takeover = new();
+        FakeMessagePersistedPublisher publisher = new();
+
+        await CreateForAgentReply(publisher, takeover).SendAgentReplyAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "Here's the answer"), default);
 
         Assert.Empty(takeover.SetCalls);
     }
