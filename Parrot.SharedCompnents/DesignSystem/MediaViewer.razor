@@ -1,4 +1,5 @@
 @namespace Parrot.SharedComponents.DesignSystem
+@implements IAsyncDisposable
 @inject Parrot.SharedComponents.Services.AuroraInterop Interop
 @inject Parrot.SharedComponents.Services.ToastService Toasts
 
@@ -12,7 +13,7 @@
 @if (Item is { } item)
 {
     <div class="ds-media-viewer" role="dialog" aria-modal="true" aria-label="@($"{item.Name}, sent by {item.Sender}")"
-         tabindex="-1" @ref="_root" @onkeydown="OnKeyDown">
+         tabindex="-1" @ref="_root">
         <header class="ds-media-viewer__bar">
             <div class="ds-media-viewer__who">
                 <PetalAvatar Seed="@item.SenderSeed" Initials="@item.SenderInitials" Size="AvatarSize.Md" />
@@ -52,6 +53,8 @@
     private bool _zoomed;
     private bool _downloading;
     private bool _focusPending;
+    private IAsyncDisposable? _trap;
+    private DotNetObjectReference<MediaViewer>? _self;
 
     protected override void OnParametersSet()
     {
@@ -67,15 +70,35 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (Item is null)
+        {
+            await ReleaseFocusAsync();
+            return;
+        }
         if (!_focusPending) return;
         _focusPending = false;
+        _self ??= DotNetObjectReference.Create(this);
+        _trap ??= await Interop.TrapFocusAsync(_root, _self, nameof(OnEscapeAsync));
         await _root.FocusAsync();
     }
 
     private Task CloseAsync() => OnClose.InvokeAsync();
     private void ToggleZoom() => _zoomed = !_zoomed;
 
-    private Task OnKeyDown(KeyboardEventArgs args) => args.Key == "Escape" ? CloseAsync() : Task.CompletedTask;
+    [JSInvokable] public Task OnEscapeAsync() => CloseAsync();
+
+    private async Task ReleaseFocusAsync()
+    {
+        if (_trap is null) return;
+        var trap = _trap; _trap = null;
+        await trap.DisposeAsync();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        await ReleaseFocusAsync();
+        _self?.Dispose();
+    }
 
     private async Task DownloadAsync()
     {

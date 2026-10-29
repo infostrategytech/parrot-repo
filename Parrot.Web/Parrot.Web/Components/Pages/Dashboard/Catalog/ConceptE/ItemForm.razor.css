@@ -1,0 +1,197 @@
+/* One item, plainly: white cards on the muted page, one column; with the post it came from beside it when
+   checking a post. Agent setup's rhythm: 16px between cards, 20px inside them. */
+
+.item-form {
+  /* Gaps in the token set: no page gutter, form width, source width or border width. */
+  --ds-item-form-gutter: clamp(24px, 3vw, 56px);
+  --ds-item-form-measure: 720px;
+  --ds-item-form-source: 380px;
+  --ds-item-form-hairline: 1px;
+
+  min-width: 0;
+  padding: var(--spacing-4xl) var(--ds-item-form-gutter) calc(var(--spacing-5xl) + var(--ds-catalog-preview-clearance, var(--spacing-none)));
+  color: var(--colors-text-primary);
+  outline: none;
+}
+
+.item-form__top,
+.item-form__layout { width: min(var(--ds-item-form-measure), 100%); margin-inline: auto; }
+.item-form__layout.has-source { width: min(calc(var(--ds-item-form-measure) + var(--ds-item-form-source) + var(--spacing-3xl)), 100%); }
+.item-form__top:has(+ .item-form__layout.has-source) { width: min(calc(var(--ds-item-form-measure) + var(--ds-item-form-source) + var(--spacing-3xl)), 100%); }
+
+.item-form__top { display: grid; gap: var(--spacing-sm); justify-items: start; margin-bottom: var(--spacing-2xl); }
+.item-form__top ::deep .item-form__back { margin-inline-start: calc(-1 * var(--spacing-sm)); }
+.item-form__top ::deep h1 { margin: var(--spacing-none); }
+.item-form__top ::deep p { margin: var(--spacing-none); }
+
+.item-form__layout { display: grid; gap: var(--spacing-3xl); align-items: start; }
+.item-form__layout.has-source { grid-template-columns: minmax(0, 1fr) var(--ds-item-form-source); }
+
+.item-form__main { display: grid; gap: var(--spacing-lg); min-width: 0; }
+
+.item-form__card {
+  display: grid;
+  gap: var(--spacing-lg);
+  min-width: 0;
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-item-form-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.item-form__card ::deep h2 { margin: var(--spacing-none); }
+
+/* Photos are a small row here: the name matters more. */
+.item-form__card ::deep .ds-photo-picker { --ds-photo-picker-tile: 80px; }
+
+.item-form__chips { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; }
+.item-form__selectors { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-lg); }
+.item-form__category-create { display: grid; gap: var(--spacing-md); }
+.item-form ::deep .item-form__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.item-form ::deep .field__helper,
+.item-form ::deep .select-field__helper,
+.item-form ::deep .toggle__text small,
+.item-form__category-create ::deep .field__helper { font-weight: var(--typography-font-weight-medium); }
+
+.item-form__pair { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: var(--spacing-sm); align-items: start; }
+
+/* The price: a single price, variants, or price on request. Variants are a list, a row each: the variant
+   written their way and its price. On a wide card a row is one line, its fields lined up down the list;
+   where there's less room the price moves under the variant. */
+.item-form__price { container: item-price / inline-size; }
+
+.item-form__versions {
+  /* Gap in the token set: no width for a variant's price. */
+  --ds-item-form-version-price: 180px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--ds-item-form-version-price) auto;
+  column-gap: var(--spacing-sm);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+  background: var(--colors-surface-card);
+  border: var(--ds-item-form-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.item-form__version {
+  display: grid;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+.item-form__version + .item-form__version { border-top: var(--ds-item-form-hairline) solid var(--colors-surface-border); }
+.item-form__version-end { display: inline-flex; gap: var(--spacing-xs); align-items: center; justify-self: end; }
+.item-form ::deep .item-form__add-variant { justify-self: start; margin-inline-start: calc(-1 * var(--spacing-sm)); }
+
+@container item-price (max-width: 480px) {
+  .item-form__versions { grid-template-columns: minmax(0, 1fr); }
+  .item-form__version { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+  .item-form__version ::deep .item-form__value { flex: 1 1 100%; }
+  .item-form__version ::deep .item-form__amount { flex: 1 1 var(--ds-item-form-version-price); }
+  .item-form__version-end { margin-inline-start: auto; }
+}
+
+
+/* The post is about an item already on the list. */
+.item-form__match {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-item-form-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.item-form__match ::deep p { margin: var(--spacing-none); }
+.item-form__match ::deep strong { font-weight: var(--typography-font-weight-semibold); }
+
+.item-form__actions {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--colors-surface-card);
+  border: var(--ds-item-form-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  scroll-margin-block-end: var(--ds-catalog-preview-clearance, var(--spacing-xl));
+}
+.item-form__buttons { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+.item-form__spacer { flex: 1 1 auto; }
+
+/* The post it came from, staying in view. */
+.item-form__source { position: sticky; top: var(--spacing-xl); min-width: 0; }
+.item-form__source-card {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  background: var(--colors-surface-card);
+  border: var(--ds-item-form-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  max-height: calc(100dvh - var(--spacing-5xl));
+  overflow-y: auto;
+}
+.item-form__source-words { display: grid; gap: var(--spacing-xs); padding: var(--spacing-none) var(--spacing-xs) var(--spacing-xs); }
+.item-form__source-from { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.item-form__source-words ::deep .item-form__caption { margin: var(--spacing-none); color: var(--colors-text-secondary); white-space: pre-line; }
+
+@media (max-width: 1180px) {
+  .item-form__layout.has-source { grid-template-columns: minmax(0, 1fr); }
+  .item-form__source { position: static; order: -1; }
+  .item-form__source-card { max-height: none; }
+  .item-form__source-words ::deep .item-form__caption { max-block-size: 6lh; overflow-y: auto; }
+  .item-form__source-card ::deep .post-tile { display: none; }
+}
+
+@media (max-width: 760px) {
+  .item-form__card { padding: var(--spacing-lg); }
+  .item-form__pair,
+  .item-form__selectors { grid-template-columns: minmax(0, 1fr); }
+  .item-form__spacer { display: none; }
+  .item-form__buttons { justify-content: flex-end; }
+}
+
+/* In a side panel (reviewing): no page around it. The panel gives the edges, so the cards become groups
+   divided by a hairline; the post sits small at the top; More details opens what's optional. */
+.item-form.is-panel {
+  /* Gap in the token set: no thumbnail size. */
+  --ds-item-form-post-photo: 64px;
+
+  padding: var(--spacing-none);
+}
+.item-form.is-panel .item-form__card {
+  padding: var(--spacing-none);
+  background: transparent;
+  border: var(--spacing-none);
+  border-radius: var(--radius-radius-none);
+}
+.item-form.is-panel .item-form__card + .item-form__card,
+.item-form.is-panel .item-form__card + .item-form__more { padding-top: var(--spacing-lg); border-top: var(--ds-item-form-hairline) solid var(--colors-surface-border); }
+
+.item-form__post {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-md);
+  background: var(--colors-surface-background);
+  border-radius: var(--radius-radius-xl);
+}
+.item-form__post-photo { width: var(--ds-item-form-post-photo); height: var(--ds-item-form-post-photo); object-fit: cover; border-radius: var(--radius-radius-lg); }
+.item-form__post-words { display: grid; grid-column: -2; gap: var(--spacing-2xs); min-width: 0; }
+.item-form__post ::deep .item-form__post-caption {
+  display: -webkit-box;
+  margin: var(--spacing-none);
+  overflow: hidden;
+  color: var(--colors-text-secondary);
+  white-space: pre-line;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+
+.item-form ::deep .item-form__more { justify-self: start; margin-inline-start: calc(-1 * var(--spacing-sm)); }
+.item-form ::deep .item-form__more svg { transition: transform var(--ds-motion-fast) ease; }
+.item-form ::deep .item-form__more.is-open svg { transform: rotate(180deg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .item-form ::deep .item-form__more svg { transition: none; }
+}

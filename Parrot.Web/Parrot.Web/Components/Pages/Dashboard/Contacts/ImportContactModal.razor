@@ -465,11 +465,12 @@
                 <div class="import__fields">
                     <Input FloatingLabel="Name" Value="@draft.Name" ValueChanged='value => Change(draft, "name", value)' maxlength="120"
                            Error="@(draft.Name.Trim().Length == 0)" />
-                    <Input FloatingLabel="WhatsApp number" Type="tel" Value="@draft.Phone" ValueChanged='value => Change(draft, "phone", value)' maxlength="24"
+                    <Input FloatingLabel="WhatsApp number" Numeric="NumericInputKind.Phone" Value="@draft.Phone" ValueChanged='value => Change(draft, "phone", value)' maxlength="24"
                            Error="@(CustomerImport.Phone(draft.Phone).Problem is not null)"
-                           HelperText="@(CustomerImport.Phone(draft.Phone) is { Local: true, Number: { } saved } ? $"Saved as {CustomerImport.Display(saved)}" : CustomerImport.Phone(draft.Phone).Problem)" />
+                           HelperText="@(CustomerImport.Phone(draft.Phone) is { Local: true, Number: { } saved } ? $"Saved as {CustomerImport.Display(saved)}" : CustomerImport.Phone(draft.Phone) is { Problem: not null } reading ? reading.Advice ?? reading.Problem : null)" />
                     <Input FloatingLabel="Email (optional)" Type="email" Value="@draft.Email" ValueChanged='value => Change(draft, "email", value)' maxlength="200"
-                           Error="@(draft.Email.Trim().Length > 0 && !CustomerImport.IsEmail(draft.Email))" />
+                           Error="@(draft.Email.Trim().Length > 0 && !CustomerImport.IsEmail(draft.Email))"
+                           HelperText="@(draft.Email.Trim().Length > 0 && !CustomerImport.IsEmail(draft.Email) ? ContactText.EmailAdvice : null)" />
                 </div>
                 <div class="import__row-foot">
                     @if (problems.Count > 0)

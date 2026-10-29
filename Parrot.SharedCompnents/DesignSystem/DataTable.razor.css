@@ -1,0 +1,84 @@
+/* The table's card, its rows and its footer (designer, 28 October 2026: one look for every table).
+   Rows are each feature's own components, so their shared look is drawn from here, through ::deep, on
+   the class every row carries. :where() keeps these rules light, so a feature can still set its own
+   columns and cells over them. */
+.ds-table {
+  /* Gaps in the token set: no border-width or opacity scale. The card's edge and the lines between rows,
+     half a hairline (designer, 25 October 2026: subtle). */
+  --ds-table-divider: 0.5px;
+  --ds-table-busy: 0.6;
+  /* How long a row just added stays lit (no motion token this long). */
+  --ds-table-fresh: 2.4s;
+  /* Gap in the token set: no row-height scale. The column names' band. */
+  --ds-table-head: 56px;
+
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-table-divider) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+.ds-table.is-nested { border-radius: var(--radius-radius-xl); box-shadow: none; }
+
+.ds-table__grid { display: grid; min-width: 0; transition: opacity var(--ds-motion-fast) ease; }
+.ds-table.is-busy .ds-table__grid { opacity: var(--ds-table-busy); }
+.ds-table__notice { padding: var(--spacing-md) var(--spacing-2xl); }
+.ds-table__message { display: grid; }
+.ds-table__message ::deep .ds-empty-state { padding-block: var(--spacing-4xl); }
+
+/* A row: its own columns, the table's padding, gap and line. */
+.ds-table__grid ::deep :where(.ds-table__row) {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--ds-table-columns, minmax(0, 1fr));
+  gap: var(--spacing-2xl);
+  align-items: center;
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  transition: background var(--ds-motion-fast) ease;
+}
+.ds-table__grid ::deep :where(.ds-table__row > *) { min-width: 0; }
+.ds-table__grid ::deep :where(.ds-table__row:not(.is-head) + .ds-table__row) { border-top: var(--ds-table-divider) solid var(--colors-surface-border); }
+.ds-table__grid ::deep :where(.ds-table__row:not(.is-head)):hover,
+.ds-table__grid ::deep :where(.ds-table__row.is-open) { background: var(--colors-interaction-hover); }
+.ds-table__grid ::deep :where(.ds-table__row.is-selected) { background: var(--colors-accent-brand-subtle); }
+.ds-table__grid ::deep :where(.ds-table__row.is-fresh) { animation: ds-table-fresh var(--ds-table-fresh) ease-out; }
+@keyframes ds-table-fresh {
+  from { background: var(--colors-accent-brand-subtle); }
+  to { background: var(--colors-surface-card); }
+}
+
+/* The column names, on the page's own ground: one height on every table, with or without a choose-all tick
+   box (designer, 28 October 2026: the band read small and tight). */
+.ds-table__grid ::deep :where(.ds-table__row.is-head) {
+  min-height: var(--ds-table-head);
+  padding-block: var(--spacing-md);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border-bottom: var(--ds-table-divider) solid var(--colors-surface-border);
+}
+/* A column whose content sits at its end (actions): its name too. */
+.ds-table__grid ::deep .ds-table__heading.is-end { justify-self: end; text-align: end; }
+
+/* The footer band: how many are showing, and the pages when there's more than one; or a review's progress. */
+.ds-table__footer {
+  padding: var(--spacing-md) var(--spacing-2xl);
+  color: var(--colors-text-muted);
+  background: var(--colors-surface-background);
+  border-top: var(--ds-table-divider) solid var(--colors-surface-border);
+}
+
+/* A tablet or smaller: rows stack (each feature says how), so the column names go. */
+@media (max-width: 1024px) {
+  .ds-table__grid ::deep :where(.ds-table__row) { gap: var(--spacing-sm) var(--spacing-md); padding: var(--spacing-md) var(--spacing-lg); }
+  .ds-table__grid ::deep :where(.ds-table__row.is-head) { display: none; }
+  .ds-table__footer { padding-inline: var(--spacing-lg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-table__grid,
+  .ds-table__grid ::deep :where(.ds-table__row) { transition: none; }
+  .ds-table__grid ::deep :where(.ds-table__row.is-fresh) { animation: none; }
+}

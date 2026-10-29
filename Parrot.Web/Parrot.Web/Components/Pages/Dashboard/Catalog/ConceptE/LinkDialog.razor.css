@@ -1,0 +1,3 @@
+/* The link field, and while it's read, a line saying so. */
+.link-dialog { display: grid; gap: var(--spacing-md); }
+.link-dialog__reading { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }

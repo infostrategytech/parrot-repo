@@ -10,7 +10,7 @@
 @inject IBusinessSetupService BusinessSetupService
 @inject AuthState AuthState
 
-<PageTitle>Business setup · OmniAI</PageTitle>
+<PageTitle>Business setup · yára</PageTitle>
 
 @* Three steps in one full-page card: Aurora's guided setup shell (header
    with a counter, a progress bar, a body held to a reading width, a footer
@@ -119,8 +119,10 @@
                                       @oninput="e => _org.Description = e.Value?.ToString() ?? string.Empty" />
                         </label>
 
-                        <Input FloatingLabel="Business email" Type="email" @bind-Value="_org.BusinessEmail" />
-                        <Input FloatingLabel="Phone number" Type="tel" @bind-Value="_org.PhoneNumber" />
+                        <Input FloatingLabel="Business email" Type="email" maxlength="200" @bind-Value="_org.BusinessEmail"
+                               Error="@(EmailAdvice is not null)" HelperText="@EmailAdvice" />
+                        <Input FloatingLabel="Phone number" Numeric="NumericInputKind.Phone" maxlength="20" @bind-Value="_org.PhoneNumber"
+                               Error="@(PhoneAdvice is not null)" HelperText="@PhoneAdvice" />
 
                         <div class="setup__full">
                             <Input FloatingLabel="Website" Type="url" @bind-Value="_org.Website" />
@@ -147,7 +149,8 @@
                                 <Input FloatingLabel="Instagram" PrefixText="@("@")" IconLeft="InstagramMark" @bind-Value="_org.SocialMedia.Instagram" />
                                 <Input FloatingLabel="X (Twitter)" PrefixText="@("@")" IconLeft="GlobeMark" @bind-Value="_org.SocialMedia.TwitterX" />
                                 <Input FloatingLabel="LinkedIn" PrefixText="linkedin.com/company/" IconLeft="GlobeMark" @bind-Value="_org.SocialMedia.LinkedIn" />
-                                <Input FloatingLabel="WhatsApp Business" PrefixText="+" Type="tel" IconLeft="WhatsappMark" @bind-Value="_org.SocialMedia.WhatsApp" />
+                                <Input FloatingLabel="WhatsApp Business" PrefixText="+" Numeric="NumericInputKind.Phone" maxlength="20" IconLeft="WhatsappMark" @bind-Value="_org.SocialMedia.WhatsApp"
+                                       Error="@(WhatsAppAdvice is not null)" HelperText="@WhatsAppAdvice" />
                                 <Input FloatingLabel="YouTube" PrefixText="@("youtube.com/@")" IconLeft="GlobeMark" @bind-Value="_org.SocialMedia.YouTube" />
                                 <Input FloatingLabel="TikTok" PrefixText="@("@")" IconLeft="GlobeMark" @bind-Value="_org.SocialMedia.TikTok" />
                             </div>
@@ -453,10 +456,19 @@
         else _step--;
     }
 
+    // The contact details, checked as every screen checks them (ContactText): only when filled in, and only
+    // once Continue is pressed (designer, 28 October 2026).
+    private string? EmailAdvice => _showErrors && !string.IsNullOrWhiteSpace(_org.BusinessEmail) && !ContactText.IsEmail(_org.BusinessEmail) ? ContactText.EmailAdvice : null;
+    private string? PhoneAdvice => _showErrors ? ContactText.Phone(_org.PhoneNumber).Advice : null;
+    // The field shows its own +, so the number in it is read with one.
+    private string? WhatsAppAdvice => _showErrors && !string.IsNullOrWhiteSpace(_org.SocialMedia.WhatsApp)
+        ? ContactText.Phone("+" + _org.SocialMedia.WhatsApp.Trim().TrimStart('+')).Advice : null;
+
     private async Task GoToStep2()
     {
         _showErrors = true;
-        if (string.IsNullOrWhiteSpace(_org.Name) || string.IsNullOrWhiteSpace(_org.Industry))
+        if (string.IsNullOrWhiteSpace(_org.Name) || string.IsNullOrWhiteSpace(_org.Industry)
+            || EmailAdvice is not null || PhoneAdvice is not null || WhatsAppAdvice is not null)
             return;
         _showErrors = false;
 

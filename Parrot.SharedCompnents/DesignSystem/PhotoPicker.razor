@@ -1,0 +1,140 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using Microsoft.AspNetCore.Components.Forms
+
+@* Photos of something for sale: a few, the first shown first ("Cover").
+   Each is shrunk in the browser before it is sent (a phone photo is many
+   megabytes; a product photo needs about 1200 pixels), and handed back as a
+   data URL. Saving it somewhere for good is the page's job: today the demo
+   keeps it for the session; the catalog API stores media once it can take an
+   upload (see catalog-backend-requests). *@
+
+<div class="ds-photo-picker @Class">
+    <div class="ds-photo-picker__head">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@Label</Typography>
+        @if (Optional)
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="ds-photo-picker__muted">Optional</Typography>
+        }
+    </div>
+
+    <ul class="ds-photo-picker__grid" aria-label="@Label">
+        @for (var index = 0; index < Photos.Count; index++)
+        {
+            var current = index;
+            <li class="ds-photo-picker__photo">
+                <img src="@Photos[current]" alt="@($"{Label}, photo {current + 1} of {Photos.Count}")" />
+                @if (current == 0)
+                {
+                    <span class="ds-photo-picker__cover"><Typography TextStyle="TextStyle.Small10Semibold" As="span">Cover</Typography></span>
+                }
+                <span class="ds-photo-picker__menu">
+                    <ActionMenu Label="@($"Photo {current + 1}")" Glyph="IconName.RiMore2Fill" Size="ButtonSize.Small">
+                        @if (current > 0)
+                        {
+                            <ActionMenuItem Label="Make cover" Glyph="IconName.RiImageFill" OnClick="() => MakeCoverAsync(current)" />
+                        }
+                        <ActionMenuItem Label="Remove" Glyph="IconName.RiDeleteBin6Fill" OnClick="() => RemoveAsync(current)" />
+                    </ActionMenu>
+                </span>
+            </li>
+        }
+        @if (Photos.Count < Max)
+        {
+            <li>
+                @* A label around the file input: the browser's own file picker
+                   is the only way to choose photos, so it cannot be a
+                   design-system Button. The input stays focusable (visually
+                   hidden), and the tile shows the focus ring. *@
+                <label class="@(_reading ? "ds-photo-picker__add is-busy" : "ds-photo-picker__add")">
+                    <InputFile OnChange="AddAsync" accept="image/jpeg,image/png,image/webp" multiple class="ds-photo-picker__input" disabled="@_reading" />
+                    <Icon Name="IconName.RiUploadCloud2Fill" Size="IconSize.Md" />
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(_reading ? "Adding…" : Photos.Count == 0 ? "Add photos" : "Add more")</Typography>
+                </label>
+            </li>
+        }
+    </ul>
+
+    @if (HelperText is not null)
+    {
+        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="ds-photo-picker__muted">@HelperText</Typography>
+    }
+    @if (_error is not null)
+    {
+        <InlineError Message="@_error" Tone="InlineErrorTone.Warning" OnDismiss="() => _error = null" />
+    }
+</div>
+
+@code {
+    [Parameter] public string Label { get; set; } = "Photos";
+
+    [Parameter] public bool Optional { get; set; }
+
+    /// <summary>Photo addresses, the first shown first.</summary>
+    [Parameter] public IReadOnlyList<string> Photos { get; set; } = [];
+
+    [Parameter] public EventCallback<IReadOnlyList<string>> PhotosChanged { get; set; }
+
+    [Parameter] public int Max { get; set; } = 4;
+
+    [Parameter] public string? HelperText { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    // A phone photo, before it is shrunk. Larger is almost always a scan or a mistake.
+    private const long MaxFileBytes = 15 * 1024 * 1024;
+    private const int Longest = 1200;
+    private static readonly string[] Accepted = ["image/jpeg", "image/png", "image/webp"];
+
+    private string? _error;
+    private bool _reading;
+
+    private async Task AddAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var room = Max - Photos.Count;
+        var files = e.GetMultipleFiles(Math.Max(e.FileCount, 1));
+        var added = new List<string>();
+        var skipped = 0;
+        _reading = true;
+        try
+        {
+            foreach (var file in files)
+            {
+                if (added.Count >= room) { skipped++; continue; }
+                if (!Accepted.Contains(file.ContentType)) { _error = $"{file.Name} isn't a photo. Use JPG, PNG or WebP."; continue; }
+                if (file.Size > MaxFileBytes) { _error = $"{file.Name} is over 15 MB. Try a smaller photo."; continue; }
+                var shrunk = await file.RequestImageFileAsync("image/jpeg", Longest, Longest);
+                await using var stream = shrunk.OpenReadStream(MaxFileBytes);
+                using var memory = new MemoryStream();
+                await stream.CopyToAsync(memory);
+                added.Add("data:image/jpeg;base64," + Convert.ToBase64String(memory.ToArray()));
+            }
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or JSException)
+        {
+            _error = "That photo couldn't be read. Try another.";
+        }
+        finally
+        {
+            _reading = false;
+        }
+        if (skipped > 0) _error = $"Up to {Max} photos. {skipped} {(skipped == 1 ? "wasn't" : "weren't")} added.";
+        if (added.Count > 0) await PhotosChanged.InvokeAsync([.. Photos, .. added]);
+    }
+
+    private Task MakeCoverAsync(int index)
+    {
+        var photos = Photos.ToList();
+        var photo = photos[index];
+        photos.RemoveAt(index);
+        photos.Insert(0, photo);
+        return PhotosChanged.InvokeAsync(photos);
+    }
+
+    private Task RemoveAsync(int index)
+    {
+        var photos = Photos.ToList();
+        photos.RemoveAt(index);
+        return PhotosChanged.InvokeAsync(photos);
+    }
+}

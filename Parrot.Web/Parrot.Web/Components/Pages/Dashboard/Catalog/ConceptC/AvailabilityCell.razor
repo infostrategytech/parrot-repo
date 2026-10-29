@@ -1,0 +1,145 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptC
+@using System.Globalization
+@using Parrot.Web.Features.Dashboard.Catalog
+
+@* Whether customers can have it now, as one choice of three (designer, 25 October 2026: simplify it for the
+   SME): available (taking bookings, for a service), sold out for now, or hidden (not offered, kept for later).
+   It replaces the row's separate Active switch, so an item is never "sold out but active". The colour is what
+   the eye scans and the words confirm it. An item whose stock is counted says how many are left, changed here
+   too; at none it is sold out. *@
+
+<div class="@WrapClass">
+    <FilterPopover Label="@Label" Title="@($"Can customers have {Item.Name} now?")" Quiet="Quiet" Busy="_saving" Open="_open" OpenChanged="Opened" Class="availability-cell">
+        <Leading><span class="availability-cell__dot"></span></Leading>
+        <ChildContent>
+            @if (CountsStock)
+            {
+                <div class="availability-cell__stock">
+                    <Input FloatingLabel="How many are left"
+                           Numeric="NumericInputKind.Integer"
+                           maxlength="6"
+                           Value="@_stock"
+                           ValueChanged="value => { _stock = value; _needStock = false; _error = null; }"
+                           Error="_needStock"
+                           HelperText="@(_needStock ? "Add how many you have to make it available." : "At 0 it shows as sold out.")" />
+                    <Button Size="ButtonSize.Small" Busy="_saving" disabled="@(Count is null)" @onclick="SaveStockAsync">Save</Button>
+                </div>
+            }
+            <PopoverOption Label="@ItemGuide.AvailabilityName(ItemAvailability.Available, Item.Kind)"
+                           Description="@(Item.Kind == CatalogKind.Service ? "Customers can book it" : "Customers can buy it")"
+                           Active="@(State == ItemAvailability.Available)"
+                           OnSelect="() => ChooseAsync(ItemAvailability.Available)">
+                <Leading><span class="availability-cell__option-dot is-available"></span></Leading>
+            </PopoverOption>
+            <PopoverOption Label="@ItemGuide.AvailabilityName(ItemAvailability.SoldOut, Item.Kind)"
+                           Description="@(Item.Kind == CatalogKind.Service ? "Shown, but not booking for now" : "Shown as sold out for now")"
+                           Active="@(State == ItemAvailability.SoldOut)"
+                           OnSelect="() => ChooseAsync(ItemAvailability.SoldOut)">
+                <Leading><span class="availability-cell__option-dot is-out"></span></Leading>
+            </PopoverOption>
+            <PopoverOption Label="Hidden"
+                           Description="Not offered, kept for later"
+                           Active="@(State == ItemAvailability.Hidden)"
+                           OnSelect="() => ChooseAsync(ItemAvailability.Hidden)">
+                <Leading><span class="availability-cell__option-dot is-hidden"></span></Leading>
+            </PopoverOption>
+            @if (_error is not null) { <InlineError Message="@_error" /> }
+        </ChildContent>
+    </FilterPopover>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CatalogEntry Item { get; set; } = default!;
+
+    /// <summary>The compact status-menu treatment used for values changed in a table.</summary>
+    [Parameter] public bool Quiet { get; set; }
+
+    /// <summary>Saves the changed item: null when saved, or what went wrong.</summary>
+    [Parameter, EditorRequired] public Func<CatalogEntry, Task<string?>> Save { get; set; } = _ => Task.FromResult<string?>(null);
+
+    private bool _open, _saving, _needStock;
+    private string? _stock, _error;
+
+    private bool InStock => ItemGuide.InStock(Item);
+
+    private ItemAvailability State => Item.IsHidden ? ItemAvailability.Hidden : InStock ? ItemAvailability.Available : ItemAvailability.SoldOut;
+
+    // One count for the item; an item with options counts each option on its page.
+    private bool CountsStock => Item.TracksStock && !Item.HasOptions && !Item.MadeToOrder;
+
+    private string WrapClass => "availability-cell-wrap" + (Quiet ? " is-quiet" : null) + (State switch
+    {
+        ItemAvailability.Hidden => " is-hidden",
+        ItemAvailability.SoldOut => " is-out",
+        _ => null,
+    });
+
+    // Hidden or sold out says so; available says how many are left, where they're counted.
+    private string Label
+    {
+        get
+        {
+            if (State == ItemAvailability.Hidden) return "Hidden";
+            if (State == ItemAvailability.SoldOut) return ItemGuide.AvailabilityName(ItemAvailability.SoldOut, Item.Kind);
+            if (CountsStock) return $"{Item.Stock} left";
+            if (Item.TracksStock && Item.HasOptions)
+            {
+                var stock = Item.Variants.Sum(variant => Math.Max(0, variant.Stock ?? 0));
+                if (stock > 0) return $"{stock} left";
+            }
+            // Made after the order: "In stock" would promise it's ready.
+            if (Item.MadeToOrder && Item.Kind is CatalogKind.Product or CatalogKind.Food) return "Made to order";
+            return ItemGuide.AvailabilityName(ItemAvailability.Available, Item.Kind);
+        }
+    }
+
+    private int? Count => NumberText.Integer(_stock, 999999);
+
+    private void Opened(bool open)
+    {
+        if (open) _stock = (Item.Stock ?? 0).ToString(CultureInfo.InvariantCulture);
+        _needStock = false;
+        _error = null;
+        _open = open;
+    }
+
+    private async Task ChooseAsync(ItemAvailability choice)
+    {
+        if (_saving) return;
+        // Available with none counted: it needs a count first, so the menu stays open to ask.
+        if (choice == ItemAvailability.Available && CountsStock && (Item.Stock ?? 0) <= 0)
+        {
+            _needStock = true;
+            _stock = string.Empty;
+            return;
+        }
+        if (choice == State) return;
+        var changed = Item.Copy();
+        changed.IsHidden = choice == ItemAvailability.Hidden;
+        if (choice != ItemAvailability.Hidden) changed.IsAvailable = choice == ItemAvailability.Available;
+        _saving = true;
+        _error = null;
+        try { _error = await Save(changed); if (_error is null) _open = false; }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { _error = "We couldn't change availability. Check your connection and try again."; }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveStockAsync()
+    {
+        if (Count is not { } count || _saving) return;
+        var changed = Item.Copy();
+        changed.Stock = count;
+        if (count > 0) { changed.IsAvailable = true; changed.IsHidden = false; }
+        _saving = true;
+        _error = null;
+        try
+        {
+            _error = await Save(changed);
+            if (_error is null) { _open = false; _needStock = false; }
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { _error = "We couldn't save this stock count. Check your connection and try again."; }
+        finally { _saving = false; }
+    }
+}

@@ -1,0 +1,45 @@
+/* Changing many prices at once: up or down, by how much, and the new prices before anything changes. */
+.change-prices__panel {
+  /* Gap in the token set: no menu-width scale. */
+  --ds-change-prices-panel: 340px;
+
+  display: grid;
+  gap: var(--spacing-md);
+  width: var(--ds-change-prices-panel);
+  max-width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-sm);
+}
+
+/* The amount and its unit side by side, the switch exactly as tall as the field so their tops and bottoms line
+   up; a helper under the field doesn't stretch the switch. */
+.change-prices__by {
+  /* Gap in the token set: no control-height scale; the field's own height (Input's --ds-field-height). */
+  --ds-change-prices-field: 58px;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: start;
+}
+.change-prices__by ::deep .ds-segmented { box-sizing: border-box; height: var(--ds-change-prices-field); }
+/* At this height a pill as wide as it is tall, so % and ₦ read as round, not as tall ovals. */
+.change-prices__by ::deep .ds-segmented__option { min-width: calc(var(--ds-change-prices-field) - var(--spacing-xs) * 2); }
+
+.change-prices__preview { display: grid; gap: var(--spacing-2xs); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.change-prices__preview li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
+  border-radius: var(--radius-radius-md);
+}
+.change-prices__preview ::deep .change-prices__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--colors-text-secondary); }
+.change-prices__preview ::deep .change-prices__was { color: var(--colors-text-muted); text-decoration: line-through; }
+.change-prices__preview li ::deep .ds-icon { color: var(--colors-icon-muted); }
+
+.change-prices__panel ::deep .change-prices__note { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.change-prices__actions { display: flex; gap: var(--spacing-xs); justify-content: flex-end; }

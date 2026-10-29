@@ -1,0 +1,182 @@
+/* Posts stay at their original size. Clear groups and readable captions provide breathing room;
+   selecting and previewing are separate actions, and the one floating review button stays in view. */
+
+.post-picker {
+  /* Gaps in the token set: no page gutter, page width, tile, tick, ring or skeleton size, and no opacity scale. */
+  --ds-post-picker-gutter: clamp(24px, 3vw, 56px);
+  --ds-post-picker-max: 1180px;
+  --ds-post-picker-card: 180px;
+  --ds-post-picker-tick: 24px;
+  --ds-post-picker-ring: 2px;
+  --ds-post-picker-hairline: 1px;
+  --ds-post-picker-skeleton: 180px;
+  /* Gap in the token set: no search-field measure. */
+  --ds-post-picker-search: 280px;
+
+  display: grid;
+  gap: var(--spacing-2xl);
+  min-width: 0;
+  padding: var(--spacing-4xl) var(--ds-post-picker-gutter) var(--spacing-6xl);
+  color: var(--colors-text-primary);
+}
+.post-picker > * { width: min(var(--ds-post-picker-max), 100%); min-width: 0; margin-inline: auto; }
+
+.post-picker__top { display: grid; gap: var(--spacing-sm); justify-items: start; }
+.post-picker > nav ::deep .post-picker__back { margin-inline-start: calc(-1 * var(--spacing-sm)); }
+.post-picker__top ::deep h1,
+.post-picker__top ::deep .post-picker__lede { margin: var(--spacing-none); }
+.post-picker__top ::deep .post-picker__lede { color: var(--colors-text-secondary); }
+
+.post-picker__content { display: grid; gap: var(--spacing-xl); min-width: 0; }
+
+/* The way on: one button, floating at the bottom right, over the grid as it scrolls. */
+.post-picker__bar {
+  position: sticky;
+  bottom: var(--spacing-xl);
+  z-index: 2;
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.post-picker__bar ::deep .ds-button { pointer-events: auto; box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow); }
+
+.post-picker ::deep .post-picker__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.post-picker__tools { display: grid; gap: var(--spacing-md); }
+.post-picker__filters { display: flex; flex-wrap: wrap; gap: var(--spacing-lg); align-items: center; justify-content: space-between; }
+.post-picker__filters ::deep .post-picker__channels { max-width: 100%; min-width: 0; }
+.post-picker__filters ::deep .ds-tab { display: inline-flex; gap: var(--spacing-xs); align-items: center; }
+.post-picker__filters ::deep .post-picker__search { flex: 1 1 var(--ds-post-picker-search); width: var(--ds-post-picker-search); min-width: 0; }
+.post-picker__find { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+.post-picker__find ::deep .filter-popover { flex: none; }
+/* Bulk selection starts above the first tile; the result count anchors the far edge. */
+.post-picker__selection { display: flex; gap: var(--spacing-lg); align-items: center; }
+.post-picker__selection ::deep .checkbox { align-items: center; }
+.post-picker__selection ::deep .post-picker__count { margin-inline-start: auto; }
+.post-picker__from { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-secondary); }
+
+.post-picker__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--ds-post-picker-card), 1fr));
+  gap: var(--spacing-2xl) var(--spacing-lg);
+  margin-block: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+.post-picker__skeleton { display: grid; gap: var(--spacing-sm); }
+
+.post-picker__post { display: grid; align-content: start; gap: var(--spacing-xs); justify-items: start; min-width: 0; }
+
+/* The tile is the button: no fill of its own, the post's picture fills it. */
+.post-picker__post ::deep .post-picker__pick {
+  position: relative;
+  display: grid;
+  justify-self: stretch;
+  min-height: 0;
+  padding: var(--spacing-none);
+  background: transparent;
+  border-radius: var(--radius-radius-xl);
+  transition: box-shadow var(--ds-motion-fast) ease;
+}
+.post-picker__post ::deep .post-picker__pick:hover { background: transparent; box-shadow: 0 0 0 var(--ds-post-picker-ring) var(--colors-surface-input); }
+.post-picker__post ::deep .post-picker__pick:focus-visible { outline: var(--ds-post-picker-ring) solid var(--colors-brand-primary); outline-offset: var(--spacing-2xs); }
+.post-picker__post.is-chosen ::deep .post-picker__pick { box-shadow: 0 0 0 var(--ds-post-picker-ring) var(--colors-brand-primary); }
+
+/* The tick, top right: an empty ring until picked, then filled. */
+.post-picker__post ::deep .post-picker__tick {
+  position: absolute;
+  top: var(--spacing-sm);
+  right: var(--spacing-sm);
+  display: grid;
+  place-items: center;
+  width: var(--ds-post-picker-tick);
+  height: var(--ds-post-picker-tick);
+  color: transparent;
+  background: var(--colors-surface-card);
+  border: var(--ds-post-picker-ring) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+}
+.post-picker__post.is-chosen ::deep .post-picker__tick {
+  color: var(--colors-text-on-primary);
+  background: var(--colors-brand-primary);
+  border-color: var(--colors-brand-primary);
+}
+
+.post-picker__words { display: grid; gap: var(--spacing-xs); justify-self: stretch; min-width: 0; padding: var(--spacing-xs) var(--spacing-2xs) var(--spacing-none); }
+.post-picker ::deep .post-picker__line { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.post-picker ::deep .post-picker__caption {
+  display: -webkit-box;
+  min-block-size: 2lh;
+  overflow: hidden;
+  color: var(--colors-text-primary);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow-wrap: anywhere;
+}
+.post-picker__meta { display: flex; gap: var(--spacing-xs); align-items: center; justify-content: space-between; }
+.post-picker__meta ::deep .ds-button { padding-inline: var(--spacing-xs); color: var(--colors-text-secondary); }
+
+/* Recovery stays by the action; preparation itself covers the full viewport below. */
+.post-picker__recovery-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+  max-width: 100%;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-post-picker-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow);
+  pointer-events: auto;
+}
+.post-picker__progress-copy { display: grid; gap: var(--spacing-xs); }
+.post-picker__progress-copy ::deep strong { color: var(--colors-text-primary); }
+.post-picker__progress-copy ::deep span { color: var(--colors-text-secondary); }
+.post-picker__recovery { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); margin-inline-start: auto; }
+
+/* The shared Dialog owns the full-screen layer and focus management. No visible card around the status. */
+.post-preparation {
+  /* Gap in the token set: no translucent preparation-overlay opacity. */
+  --ds-post-preparation-opacity: 94%;
+}
+.post-preparation ::deep .dialog-backdrop::before {
+  background: color-mix(in srgb, var(--colors-surface-background) var(--ds-post-preparation-opacity), transparent);
+}
+.post-preparation ::deep .dialog {
+  background: transparent;
+  box-shadow: none;
+  border-radius: var(--radius-radius-none);
+}
+.post-preparation__body { display: grid; gap: var(--spacing-md); justify-items: center; text-align: center; }
+.post-preparation__mark { display: grid; place-items: center; margin-bottom: var(--spacing-lg); color: var(--colors-icon-brand); }
+.post-preparation__body ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.post-preparation__body ::deep p { margin: var(--spacing-none); color: var(--colors-text-secondary); }
+
+.post-preview {
+  /* Gap in the token set: no post-preview image height. */
+  --ds-post-preview-image-max: 340px;
+  display: grid;
+  gap: var(--spacing-xl);
+  min-width: 0;
+}
+.post-preview__source { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+.post-preview ::deep .post-preview__muted { color: var(--colors-text-muted); }
+.post-preview__content { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--spacing-xl); align-items: start; }
+.post-preview__content.is-text { grid-template-columns: minmax(0, 1fr); }
+.post-preview__image { width: 100%; max-height: var(--ds-post-preview-image-max); object-fit: contain; background: var(--colors-surface-muted); border-radius: var(--radius-radius-xl); }
+.post-preview ::deep .post-preview__caption { margin: var(--spacing-none); color: var(--colors-text-primary); white-space: pre-wrap; overflow-wrap: anywhere; }
+.post-preview__actions { display: flex; justify-content: flex-end; padding-top: var(--spacing-md); }
+
+@media (max-width: 760px) {
+  .post-picker { --ds-post-picker-card: 132px; /* gap: no tile-size scale */ }
+  .post-picker__find { width: 100%; }
+  .post-picker__find ::deep .post-picker__search { flex: 1 1 auto; width: auto; }
+  .post-preview__content { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .post-picker__post ::deep .post-picker__pick { transition: none; }
+}

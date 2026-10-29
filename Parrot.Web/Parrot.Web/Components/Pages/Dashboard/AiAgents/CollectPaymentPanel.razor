@@ -24,8 +24,8 @@
 {
     <Input FloatingLabel="Amount"
            PrefixText="₦"
-           type="number"
-           min="0"
+           Numeric="NumericInputKind.Decimal"
+           maxlength="12"
            Value="@Step.PaymentAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
            ValueChanged="value => Step.PaymentAmount = decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0" />
 }

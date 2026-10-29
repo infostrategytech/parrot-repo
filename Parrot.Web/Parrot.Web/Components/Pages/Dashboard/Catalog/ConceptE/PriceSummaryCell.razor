@@ -1,0 +1,315 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using System.Globalization
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+
+@* An item's price in the list (research, 25 October 2026): the amount first, and a quiet line under it only
+   when it adds something ("per yard", "By length", "All sizes"). A missing price says only "Add a price".
+   The amounts change here, in a small panel that floats over the table; how it's priced (per unit, a price
+   list, a starting price, ask for price) changes on the item, where there's room to explain it. Prices reach
+   customers through the agent at once, so a change ten times higher or lower is asked about first. *@
+
+<div class="@CellClass">
+    @if (Reviewing && SimpleReviewPrice)
+    {
+        <div class="price-summary__review">
+            <Input FloatingLabel="@(Item.PriceType == PriceType.From ? "Starting Price" : "Price")" PrefixText="₦"
+                   aria-label="@($"Price for {Item.Name}")" Numeric="NumericInputKind.Decimal" maxlength="16"
+                   Value="@_reviewText" ValueChanged="ReviewPriceChangedAsync"
+                   Error="@(_reviewError is not null)" HelperText="@(_reviewError ?? _reviewWarning ?? (Item.PriceUnit.Length > 0 ? Item.PriceUnit : null))"
+                   @onfocus="() => _reviewEditing = true" @onblur="ReviewBlurred" />
+            @if (_reviewWarning is not null)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="AcceptReviewPriceAsync">Use This Price</Button>
+            }
+        </div>
+    }
+    else if (Reviewing)
+    {
+        <RowButton Class="price-summary__trigger" OnClick="OnOpen" aria-label="@($"Edit pricing for {Item.Name}")">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="price-summary__main">@Lines.Main</Typography>
+            @if (Lines.Detail is { } detail)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="price-summary__detail">@detail</Typography>
+            }
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="price-summary__edit">@(Lines.Ask ? "Edit Pricing" : "Edit Prices")</Typography>
+        </RowButton>
+    }
+    else
+    {
+    <Popover Title="@($"Price of {Item.Name}")" Subtitle="@Subtitle" Open="_open" OpenChanged="Opened" Class="price-summary__popover">
+        <Anchor>
+            <RowButton Class="price-summary__trigger" OnClick="() => Opened(!_open)" aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")"
+                       aria-label="@($"Price of {Item.Name}: {Lines.Main}{(Lines.Detail is { } said ? $", {said}" : string.Empty)}. Change it")">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="price-summary__main">@Lines.Main</Typography>
+                @if (Lines.Detail is { } detail)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="price-summary__detail">@detail</Typography>
+                }
+            </RowButton>
+        </Anchor>
+        <ChildContent>
+            <div class="price-summary__panel">
+                @if (Lines.Ask)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="price-summary__note">When a customer asks for the price, your agent hands the conversation to you. To add a price, open the item.</Typography>
+                }
+                else if (_rows.Count > 1)
+                {
+                    @foreach (var row in _rows)
+                    {
+                        var current = row;
+                        <Input FloatingLabel="@current.Value"
+                               PrefixText="₦"
+                               Numeric="NumericInputKind.Decimal"
+                               maxlength="16"
+                               Value="@current.Text"
+                               ValueChanged="value => { current.Text = value; _invalid = false; _warning = null; }"
+                               Error="@(_invalid && Money(current.Text) is null)"
+                               HelperText="@(_invalid && Money(current.Text) is null ? "Enter a positive price with up to 2 decimal places." : null)" />
+                    }
+                }
+                else if (Combinations)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="price-summary__note">Its prices differ for each combination of its choices. Change them on the item.</Typography>
+                }
+                else
+                {
+                    <Input @ref="_field"
+                           FloatingLabel="@(Item.PriceType == PriceType.From ? "Starting price" : "Price")"
+                           PrefixText="₦"
+                           Numeric="NumericInputKind.Decimal"
+                           maxlength="16"
+                           Value="@_text"
+                           ValueChanged="value => { _text = value; _invalid = false; _warning = null; }"
+                           Error="_invalid"
+                           HelperText="@(_invalid ? "Enter a positive amount with up to 2 decimal places." : Said)"
+                           @onkeydown="KeyAsync" />
+                }
+                @if (_warning is not null)
+                {
+                    <InlineError Tone="InlineErrorTone.Warning" Message="@_warning" />
+                }
+                @if (_saveError is not null) { <InlineError Message="@_saveError" /> }
+                @* Only the amounts change here (designer, 27 October 2026); how it's priced changes on the item, opened
+                   from its name. Where there's no amount to change here, opening the item is the way on. *@
+                <div class="price-summary__actions">
+                    @if (Lines.Ask || Combinations)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="OpenItemAsync">Open item</Button>
+                    }
+                    else
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _open = false">Cancel</Button>
+                        <Button Size="ButtonSize.Small" Busy="_saving" @onclick="CommitAsync">@(_warning is null ? "Save" : "Save anyway")</Button>
+                    }
+                </div>
+            </div>
+        </ChildContent>
+    </Popover>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public CatalogEntry Item { get; set; } = default!;
+
+    /// <summary>Saves the changed item: null when saved, or what went wrong.</summary>
+    [Parameter, EditorRequired] public Func<CatalogEntry, Task<string?>> Save { get; set; } = _ => Task.FromResult<string?>(null);
+
+    /// <summary>Opens the item, to change how it's priced.</summary>
+    [Parameter] public EventCallback OnOpen { get; set; }
+
+    /// <summary>Review drafts can be edited directly; nothing reaches the catalogue until the review is approved.</summary>
+    [Parameter] public bool Reviewing { get; set; }
+
+    [Parameter] public EventCallback<bool> ValidityChanged { get; set; }
+
+    private sealed class Row
+    {
+        public string Value { get; init; } = "";
+        public decimal Before { get; init; }
+        public string? Text { get; set; }
+    }
+
+    private Input? _field;
+    private bool _open, _focus, _saving, _invalid;
+    private string? _text, _warning, _saveError;
+    private List<Row> _rows = [];
+    private CatalogEntry? _reviewItem;
+    private string? _reviewText, _reviewError, _reviewWarning;
+    private decimal? _reviewOriginalPrice, _reviewAcceptedPrice;
+    private bool _reviewEditing;
+
+    private PriceWords.Lines Lines => PriceWords.For(Item);
+
+    private string CellClass => "price-summary" + (Lines.Missing ? " is-missing" : null) + (Lines.Ask ? " is-ask" : null);
+
+    // Prices that differ, but not by one choice: too many to change here.
+    private bool Combinations => Item.HasOptions && PriceWords.Prices(Item).Count > 1 && PriceWords.PriceOption(Item) is null;
+
+    private bool SimpleReviewPrice => !Lines.Ask && !Combinations && PriceWords.PriceOption(Item) is null;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Reviewing || ReferenceEquals(_reviewItem, Item)) return;
+        if (_reviewItem is null) _reviewOriginalPrice = Item.Price;
+        _reviewItem = Item;
+        if (!_reviewEditing)
+        {
+            var needsReset = _reviewError is not null || _reviewWarning is not null;
+            _reviewError = null;
+            _reviewWarning = null;
+            _reviewText = Item.Price is { } price ? Amount(price) : null;
+            if (needsReset) await ValidityChanged.InvokeAsync(true);
+        }
+    }
+
+    private async Task ReviewPriceChangedAsync(string? value)
+    {
+        _reviewEditing = true;
+        _reviewText = value;
+        _reviewError = null;
+        _reviewWarning = null;
+        var blank = string.IsNullOrWhiteSpace(value);
+        var amount = blank ? null : Money(value);
+        if (!blank && amount is null)
+        {
+            _reviewError = "Enter an amount, such as 12,000.";
+            await ValidityChanged.InvokeAsync(false);
+            return;
+        }
+        if (amount is { } after && _reviewOriginalPrice is { } before && Suspicious(before, after) && _reviewAcceptedPrice != after)
+            _reviewWarning = Warning(after, before, null);
+
+        var changed = Item.Copy();
+        changed.Price = amount;
+        foreach (var variant in changed.Variants) variant.Price = null;
+        changed.Status = amount is null ? CatalogStatus.Draft : CatalogStatus.Live;
+        _reviewError = await Save(changed);
+        await ValidityChanged.InvokeAsync(_reviewError is null && _reviewWarning is null);
+    }
+
+    private void ReviewBlurred()
+    {
+        _reviewEditing = false;
+        if (_reviewError is null && Money(_reviewText) is { } amount)
+            _reviewText = Amount(amount);
+    }
+
+    private async Task AcceptReviewPriceAsync()
+    {
+        _reviewAcceptedPrice = Money(_reviewText);
+        _reviewWarning = null;
+        await ValidityChanged.InvokeAsync(_reviewError is null);
+    }
+
+    private string? Subtitle => Item.HasOptions ? $"{Item.Variants.Count} {(Item.Variants.Count == 1 ? "variant" : "variants")}"
+        : Lines.Ask ? "Ask for price"
+        : Item.PriceType == PriceType.From ? "A starting price"
+        : Item.PriceUnit.Length > 0 ? $"Said as {Item.PriceUnit}"
+        : Item.HasOptions && PriceWords.Sizing(Item.Options[0]) ? $"The same for every {PriceWords.Singular(Item.Options[0]).ToLowerInvariant()}"
+        : null;
+
+    // The field shows the amount grouped as typed (58,000), so the line under it says nothing more; it speaks only
+    // when what is there reads differently (designer, 28 October 2026).
+    private string? Said => Money(_text) is { } amount && !(_text ?? string.Empty).Trim().Equals(amount.ToString("#,0.##", CultureInfo.InvariantCulture)) && !(_text ?? string.Empty).Trim().Equals(Amount(amount)) ? $"That's {PriceWords.Naira(amount)}" : null;
+
+    private void Opened(bool open)
+    {
+        if (open)
+        {
+            var prices = PriceWords.Prices(Item);
+            _rows = PriceWords.PriceOption(Item) is not null
+                ? [.. PriceWords.PriceList(Item).Select(row => new Row { Value = row.Value, Before = row.Price, Text = Amount(row.Price) })]
+                : [];
+            _text = prices.Count > 0 ? Amount(prices.Min()) : null;
+            _invalid = false;
+            _warning = null;
+            _focus = !Lines.Ask && !Combinations && _rows.Count <= 1;
+            _saveError = null;
+        }
+        _open = open;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focus && _field is not null)
+        {
+            _focus = false;
+            // After the panel has floated into view: a field can't take focus while it is hidden.
+            await Task.Yield();
+            await _field.FocusAtEndAsync();
+        }
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter") await CommitAsync();
+    }
+
+    private async Task CommitAsync()
+    {
+        if (_saving) return;
+        _saveError = null;
+        var changed = Item.Copy();
+        string? suspicious = null;
+        if (_rows.Count > 1)
+        {
+            if (_rows.Any(row => Money(row.Text) is null)) { _invalid = true; return; }
+            var index = Item.Options.IndexOf(PriceWords.PriceOption(Item)!);
+            foreach (var variant in changed.Variants)
+            {
+                var row = _rows.FirstOrDefault(entry => entry.Value == PriceWords.Part(variant.Key, index));
+                if (row is not null) variant.Price = Money(row.Text);
+            }
+            var odd = _rows.FirstOrDefault(row => Suspicious(row.Before, Money(row.Text)!.Value));
+            if (odd is not null) suspicious = Warning(Money(odd.Text)!.Value, odd.Before, odd.Value);
+            if (_rows.All(row => Money(row.Text) == row.Before)) { _open = false; return; }
+        }
+        else
+        {
+            if (Money(_text) is not { } amount) { _invalid = true; return; }
+            var before = PriceWords.Prices(Item);
+            if (before.Count == 1 && before[0] == amount) { _open = false; return; }
+            changed.Price = amount;
+            if (changed.PriceType == PriceType.OnRequest) changed.PriceType = PriceType.Fixed;
+            // One price for every choice.
+            foreach (var variant in changed.Variants) variant.Price = null;
+            if (before.Count == 1 && Suspicious(before[0], amount)) suspicious = Warning(amount, before[0], null);
+        }
+
+        // Asked once; "Save anyway" keeps it.
+        if (suspicious is not null && _warning is null)
+        {
+            _warning = suspicious;
+            return;
+        }
+
+        // Table edits never approve a draft. Completing it is an explicit action on the item form.
+
+        _saving = true;
+        try
+        {
+            var error = await Save(changed);
+            if (error is null) _open = false;
+            else _saveError = error;
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { _saveError = "We couldn't save this price. Check your connection and try again."; }
+        finally { _saving = false; }
+    }
+
+    private async Task OpenItemAsync()
+    {
+        _open = false;
+        await OnOpen.InvokeAsync();
+    }
+
+    private static bool Suspicious(decimal before, decimal after) => before > 0 && (after >= before * 10 || after * 10 <= before);
+
+    private static string Warning(decimal after, decimal before, string? choice) =>
+        $"{PriceWords.Naira(after)}{(choice is null ? string.Empty : $" for {choice}")} is {(after > before ? "much higher" : "much lower")} than before ({PriceWords.Naira(before)}). Is that right?";
+
+    private static string Amount(decimal amount) => amount.ToString(amount == decimal.Truncate(amount) ? "#,##0" : "#,##0.00", CultureInfo.InvariantCulture);
+    private static decimal? Money(string? text) => NumberText.Decimal(text) is { } amount && amount > 0 ? amount : null;
+}

@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Parrot.SharedComponents.DesignSystem;
 
 namespace Parrot.Web.Features.Dashboard.Customers;
 
@@ -9,9 +10,10 @@ namespace Parrot.Web.Features.Dashboard.Customers;
 /// <param name="NeedsCheck">Read with little confidence (a photo can be misread): the review asks the owner to look.</param>
 public sealed record ImportEntry(string Name, string? Phone, string? Email, bool NeedsCheck = false);
 
-/// <summary>A number as typed, made one shape (+ and digits), or what's wrong with it.</summary>
+/// <summary>A number as typed, made one shape (+ and digits), or what's wrong with it: a short Problem for a
+/// list, and Advice, the sentence under a field (ContactText, shared by every screen).</summary>
 /// <param name="Local">Written as a local number (0803…): the country code was added.</param>
-public sealed record PhoneReading(string? Number, string? Problem, bool Local = false);
+public sealed record PhoneReading(string? Number, string? Problem, bool Local = false, string? Advice = null);
 
 /// <summary>
 /// Bringing in the customers a business already has (designer, 22 October 2026: most small businesses
@@ -44,26 +46,14 @@ public static partial class CustomerImport
     /// </summary>
     public static PhoneReading Phone(string raw)
     {
-        var text = Separators().Replace(raw.Trim(), "");
-        if (text.Length == 0) return new(null, null);
-        if (text.StartsWith("00")) text = "+" + text[2..];
-        if (text.StartsWith('+')) return International().IsMatch(text) ? new(text, null) : new(null, "Check this number");
-        if (!text.All(char.IsDigit)) return new(null, "Check this number");
-        // Local: a 0 and ten digits, or the ten digits alone (803…), as people write Nigerian numbers.
-        if (text.Length == 11 && text[0] == '0' && text[1] is '7' or '8' or '9') return new("+" + HomeCode + text[1..], null, Local: true);
-        if (text.Length == 10 && text[0] is '7' or '8' or '9') return new("+" + HomeCode + text, null, Local: true);
-        if (text.StartsWith(HomeCode) && text.Length == HomeCode.Length + 10) return new("+" + text, null);
-        if (text[0] == '0') return new(null, "Check this number");
-        return International().IsMatch("+" + text) ? new("+" + text, null) : new(null, "Check this number");
+        var check = ContactText.Phone(raw);
+        return new(check.Number, check.Problem, check.Local, check.Advice);
     }
 
     /// <summary>A number as it's easy to read: +234 803 555 1234.</summary>
-    public static string Display(string number) =>
-        number.StartsWith("+" + HomeCode) && number.Length == HomeCode.Length + 11
-            ? $"+{HomeCode} {number[4..7]} {number[7..10]} {number[10..]}"
-            : number;
+    public static string Display(string number) => ContactText.Display(number);
 
-    public static bool IsEmail(string raw) => EmailShape().IsMatch(raw.Trim());
+    public static bool IsEmail(string raw) => ContactText.IsEmail(raw);
 
     // ── Files ───────────────────────────────────────────────────────────
 
@@ -345,11 +335,6 @@ public static partial class CustomerImport
     [GeneratedRegex(@"[\s\-().]")]
     private static partial Regex Separators();
 
-    [GeneratedRegex(@"^\+[1-9]\d{7,14}$")]
-    private static partial Regex International();
-
-    [GeneratedRegex(@"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
-    private static partial Regex EmailShape();
 
     [GeneratedRegex(@"[^\s@,;<>()]+@[^\s@,;<>()]+\.[^\s@,;<>()]+")]
     private static partial Regex EmailInText();

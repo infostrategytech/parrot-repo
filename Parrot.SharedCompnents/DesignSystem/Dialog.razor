@@ -205,11 +205,13 @@
         if (Open && !_wasOpen)
         {
             _wasOpen = true;
-            await _card.FocusAsync();
             // Escape is caught in the browser: a per-key handler here would
             // send every keystroke typed in the dialog to the server.
+            // Capture the trigger before moving focus; otherwise the trap remembers
+            // this dialog itself and cannot return focus when it is removed.
             _self ??= DotNetObjectReference.Create(this);
             _trap = await Interop.TrapFocusAsync(_card, _self, nameof(OnEscapeAsync));
+            await _card.FocusAsync();
         }
         else if (!Open && _wasOpen)
         {

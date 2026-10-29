@@ -96,8 +96,8 @@
             }
         </SelectField>
         <Input FloatingLabel="Minimum amount"
-               type="number"
-               min="0"
+               Numeric="NumericInputKind.Decimal"
+               maxlength="12"
                Value="@Step.MinAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                ValueChanged="value => Step.MinAmount = decimal.TryParse(value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var parsed) ? parsed : 0" />
     </div>

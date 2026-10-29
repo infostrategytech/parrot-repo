@@ -1,0 +1,62 @@
+/* One full-width review table for every import source. A price-list photo is available on demand,
+   not in a sidebar that squeezes the table. */
+
+.review {
+  /* Gaps in the token set: no page gutter, page width or border width. */
+  --ds-review-gutter: clamp(24px, 3vw, 56px);
+  --ds-review-max: 1180px;
+  --ds-review-hairline: 1px;
+
+  display: grid;
+  gap: var(--spacing-xl);
+  min-width: 0;
+  padding: var(--spacing-4xl) var(--ds-review-gutter) var(--spacing-6xl);
+  color: var(--colors-text-primary);
+  outline: none;
+}
+.review > * { width: min(var(--ds-review-max), 100%); min-width: 0; margin-inline: auto; }
+
+.review__top { display: grid; gap: var(--spacing-sm); justify-items: start; }
+.review__top ::deep .review__back { margin-inline-start: calc(-1 * var(--spacing-sm)); margin-bottom: var(--spacing-xl); }
+.review__summary { display: flex; flex-wrap: wrap; gap: var(--spacing-lg); align-items: center; justify-content: space-between; width: 100%; }
+.review__heading { display: grid; gap: var(--spacing-sm); min-width: 0; }
+.review__top ::deep h1 { margin: var(--spacing-none); }
+.review__top ::deep .review__lede { margin: var(--spacing-none); color: var(--colors-text-secondary); }
+
+.review ::deep .review__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.review__layout { display: grid; gap: var(--spacing-2xl); align-items: start; }
+
+/* The table, its card and its footer (the review's progress) are the shared DataTable's (designer, 28 October 2026). */
+
+/* Under a post's name: its channel and age. */
+.review ::deep .review__origin { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+
+.review__photo-preview {
+  /* Gap in the token set: viewport-relative height for a source image in the shared dialog. */
+  --ds-review-photo-height: 65dvh;
+
+  display: block;
+  width: 100%;
+  max-height: var(--ds-review-photo-height);
+  object-fit: contain;
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-xl);
+}
+
+/* The way on: one button, floating at the bottom right; an error, if any, beside it. */
+.review__bar {
+  position: sticky;
+  bottom: var(--spacing-xl);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+  pointer-events: none;
+}
+.review__bar > ::deep * { pointer-events: auto; }
+.review__bar ::deep .ds-button { box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow); }
+.review__bar ::deep .ds-button { margin-inline-start: auto; }
+

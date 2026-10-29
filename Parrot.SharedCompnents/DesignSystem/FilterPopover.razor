@@ -55,13 +55,16 @@
                     @onclick="CloseAsync"></button>
 
             <div class="filter-popover__menu" role="menu" aria-label="@Title" @onkeydown="OnKeyDown" @ref="_menu">
-                <header>
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
-                    @if (!string.IsNullOrWhiteSpace(Subtitle))
-                    {
-                        <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
-                    }
-                </header>
+                @if (ShowHeading)
+                {
+                    <header>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
+                        @if (!string.IsNullOrWhiteSpace(Subtitle))
+                        {
+                            <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
+                        }
+                    </header>
+                }
                 @ChildContent
             </div>
         </div>
@@ -72,10 +75,18 @@
     /// <summary>What the trigger reads — usually the current selection, not the filter's name.</summary>
     [Parameter, EditorRequired] public string Label { get; set; } = "";
 
-    /// <summary>The menu's heading, and its accessible name.</summary>
+    /// <summary>The menu's accessible name, and its heading when <see cref="ShowHeading"/> is on.</summary>
     [Parameter, EditorRequired] public string Title { get; set; } = "";
 
+    /// <summary>A line under the heading, shown with it.</summary>
     [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>
+    /// Show the title (and subtitle) at the top of the menu. Off by default (designer, 26 October 2026: a
+    /// heading over a list of choices tells people nothing the choices don't); on only where it says something
+    /// the choices can't, such as what choosing will do.
+    /// </summary>
+    [Parameter] public bool ShowHeading { get; set; }
 
     [Parameter] public RenderFragment? Leading { get; set; }
 

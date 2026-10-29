@@ -1,0 +1,22 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A column's name in a DataTable (designer, 28 October 2026): one style on every table, 14px medium in
+   sentence case ("Last message"), never capitals (12px read too small). End puts it at the column's end,
+   over actions. InCell is for a name that shares its cell with something else (a choose-all tick box):
+   the cell is the column header, so the words aren't one too. *@
+
+<Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="@ClassName" role="@(InCell ? null : "columnheader")">@ChildContent</Typography>
+
+@code {
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>At the column's end, as its content is (an action).</summary>
+    [Parameter] public bool End { get; set; }
+
+    /// <summary>Inside a cell that is the column header already.</summary>
+    [Parameter] public bool InCell { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private string ClassName => "ds-table__heading" + (End ? " is-end" : null) + (string.IsNullOrWhiteSpace(Class) ? null : " " + Class);
+}

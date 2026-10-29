@@ -190,11 +190,10 @@
                                 <div class="agent-advanced__field is-indented">
                                     <Input FloatingLabel="Orders over"
                                            PrefixText="₦"
-                                           Type="number"
+                                           Numeric="NumericInputKind.Integer"
+                                           maxlength="10"
                                            Value="@Form.Settings.BigOrderNaira.ToString(CultureInfo.InvariantCulture)"
-                                           ValueChanged="SetBigOrderAsync"
-                                           min="1000"
-                                           step="1000" />
+                                           ValueChanged="SetBigOrderAsync" />
                                 </div>
                             }
                         </div>

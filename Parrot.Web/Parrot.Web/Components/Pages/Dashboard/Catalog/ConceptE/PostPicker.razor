@@ -1,0 +1,499 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+@inject IOfferingDiscovery Discovery
+@implements IDisposable
+
+@* Keep selection in place while posts are prepared. One aggregate status replaces a separate loading
+   screen; captions always sit below thumbnails. Older and added posts live in the toolbar's scope filter. *@
+
+<main class="post-picker" aria-labelledby="post-picker-title">
+    <nav aria-label="Back to products and services">
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="post-picker__back" disabled="@(_stage == Stage.Reading && !HasFailed)" @onclick="CloseAsync">
+            <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+            <ChildContent>Products &amp; Services</ChildContent>
+        </Button>
+    </nav>
+    <header class="post-picker__top">
+        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1" id="post-picker-title">Select Your Posts</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="post-picker__lede">Choose posts that show what you sell. You’ll review the details next.</Typography>
+    </header>
+
+    @foreach (var channel in Reconnect)
+    {
+        var current = channel;
+        <InlineError Tone="InlineErrorTone.Warning" Message="@($"{PostChannels.Name(current)} needs reconnecting before its posts can be read.")">
+            <Action><Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => OnReconnect.InvokeAsync(current)">@($"Reconnect {PostChannels.Name(current)}")</Button></Action>
+        </InlineError>
+    }
+
+    @if (_loading)
+    {
+        <section class="post-picker__grid" aria-busy="true" aria-label="Getting your recent posts">
+            @for (var index = 0; index < 8; index++)
+            {
+                <div class="post-picker__skeleton">
+                    <Skeleton Shape="SkeletonShape.Block" Width="100%" Height="var(--ds-post-picker-skeleton)" Order="@(index * 2)" />
+                    <Skeleton Shape="SkeletonShape.Line" Order="@(index * 2 + 1)" />
+                </div>
+            }
+        </section>
+        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="post-picker__muted" role="status">Getting your recent posts…</Typography>
+    }
+    else if (_loadFailed)
+    {
+        <EmptyState Glyph="IconName.RiErrorWarningFill" Size="EmptyStateSize.Panel" Title="We couldn't get your posts"
+                    Description="Check your connection and try again.">
+            <Action><Button @onclick="LoadAsync">Try again</Button></Action>
+        </EmptyState>
+    }
+    else if (_posts.Count == 0)
+    {
+        <EmptyState Glyph="IconName.RiImageFill" Size="EmptyStateSize.Panel" Title="No recent posts yet"
+                    Description="@($"Posts on {PostChannels.Names(Channels)} show here.")" />
+    }
+    else
+    {
+        <section class="post-picker__content" aria-label="Choose posts" aria-busy="@_busy.ToString().ToLowerInvariant()" inert="@(_stage == Stage.Reading ? "" : null)">
+        <div class="post-picker__tools">
+        <div class="post-picker__filters">
+                @if (ChannelsWithPosts.Count > 1)
+            {
+                <Tabs Label="Where it was posted" Variant="TabsVariant.Tray" Class="post-picker__channels">
+                    <Tab Selected="@(_channel is null)" Count="@Shown(null).Count.ToString()" OnClick="() => _channel = null">
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">All</Typography>
+                    </Tab>
+                    @foreach (var channel in ChannelsWithPosts)
+                    {
+                        var current = channel;
+                        <Tab Selected="@(_channel == current)" Count="@Shown(current).Count.ToString()" OnClick="() => _channel = current">
+                            <ChannelIcon Channel="@current" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@PostChannels.Name(current)</Typography>
+                        </Tab>
+                    }
+                </Tabs>
+            }
+            else
+            {
+                <span class="post-picker__from">
+                    @foreach (var channel in ChannelsWithPosts)
+                    {
+                        <ChannelIcon Channel="@channel" Size="IconSize.Sm" />
+                    }
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@($"From {PostChannels.Names(ChannelsWithPosts)}")</Typography>
+                </span>
+            }
+            <div class="post-picker__find">
+                <SearchField Value="@_search" ValueChanged="value => _search = value" Placeholder="Search your posts" AriaLabel="Search posts by caption" Class="post-picker__search" />
+                @if (HiddenCount > 0)
+                {
+                    <FilterPopover Label="@(_showAll ? "All Posts" : "Recent Posts")" Title="Show Posts" AlignEnd Open="_scopeOpen" OpenChanged="open => _scopeOpen = open">
+                        <PopoverOption Label="Recent Posts" Description="Last 3 months, not already added" Active="@(!_showAll)" OnSelect="() => SetScope(false)" />
+                        <PopoverOption Label="All Posts" Description="@HiddenDescription" Active="_showAll" OnSelect="() => SetScope(true)" />
+                    </FilterPopover>
+                }
+            </div>
+        </div>
+        <div class="post-picker__selection">
+            @if (VisiblePosts.Count > 0)
+            {
+                <Checkbox State="VisibleSelectionState" StateChanged="SelectVisiblePosts" Label="Select all" aria-describedby="post-picker-count" />
+            }
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="post-picker__muted post-picker__count" id="post-picker-count" role="status">@ResultsLabel</Typography>
+        </div>
+        </div>
+
+        @if (VisiblePosts.Count == 0 && !string.IsNullOrWhiteSpace(_search))
+        {
+            <EmptyState Glyph="IconName.RiSearch2Fill" Size="EmptyStateSize.Panel" Title="No Matching Posts" Description="Try another word from the caption.">
+                <Action><Button Variant="ButtonVariant.Secondary" @onclick="() => _search = null">Clear Search</Button></Action>
+            </EmptyState>
+        }
+        else if (VisiblePosts.Count == 0)
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="post-picker__muted">Nothing new here.</Typography>
+        }
+        else
+        {
+            <ul class="post-picker__grid" aria-label="Your recent posts">
+                @foreach (var post in VisiblePosts)
+                {
+                    var current = post;
+                    var chosen = _chosen.Contains(current.Id);
+                    <li class="@($"post-picker__post{(chosen ? " is-chosen" : null)}")">
+                        @* One press selects it: the tile is the button; the tick only shows it. *@
+                        <RowButton Class="post-picker__pick" OnClick="() => Toggle(current.Id)" aria-pressed="@(chosen ? "true" : "false")"
+                                   aria-label="@($"{PostChannels.Name(current.Channel)} post, {PostDraft.Ago(current.DaysAgo)}: {FirstLine(current.Caption)}")">
+                            <PostTile Post="current" />
+                            <span class="post-picker__tick" aria-hidden="true"><Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /></span>
+                        </RowButton>
+                        <span class="post-picker__words">
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="post-picker__caption">@(string.IsNullOrWhiteSpace(current.Caption) ? "No caption" : FirstLine(current.Caption))</Typography>
+                            <span class="post-picker__meta">
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="post-picker__muted">@PostDraft.Ago(current.DaysAgo)</Typography>
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Preview post: {FirstLine(current.Caption)}")" title="Preview Post" @onclick="() => Preview(current)">
+                                    <IconLeft><Icon Name="IconName.RiEyeFill" Size="IconSize.Sm" /></IconLeft>
+                                    <ChildContent>Preview</ChildContent>
+                                </Button>
+                            </span>
+                        </span>
+                        @if (MatchOf(current) is not null || Brought.Contains(current.Id))
+                        {
+                            <StatusBadge Tone="StatusTone.Neutral">Already added</StatusBadge>
+                        }
+                        else if (current.DaysAgo > PostDraft.OldAfterDays)
+                        {
+                            <StatusBadge Tone="StatusTone.Warning">Over 3 months old</StatusBadge>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        </section>
+
+        @if (_stage == Stage.Reading && !_busy)
+        {
+            <footer class="post-picker__bar">
+                <div class="post-picker__recovery-card" role="status" aria-live="polite">
+                        <span class="post-picker__progress-copy">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@FailureTitle</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@(ReadDrafts.Count > 0 ? "Review the ready posts, or try the others again." : "Try again, or choose different posts.")</Typography>
+                        </span>
+                        <span class="post-picker__recovery">
+                            @if (ReadDrafts.Count > 0)
+                            {
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="RetryFailedAsync">Try Again</Button>
+                                <Button Size="ButtonSize.Small" @onclick="FinishAsync">@ReviewLabel(ReadDrafts.Count)</Button>
+                            }
+                            else
+                            {
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="ResetSelection">Choose Posts</Button>
+                                <Button Size="ButtonSize.Small" @onclick="RetryFailedAsync">Try Again</Button>
+                            }
+                        </span>
+                </div>
+            </footer>
+        }
+        else if (_stage == Stage.Choose && _chosen.Count > 0)
+        {
+            <footer class="post-picker__bar">
+                <Button @onclick="ReadChosenAsync">
+                    <ChildContent>@ReviewLabel(_chosen.Count)</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            </footer>
+        }
+    }
+</main>
+
+@* A full-viewport preparation layer. The shared Dialog provides the focus trap and blocks the page
+   behind it; its card is removed visually so the loader has the whole screen, not a small panel. *@
+<div class="post-preparation">
+    <Dialog Open="_busy" Title="Getting Your Items Ready" TitleVisuallyHidden HideFooter Busy="_busy" OnConfirm="() => { }">
+        <Body>
+            <section class="post-preparation__body" role="status" aria-live="polite" aria-busy="true">
+                <span class="post-preparation__mark" aria-hidden="true"><CadenceLoader Kind="CadenceLoaderKind.Thread" Size="64" /></span>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Getting Your Items Ready</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Reading your posts. You’ll review the details next.</Typography>
+            </section>
+        </Body>
+    </Dialog>
+</div>
+
+<Dialog Open="_previewOpen" Title="Post Preview" Size="DialogSize.Wide" Dismissible HideFooter
+        OnCancel="() => _previewOpen = false" OnConfirm="SelectPreview">
+    <Body>
+        @if (_previewPost is { } post)
+        {
+            <div class="post-preview">
+                <span class="post-preview__source">
+                    <ChannelIcon Channel="@post.Channel" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@PostChannels.Name(post.Channel)</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="post-preview__muted">@PostDraft.Ago(post.DaysAgo)</Typography>
+                </span>
+                <div class="@($"post-preview__content{(post.ImageUrl.Length == 0 ? " is-text" : null)}")">
+                    @if (post.ImageUrl.Length > 0)
+                    {
+                        <img class="post-preview__image" src="@post.ImageUrl" alt="@($"Image from this {PostChannels.Name(post.Channel)} post")" />
+                    }
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="post-preview__caption">@post.Caption</Typography>
+                </div>
+                <div class="post-preview__actions">
+                    <Button Variant="@(_chosen.Contains(post.Id) ? ButtonVariant.Secondary : ButtonVariant.Primary)" @onclick="SelectPreview">
+                        <IconLeft><Icon Name="@(_chosen.Contains(post.Id) ? IconName.RiCloseFill : IconName.RiCheckFill)" /></IconLeft>
+                        <ChildContent>@(_chosen.Contains(post.Id) ? "Deselect Post" : "Select Post")</ChildContent>
+                    </Button>
+                </div>
+            </div>
+        }
+    </Body>
+</Dialog>
+
+@code {
+    /// <summary>The connected social channels: only their posts show.</summary>
+    [Parameter] public IReadOnlyList<string> Channels { get; set; } = PostChannels.Social;
+
+    /// <summary>Connected channels whose access has lapsed: their posts can't be read until they're reconnected.</summary>
+    [Parameter] public IReadOnlyList<string> Reconnect { get; set; } = [];
+
+    /// <summary>The items on the list, to leave out posts already there and to update rather than repeat.</summary>
+    [Parameter] public IReadOnlyList<CatalogEntry> Items { get; set; } = [];
+
+    /// <summary>Posts already brought in, left out next time.</summary>
+    [Parameter] public IReadOnlyCollection<string> Brought { get; set; } = [];
+
+    /// <summary>The demo's ?posts=: "offline" (the first fetch fails) or "unreadable" (one post can't be read at first).</summary>
+    [Parameter] public string? DemoPreview { get; set; }
+
+    /// <summary>A post that isn't here: its link, in its own small window.</summary>
+    [Parameter] public EventCallback OnLink { get; set; }
+
+    [Parameter] public EventCallback<string> OnReconnect { get; set; }
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The posts are read: one draft each, to review.</summary>
+    [Parameter] public EventCallback<IReadOnlyList<ReviewDraft>> OnRead { get; set; }
+
+    private enum Stage { Choose, Reading }
+    private enum Status { Waiting, Reading, Ready, Failed }
+
+    // The demo's reader; the backend's, once it exists, comes through Program.cs (catalog-backend-requests).
+    private readonly ICaptionReader _reader = new DemoCaptionReader();
+    private readonly HashSet<string> _chosen = [];
+    private readonly Dictionary<string, Status> _status = [];
+    private readonly Dictionary<string, ReviewDraft> _read = [];
+    private readonly HashSet<string> _failedOnce = [];
+    private readonly CancellationTokenSource _cancel = new();
+    private List<SocialPost> _posts = [];
+    private List<SocialPost> _reading = [];
+    private Stage _stage = Stage.Choose;
+    private string? _channel, _search;
+    private SocialPost? _previewPost;
+    private bool _previewOpen, _scopeOpen;
+    private bool _loading = true, _loadFailed, _showAll, _busy, _offlineShown;
+
+    // The channels with posts to show: no tab for one whose posts are all left out.
+    private List<string> ChannelsWithPosts => [.. PostChannels.Social.Where(channel => Shown(null).Any(post => post.Channel == channel))];
+
+    private CatalogEntry? MatchOf(SocialPost post) => PostDraft.Existing(post, Items);
+
+    private bool Hidden(SocialPost post) => Brought.Contains(post.Id) || MatchOf(post) is not null || post.DaysAgo > PostDraft.OldAfterDays;
+
+    private List<SocialPost> Shown(string? channel) =>
+        [.. _posts.Where(post => channel is null || post.Channel == channel).Where(post => _showAll || !Hidden(post))];
+
+    // Search only what the post actually says; no inferred product facts before review.
+    private List<SocialPost> VisiblePosts => [.. Shown(_channel).Where(post =>
+        string.IsNullOrWhiteSpace(_search) || post.Caption.Contains(_search.Trim(), StringComparison.OrdinalIgnoreCase))];
+
+    private CheckboxState VisibleSelectionState
+    {
+        get
+        {
+            var posts = VisiblePosts;
+            var selected = posts.Count(post => _chosen.Contains(post.Id));
+            return selected == 0 ? CheckboxState.Unchecked
+                : selected == posts.Count ? CheckboxState.Checked
+                : CheckboxState.Indeterminate;
+        }
+    }
+
+    private string ResultsLabel => VisiblePosts.Count switch
+    {
+        0 => "No posts in this view",
+        1 => "1 post",
+        var count => $"{count} posts",
+    };
+
+    private void Preview(SocialPost post)
+    {
+        _previewPost = post;
+        _previewOpen = true;
+    }
+
+    private void SelectPreview()
+    {
+        if (_previewPost is { } post) Toggle(post.Id);
+        _previewOpen = false;
+    }
+
+    private int Failed => _reading.Count(post => _status.GetValueOrDefault(post.Id) == Status.Failed);
+
+    private bool HasFailed => Failed > 0;
+
+    private string FailureTitle => ReadDrafts.Count > 0
+        ? $"{ReadDrafts.Count} ready · {Failed} couldn’t be read"
+        : "We Couldn’t Read These Posts";
+
+    // In the order they were read, leaving out any skipped or not read.
+    private List<ReviewDraft> ReadDrafts => [.. _reading.Where(post => _read.ContainsKey(post.Id)).Select(post => _read[post.Id])];
+
+    private static string ReviewLabel(int count) => count switch
+    {
+        0 => "Review posts",
+        1 => "Review 1 post",
+        _ => $"Review {count} posts",
+    };
+
+    private int AddedCount => _posts.Count(post => Brought.Contains(post.Id) || MatchOf(post) is not null);
+    private int OlderCount => _posts.Count(post => !(Brought.Contains(post.Id) || MatchOf(post) is not null) && post.DaysAgo > PostDraft.OldAfterDays);
+    private int HiddenCount => AddedCount + OlderCount;
+
+    private string HiddenDescription
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (AddedCount > 0) parts.Add($"{AddedCount} already added");
+            if (OlderCount > 0) parts.Add(OlderCount == 1 ? "1 older post" : $"{OlderCount} older posts");
+            return "Includes " + string.Join(" and ", parts);
+        }
+    }
+
+    private void SetScope(bool all)
+    {
+        _showAll = all;
+        _scopeOpen = false;
+    }
+
+    // Every entry point starts with nothing selected. Only the owner selects posts and starts reading.
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadFailed = false;
+        try
+        {
+            // The demo can show a fetch that fails the first time (?posts=offline).
+            if (DemoPreview == "offline" && !_offlineShown)
+            {
+                _offlineShown = true;
+                await Task.Delay(400, _cancel.Token);
+                throw new HttpRequestException("Demo: no connection.");
+            }
+            var recent = await Discovery.ListRecentPostsAsync(_cancel.Token);
+            _posts = [.. recent.Concat(DemoPosts.More).Where(post => Channels.Contains(post.Channel)).OrderBy(post => post.DaysAgo)];
+        }
+        catch (Exception exception) when (exception is HttpRequestException or NotSupportedException)
+        {
+            _posts = [];
+            _loadFailed = true;
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            _loading = false;
+        }
+        // Viewing or loading posts is not a dismissal. Only explicit dismiss/confirmed additions hide the
+        // discovery prompt; leaving the picker without selecting anything must not make it disappear.
+    }
+
+    private void Toggle(string id)
+    {
+        if (!_chosen.Remove(id)) _chosen.Add(id);
+    }
+
+    private void SelectVisiblePosts(CheckboxState state)
+    {
+        var visibleIds = VisiblePosts.Select(post => post.Id);
+        if (state == CheckboxState.Checked) _chosen.UnionWith(visibleIds);
+        else _chosen.ExceptWith(visibleIds);
+    }
+
+    private Task ReadChosenAsync() => ReadAsync([.. _posts.Where(post => _chosen.Contains(post.Id))]);
+
+    // A moment for each post, said as it goes; one that can't be read waits for Try again or Skip.
+    private async Task ReadAsync(List<SocialPost> posts)
+    {
+        if (posts.Count == 0) return;
+        _reading = posts;
+        _status.Clear();
+        _read.Clear();
+        foreach (var post in posts) _status[post.Id] = Status.Waiting;
+        _stage = Stage.Reading;
+        _busy = true;
+        StateHasChanged();
+        try
+        {
+            foreach (var post in posts) await ReadOneAsync(post);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        _busy = false;
+        if (!HasFailed) await FinishAsync();
+        else StateHasChanged();
+    }
+
+    private async Task ReadOneAsync(SocialPost post)
+    {
+        var token = _cancel.Token;
+        _status[post.Id] = Status.Reading;
+        StateHasChanged();
+        try
+        {
+            // The demo can show a post that can't be read the first time (?posts=unreadable): the second one.
+            if (DemoPreview == "unreadable" && post == _reading.ElementAtOrDefault(1) && _failedOnce.Add(post.Id))
+            {
+                await Task.Delay(700, token);
+                throw new HttpRequestException("Demo: couldn't read this post.");
+            }
+            var reading = await _reader.ReadAsync(post.Caption, token);
+            _read[post.Id] = ReviewDraft.FromPost(PostDraft.From(post, reading, Items));
+            _status[post.Id] = Status.Ready;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            _status[post.Id] = Status.Failed;
+        }
+        StateHasChanged();
+    }
+
+    private async Task RetryFailedAsync()
+    {
+        _busy = true;
+        try
+        {
+            foreach (var post in _reading.Where(post => _status.GetValueOrDefault(post.Id) == Status.Failed).ToList())
+                await ReadOneAsync(post);
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        _busy = false;
+        if (!HasFailed) await FinishAsync();
+    }
+
+    private void ResetSelection()
+    {
+        _stage = Stage.Choose;
+        _reading.Clear();
+        _status.Clear();
+        _read.Clear();
+    }
+
+    private Task FinishAsync() => OnRead.InvokeAsync(ReadDrafts);
+
+    private async Task CloseAsync()
+    {
+        _cancel.Cancel();
+        await OnClose.InvokeAsync();
+    }
+
+    private static string FirstLine(string caption) =>
+        caption.Split('\n').Select(part => part.Trim()).FirstOrDefault(part => part.Length > 0) ?? string.Empty;
+
+    public void Dispose()
+    {
+        _cancel.Cancel();
+        _cancel.Dispose();
+    }
+}

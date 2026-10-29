@@ -184,6 +184,8 @@ export function keepDigits(element, max) {
 }
 
 export function setValue(element, value, focus) {
+  // An amount put in by the page reads as one typed would: 58000 shows as 58,000.
+  if (element?.dataset.numericInput === "decimal" && value) value = groupAmount(value);
   if (element && element.value !== value) element.value = value;
   element?.__auroraGrow?.();
   // Text put in for the person to carry on with (a draft, a saved reply, an
@@ -192,6 +194,136 @@ export function setValue(element, value, focus) {
     element.focus();
     element.setSelectionRange(value.length, value.length);
   }
+}
+
+/* An amount with its thousands grouped, as people read money (designer, 28 October 2026): 58000 → 58,000,
+   100000.5 → 100,000.5. Anything but digits and one point is dropped; at most two places after the point. */
+function groupAmount(text) {
+  const [whole, ...rest] = String(text).split(".");
+  const digits = whole.replace(/[^0-9]/g, "").replace(/^0+(?=[0-9])/, "");
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return rest.length ? `${grouped}.${rest.join("").replace(/[^0-9]/g, "").slice(0, 2)}` : grouped;
+}
+
+/* A pasted amount, read the way it's written in captions and chats (designer, 28 October 2026): "58k",
+   "1.2m", "₦58,000", "N58,000", "NGN 58,000", "#8,500", "58,000 naira". Null when it isn't an amount, so
+   "58k only" or "about 5k" are refused as before. Only pasting is read this way: typing stays digits only. */
+function readPastedAmount(text) {
+  const plain = String(text).trim().toLowerCase().replace(/\s+/g, "")
+    .replace(/^(?:₦|ngn|n|#)/, "").replace(/(?:naira|ngn)$/, "");
+  const match = plain.match(/^([0-9][0-9,]*(?:\.[0-9]+)?|\.[0-9]+)([km])?$/);
+  if (!match) return null;
+  const written = match[1].replace(/,/g, "");
+  if (!match[2]) {
+    const [whole, places = ""] = written.split(".");
+    return places.length > 2 ? Number(written).toFixed(2) : written;
+  }
+  const amount = Number(written) * (match[2] === "k" ? 1e3 : 1e6);
+  if (!Number.isFinite(amount)) return null;
+  return (Math.round(amount * 100) / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
+
+/* Numeric fields opt in. Reject the entire invalid insertion, never turn -500 or 500abc into 500.
+   Run before Blazor's delegated input listener; normal text/auth fields never attach these handlers.
+   Amounts (decimal) also group their thousands as they're typed, and read a pasted 58k or ₦58,000. */
+export function bindNumberInput(element, target) {
+  if (!element) return { release() {} };
+  const amount = element.dataset.numericInput === "decimal";
+  const limit = element.maxLength;
+  // A grouped amount may be wider than its digit limit. Native maxlength counts commas too, which can
+  // otherwise trap a formatted large value; enforce the digit limit locally instead.
+  if (element.dataset.numericInput === "decimal" && limit >= 0) element.removeAttribute("maxlength");
+  // A phone number: digits and what people write one with (+234 803 555 1234, (0803) 555-1234), never letters.
+  const kinds = { integer: /^[0-9]*$/, phone: /^[0-9+() -]*$/, decimal: /^[0-9,]*(?:\.[0-9]{0,2})?$/ };
+  const valid = value => (kinds[element.dataset.numericInput] ?? kinds.decimal).test(value)
+    && (limit < 0 || value.replace(/[,.]/g, "").length <= limit);
+  let accepted = element.value;
+  let caret = element.selectionStart ?? accepted.length;
+  let composing = false;
+  const reject = () => target.invokeMethodAsync("NumberRejectedAsync", accepted).catch(() => {});
+  const proposed = text => element.value.slice(0, element.selectionStart ?? element.value.length)
+    + text + element.value.slice(element.selectionEnd ?? element.value.length);
+  // Groups the amount in place, keeping the caret beside the same digit it was beside.
+  const regroup = () => {
+    const shown = element.value;
+    const next = groupAmount(shown);
+    if (next === shown) return;
+    const at = element.selectionStart ?? shown.length;
+    const kept = shown.slice(0, at).replace(/[^0-9.]/g, "").length;
+    element.value = next;
+    let position = 0;
+    for (let seen = 0; position < next.length && seen < kept; position++) if (/[0-9.]/.test(next[position])) seen++;
+    element.setSelectionRange(position, position);
+  };
+  // Puts text in place of the selection as if typed, so the field's own input handling runs (and Blazor hears it).
+  const putIn = (text, start, end) => {
+    element.value = element.value.slice(0, start) + text + element.value.slice(end);
+    element.setSelectionRange(start + text.length, start + text.length);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const before = event => {
+    accepted = element.value; caret = element.selectionStart ?? accepted.length;
+    // Deleting next to a comma deletes the digit beside it: the comma alone would only come straight back.
+    if (amount && (event.inputType === "deleteContentBackward" || event.inputType === "deleteContentForward")
+      && element.selectionStart === element.selectionEnd) {
+      const back = event.inputType === "deleteContentBackward";
+      const comma = back ? caret - 1 : caret;
+      if (accepted[comma] === ",") {
+        event.preventDefault();
+        const digit = back ? comma - 1 : comma + 1;
+        if (digit < 0 || digit >= accepted.length) return;
+        const from = Math.min(comma, digit);
+        element.value = accepted.slice(0, from) + accepted.slice(Math.max(comma, digit) + 1);
+        element.setSelectionRange(from, from);
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
+    }
+    if (event.isComposing || !event.inputType?.startsWith("insert") || event.data == null) return;
+    if (!valid(proposed(event.data))) { event.preventDefault(); reject(); }
+  };
+  const paste = event => {
+    const text = event.clipboardData?.getData("text");
+    if (text == null) return;
+    accepted = element.value; caret = element.selectionStart ?? accepted.length;
+    // An amount pasted the way it's written ("58k", "₦58,000"): put in as the number it means.
+    const read = amount ? readPastedAmount(text) : null;
+    if (read !== null) {
+      event.preventDefault();
+      const start = element.selectionStart ?? accepted.length, end = element.selectionEnd ?? start;
+      if (!valid(proposed(read))) { reject(); return; }
+      putIn(read, start, end);
+      return;
+    }
+    if (!valid(proposed(text))) { event.preventDefault(); reject(); }
+  };
+  const input = event => {
+    if (composing || event.isComposing) { event.stopImmediatePropagation(); return; }
+    // Old drafts can contain invalid text. Let people delete it rather than trapping them in that value.
+    if (valid(element.value) || event.inputType?.startsWith("delete") && element.value.length < accepted.length) {
+      if (amount && valid(element.value)) regroup();
+      accepted = element.value; caret = element.selectionStart ?? accepted.length; return;
+    }
+    element.value = accepted;
+    element.setSelectionRange(caret, caret);
+    event.stopImmediatePropagation(); reject();
+  };
+  const startComposition = () => { composing = true; };
+  const endComposition = () => { composing = false; element.dispatchEvent(new Event("input", { bubbles: true })); };
+  // An amount already in the field (a saved price) shows grouped from the start; the value is the same number.
+  if (amount && valid(element.value)) { element.value = groupAmount(element.value); accepted = element.value; }
+  element.addEventListener("beforeinput", before);
+  element.addEventListener("paste", paste);
+  element.addEventListener("input", input, true);
+  element.addEventListener("compositionstart", startComposition);
+  element.addEventListener("compositionend", endComposition);
+  return { release() {
+    element.removeEventListener("beforeinput", before);
+    element.removeEventListener("paste", paste);
+    element.removeEventListener("input", input, true);
+    element.removeEventListener("compositionstart", startComposition);
+    element.removeEventListener("compositionend", endComposition);
+  } };
 }
 
 /* A textarea that grows with its text, upwards when it sits at the bottom of
