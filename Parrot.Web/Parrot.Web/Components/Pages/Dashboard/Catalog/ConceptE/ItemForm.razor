@@ -1,0 +1,837 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using System.Globalization
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+@inject AuroraInterop Interop
+@inject NavigationManager Navigation
+
+@* One item, plainly (designer, 26 October 2026). Products & Services is what the agent knows about what the
+   business sells, so it can answer, suggest and take payment: not a shop listing. So there's no "on sale":
+   Add item requires the basics; Save draft explicitly keeps unfinished work away from the agent.
+   The same form adds an item by hand, changes one, and checks one being reviewed (Reviewing: from a post,
+   filled in with the post beside it, or from a price list); then Done goes back to the review, nothing saved
+   yet. An item has one price, or a list of the versions sold, each with its own price. *@
+
+@if (InPanel)
+{
+    <div class="item-form is-panel">@FormBody</div>
+}
+else
+{
+<main class="item-form" @ref="_top" tabindex="-1" aria-labelledby="item-form-title">
+    <header class="item-form__top">
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="item-form__back" disabled="@_saving" @onclick="BackAsync">
+            <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+            <ChildContent>@(BackLabel ?? (Reviewing ? "Imported items" : "Products & Services"))</ChildContent>
+        </Button>
+        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1" id="item-form-title">@Heading</Typography>
+        @if (ReviewPosition is { Length: > 0 })
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="item-form__muted">@ReviewPosition</Typography>
+        }
+        @HeaderActions
+    </header>
+
+    <div class="@($"item-form__layout{(Source is null ? null : " has-source")}")">
+        @FormBody
+
+        @if (Source is not null)
+        {
+            @* The post as it was, to compare with what was filled in. *@
+            <aside class="item-form__source" aria-label="Your post">
+                <div class="item-form__source-card">
+                    @if (Source.ImageUrl.Length > 0)
+                    {
+                        <PostTile Post="Source" />
+                    }
+                    <div class="item-form__source-words">
+                        <span class="item-form__source-from">
+                            <ChannelIcon Channel="@Source.Channel" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{ChannelName(Source.Channel)} · {PostDraft.Ago(Source.DaysAgo)}")</Typography>
+                        </span>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="item-form__caption">@Source.Caption</Typography>
+                    </div>
+                </div>
+            </aside>
+        }
+    </div>
+</main>
+}
+
+<Dialog Open="_newCategory" Title="New category" ConfirmLabel="Create category" CancelLabel="Cancel"
+        Busy="_categorySaving" ConfirmDisabled="@string.IsNullOrWhiteSpace(_categoryName)"
+        OnConfirm="CreateCategoryAsync" OnCancel="CloseCategory">
+    <Body>
+        <div class="item-form__category-create">
+            <Input FloatingLabel="Category name" maxlength="40" Value="@_categoryName" ValueChanged="value => { _categoryName = value ?? string.Empty; _categoryError = null; }"
+                   HelperText="For example, Clothing or Hair care" Error="@(_categoryError is not null)" Disabled="_categorySaving" />
+            @if (_categoryError is not null) { <InlineError Message="@_categoryError" /> }
+        </div>
+    </Body>
+</Dialog>
+
+@if (!Reviewing)
+{
+    <NavigationLock ConfirmExternalNavigation="@(!_allowNavigation && HasChanges)" OnBeforeInternalNavigation="CheckNavigationAsync" />
+    <Dialog Open="_leaving" Type="DialogType.Destructive" Title="Leave without saving?"
+            ConfirmLabel="Leave without saving" CancelLabel="Keep editing" OnConfirm="LeaveAsync" OnCancel="KeepEditing">
+        <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p">Your changes haven't been saved. Stay here to finish or save a draft.</Typography></Body>
+    </Dialog>
+}
+
+@code {
+    /// <summary>The item to change, or one filled in from a post; null to add one by hand.</summary>
+    [Parameter] public CatalogEntry? Item { get; set; }
+
+    /// <summary>The post it was filled in from: shown beside it, with what to check.</summary>
+    [Parameter] public SocialPost? Source { get; set; }
+
+    /// <summary>Optional source-preview actions, without changing the shared item form or its fields.</summary>
+    [Parameter] public RenderFragment? HeaderActions { get; set; }
+
+    [Parameter] public IReadOnlyList<string> Checks { get; set; } = [];
+
+    /// <summary>The item already on the list that the post is about: saving can update it instead.</summary>
+    [Parameter] public CatalogEntry? Match { get; set; }
+
+    /// <summary>With a match: whether it starts as updating it (true) or adding a new item.</summary>
+    [Parameter] public bool UpdateMatch { get; set; } = true;
+
+    [Parameter] public IReadOnlyList<string> Categories { get; set; } = [];
+    [Parameter] public Func<string, Task<string?>>? CreateCategory { get; set; }
+
+    /// <summary>Saves the item, or an explicitly chosen draft: null when saved, or what went wrong.</summary>
+    [Parameter, EditorRequired] public Func<CatalogEntry, bool, Task<string?>> Save { get; set; } = (_, _) => Task.FromResult<string?>(null);
+
+    /// <summary>Checking an item being reviewed: back goes to the review, and Done keeps the changes there (Save saves nothing yet).</summary>
+    [Parameter] public bool Reviewing { get; set; }
+
+    [Parameter] public bool FinalReview { get; set; }
+    [Parameter] public string? ReviewPosition { get; set; }
+    [Parameter] public string? SubmitLabel { get; set; }
+    [Parameter] public string? BackLabel { get; set; }
+    [Parameter] public EventCallback OnPrevious { get; set; }
+
+    /// <summary>Unsaved form values, including incomplete amounts, when moving between imported items.</summary>
+    [Parameter] public DraftValues? RestoredDraft { get; set; }
+
+    public sealed record VersionDraft(string Name, string? Price, bool SoldOut, string? Stock = null);
+    public sealed record DraftValues(List<string> Photos, string Name, CatalogKind Kind, string Description,
+        string Category, string PriceType, string? Price, string Unit, string Availability,
+        string Time, string? Stock, bool Update, bool HasVersions, List<VersionDraft> Versions);
+
+    /// <summary>In a side panel (reviewing): no page around it; name and price first, the rest under More details.
+    /// The panel's own button saves it (<see cref="SubmitAsync"/>).</summary>
+    [Parameter] public bool InPanel { get; set; }
+
+    [Parameter] public EventCallback OnBack { get; set; }
+
+    [Parameter] public EventCallback<CatalogEntry> OnDelete { get; set; }
+
+    // One variant sold, written the owner's way, with its price, and whether it's sold out.
+    private sealed class VersionRow
+    {
+        public string Id { get; } = Guid.NewGuid().ToString("N");
+        public string Name { get; set; } = "";
+        public string? Price { get; set; }
+        public bool SoldOut { get; set; }
+        public string? Stock { get; set; }
+    }
+
+    private static readonly CatalogKind[] Kinds = [CatalogKind.Product, CatalogKind.Food, CatalogKind.Service, CatalogKind.Digital];
+    private const int MaxVersions = 60;
+
+    private ElementReference _top;
+    private Input? _nameField, _priceField;
+    private List<string> _photos = [];
+    private string _name = "", _description = "", _category = "", _unit = "", _time = "", _now = "now", _priceType = "fixed";
+    private string? _price, _stock, _error;
+    private CatalogKind _kind = CatalogKind.Product;
+    private bool _tried, _draftTried, _saving, _savingDraft, _update = true, _newCategory, _more;
+    private bool _kindOpen, _categoryOpen, _categorySaving;
+    private string _categoryName = "";
+    private string? _categoryError;
+    private readonly List<string> _createdCategories = [];
+    private bool _hasVersions;
+    private bool _legacyStockTracking;
+    private List<VersionRow> _versions = [];
+    private string _initialDraft = "";
+    private bool _leaving, _allowNavigation;
+    private string? _navigationTarget;
+
+    // The form's body, shared by the page and the panel.
+    private RenderFragment FormBody => @<text>
+<div class="item-form__main">
+    @if (InPanel && Source is not null)
+    {
+        @* The post, small, above what was filled in from it. *@
+        <section class="item-form__post" aria-label="Your post">
+            @if (Source.ImageUrl.Length > 0)
+            {
+                <img class="item-form__post-photo" src="@Source.ImageUrl" alt="" />
+            }
+            <div class="item-form__post-words">
+                <span class="item-form__source-from">
+                    <ChannelIcon Channel="@Source.Channel" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{ChannelName(Source.Channel)} · {PostDraft.Ago(Source.DaysAgo).ToLowerInvariant()}")</Typography>
+                </span>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="item-form__post-caption">@Source.Caption</Typography>
+            </div>
+        </section>
+    }
+    else if (Source is not null)
+    {
+        <InlineError Tone="InlineErrorTone.Info" Message="Filled in from your post. Check it." />
+    }
+    @foreach (var check in Checks)
+    {
+        <InlineError Tone="InlineErrorTone.Warning" Message="@check" />
+    }
+    @if (Match is not null)
+    {
+            <section class="item-form__match" aria-label="Already in your list">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>You already have <strong>@Match.Name</strong>.</Typography>
+                <div class="item-form__chips" role="group" aria-label="What to do with it">
+                    <ChoiceChip Selected="_update" OnClick="() => _update = true">Update it</ChoiceChip>
+                    <ChoiceChip Selected="!_update" OnClick="() => _update = false">Add as new</ChoiceChip>
+                </div>
+                @if (_update)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="item-form__muted">Your existing details are filled in. Only the changes you confirm will be saved.</Typography>
+                }
+            </section>
+    }
+
+    <section class="item-form__card" aria-labelledby="item-form-about">
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="item-form-about">About it</Typography>
+        <Input @ref="_nameField" FloatingLabel="Name" maxlength="80" Value="@_name" ValueChanged="value => { _name = value ?? string.Empty; _error = null; }"
+               Error="@((_tried || _draftTried) && _name.Trim().Length == 0)" HelperText="@((_tried || _draftTried) && _name.Trim().Length == 0 ? "Give it a name." : null)" />
+        <div class="item-form__selectors">
+            <SelectField FloatingLabel="Item type" Value="@KindName(_kind)" Open="_kindOpen" OpenChanged="open => _kindOpen = open">
+                @foreach (var kind in Kinds)
+                {
+                    var current = kind;
+                    <PopoverOption Label="@KindName(current)" Active="@(_kind == current)" OnSelect="() => ChooseKind(current)" />
+                }
+            </SelectField>
+            @if (!InPanel)
+            {
+                @CategoryField
+            }
+        </div>
+        @if (!InPanel)
+        {
+            @DescriptionField
+            @PhotosField
+        }
+    </section>
+
+    @* The price (designer, 27 October 2026): three choices, and the one picked decides what shows. Single
+       price: the price. Variants: no single price; each variant written their way ("UK 6 blue", "128GB UK
+       used") with its own price, only the ones they sell. Price on request: nothing to fill in, as a vendor
+       writes "DM for price". *@
+    <section class="item-form__card item-form__price" aria-labelledby="item-form-price">
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="item-form-price">Price</Typography>
+        <SegmentedControl TValue="string" Label="How it's priced" Options="PricingChoices" Value="@Pricing" ValueChanged="SetPricing" />
+
+        @if (Pricing == PriceSingle)
+        {
+            <div class="item-form__pair">
+                <Input @ref="_priceField" FloatingLabel="@(_priceType == "from" ? "Starting price" : "Price")" PrefixText="₦" Numeric="NumericInputKind.Decimal" maxlength="16"
+                       Value="@_price" ValueChanged="value => { _price = value; _error = null; }" @onfocusout="() => _price = Grouped(_price)"
+                       Error="@(_tried && (PriceInvalid || RequiredPriceMissing))"
+                       HelperText="@(_tried && PriceInvalid ? "Enter a positive amount with up to 2 decimal places." : _tried && RequiredPriceMissing ? "Add a price, or choose Price on request." : _priceType == "from" ? "The price starts from this amount." : null)" />
+                <Input FloatingLabel="Price per (optional)" maxlength="24" HelperText="For example, yard or person"
+                       Value="@_unit" ValueChanged="value => _unit = value ?? string.Empty" />
+            </div>
+        }
+        else if (Pricing == PriceVariants)
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="item-form__muted">Add each variant the way you'd write it, such as UK 6 blue, with its price.</Typography>
+            <ul class="@($"item-form__versions{(_legacyStockTracking ? " has-stock" : null)}")" aria-label="Variants">
+                @for (var index = 0; index < _versions.Count; index++)
+                {
+                    var row = _versions[index];
+                    var number = index + 1;
+                    <li class="item-form__version" @key="row.Id">
+                        <Input @ref="_variantNames[row.Id]" Class="item-form__value" FloatingLabel="Variant" maxlength="60" autocomplete="off"
+                               Value="@row.Name" ValueChanged="value => SetName(row, value)"
+                               Error="@(_tried && RowStarted(row) && (NameOf(row).Length == 0 || Twice(row)))"
+                               HelperText="@(_tried && RowStarted(row) && NameOf(row).Length == 0 ? "Give this variant a name." : _tried && Twice(row) ? "This name is already used." : null)" />
+                        <Input @ref="_variantPrices[row.Id]" Class="item-form__amount" FloatingLabel="Price" PrefixText="₦" Numeric="NumericInputKind.Decimal" maxlength="16"
+                               Value="@row.Price" ValueChanged="value => { row.Price = value; _error = null; }" @onfocusout="() => row.Price = Grouped(row.Price)"
+                               Error="@(_tried && RowStarted(row) && RowPriceWrong(row))"
+                               HelperText="@(_tried && RowStarted(row) && RowPriceWrong(row) ? "Enter a positive price, up to 2 decimals." : null)" />
+                        @if (_legacyStockTracking)
+                        {
+                            <Input @ref="_variantStocks[row.Id]" Class="item-form__variant-stock" FloatingLabel="Stock" Numeric="NumericInputKind.Integer" maxlength="6"
+                                   Value="@row.Stock" ValueChanged="value => SetStock(row, value)"
+                                   Error="@(_tried && RowStarted(row) && RowStockWrong(row))"
+                                   HelperText="@(_tried && RowStarted(row) && RowStockWrong(row) ? "Add stock, or mark sold out." : null)" />
+                        }
+                        <span class="item-form__version-end">
+                            @if (row.SoldOut)
+                            {
+                                <StatusBadge Tone="StatusTone.Danger">Sold out</StatusBadge>
+                            }
+                            <ActionMenu Label="@($"More for variant {number}")">
+                                <ActionMenuItem Label="Duplicate" Glyph="IconName.RiFileCopyFill" OnClick="() => Duplicate(row)" />
+                                <ActionMenuItem Label="@(row.SoldOut ? "Mark available" : "Mark sold out")" Glyph="@(row.SoldOut ? IconName.RiCheckFill : IconName.RiCloseFill)" OnClick="() => row.SoldOut = !row.SoldOut" />
+                                <ActionMenuItem Label="Remove" Glyph="IconName.RiDeleteBin6Fill" Disabled="@(_versions.Count == 1)" OnClick="() => RemoveVersion(row)" />
+                            </ActionMenu>
+                        </span>
+                    </li>
+                }
+            </ul>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="item-form__add-variant" disabled="@(_versions.Count >= MaxVersions)" @onclick="AddVersion">
+                <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                <ChildContent>Add a variant</ChildContent>
+            </Button>
+        }
+        else
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="item-form__muted">When a customer asks for the price, your agent hands the conversation to you.</Typography>
+        }
+    </section>
+
+    @if (InPanel)
+    {
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="@(_more ? "item-form__more is-open" : "item-form__more")" aria-expanded="@(_more ? "true" : "false")" @onclick="() => _more = !_more">
+            <ChildContent>@(_more ? "Fewer details" : "More details")</ChildContent>
+            <IconRight><Icon Name="IconName.RiArrowDownSLine" /></IconRight>
+        </Button>
+        @if (_more)
+        {
+            <section class="item-form__card" aria-label="More details">
+                @PhotosField
+                @DescriptionField
+                @CategoryField
+            </section>
+        }
+    }
+
+    @if (!InPanel || _more)
+    {
+    <section class="item-form__card" aria-labelledby="item-form-now">
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="item-form-now">Availability</Typography>
+        <SegmentedControl TValue="string" Label="Is it available now?" Options="NowOptions" Value="@_now" ValueChanged="value => { _now = value; _error = null; }" />
+        @if (_tried && string.IsNullOrEmpty(_now))
+        {
+            <InlineError Message="Choose whether customers can have it now." />
+        }
+        @if (_kind == CatalogKind.Service)
+        {
+            <Input FloatingLabel="Service duration (optional)" maxlength="40" HelperText="For example, 3 hours" Value="@_time" ValueChanged="value => _time = value ?? string.Empty" />
+        }
+        else if (_now == "order")
+        {
+            <Input FloatingLabel="Preparation time (optional)" maxlength="40" HelperText="For example, 5 days" Value="@_time" ValueChanged="value => _time = value ?? string.Empty" />
+        }
+        else if (_now == "now" && CountsStock)
+        {
+            <Input @ref="_stockField" FloatingLabel="Quantity in stock (optional)" Numeric="NumericInputKind.Integer" maxlength="6" Value="@_stock"
+                   ValueChanged="value => { _stock = value; _error = null; }" Error="@(_tried && StockInvalid)"
+                   HelperText="@(_tried && StockInvalid ? "Enter a whole number, such as 12." : "Update this when your stock changes.")" />
+        }
+    </section>
+
+    }
+
+    @if (InPanel)
+    {
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" />
+        }
+    }
+    else
+    {
+    <footer class="item-form__actions">
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" />
+        }
+        <div class="item-form__buttons">
+            @if (OnPrevious.HasDelegate)
+            {
+                <Button Variant="ButtonVariant.Secondary" disabled="@_saving" @onclick="OnPrevious">
+                    <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                    <ChildContent>Previous item</ChildContent>
+                </Button>
+            }
+            @if (!Reviewing && Source is null && !IsNew && OnDelete.HasDelegate)
+            {
+                <Button Variant="ButtonVariant.Ghost" disabled="@_saving" @onclick="() => OnDelete.InvokeAsync(Item!)">
+                    <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                    <ChildContent>Delete</ChildContent>
+                </Button>
+            }
+            <span class="item-form__spacer"></span>
+            @if (CanSaveDraft)
+            {
+                <Button Variant="ButtonVariant.Secondary" Busy="_savingDraft" disabled="@(_saving && !_savingDraft)" @onclick="SaveDraftAsync">Save draft</Button>
+            }
+            <Button Busy="@(_saving && !_savingDraft)" disabled="_savingDraft" @onclick="SaveAsync">@PrimaryLabel</Button>
+        </div>
+    </footer>
+    }
+</div>
+    </text>;
+
+    private RenderFragment PhotosField => @<PhotoPicker Label="Photos" Optional Photos="_photos" PhotosChanged="photos => _photos = [.. photos]" Max="4" />;
+
+    private RenderFragment DescriptionField => @<text>
+        <TextArea Value="@_description" ValueChanged="value => _description = value ?? string.Empty" AriaLabel="Description"
+                  Rows="3" AutoGrow MaxLength="@(Source is null ? 800 : (int?)null)" Placeholder="Description (optional)" />
+    </text>;
+
+    private RenderFragment CategoryField => @<text>
+        <SelectField FloatingLabel="Category (optional)" Value="@(_category.Length > 0 ? _category : null)" Open="_categoryOpen" OpenChanged="open => _categoryOpen = open">
+            <PopoverOption Label="No category" Active="@(_category.Length == 0)" OnSelect="() => ChooseCategory(string.Empty)" />
+            @foreach (var category in AvailableCategories)
+            {
+                var current = category;
+                <PopoverOption Label="@current" Active="@string.Equals(_category, current, StringComparison.CurrentCultureIgnoreCase)" OnSelect="() => ChooseCategory(current)" />
+            }
+            @if (CreateCategory is not null)
+            {
+                <PopoverOption Label="Create category" OnSelect="StartCategory">
+                    <Leading><Icon Name="IconName.RiAddFill" Size="IconSize.Sm" /></Leading>
+                </PopoverOption>
+            }
+        </SelectField>
+    </text>;
+
+    /// <summary>Saves it as the form's own button would: for the panel's button.</summary>
+    public Task SubmitAsync() => SaveAsync();
+
+    private bool IsNew => Item is null || string.IsNullOrEmpty(Item.Id);
+
+    private bool Updating => Match is not null && _update;
+
+    private bool CanSaveDraft => !Reviewing && !Updating && (IsNew || CatalogReadiness.IsDraft(Item!));
+
+    private string PrimaryLabel => FinalReview ? Updating ? "Update item" : "Add item"
+        : SubmitLabel ?? (Reviewing ? "Confirm item" : Updating ? "Save changes"
+            : IsNew || CatalogReadiness.IsDraft(Item!) ? "Add item" : "Save changes");
+
+    private string Heading => Reviewing ? "Review item" : Source is not null ? "Check this item" : IsNew ? "Add an item" : Item!.Name;
+
+    // ── Pricing (designer, 27 October 2026) ────────────────────────────────
+    // Three choices: a single price, variants (each written the owner's way, "UK 6 blue", with its own price,
+    // only the ones they sell), or price on request. What's picked decides what shows.
+
+    private const string PriceSingle = "single", PriceVariants = "variants", PriceAsk = "ask";
+
+    private static readonly IReadOnlyList<SegmentedOption<string>> PricingChoices =
+        [new(PriceSingle, "Single price"), new(PriceVariants, "Variants"), new(PriceAsk, "Price on request")];
+
+    private string Pricing => _priceType == "ask" ? PriceAsk : _hasVersions ? PriceVariants : PriceSingle;
+
+    private void SetPricing(string value)
+    {
+        if (value == Pricing) return;
+        // Variants to a single price: the price they all share carries over.
+        if (value == PriceSingle && _hasVersions && UsableVersions.Select(row => Money(row.Price)).Distinct().ToList() is [decimal same]) _price = Grouped(Amount(same));
+        // A single price to variants: two to fill in, at the price already there.
+        if (value == PriceVariants && _versions.Count == 0) _versions = [new VersionRow { Price = _price }, new VersionRow { Price = _price }];
+        _priceType = value == PriceAsk ? "ask" : "fixed";
+        if (value != PriceAsk) _hasVersions = value == PriceVariants;
+        _error = null;
+    }
+
+    private bool PriceInvalid => Pricing == PriceSingle && (_price ?? string.Empty).Trim().Length > 0 && Money(_price) is not > 0;
+    private bool RequiredPriceMissing => Pricing == PriceSingle && Money(_price) is not > 0;
+    private Input? _stockField;
+    private readonly Dictionary<string, Input> _variantNames = [], _variantPrices = [], _variantStocks = [];
+
+    // A variant's name as it's kept: tidied spaces, and " / " (which joins combinations elsewhere) said with a space.
+    private static string NameOf(VersionRow row) => string.Join(' ', row.Name.Replace(" / ", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries));
+
+    private static bool RowStarted(VersionRow row) => row.Name.Trim().Length > 0 || (row.Price ?? string.Empty).Trim().Length > 0;
+
+    // Rows left completely empty are ignored.
+    private List<VersionRow> UsableVersions => [.. _versions.Where(RowStarted)];
+
+    // The same variant written twice, ignoring capitals: the agent couldn't tell which price is right.
+    private bool Twice(VersionRow row) => NameOf(row).Length > 0
+        && _versions.Any(other => other != row && string.Equals(NameOf(other), NameOf(row), StringComparison.OrdinalIgnoreCase));
+
+    // A sold-out variant can wait for its price; one customers can buy needs it.
+    private bool RowPriceWrong(VersionRow row) =>
+        (row.Price ?? string.Empty).Trim().Length > 0 ? Money(row.Price) is not > 0 : !row.SoldOut;
+
+    private bool RowStockWrong(VersionRow row) => _legacyStockTracking &&
+        (!string.IsNullOrWhiteSpace(row.Stock) && NumberText.Integer(row.Stock, 999999) is null
+            || !row.SoldOut && NumberText.Integer(row.Stock, 999999) is not > 0);
+
+    private void SetStock(VersionRow row, string? value)
+    {
+        var before = NumberText.Integer(row.Stock, 999999);
+        row.Stock = value; _error = null;
+        if (NumberText.Integer(value, 999999) is { } count)
+        {
+            if (count == 0) row.SoldOut = true;
+            else if (before is null or 0) row.SoldOut = false;
+        }
+    }
+
+    private void SetName(VersionRow row, string? name)
+    {
+        row.Name = name ?? string.Empty;
+        _error = null;
+    }
+
+    private void AddVersion()
+    {
+        if (_versions.Count >= MaxVersions) return;
+        _versions.Add(new VersionRow());
+        _error = null;
+    }
+
+    // A copy just under it: the quickest way to the next variant (UK 14 blue after UK 14 red).
+    private void Duplicate(VersionRow row)
+    {
+        if (_versions.Count >= MaxVersions) return;
+        _versions.Insert(_versions.IndexOf(row) + 1, new VersionRow { Name = row.Name, Price = row.Price, SoldOut = row.SoldOut });
+    }
+
+    private void RemoveVersion(VersionRow row)
+    {
+        if (_versions.Count <= 1) return;
+        _versions.Remove(row);
+        _error = null;
+    }
+
+    // What's wrong with the variants, in words that say how to fix it; null when nothing is.
+    private string? VersionsIssue()
+    {
+        if (Pricing != PriceVariants) return null;
+        var rows = UsableVersions;
+        if (rows.Count == 0) return "Add at least one variant, or choose Single price.";
+        if (rows.Any(row => NameOf(row).Length == 0)) return "Name each variant, such as UK 6 blue, or remove the ones you don't need.";
+        if (rows.FirstOrDefault(Twice) is { } twice) return $"{NameOf(twice)} is listed twice. Change or remove one.";
+        if (rows.Any(row => (row.Price ?? string.Empty).Trim().Length > 0 && Money(row.Price) is not > 0)) return "Enter positive prices with up to 2 decimal places.";
+        if (rows.Any(row => !row.SoldOut && Money(row.Price) is not > 0)) return "Add a price for every available variant.";
+        if (!rows.Any(row => Money(row.Price) is > 0)) return "Add at least one variant price, even if all variants are sold out.";
+        if (rows.Any(RowStockWrong)) return "Add stock for each available variant, or mark it sold out.";
+        return null;
+    }
+
+    // Counted as one number: a product or food sold at one price.
+    private bool CountsStock => _kind is CatalogKind.Product or CatalogKind.Food && Pricing != PriceVariants;
+
+    private bool StockInvalid => !string.IsNullOrWhiteSpace(_stock) && NumberText.Integer(_stock, 999999) is null;
+
+    private static int? Quantity(string? text) => int.TryParse((text ?? string.Empty).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var quantity)
+        && quantity <= 999999 ? quantity : null;
+
+    private IReadOnlyList<SegmentedOption<string>> NowOptions => _kind switch
+    {
+        CatalogKind.Service => [new("now", "Taking bookings"), new("out", "Not for now")],
+        CatalogKind.Digital => [new("now", "Available"), new("out", "Not for now")],
+        _ => [new("now", "Available now"), new("order", "Made to order"), new("out", "Sold out for now")],
+    };
+
+    protected override void OnInitialized()
+    {
+        var item = Item ?? new CatalogEntry();
+        _update = UpdateMatch;
+        _photos = [.. item.Photos];
+        _name = item.Name;
+        _kind = item.Kind;
+        _description = item.Description;
+        _category = item.Group;
+        // A starting price ("from ₦15,000") has no choice of its own any more: it reads as the single price.
+        _priceType = item.PriceType == PriceType.OnRequest ? "ask" : item.PriceType == PriceType.From ? "from" : "fixed";
+        _price = item.Price is { } price ? Grouped(Amount(price)) : null;
+        _unit = PerWord.Replace(item.PriceUnit, string.Empty);
+        _now = item.AvailabilityIsUnconfirmed ? string.Empty : !item.IsAvailable ? "out" : item.MadeToOrder ? "order" : "now";
+        _time = item.Kind == CatalogKind.Service ? item.Duration : item.LeadTime;
+        _stock = item.TracksStock && !item.HasOptions && item.Stock is { } stock ? stock.ToString(CultureInfo.InvariantCulture) : null;
+
+        // The variants it's sold in, one row each and only those. An older item's combinations ("M / Indigo") read
+        // as one name each ("M Indigo"); one counted to 0 reads as sold out.
+        if (item.HasOptions)
+        {
+            _legacyStockTracking = item.TracksStock;
+            _hasVersions = true;
+            _versions = [.. item.Variants.Select(variant => new VersionRow
+            {
+                Name = variant.Key.Replace(" / ", " "),
+                Price = (variant.Price ?? item.Price) is { } amount ? Grouped(Amount(amount)) : null,
+                SoldOut = !variant.IsAvailable || item.TracksStock && variant.Stock is not > 0,
+                Stock = variant.Stock?.ToString(CultureInfo.InvariantCulture),
+            })];
+            _price = null;
+        }
+        if (item.Status == CatalogStatus.Draft && item.EditorDraft is { } draft)
+        {
+            _priceType = draft.Pricing == PriceAsk ? "ask" : item.PriceType == PriceType.From ? "from" : "fixed";
+            _hasVersions = draft.Pricing == PriceVariants;
+            _price = draft.Price; _stock = draft.Stock; _unit = draft.Unit;
+            _versions = [.. draft.Variants.Select(row => new VersionRow { Name = row.Name, Price = row.Price, SoldOut = row.SoldOut, Stock = row.Stock })];
+        }
+        if (RestoredDraft is { } restored)
+        {
+            _photos = [.. restored.Photos]; _name = restored.Name; _kind = restored.Kind;
+            _description = restored.Description; _category = restored.Category;
+            _priceType = restored.PriceType; _price = restored.Price; _unit = restored.Unit;
+            _now = restored.Availability; _time = restored.Time; _stock = restored.Stock; _update = restored.Update;
+            _hasVersions = restored.HasVersions;
+            _versions = [.. restored.Versions.Select(row => new VersionRow { Name = row.Name, Price = row.Price, SoldOut = row.SoldOut, Stock = row.Stock })];
+        }
+        _initialDraft = System.Text.Json.JsonSerializer.Serialize(CaptureState());
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !InPanel) await Interop.ScrollIntoViewAsync(_top);
+    }
+
+    private void ChooseKind(CatalogKind kind)
+    {
+        _kind = kind;
+        _kindOpen = false;
+        _error = null;
+        if (kind is CatalogKind.Service or CatalogKind.Digital && _now == "order") _now = "now";
+    }
+
+    private void ChooseCategory(string category)
+    {
+        _category = category;
+        _categoryOpen = false;
+        _error = null;
+    }
+
+    private IReadOnlyList<string> AvailableCategories => [.. Categories.Concat(_createdCategories).Append(_category)
+        .Where(category => !string.IsNullOrWhiteSpace(category)).Distinct(StringComparer.CurrentCultureIgnoreCase)];
+
+    private void StartCategory()
+    {
+        _categoryOpen = false; _newCategory = true; _categoryName = ""; _categoryError = null;
+    }
+
+    private void CloseCategory() { if (!_categorySaving) { _newCategory = false; _categoryError = null; } }
+
+    private async Task CreateCategoryAsync()
+    {
+        if (_categorySaving || CreateCategory is null) return;
+        var name = _categoryName.Trim();
+        if (name.Length is 0 or > 40) { _categoryError = "Enter a category name of 40 characters or fewer."; return; }
+        if (AvailableCategories.Contains(name, StringComparer.CurrentCultureIgnoreCase))
+        { _categoryError = "This category already exists. Choose it from the list."; return; }
+        _categorySaving = true; _categoryError = null;
+        try
+        {
+            var error = await CreateCategory(name);
+            if (error is not null) { _categoryError = error; return; }
+            _createdCategories.Add(name);
+            _category = name;
+            _newCategory = false;
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { _categoryError = "We couldn't create this category. Check your connection and try again."; }
+        finally { _categorySaving = false; }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving) return;
+        _tried = true;
+        _error = null;
+        if (_name.Trim().Length == 0) { _error = "Give it a name."; if (_nameField is not null) await _nameField.FocusAsync(); return; }
+        if (Pricing == PriceSingle && (PriceInvalid || RequiredPriceMissing))
+        {
+            _error = PriceInvalid ? "Enter a positive price with up to 2 decimal places." : "Add a price, or choose Price on request.";
+            if (_priceField is not null) await _priceField.FocusAsync();
+            return;
+        }
+        if (_now == "now" && CountsStock && StockInvalid)
+        { _error = "Use a whole number for how many you have."; if (_stockField is not null) await _stockField.FocusAsync(); return; }
+        if (VersionsIssue() is { } versions)
+        {
+            _error = versions;
+            var badName = UsableVersions.FirstOrDefault(row => NameOf(row).Length == 0 || Twice(row));
+            var badPrice = UsableVersions.FirstOrDefault(RowPriceWrong);
+            var badStock = UsableVersions.FirstOrDefault(RowStockWrong);
+            var field = badName is not null ? _variantNames.GetValueOrDefault(badName.Id)
+                : badPrice is not null ? _variantPrices.GetValueOrDefault(badPrice.Id)
+                : badStock is not null ? _variantStocks.GetValueOrDefault(badStock.Id) : _variantNames.Values.FirstOrDefault();
+            if (field is not null) await field.FocusAsync();
+            return;
+        }
+
+        var entry = CaptureDraft();
+        if (CatalogReadiness.Issue(entry) is { } issue) { _error = issue; return; }
+        entry.Status = CatalogStatus.Live;
+        entry.EditorDraft = null;
+        _saving = true;
+        try
+        {
+            var error = await Save(entry, false);
+            if (error is not null) _error = error;
+            else _allowNavigation = true;
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { _error = "We couldn't save this item. Check your connection and try again."; }
+        finally { _saving = false; }
+    }
+
+    private async Task SaveDraftAsync()
+    {
+        if (_saving || !CanSaveDraft) return;
+        _draftTried = true; _tried = false; _error = null;
+        if (_name.Trim().Length is 0 or > 80)
+        {
+            _error = "Give your draft a name of 80 characters or fewer.";
+            if (_nameField is not null) await _nameField.FocusAsync();
+            return;
+        }
+        var entry = CaptureDraft();
+        entry.Status = CatalogStatus.Draft;
+        entry.EditorDraft = new CatalogEditorDraft
+        {
+            Pricing = Pricing, Price = _price, Stock = _stock, Unit = _unit,
+            Variants = [.. _versions.Select(row => new CatalogVariantDraft(row.Name, row.Price, row.SoldOut, row.Stock))],
+        };
+        _saving = _savingDraft = true;
+        try { _error = await Save(entry, true); if (_error is null) _allowNavigation = true; }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { _error = "We couldn't save this draft. Check your connection and try again."; }
+        finally { _saving = _savingDraft = false; }
+    }
+
+    public DraftValues CaptureState() => new([.. _photos], _name, _kind, _description, _category,
+        _priceType, _price, _unit, _now, _time, _stock, _update, _hasVersions,
+        [.. _versions.Select(row => new VersionDraft(row.Name, row.Price, row.SoldOut, row.Stock))]);
+
+    public bool HasChanges => _initialDraft != System.Text.Json.JsonSerializer.Serialize(CaptureState());
+
+    private Task BackAsync()
+    {
+        if (_saving) return Task.CompletedTask;
+        // The import controller retains drafts and owns its own leave confirmation.
+        if (Reviewing || !HasChanges) return OnBack.InvokeAsync();
+        _leaving = true; return Task.CompletedTask;
+    }
+
+    private Task CheckNavigationAsync(Microsoft.AspNetCore.Components.Routing.LocationChangingContext context)
+    {
+        if (Reviewing || _allowNavigation || !HasChanges) return Task.CompletedTask;
+        context.PreventNavigation();
+        if (!_saving) { _navigationTarget = context.TargetLocation; _leaving = true; StateHasChanged(); }
+        return Task.CompletedTask;
+    }
+
+    private void KeepEditing() { _leaving = false; _navigationTarget = null; }
+
+    private async Task LeaveAsync()
+    {
+        _leaving = false; _allowNavigation = true;
+        if (_navigationTarget is { } destination) Navigation.NavigateTo(destination);
+        else await OnBack.InvokeAsync();
+    }
+
+    /// <summary>Captures the draft only; the review controller owns approval and final persistence.</summary>
+    public CatalogEntry CaptureDraft()
+    {
+        // Only what the chosen pricing shows is saved: price on request keeps no price and no variants.
+        var ask = Pricing == PriceAsk;
+        var rows = Pricing == PriceVariants ? UsableVersions : [];
+        var basePrice = Pricing == PriceSingle ? Money(_price) : null;
+
+        // Prefilled existing details stay until the owner explicitly changes them in this form.
+        var original = Updating ? Match : Item;
+        var entry = original?.Copy() ?? new CatalogEntry();
+        // Added as new from what was the match's update: a new item, not the match again.
+        if (!Updating && Match is not null && entry.Id == Match.Id) entry.Id = string.Empty;
+        entry.Name = _name.Trim();
+        entry.Kind = _kind;
+        entry.Group = _category.Trim();
+        entry.Description = _description.Trim();
+        entry.Photos = [.. _photos];
+
+        entry.PriceType = ask ? PriceType.OnRequest : _priceType == "from" ? PriceType.From : PriceType.Fixed;
+        entry.Price = basePrice;
+        entry.PriceUnit = Pricing != PriceSingle || _unit.Trim().Length == 0 ? string.Empty : $"per {PerWord.Replace(_unit.Trim(), string.Empty)}";
+        if (Pricing == PriceVariants && original is { HasOptions: true }) entry.PriceUnit = original.PriceUnit;
+
+        // The variants listed, each under its own name: there's no UK 6 in red unless it's listed.
+        var versions = rows.DistinctBy(NameOf, StringComparer.OrdinalIgnoreCase).ToList();
+        entry.Options = versions.Count == 0 ? [] : [new ItemOption { Name = PriceWords.VariantList, Values = [.. versions.Select(NameOf)] }];
+        entry.Variants = [.. versions.Select(row => new ItemVariant { Key = NameOf(row), Price = Money(row.Price), IsAvailable = !row.SoldOut })];
+        // A metadata-only edit must not migrate Size/Colour options, clear stock, or turn a starting price
+        // into a fixed one. Keep the existing shape whenever the variant names still match.
+        if (Pricing == PriceVariants && original is { HasOptions: true }
+            && original.Variants.Select(variant => string.Join(' ', variant.Key.Replace(" / ", " ").Split(' ', StringSplitOptions.RemoveEmptyEntries)))
+                .SequenceEqual(versions.Select(NameOf)))
+        {
+            entry.Options = [.. original.Options.Select(option => option.Copy())];
+            entry.Price = original.Price;
+            entry.Variants = [.. versions.Select((row, index) =>
+            {
+                var before = original.Variants[index];
+                var variant = before.Copy();
+                if (Money(row.Price) != (before.Price ?? original.Price)) variant.Price = Money(row.Price);
+                var wasOut = !before.IsAvailable || original.TracksStock && before.Stock is not > 0;
+                if (row.SoldOut != wasOut) variant.IsAvailable = !row.SoldOut;
+                if (_legacyStockTracking) variant.Stock = NumberText.Integer(row.Stock, 999999);
+                return variant;
+            })];
+        }
+        else if (_legacyStockTracking && Pricing == PriceVariants)
+            for (var index = 0; index < versions.Count; index++) entry.Variants[index].Stock = NumberText.Integer(versions[index].Stock, 999999);
+
+        entry.IsAvailable = _now != "out";
+        entry.AvailabilityIsUnconfirmed = string.IsNullOrEmpty(_now);
+        if (entry.Kind is CatalogKind.Product or CatalogKind.Food) entry.MadeToOrder = _now == "order";
+        if (entry.Kind == CatalogKind.Service) entry.Duration = _time.Trim();
+        else if (entry.MadeToOrder) entry.LeadTime = _time.Trim();
+        if (CountsStock && _now == "now" && !entry.HasOptions)
+        {
+            var counted = int.TryParse(_stock, NumberStyles.None, CultureInfo.InvariantCulture, out var stock);
+            entry.TracksStock = counted;
+            entry.Stock = counted ? stock : entry.Stock;
+        }
+        else if (entry.HasOptions)
+        {
+            // Variants are available or sold out, not counted.
+            entry.TracksStock = _legacyStockTracking;
+            entry.Stock = null;
+        }
+
+        // Capturing values never approves them. The explicit Add/Save action validates and marks them live.
+        entry.Status = CatalogStatus.Draft;
+        entry.EditorDraft = null;
+
+        return entry;
+    }
+
+    // Naira as people type it (12000, 12,000, 12k, ₦1.2m): null when it isn't an amount above zero.
+    private static decimal? Money(string? text) => NumberText.Decimal(text) is { } amount && amount > 0 ? amount : null;
+
+    // An amount as it reads best once typed: 58k becomes 58,000. Anything else stays as typed, to be corrected.
+    private static string? Grouped(string? text) => Money(text) is { } amount ? amount.ToString("#,0.##", CultureInfo.InvariantCulture) : text;
+
+    private static string Amount(decimal amount) => amount.ToString("0.############################", CultureInfo.InvariantCulture);
+
+    private static string KindName(CatalogKind kind) => kind switch
+    {
+        CatalogKind.Food => "Food",
+        CatalogKind.Service => "Service",
+        CatalogKind.Digital => "Digital item",
+        _ => "Product",
+    };
+
+    public static string ChannelName(string channel) => channel.ToLowerInvariant() switch
+    {
+        "instagram" => "Instagram",
+        "facebook" => "Facebook",
+        "tiktok" => "TikTok",
+        "whatsapp" => "WhatsApp",
+        _ => "Your post",
+    };
+
+    private static readonly System.Text.RegularExpressions.Regex PerWord = new(@"^per\s+", System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
+}

@@ -1,0 +1,189 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptC
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+
+@* One item in Concept E's list (designer, 25 October 2026: useful to the owner, and readable as what the
+   agent knows). The item type sits under the name; its assigned category has its own column, blank when unset.
+   the price is said once, in one shape (the amount, then
+   what it depends on), and a missing price said only in the price column, as "Add a price". There's no "on
+   sale": an item without a price is kept until it has one, and the price column is all that says so. The
+   name covers the row, so a click anywhere but the tick box, the price or the availability opens the item.
+   Head draws the column names. Note adds one line under the name (reviewing posts: "Updates Adire scarf"). *@
+
+@if (Head)
+{
+    <div class="@($"ds-table__row is-head offer-row{(ReviewOnly ? " is-review" : null)}")" role="row">
+        <div class="offer-row__item" role="columnheader">
+            <span class="offer-row__select">
+                <Checkbox State="@HeadState" StateChanged="_ => OnSelectAll.InvokeAsync()" Disabled="Disabled" AriaLabel="@(Including ? "Include every item" : "Choose every item shown")" />
+            </span>
+            <TableHeading InCell>Item</TableHeading>
+        </div>
+        @if (!ReviewOnly)
+        {
+            <TableHeading>Category</TableHeading>
+        }
+        <TableHeading>Price</TableHeading>
+        <TableHeading>@(ReviewOnly ? "Status" : "Availability")</TableHeading>
+        @if (ReviewOnly)
+        {
+            <TableHeading End>Review</TableHeading>
+        }
+    </div>
+}
+else
+{
+    <div class="@RowClass" role="row" aria-selected="@(Selected ? "true" : "false")">
+        <div class="offer-row__item" role="cell">
+            <span class="offer-row__select">
+                <Checkbox State="@(Selected ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                          Disabled="Disabled"
+                          StateChanged="state => OnSelect.InvokeAsync(state == CheckboxState.Checked)"
+                          AriaLabel="@($"{(Including ? "Include" : "Choose")} {Item.Name}")" />
+            </span>
+
+            <span class="offer-row__picture">
+                @if (Item.Photos.Count > 0)
+                {
+                    <img class="offer-row__thumb" src="@Item.Photos[0]" alt="" loading="lazy" />
+                }
+                else
+                {
+                    <span class="offer-row__monogram">
+                        <PetalAvatar Seed="@Item.Id" Initials="@Initials.From(Item.Name)" Size="AvatarSize.Lg" />
+                    </span>
+                }
+                @if (Channel is { Length: > 0 } channel)
+                {
+                    <span class="offer-row__channel" title="@($"From {PostChannels.Name(channel)}")"><ChannelIcon Channel="@channel" Size="IconSize.Sm" /></span>
+                }
+            </span>
+
+            <span class="offer-row__words">
+                <RowButton Class="offer-row__name" OnClick="OnOpen" Disabled="Disabled" title="@Item.Name" aria-label="@($"Open {Item.Name}")">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Prose Class="offer-row__name-text">@Item.Name</Typography>
+                </RowButton>
+                <span class="offer-row__meta">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@ItemType</Typography>
+                </span>
+                @if (Note is not null)
+                {
+                    <span class="offer-row__note">@Note</span>
+                }
+            </span>
+        </div>
+
+        @if (!ReviewOnly)
+        {
+            <div class="@($"offer-row__category{(string.IsNullOrWhiteSpace(Item.Group) ? " is-empty" : null)}")" role="cell">
+                @if (!string.IsNullOrWhiteSpace(Item.Group))
+                {
+                    <CategoryCell Item="Item" Categories="Categories" Save="Save" />
+                }
+            </div>
+        }
+
+        <div class="offer-row__price" role="cell">
+            @if (DraftRow)
+            {
+                <RowButton OnClick="OnOpen" Disabled="Disabled" aria-label="@($"Complete {Item.Name}")">
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@(PriceWords.For(Item).Missing ? "Not set" : PriceWords.For(Item).Main)</Typography>
+                </RowButton>
+                @if (PriceWords.For(Item).Detail is { } draftDetail)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="offer-row__detail">@draftDetail</Typography>
+                }
+            }
+            else if (ReviewOnly)
+            {
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@(PriceWords.For(Item).Missing ? "No price yet" : PriceWords.For(Item).Main)</Typography>
+                @if (PriceWords.For(Item).Detail is { } detail)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="offer-row__detail">@detail</Typography>
+                }
+            }
+            else
+            {
+                <PriceSummaryCell Item="Item" Save="Save" OnOpen="OnOpen" Reviewing="Including" ValidityChanged="PriceValidityChanged" />
+            }
+        </div>
+
+        <div class="offer-row__available" role="cell">
+            @if (ReviewOnly)
+            {
+                @ReviewStatus
+            }
+            else if (DraftRow)
+            {
+                <StatusBadge Tone="StatusTone.Neutral">Draft</StatusBadge>
+            }
+            else
+            {
+                <AvailabilityCell Item="Item" Save="Save" Quiet />
+            }
+        </div>
+        @if (ReviewOnly)
+        {
+            <div class="offer-row__review" role="cell">@ReviewAction</div>
+        }
+    </div>
+}
+
+@code {
+    /// <summary>The column names instead of an item.</summary>
+    [Parameter] public bool Head { get; set; }
+
+    [Parameter] public CatalogEntry Item { get; set; } = default!;
+
+    [Parameter] public IReadOnlyList<string> Categories { get; set; } = [];
+
+    [Parameter] public bool Selected { get; set; }
+
+    /// <summary>The tick means "add it" (reviewing what came in): ticked rows look as usual, unticked ones fade.</summary>
+    [Parameter] public bool Including { get; set; }
+
+    [Parameter] public bool ReviewOnly { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public RenderFragment? ReviewAction { get; set; }
+    [Parameter] public RenderFragment? ReviewStatus { get; set; }
+
+    /// <summary>Where it came from, as a small mark on its picture (reviewing posts: "instagram", "tiktok").</summary>
+    [Parameter] public string? Channel { get; set; }
+
+    /// <summary>One short line under the name, such as a badge.</summary>
+    [Parameter] public RenderFragment? Note { get; set; }
+
+    /// <summary>For the head: whether everything shown is chosen.</summary>
+    [Parameter] public CheckboxState HeadState { get; set; }
+
+    /// <summary>Saves a change made in a cell: null when saved, or what went wrong.</summary>
+    [Parameter] public Func<CatalogEntry, Task<string?>> Save { get; set; } = _ => Task.FromResult<string?>(null);
+
+    [Parameter] public EventCallback<bool> OnSelect { get; set; }
+
+    [Parameter] public EventCallback OnSelectAll { get; set; }
+
+    /// <summary>Opens the item (its page: photos, words and what the agent will say).</summary>
+    [Parameter] public EventCallback OnOpen { get; set; }
+
+    [Parameter] public EventCallback<bool> PriceValidityChanged { get; set; }
+
+    private string ItemType => Item.Kind switch
+    {
+        CatalogKind.Food => "Food",
+        CatalogKind.Service => "Service",
+        CatalogKind.Digital => "Digital item",
+        _ => "Product",
+    };
+
+    private bool DraftRow => !Head && !ReviewOnly && CatalogReadiness.IsDraft(Item);
+
+    private string RowClass =>
+        "ds-table__row offer-row"
+        + (ReviewOnly ? " is-review" : null)
+        + (Item.Status == CatalogStatus.Live && Item.IsHidden ? " is-hidden" : null)
+        + (Selected && !Including ? " is-selected" : null)
+        + (Including && !Selected ? " is-left-out" : null);
+
+}

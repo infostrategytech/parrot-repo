@@ -1,0 +1,311 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.Forms
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+@implements IDisposable
+@inject IPriceListReader Reader
+@inject AuroraInterop Interop
+
+@* A price list, in a window over the list (designer, 26 October 2026: a modal, not a page). The three ways
+   it comes in are one window with three tabs, since they do one job: a photo (a list, menu, flyer or
+   screenshot), an Excel or CSV file, or words pasted from WhatsApp or notes. It's read here; a file's
+   columns are confirmed here; then the review opens as a page (ItemReview), the same as for posts. *@
+
+<Dialog Open="Open"
+        Title="@Title"
+        Subtitle="@Subtitle"
+        Size="DialogSize.Wide"
+        Dismissible
+        HideFooter="@(_stage == Stage.Reading || (_stage == Stage.Get && _source != ImportSource.Paste))"
+        ConfirmLabel="@(_stage == Stage.Columns ? "Continue" : "Read list")"
+        ConfirmDisabled="@((_stage == Stage.Get && string.IsNullOrWhiteSpace(_text)) || (_stage == Stage.Columns && _lines.Count == 0))"
+        OnConfirm="ConfirmAsync"
+        OnCancel="CloseAsync">
+    <Body>
+        <div class="price-list">
+            @* The file choosers stay in the window through every step: one removed while its file is read stops the reading. *@
+            <InputFile @ref="_photoPicker" OnChange="ReadPhotoAsync" accept="image/jpeg,image/png,image/webp" capture="environment" class="sr-only price-list__file is-photo" tabindex="-1" aria-hidden="true" />
+            <InputFile @ref="_sheetPicker" OnChange="ReadSheetAsync" accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="sr-only price-list__file is-sheet" tabindex="-1" aria-hidden="true" />
+
+            @switch (_stage)
+            {
+                case Stage.Get:
+                    <Tabs Label="How your list comes in" Variant="TabsVariant.Tray" Class="price-list__ways">
+                        @foreach (var way in Ways)
+                        {
+                            var current = way;
+                            <Tab Selected="@(_source == current)" OnClick="() => ChooseSource(current)">
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span">@WayName(current)</Typography>
+                            </Tab>
+                        }
+                    </Tabs>
+
+                    @if (_source == ImportSource.Paste)
+                    {
+                        <TextArea Value="@_text" ValueChanged="value => { _text = value; _error = null; }" AriaLabel="Your list" Rows="7" AutoGrow MaxLength="20000"
+                                  Placeholder="@PastePlaceholder" />
+                    }
+                    else
+                    {
+                        @* The whole area opens the chooser (a camera on a phone, for a photo). *@
+                        <RowButton Class="price-list__drop" OnClick="ChooseFileAsync">
+                            <span class="price-list__drop-icon" aria-hidden="true"><Icon Name="@WayIcon(_source)" Size="IconSize.Md" /></span>
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@(_source == ImportSource.Photo ? "Take or choose a photo" : "Choose an Excel or CSV file")</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>
+                                @(_source == ImportSource.Photo ? "Use a clear, flat photo taken in good light." : "Only the first sheet will be imported.")
+                            </Typography>
+                        </RowButton>
+                    }
+                    @if (_error is not null)
+                    {
+                        <InlineError Message="@_error" />
+                    }
+                    break;
+
+                case Stage.Reading:
+                    <div class="price-list__reading" aria-live="polite">
+                        @if (_photo is not null)
+                        {
+                            <img class="price-list__photo" src="@_photo" alt="Your price list" />
+                        }
+                        <span class="price-list__reading-line" role="status">
+                            <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="16" />
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">Reading names and prices…</Typography>
+                        </span>
+                    </div>
+                    break;
+
+                default:
+                    @* A file: which column has the names, and which the prices, with what that gives. *@
+                    <div class="price-list__columns">
+                        <FilterPopover Label="@($"Names: {_sheet!.Columns[_nameColumn]}")" Title="The column with names" Open="_nameOpen" OpenChanged="open => _nameOpen = open">
+                            @for (var index = 0; index < _sheet.Columns.Count; index++)
+                            {
+                                var column = index;
+                                <PopoverOption Label="@_sheet.Columns[column]" Active="@(column == _nameColumn)" OnSelect="() => PickColumns(column, _priceColumn)" />
+                            }
+                        </FilterPopover>
+                        <FilterPopover Label="@($"Prices: {_sheet.Columns[_priceColumn]}")" Title="The column with prices" Open="_priceOpen" OpenChanged="open => _priceOpen = open">
+                            @for (var index = 0; index < _sheet.Columns.Count; index++)
+                            {
+                                var column = index;
+                                <PopoverOption Label="@_sheet.Columns[column]" Active="@(column == _priceColumn)" OnSelect="() => PickColumns(_nameColumn, column)" />
+                            }
+                        </FilterPopover>
+                    </div>
+                    <ul class="price-list__preview" aria-label="The first items">
+                        @foreach (var line in _lines.Take(5))
+                        {
+                            <li class="price-list__preview-row">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="price-list__preview-name">@line.Name</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(line.Price is { } price ? PriceWords.Naira(price) : "No price")</Typography>
+                            </li>
+                        }
+                    </ul>
+                    @if (_lines.Count > 5)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="price-list__muted">@($"And {_lines.Count - 5} more.")</Typography>
+                    }
+                    @if (_error is not null)
+                    {
+                        <InlineError Message="@_error" />
+                    }
+                    break;
+            }
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    /// <summary>The tab it opens on.</summary>
+    [Parameter] public ImportSource Source { get; set; } = ImportSource.Photo;
+
+    /// <summary>The items on the list, so one already there has its price updated, not repeated.</summary>
+    [Parameter] public IReadOnlyList<CatalogEntry> Items { get; set; } = [];
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The list is read: one draft a line, and where they came from.</summary>
+    [Parameter] public EventCallback<(IReadOnlyList<ReviewDraft> Drafts, ReviewSource Source)> OnRead { get; set; }
+
+    private enum Stage { Get, Reading, Columns }
+
+    private const string PastePlaceholder = "One item a line, with its price. For example:\nAnkara kaftan - 25,000\nSmall chops (50 pieces) 18k\nGele tying 8000";
+    private const long MaxPhotoBytes = 15 * 1024 * 1024;
+    private const long MaxSheetBytes = 5 * 1024 * 1024;
+    private const int PhotoLongest = 2000;
+
+    private InputFile? _photoPicker, _sheetPicker;
+    private ImportSource _source;
+    private Stage _stage = Stage.Get;
+    private PriceSheet? _sheet;
+    private List<PriceListLine> _lines = [];
+    private CancellationTokenSource? _cancel;
+    private string? _text, _error, _photo, _fileName;
+    private int _nameColumn, _priceColumn;
+    private bool _nameOpen, _priceOpen, _wasOpen;
+
+    private IEnumerable<ImportSource> Ways => Reader.CanReadPhotos
+        ? [ImportSource.Photo, ImportSource.Sheet, ImportSource.Paste]
+        : [ImportSource.Sheet, ImportSource.Paste];
+
+    private string Title => _stage switch
+    {
+        Stage.Reading => "Reading your list",
+        Stage.Columns => "Check the columns",
+        _ => "Import a price list",
+    };
+
+    private string Subtitle => _stage switch
+    {
+        Stage.Reading => "Finding names and prices.",
+        Stage.Columns => _lines.Count == 1 ? $"1 item found in {_fileName}." : $"{_lines.Count} items found in {_fileName}.",
+        _ => "We'll extract the item names and prices for you to review.",
+    };
+
+    // Opened: a fresh start, on the tab asked for.
+    protected override void OnParametersSet()
+    {
+        if (Open == _wasOpen) return;
+        _wasOpen = Open;
+        if (!Open)
+        {
+            _cancel?.Cancel();
+            return;
+        }
+        _source = Source == ImportSource.Photo && !Reader.CanReadPhotos ? ImportSource.Sheet : Source;
+        _stage = Stage.Get;
+        _sheet = null;
+        _lines = [];
+        _photo = _error = _fileName = null;
+        _text = null;
+    }
+
+    private void ChooseSource(ImportSource source)
+    {
+        _source = source;
+        _error = null;
+    }
+
+    private async Task ChooseFileAsync()
+    {
+        var picker = _source == ImportSource.Photo ? _photoPicker : _sheetPicker;
+        if (picker?.Element is { } element) await Interop.ClickAsync(element);
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (_stage == Stage.Columns) { await DoneAsync(_lines, new ReviewSource(ImportSource.Sheet, [], FileName: _fileName)); return; }
+        _error = null;
+        var lines = PriceListParser.ParseText(_text ?? string.Empty).ToList();
+        if (lines.Count == 0) { _error = "We couldn't find any items. Put one item on each line with its price, for example: Ankara kaftan - 25,000."; return; }
+        await DoneAsync(lines, new ReviewSource(ImportSource.Paste, []));
+    }
+
+    private Task DoneAsync(IReadOnlyList<PriceListLine> lines, ReviewSource source) =>
+        OnRead.InvokeAsync(([.. lines.Select((line, index) => ReviewDraft.FromLine(line, index, Items))], source));
+
+    private async Task ReadPhotoAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var file = e.File;
+        if (file.ContentType is not ("image/jpeg" or "image/png" or "image/webp")) { _error = "That isn't a photo we can read. Use a JPG, PNG or WebP."; return; }
+        if (file.Size > MaxPhotoBytes) { _error = "That photo is over 15 MB. Try a smaller one."; return; }
+
+        _cancel?.Cancel();
+        _cancel = new CancellationTokenSource();
+        var token = _cancel.Token;
+        _stage = Stage.Reading;
+        try
+        {
+            var shrunk = await file.RequestImageFileAsync("image/jpeg", PhotoLongest, PhotoLongest);
+            using var memory = new MemoryStream();
+            await using (var stream = shrunk.OpenReadStream(MaxPhotoBytes, token)) await stream.CopyToAsync(memory, token);
+            _photo = "data:image/jpeg;base64," + Convert.ToBase64String(memory.ToArray());
+            StateHasChanged();
+            memory.Position = 0;
+            var lines = await Reader.ReadPhotoAsync(memory, "image/jpeg", token);
+            if (token.IsCancellationRequested) return;
+            if (lines.Count == 0)
+            {
+                _stage = Stage.Get;
+                _photo = null;
+                _error = "We couldn't read any items in that photo. Try a closer, clearer photo taken in good light.";
+                return;
+            }
+            await DoneAsync([.. lines], new ReviewSource(ImportSource.Photo, [], Photo: _photo));
+        }
+        catch (OperationCanceledException)
+        {
+            // Closed while reading: nothing to show.
+        }
+        catch (Exception exception) when (exception is IOException or InvalidOperationException or JSException or HttpRequestException)
+        {
+            _stage = Stage.Get;
+            _photo = null;
+            _error = "We couldn't read that photo. Check your connection and try again.";
+        }
+    }
+
+    private async Task ReadSheetAsync(InputFileChangeEventArgs e)
+    {
+        _error = null;
+        var file = e.File;
+        _fileName = file.Name;
+        if (file.Name.EndsWith(".xls", StringComparison.OrdinalIgnoreCase)) { _error = "This is an older Excel file (.xls). In Excel, save it as .xlsx or CSV, then choose it again."; return; }
+        if (!file.Name.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase) && !file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase)) { _error = "Choose an Excel (.xlsx) or CSV file."; return; }
+        if (file.Size > MaxSheetBytes) { _error = "That file is over 5 MB. Keep only the sheet with your items, then try again."; return; }
+        try
+        {
+            // Read whole first: a workbook is a zip, which is read out of order.
+            using var memory = new MemoryStream();
+            await using (var stream = file.OpenReadStream(MaxSheetBytes)) await stream.CopyToAsync(memory);
+            memory.Position = 0;
+            var sheet = PriceListParser.ParseSpreadsheet(memory, file.Name);
+            if (sheet.Rows.Count == 0) { _error = "That file's first sheet is empty. Put your items on the first sheet, then try again."; return; }
+            _sheet = sheet;
+            PickColumns(sheet.NameColumn, sheet.PriceColumn);
+            if (_lines.Count == 0) { _sheet = null; _error = "We couldn't find any item names in that file."; return; }
+            _stage = Stage.Columns;
+        }
+        catch (Exception exception) when (exception is InvalidDataException or IOException or InvalidOperationException)
+        {
+            _error = "We couldn't read that file. Open it in Excel, save it as .xlsx or CSV, then try again.";
+        }
+    }
+
+    private void PickColumns(int nameColumn, int priceColumn)
+    {
+        if (_sheet is null) return;
+        _nameColumn = Math.Max(0, nameColumn);
+        _priceColumn = Math.Max(0, priceColumn);
+        _nameOpen = _priceOpen = false;
+        _lines = [.. _sheet.Lines(_nameColumn, _priceColumn)];
+        _error = _lines.Count == 0 ? "There are no names in that column. Choose another." : null;
+    }
+
+    private async Task CloseAsync()
+    {
+        _cancel?.Cancel();
+        await OnClose.InvokeAsync();
+    }
+
+    private static string WayName(ImportSource source) => source switch
+    {
+        ImportSource.Sheet => "Excel or CSV",
+        ImportSource.Paste => "Paste text",
+        _ => "Photo",
+    };
+
+    private static IconName WayIcon(ImportSource source) => source switch
+    {
+        ImportSource.Sheet => IconName.RiFileExcel2Fill,
+        ImportSource.Paste => IconName.RiClipboardFill,
+        _ => IconName.RiImageFill,
+    };
+
+    public void Dispose() => _cancel?.Cancel();
+}

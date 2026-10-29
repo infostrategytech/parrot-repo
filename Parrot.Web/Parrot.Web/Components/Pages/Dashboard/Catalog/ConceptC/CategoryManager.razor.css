@@ -1,0 +1,36 @@
+.category-manager { display: grid; gap: var(--spacing-lg); }
+.category-manager ::deep .category-manager__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+.category-manager__list { display: grid; gap: var(--spacing-sm); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+
+/* One category: its place, its name, how many items, delete. */
+.category-manager__row {
+  /* Gap in the token set: no column-width scale. */
+  --ds-category-manager-count: 64px;
+
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) var(--ds-category-manager-count) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.category-manager__row.is-deleting { background: var(--colors-feedback-destructive-subtle); border-color: var(--colors-feedback-destructive-border); }
+
+.category-manager__move { display: grid; gap: var(--spacing-2xs); }
+.category-manager__move ::deep .category-manager__up .ds-button__icon { transform: rotate(180deg); }
+
+.category-manager__row ::deep .category-manager__count { align-self: center; color: var(--colors-text-muted); white-space: nowrap; }
+.category-manager__row > ::deep .ds-button:last-of-type { align-self: center; }
+
+/* Deleting one that holds items: where they go first. */
+.category-manager__delete {
+  grid-column: 2 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+.category-manager__delete ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }

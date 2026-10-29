@@ -1,0 +1,120 @@
+/* A row of Concept E's table, and its column names (is-head). The table's look (padding, the line between
+   rows, the header band, hover, chosen) is the shared DataTable's (designer, 28 October 2026: every table
+   alike). Item, category, price and availability share aligned columns. Under the name: only the item type. */
+.offer-row {
+  /* Gaps in the token set: no border-width, thumbnail, row-height or opacity scale. */
+  --ds-offer-row-hairline: 1px;
+  /* A thumbnail's edge, half a hairline (designer, 25 October 2026: subtle). */
+  --ds-offer-row-divider: 0.5px;
+  --ds-offer-row-thumb: 48px;
+  --ds-offer-row-hidden: 0.6;
+  --ds-offer-row-min: 88px;
+  /* Gap in the token set: a shared action-column width keeps table headers and every row aligned. */
+  --ds-offer-row-review-width: 112px;
+  /* No status-column width in the token set: Taking bookings and its chevron, the longest status. The column
+     is only that wide, so the other columns share the space and the table ends evenly at both edges
+     (designer, 27 October 2026: balanced). */
+  --ds-offer-row-availability-min: 152px;
+  --ds-table-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr) var(--ds-offer-row-availability-min);
+}
+.offer-row:not(.is-head) { min-height: var(--ds-offer-row-min); }
+.offer-row.is-review { --ds-table-columns: minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1fr) var(--ds-offer-row-review-width); }
+.offer-row__review { position: relative; z-index: 1; display: grid; gap: var(--spacing-xs); justify-items: end; }
+.offer-row.is-review .offer-row__price { display: grid; gap: var(--spacing-xs); }
+.offer-row ::deep .offer-row__detail { color: var(--colors-text-muted); }
+
+/* The tick box, the picture and the words, side by side. The tick box sits above the name's cover, so it
+   chooses rather than opens. */
+.offer-row__item { display: flex; gap: var(--spacing-md); align-items: center; min-width: 0; }
+.offer-row__select { position: relative; z-index: 1; display: grid; flex: none; place-items: center; }
+
+.offer-row__thumb {
+  flex: none;
+  width: var(--ds-offer-row-thumb);
+  height: var(--ds-offer-row-thumb);
+  object-fit: cover;
+  background: var(--colors-surface-muted);
+  border: var(--ds-offer-row-divider) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+/* The picture, with where it came from as a small mark on its corner when it came from a post. */
+.offer-row__picture { position: relative; display: grid; flex: none; }
+.offer-row__channel {
+  /* Gap in the token set: no badge size. */
+  --ds-offer-row-badge: 22px;
+
+  position: absolute;
+  right: calc(-1 * var(--spacing-xs));
+  bottom: calc(-1 * var(--spacing-xs));
+  display: grid;
+  place-items: center;
+  width: var(--ds-offer-row-badge);
+  height: var(--ds-offer-row-badge);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+}
+
+/* No photo: the item's initials, the size and corners of a photo. */
+.offer-row__monogram { display: grid; flex: none; }
+.offer-row__monogram ::deep .petal-avatar { width: var(--ds-offer-row-thumb); height: var(--ds-offer-row-thumb); border-radius: var(--radius-radius-lg); }
+
+.offer-row__words { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.offer-row__words ::deep .offer-row__name {
+  justify-content: start;
+  min-height: auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+  text-align: start;
+  background: transparent;
+}
+/* At most two lines, then "…", as a task's title. */
+.offer-row__words ::deep .offer-row__name-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.offer-row__words ::deep .offer-row__name::after { position: absolute; inset: 0; content: ""; }
+.offer-row__words ::deep .offer-row__name:focus-visible { outline: none; }
+.offer-row__words ::deep .offer-row__name:focus-visible::after { outline: var(--ds-offer-row-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-offer-row-hairline) * -1); }
+
+.offer-row__meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+/* The note sits above the name's cover, as the tick box does, so a badge can be read without opening. */
+.offer-row__note { position: relative; display: flex; flex-wrap: wrap; gap: var(--spacing-xs); pointer-events: none; }
+
+/* The price and availability panels open above the name's cover, so they can be used on their own. */
+.offer-row__price,
+.offer-row__category,
+.offer-row__available { position: relative; z-index: 1; }
+
+/* A hidden item stays on the list, quieter: it's kept for later. Its availability keeps full contrast. */
+.offer-row.is-hidden .offer-row__thumb,
+.offer-row.is-hidden .offer-row__monogram,
+.offer-row.is-hidden .offer-row__words,
+.offer-row.is-hidden > .offer-row__category,
+.offer-row.is-hidden > .offer-row__price { opacity: var(--ds-offer-row-hidden); }
+/* Reviewing: an unticked row is left out, so it fades as a hidden one does. */
+.offer-row.is-left-out .offer-row__thumb,
+.offer-row.is-left-out .offer-row__monogram,
+.offer-row.is-left-out .offer-row__words,
+.offer-row.is-left-out > .offer-row__price,
+.offer-row.is-left-out > .offer-row__available { opacity: var(--ds-offer-row-hidden); }
+
+/* A tablet or smaller, as every table stacks (designer, 28 October 2026): the item on top, its price and
+   availability on one line under it, in line with its name. */
+@media (max-width: 1024px) {
+  .offer-row {
+    --ds-table-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "item item" "price available";
+  }
+  .offer-row:not(.is-review):has(.offer-row__category:not(.is-empty)) { grid-template-areas: "item item" "category category" "price available"; }
+  .offer-row__item { grid-area: item; }
+  .offer-row__category { grid-area: category; padding-left: calc(var(--icon-size-icon-md) + var(--spacing-md) * 2 + var(--ds-offer-row-thumb)); }
+  .offer-row__category.is-empty { display: none; }
+  .offer-row__price { grid-area: price; padding-left: calc(var(--icon-size-icon-md) + var(--spacing-md) * 2 + var(--ds-offer-row-thumb)); }
+  .offer-row__available { grid-area: available; }
+  .offer-row.is-review { --ds-table-columns: minmax(0, 1fr) auto; grid-template-areas: "item review" "price available"; }
+  .offer-row__review { grid-area: review; }
+}

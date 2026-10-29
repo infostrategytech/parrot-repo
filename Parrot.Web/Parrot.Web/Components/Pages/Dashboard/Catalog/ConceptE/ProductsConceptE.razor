@@ -1,0 +1,1018 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptC
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+@inject ICatalogStore Store
+@inject IOfferingDiscovery Discovery
+@inject IPriceListReader PriceLists
+@inject ToastService Toasts
+@inject NavigationManager Nav
+@inject Parrot.Web.Features.Dashboard.Channels.State.ChannelsState ChannelState
+
+@* Products & Services, Concept E (designer, 25–26 October 2026), kept clean and simple. It's what the agent
+   knows about what the business sells and for how much, so it can answer, suggest and take payment; not a
+   shop listing, so nothing is "on sale": an item is added, and one without a price is kept until it has one.
+   Most owners already post on Instagram and TikTok, so the main way in is their posts: chosen the first
+   time, then new posts are offered to review as they're found. The post is read, and what's read is put
+   where it belongs on an ordinary item for the owner to check. From research into how Nigerian Instagram
+   and TikTok vendors price.
+
+   - Posts lead directly through Add From Posts (designer, 26 October 2026). Other Ways to Add groups
+     manual entry, a post link and price lists without asking owners to choose one or many items first.
+     Posts are selected and read on a page (PostPicker); price lists in a small window (PriceListDialog).
+     Both open one review page (ItemReview). Manual entry opens ItemForm; a link opens LinkDialog,
+     then the same form filled in beside its post.
+   - The connected channels lead: only their posts, tabs and marks show (PostChannels).
+   - A price that changes with a choice (UK 6–12 and 14–20, 8 or 14 inches) goes in as a price for each choice;
+     the same price for every choice stays one price.
+   - The list is Concept C's table: the item with its category and its choices, its price said once in one
+     shape (the amount, then what it depends on), and whether customers can have it now. Amounts change in
+     the table, with a check for a price ten times off and an Undo; how something is priced changes on the
+     item. Many prices move at once (Change prices), as they do with inflation.
+   - Drafts: explicitly saved unfinished items, outside the main catalogue and unavailable to the agent.
+
+   The Products & Services page (designer, 28 October 2026). *@
+
+@if (_mode == Mode.Compose)
+{
+    <ItemForm @key="@(_linked?.Post.Id ?? _composing?.Id ?? "new")"
+              Item="@(_linked?.Item ?? _composing)"
+              Source="_linked?.Post"
+              Checks="@(_linked?.Checks ?? [])"
+              Match="_linked?.Match"
+              Categories="_categories"
+              CreateCategory="CreateCategoryAsync"
+              Save="SaveComposedAsync"
+              OnBack="BackToList"
+              OnDelete="item => _pendingDelete = [item]" />
+}
+else if (_mode == Mode.Posts)
+{
+    <PostPicker Channels="ConnectedSocial"
+                Items="_items"
+                Brought="_brought"
+                Reconnect="ReconnectSocial"
+                DemoPreview="@Query("posts")"
+                OnReconnect="_ => Nav.NavigateTo(ChannelsUrl)"
+                OnLink="() => { BackToList(); _linkOpen = true; }"
+                OnClose="BackToList"
+                OnRead="PostsRead" />
+}
+else if (_mode == Mode.Review)
+{
+    <ItemReview Drafts="_review"
+                Source="_reviewSource"
+                Categories="_categories"
+                CreateCategory="CreateCategoryAsync"
+                Save="SaveReviewedAsync"
+                OnBrought="id => _brought.Add(id)"
+                OnBack="BackToList"
+                OnDone="ReviewDoneAsync" />
+}
+else
+{
+<main class="products-e">
+    <header class="products-e__header">
+        <div class="products-e__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Products &amp; Services</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="products-e__lede">
+                Keep what you sell, its price and availability in one place.
+            </Typography>
+        </div>
+        @if (_mode == Mode.List && _items.Count > 0)
+        {
+            @AddActions
+        }
+    </header>
+
+    @if (_loading)
+    {
+        <DataTable Label="Loading your items" Busy>
+            <Message>
+                @for (var index = 0; index < 6; index++)
+                {
+                    <div class="products-e__skeleton">
+                        <Skeleton Shape="SkeletonShape.Block" Width="var(--ds-products-e-photo)" Height="var(--ds-products-e-photo)" Order="@(index * 2)" />
+                        <Skeleton Shape="SkeletonShape.Line" Order="@(index * 2 + 1)" />
+                    </div>
+                }
+            </Message>
+        </DataTable>
+    }
+    else if (_loadFailed)
+    {
+        <EmptyState Glyph="IconName.RiErrorWarningFill"
+                    Size="EmptyStateSize.Page"
+                    Title="We couldn't load your items"
+                    Description="Check your connection and try again.">
+            <Action><Button @onclick="LoadAsync">Try again</Button></Action>
+        </EmptyState>
+    }
+    else if (_items.Count == 0)
+    {
+        @* One calm invitation, with the same posts-first actions as the populated list. *@
+        <section class="products-e__start" aria-labelledby="products-e-start-title">
+            @SocialMarks
+            <div class="products-e__start-head">
+                <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h2" id="products-e-start-title">Add What You Sell</Typography>
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>Start with your social posts. Review the details before adding them.</Typography>
+            </div>
+            @AddActions
+        </section>
+    }
+    else
+    {
+        @if (_selected.Count == 0 && NewPosts is { Count: > 0 } fresh)
+        {
+            @* New posts found on the connected channels: review them, or dismiss them (they stay on Select posts). *@
+            <section class="products-e__new" aria-label="New posts">
+                <span class="products-e__channels" aria-hidden="true">
+                    @foreach (var channel in Social.Where(channel => fresh.Any(post => post.Channel == channel)))
+                    {
+                        <ChannelIcon Channel="@channel" Size="IconSize.Sm" />
+                    }
+                </span>
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" role="status">@NewLine(fresh)</Typography>
+                <div class="products-e__new-actions">
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _seen.UnionWith(fresh.Select(post => post.Id))">Dismiss</Button>
+                    <Button Size="ButtonSize.Small" @onclick="BringPosts">Review posts</Button>
+                </div>
+            </section>
+        }
+
+        @if (_selected.Count > 0)
+        {
+            @* Items chosen: the toolbar becomes what can be done to them. *@
+            <section class="products-e__bulk" aria-label="Change the chosen items">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" role="status">@($"{_selected.Count} items selected")</Typography>
+                @if (Visible.Count > _selected.Count)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="ChooseAllInView">@($"Select all {Visible.Count}")</Button>
+                }
+                <div class="products-e__bulk-actions">
+                    @if (_view != ItemView.Drafts)
+                    {
+                    <ChangePrices Items="Chosen" Apply="ChangePricesAsync" Busy="_bulkBusy" />
+                    <FilterPopover Label="Mark as" Title="Mark as" Open="_markOpen" OpenChanged="open => _markOpen = open">
+                        <PopoverOption Label="Available" Description="Customers can buy or book them" OnSelect="() => MarkManyAsync(Mark.Available)" />
+                        <PopoverOption Label="Unavailable" Description="Customers cannot order or book them" OnSelect="() => MarkManyAsync(Mark.SoldOut)" />
+                        <PopoverOption Label="Hidden" Description="Not offered to customers. Kept for later." OnSelect="() => MarkManyAsync(Mark.Hidden)" />
+                    </FilterPopover>
+                    }
+                    <FilterPopover Label="Move to category" Title="Move to category" Open="_moveOpen" OpenChanged="open => _moveOpen = open">
+                        @foreach (var category in _categories)
+                        {
+                            var current = category;
+                            <PopoverOption Label="@current" OnSelect="() => MoveManyAsync(current)" />
+                        }
+                        <PopoverOption Label="No category" OnSelect="() => MoveManyAsync(string.Empty)" />
+                    </FilterPopover>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_bulkBusy" @onclick="() => _pendingDelete = Chosen">
+                        <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
+                        <ChildContent>Delete</ChildContent>
+                    </Button>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="ClearChosen">Clear</Button>
+                </div>
+            </section>
+        }
+        else
+        {
+            <section class="products-e__toolbar" aria-label="Find items">
+                <Tabs Label="Show items" Variant="TabsVariant.Tray" Class="products-e__views">
+                    @foreach (var view in Views.Where(view => view is ItemView.All or ItemView.Available or ItemView.Drafts || Count(view) > 0 || _view == view))
+                    {
+                        var current = view;
+                        <Tab Selected="@(_view == current)" Count="@Count(current).ToString()" OnClick="() => ChangeView(current)">
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@ViewLabel(current)</Typography>
+                        </Tab>
+                    }
+                </Tabs>
+                <div class="products-e__find">
+                    <SearchField Value="@_search" ValueChanged="Search" Placeholder="Search products or services" AriaLabel="Search products and services" />
+                    <FilterPopover Label="@(_category ?? "All categories")" Title="Categories" Subtitle="Narrow the list by category" AlignEnd Open="_categoryOpen" OpenChanged="open => _categoryOpen = open">
+                        <PopoverOption Label="All categories" Description="@Plural(_items.Count)" Active="@(_category is null)" OnSelect="() => PickCategory(null)" />
+                        @foreach (var category in _categories)
+                        {
+                            var current = category;
+                            <PopoverOption Label="@current" Description="@Plural(CountIn(current))" Active="@(_category == current)" OnSelect="() => PickCategory(current)" />
+                        }
+                        <div class="products-e__category-tools">
+                            <Toggle Checked="_byCategory" CheckedChanged="on => { _byCategory = on; _page = 1; }" Size="ToggleSize.Sm" Label="Group the list by category" />
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" FullWidth @onclick="() => { _categoryOpen = false; _manageOpen = true; }">
+                                <IconLeft><Icon Name="IconName.RiSettings4Fill" /></IconLeft>
+                                <ChildContent>Manage categories</ChildContent>
+                            </Button>
+                        </div>
+                    </FilterPopover>
+                </div>
+            </section>
+        }
+
+        @if (_view == ItemView.Drafts)
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="products-e__draft-note">Drafts aren't used by your agent. Finish the basics and choose Add item when you're ready.</Typography>
+        }
+
+        @if (Visible.Count == 0 && string.IsNullOrWhiteSpace(_search) && _category is null && _view == ItemView.Drafts)
+        {
+            <DataTable Label="Your items">
+                <Message>
+                    <EmptyState Glyph="IconName.RiFileList3Fill" Size="EmptyStateSize.Panel" Title="No drafts yet"
+                                Description="Save an unfinished item as a draft and return to it here." />
+                </Message>
+            </DataTable>
+        }
+        else if (Visible.Count == 0 && string.IsNullOrWhiteSpace(_search) && _category is null && _view == ItemView.All && Count(ItemView.Drafts) > 0)
+        {
+            <DataTable Label="Your items">
+                <Message>
+                    <EmptyState Glyph="IconName.RiShoppingBag3Fill" Size="EmptyStateSize.Panel" Title="Your items are still in Drafts"
+                                Description="Finish their details before your agent can use them.">
+                        <Action><Button Variant="ButtonVariant.Secondary" @onclick="() => ChangeView(ItemView.Drafts)">View drafts</Button></Action>
+                    </EmptyState>
+                </Message>
+            </DataTable>
+        }
+        else if (Visible.Count == 0)
+        {
+            <DataTable Label="Your items">
+                <Message>
+                    <EmptyState Glyph="IconName.RiSearch2Fill"
+                                Size="EmptyStateSize.Panel"
+                                Title="Nothing matches"
+                                Description="Try another word, or show all your items.">
+                        <Action><Button Variant="ButtonVariant.Secondary" @onclick="ShowAll">Show all items</Button></Action>
+                    </EmptyState>
+                </Message>
+            </DataTable>
+        }
+        else
+        {
+            <DataTable Label="Your items" aria-rowcount="@(Visible.Count + 1)" aria-colcount="4">
+                <ChildContent>
+                    <OfferRow Head HeadState="PageCheckState" OnSelectAll="() => ChoosePage(PageCheckState)" />
+
+                    @if (_byCategory)
+                    {
+                        @foreach (var section in Sections)
+                        {
+                            var current = section;
+                            <div class="products-e__section" role="rowgroup" aria-label="@current.Name">
+                                <div class="products-e__section-head" role="row">
+                                    <div role="cell" class="products-e__section-select">
+                                        <Checkbox State="@SectionCheckState(current.Items)" StateChanged="_ => ChooseSection(current.Items)" AriaLabel="@($"Choose everything in {current.Name}")" />
+                                    </div>
+                                    <div role="cell" class="products-e__section-title">
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@current.Name</Typography>
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@Plural(current.Items.Count)</Typography>
+                                    </div>
+                                </div>
+                                @foreach (var item in current.Items)
+                                {
+                                    @Row(item)
+                                }
+                            </div>
+                        }
+                    }
+                    else
+                    {
+                        <div role="rowgroup">
+                            @foreach (var item in PagedItems)
+                            {
+                                @Row(item)
+                            }
+                        </div>
+                    }
+                </ChildContent>
+                @* The count, always; the pages when there are more than one (grouped by category, everything shows). *@
+                <Footer>
+                    <Pagination Page="@(_byCategory ? 1 : CurrentPage)" PageChanged="page => _page = page" Total="Visible.Count"
+                                PageSize="@(_byCategory ? Math.Max(1, Visible.Count) : PageSize)" AriaLabel="Pages of items" />
+                </Footer>
+            </DataTable>
+        }
+    }
+</main>
+}
+
+<LinkDialog Open="_linkOpen" Items="_items" OnClose="() => _linkOpen = false" OnRead="LinkReadAsync" />
+
+<Dialog Open="_connectOpen"
+        Title="Connect a channel first"
+        ConfirmLabel="Go to Channels"
+        OnCancel="() => _connectOpen = false"
+        OnConfirm="() => Nav.NavigateTo(ChannelsUrl)">
+    <GlyphContent><Icon Name="IconName.RiLinksFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>Connect Instagram, Facebook or TikTok to select items from your posts.</p>
+    </Body>
+</Dialog>
+
+<PriceListDialog Open="_listOpen"
+                 Source="_importSource"
+                 Items="_items"
+                 OnClose="() => _listOpen = false"
+                 OnRead="ListRead" />
+
+<CategoryManager Open="_manageOpen"
+                 Categories="_categories"
+                 Counts="CategoryCounts"
+                 OnClose="() => _manageOpen = false"
+                 Save="ApplyCategoriesAsync" />
+
+<Dialog Open="@(_pendingDelete is { Count: > 0 })"
+        Type="DialogType.Destructive"
+        Title="@DeleteTitle"
+        ConfirmLabel="Delete"
+        Busy="_deleting"
+        BusyLabel="Deleting…"
+        OnCancel="() => _pendingDelete = null"
+        OnConfirm="DeleteAsync">
+    <GlyphContent><Icon Name="IconName.RiDeleteBin6Fill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>@(_pendingDelete is { Count: > 1 } ? "They're removed from your list. To stop offering something for a while, hide it instead." : "It's removed from your list. To stop offering it for a while, hide it instead.")</p>
+    </Body>
+</Dialog>
+
+@code {
+    private enum Mode { List, Compose, Posts, Review }
+    private enum ItemView { All, Available, SoldOut, Hidden, Drafts }
+    private enum Mark { Available, SoldOut, Hidden }
+
+    private sealed record Section(string Name, List<CatalogEntry> Items);
+
+    private static readonly ItemView[] Views = [ItemView.All, ItemView.Available, ItemView.SoldOut, ItemView.Hidden, ItemView.Drafts];
+    private const int PageSize = 25;
+
+    private List<CatalogEntry> _items = [];
+    private List<string> _categories = [];
+    private Mode _mode = Mode.List;
+    private ItemView _view = ItemView.All;
+    private bool _byCategory;
+    private string? _search, _category;
+    private int _page = 1;
+    private readonly HashSet<string> _selected = [];
+    private bool _loading = true, _loadFailed, _categoryOpen, _moveOpen, _markOpen, _importOpen, _linkOpen, _manageOpen, _bulkBusy, _deleting;
+    private CatalogEntry? _composing;
+    // Posts already brought in, left out the next time posts are chosen.
+    private readonly HashSet<string> _brought = [];
+    private PostDraft? _linked;
+    // New posts: found on the connected channels, offered to review; put off ones aren't offered again.
+    private List<SocialPost> _recentPosts = [];
+    // Posts the owner has seen (shown on Select posts, reviewed or dismissed): not offered again as new.
+    private readonly HashSet<string> _seen = [];
+    // Just added or updated from a review: said on their rows, and shown first.
+    private readonly HashSet<string> _justAdded = [], _justUpdated = [];
+    private bool _connectOpen;
+    private ImportSource _importSource = ImportSource.Photo;
+    private bool _listOpen;
+    // What's being reviewed, and where it came from.
+    private List<ReviewDraft> _review = [];
+    private ReviewSource _reviewSource = new(null, []);
+    private List<CatalogEntry>? _pendingDelete;
+
+    // Posts are the direct primary action; the alternatives share one quieter menu.
+    private RenderFragment AddActions => @<div class="products-e__actions">
+        @OtherWaysMenu
+        <Button @onclick="SocialPosts">
+            <IconLeft><Icon Name="IconName.RiImageFill" /></IconLeft>
+            <ChildContent>Import from posts</ChildContent>
+        </Button>
+    </div>;
+
+    private RenderFragment OtherWaysMenu => @<Popover Title="Other Ways to Add" Role="menu" AlignEnd Wide Open="_importOpen" OpenChanged="open => _importOpen = open" Class="products-e__import">
+        <Anchor>
+            <Button Variant="ButtonVariant.Secondary" aria-haspopup="menu" aria-expanded="@(_importOpen ? "true" : "false")" @onclick="() => _importOpen = !_importOpen">
+                <ChildContent>Other Ways to Add</ChildContent>
+                <IconRight><Icon Name="IconName.RiArrowDownSLine" /></IconRight>
+            </Button>
+        </Anchor>
+        <ChildContent>
+            <PopoverOption Label="Enter Manually" Description="Enter the item details yourself" OnSelect="Compose">
+                <Leading><span class="products-e__way-mark is-one"><Icon Name="IconName.RiPencilFill" Size="IconSize.Sm" /></span></Leading>
+            </PopoverOption>
+            <PopoverOption Label="Use a Post Link" Description="Paste a link and review the details" OnSelect="OpenLink">
+                <Leading><span class="products-e__way-mark is-link"><Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" /></span></Leading>
+            </PopoverOption>
+            @* Price lists are one way in (designer, 27 October 2026): the window's own tabs choose a photo, a file
+               or pasted words, so the menu says it once. *@
+            <PopoverOption Label="Import a Price List" Description="@(PriceLists.CanReadPhotos ? "A photo, an Excel or CSV file, or a pasted list" : "An Excel or CSV file, or a pasted list")"
+                           OnSelect="() => Import(PriceLists.CanReadPhotos ? ImportSource.Photo : ImportSource.Sheet)">
+                <Leading><span class="products-e__way-mark is-list"><Icon Name="IconName.RiFileList3Fill" Size="IconSize.Sm" /></span></Leading>
+            </PopoverOption>
+        </ChildContent>
+    </Popover>;
+
+    private RenderFragment Row(CatalogEntry item) => @<OfferRow @key="item.Id"
+                                                               Item="item"
+                                                               Categories="_categories"
+                                                               Selected="@_selected.Contains(item.Id)"
+                                                               Save="SaveCellAsync"
+                                                               OnSelect="on => Choose(item.Id, on)"
+                                                               OnOpen="() => Open(item)" />;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        await FindNewPostsAsync();
+    }
+
+    // The demo: posts not yet seen, not added and not over 3 months old. For real, the backend finds new posts
+    // on the connected channels and keeps which the owner has seen or dismissed (catalog-backend-requests).
+    private async Task FindNewPostsAsync()
+    {
+        if (!SocialConnected) return;
+        try
+        {
+            var recent = await Discovery.ListRecentPostsAsync();
+            _recentPosts = [.. recent.Concat(DemoPosts.More).Where(post => ConnectedSocial.Contains(post.Channel)).OrderBy(post => post.DaysAgo)];
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
+        {
+            _recentPosts = [];
+        }
+    }
+
+    private List<SocialPost> NewPosts => [.. _recentPosts.Where(post => PostDraft.IsNew(post, _items, [.. _brought, .. _seen]))];
+
+    private static string NewLine(IReadOnlyList<SocialPost> posts)
+    {
+        return posts.Count == 1 ? "We found 1 new post. Want to add it?"
+            : $"We found {posts.Count} new posts. Want to add them?";
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _loadFailed = false;
+        try
+        {
+            _items = [.. await Store.ListAsync()];
+            _categories = [.. await Store.ListCategoriesAsync()];
+            _selected.IntersectWith(_items.Select(item => item.Id));
+            if (_category is not null && !_categories.Contains(_category)) _category = null;
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
+        {
+            _loadFailed = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // ── What shows ─────────────────────────────────────────────────────────
+
+    private static bool InCategory(CatalogEntry item, string category) => string.Equals(item.Group, category, StringComparison.CurrentCultureIgnoreCase);
+
+    private int CountIn(string category) => _items.Count(item => InCategory(item, category));
+
+    private IReadOnlyDictionary<string, int> CategoryCounts => _categories.ToDictionary(category => category, CountIn);
+
+    private static bool Live(CatalogEntry item) => !CatalogReadiness.IsDraft(item);
+
+    private int Count(ItemView view) => _items.Count(item => Matches(item, view));
+
+    private static bool Matches(CatalogEntry item, ItemView view) => view switch
+    {
+        ItemView.Available => Live(item) && !item.IsHidden && ItemGuide.InStock(item),
+        ItemView.SoldOut => Live(item) && !item.IsHidden && !ItemGuide.InStock(item),
+        ItemView.Hidden => Live(item) && item.IsHidden,
+        ItemView.Drafts => CatalogReadiness.IsDraft(item),
+        _ => Live(item),
+    };
+
+    private static string ViewLabel(ItemView view) => view switch
+    {
+        ItemView.Available => "Available",
+        ItemView.SoldOut => "Unavailable",
+        ItemView.Hidden => "Hidden",
+        ItemView.Drafts => "Drafts",
+        _ => "All",
+    };
+
+    private List<CatalogEntry> Visible
+    {
+        get
+        {
+            var query = (_search ?? string.Empty).Trim();
+            var items = _items
+                .Where(item => Matches(item, _view))
+                .Where(item => _category is null || InCategory(item, _category))
+                .Where(item => query.Length == 0 || $"{item.Name} {item.Description} {item.Group} {string.Join(" ", item.OtherNames)}".Contains(query, StringComparison.CurrentCultureIgnoreCase));
+            return [.. items.OrderBy(item => _justAdded.Contains(item.Id) || _justUpdated.Contains(item.Id) ? 0 : 1).ThenBy(item => item.Status == CatalogStatus.Draft ? 0 : 1).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)];
+        }
+    }
+
+    private List<Section> Sections
+    {
+        get
+        {
+            var visible = Visible;
+            var sections = _categories
+                .Select(category => new Section(category, [.. visible.Where(item => InCategory(item, category))]))
+                .Where(section => section.Items.Count > 0)
+                .ToList();
+            var loose = visible.Where(item => item.Group.Length == 0 || !_categories.Any(category => InCategory(item, category))).ToList();
+            if (loose.Count > 0) sections.Add(new Section("No category", loose));
+            return sections;
+        }
+    }
+
+    private int TotalPages => Math.Max(1, (int)Math.Ceiling(Visible.Count / (double)PageSize));
+    private int CurrentPage => Math.Clamp(_page, 1, TotalPages);
+    private List<CatalogEntry> PagedItems => [.. Visible.Skip((CurrentPage - 1) * PageSize).Take(PageSize)];
+    private List<CatalogEntry> Shown => _byCategory ? Visible : PagedItems;
+
+    private void ChangeView(ItemView view)
+    {
+        _view = view;
+        _page = 1;
+        _selected.Clear();
+    }
+
+    private void Search(string? value)
+    {
+        _search = value;
+        _page = 1;
+        _selected.Clear();
+    }
+
+    private void PickCategory(string? category)
+    {
+        _category = category;
+        _categoryOpen = false;
+        _page = 1;
+        _selected.Clear();
+    }
+
+    private void ClearChosen()
+    {
+        _selected.Clear();
+        _markOpen = _moveOpen = false;
+    }
+
+    private void ShowAll()
+    {
+        _view = ItemView.All;
+        _search = null;
+        _category = null;
+        _page = 1;
+    }
+
+    private static string Plural(int count) => count == 1 ? "1 item" : $"{count} items";
+
+    // ── Choosing items for a change to many ───────────────────────────────
+
+    private List<CatalogEntry> Chosen => [.. _items.Where(item => _selected.Contains(item.Id))];
+
+    private CheckboxState PageCheckState => SectionCheckState(Shown);
+
+    private CheckboxState SectionCheckState(IReadOnlyCollection<CatalogEntry> items) =>
+        items.Count > 0 && items.All(item => _selected.Contains(item.Id)) ? CheckboxState.Checked
+        : items.Any(item => _selected.Contains(item.Id)) ? CheckboxState.Indeterminate
+        : CheckboxState.Unchecked;
+
+    private void Choose(string id, bool on)
+    {
+        if (on) _selected.Add(id);
+        else _selected.Remove(id);
+    }
+
+    private void ChoosePage(CheckboxState state) => ChooseSection(Shown);
+
+    private void ChooseSection(IReadOnlyCollection<CatalogEntry> items)
+    {
+        if (items.All(item => _selected.Contains(item.Id))) _selected.ExceptWith(items.Select(item => item.Id));
+        else _selected.UnionWith(items.Select(item => item.Id));
+    }
+
+    private void ChooseAllInView() => _selected.UnionWith(Visible.Select(item => item.Id));
+
+    private async Task MarkManyAsync(Mark mark)
+    {
+        _markOpen = false;
+        var items = Chosen.Where(Live).ToList();
+        if (items.Count == 0 || _bulkBusy) return;
+        _bulkBusy = true;
+        try
+        {
+            foreach (var item in items)
+            {
+                var changed = item.Copy();
+                changed.IsHidden = mark == Mark.Hidden;
+                if (mark != Mark.Hidden) changed.IsAvailable = mark == Mark.Available;
+                await Store.SaveAsync(changed);
+            }
+            await LoadAsync();
+            ClearChosen();
+            var one = items.Count == 1;
+            var stillOut = mark == Mark.Available
+                ? _items.Count(item => items.Any(chosen => chosen.Id == item.Id) && !ItemGuide.InStock(item))
+                : 0;
+            var done = items.Count - stillOut;
+            Toasts.Show(mark switch
+            {
+                Mark.Available when stillOut > 0 => $"{Plural(done)} {(done == 1 ? "is" : "are")} available. {Plural(stillOut)} {(stillOut == 1 ? "stays" : "stay")} sold out until you add how many are left.",
+                Mark.Available => $"{Plural(items.Count)} {(one ? "is" : "are")} available.",
+                Mark.SoldOut => $"{Plural(items.Count)} {(one ? "is" : "are")} unavailable.",
+                _ => $"{Plural(items.Count)} {(one ? "is" : "are")} hidden. Customers won't be offered {(one ? "it" : "them")}.",
+            });
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            await LoadAsync();
+            Toasts.ShowError("We couldn't change them all. Check your connection and try again.");
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
+    private async Task MoveManyAsync(string category)
+    {
+        _moveOpen = false;
+        var items = Chosen;
+        if (items.Count == 0 || _bulkBusy) return;
+        _bulkBusy = true;
+        try
+        {
+            foreach (var item in items)
+            {
+                var moved = item.Copy();
+                moved.Group = category;
+                await Store.SaveAsync(moved);
+            }
+            await LoadAsync();
+            ClearChosen();
+            Toasts.Show(category.Length > 0 ? $"{Plural(items.Count)} moved to {category}." : $"{Plural(items.Count)} {(items.Count == 1 ? "has" : "have")} no category now.");
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            await LoadAsync();
+            Toasts.ShowError("We couldn't move them all. Check your connection and try again.");
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+    }
+
+    /// <summary>Many prices at once, said back with an Undo that puts every one back.</summary>
+    private async Task<string?> ChangePricesAsync(IReadOnlyList<CatalogEntry> changed)
+    {
+        if (changed.Count == 0 || _bulkBusy) return "Choose items with prices to change.";
+        var before = changed.Select(item => _items.First(existing => existing.Id == item.Id).Copy()).ToList();
+        _bulkBusy = true;
+        try
+        {
+            foreach (var item in changed) await Store.SaveAsync(item);
+            await LoadAsync();
+            ClearChosen();
+            Toasts.Show(new ToastMessage(
+                changed.Count == 1 ? $"{changed[0].Name} is {PriceWords.For(changed[0]).Main} now." : $"New prices for {Plural(changed.Count)}.",
+                "Customers are told the new prices from now on.",
+                ToastStatus.Success,
+                "Undo",
+                () => InvokeAsync(() => PutBackAsync(before))));
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            await LoadAsync();
+            Toasts.ShowError("We couldn't change them all. Check your connection and try again.");
+            return "Some prices may have changed. Check the list before retrying.";
+        }
+        finally
+        {
+            _bulkBusy = false;
+        }
+        // Called by the Change prices panel (not an event of this page's own), so the page draws itself again.
+        StateHasChanged();
+        return null;
+    }
+
+    private async Task PutBackAsync(IReadOnlyList<CatalogEntry> before)
+    {
+        try
+        {
+            foreach (var item in before) await Store.SaveAsync(item);
+            await LoadAsync();
+            Toasts.Show(before.Count == 1 ? $"{before[0].Name} is back to {PriceWords.For(before[0]).Main}." : $"{Plural(before.Count)} are back to their prices.");
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            await LoadAsync();
+            Toasts.ShowError("We couldn't put them all back. Check your connection and try again.");
+        }
+        StateHasChanged();
+    }
+
+    // ── Changes in a cell ──────────────────────────────────────────────────
+
+    /// <summary>A price, category or availability changed in the table, said back in plain words; a price with an Undo.</summary>
+    private async Task<string?> SaveCellAsync(CatalogEntry changed)
+    {
+        var before = _items.FirstOrDefault(item => item.Id == changed.Id)?.Copy();
+        // A draft's category can change here; approval must still happen on its form.
+        if (before is not null && CatalogReadiness.IsDraft(before)) changed.Status = CatalogStatus.Draft;
+        else if (CatalogReadiness.Issue(changed) is { } issue) return issue;
+        try
+        {
+            await Store.SaveAsync(changed);
+            await AddCategoryAsync(changed.Group);
+            await LoadAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            Toasts.ShowError($"We couldn't change {changed.Name}. Try again.");
+            return "Not saved.";
+        }
+
+        if (before is not null)
+        {
+            var wasPrice = PriceWords.For(before);
+            var nowPrice = PriceWords.For(changed);
+            if (wasPrice != nowPrice || PriceWords.PriceList(before).SequenceEqual(PriceWords.PriceList(changed)) is false)
+                Toasts.Show(new ToastMessage(
+                    $"{changed.Name} is {nowPrice.Main}{(nowPrice.Detail is { } detail ? $", {detail.ToLowerInvariant()}" : string.Empty)} now.",
+                    wasPrice.Missing ? "Your agent can offer it now." : "Customers are told the new price from now on.",
+                    ToastStatus.Success,
+                    "Undo",
+                    () => InvokeAsync(() => PutBackAsync([before]))));
+            else if (!string.Equals(before.Group, changed.Group, StringComparison.CurrentCulture))
+                Toasts.Show(changed.Group.Length > 0 ? $"{changed.Name} is in {changed.Group} now." : $"{changed.Name} has no category now.");
+            else if (before.IsHidden != changed.IsHidden)
+                Toasts.Show(changed.IsHidden ? $"{changed.Name} is hidden. Customers won't be offered it." : $"{changed.Name} is offered to customers again.");
+            else if (before.Stock != changed.Stock)
+                Toasts.Show((changed.Stock ?? 0) > 0 ? $"{changed.Name}: {changed.Stock} in stock." : $"{changed.Name} is sold out.");
+            else if (ItemGuide.InStock(before) != ItemGuide.InStock(changed))
+                Toasts.Show(changed.Kind == CatalogKind.Service
+                    ? (ItemGuide.InStock(changed) ? $"{changed.Name} is taking bookings." : $"{changed.Name} isn't taking bookings for now.")
+                    : (ItemGuide.InStock(changed) ? $"{changed.Name} is available." : $"{changed.Name} is sold out."));
+            else
+                Toasts.Show($"Saved. {changed.Name} is up to date.");
+        }
+        StateHasChanged();
+        return null;
+    }
+
+    private async Task AddCategoryAsync(string category)
+    {
+        if (category.Length == 0 || _categories.Any(existing => string.Equals(existing, category, StringComparison.CurrentCultureIgnoreCase))) return;
+        await Store.SaveCategoriesAsync([.. _categories, category]);
+        _categories = [.. _categories, category];
+    }
+
+    private async Task<string?> CreateCategoryAsync(string name)
+    {
+        try
+        {
+            await AddCategoryAsync(name);
+            StateHasChanged();
+            return null;
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { return "We couldn't create this category. Check your connection and try again."; }
+    }
+
+    private async Task<string?> ApplyCategoriesAsync(CategoryChanges changes)
+    {
+        try
+        {
+            foreach (var item in _items)
+            {
+                var from = changes.Moves.Keys.FirstOrDefault(name => InCategory(item, name));
+                if (from is null) continue;
+                var moved = item.Copy();
+                moved.Group = changes.Moves[from];
+                await Store.SaveAsync(moved);
+            }
+            await Store.SaveCategoriesAsync(changes.Order);
+            await LoadAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            await LoadAsync();
+            return "We couldn't save every change. Check your connection and try again.";
+        }
+        _manageOpen = false;
+        Toasts.Show("Categories saved.");
+        StateHasChanged();
+        return null;
+    }
+
+    // ── Adding and opening ─────────────────────────────────────────────────
+
+    private void Compose()
+    {
+        _importOpen = false;
+        _composing = null;
+        _linked = null;
+        _mode = Mode.Compose;
+    }
+
+    private void BringPosts()
+    {
+        _importOpen = false;
+        _mode = Mode.Posts;
+    }
+
+    private static IReadOnlyList<string> Social => PostChannels.Social;
+
+    // The social channels posts come from: the business's connected channels that allow reading them (catalog-backend-requests).
+    private IReadOnlyList<string> ConnectedSocial => PostChannels.Connected(ChannelState.Workspace, false, null);
+
+    private bool SocialConnected => Discovery.CanReadPosts && ConnectedSocial.Count > 0;
+
+    // The connected channels' own marks, side by side, read out once; all three when none is, to say what can be.
+    private RenderFragment SocialMarks => @<span class="products-e__channels" role="img" aria-label="@PostChannels.Names(SocialConnected ? ConnectedSocial : Social)">
+        @foreach (var channel in SocialConnected ? ConnectedSocial : Social)
+        {
+            <ChannelIcon Channel="@channel" Size="IconSize.Sm" />
+        }
+    </span>;
+
+    // With a channel connected, posts are selected; without one, a short word on connecting one first.
+    private void SocialPosts()
+    {
+        _importOpen = false;
+        if (SocialConnected) BringPosts();
+        else _connectOpen = true;
+    }
+
+    // Returning here from Channels needs Channels to honour ?return= (catalog-backend-requests: frontend-only).
+    private const string ChannelsUrl = "/dashboard/channels";
+
+    private string? Query(string name) => System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)[name];
+
+    // Connected channels whose access has lapsed: posts can't be read from them.
+    private IReadOnlyList<string> ReconnectSocial =>
+        [.. Social.Where(channel => ChannelState.Workspace.Channels.Any(each => each.Status == Parrot.Web.Features.Dashboard.Channels.Models.ChannelStatus.NeedsAttention && each.Id.ToString().Equals(channel, StringComparison.OrdinalIgnoreCase)))];
+
+    private void Import(ImportSource source)
+    {
+        _importOpen = false;
+        _importSource = source;
+        _listOpen = true;
+    }
+
+    // Read: the review opens.
+    private void PostsRead(IReadOnlyList<ReviewDraft> drafts)
+    {
+        _review = [.. drafts];
+        _justAdded.Clear();
+        _justUpdated.Clear();
+        _reviewSource = ReviewSource.Posts(drafts.Select(draft => draft.Post!).Where(post => post is not null));
+        _mode = Mode.Review;
+    }
+
+    private void ListRead((IReadOnlyList<ReviewDraft> Drafts, ReviewSource Source) read)
+    {
+        _listOpen = false;
+        _review = [.. read.Drafts];
+        _reviewSource = read.Source;
+        _justAdded.Clear();
+        _justUpdated.Clear();
+        _mode = Mode.Review;
+    }
+
+    private void OpenLink()
+    {
+        _importOpen = false;
+        _linkOpen = true;
+    }
+
+    // The post behind the link was read: the item's form opens, filled in, beside it.
+    private Task LinkReadAsync(PostDraft draft)
+    {
+        _linkOpen = false;
+        _linked = draft;
+        _composing = null;
+        _mode = Mode.Compose;
+        return Task.CompletedTask;
+    }
+
+    private void Open(CatalogEntry item)
+    {
+        _linked = null;
+        _composing = _items.FirstOrDefault(existing => existing.Id == item.Id) ?? item;
+        _mode = Mode.Compose;
+    }
+
+    private void BackToList()
+    {
+        _mode = Mode.List;
+        _review = [];
+        _composing = null;
+        _linked = null;
+    }
+
+    private async Task<string?> SaveComposedAsync(CatalogEntry entry, bool asDraft)
+    {
+        if (!asDraft && CatalogReadiness.Issue(entry) is { } issue) return issue;
+        if (string.IsNullOrWhiteSpace(entry.Name)) return "Give it a name.";
+        entry.Status = asDraft ? CatalogStatus.Draft : CatalogStatus.Live;
+        if (!asDraft) entry.EditorDraft = null;
+        var isNew = string.IsNullOrEmpty(entry.Id) || _items.All(item => item.Id != entry.Id);
+        try
+        {
+            if (isNew) entry = await Store.CreateAsync(entry);
+            else await Store.SaveAsync(entry);
+            await AddCategoryAsync(entry.Group);
+            await LoadAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            return $"We couldn't save {entry.Name}. Check your connection and try again.";
+        }
+
+        BackToList();
+        _search = _category = null;
+        ChangeView(asDraft ? ItemView.Drafts : ItemView.All);
+        Toasts.Show(asDraft
+            ? $"{entry.Name} is saved in Drafts. Your agent won't use it yet."
+            : isNew ? $"{entry.Name} is added." : $"{entry.Name} is updated.");
+        StateHasChanged();
+        return null;
+    }
+
+    /// <summary>One reviewed item: saved (or the item it updates), staying on the review until all are.</summary>
+    private async Task<string?> SaveReviewedAsync(CatalogEntry entry, bool asDraft)
+    {
+        if (CatalogReadiness.Issue(entry) is { } issue) return issue;
+        entry.Status = CatalogStatus.Live;
+        entry.EditorDraft = null;
+        var isNew = string.IsNullOrEmpty(entry.Id) || _items.All(item => item.Id != entry.Id);
+        try
+        {
+            if (isNew) entry = await Store.CreateAsync(entry);
+            else await Store.SaveAsync(entry);
+            if (isNew) _justAdded.Add(entry.Id);
+            else _justUpdated.Add(entry.Id);
+            await AddCategoryAsync(entry.Group);
+            await LoadAsync();
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            return $"We couldn't save {entry.Name}. Check your connection and try again.";
+        }
+        return null;
+    }
+
+    private async Task ReviewDoneAsync(IReadOnlyList<CatalogEntry> saved)
+    {
+        BackToList();
+        await LoadAsync();
+        var updated = saved.Count(entry => entry.Id.Length > 0);
+        Done(saved.Count - updated, updated);
+        StateHasChanged();
+    }
+
+    // All items have been reviewed and are complete before entering the catalogue.
+    private void Done(int added, int updated)
+    {
+        var parts = new List<string>();
+        if (added > 0) parts.Add($"{Plural(added)} added");
+        if (updated > 0) parts.Add($"{Plural(updated)} updated");
+        if (parts.Count == 0) parts.Add("Nothing added");
+        var line = string.Join(", ", parts) + ".";
+        line = char.ToUpperInvariant(line[0]) + line[1..];
+        ChangeView(ItemView.All);
+        Toasts.Show(line);
+    }
+
+    // ── Deleting ───────────────────────────────────────────────────────────
+
+    private string DeleteTitle => _pendingDelete switch
+    {
+        { Count: 1 } one => $"Delete {one[0].Name}?",
+        { Count: > 1 } many => $"Delete {many.Count} items?",
+        _ => "Delete?",
+    };
+
+    private async Task DeleteAsync()
+    {
+        if (_pendingDelete is not { Count: > 0 } items || _deleting) return;
+        _deleting = true;
+        try
+        {
+            foreach (var item in items) await Store.DeleteAsync(item.Id);
+            await LoadAsync();
+            _selected.ExceptWith(items.Select(item => item.Id));
+            _pendingDelete = null;
+            if (_mode == Mode.Compose) BackToList();
+            Toasts.Show(items.Count == 1 ? $"{items[0].Name} is deleted." : $"{items.Count} items are deleted.");
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            await LoadAsync();
+            Toasts.ShowError("We couldn't delete them all. Try again.");
+        }
+        finally
+        {
+            _deleting = false;
+        }
+    }
+}

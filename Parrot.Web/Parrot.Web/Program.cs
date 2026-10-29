@@ -2,7 +2,6 @@ using Parrot.Grpc.Contracts.Messaging.V1;
 using Parrot.Web.Components;
 using Parrot.Web.Features.Auth.ForgotPassword.Services;
 using Parrot.Web.Features.Dashboard.AiAgents.State;
-using Parrot.Web.Features.Dashboard.Catalog.State;
 using Parrot.Web.Features.Dashboard.Channels.Services;
 using Parrot.Web.Features.Dashboard.Channels.State;
 using Parrot.Web.Features.Dashboard.Contacts.State;
@@ -163,7 +162,13 @@ builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.BusinessKind>(
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.AgentReadiness>();
 // Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
-builder.Services.AddScoped<CatalogState>();
+// Products & Services: no catalog API connected yet, so items last for the session (catalog-backend-requests).
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore, Parrot.Web.Features.Dashboard.Catalog.SessionCatalogStore>();
+// The backend does not expose owned social content or extraction yet: posts and post links are not offered.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDiscovery, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDiscovery>();
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDraftReader, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDraftReader>();
+// No service reads a photo of a price list yet, so "Snap a photo" is not offered.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Catalog.IPriceListReader, Parrot.Web.Features.Dashboard.Catalog.UnavailablePriceListReader>();
 builder.Services.AddScoped<ChannelsState>();
 builder.Services.AddScoped<ContactsState>();
 builder.Services.AddScoped<ConversationsState>();

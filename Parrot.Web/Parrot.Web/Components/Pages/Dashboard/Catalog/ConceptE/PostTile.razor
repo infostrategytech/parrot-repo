@@ -1,0 +1,27 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using Parrot.Web.Features.Dashboard.Catalog
+
+@* The source thumbnail when provided. A missing thumbnail is stated honestly; the caption is shown
+   independently below the tile, including for TikTok. Never pass caption text off as image content. *@
+
+<span class="@($"post-tile{(Post.ImageUrl.Length == 0 ? " is-words" : null)} {Class}")" aria-hidden="true">
+    @if (Post.ImageUrl.Length > 0)
+    {
+        <img class="post-tile__photo" src="@Post.ImageUrl" alt="" loading="lazy" />
+    }
+    else
+    {
+        <span class="post-tile__placeholder">
+            <Icon Name="IconName.RiImageFill" Size="IconSize.Lg" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">No Thumbnail</Typography>
+        </span>
+    }
+    <span class="post-tile__channel"><ChannelIcon Channel="@Post.Channel" Size="IconSize.Sm" /></span>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public SocialPost Post { get; set; } = default!;
+
+    [Parameter] public string? Class { get; set; }
+
+}

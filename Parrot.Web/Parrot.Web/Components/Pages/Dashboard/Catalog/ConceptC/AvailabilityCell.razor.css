@@ -1,0 +1,77 @@
+/* A's availability pill: green in stock, red sold out, with a dot. The
+   chevron shows on hover or focus, to say it opens. */
+.availability-cell-wrap {
+  /* Gaps in the token set: no pill-size or dot-size scale (A's measures). */
+  --ds-availability-cell-pill: 33px;
+  --ds-availability-cell-pill-min: 128px;
+  --ds-availability-cell-dot: 6px;
+
+  min-width: 0;
+}
+
+.availability-cell-wrap:not(.is-quiet) ::deep .filter-popover__trigger {
+  width: fit-content;
+  min-width: var(--ds-availability-cell-pill-min);
+  height: var(--ds-availability-cell-pill);
+  padding: var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-accent-emerald-text);
+  background: var(--colors-accent-emerald-subtle);
+  border-color: transparent;
+}
+.availability-cell-wrap.is-out:not(.is-quiet) ::deep .filter-popover__trigger {
+  color: var(--colors-accent-red-text);
+  background: var(--colors-accent-red-subtle);
+}
+/* Hidden: not offered, kept for later. Quiet, not alarming. */
+.availability-cell-wrap.is-hidden:not(.is-quiet) ::deep .filter-popover__trigger {
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+}
+.availability-cell-wrap:not(.is-quiet) ::deep .filter-popover__trigger > .ds-icon { opacity: 0; transition: opacity var(--ds-motion-fast) ease; }
+.availability-cell-wrap:not(.is-quiet) ::deep .filter-popover__trigger:hover > .ds-icon,
+.availability-cell-wrap:not(.is-quiet) ::deep .filter-popover__trigger:focus-visible > .ds-icon,
+.availability-cell-wrap:not(.is-quiet) ::deep .filter-popover__trigger[aria-expanded="true"] > .ds-icon { opacity: 1; }
+
+/* Concept E uses the shared quiet trigger, matching Task Requests: neutral words and an 8px status dot. */
+.availability-cell-wrap.is-quiet { --ds-availability-cell-dot: 8px; display: flex; }
+.availability-cell-wrap.is-quiet .availability-cell__dot { background: var(--colors-feedback-success-text); }
+.availability-cell-wrap.is-quiet.is-out .availability-cell__dot { background: var(--colors-feedback-destructive-text); }
+.availability-cell-wrap.is-quiet.is-hidden .availability-cell__dot { background: var(--colors-text-muted); }
+.availability-cell-wrap.is-quiet ::deep .availability-cell__option-dot.is-available { background: var(--colors-feedback-success-text); }
+.availability-cell-wrap.is-quiet ::deep .availability-cell__option-dot.is-out { background: var(--colors-feedback-destructive-text); }
+
+.availability-cell__dot {
+  display: block;
+  width: var(--ds-availability-cell-dot);
+  height: var(--ds-availability-cell-dot);
+  background: currentColor;
+  border-radius: var(--radius-radius-full);
+}
+
+/* In the menu: each choice with the dot of the pill it makes. */
+.availability-cell__option-dot {
+  /* Gap in the token set: no dot-size scale (A's 6px, a little larger to read in a menu). */
+  --ds-availability-cell-dot: 8px;
+
+  display: block;
+  width: var(--ds-availability-cell-dot);
+  height: var(--ds-availability-cell-dot);
+  border-radius: var(--radius-radius-full);
+}
+.availability-cell__option-dot.is-available { background: var(--colors-accent-emerald-text); }
+.availability-cell__option-dot.is-out { background: var(--colors-accent-red-text); }
+.availability-cell__option-dot.is-hidden { background: var(--colors-text-muted); }
+
+.availability-cell__stock {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: start;
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-sm);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.availability-cell__stock ::deep .ds-button { margin-top: var(--spacing-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .availability-cell-wrap ::deep .filter-popover__trigger > .ds-icon { transition: none; }
+}
