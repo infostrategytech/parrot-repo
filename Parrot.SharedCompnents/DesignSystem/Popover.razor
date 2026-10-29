@@ -17,13 +17,16 @@
             <button type="button" class="ds-popover__dismiss" tabindex="-1" aria-hidden="true" data-float-dismiss
                     @onclick="CloseAsync"></button>
             <div class="ds-popover__panel @(Wide ? "is-wide" : null)" role="@Role" aria-label="@Title" @ref="_panel">
-                <header>
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
-                    @if (!string.IsNullOrWhiteSpace(Subtitle))
-                    {
-                        <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
-                    }
-                </header>
+                @if (ShowHeading)
+                {
+                    <header>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Title</Typography>
+                        @if (!string.IsNullOrWhiteSpace(Subtitle))
+                        {
+                            <Typography TextStyle="TextStyle.Small10Regular" As="small">@Subtitle</Typography>
+                        }
+                    </header>
+                }
                 @ChildContent
             </div>
         </div>
@@ -34,10 +37,17 @@
     /// <summary>The trigger: usually a Button whose click toggles Open.</summary>
     [Parameter, EditorRequired] public RenderFragment? Anchor { get; set; }
 
-    /// <summary>The panel's heading, and its accessible name.</summary>
+    /// <summary>The panel's accessible name, and its heading when <see cref="ShowHeading"/> is on.</summary>
     [Parameter, EditorRequired] public string Title { get; set; } = "";
 
+    /// <summary>A line under the heading, shown with it.</summary>
     [Parameter] public string? Subtitle { get; set; }
+
+    /// <summary>
+    /// Show the title (and subtitle) at the top of the panel. Off by default (designer, 26 October 2026: a
+    /// heading over choices tells people nothing the choices don't); on only where it says something they can't.
+    /// </summary>
+    [Parameter] public bool ShowHeading { get; set; }
 
     /// <summary>"menu" for a list of choices; "dialog" (the default) for anything with its own fields, such as a search.</summary>
     [Parameter] public string Role { get; set; } = "dialog";

@@ -1,6 +1,6 @@
 @namespace Parrot.SharedComponents.DesignSystem
 
-@* The OmniAI parrot, alive: its face shows what it is doing (idle, listening,
+@* The yára parrot, alive: its face shows what it is doing (idle, listening,
    thinking, speaking, happy) and a soft glow behind it follows a voice level.
    The level is not a parameter: it changes many times a second, so the voice
    module writes it straight onto the element as --level (0 to 1) rather than
@@ -59,7 +59,7 @@
 
     [Parameter] public MascotState State { get; set; }
 
-    /// <summary>Read out by screen readers ("OmniAI is listening"); leave null when the state is said elsewhere.</summary>
+    /// <summary>Read out by screen readers ("yára is listening"); leave null when the state is said elsewhere.</summary>
     [Parameter] public string? Label { get; set; }
 
     /// <summary>The mascot's element, for the voice module to write the live level onto.</summary>
