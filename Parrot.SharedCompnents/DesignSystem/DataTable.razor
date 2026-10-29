@@ -1,0 +1,68 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Every table in the app, drawn one way (designer, 28 October 2026: "our tables need to be consistent in
+   header, footer, pagination, rows and columns"). Products & Services' list is the model: a white card,
+   rows edge to edge with a subtle line between them, the column names on a band of the page's own ground,
+   the whole row lit on hover, and a footer band that says how many are showing (Pagination).
+
+   Each feature keeps its own row component, so its columns and cells stay its own; the row only joins
+   the table: class "ds-table__row" (and "is-head" for the column names), with its columns in
+   --ds-table-columns. The row's states are shared: is-selected, is-open (its details are showing),
+   is-fresh (just added; lit, then fading). Column names are TableHeading.
+
+   Message replaces the rows when there's nothing to list (loading, empty, couldn't load), in the same
+   card. Notice sits above the rows (an error while the rows stay). Busy fades the rows while new ones
+   come. Nested is for a table inside another card (a settings page): no shadow, smaller corners. *@
+
+<section class="@ClassName" aria-busy="@(Busy ? "true" : null)">
+    @if (Notice is not null)
+    {
+        <div class="ds-table__notice">@Notice</div>
+    }
+    @if (Message is not null)
+    {
+        <div class="ds-table__message">@Message</div>
+    }
+    else
+    {
+        <div class="ds-table__grid" role="table" aria-label="@Label" @attributes="AdditionalAttributes">@ChildContent</div>
+        @if (Footer is not null)
+        {
+            <div class="ds-table__footer">@Footer</div>
+        }
+    }
+</section>
+
+@code {
+    /// <summary>What the table lists, for screen readers: "Customers", "Your items".</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    /// <summary>The rows: the column names first (a row with is-head), then one row each.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>Under the rows, on the footer band: usually Pagination; on a review, its progress.</summary>
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    /// <summary>In place of the rows: a loading, empty or couldn't-load state.</summary>
+    [Parameter] public RenderFragment? Message { get; set; }
+
+    /// <summary>Above the rows, inside the card: an error while the last rows stay.</summary>
+    [Parameter] public RenderFragment? Notice { get; set; }
+
+    /// <summary>New rows on their way: the rows stay, quieter, until they arrive.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Inside another card: no shadow, smaller corners.</summary>
+    [Parameter] public bool Nested { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>On the table itself, such as aria-rowcount.</summary>
+    [Parameter(CaptureUnmatchedValues = true)]
+    public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string ClassName => "ds-table"
+        + (Busy ? " is-busy" : null)
+        + (Nested ? " is-nested" : null)
+        + (string.IsNullOrWhiteSpace(Class) ? null : " " + Class);
+}

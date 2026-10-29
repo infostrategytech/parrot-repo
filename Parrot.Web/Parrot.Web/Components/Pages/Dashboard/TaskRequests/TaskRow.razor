@@ -9,18 +9,18 @@
 @if (Head)
 {
     @* The table's column names, drawn by the row so the two always share their columns. *@
-    <div class="task-row is-head @(HasTeam ? "has-team" : null)" role="row">
-        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Task</Typography>
+    <div class="ds-table__row is-head task-row @(HasTeam ? "has-team" : null)" role="row">
+        <TableHeading>Task</TableHeading>
         <div class="task-row__facts">
-            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Raised by</Typography>
-            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Customer</Typography>
-            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Due</Typography>
+            <TableHeading>Raised by</TableHeading>
+            <TableHeading>Customer</TableHeading>
+            <TableHeading>Due</TableHeading>
         </div>
         @if (HasTeam)
         {
-            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Assignee</Typography>
+            <TableHeading>Assignee</TableHeading>
         }
-        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">Status</Typography>
+        <TableHeading>Status</TableHeading>
     </div>
 }
 else
@@ -29,8 +29,8 @@ else
         <div class="task-row__task" role="cell">
             <TaskKindMark Kind="Item.Kind" />
             <div class="task-row__words">
-                <RowButton Class="task-row__title" OnClick="OnOpen">
-                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@Item.Title</Typography>
+                <RowButton Class="task-row__title" OnClick="OnOpen" title="@Item.Title">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Prose Class="task-row__title-text">@Item.Title</Typography>
                 </RowButton>
                 <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="task-row__meta">
                     @if (Item.Urgent && !Item.IsClosed)
@@ -72,19 +72,19 @@ else
                 }
                 else
                 {
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-row__muted">No customer</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-row__muted">No customer</Typography>
                 }
             </div>
 
             <div class="task-row__due" role="cell">
                 @if (Item.IsClosed)
                 {
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-row__muted">@TaskWords.Ago(Item.LastActivityAt, Now, Zone)</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-row__muted">@TaskWords.Ago(Item.LastActivityAt, Now, Zone)</Typography>
                 }
                 else
                 {
                     var (text, tone) = TaskWords.Due(Item.DueAt, Item.DueHasTime, Now, Zone);
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="@DueClass(tone)">@text</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="@DueClass(tone)">@text</Typography>
                 }
             </div>
         </div>
@@ -143,7 +143,7 @@ else
 
     private bool HasTeam => Team.Count > 1 && Me is not null;
 
-    private string ClassName => "task-row" + (HasTeam ? " has-team" : null) + (Open ? " is-open" : null) + (Fresh ? " is-fresh" : null)
+    private string ClassName => "ds-table__row task-row" + (HasTeam ? " has-team" : null) + (Open ? " is-open" : null) + (Fresh ? " is-fresh" : null)
         + (Item?.IsClosed == true ? " is-closed" : null) + (MenuOpen || AssignOpen ? " is-menu-open" : null);
 
     private static string DueClass(StatusTone? tone) => tone switch

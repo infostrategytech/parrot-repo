@@ -14,7 +14,7 @@
 @inject NavigationManager Nav
 @inject ToastService Toasts
 
-<PageTitle>Tasks · OmniAI</PageTitle>
+<PageTitle>Tasks · yára</PageTitle>
 
 @* Tasks (designer, 20 October 2026): one list of what needs doing for customers, like a ticket queue.
    An agent raises a task when a conversation needs a person (an order to confirm, a quote to send);
@@ -42,17 +42,19 @@
     @if (!Store.Available)
     {
         @* Real mode until the backend keeps tasks: said plainly, nothing made up. *@
-        <section class="tasks__card">
-            <EmptyState Glyph="IconName.RiClipboardFill"
-                        Title="Tasks are on the way"
-                        Description="When an agent needs you to act on a conversation, such as an order to confirm or a quote to send, it will show here, with anything your team adds." />
-        </section>
+        <DataTable Label="Tasks">
+            <Message>
+                <EmptyState Glyph="IconName.RiClipboardFill"
+                            Title="Tasks are on the way"
+                            Description="When an agent needs you to act on a conversation, such as an order to confirm or a quote to send, it will show here, with anything your team adds." />
+            </Message>
+        </DataTable>
     }
     else if (_tasks is null)
     {
-        <section class="tasks__card">
-            <LoadingState Glyph="IconName.RiClipboardFill" Title="Getting your tasks" />
-        </section>
+        <DataTable Label="Tasks">
+            <Message><LoadingState Glyph="IconName.RiClipboardFill" Title="Getting your tasks" /></Message>
+        </DataTable>
     }
     else
     {
@@ -100,9 +102,10 @@
             </div>
         </section>
 
-        <section class="tasks__card" aria-label="@ViewLabel(_view)">
-            @if (Shown.Count == 0)
-            {
+        @if (Shown.Count == 0)
+        {
+            <DataTable Label="@ViewLabel(_view)">
+                <Message>
                 @if (Filtering)
                 {
                     <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiSearch2Fill" Title="No tasks match"
@@ -114,10 +117,13 @@
                 {
                     <EmptyState Size="EmptyStateSize.Panel" Glyph="@EmptyGlyph" Title="@EmptyTitle" Description="@EmptyText" />
                 }
-            }
-            else
-            {
-                <div class="tasks__table" role="table" aria-label="@ViewLabel(_view)">
+                </Message>
+            </DataTable>
+        }
+        else
+        {
+            <DataTable Label="@ViewLabel(_view)">
+                <ChildContent>
                     <TaskRow Head Team="TeamForRows" Me="Store.Me" />
                     @foreach (var task in Shown.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
                     {
@@ -132,11 +138,11 @@
                                  OnAssign="person => AssignAsync(task, person)"
                                  StatusBusy="@_saving.Contains("state-" + task.Id)" AssignBusy="@_saving.Contains("assign-" + task.Id)" />
                     }
-                </div>
-                @* Pages, as Products & Services has them: always under the list, with the count. *@
-                <Pagination Class="tasks__pages" Page="CurrentPage" PageChanged="page => _page = page" Total="Shown.Count" PageSize="PageSize" AriaLabel="Pages of tasks" />
-            }
-        </section>
+                </ChildContent>
+                @* The count, always; the pages when there are more than one. *@
+                <Footer><Pagination Page="CurrentPage" PageChanged="page => _page = page" Total="Shown.Count" PageSize="PageSize" AriaLabel="Pages of tasks" /></Footer>
+            </DataTable>
+        }
     }
 </main>
 
