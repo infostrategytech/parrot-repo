@@ -57,7 +57,7 @@
 }
 
 /* The current entry screen remains visible, so this reads as guided work inside
-   OmniAI rather than a separate full-screen product. It may open from the
+   yára rather than a separate full-screen product. It may open from the
    Dashboard, the standalone AI Operations module or Business Setup. Keep the
    blur on its own layer so chat updates do not repaint the whole backdrop. */
 .teach-ai::before {

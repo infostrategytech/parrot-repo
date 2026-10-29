@@ -52,7 +52,7 @@ public class ChannelsState
             "assets/images/icons/whatsapp.png",
             "A Facebook account", 25),
         new(ChannelId.Instagram, "instagram", "Instagram",
-            "Bring Instagram DMs into your OmniAI inbox.",
+            "Bring Instagram DMs into your yára inbox.",
             "assets/images/icons/instagram.png",
             "An Instagram professional account", 5),
         new(ChannelId.Facebook, "facebook", "Facebook",
@@ -64,7 +64,7 @@ public class ChannelsState
             "",
             "A TikTok Business Account and your own TikTok developer app", 10),
         new(ChannelId.X, "twitter", "X",
-            "Bring X DMs into your OmniAI inbox.",
+            "Bring X DMs into your yára inbox.",
             "",
             "An X account with DMs open", 5),
     ];
