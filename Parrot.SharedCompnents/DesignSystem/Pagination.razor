@@ -2,19 +2,24 @@
 
 @* Pages of a long list, as Products & Services draws them (designer, 21 October 2026: Tasks had "Show
    more", which only appeared past 25 and was never seen): how many are showing out of how many, then
-   Previous, the page, Next. Always there under a list, so the count is too. The caller owns the page,
-   and its container (a hairline above it, the card's padding). *@
+   Previous, the page, Next. The count is always there under a list; the pages only when there are more
+   than one. The caller owns the page; a DataTable's footer band is its container. *@
 <nav class="ds-pagination @Class" aria-label="@AriaLabel">
-    <Typography TextStyle="TextStyle.Small12Regular" As="span">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span">
         @(Total == 0 ? "Nothing to show" : $"Showing {First}–{Last} of {Total}")
     </Typography>
-    <div class="ds-pagination__controls">
-        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Current <= 1)"
-                @onclick="() => PageChanged.InvokeAsync(Current - 1)">Previous</Button>
-        <Typography TextStyle="TextStyle.Small12Regular" As="span" aria-live="polite">Page @Current of @Pages</Typography>
-        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Current >= Pages)"
-                @onclick="() => PageChanged.InvokeAsync(Current + 1)">Next</Button>
-    </div>
+    @* The pages only when there's more than one (designer, 28 October 2026): Previous and Next that can't be
+       used are noise under a short list. *@
+    @if (Pages > 1)
+    {
+        <div class="ds-pagination__controls">
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Current <= 1)"
+                    @onclick="() => PageChanged.InvokeAsync(Current - 1)">Previous</Button>
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" aria-live="polite">Page @Current of @Pages</Typography>
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Current >= Pages)"
+                    @onclick="() => PageChanged.InvokeAsync(Current + 1)">Next</Button>
+        </div>
+    }
 </nav>
 
 @code {

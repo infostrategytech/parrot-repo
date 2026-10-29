@@ -16,7 +16,7 @@
 }
 
 /* One left edge for the eye to follow down the page. */
-.tasks > * { width: min(var(--ds-tasks-max), 100%); min-width: 0; margin-inline: auto; }
+.tasks > ::deep * { width: min(var(--ds-tasks-max), 100%); min-width: 0; margin-inline: auto; }
 .tasks ::deep p,
 .tasks ::deep h1,
 .tasks ::deep h2,
@@ -46,23 +46,7 @@
 .tasks__tools { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
 .tasks__tools ::deep .tasks__search { width: var(--ds-tasks-search); }
 
-.tasks__card {
-  display: grid;
-  min-width: 0;
-  padding: var(--spacing-sm) var(--spacing-lg);
-  background: var(--colors-surface-card);
-  border: var(--ds-tasks-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-2xl);
-}
-.tasks__card ::deep .ds-empty-state { padding-block: var(--spacing-4xl); }
-
-.tasks__table { display: grid; min-width: 0; }
-
-/* More than a page of tasks: the next page, on asking. */
-.tasks ::deep .tasks__pages {
-  padding: var(--spacing-md);
-  border-top: var(--ds-tasks-hairline) solid var(--colors-surface-border);
-}
+/* The table, its card and its pages are the shared DataTable's (designer, 28 October 2026). */
 
 @media (max-width: 1024px) {
   .tasks__tools { width: 100%; }
@@ -71,5 +55,4 @@
 
 @media (max-width: 760px) {
   .tasks__header { flex-direction: column; align-items: stretch; gap: var(--spacing-lg); }
-  .tasks__card { padding-inline: var(--spacing-sm); }
 }
