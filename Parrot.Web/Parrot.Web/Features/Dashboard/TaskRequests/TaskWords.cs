@@ -195,7 +195,8 @@ public static partial class TaskWords
     }
 
     /// <summary>
-    /// When it's due, and how much that matters: late or due today is a problem, as the design shows it. "Today, 5pm",
+    /// When it's due, and how much that matters: late is a problem (red), due today a heads-up (amber), and a time
+    /// today that has passed is late (designer, 29 October 2026). "Today, 5pm",
     /// "Tomorrow", "Thursday, 11am", "1 day late". By the person's own calendar, not the server's.
     /// </summary>
     public static (string Text, StatusTone? Tone) Due(DateTime? dueAt, bool hasTime, DateTime now, TimeZoneInfo zone)
@@ -204,11 +205,12 @@ public static partial class TaskWords
         var local = Local(due, zone);
         var days = (local.Date - Local(now, zone).Date).Days;
         var at = hasTime ? ", " + Hour(local) : "";
+        var late = hasTime && due < now;
         return days switch
         {
             < -1 => ($"{-days} days late", StatusTone.Danger),
             -1 => ("1 day late", StatusTone.Danger),
-            0 => ("Today" + at, StatusTone.Danger),
+            0 => ("Today" + at, late ? StatusTone.Danger : StatusTone.Warning),
             1 => ("Tomorrow" + at, null),
             < 7 => (local.ToString("dddd", CultureInfo.InvariantCulture) + at, null),
             _ => (local.ToString("d MMM", CultureInfo.InvariantCulture) + at, null),
