@@ -8,7 +8,7 @@
 @inject TokenStorageService TokenStorage
 @implements IDisposable
 
-<PageTitle>Join a Team · OmniAI</PageTitle>
+<PageTitle>Join a Team · yára</PageTitle>
 
 @* Where an invite email's link lands. It says whose team it is before anyone
    signs in. One login works everywhere, so:
@@ -49,7 +49,7 @@ else
     else if (!AuthState.IsAuthenticated && !_preview.HasAccount)
     {
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-            Set up your OmniAI login for @_preview.Email. You will use it for this team and any other you join.
+            Set up your yára login for @_preview.Email. You will use it for this team and any other you join.
         </Typography>
         <form class="account-panel__form" novalidate @onsubmit="SignUpAsync" @onsubmit:preventDefault="true">
             @* The address is the invite's: shown, not editable. Opening the link proved it, so the login starts verified. *@
@@ -73,7 +73,7 @@ else
     else if (!AuthState.IsAuthenticated)
     {
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-            You already have an OmniAI login for @_preview.Email. Sign in to join the team.
+            You already have a yára login for @_preview.Email. Sign in to join the team.
         </Typography>
         <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="@(() => GoAsync("/login"))">Sign In</Button>
     }

@@ -40,7 +40,7 @@ public static class GuidedSteps
             new("In the left menu, find **Accounts**. If it is closed, select it to reveal its options."),
             new("Select **Apps**, then choose **Add**.")
         ],
-            Aside: "Keep OmniAI open in another tab so you can follow each step."),
+            Aside: "Keep yára open in another tab so you can follow each step."),
 
         new("Name your Meta app",
         [
@@ -63,7 +63,7 @@ public static class GuidedSteps
             new("Review the information and complete anything Meta asks for.", "Requirements"),
             new("Check your selections, then choose **Create app**.", "Overview")
         ],
-            Intro: "Meta will take you through the remaining screens. Complete each one, then create the app before returning to OmniAI.",
+            Intro: "Meta will take you through the remaining screens. Complete each one, then create the app before returning to yára.",
             Aside: "Meta may adjust or skip a screen depending on your business account. Continue until you see your new app dashboard."),
 
         new("Open WhatsApp API Setup",
