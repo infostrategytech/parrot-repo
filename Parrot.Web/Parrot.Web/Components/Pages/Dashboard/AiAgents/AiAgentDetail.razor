@@ -302,7 +302,7 @@ else
                                 }
                             </span>
                         </RowButton>
-                        <RowButton Class="agent-detail__stat" OnClick="OpenTasks" aria-label="@($"{today.TasksCreated} tasks created. See them in Task Requests.")">
+                        <RowButton Class="agent-detail__stat" OnClick="OpenTasks" aria-label="@($"{today.TasksCreated} tasks created. See them in Tasks.")">
                             <span class="agent-detail__stat-icon is-tasks"><Icon Name="IconName.RiTaskFill" Size="IconSize.Md" /></span>
                             <span class="agent-detail__stat-text">
                                 <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@today.TasksCreated</Typography>
@@ -1419,5 +1419,5 @@ else
 
     private void OpenInbox() => Nav.NavigateTo("/dashboard/conversations");
 
-    private void OpenTasks() => Nav.NavigateTo("/dashboard/task-requests");
+    private void OpenTasks() => Nav.NavigateTo("/dashboard/tasks");
 }
