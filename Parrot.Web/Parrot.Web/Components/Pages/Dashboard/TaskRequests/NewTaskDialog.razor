@@ -26,6 +26,10 @@
     <GlyphContent><Icon Name="@(Editing is null ? IconName.RiClipboardFill : IconName.RiPencilFill)" Size="IconSize.Md" /></GlyphContent>
     <Body>
         <div class="new-task">
+            @if (_loadProblem)
+            {
+                <InlineError Message="Your team and customers couldn't be loaded. You can still add the task." />
+            }
             <div class="new-task__what">
                 <TextArea Id="new-task-what" Value="@_text" ValueChanged="OnText" Rows="2" AutoGrow MaxLength="600"
                           AriaLabel="What needs doing?" Placeholder="What needs doing? For example: Send Kemi a quote for 80 guests" />
@@ -300,6 +304,7 @@
     private IReadOnlyList<TaskItem> _catalog = [];
     private IReadOnlyList<TaskPerson> _team = [];
     private IReadOnlyList<TaskRequest> _open = [];
+    private bool _loadProblem;
 
     protected override async Task OnParametersSetAsync()
     {
@@ -307,9 +312,13 @@
         if (Open && !_wasOpen)
         {
             Reset();
-            _team = await Store.TeamAsync();
-            _open = (await Store.ListAsync()).Where(t => t.IsOpen).ToList();
-            if (Customer is null) _customers = await Store.CustomersAsync();
+            // What helps fill it in; without it the task can still be added (no one to assign, a customer typed in).
+            try { _team = await Store.TeamAsync(); }
+            catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException) { _team = []; _loadProblem = true; }
+            try { _open = (await Store.ListAsync()).Where(t => t.IsOpen).ToList(); }
+            catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException) { _open = []; }
+            try { if (Customer is null) _customers = await Store.CustomersAsync(); }
+            catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException) { _customers = []; _loadProblem = true; }
             try { _catalog = await Store.ItemsAsync(); }
             catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException) { _catalog = []; }
             if (Editing is { } task) Fill(task);
@@ -321,7 +330,7 @@
     {
         _text = _walkName = _walkPhone = _address = _amount = string.Empty;
         _kind = TaskKind.Other;
-        _kindPicked = _showCustomer = _showItems = _showAssign = _walkIn = _urgent = _tried = _saving = false;
+        _kindPicked = _showCustomer = _showItems = _showAssign = _walkIn = _urgent = _tried = _saving = _loadProblem = false;
         _openMenu = null;
         _customer = null;
         _items = [];
