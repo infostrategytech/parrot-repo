@@ -1,7 +1,5 @@
-@page "/ai-operations/{AgentId}/playbooks/{PlaybookId}"
-@page "/dashboard/ai-agents/{AgentId}/playbooks/{PlaybookId}"
-@page "/ai-operations/{AgentId}/builder"
-@page "/dashboard/ai-agents/{AgentId}/builder"
+@page "/dashboard/ai-operations/{AgentId}/playbooks/{PlaybookId}"
+@page "/dashboard/ai-operations/{AgentId}/builder"
 @attribute [RequiresAccess(AccessRules.AgentEdit)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
@@ -17,5 +15,5 @@
     [Parameter] public string? PlaybookId { get; set; }
 
     protected override void OnInitialized() =>
-        Nav.NavigateTo($"/ai-operations/{AgentId}?tab={(PlaybookId is null ? "settings" : "playbooks")}", replace: true);
+        Nav.NavigateTo($"/dashboard/ai-operations/{AgentId}?tab={(PlaybookId is null ? "settings" : "playbooks")}", replace: true);
 }

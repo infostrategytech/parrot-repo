@@ -1,5 +1,4 @@
-@page "/ai-operations"
-@page "/dashboard/ai-agents"
+@page "/dashboard/ai-operations"
 @attribute [RequiresAccess(AccessRules.Agents)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
@@ -173,7 +172,7 @@
                                    Busy="@(_busyAgentId == current.Id)"
                                    OnOpen="() => OpenAgent(current)"
                                    OnConfigure="() => OpenSettings(current)"
-                                   OnGetReady="@(() => Nav.NavigateTo($"/ai-operations/{current.Id}?tab=overview"))"
+                                   OnGetReady="@(() => Nav.NavigateTo($"/dashboard/ai-operations/{current.Id}?tab=overview"))"
                                    OnDelete="() => _pendingDelete = current"
                                    OnStatusChange="() => ChangeStatusAsync(current)" />
                     }
@@ -351,7 +350,7 @@
     }
 
     // The questions wait in the inbox, where the agent asks them.
-    private void ReviewWaiting() => Nav.NavigateTo("/dashboard/conversations");
+    private void ReviewWaiting() => Nav.NavigateTo("/dashboard/inbox");
 
     private List<AiAgent> FilteredAgents
     {
@@ -394,7 +393,7 @@
     protected override void OnAfterRender(bool firstRender)
     {
         // Drop ?new=1, so a refresh or Back does not open setup again.
-        if (New == "1" && _newHandled) Nav.NavigateTo("/ai-operations", replace: true);
+        if (New == "1" && _newHandled) Nav.NavigateTo("/dashboard/ai-operations", replace: true);
     }
 
     // A new agent needs a connected channel, then, the first time, what the
@@ -402,13 +401,13 @@
     // opens before the create page.
     private Task CreateAgentAsync() => AgentGate.RequireAsync(() =>
     {
-        Nav.NavigateTo("/ai-operations/new-agent");
+        Nav.NavigateTo("/dashboard/ai-operations/new-agent");
         return Task.CompletedTask;
     });
 
-    private void OpenAgent(AiAgent agent) => Nav.NavigateTo($"/ai-operations/{agent.Id}");
+    private void OpenAgent(AiAgent agent) => Nav.NavigateTo($"/dashboard/ai-operations/{agent.Id}");
 
-    private void OpenSettings(AiAgent agent) => Nav.NavigateTo($"/ai-operations/{agent.Id}?tab=settings");
+    private void OpenSettings(AiAgent agent) => Nav.NavigateTo($"/dashboard/ai-operations/{agent.Id}?tab=settings");
 
     private async Task ChangeStatusAsync(AiAgent agent)
     {

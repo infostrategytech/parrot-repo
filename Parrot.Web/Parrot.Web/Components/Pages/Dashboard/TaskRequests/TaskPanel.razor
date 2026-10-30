@@ -404,7 +404,7 @@
     // The task's conversation, opened where the task was raised when the thread says so (the newest otherwise).
     private static string ConversationUrl(TaskRequest task)
     {
-        var url = $"/dashboard/conversations/{Uri.EscapeDataString(task.Customer!.ConversationId!)}";
+        var url = $"/dashboard/inbox/{Uri.EscapeDataString(task.Customer!.ConversationId!)}";
         return task.RaisedInMessageId is { } line ? $"{url}?message={Uri.EscapeDataString(line)}" : url;
     }
 

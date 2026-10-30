@@ -1,4 +1,4 @@
-@page "/dashboard/contacts"
+@page "/dashboard/customers"
 @attribute [RequiresAccess(AccessRules.Customers)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Contacts
@@ -397,7 +397,7 @@
     }
 
     private void OpenConversation(CustomerChannel channel) =>
-        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(channel.ConversationId)}");
+        Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(channel.ConversationId)}");
 
     private Task TaskAddedAsync(TaskRequest task)
     {

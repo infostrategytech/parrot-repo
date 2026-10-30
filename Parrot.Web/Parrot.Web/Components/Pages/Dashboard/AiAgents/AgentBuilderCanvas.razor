@@ -179,7 +179,7 @@
             await _module.InvokeVoidAsync("validate", _canvasHostId);
     }
 
-    private void BackToAgent() => Nav.NavigateTo($"/ai-operations/{AgentId}");
+    private void BackToAgent() => Nav.NavigateTo($"/dashboard/ai-operations/{AgentId}");
 
     // Pip's drawing, as agent-builder.js draws it: an illustration, so it
     // keeps its own colours like a brand mark.

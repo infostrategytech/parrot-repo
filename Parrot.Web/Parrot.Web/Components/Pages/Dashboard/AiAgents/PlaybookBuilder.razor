@@ -25,7 +25,7 @@
                     Title="Playbook not found"
                     Description="This playbook does not exist.">
             <Action>
-                <Button Variant="ButtonVariant.Secondary" @onclick='() => Nav.NavigateTo("/ai-operations")'>Back to agents</Button>
+                <Button Variant="ButtonVariant.Secondary" @onclick='() => Nav.NavigateTo("/dashboard/ai-operations")'>Back to agents</Button>
             </Action>
         </EmptyState>
     </main>
@@ -157,7 +157,7 @@ else
         if (_showTestPanel) _selectedStepId = string.Empty;
     }
 
-    private void BackToAgent() => Nav.NavigateTo($"/ai-operations/{AgentId}");
+    private void BackToAgent() => Nav.NavigateTo($"/dashboard/ai-operations/{AgentId}");
 
     private void OpenSaveModal() => _showSaveModal = true;
     private void CloseSaveModal() => _showSaveModal = false;
