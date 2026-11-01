@@ -1,77 +1,51 @@
-/* The row's columns are set by the table that contains it. This file styles
-   what sits inside each cell. Copied from Aurora's ProductRow.razor.css. */
-
-.contact-row {
-  min-height: var(--ds-row-min);
-  background: var(--colors-surface-card);
-  cursor: pointer;
-  transition: background var(--ds-row-motion) ease;
+/* A row of the Customers table, and its column names (is-head). The table's look (padding, the line between
+   rows, the header band, hover, just added) is the shared DataTable's (designer, 28 October 2026: every
+   table alike); the columns and cells are this table's own. */
+.customer-row {
+  /* Gaps in the token set: no border-width scale, and the columns are this table's own. */
+  --ds-customer-hairline: 1px;
+  --ds-customer-when: 160px;
+  --ds-customer-tasks: 120px;
+  --ds-table-columns: minmax(0, 2fr) minmax(0, 1.4fr) var(--ds-customer-when);
 }
+.customer-row.has-tasks { --ds-table-columns: minmax(0, 2fr) minmax(0, 1.4fr) var(--ds-customer-when) var(--ds-customer-tasks); }
+.customer-row__facts > * { min-width: 0; }
+.customer-row__facts { display: contents; }
 
-.contact-row {
-  /* Gaps in the token set: no row-height, control-size or motion scale. */
-  --ds-row-min: 64px;
-  --ds-row-motion: 130ms;
-  --ds-row-open: 32px;
-  --ds-row-mark: 28px;
-}
+.customer-row__who { display: flex; gap: var(--spacing-md); align-items: center; }
+.customer-row__words { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.customer-row ::deep .customer-row__muted { color: var(--colors-text-muted); }
 
-.contact-row:hover { background: var(--colors-interaction-hover); }
-
-.contact-row__name {
-  display: flex;
-  gap: var(--spacing-sm);
-  align-items: center;
-  min-width: 0;
-}
-
-.contact-row__name ::deep strong {
-  overflow: hidden;
-  color: var(--colors-text-secondary);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-
-.contact-row__channels { display: flex; gap: var(--spacing-xs); }
-
-/* Brand marks, not ours: WhatsApp green and Instagram magenta stay as Aurora's
-   ChannelCard draws them and are recorded in brand-literals.json. */
-.contact-row__mark {
-  display: grid;
-  place-items: center;
-  width: var(--ds-row-mark);
-  height: var(--ds-row-mark);
-  color: var(--colors-text-inverse);
-  border-radius: var(--radius-radius-md);
-}
-
-.contact-row__mark--whatsapp { background: #22a968; }
-.contact-row__mark--instagram { background: #c63886; }
-
-::deep .contact-row__last { color: var(--colors-text-muted); }
-
-.contact-row__tags { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); min-width: 0; }
-
-::deep .contact-row__orders { color: var(--colors-text-secondary); }
-
-.contact-row__stage { display: flex; }
-
-.contact-row__actions { display: flex; justify-content: flex-end; }
-
-.contact-row__open {
-  display: grid;
-  place-items: center;
-  width: var(--ds-row-open);
-  height: var(--ds-row-open);
+/* The name's button covers the row, so a click anywhere opens Customer details. */
+.customer-row__words ::deep .customer-row__name {
+  justify-content: start;
+  min-height: auto;
   padding: var(--spacing-none);
-  color: var(--colors-text-secondary);
-  background: var(--colors-surface-muted);
-  border: 0;
-  border-radius: var(--radius-radius-full);
-  cursor: pointer;
+  color: var(--colors-text-primary);
+  text-align: start;
+  background: transparent;
 }
+.customer-row__words ::deep .customer-row__name::after { position: absolute; inset: 0; content: ""; }
+.customer-row__words ::deep .customer-row__name:focus-visible { outline: none; }
+.customer-row__words ::deep .customer-row__name:focus-visible::after { outline: var(--ds-customer-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-customer-hairline) * -1); }
 
-.contact-row__open:hover {
-  color: var(--colors-brand-primary);
-  background: var(--colors-accent-brand-subtle);
+.customer-row__channels { display: flex; flex-wrap: wrap; gap: var(--spacing-xs) var(--spacing-md); align-items: center; }
+.customer-row__channel { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-secondary); }
+
+.customer-row__when { color: var(--colors-text-secondary); }
+.customer-row__count { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-brand-primary); }
+
+/* A tablet: the customer on top, then their channels, when and what's open, in one line under the name. */
+@media (max-width: 1024px) {
+  .customer-row,
+  .customer-row.has-tasks { --ds-table-columns: minmax(0, 1fr); }
+  .customer-row__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs) var(--spacing-lg);
+    align-items: center;
+    padding-left: calc(var(--spacing-2xl) + var(--spacing-md));
+  }
+  /* Without its column name, a lone "None" says nothing: nothing open, nothing shown. */
+  .customer-row__tasks.is-none { display: none; }
 }

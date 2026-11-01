@@ -5,7 +5,7 @@
    inbox's conversation toolbar uses it; with Text, a labelled button with a
    chevron ("Import"), for a page header. Items are ActionMenuItem; choosing
    one closes the menu. Escape and a click anywhere else close it too. *@
-<div class="ds-action-menu" @onkeydown="OnKeyDown">
+<div class="ds-action-menu" @onkeydown="OnKeyDown" @ref="_root">
     @* Two renderings, not one with an empty label: the Button builds an
        icon-only button from an omitted label. *@
     @if (Text is null)
@@ -32,11 +32,15 @@
 
     @if (_open)
     {
-        @* The click-away layer: a full-screen transparent button, the documented
-           exception to building from components. *@
-        <button type="button" class="ds-action-menu__dismiss" tabindex="-1" aria-hidden="true" @onclick="Close"></button>
-        <div class="ds-action-menu__menu" role="menu" aria-label="@Label" @onclick="Close" @ref="_menu">
-            @ChildContent
+        @* In the browser's top layer, placed against the trigger: below it or above it, wherever there is
+           room, and never cut off by a list, a panel or a dialog that scrolls (see FilterPopover). *@
+        <div class="ds-action-menu__layer" popover="manual" @ref="_layer">
+            @* The click-away layer: a full-screen transparent button, the documented
+               exception to building from components. *@
+            <button type="button" class="ds-action-menu__dismiss" tabindex="-1" aria-hidden="true" data-float-dismiss @onclick="Close"></button>
+            <div class="ds-action-menu__menu" role="menu" aria-label="@Label" @onclick="Close" @ref="_menu">
+                @ChildContent
+            </div>
         </div>
     }
 </div>
@@ -52,7 +56,7 @@
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private bool _open, _placing;
-    private ElementReference _menu;
+    private ElementReference _root, _layer, _menu;
 
     private void Toggle()
     {
@@ -60,12 +64,12 @@
         _placing = _open;
     }
 
-    // Once drawn, the menu opens upward if it would not fit below (the last rows of a list).
+    // Once drawn, the menu is placed: upward when it would not fit below (the last rows of a list).
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!_placing) return;
         _placing = false;
-        try { await Interop.PlaceMenuAsync(_menu); }
+        try { await Interop.FloatMenuAsync(_layer, _root, _menu); }
         catch (JSException) { }
         catch (InvalidOperationException) { }
     }

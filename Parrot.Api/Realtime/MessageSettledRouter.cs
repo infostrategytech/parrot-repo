@@ -13,13 +13,15 @@ namespace Parrot.Api.Realtime;
 /// being down or a failed push changes nothing durable, and the inbox's poll shows it. Never throws (other than for
 /// shutdown): a throwing handler would make the bus redeliver the event and hold up the partition.
 /// </summary>
-public sealed class MessageSettledRouter(IOnlineSessionStore sessions, IHubContext<MessagingHub> hub, ILogger<MessageSettledRouter> logger)
+public sealed class MessageSettledRouter(IOnlineSessionStore sessions, IHubContext<MessagingHub> hub, IRealtimeAudience audience,
+    ILogger<MessageSettledRouter> logger)
 {
     public async Task RouteAsync(MessageSettled settled, CancellationToken cancellationToken)
     {
         try
         {
-            IReadOnlyList<string> connections = await sessions.GetConnectionsAsync(settled.OwnerUserId, cancellationToken);
+            IReadOnlyList<string> connections = await audience.ForConversationAsync(settled.OwnerUserId,
+                await sessions.GetConnectionsAsync(settled.OwnerUserId, cancellationToken), settled.ConnectionId);
             if (connections.Count == 0) return;
 
             (string method, object payload) = settled.Kind == SettledKinds.Media

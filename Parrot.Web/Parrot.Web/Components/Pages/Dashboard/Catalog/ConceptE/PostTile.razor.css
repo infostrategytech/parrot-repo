@@ -1,0 +1,44 @@
+/* A post's picture, square, with its channel's mark in the corner. */
+.post-tile {
+  /* Gap in the token set: no aspect-ratio or badge-size scale. */
+  --ds-post-tile-ratio: 1;
+  --ds-post-tile-badge: 28px;
+  --ds-post-tile-hairline: 1px;
+
+  position: relative;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  aspect-ratio: var(--ds-post-tile-ratio);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+.post-tile__photo { width: 100%; height: 100%; object-fit: cover; }
+
+/* A neutral thumbnail placeholder; source captions belong outside the image. */
+.post-tile.is-words {
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-card);
+  box-shadow: inset 0 0 0 var(--ds-post-tile-hairline) var(--colors-surface-border);
+}
+.post-tile__placeholder {
+  display: grid;
+  gap: var(--spacing-sm);
+  justify-items: center;
+  color: var(--colors-icon-muted);
+  text-align: center;
+}
+.post-tile__placeholder ::deep span { color: var(--colors-text-muted); }
+
+.post-tile__channel {
+  position: absolute;
+  bottom: var(--spacing-sm);
+  left: var(--spacing-sm);
+  display: grid;
+  place-items: center;
+  width: var(--ds-post-tile-badge);
+  height: var(--ds-post-tile-badge);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+}

@@ -1,0 +1,26 @@
+@layout Parrot.Web.Components.Layout.Dashboard.DashboardLayout
+@inject AuthState AuthState
+
+@* Shown in place of a page the person's role does not reach (see
+   RequiresAccessAttribute). It has no route of its own: the router renders it
+   at the page's address, so the address bar still says where they tried to go. *@
+
+<PageTitle>No access · yára</PageTitle>
+
+<div class="no-access">
+    <EmptyState Glyph="IconName.RiLockFill"
+                Title="This isn't part of your role"
+                Description="@Description">
+        <Action>
+            <Button Variant="ButtonVariant.Secondary" @onclick="@(() => Nav.NavigateTo("/dashboard"))">Back to the overview</Button>
+        </Action>
+    </EmptyState>
+</div>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private string Description => AuthState.CurrentUser is { Role: { Length: > 0 } role } && role != "Owner"
+        ? $"You're a {role} in this workspace. Ask the owner if you need access."
+        : "Ask the workspace owner if you need access.";
+}

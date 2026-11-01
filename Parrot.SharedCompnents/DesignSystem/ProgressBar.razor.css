@@ -1,0 +1,25 @@
+/* A progress bar: the words, then a thin track with the brand's fill. */
+.ds-progress {
+  /* Missing from the token set: a progress track's thickness. */
+  --ds-progress-track: 6px;
+
+  display: grid;
+  gap: var(--spacing-xs);
+}
+.ds-progress ::deep .ds-progress__label { color: var(--colors-text-secondary); }
+.ds-progress__track {
+  overflow: hidden;
+  height: var(--ds-progress-track);
+  /* The border colour: a muted fill is the panel's own colour in dark mode. */
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.ds-progress__fill {
+  height: 100%;
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+  transition: inline-size var(--ds-motion-base) ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .ds-progress__fill { transition: none; }
+}

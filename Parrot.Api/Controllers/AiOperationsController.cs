@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
-using Parrot.Application.Agents;
-using Parrot.Domain.Exceptions;
 using Parrot.Api.Security;
+using Parrot.Application.Agents;
+using Parrot.Application.Teams;
+using Parrot.Domain.Exceptions;
 
 namespace Parrot.Api.Controllers;
 
@@ -24,16 +25,19 @@ public sealed class AiOperationsController(IAiOperationsService operations) : Co
 
     /// <summary>Today's figures, for every agent and channel or for one of each.</summary>
     [HttpGet("today")]
+    [RequirePermission(WorkspacePermissions.AnalyticsDashboard)]
     public async Task<IActionResult> Today([FromQuery] string? agentId, [FromQuery] string? channel, CancellationToken cancellationToken) =>
         Ok(await operations.TodayAsync(Owner, agentId, channel, cancellationToken));
 
     /// <summary>Conversations per day for the last seven days, oldest first.</summary>
     [HttpGet("week")]
+    [RequirePermission(WorkspacePermissions.AnalyticsDashboard)]
     public async Task<IActionResult> Week([FromQuery] string? agentId, [FromQuery] string? channel, CancellationToken cancellationToken) =>
         Ok(await operations.WeekAsync(Owner, agentId, channel, cancellationToken));
 
     /// <summary>The latest conversations, newest first.</summary>
     [HttpGet("recent")]
+    [RequirePermission(WorkspacePermissions.AnalyticsDashboard)]
     public async Task<IActionResult> Recent(
         [FromQuery] string? agentId,
         [FromQuery] string? channel,
@@ -43,11 +47,13 @@ public sealed class AiOperationsController(IAiOperationsService operations) : Co
 
     /// <summary>The approvals and escalations waiting for the owner.</summary>
     [HttpGet("waiting")]
+    [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
     public async Task<IActionResult> Waiting(CancellationToken cancellationToken) =>
         Ok(await operations.WaitingAsync(Owner, cancellationToken));
 
     /// <summary>Decides an approval: the orchestrator resumes the turn, and the decision is kept here.</summary>
     [HttpPost("approvals/{id}")]
+    [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
     public async Task<IActionResult> Decide(string id, [FromBody] ApprovalDecisionRequest request, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(id))

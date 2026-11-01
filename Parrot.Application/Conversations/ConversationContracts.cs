@@ -108,6 +108,15 @@ public interface IConversationReadStore
 
     /// <summary>Unread messages across all of the owner's conversations.</summary>
     Task<int> TotalUnreadAsync(string owner, string reader, CancellationToken ct);
+
+    /// <summary>
+    /// Unread messages on just these connections, for a team member whose grant
+    /// reaches only some channels. Null is every connection.
+    /// </summary>
+    Task<int> TotalUnreadAsync(string owner, string reader, IReadOnlySet<Guid>? connections, CancellationToken ct) =>
+        connections is null
+            ? TotalUnreadAsync(owner, reader, ct)
+            : throw new NotSupportedException("This store cannot count unread messages by connection.");
 }
 
 /// <summary>Sets or clears one of the per-user conversation flags.</summary>
@@ -136,6 +145,13 @@ public interface IConversationFlagStore
 public interface IConversationStore
 {
     Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, int skip, int take, CancellationToken ct);
+
+    /// <summary>
+    /// Like <see cref="ListAsync(string, int, int, CancellationToken)"/>, but only conversations on these
+    /// connections, paged after filtering: for a team member whose grant reaches only some channels.
+    /// </summary>
+    async Task<IReadOnlyList<ConversationSummary>> ListAsync(string owner, IReadOnlySet<Guid> connections, int skip, int take, CancellationToken ct) =>
+        (await ListAsync(owner, 0, int.MaxValue, ct)).Where(c => connections.Contains(c.ConnectionId)).Skip(skip).Take(take).ToList();
 
     /// <summary>The summaries of just these conversations (those with no messages are absent), newest first.</summary>
     Task<IReadOnlyList<ConversationSummary>> FindAsync(string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct);

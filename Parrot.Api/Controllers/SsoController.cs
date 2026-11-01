@@ -4,10 +4,10 @@ using Microsoft.AspNetCore.Authentication.Facebook;
 using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
-using Parrot.Application.Auth;
-using Parrot.Application.DTOs.Auth;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
+using Parrot.Application.Auth;
+using Parrot.Application.DTOs.Auth;
 
 namespace Parrot.Api.Controllers;
 
@@ -94,7 +94,7 @@ public class SsoController : ControllerBase
         // Business name and logo are filled in by the setup step after sign-in,
         // so both are optional here and the callback must not assume them.
         string redirectUrl = string.Format(
-            "{0}/sso-callback?token={1}&expiresAt={2}&userId={3}&email={4}&businessName={5}&logoUrl={6}&phoneNumber={7}&workspaceId={8}",
+            "{0}/sso-callback?token={1}&expiresAt={2}&userId={3}&email={4}&businessName={5}&logoUrl={6}&phoneNumber={7}&workspaceId={8}&role={9}&permissions={10}",
             _frontendSettings.BaseUrl,
             Uri.EscapeDataString(authResponse.Token),
             Uri.EscapeDataString(authResponse.ExpiresAt.ToString("O")),
@@ -103,7 +103,9 @@ public class SsoController : ControllerBase
             Uri.EscapeDataString(authResponse.BusinessName ?? string.Empty),
             Uri.EscapeDataString(authResponse.LogoUrl ?? string.Empty),
             Uri.EscapeDataString(authResponse.PhoneNumber ?? string.Empty),
-            Uri.EscapeDataString(authResponse.WorkspaceId));
+            Uri.EscapeDataString(authResponse.WorkspaceId),
+            Uri.EscapeDataString(authResponse.Role),
+            Uri.EscapeDataString(string.Join(',', authResponse.Permissions)));
 
         return Redirect(redirectUrl);
     }

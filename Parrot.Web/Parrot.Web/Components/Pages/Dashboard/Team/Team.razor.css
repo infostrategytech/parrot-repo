@@ -19,7 +19,8 @@
   --ds-team-measure: 650px;
   --ds-team-col-name: 220px;
   --ds-team-col-role: 200px;
-  --ds-team-col-status: 120px;
+  --ds-team-col-status: 160px;
+  --ds-team-col-actions: 40px;
   --ds-team-head-min: 45px;
   --ds-team-row-min: 64px;
 }
@@ -54,10 +55,11 @@
 .team-row {
   display: grid;
   grid-template-columns:
-    minmax(var(--ds-team-col-name), 1.4fr)
-    minmax(0, 1.6fr)
-    var(--ds-team-col-role)
-    var(--ds-team-col-status);
+    minmax(var(--ds-team-col-name), 1.2fr)
+    minmax(0, 1.2fr)
+    minmax(var(--ds-team-col-role), 1.6fr)
+    var(--ds-team-col-status)
+    var(--ds-team-col-actions);
   gap: var(--spacing-md);
   align-items: center;
   padding: var(--spacing-sm) var(--spacing-md);
@@ -83,3 +85,25 @@
 ::deep .team-row__email { overflow: hidden; color: var(--colors-text-muted); white-space: nowrap; text-overflow: ellipsis; }
 .team-row__role,
 .team-row__status { display: flex; }
+::deep .team-row__access { color: var(--colors-text-secondary); }
+.team-row__actions { display: flex; justify-content: flex-end; }
+
+/* Narrow screens: name and status on top, email and access beneath. */
+@media (max-width: 760px) {
+  .team__table-head { display: none; }
+  .team-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+  ::deep .team-row__email,
+  ::deep .team-row__access { grid-column: 1 / -1; }
+}
+
+/* The Roles section sits under the team table. */
+.team__header--section { margin-top: var(--spacing-4xl); }
+
+.team-row--role {
+  grid-template-columns:
+    minmax(var(--ds-team-col-name), 1.2fr)
+    var(--ds-team-col-status)
+    minmax(0, 2fr)
+    var(--ds-team-col-status)
+    var(--ds-team-col-actions);
+}

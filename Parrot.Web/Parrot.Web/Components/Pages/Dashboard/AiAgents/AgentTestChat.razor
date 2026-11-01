@@ -180,6 +180,9 @@
     /// <summary>"Change this": the host closes this and selects that sentence of the job summary.</summary>
     [Parameter] public EventCallback<string> OnChangeLine { get; set; }
 
+    /// <summary>It replied: the agent has been tested as a customer.</summary>
+    [Parameter] public EventCallback OnReplied { get; set; }
+
     private sealed class ChatLine
     {
         public bool FromCustomer { get; init; }
@@ -310,6 +313,7 @@
             var history = _chat.Select(line => new AgentTryTurn(line.FromCustomer, line.FromCustomer ? line.Text : line.Reply?.Reply ?? string.Empty)).ToList();
             var reply = await Briefing.TryAsync(new(Brief, Name, UseCase, Industry, Business, history, message));
             _chat.Add(new() { FromCustomer = false, Reply = reply, Question = message });
+            await OnReplied.InvokeAsync();
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or NotSupportedException)
         {

@@ -1,0 +1,177 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using System.Globalization
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+
+@* Changing the prices of the chosen items at once (research, 25 October 2026: prices drift with inflation
+   and the exchange rate, and no tool vendors use helps). Up or down, by a percentage or an amount, with
+   the new prices shown before anything changes. A percentage rounds to the nearest ₦100, as prices are
+   written; an item where customers ask for the price stays as it is. Every price of an item moves: its own
+   and each choice's. *@
+
+<Popover Title="Change prices" Subtitle="@($"For {Plural(Priced.Count)}")" Open="_open" OpenChanged="Opened" Wide Class="change-prices">
+    <Anchor>
+        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")" disabled="@(Items.Count == 0 || Busy)" @onclick="() => Opened(!_open)">
+            <IconLeft><Icon Name="IconName.RiPriceTag3Fill" /></IconLeft>
+            <ChildContent>Change prices</ChildContent>
+        </Button>
+    </Anchor>
+    <ChildContent>
+        <div class="change-prices__panel">
+            @if (Priced.Count == 0)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="change-prices__note">None of these has a price to change yet.</Typography>
+            }
+            else
+            {
+                <SegmentedControl TValue="string" Label="Raise or lower" Options="Directions" Value="@_direction" ValueChanged="value => _direction = value" />
+                <div class="change-prices__by">
+                    <Input @ref="_by" FloatingLabel="By"
+                           Numeric="NumericInputKind.Decimal"
+                           maxlength="10"
+                           PrefixText="@(_unit == "naira" ? "₦" : null)"
+                           Value="@_amount"
+                           ValueChanged="value => { _amount = value; _invalid = false; _error = null; }"
+                           Error="_invalid"
+                           HelperText="@(_invalid ? (_unit == "percent" ? "Enter a positive percentage. Reductions must be below 100%." : "Enter a positive amount, such as 2,000.") : null)" />
+                    <SegmentedControl TValue="string" Label="Percentage or amount" Options="Units" Value="@_unit" ValueChanged="value => { _unit = value; _invalid = false; }" />
+                </div>
+
+                @if (Preview.Count > 0)
+                {
+                    <ul class="change-prices__preview" aria-label="New prices">
+                        @foreach (var change in Preview.Take(4))
+                        {
+                            <li>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="change-prices__name">@change.Name</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="change-prices__was">@change.Was</Typography>
+                                <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
+                                <Typography TextStyle="TextStyle.Small12Semibold" As="span">@change.Now</Typography>
+                            </li>
+                        }
+                    </ul>
+                    @if (Preview.Count > 4)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="change-prices__note">@($"And {Plural(Preview.Count - 4)} more.")</Typography>
+                    }
+                }
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="change-prices__note">@Note</Typography>
+                @if (AdjustmentIssue is { } issue) { <InlineError Message="@issue" /> }
+                @if (_error is not null) { <InlineError Message="@_error" /> }
+            }
+            <div class="change-prices__actions">
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _open = false">Cancel</Button>
+                <Button Size="ButtonSize.Small" Busy="Busy" disabled="@(Priced.Count == 0)" @onclick="ApplyAsync">@(Preview.Count > 0 ? $"Change {Plural(Preview.Count)}" : "Change prices")</Button>
+            </div>
+        </div>
+    </ChildContent>
+</Popover>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<CatalogEntry> Items { get; set; } = [];
+
+    /// <summary>Saves the changed items together.</summary>
+    [Parameter, EditorRequired] public Func<IReadOnlyList<CatalogEntry>, Task<string?>> Apply { get; set; } = _ => Task.FromResult<string?>(null);
+
+    [Parameter] public bool Busy { get; set; }
+
+    private sealed record Change(string Name, string Was, string Now);
+
+    private static readonly IReadOnlyList<SegmentedOption<string>> Directions = [new("up", "Raise"), new("down", "Lower")];
+    private static readonly IReadOnlyList<SegmentedOption<string>> Units = [new("percent", "%"), new("naira", "₦")];
+
+    private bool _open, _invalid;
+    private string _direction = "up", _unit = "percent";
+    private string? _amount, _error;
+
+    private List<CatalogEntry> Priced => [.. Items.Where(item => item.PriceType != PriceType.OnRequest && PriceWords.Prices(item).Count > 0)];
+
+    private decimal? By => NumberText.Decimal(_amount) is { } value && value > 0 && (_unit == "naira" || value < 100 || _direction == "up") ? value : null;
+
+    private List<(CatalogEntry Before, CatalogEntry After)> Changes => By is null || AdjustmentIssue is not null ? []
+        : [.. Priced.Select(item => (Before: item, After: Changed(item)))
+            .Where(pair => !PriceWords.Prices(pair.Before).SequenceEqual(PriceWords.Prices(pair.After)))];
+
+    private List<Change> Preview => [.. Changes.Select(pair => new Change(pair.Before.Name, PriceWords.For(pair.Before).Main, PriceWords.For(pair.After).Main))];
+
+    private string? AdjustmentIssue
+    {
+        get
+        {
+            if (By is null) return null;
+            try { return Priced.SelectMany(item => PriceWords.Prices(item)).Any(price => Move(price) <= 0)
+                ? "That would reduce a price to zero or below. Use a smaller reduction." : null; }
+            catch (OverflowException) { return "That change is too large. Enter a smaller amount."; }
+        }
+    }
+
+    private string Note
+    {
+        get
+        {
+            var parts = new List<string>();
+            if (_unit == "percent") parts.Add("Rounded to the nearest ₦100.");
+            var asked = Items.Count(item => item.PriceType == PriceType.OnRequest);
+            if (asked > 0) parts.Add($"{Plural(asked)} where customers ask for the price {(asked == 1 ? "stays" : "stay")} as {(asked == 1 ? "it is" : "they are")}.");
+            var missing = Items.Count(item => item.PriceType != PriceType.OnRequest && PriceWords.Prices(item).Count == 0);
+            if (missing > 0) parts.Add($"{Plural(missing)} without a price {(missing == 1 ? "is" : "are")} left out.");
+            return string.Join(" ", parts);
+        }
+    }
+
+    private void Opened(bool open)
+    {
+        if (open) { _amount = null; _error = null; _invalid = false; _direction = "up"; _unit = "percent"; _focus = Priced.Count > 0; }
+        _open = open;
+    }
+
+    // Opening puts the cursor in By, the one thing to type (Raise is already chosen).
+    private Input? _by;
+    private bool _focus;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_focus || _by is null) return;
+        _focus = false;
+        // After the panel has floated into view: a field can't take focus while it is hidden.
+        await Task.Yield();
+        await _by.FocusAsync();
+    }
+
+    private CatalogEntry Changed(CatalogEntry item)
+    {
+        var changed = item.Copy();
+        if (changed.Price is { } price) changed.Price = Move(price);
+        foreach (var variant in changed.Variants)
+            if (variant.Price is { } own) variant.Price = Move(own);
+        return changed;
+    }
+
+    private decimal Move(decimal price)
+    {
+        var by = By ?? 0;
+        var sign = _direction == "up" ? 1 : -1;
+        var moved = _unit == "percent"
+            ? Math.Round(price * (1 + sign * by / 100) / 100, MidpointRounding.AwayFromZero) * 100
+            : price + sign * by;
+        return moved;
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (Busy) return;
+        _error = null;
+        if (By is null) { _invalid = true; return; }
+        if (AdjustmentIssue is not null) return;
+        if (Changes.Count == 0) { _error = "This adjustment doesn't change any prices. Try a different amount."; return; }
+        try
+        {
+            _error = await Apply([.. Changes.Select(pair => pair.After)]);
+            if (_error is null) _open = false;
+        }
+        catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
+        { _error = "We couldn't change these prices. Check your connection and try again."; }
+    }
+
+    private static string Plural(int count) => count == 1 ? "1 item" : $"{count.ToString(CultureInfo.InvariantCulture)} items";
+}

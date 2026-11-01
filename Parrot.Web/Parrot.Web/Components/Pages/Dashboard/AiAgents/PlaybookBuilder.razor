@@ -16,7 +16,7 @@
     var playbook = agent?.Playbooks.FirstOrDefault(p => p.Id == PlaybookId);
 }
 
-<PageTitle>@(playbook?.Title ?? "Playbook") · OmniAI</PageTitle>
+<PageTitle>@(playbook?.Title ?? "Playbook") · yára</PageTitle>
 
 @if (agent is null || playbook is null)
 {

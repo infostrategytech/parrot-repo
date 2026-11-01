@@ -1,0 +1,58 @@
+/* The price, plain until pointed at: the amount, and a quiet line under it when it adds something. */
+.price-summary {
+  /* Gap in the token set: no menu-width or menu-height scale. */
+  --ds-price-summary-panel: 340px;
+  --ds-price-summary-panel-height: 360px;
+
+  min-width: 0;
+}
+
+/* The popover's anchor takes the column's width here, so the price is sized against the column, not squeezed. */
+.price-summary ::deep .ds-popover { display: flex; }
+/* The panel is as wide as the fields and buttons in it, so nothing is cut off at its edge. */
+.price-summary ::deep .ds-popover__panel { width: min(var(--ds-price-summary-panel), calc(100vw - var(--spacing-lg))); }
+
+.price-summary ::deep .price-summary__trigger {
+  display: grid;
+  justify-items: start;
+  gap: var(--spacing-2xs);
+  /* Its own width, so "₦20,000" and "per person" never break word by word (it's a flex item of the popover's
+     anchor, so it mustn't shrink); the column caps it. */
+  flex: none;
+  width: max-content;
+  max-width: 100%;
+  min-height: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  margin-inline-start: calc(-1 * var(--spacing-sm));
+  text-align: start;
+  background: transparent;
+  border-radius: var(--radius-radius-md);
+}
+.price-summary ::deep .price-summary__trigger:hover,
+.price-summary ::deep .price-summary__trigger[aria-expanded="true"] { background: var(--colors-surface-muted); }
+
+/* Each line whole; a long one is cut with an ellipsis at the column's edge rather than broken. */
+.price-summary ::deep .price-summary__main,
+.price-summary ::deep .price-summary__detail { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.price-summary ::deep .price-summary__main { color: var(--colors-text-primary); }
+.price-summary ::deep .price-summary__detail { color: var(--colors-text-muted); }
+
+/* Nothing yet: the one thing to do. Ask for price: an answer, not a gap, so quieter. */
+.price-summary.is-missing ::deep .price-summary__main { color: var(--colors-feedback-warning-text); }
+.price-summary.is-ask ::deep .price-summary__main { color: var(--colors-text-secondary); }
+
+.price-summary__panel {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: 100%;
+  max-height: var(--ds-price-summary-panel-height);
+  overflow-y: auto;
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-sm);
+}
+.price-summary__panel ::deep .price-summary__note { margin: var(--spacing-none); color: var(--colors-text-secondary); }
+.price-summary__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; justify-content: flex-end; }
+
+/* Review uses one amount field, rather than a menu of unrelated pricing actions. */
+.price-summary__review { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.price-summary__review ::deep .ds-button { justify-self: start; }
+.price-summary ::deep .price-summary__edit { color: var(--colors-text-link); }

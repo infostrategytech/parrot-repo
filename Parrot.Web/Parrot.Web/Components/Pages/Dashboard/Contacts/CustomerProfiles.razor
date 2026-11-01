@@ -1,0 +1,116 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@using Parrot.Web.Services
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+@inject ICustomerLinks Links
+@inject ToastService Toasts
+@inject AuroraInterop Interop
+@implements IDisposable
+
+@if (Links.Available && Open)
+{
+    <CustomerSection Title="Customer profiles">
+        <div class="customer-profiles" tabindex="-1" @ref="_region" aria-label="Customer profiles">
+            @if (_loading) { <Skeleton Shape="SkeletonShape.Line" /> }
+            else if (_error is not null)
+            {
+                <InlineError Message="@_error"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action></InlineError>
+            }
+            else if (_profile is { } profile)
+            {
+                @if (profile.Links.Count > 0)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@($"Linked under {profile.Customer.Name}. Conversations stay separate.")</Typography>
+                    @foreach (var identity in profile.Customer.Identities)
+                    {
+                        var channel = new CustomerChannel(identity.Platform, CustomerChannel.HandleFor(identity.Platform, identity.Sender, identity.Username)
+                            ?? ChannelLinks.PlatformName(identity.Platform), identity.ConnectionId, identity.Sender, null, identity.Username);
+                        <div class="customer-profiles__channel">
+                            <ChannelGlyph Channel="@channel.Platform" Compact />
+                            <span><Typography TextStyle="TextStyle.Small12Medium" As="small">@ChannelLinks.PlatformName(channel.Platform)</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@channel.Handle</Typography></span>
+                            @if (channel.HasConversation && OnOpenConversation.HasDelegate)
+                            {
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => OnOpenConversation.InvokeAsync(channel)"
+                                        aria-label="@($"Open the {ChannelLinks.PlatformName(channel.Platform)} conversation")">Open</Button>
+                            }
+                        </div>
+                    }
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _dialogOpen = true">Manage linked profiles</Button>
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Know them from another channel? Link their profiles after checking it's the same person.</Typography>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _dialogOpen = true">
+                        <IconLeft><Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" /></IconLeft>
+                        <ChildContent>Link to existing customer</ChildContent>
+                    </Button>
+                }
+            }
+            else { <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>A customer profile isn't available for this conversation yet.</Typography> }
+        </div>
+    </CustomerSection>
+    @if (_profile is { } source)
+    {
+        <CustomerLinkDialog Open="_dialogOpen" Source="source" Manage="@(source.Links.Count > 0)" OnClose="() => _dialogOpen = false" OnChanged="ChangedAsync" />
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public CustomerView Customer { get; set; } = default!;
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<CustomerChannel> OnOpenConversation { get; set; }
+    [Parameter] public EventCallback<CustomerDetailDto> OnChanged { get; set; }
+    private LinkedCustomerProfile? _profile;
+    private string? _key, _error;
+    private bool _loading, _dialogOpen, _disposed, _focusPending;
+    private ElementReference _region;
+    private CancellationTokenSource? _load;
+    private string Key => $"{Customer.CustomerId}:{Customer.Primary?.ConversationId}";
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (!Open) { _key = null; _load?.Cancel(); _dialogOpen = false; return Task.CompletedTask; }
+        if (!Links.Available || _key == Key) return Task.CompletedTask;
+        _key = Key;
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _load?.Cancel(); _load?.Dispose();
+        var mine = _load = new CancellationTokenSource();
+        var ct = mine.Token;
+        _loading = true; _profile = null; _error = null;
+        try
+        {
+            var profile = Customer.CustomerId is { } id ? await Links.GetAsync(id, ct)
+                : Customer.Primary is { HasConversation: true } channel ? await Links.FindAsync(channel.ConnectionId, channel.Sender, ct) : null;
+            if (!ct.IsCancellationRequested && !_disposed) _profile = profile;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        { if (!ct.IsCancellationRequested) _error = "Customer profiles couldn't be loaded."; }
+        finally { if (_load == mine) _loading = false; }
+    }
+
+    private async Task ChangedAsync(LinkedCustomerProfile profile)
+    {
+        var separated = _profile is { } previous && profile.Links.Count < previous.Links.Count;
+        _dialogOpen = false;
+        _focusPending = true;
+        _profile = profile;
+        Toasts.Show(separated ? "Profiles separated. Both customers are kept." : "Profiles linked. Conversations are kept separately.");
+        await OnChanged.InvokeAsync(profile.Customer);
+        // In Inbox the open conversation may be the profile just separated, not the retained customer.
+        if (Customer.CustomerId is null) await LoadAsync();
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusPending && !_dialogOpen && !_loading && Open)
+        {
+            _focusPending = false;
+            await Interop.FocusWhenInteractiveAsync(_region);
+        }
+    }
+    public void Dispose() { _disposed = true; _load?.Cancel(); _load?.Dispose(); }
+}

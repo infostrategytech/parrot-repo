@@ -1,0 +1,105 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@typeparam TItem
+
+@* Finding one item in a list by typing (designer, 21 October 2026: "we should be able to search, like for
+   customers, or when selecting a product"). The matches show right under the search. Inside a form it
+   goes in a floating menu (a Popover, or a SelectField's menu) with Plain, so it never pushes the form.
+   The arrow keys move through the matches and Enter picks. A footer can offer a way out ("Someone not in
+   your Inbox"). *@
+<div class="ds-search-pick @(Plain ? "is-plain" : null) @Class">
+    <SearchField Value="@_query" ValueChanged="OnQuery" Placeholder="@Placeholder" AriaLabel="@AriaLabel" AutoFocus="AutoFocus"
+                 @onkeydown="OnKeyAsync" role="combobox" aria-expanded="true" aria-controls="@_listId" />
+    <ul class="ds-search-pick__list" id="@_listId" role="listbox" aria-label="@AriaLabel">
+        @{ var shown = Matches.Take(Max).ToList(); }
+        @for (var i = 0; i < shown.Count; i++)
+        {
+            var item = shown[i];
+            var index = i;
+            <li role="option" aria-selected="@(index == _active ? "true" : "false")">
+                <button type="button" class="ds-search-pick__option @(index == _active ? "is-active" : null)" tabindex="-1"
+                        @onclick="() => OnPick.InvokeAsync(item)" @onmouseenter="() => _active = index">
+                    @if (Leading is not null)
+                    {
+                        <span class="ds-search-pick__leading" aria-hidden="true">@Leading(item)</span>
+                    }
+                    <span class="ds-search-pick__words">
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@Label(item)</Typography>
+                        @if (Detail?.Invoke(item) is { Length: > 0 } detail)
+                        {
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="ds-search-pick__detail">@detail</Typography>
+                        }
+                    </span>
+                </button>
+            </li>
+        }
+        @if (shown.Count == 0)
+        {
+            <li class="ds-search-pick__none">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@(Items.Count == 0 ? EmptyText : $"Nothing matches “{_query.Trim()}”.")</Typography>
+            </li>
+        }
+        else if (Matches.Count() > Max)
+        {
+            <li class="ds-search-pick__none">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{Matches.Count() - Max} more: keep typing to narrow it down.")</Typography>
+            </li>
+        }
+    </ul>
+    @if (Footer is not null)
+    {
+        <div class="ds-search-pick__footer">@Footer</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<TItem> Items { get; set; } = [];
+    [Parameter, EditorRequired] public Func<TItem, string> Label { get; set; } = _ => "";
+    /// <summary>A second line: the channel, the price.</summary>
+    [Parameter] public Func<TItem, string?>? Detail { get; set; }
+    /// <summary>What a search looks in; the label by default.</summary>
+    [Parameter] public Func<TItem, string>? SearchText { get; set; }
+    [Parameter] public RenderFragment<TItem>? Leading { get; set; }
+    [Parameter] public EventCallback<TItem> OnPick { get; set; }
+    [Parameter] public string Placeholder { get; set; } = "Search";
+    [Parameter] public string AriaLabel { get; set; } = "Search";
+    [Parameter] public string EmptyText { get; set; } = "Nothing to choose from yet.";
+    [Parameter] public bool AutoFocus { get; set; } = true;
+    /// <summary>How many matches show at once; the rest are a search away.</summary>
+    [Parameter] public int Max { get; set; } = 6;
+    [Parameter] public RenderFragment? Footer { get; set; }
+
+    /// <summary>Inside a menu that is already a card: the matches without a card of their own.</summary>
+    [Parameter] public bool Plain { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private readonly string _listId = "search-pick-" + Guid.NewGuid().ToString("N");
+    private string _query = "";
+    private int _active;
+
+    private IEnumerable<TItem> Matches
+    {
+        get
+        {
+            var words = _query.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            return Items.Where(item =>
+            {
+                var text = (SearchText ?? Label)(item);
+                return words.All(word => text.Contains(word, StringComparison.CurrentCultureIgnoreCase));
+            });
+        }
+    }
+
+    private void OnQuery(string? value)
+    {
+        _query = value ?? "";
+        _active = 0;
+    }
+
+    private async Task OnKeyAsync(KeyboardEventArgs args)
+    {
+        var count = Math.Min(Matches.Count(), Max);
+        if (args.Key == "ArrowDown" && count > 0) _active = (_active + 1) % count;
+        else if (args.Key == "ArrowUp" && count > 0) _active = (_active - 1 + count) % count;
+        else if (args.Key == "Enter" && count > 0) await OnPick.InvokeAsync(Matches.ElementAt(Math.Min(_active, count - 1)));
+    }
+}

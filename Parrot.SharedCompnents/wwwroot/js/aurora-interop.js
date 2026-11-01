@@ -23,6 +23,11 @@ const FOCUSABLE = [
 // called only for Escape, never for other keys, so typing in a dialog's
 // fields does not cost a server round trip per keystroke (on Blazor Server a
 // per-key handler redraws the dialog and can overwrite the field mid-typing).
+// The person's own time zone (an IANA id such as "Africa/Lagos"), so "today" is their today.
+export function timeZone() {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch { return null; }
+}
+
 export function trapFocus(container, escapeTarget, escapeMethod) {
   // The dialog can be gone by the time this runs (its page was left, or the
   // session ended, between render and this call). Nothing to trap then; an
@@ -38,6 +43,10 @@ export function trapFocus(container, escapeTarget, escapeMethod) {
   }
 
   function onKeyDown(event) {
+    // A confirmation can sit inside a side panel. Let the innermost dialog own
+    // its Escape/Tab keys, so dismissing it never dismisses the customer's panel too.
+    const innerDialog = event.target.closest?.('[role="dialog"]');
+    if (event.defaultPrevented || (innerDialog && innerDialog !== container && container.contains(innerDialog))) return;
     if (event.key === "Escape") {
       if (escapeTarget && escapeMethod) escapeTarget.invokeMethodAsync(escapeMethod);
       return;
@@ -126,9 +135,11 @@ export function bindFocusShortcut(element, key) {
 
 // Non-modal drawers do not trap focus, but Escape should still dismiss them
 // regardless of where focus currently sits on the page.
-export function bindEscape(dotNetRef, method) {
+export function bindEscape(dotNetRef, method, owner) {
   const onKeyDown = event => {
     if (event.key !== "Escape") return;
+    // A contextual drawer must not close underneath a child viewer, form or menu.
+    if (owner && (event.defaultPrevented || event.target?.closest?.('[role="dialog"], [role="menu"], [role="listbox"]'))) return;
     dotNetRef.invokeMethodAsync(method);
   };
   document.addEventListener("keydown", onKeyDown);
@@ -137,6 +148,31 @@ export function bindEscape(dotNetRef, method) {
       document.removeEventListener("keydown", onKeyDown);
     }
   };
+}
+
+export function rememberFocus() {
+  const trigger = document.activeElement;
+  return { release() { if (trigger?.isConnected) trigger.focus({ preventScroll: true }); } };
+}
+
+export function focusWhenInteractive(element) {
+  return new Promise(resolve => {
+    if (!element?.isConnected) { resolve(false); return; }
+    let timer;
+    const observer = new MutationObserver(tryFocus);
+    function finish(focused) { observer.disconnect(); clearTimeout(timer); resolve(focused); }
+    function tryFocus() {
+      if (!element.isConnected) { finish(false); return; }
+      if (element.closest('[inert]')) return;
+      element.focus({ preventScroll: true });
+      finish(document.activeElement === element);
+    }
+    // Blazor Server can run an earlier render's callback while the opening batch is still travelling.
+    // Observe the actual browser state; never remove inert ourselves or move focus into a closed drawer.
+    observer.observe(element, { attributes: true, attributeFilter: ['inert'] });
+    timer = setTimeout(() => finish(false), 1000);
+    tryFocus();
+  });
 }
 
 
@@ -179,6 +215,8 @@ export function keepDigits(element, max) {
 }
 
 export function setValue(element, value, focus) {
+  // An amount put in by the page reads as one typed would: 58000 shows as 58,000.
+  if (element?.dataset.numericInput === "decimal" && value) value = groupAmount(value);
   if (element && element.value !== value) element.value = value;
   element?.__auroraGrow?.();
   // Text put in for the person to carry on with (a draft, a saved reply, an
@@ -187,6 +225,136 @@ export function setValue(element, value, focus) {
     element.focus();
     element.setSelectionRange(value.length, value.length);
   }
+}
+
+/* An amount with its thousands grouped, as people read money (designer, 28 October 2026): 58000 → 58,000,
+   100000.5 → 100,000.5. Anything but digits and one point is dropped; at most two places after the point. */
+function groupAmount(text) {
+  const [whole, ...rest] = String(text).split(".");
+  const digits = whole.replace(/[^0-9]/g, "").replace(/^0+(?=[0-9])/, "");
+  const grouped = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return rest.length ? `${grouped}.${rest.join("").replace(/[^0-9]/g, "").slice(0, 2)}` : grouped;
+}
+
+/* A pasted amount, read the way it's written in captions and chats (designer, 28 October 2026): "58k",
+   "1.2m", "₦58,000", "N58,000", "NGN 58,000", "#8,500", "58,000 naira". Null when it isn't an amount, so
+   "58k only" or "about 5k" are refused as before. Only pasting is read this way: typing stays digits only. */
+function readPastedAmount(text) {
+  const plain = String(text).trim().toLowerCase().replace(/\s+/g, "")
+    .replace(/^(?:₦|ngn|n|#)/, "").replace(/(?:naira|ngn)$/, "");
+  const match = plain.match(/^([0-9][0-9,]*(?:\.[0-9]+)?|\.[0-9]+)([km])?$/);
+  if (!match) return null;
+  const written = match[1].replace(/,/g, "");
+  if (!match[2]) {
+    const [whole, places = ""] = written.split(".");
+    return places.length > 2 ? Number(written).toFixed(2) : written;
+  }
+  const amount = Number(written) * (match[2] === "k" ? 1e3 : 1e6);
+  if (!Number.isFinite(amount)) return null;
+  return (Math.round(amount * 100) / 100).toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1");
+}
+
+/* Numeric fields opt in. Reject the entire invalid insertion, never turn -500 or 500abc into 500.
+   Run before Blazor's delegated input listener; normal text/auth fields never attach these handlers.
+   Amounts (decimal) also group their thousands as they're typed, and read a pasted 58k or ₦58,000. */
+export function bindNumberInput(element, target) {
+  if (!element) return { release() {} };
+  const amount = element.dataset.numericInput === "decimal";
+  const limit = element.maxLength;
+  // A grouped amount may be wider than its digit limit. Native maxlength counts commas too, which can
+  // otherwise trap a formatted large value; enforce the digit limit locally instead.
+  if (element.dataset.numericInput === "decimal" && limit >= 0) element.removeAttribute("maxlength");
+  // A phone number: digits and what people write one with (+234 803 555 1234, (0803) 555-1234), never letters.
+  const kinds = { integer: /^[0-9]*$/, phone: /^[0-9+() -]*$/, decimal: /^[0-9,]*(?:\.[0-9]{0,2})?$/ };
+  const valid = value => (kinds[element.dataset.numericInput] ?? kinds.decimal).test(value)
+    && (limit < 0 || value.replace(/[,.]/g, "").length <= limit);
+  let accepted = element.value;
+  let caret = element.selectionStart ?? accepted.length;
+  let composing = false;
+  const reject = () => target.invokeMethodAsync("NumberRejectedAsync", accepted).catch(() => {});
+  const proposed = text => element.value.slice(0, element.selectionStart ?? element.value.length)
+    + text + element.value.slice(element.selectionEnd ?? element.value.length);
+  // Groups the amount in place, keeping the caret beside the same digit it was beside.
+  const regroup = () => {
+    const shown = element.value;
+    const next = groupAmount(shown);
+    if (next === shown) return;
+    const at = element.selectionStart ?? shown.length;
+    const kept = shown.slice(0, at).replace(/[^0-9.]/g, "").length;
+    element.value = next;
+    let position = 0;
+    for (let seen = 0; position < next.length && seen < kept; position++) if (/[0-9.]/.test(next[position])) seen++;
+    element.setSelectionRange(position, position);
+  };
+  // Puts text in place of the selection as if typed, so the field's own input handling runs (and Blazor hears it).
+  const putIn = (text, start, end) => {
+    element.value = element.value.slice(0, start) + text + element.value.slice(end);
+    element.setSelectionRange(start + text.length, start + text.length);
+    element.dispatchEvent(new Event("input", { bubbles: true }));
+  };
+  const before = event => {
+    accepted = element.value; caret = element.selectionStart ?? accepted.length;
+    // Deleting next to a comma deletes the digit beside it: the comma alone would only come straight back.
+    if (amount && (event.inputType === "deleteContentBackward" || event.inputType === "deleteContentForward")
+      && element.selectionStart === element.selectionEnd) {
+      const back = event.inputType === "deleteContentBackward";
+      const comma = back ? caret - 1 : caret;
+      if (accepted[comma] === ",") {
+        event.preventDefault();
+        const digit = back ? comma - 1 : comma + 1;
+        if (digit < 0 || digit >= accepted.length) return;
+        const from = Math.min(comma, digit);
+        element.value = accepted.slice(0, from) + accepted.slice(Math.max(comma, digit) + 1);
+        element.setSelectionRange(from, from);
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+        return;
+      }
+    }
+    if (event.isComposing || !event.inputType?.startsWith("insert") || event.data == null) return;
+    if (!valid(proposed(event.data))) { event.preventDefault(); reject(); }
+  };
+  const paste = event => {
+    const text = event.clipboardData?.getData("text");
+    if (text == null) return;
+    accepted = element.value; caret = element.selectionStart ?? accepted.length;
+    // An amount pasted the way it's written ("58k", "₦58,000"): put in as the number it means.
+    const read = amount ? readPastedAmount(text) : null;
+    if (read !== null) {
+      event.preventDefault();
+      const start = element.selectionStart ?? accepted.length, end = element.selectionEnd ?? start;
+      if (!valid(proposed(read))) { reject(); return; }
+      putIn(read, start, end);
+      return;
+    }
+    if (!valid(proposed(text))) { event.preventDefault(); reject(); }
+  };
+  const input = event => {
+    if (composing || event.isComposing) { event.stopImmediatePropagation(); return; }
+    // Old drafts can contain invalid text. Let people delete it rather than trapping them in that value.
+    if (valid(element.value) || event.inputType?.startsWith("delete") && element.value.length < accepted.length) {
+      if (amount && valid(element.value)) regroup();
+      accepted = element.value; caret = element.selectionStart ?? accepted.length; return;
+    }
+    element.value = accepted;
+    element.setSelectionRange(caret, caret);
+    event.stopImmediatePropagation(); reject();
+  };
+  const startComposition = () => { composing = true; };
+  const endComposition = () => { composing = false; element.dispatchEvent(new Event("input", { bubbles: true })); };
+  // An amount already in the field (a saved price) shows grouped from the start; the value is the same number.
+  if (amount && valid(element.value)) { element.value = groupAmount(element.value); accepted = element.value; }
+  element.addEventListener("beforeinput", before);
+  element.addEventListener("paste", paste);
+  element.addEventListener("input", input, true);
+  element.addEventListener("compositionstart", startComposition);
+  element.addEventListener("compositionend", endComposition);
+  return { release() {
+    element.removeEventListener("beforeinput", before);
+    element.removeEventListener("paste", paste);
+    element.removeEventListener("input", input, true);
+    element.removeEventListener("compositionstart", startComposition);
+    element.removeEventListener("compositionend", endComposition);
+  } };
 }
 
 /* A textarea that grows with its text, upwards when it sits at the bottom of
@@ -384,11 +552,88 @@ export function placeMenu(menu) {
   menu.dataset.placed = "";
 }
 
-export function scrollIntoView(element) {
+// ── Floating menus ──────────────────────────────────────────────────────────
+// A menu inside a dialog or a side panel was cut off by the panel's own
+// scrolling, and the dialog card's transform traps position: fixed as well
+// (designer, 21 October 2026: a popover must stay a popover, never push the
+// form). The browser's top layer (the popover attribute) draws the menu above
+// everything while it stays where it is in the document, so clicks, focus and
+// the dialog's focus trap behave as before. The menu sits against its trigger:
+// below it, or above when there is more room there; kept on screen; following
+// the trigger when the window resizes or the menu's content changes size.
+// Escape closes the menu, not the dialog under it.
+export function floatMenu(layer, anchor, menu, alignEnd, matchWidth) {
+  if (!layer || !anchor || !menu) return;
+  // A browser without the top layer still shows the menu, placed the same way.
+  if (typeof layer.showPopover !== "function") layer.removeAttribute("popover");
+  else if (!layer.matches(":popover-open")) {
+    try { layer.showPopover(); } catch { return; }
+  }
+  // A menu its stylesheet anchors to the right ("right: 0; left: auto") keeps
+  // that edge, as it did before it floated: read before any placing.
+  let end = !!alignEnd;
+  if (!end && typeof menu.computedStyleMap === "function") {
+    try { end = String(menu.computedStyleMap().get("left")) === "auto"; } catch { /* keep the start edge */ }
+  }
+  const gap = 4, margin = 8, least = 160;
+  let frame = 0;
+  // The trigger itself, when the anchor is a wrapper around it (an ActionMenu, a Popover's span).
+  const trigger = anchor.matches("[aria-haspopup]") ? anchor : anchor.querySelector("[aria-haspopup]") ?? anchor;
+  const place = () => {
+    frame = 0;
+    if (!layer.isConnected) { stop(); return; }
+    const a = trigger.getBoundingClientRect();
+    // As wide as the field at least (a select), never narrower than its own width.
+    if (matchWidth) menu.style.minWidth = `${Math.round(a.width)}px`;
+    menu.style.maxHeight = "";
+    const box = menu.getBoundingClientRect();
+    const below = window.innerHeight - a.bottom - gap - margin;
+    const above = a.top - gap - margin;
+    // Below the trigger when it fits, or when there is more room below than above.
+    const down = box.height <= below || below >= above;
+    const room = Math.max(down ? below : above, least);
+    if (box.height > room) menu.style.maxHeight = `${Math.round(room)}px`;
+    const height = Math.min(box.height, room);
+    const top = down ? a.bottom + gap : a.top - gap - height;
+    // From the trigger's start edge, or its end edge; switched when that side would run off the screen.
+    let left = end ? a.right - box.width : a.left;
+    if (!end && left + box.width > window.innerWidth - margin) left = a.right - box.width;
+    if (end && left < margin) left = a.left;
+    left = Math.max(margin, Math.min(left, window.innerWidth - margin - box.width));
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.left = `${Math.round(left)}px`;
+    menu.dataset.float = down ? "below" : "above";
+    menu.dataset.placed = "";
+  };
+  const later = () => { if (!frame) frame = requestAnimationFrame(place); };
+  // Escape closes the open menu first, wherever focus is (the trigger, the menu, a field of the form
+  // under it), and goes no further, so a dialog under the menu stays open.
+  const onKey = (event) => {
+    if (!layer.isConnected) { stop(); return; }
+    if (event.key !== "Escape") return;
+    event.stopPropagation();
+    event.preventDefault();
+    layer.querySelector("[data-float-dismiss]")?.click();
+  };
+  const watch = typeof ResizeObserver === "function" ? new ResizeObserver(later) : null;
+  function stop() {
+    window.removeEventListener("resize", later);
+    window.removeEventListener("scroll", later, true);
+    document.removeEventListener("keydown", onKey, true);
+    watch?.disconnect();
+  }
+  place();
+  window.addEventListener("resize", later);
+  window.addEventListener("scroll", later, true);
+  document.addEventListener("keydown", onKey, true);
+  watch?.observe(menu);
+}
+
+export function scrollIntoView(element, block) {
   if (!element) return;
   // One frame later, so the panel has been laid out before we measure it.
   requestAnimationFrame(() => {
-    element.scrollIntoView({ behavior: "smooth", block: "start" });
+    element.scrollIntoView({ behavior: "smooth", block: block || "start" });
   });
 }
 
@@ -466,7 +711,7 @@ export async function copyText(value) {
 
 export async function downloadFile(url, fileName) {
   try {
-    // Same-origin credentials allow protected OmniAI media without ever
+    // Same-origin credentials allow protected yára media without ever
     // forwarding session cookies to an external channel URL.
     const response = await fetch(url, { credentials: "same-origin" });
     if (!response.ok) return false;

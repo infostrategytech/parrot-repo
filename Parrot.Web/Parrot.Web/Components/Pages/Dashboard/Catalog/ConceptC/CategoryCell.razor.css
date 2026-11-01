@@ -1,0 +1,42 @@
+/* The category as A shows it, small and quiet under the type: plain text
+   that opens its menu, with the chevron only on hover or focus. */
+.category-cell-wrap { min-width: 0; max-width: 100%; }
+
+.category-cell-wrap ::deep .filter-popover__trigger {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-subtle);
+  background: transparent;
+  border-color: transparent;
+}
+.category-cell-wrap ::deep .filter-popover__trigger:hover,
+.category-cell-wrap ::deep .filter-popover__trigger[aria-expanded="true"] {
+  color: var(--colors-text-primary);
+  background: transparent;
+  border-color: transparent;
+}
+.category-cell-wrap ::deep .filter-popover__trigger > span { overflow: hidden; text-overflow: ellipsis; }
+.category-cell-wrap ::deep .filter-popover__trigger > .ds-icon { opacity: 0; transition: opacity var(--ds-motion-fast) ease; }
+.category-cell-wrap ::deep .filter-popover__trigger:hover > .ds-icon,
+.category-cell-wrap ::deep .filter-popover__trigger:focus-visible > .ds-icon,
+.category-cell-wrap ::deep .filter-popover__trigger[aria-expanded="true"] > .ds-icon { opacity: 1; }
+
+/* No category yet: said as an invitation, in the link colour on hover. */
+.category-cell-wrap ::deep .category-cell.is-empty .filter-popover__trigger:hover { color: var(--colors-text-link); }
+
+/* A new category, made right in the menu. */
+.category-cell__new {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: start;
+  padding: var(--spacing-sm);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.category-cell__new ::deep .ds-button { margin-top: var(--spacing-sm); }
+
+@media (prefers-reduced-motion: reduce) {
+  .category-cell-wrap ::deep .filter-popover__trigger > .ds-icon { transition: none; }
+}

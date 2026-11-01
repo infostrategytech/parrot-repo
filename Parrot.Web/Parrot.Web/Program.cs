@@ -2,14 +2,12 @@ using Parrot.Grpc.Contracts.Messaging.V1;
 using Parrot.Web.Components;
 using Parrot.Web.Features.Auth.ForgotPassword.Services;
 using Parrot.Web.Features.Dashboard.AiAgents.State;
-using Parrot.Web.Features.Dashboard.Catalog.State;
 using Parrot.Web.Features.Dashboard.Channels.Services;
 using Parrot.Web.Features.Dashboard.Channels.State;
 using Parrot.Web.Features.Dashboard.Contacts.State;
 using Parrot.Web.Components.Pages.Dashboard.BusinessSetup.Services;
 using Parrot.Web.Components.Pages.Dashboard.Conversations;
 using Parrot.Web.Features.Dashboard.QaInsights.State;
-using Parrot.Web.Features.Dashboard.TaskRequests.State;
 using Parrot.Web.Features.Dashboard.Workspace;
 using Parrot.Web.Features.Profile;
 using Parrot.Web.Features.Dashboard.Team.State;
@@ -83,6 +81,9 @@ builder.Services.AddScoped<ProfileClient>();
 builder.Services.AddScoped<WorkspaceClient>();
 builder.Services.AddScoped<IWorkspaceSetupService, WorkspaceSetupService>();
 builder.Services.AddScoped<WorkspacePrompt>();
+// The owner's team, and invite links opened before signing in.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.TeamClient>();
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.PendingInvite>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {
@@ -109,6 +110,10 @@ builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddScoped<ConversationClient>();
 builder.Services.AddScoped<CustomerClient>();
+// Linking a customer's profiles (reversible) stays hidden until the API has the links endpoints (customers-backend-requests).
+builder.Services.AddSingleton<ICustomerLinks, UnavailableCustomerLinks>();
+// No photo-reading service yet; photos are not offered in the import modal until one exists.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Customers.ICustomerListReader, Parrot.Web.Features.Dashboard.Customers.UnavailableCustomerListReader>();
 builder.Services.AddScoped<InboxUnreadState>();
 // The API has none of the extra inbox actions yet, so the inbox hides them.
 builder.Services.AddSingleton<IInboxFeatures, UnavailableInboxFeatures>();
@@ -154,14 +159,26 @@ builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentBrief
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IJobInterview, Parrot.Web.Features.Dashboard.AiAgents.UnavailableJobInterview>();
 // The business's knowledge as facts (what an agent uses): no API for it yet.
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory, Parrot.Web.Features.Dashboard.Knowledge.UnavailableKnowledgeMemory>();
+// The kind of business, once for the business; and which agents have been tested (both for the session).
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.BusinessKind>();
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.AgentReadiness>();
 // Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
-builder.Services.AddScoped<CatalogState>();
+// Products & Services: no catalog API connected yet, so items last for the session (catalog-backend-requests).
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore, Parrot.Web.Features.Dashboard.Catalog.SessionCatalogStore>();
+// The backend does not expose owned social content or extraction yet: posts and post links are not offered.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDiscovery, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDiscovery>();
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDraftReader, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDraftReader>();
+// No service reads a photo of a price list yet, so "Snap a photo" is not offered.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Catalog.IPriceListReader, Parrot.Web.Features.Dashboard.Catalog.UnavailablePriceListReader>();
 builder.Services.AddScoped<ChannelsState>();
 builder.Services.AddScoped<ContactsState>();
 builder.Services.AddScoped<ConversationsState>();
 builder.Services.AddScoped<QaInsightsState>();
-builder.Services.AddScoped<TaskRequestsState>();
+// Tasks, as the API keeps them for the session's workspace.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore, Parrot.Web.Features.Dashboard.TaskRequests.ApiTaskStore>();
+// The person's own time zone, read from their browser, so "Today" is their today.
+builder.Services.AddScoped<Parrot.Web.Services.UserClock>();
 builder.Services.AddScoped<TeamState>();
 
 WebApplication app = builder.Build();

@@ -77,8 +77,8 @@
                 }
             </span>
             <div class="manual__titles">
-                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Meta to OmniAI</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the three details OmniAI needs to send messages.</Typography>
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>Connect Meta to yára</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Add the three details yára needs to send messages.</Typography>
             </div>
             <ManualSectionAside Done="Reached > 1"
                                 IsCurrent="Reached == 1"
@@ -93,7 +93,7 @@
                    temporary token works today and silently takes the
                    connection down tomorrow. *@
                 <InlineError Tone="InlineErrorTone.Warning"
-                             Message="The temporary token on API Setup is fine for testing and expires after about a day. Use a permanent token when you want OmniAI to stay connected." />
+                             Message="The temporary token on API Setup is fine for testing and expires after about a day. Use a permanent token when you want yára to stay connected." />
 
                 <div class="manual__token-type" role="group" aria-label="Access token type">
                     <RowButton Class="@(Permanent ? "manual__token is-selected" : "manual__token")"
@@ -150,14 +150,14 @@
                     <Input FloatingLabel="Phone Number ID"
                            Value="@PhoneNumberId"
                            ValueChanged="PhoneNumberIdChanged"
-                           inputmode="numeric"
+                           Numeric="NumericInputKind.Integer"
                            maxlength="64"
                            HelperText="This is the ID shown in Meta, not your phone number." />
 
                     <Input FloatingLabel="WhatsApp Business Account ID"
                            Value="@BusinessAccountId"
                            ValueChanged="BusinessAccountIdChanged"
-                           inputmode="numeric"
+                           Numeric="NumericInputKind.Integer"
                            maxlength="64" />
 
                     @* type=password, autocomplete off, and cleared after
@@ -243,7 +243,7 @@
                 <Checkbox State="@(WebhookConfirmed ? CheckboxState.Checked : CheckboxState.Unchecked)"
                           StateChanged="@(state => WebhookConfirmedChanged.InvokeAsync(state == CheckboxState.Checked))"
                           Label="I verified the webhook and subscribed to messages"
-                          Description="This allows new customer messages to arrive in OmniAI." />
+                          Description="This allows new customer messages to arrive in yára." />
 
                 <Button disabled="@(!WebhookConfirmed || Busy)" @onclick="OnFinish">
                     <ChildContent>Continue to Message Test</ChildContent>

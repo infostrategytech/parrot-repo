@@ -1,0 +1,71 @@
+/* A price list in a window: three tabs for how it comes in, one place to drop or paste it, the photo while
+   it's read, and a file's columns with the first items they give. */
+
+.price-list {
+  /* Gaps in the token set: no border width, drop-area height, icon tile, photo height or measure. */
+  --ds-price-list-hairline: 1px;
+  --ds-price-list-drop: 200px;
+  --ds-price-list-icon: 48px;
+  --ds-price-list-photo: 240px;
+  --ds-price-list-measure: 44ch;
+
+  display: grid;
+  gap: var(--spacing-lg);
+  min-width: 0;
+  color: var(--colors-text-primary);
+}
+
+.price-list ::deep .price-list__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.price-list ::deep .price-list__ways { justify-self: start; }
+
+/* The whole area opens the file chooser. */
+.price-list ::deep .price-list__drop {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-height: var(--ds-price-list-drop);
+  padding: var(--spacing-2xl);
+  text-align: center;
+  background: var(--colors-surface-background);
+  border: var(--ds-price-list-hairline) dashed var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+  cursor: pointer;
+  transition: border-color var(--ds-motion-fast) ease, background var(--ds-motion-fast) ease;
+}
+.price-list ::deep .price-list__drop:hover,
+.price-list ::deep .price-list__drop:focus-visible { background: var(--colors-accent-brand-subtle); border-color: var(--colors-accent-brand-border); }
+.price-list ::deep .price-list__drop > span:not(.price-list__drop-icon) { max-width: var(--ds-price-list-measure); color: var(--colors-text-muted); }
+.price-list ::deep .price-list__drop strong { color: var(--colors-text-primary); }
+.price-list ::deep .price-list__drop-icon {
+  display: grid;
+  place-items: center;
+  width: var(--ds-price-list-icon);
+  height: var(--ds-price-list-icon);
+  color: var(--colors-icon-brand);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-lg);
+}
+
+.price-list__reading { display: grid; gap: var(--spacing-md); justify-items: center; padding: var(--spacing-lg) var(--spacing-none); }
+.price-list__reading-line { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.price-list__photo { display: block; max-width: 100%; max-height: var(--ds-price-list-photo); object-fit: contain; border-radius: var(--radius-radius-xl); }
+
+/* A file: the columns, then the first items they give. */
+.price-list__columns { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+.price-list__preview {
+  display: grid;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none) var(--spacing-lg);
+  list-style: none;
+  background: var(--colors-surface-background);
+  border-radius: var(--radius-radius-xl);
+}
+.price-list__preview-row { display: flex; gap: var(--spacing-lg); align-items: baseline; justify-content: space-between; padding: var(--spacing-sm) var(--spacing-none); }
+.price-list__preview-row + .price-list__preview-row { border-top: var(--ds-price-list-hairline) solid var(--colors-surface-border); }
+.price-list__preview-row ::deep .price-list__preview-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  .price-list ::deep .price-list__drop { transition: none; }
+}

@@ -1,0 +1,6 @@
+.customer-profiles { display: grid; gap: var(--spacing-md); min-width: 0; }
+.customer-profiles > ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.customer-profiles__channel { display: grid; grid-template-columns: var(--spacing-xl) minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-sm); padding-block: var(--spacing-xs); }
+.customer-profiles__channel > span { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.customer-profiles__channel ::deep small { color: var(--colors-text-muted); }
+.customer-profiles__channel ::deep strong { color: var(--colors-text-primary); overflow-wrap: anywhere; }

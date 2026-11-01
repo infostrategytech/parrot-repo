@@ -111,8 +111,13 @@ AnthropicSettings anthropicSettings = builder.Configuration.GetSection(Anthropic
     ?? new AnthropicSettings();
 
 // Database
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// The options are a singleton so the singleton factory below can share them;
+// the context itself stays one per request. With scoped options, Development's
+// startup validation refuses the factory and the API does not start.
+builder.Services.AddDbContext<ApplicationDbContext>(
+    options => options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")),
+    contextLifetime: ServiceLifetime.Scoped,
+    optionsLifetime: ServiceLifetime.Singleton);
 // Factory for singleton services (e.g. EfCustomerRepository) that create short-lived contexts.
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")),
@@ -335,6 +340,16 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // 20 invite emails (new or resent) per owner per hour. Per account, not per
+    // IP: sending needs a session, and every email goes to someone else's inbox.
+    options.AddPolicy(RateLimitPolicies.TeamInvite, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? ctx.User.FindFirst("sub")?.Value
+                ?? ctx.Connection.RemoteIpAddress?.ToString()
+                ?? "unknown",
+            _ => PerIp(20, 60)));
+
     // 20 profile or logo image uploads per IP per 10 minutes
     options.AddPolicy(RateLimitPolicies.ImageUpload, ctx =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -409,8 +424,12 @@ builder.Services.AddOpenTelemetry().WithMetrics(metrics => metrics
 builder.Services.AddScoped<IJwtHelper, JwtHelper>();
 builder.Services.AddScoped<IAgentRepository, AgentRepository>();
 builder.Services.AddScoped<IAgentService, AgentService>();
+builder.Services.AddScoped<IConnectionRepository, ConnectionRepository>();
+builder.Services.AddScoped<IConnectionService, ConnectionService>();
 builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
 builder.Services.AddScoped<CustomerService>();
+builder.Services.AddSingleton<Parrot.Application.Tasks.IWorkTaskRepository, Parrot.Infrastructure.Tasks.EfWorkTaskRepository>();
+builder.Services.AddScoped<Parrot.Application.Tasks.TaskService>();
 builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
 
 // Calls to the orchestrator carry a short-lived service token for the owner.
@@ -436,6 +455,16 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
 builder.Services.AddScoped<IWorkspaceService, WorkspaceService>();
+builder.Services.AddScoped<Parrot.Application.Teams.ITeamRepository, Parrot.Infrastructure.Teams.TeamRepository>();
+builder.Services.AddScoped<Parrot.Application.Teams.IWorkspaceConnectionDirectory, Parrot.Infrastructure.Teams.WorkspaceConnectionDirectory>();
+builder.Services.AddScoped<Parrot.Application.Teams.IWorkspaceAccessService, Parrot.Application.Teams.WorkspaceAccessService>();
+// Tells every API instance to forget a cached access answer the moment one forgets it.
+builder.Services.AddSingleton<Parrot.Api.Realtime.RedisAccessCacheBroadcast>();
+builder.Services.AddSingleton<Parrot.Application.Teams.IAccessCacheBroadcast>(sp => sp.GetRequiredService<Parrot.Api.Realtime.RedisAccessCacheBroadcast>());
+builder.Services.AddHostedService(sp => sp.GetRequiredService<Parrot.Api.Realtime.RedisAccessCacheBroadcast>());
+builder.Services.AddScoped<Parrot.Application.Teams.ITeamService, Parrot.Application.Teams.TeamService>();
+builder.Services.AddSingleton<Parrot.Application.Teams.InviteTokens>();
+builder.Services.AddScoped<Parrot.Application.Teams.IInviteSignUpService, Parrot.Application.Teams.InviteSignUpService>();
 
 // This is the only line that knows which object store is in play. Swapping S3
 // for another vendor means changing what IObjectStorage resolves to here and
@@ -539,11 +568,16 @@ builder.Services.AddSingleton<IOutboundJobPublisher, Parrot.Infrastructure.Messa
 // What the orchestrator's agents did, kept per event in MongoDB and pushed
 // to the owner's connections as it arrives; the AI Operations screens read it.
 builder.Services.AddSingleton<IAgentActivityStore, MongoAgentActivityStore>();
+// Narrows every push to the people allowed to see it.
+builder.Services.AddSingleton<Parrot.Api.Realtime.RealtimeAudience>();
+builder.Services.AddSingleton<Parrot.Api.Realtime.IRealtimeAudience>(sp => sp.GetRequiredService<Parrot.Api.Realtime.RealtimeAudience>());
 builder.Services.AddSingleton<Parrot.Api.Realtime.AgentEventsRouter>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.AgentEventsConsumer>();
 
 // Controllers & OpenAPI
-builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+// Every signed-in request is checked against the person's access in the
+// session's workspace; see WorkspaceAccessFilter.
+builder.Services.AddControllers(options => options.Filters.Add<Parrot.Api.Security.WorkspaceAccessFilter>()).ConfigureApiBehaviorOptions(options =>
 {
     Func<Microsoft.AspNetCore.Mvc.ActionContext, Microsoft.AspNetCore.Mvc.IActionResult> defaultResponseFactory = options.InvalidModelStateResponseFactory;
     options.InvalidModelStateResponseFactory = context =>
@@ -605,6 +639,13 @@ if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
     db.Database.Migrate();
 }
 
+// Every flag gets its row (email verification on), so it can be flipped in the database. Rows already there are left alone.
+using (IServiceScope scope = app.Services.CreateScope())
+{
+    await Parrot.Infrastructure.FeatureFlags.FeatureFlagSeeder.SeedAsync(
+        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>(), app.Logger);
+}
+
 // Off means anyone can create a working account without proving they own the
 // address: right for a deployment with no working mail, wrong for production.
 if (!builder.Configuration.GetValue("FeatureFlags:" + FeatureFlagKeys.RequireEmailVerification, true))
@@ -634,6 +675,9 @@ app.UseRawBodyCapture();
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+
+    // A browsable view of the same document, at /swagger.
+    app.UseSwaggerUI(options => options.SwaggerEndpoint("/openapi/v1.json", "Parrot API v1"));
 }
 
 if (!app.Environment.IsDevelopment())
@@ -643,9 +687,10 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.UseRateLimiter();
-
+// After authentication, so a policy can count per account (TeamInvite does);
+// before authorization, so a refused request is still counted, as before.
 app.UseAuthentication();
+app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();

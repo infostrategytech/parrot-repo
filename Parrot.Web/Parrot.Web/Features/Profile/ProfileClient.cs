@@ -101,6 +101,8 @@ public sealed class ProfileClient(HttpClient http, AuthState authState, TokenSto
             WorkspaceId = current.WorkspaceId,
             BusinessName = profile.BusinessName,
             LogoUrl = profile.LogoUrl,
+            Role = current.Role,
+            Permissions = current.Permissions,
         };
 
         await tokenStorage.SaveAsync(updated);

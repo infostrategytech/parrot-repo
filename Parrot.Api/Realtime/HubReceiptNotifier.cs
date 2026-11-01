@@ -11,13 +11,13 @@ namespace Parrot.Api.Realtime;
 /// Best effort, as <see cref="MessagePersistedRouter"/> is: nothing here is durable.
 /// </summary>
 public sealed class HubReceiptNotifier(IOnlineSessionStore sessions, IHubContext<MessagingHub> hub,
-    ILogger<HubReceiptNotifier> logger) : IReceiptNotifier
+    IRealtimeAudience audience, ILogger<HubReceiptNotifier> logger) : IReceiptNotifier
 {
     public async Task ReceiptsChangedAsync(string owner, Guid connection, string? customer, CancellationToken ct)
     {
         try
         {
-            IReadOnlyList<string> connections = await sessions.GetConnectionsAsync(owner, ct);
+            IReadOnlyList<string> connections = await audience.ForConversationAsync(owner, await sessions.GetConnectionsAsync(owner, ct), connection);
             if (connections.Count == 0) return;
             await hub.Clients.Clients(connections).SendAsync(MessagingHub.ReceiptsChangedMethod, new ReceiptsChanged(connection, customer), ct);
         }

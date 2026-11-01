@@ -1,0 +1,3 @@
+.task-assignee { display: flex; min-width: 0; }
+/* Nobody yet: said quietly, so the people who are on things stand out. */
+.task-assignee ::deep .filter-popover.is-nobody .filter-popover__trigger { color: var(--colors-text-muted); }

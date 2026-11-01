@@ -1,0 +1,111 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+@inject IOfferingDiscovery Discovery
+@implements IDisposable
+
+@* One item from a post's link (designer, 26 October 2026): a small window asks for the link, reads the post
+   while it says so, and hands what it read to the item's form, filled in, beside the post. Any public post
+   from Instagram, Facebook or TikTok; a private or missing one is said plainly, and the window stays. *@
+
+<Dialog Open="Open"
+        Title="Add from a post link"
+        Subtitle="From Instagram, Facebook or TikTok. We'll fill in the item details."
+        ConfirmLabel="Continue"
+        BusyLabel="Reading the post…"
+        Busy="_reading"
+        ConfirmDisabled="@string.IsNullOrWhiteSpace(_link)"
+        OnConfirm="ReadAsync"
+        OnCancel="CloseAsync">
+    <GlyphContent><Icon Name="IconName.RiLinksFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <div class="link-dialog">
+            <Input FloatingLabel="Post link" type="url" inputmode="url" maxlength="500" Value="@_link" Disabled="_reading"
+                   ValueChanged="value => { _link = value; _error = null; }" Error="@(_error is not null)" HelperText="@_error"
+                   @onkeydown="KeyAsync" />
+            @if (_reading)
+            {
+                <span class="link-dialog__reading" role="status">
+                    <CadenceLoader Kind="CadenceLoaderKind.RelayDots" Size="16" />
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Reading the post…</Typography>
+                </span>
+            }
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    [Parameter, EditorRequired] public bool Open { get; set; }
+
+    /// <summary>The items on the list, so a post about one of them updates it.</summary>
+    [Parameter] public IReadOnlyList<CatalogEntry> Items { get; set; } = [];
+
+    [Parameter] public EventCallback OnClose { get; set; }
+
+    /// <summary>The post was read: its item, filled in, to check on the form.</summary>
+    [Parameter] public EventCallback<PostDraft> OnRead { get; set; }
+
+    // The demo's reader; the backend's, once it exists, comes through Program.cs (catalog-backend-requests).
+    private readonly ICaptionReader _reader = new DemoCaptionReader();
+    private CancellationTokenSource? _cancel;
+    private string? _link, _error;
+    private bool _reading, _wasOpen;
+
+    protected override void OnParametersSet()
+    {
+        // Each time it opens, it starts empty.
+        if (Open && !_wasOpen) { _link = null; _error = null; _reading = false; }
+        _wasOpen = Open;
+    }
+
+    private async Task KeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter") await ReadAsync();
+    }
+
+    private async Task ReadAsync()
+    {
+        var link = (_link ?? string.Empty).Trim();
+        if (_reading || link.Length == 0) return;
+        if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https"))
+        {
+            _error = "Paste the whole link, starting with https://";
+            return;
+        }
+        _cancel?.Cancel();
+        _cancel = new CancellationTokenSource();
+        _reading = true;
+        try
+        {
+            var result = await Discovery.AnalyzeLinkAsync(link, _cancel.Token);
+            if (result.Suggestions.FirstOrDefault() is not { } found) { _error = "We couldn't find a post at that link."; return; }
+            var post = new SocialPost($"link-{Guid.NewGuid():N}", found.SourceChannel, found.SourceImageUrl, found.SourceExcerpt, found.SourceLabel, link, found.SourceDaysAgo);
+            var reading = await _reader.ReadAsync(post.Caption, _cancel.Token);
+            await OnRead.InvokeAsync(PostDraft.From(post, reading, Items));
+        }
+        catch (UnauthorizedAccessException)
+        {
+            _error = "That post is private or no longer there. Try another link.";
+        }
+        catch (OperationCanceledException)
+        {
+            // Closed while reading.
+        }
+        catch (Exception exception) when (exception is HttpRequestException or NotSupportedException)
+        {
+            _error = "We couldn't open that link. Check it and try again.";
+        }
+        finally
+        {
+            _reading = false;
+        }
+    }
+
+    private async Task CloseAsync()
+    {
+        _cancel?.Cancel();
+        await OnClose.InvokeAsync();
+    }
+
+    public void Dispose() => _cancel?.Cancel();
+}

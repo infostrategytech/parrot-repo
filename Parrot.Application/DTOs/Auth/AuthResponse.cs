@@ -20,5 +20,9 @@ public record AuthResponse(
     [property: Description("The phone number in international display form, e.g. +2348012345678, or null when none is on the account.")]
     string? PhoneNumber,
     [property: Description("The workspace this session works in. Everything the token reads and writes belongs to it.")]
-    string WorkspaceId
+    string WorkspaceId,
+    [property: Description("\"Owner\" in a workspace the person made; otherwise the role they were given, e.g. \"Analyst\".")]
+    string Role,
+    [property: Description("What this session may do in the workspace, e.g. conversations.reply. An owner has every permission, team.manage and workspace.manage among them.")]
+    IReadOnlyList<string> Permissions
 );

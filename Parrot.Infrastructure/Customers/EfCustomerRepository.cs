@@ -18,6 +18,7 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         string? channel,
         int skip,
         int take,
+        IReadOnlySet<Guid>? connections,
         CancellationToken ct)
     {
         await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
@@ -25,6 +26,13 @@ public sealed class EfCustomerRepository(IDbContextFactory<ApplicationDbContext>
         IQueryable<Customer> query = db.Customers
             .Include(c => c.Identities)
             .Where(c => c.WorkspaceId == ownerUserId);
+
+        // A team member limited to some channels sees the customers who wrote on them.
+        if (connections is not null)
+        {
+            List<Guid> reachable = [.. connections];
+            query = query.Where(c => c.Identities.Any(i => reachable.Contains(i.ConnectionId)));
+        }
 
         if (!string.IsNullOrWhiteSpace(search))
         {

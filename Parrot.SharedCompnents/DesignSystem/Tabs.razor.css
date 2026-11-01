@@ -81,6 +81,54 @@
 .ds-tabs--flat ::deep .ds-tab:disabled { cursor: not-allowed; opacity: var(--ds-tabs-disabled-opacity); }
 .ds-tabs--flat ::deep .ds-tab.is-active { color: var(--colors-text-primary); background: var(--colors-surface-muted); }
 
+/* Tray: a page's views (Products & Services, Settings, Tasks). A light tray, filled neutral subtle with no edge
+   (designer, 25 October 2026: the darker one was too heavy); the chosen view a raised white card. On a narrow
+   screen it scrolls sideways without a bar rather than wrapping. */
+.ds-tabs--tray {
+  /* Missing from the token set: no tab height (Products' and Settings' own). */
+  --ds-tabs-tray-tab: 34px;
+
+  display: flex;
+  gap: var(--spacing-2xs);
+  width: fit-content;
+  max-width: 100%;
+  padding: var(--spacing-xs);
+  overflow-x: auto;
+  scrollbar-width: none;
+  background: var(--colors-accent-neutral-subtle);
+  border-radius: var(--radius-radius-full);
+}
+.ds-tabs--tray::-webkit-scrollbar { display: none; }
+.ds-tabs--tray ::deep .ds-tab {
+  display: inline-flex;
+  flex: none;
+  gap: var(--spacing-xs);
+  align-items: center;
+  min-height: var(--ds-tabs-tray-tab);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-muted);
+  white-space: nowrap;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+}
+.ds-tabs--tray ::deep .ds-tab:hover:not(.is-active) { background: var(--colors-interaction-hover); }
+/* Raised: white on the light tray, and a step lighter than the tray in dark mode. */
+.ds-tabs--tray ::deep .ds-tab.is-active {
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-elevated);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
+}
+.ds-tabs--tray ::deep .ds-tab__count {
+  display: grid;
+  place-items: center;
+  min-width: var(--spacing-xl);
+  padding: var(--spacing-none) var(--spacing-xs);
+  color: var(--colors-text-subtle);
+  border-radius: var(--radius-radius-full);
+}
+.ds-tabs--tray ::deep .ds-tab.is-active .ds-tab__count { color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); }
+
 /* Underline: a page's sections. A hairline under the whole row, the chosen
    tab underlined in the brand colour and in full-strength text, the others
    muted; on a narrow screen the row scrolls sideways rather than wrapping. */

@@ -1,3 +1,4 @@
+using Parrot.Application.Teams;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -75,6 +76,7 @@ public class ProfileController : ControllerBase
     /// about where its files live.
     /// </summary>
     [HttpPost("image")]
+    [AllowWithoutWorkspace]
     // 5 MB of image plus the multipart framing; a bigger body is refused before it is buffered.
     [RequestSizeLimit(6 * 1024 * 1024)]
     [EnableRateLimiting(RateLimitPolicies.ImageUpload)]

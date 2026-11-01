@@ -1,5 +1,6 @@
 @page "/ai-operations"
 @page "/dashboard/ai-agents"
+@attribute [RequiresAccess(AccessRules.Agents)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject AiAgentsState AiAgentsState
@@ -24,7 +25,7 @@
    sample figures in demo mode; real mode has no feed yet, so they are
    hidden there (see agents-backend-requests). *@
 
-<PageTitle>AI Operations · OmniAI</PageTitle>
+<PageTitle>AI Operations · yára</PageTitle>
 
 @* A new agent is created in a full-screen flow of its own (AgentCreate),
    then configured on its page (Concept B, the one kept: designer, 15 October 2026). *@

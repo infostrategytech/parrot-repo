@@ -1,0 +1,156 @@
+/* Products & Services, Concept E: Concept C's page (designer, 25 October 2026), laid out as Tasks is: the gutter
+   outside, then everything on one 1440 measure, centred; the table on a white card. */
+
+.products-e {
+  /* Gaps in the token set: no page-gutter, page-width, thumbnail, search-width or border-width scale.
+     The gutter and the cap are the Tasks page's. */
+  --ds-products-e-gutter: clamp(28px, 4vw, 66px);
+  --ds-products-e-max: 1440px;
+  --ds-products-e-hairline: 1px;
+  /* The card's edge and the lines inside the table, half a hairline (designer, 25 October 2026: subtle). */
+  --ds-products-e-divider: 0.5px;
+  --ds-products-e-photo: 48px;
+  --ds-products-e-select: 32px;
+  --ds-products-e-search: 300px;
+  --ds-products-e-mark: 28px;
+
+  display: grid;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-4xl) var(--ds-products-e-gutter) var(--spacing-6xl);
+  color: var(--colors-text-primary);
+}
+
+/* Every block on the one measure, and free to shrink: a wide one scrolls inside itself. */
+.products-e > ::deep * { width: min(var(--ds-products-e-max), 100%); min-width: 0; margin-inline: auto; }
+
+.products-e__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg) var(--spacing-xl);
+  align-items: flex-end;
+  justify-content: space-between;
+}
+.products-e__heading { display: grid; gap: var(--spacing-sm); min-width: 0; }
+.products-e__heading ::deep h1 { margin: var(--spacing-none); }
+.products-e__heading ::deep .products-e__lede { margin: var(--spacing-none); color: var(--colors-text-secondary); }
+.products-e__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+
+/* The first visit: one invitation with the same actions as the populated list. */
+
+.products-e__start {
+  display: grid;
+  gap: var(--spacing-xl);
+  padding: clamp(var(--spacing-xl), 4vw, var(--spacing-4xl));
+  justify-items: start;
+  background: var(--colors-surface-card);
+  border: var(--ds-products-e-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.products-e__start-head { display: grid; gap: var(--spacing-sm); }
+.products-e__start-head ::deep h2,
+.products-e__start-head ::deep p { margin: var(--spacing-none); }
+.products-e__start-head ::deep p { color: var(--colors-text-secondary); }
+
+/* Quiet visual markers make the alternative methods easy to scan. */
+.products-e__way-mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-products-e-mark);
+  height: var(--ds-products-e-mark);
+  border-radius: var(--radius-radius-md);
+}
+.products-e__way-mark.is-one { color: var(--colors-icon-brand); background: var(--colors-accent-brand-subtle); }
+.products-e__way-mark.is-list { color: var(--colors-accent-teal-text); background: var(--colors-accent-teal-subtle); }
+.products-e__way-mark.is-link { color: var(--colors-accent-violet-text); background: var(--colors-accent-violet-subtle); }
+
+/* Social sources use their own colours. */
+.products-e__channels { display: inline-flex; gap: var(--spacing-2xs); align-items: center; }
+
+/* ── Finding and changing items ──────────────────────────────────────────── */
+
+.products-e__toolbar,
+.products-e__bulk {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+}
+.products-e__toolbar > ::deep .products-e__views { min-width: 0; max-width: 100%; overflow-x: auto; }
+.products-e__toolbar ::deep .ds-tab { white-space: nowrap; }
+.products-e__find { display: flex; gap: var(--spacing-sm); align-items: center; }
+.products-e__find ::deep .ds-search-field { width: var(--ds-products-e-search); }
+
+/* Items chosen: the toolbar becomes what can be done to them. */
+.products-e__bulk {
+  justify-content: flex-start;
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--colors-accent-brand-subtle);
+  border: var(--ds-products-e-hairline) solid var(--colors-accent-brand-border);
+  border-radius: var(--radius-radius-xl);
+}
+.products-e__bulk ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.products-e__bulk-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; margin-left: auto; }
+
+/* ── The table ───────────────────────────────────────────────────────────── */
+/* The table, its card and its pages are the shared DataTable's (designer, 28 October 2026); the rows draw
+   their own columns (OfferRow), so the head always lines up. */
+
+/* New posts to review: one quiet line on a white card, above the list. */
+.products-e__new {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-products-e-divider) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.products-e__new ::deep p { flex: 1 1 auto; margin: var(--spacing-none); }
+.products-e__new-actions { display: flex; gap: var(--spacing-xs); align-items: center; }
+
+/* By category: each section opens with its name and count, and can be chosen whole while choosing. */
+.products-e__section-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-2xl);
+  background: var(--colors-surface-muted);
+  border-bottom: var(--ds-products-e-divider) solid var(--colors-surface-border);
+}
+.products-e__section + .products-e__section .products-e__section-head { border-top: var(--ds-products-e-divider) solid var(--colors-surface-border); }
+.products-e__section-select { display: grid; place-items: center; }
+.products-e__section-title { display: flex; gap: var(--spacing-sm); align-items: baseline; }
+.products-e__section-title ::deep strong { color: var(--colors-text-primary); }
+.products-e__section-title ::deep span { color: var(--colors-text-muted); }
+
+/* In the category menu: show the list by category, and manage categories. */
+.products-e__category-tools {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-top: var(--ds-products-e-hairline) solid var(--colors-surface-border);
+}
+
+.products-e__skeleton {
+  display: grid;
+  grid-template-columns: var(--ds-products-e-photo) minmax(0, 1fr);
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+}
+.products-e__skeleton + .products-e__skeleton { border-top: var(--ds-products-e-hairline) solid var(--colors-surface-border); }
+
+@media (max-width: 1024px) {
+  .products-e__find { flex: 1 1 100%; }
+  .products-e__find ::deep .ds-search-field { flex: 1 1 auto; width: auto; }
+  .products-e__bulk-actions { margin-left: 0; }
+}
+
+.products-e ::deep .products-e__draft-note {
+  /* Keep the page's shared auto inline margins, including above its 1440px content cap. */
+  margin-block: var(--spacing-none);
+  color: var(--colors-text-secondary);
+}

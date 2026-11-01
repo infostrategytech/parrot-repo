@@ -16,4 +16,13 @@ public interface IProfileService
     /// entered; an empty name or logo URL clears that field.
     /// </summary>
     Task<ProfileResponse> UpdateAsync(string userId, string workspaceId, UpdateProfileRequest request);
+
+    /// <summary>The workspace the person always opens on sign-in, or null when they resume where they left off.</summary>
+    Task<string?> GetDefaultWorkspaceAsync(string userId);
+
+    /// <summary>
+    /// Sets "When I sign in": a workspace to always open, which the person has to
+    /// own or have access to, or null to resume where they left off.
+    /// </summary>
+    Task SetDefaultWorkspaceAsync(string userId, string? workspaceId);
 }

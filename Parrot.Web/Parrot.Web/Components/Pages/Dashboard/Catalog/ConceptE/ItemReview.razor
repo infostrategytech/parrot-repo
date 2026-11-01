@@ -1,0 +1,294 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using Parrot.Web.Features.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Catalog.ConceptE
+@inject AuroraInterop Interop
+@inject NavigationManager Navigation
+
+@* Imported items are drafts, not catalogue changes. The queue is read-only; each item is confirmed on
+   the same full form as manual entry. One item goes straight to that form. A batch is added only after
+   every included item has been reviewed and passes the same validation again at the save boundary. *@
+
+@if (_editing is { } editing)
+{
+    <ItemForm @key="editing.Key" @ref="_form"
+              Item="editing.Item" Source="editing.Post" Checks="ReviewChecks(editing)"
+              Match="editing.Match" UpdateMatch="editing.Update" Categories="Categories" CreateCategory="CreateCategory"
+              Reviewing
+              RestoredDraft="_edits.GetValueOrDefault(editing.Key)"
+              ReviewPosition="@($"Item {Drafts.IndexOf(editing) + 1} of {Drafts.Count}")"
+              BackLabel="@(_singleItem ? "Products & Services" : "Imported items")"
+              SubmitLabel="@FormSubmitLabel" FinalReview="_singleItem" OnPrevious="PreviousAction"
+              OnBack="BackFromItemAsync" Save="ConfirmItemAsync">
+        <HeaderActions>
+            @if (Source.Photo is not null) { @PhotoAction }
+        </HeaderActions>
+    </ItemForm>
+}
+else
+{
+<main class="review" aria-labelledby="review-title" @ref="_queue" tabindex="-1">
+    <header class="review__top">
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="review__back" disabled="@_saving" @onclick="LeaveAsync">
+            <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+            <ChildContent>Products &amp; Services</ChildContent>
+        </Button>
+        <div class="review__summary">
+            <div class="review__heading">
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1" id="review-title">@Heading</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="review__lede">@(CanAdd ? "Your selected items are ready to add." : "Review each item before adding it to your products and services.")</Typography>
+            </div>
+            @if (Source.Photo is not null) { @PhotoAction }
+        </div>
+    </header>
+
+    <div class="review__layout">
+        <DataTable Label="Imported items" aria-rowcount="@(Drafts.Count + 1)" aria-colcount="4">
+            <ChildContent>
+                <OfferRow Head Including ReviewOnly Disabled="_saving" HeadState="IncludeState" OnSelectAll="IncludeAll" />
+                <div role="rowgroup">
+                    @foreach (var draft in Drafts)
+                    {
+                        var current = draft;
+                        <OfferRow @key="current.Key" Item="current.Item" Selected="current.Include"
+                                  Including ReviewOnly Disabled="_saving" Channel="@current.Post?.Channel"
+                                  OnSelect="on => current.Include = on" OnOpen="() => OpenItem(current)">
+                            <Note>
+                                @if (current.Update && current.Match is { } match)
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"Updates {match.Name}")</Typography>
+                                }
+                                else if (current.MaybeMany)
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">May show more than one item</Typography>
+                                }
+                            </Note>
+                            <ReviewStatus>
+                                <StatusBadge Tone="@(!current.Include ? StatusTone.Neutral : current.Ready ? StatusTone.Success : CatalogReviewValidation.Issue(current.Item) is not null ? StatusTone.Warning : StatusTone.Neutral)">
+                                    @(!current.Include ? "Left out" : current.Ready ? "Ready" : CatalogReviewValidation.Issue(current.Item) is not null ? "Needs details" : "To review")
+                                </StatusBadge>
+                            </ReviewStatus>
+                            <ReviewAction>
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_saving"
+                                        aria-label="@($"Review {current.Item.Name}")" @onclick="() => OpenItem(current)">Review</Button>
+                            </ReviewAction>
+                        </OfferRow>
+                    }
+                </div>
+            </ChildContent>
+            @* How far the review has got, in the table's footer band as every table's count is. *@
+            <Footer><Typography TextStyle="TextStyle.Small12Medium" As="span" role="status">@ProgressLabel</Typography></Footer>
+        </DataTable>
+    </div>
+
+    <footer class="review__bar">
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" />
+        }
+        <Button Busy="_saving" disabled="@(!CanAdd)" @onclick="AddAllAsync">@AddLabel</Button>
+    </footer>
+</main>
+}
+
+@if (Source.Photo is { } photo)
+{
+    <Dialog Open="_photoOpen" Title="Your price list" Size="DialogSize.Wide" Dismissible HideFooter OnCancel="ClosePhoto" OnConfirm="ClosePhoto">
+        <Body><img class="review__photo-preview" src="@photo" alt="The price-list photo you imported" /></Body>
+    </Dialog>
+}
+
+<NavigationLock ConfirmExternalNavigation="@(Drafts.Count > 0 && !_saving)" OnBeforeInternalNavigation="ConfirmNavigationAsync" />
+<Dialog Open="_leaving" Type="DialogType.Destructive" Title="Leave this import?"
+        ConfirmLabel="Leave" CancelLabel="Keep reviewing" OnCancel="CancelLeave" OnConfirm="ConfirmLeaveAsync">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p">Items you haven't added and their edits won't be kept.</Typography></Body>
+</Dialog>
+
+@code {
+    [Parameter, EditorRequired] public List<ReviewDraft> Drafts { get; set; } = [];
+    [Parameter, EditorRequired] public ReviewSource Source { get; set; } = new(null, []);
+    [Parameter] public IReadOnlyList<string> Categories { get; set; } = [];
+    [Parameter] public Func<string, Task<string?>>? CreateCategory { get; set; }
+    [Parameter, EditorRequired] public Func<CatalogEntry, bool, Task<string?>> Save { get; set; } = (_, _) => Task.FromResult<string?>(null);
+    [Parameter] public EventCallback<string> OnBrought { get; set; }
+    [Parameter] public EventCallback OnBack { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<CatalogEntry>> OnDone { get; set; }
+
+    private ReviewDraft? _editing;
+    private ItemForm? _form;
+    private ElementReference _queue;
+    private string? _error;
+    private bool _saving, _leaving, _singleItem, _focusQueue, _photoOpen;
+    private bool _allowNavigation;
+    private string? _pendingNavigation;
+    private readonly Dictionary<string, ItemForm.DraftValues> _edits = [];
+    private readonly List<CatalogEntry> _saved = [];
+    private List<ReviewDraft> Included => [.. Drafts.Where(draft => draft.Include)];
+    private bool CanAdd => Included.Count > 0 && Included.All(draft => draft.Ready);
+
+    // The source stays available without narrowing the shared review table or becoming an item photo.
+    private RenderFragment PhotoAction => @<Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_saving" @onclick="() => _photoOpen = true">
+        <IconLeft><Icon Name="IconName.RiImageFill" /></IconLeft>
+        <ChildContent>View photo</ChildContent>
+    </Button>;
+
+    private void ClosePhoto() => _photoOpen = false;
+
+    protected override void OnInitialized()
+    {
+        // Stable for the whole review: editing an item never moves its row.
+        var order = Drafts.OrderBy(draft => CatalogReviewValidation.Issue(draft.Item) is null ? 1 : 0).ToList();
+        Drafts.Clear(); Drafts.AddRange(order);
+        _singleItem = Drafts.Count == 1;
+        if (_singleItem) _editing = Drafts[0];
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusQueue && _editing is null)
+        {
+            _focusQueue = false;
+            await Interop.ScrollIntoViewAsync(_queue);
+            await _queue.FocusAsync(preventScroll: true);
+        }
+    }
+
+    private string ItemCount => Drafts.Count == 1 ? "1 item" : $"{Drafts.Count} items";
+    private string Heading => Source switch
+    {
+        { Channels.Count: > 0 } => $"{ItemCount} from your posts",
+        { List: ImportSource.Photo } => $"{ItemCount} from your photo",
+        { List: ImportSource.Sheet, FileName: { } file } => $"{ItemCount} from {file}",
+        _ => $"{ItemCount} from your list",
+    };
+
+    private string ProgressLabel => Included.Count == 0 ? "No items selected"
+        : $"{Included.Count(draft => draft.Ready)} of {Included.Count} selected items reviewed";
+
+    private string AddLabel
+    {
+        get
+        {
+            var updates = Included.Count(draft => draft.Update);
+            var additions = Included.Count - updates;
+            if (Included.Count == 0) return "Add items";
+            if (updates == 0) return Included.Count == 1 ? "Add 1 item" : $"Add {Included.Count} items";
+            if (additions == 0) return Included.Count == 1 ? "Update 1 item" : $"Update {Included.Count} items";
+            return $"Add {additions} and update {updates}";
+        }
+    }
+
+    private string FormSubmitLabel => _singleItem ? (_editing?.Update == true ? "Update item" : "Add item")
+        : NextToReview is not null ? "Confirm and next" : "Confirm item";
+    private ReviewDraft? NextToReview => Included.SkipWhile(draft => draft != _editing).Skip(1).FirstOrDefault(draft => !draft.Ready)
+        ?? Included.FirstOrDefault(draft => draft != _editing && !draft.Ready);
+    private ReviewDraft? Previous => Included.TakeWhile(draft => draft != _editing).LastOrDefault();
+    private EventCallback PreviousAction => Previous is null ? default : EventCallback.Factory.Create(this, PreviousItem);
+    private CheckboxState IncludeState => Drafts.All(draft => draft.Include) ? CheckboxState.Checked
+        : Drafts.Any(draft => draft.Include) ? CheckboxState.Indeterminate : CheckboxState.Unchecked;
+
+    private void IncludeAll()
+    {
+        if (_saving) return;
+        var include = !Drafts.All(draft => draft.Include);
+        foreach (var draft in Drafts) draft.Include = include;
+    }
+
+    private void OpenItem(ReviewDraft draft)
+    {
+        if (_saving) return;
+        _editing = draft; _form = null;
+    }
+
+    private void RememberCurrent()
+    {
+        if (_editing is not { } draft || _form is null) return;
+        _edits[draft.Key] = _form.CaptureState();
+        if (!_form.HasChanges) return;
+        draft.Item = _form.CaptureDraft();
+        draft.Update = draft.Match is { } match && draft.Item.Id == match.Id;
+        draft.Reviewed = false;
+    }
+
+    private async Task BackFromItemAsync()
+    {
+        RememberCurrent();
+        if (_singleItem) { await LeaveAsync(); return; }
+        ShowQueue();
+    }
+
+    private void PreviousItem()
+    {
+        var previous = Previous;
+        RememberCurrent();
+        if (previous is not null) OpenItem(previous);
+    }
+
+    private void ShowQueue() { _editing = null; _form = null; _focusQueue = true; }
+
+    private static IReadOnlyList<string> ReviewChecks(ReviewDraft draft) => draft.Reviewed ? []
+        : [.. draft.Checks.Where(check => !check.StartsWith("No name", StringComparison.Ordinal) && !check.StartsWith("No price", StringComparison.Ordinal))];
+
+    private async Task<string?> ConfirmItemAsync(CatalogEntry entry, bool _)
+    {
+        if (_editing is not { } draft || _saving) return "Please wait for this item to finish saving.";
+        if (CatalogReviewValidation.Issue(entry) is { } issue) return issue;
+        draft.Item = entry; draft.Reviewed = true; draft.Include = true;
+        draft.Update = draft.Match is { } match && entry.Id == match.Id;
+        _edits.Remove(draft.Key);
+        if (_singleItem) return await SaveIncludedAsync();
+        var next = NextToReview;
+        if (next is null) ShowQueue(); else OpenItem(next);
+        StateHasChanged();
+        return null;
+    }
+
+    private async Task AddAllAsync() => await SaveIncludedAsync();
+
+    private async Task<string?> SaveIncludedAsync()
+    {
+        if (_saving) return "Please wait for the current save to finish.";
+        if (!CanAdd) return _error = "Review the selected items and complete their details first.";
+        _saving = true; _error = null;
+        try
+        {
+            foreach (var draft in Included)
+            {
+                var entry = draft.Item.Copy();
+                if (!draft.Update) entry.Id = string.Empty;
+                entry.Status = CatalogStatus.Live;
+                var error = await Save(entry, false);
+                if (error is not null) return _error = error;
+                _saved.Add(draft.Item);
+                // A retry includes only unsaved items, even after a partial batch failure.
+                Drafts.Remove(draft); _edits.Remove(draft.Key);
+                if (draft.Post is { } post) await OnBrought.InvokeAsync(post.Id);
+            }
+            await OnDone.InvokeAsync(_saved.ToList());
+            return null;
+        }
+        finally { _saving = false; }
+    }
+
+    private Task LeaveAsync()
+    {
+        if (!_saving) _leaving = true;
+        return Task.CompletedTask;
+    }
+
+    private Task ConfirmNavigationAsync(Microsoft.AspNetCore.Components.Routing.LocationChangingContext context)
+    {
+        if (_allowNavigation || Drafts.Count == 0) return Task.CompletedTask;
+        context.PreventNavigation();
+        if (!_saving) { _pendingNavigation = context.TargetLocation; _leaving = true; StateHasChanged(); }
+        return Task.CompletedTask;
+    }
+
+    private void CancelLeave() { _leaving = false; _pendingNavigation = null; }
+
+    private async Task ConfirmLeaveAsync()
+    {
+        _leaving = false;
+        if (_pendingNavigation is { } target) { _allowNavigation = true; Navigation.NavigateTo(target); }
+        else await OnBack.InvokeAsync();
+    }
+}

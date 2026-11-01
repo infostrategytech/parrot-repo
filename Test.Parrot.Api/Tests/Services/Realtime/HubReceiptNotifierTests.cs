@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
@@ -25,7 +26,7 @@ public class HubReceiptNotifierTests
     {
         Mock<IHubContext<MessagingHub>> hub = new();
         hub.SetupGet(h => h.Clients).Returns(_clients.Object);
-        return new HubReceiptNotifier(_sessions, hub.Object, NullLogger<HubReceiptNotifier>.Instance);
+        return new HubReceiptNotifier(_sessions, hub.Object, new PassThroughAudience(), NullLogger<HubReceiptNotifier>.Instance);
     }
 
     private void VerifyPushed(Times times) => _proxy.Verify(p => p.SendCoreAsync(

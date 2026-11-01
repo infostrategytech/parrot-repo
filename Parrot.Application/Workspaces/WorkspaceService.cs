@@ -2,6 +2,7 @@ using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Workspaces;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
+using Parrot.Application.Teams;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
@@ -10,18 +11,62 @@ namespace Parrot.Application.Workspaces;
 public class WorkspaceService : IWorkspaceService
 {
     private readonly IWorkspaceRepository _repository;
+    private readonly ITeamRepository _team;
+    private readonly IWorkspaceAccessService _access;
     private readonly IAppLogger<WorkspaceService> _logger;
 
-    public WorkspaceService(IWorkspaceRepository repository, IAppLogger<WorkspaceService> logger)
+    public WorkspaceService(
+        IWorkspaceRepository repository,
+        ITeamRepository team,
+        IWorkspaceAccessService access,
+        IAppLogger<WorkspaceService> logger)
     {
         _repository = repository;
+        _team = team;
+        _access = access;
         _logger = logger;
     }
 
-    public async Task<IReadOnlyList<WorkspaceResponse>> ListAsync(string userId, string currentWorkspaceId)
+    // The owned ones first, oldest first, then the ones the person was granted.
+    public async Task<IReadOnlyList<WorkspaceResponse>> ListAsync(string userId, string currentWorkspaceId, string? defaultWorkspaceId = null)
     {
         IReadOnlyList<Workspace> owned = await _repository.ListByOwnerAsync(userId);
-        return owned.Select(w => ToResponse(w, currentWorkspaceId)).ToList();
+        List<WorkspaceResponse> listed = owned.Select(w => ToResponse(w, currentWorkspaceId)).ToList();
+
+        foreach ((Workspace workspace, string role, string? teamName) in await ListGrantedAsync(userId))
+        {
+            listed.Add(ToResponse(workspace, currentWorkspaceId, role) with { TeamName = teamName });
+        }
+
+        return listed.Select(w => w with { IsDefault = w.Id == defaultWorkspaceId }).ToList();
+    }
+
+    // Every workspace other owners' grants reach, one business after another,
+    // with the role the person holds there (a workspace's own grant, else the
+    // all-workspaces one) and the name the business goes by.
+    private async Task<List<(Workspace Workspace, string Role, string? TeamName)>> ListGrantedAsync(string userId)
+    {
+        List<(Workspace, string, string?)> granted = [];
+        IReadOnlyList<WorkspaceGrant> grants = await _team.ListGrantsForUserAsync(userId);
+
+        foreach (IGrouping<string, WorkspaceGrant> team in grants.Where(g => g.OwnerId != userId).GroupBy(g => g.OwnerId))
+        {
+            List<WorkspaceGrant> held = team.ToList();
+            IReadOnlyList<Workspace> theirs = await _repository.ListByOwnerAsync(team.Key);
+            string? teamName = theirs.FirstOrDefault(w => !string.IsNullOrWhiteSpace(w.Name))?.Name;
+
+            foreach (Workspace workspace in theirs)
+            {
+                // The role as people see it, built-in or the owner's own, as the access check names it.
+                if (WorkspaceAccessService.PickGrant(held, workspace.Id) is not null
+                    && await _access.GetAsync(userId, workspace.Id) is { } access)
+                {
+                    granted.Add((workspace, access.Role, teamName));
+                }
+            }
+        }
+
+        return granted;
     }
 
     public async Task<WorkspaceResponse> CreateAsync(string userId, CreateWorkspaceRequest request)
@@ -64,6 +109,7 @@ public class WorkspaceService : IWorkspaceService
 
         workspace.UpdatedAt = DateTime.UtcNow;
         await _repository.UpdateAsync(workspace);
+        _access.Forget(workspace.Id, userId);
 
         using (_logger.BeginEntityScope("Workspace", workspace.Id))
         {
@@ -85,19 +131,44 @@ public class WorkspaceService : IWorkspaceService
         return workspace;
     }
 
-    public async Task<Workspace> ResolveForSignInAsync(ApplicationUser user)
+    public async Task<WorkspaceAccess> GetAccessibleAsync(string userId, string workspaceId)
     {
-        IReadOnlyList<Workspace> owned = await _repository.ListByOwnerAsync(user.Id);
-
-        Workspace? last = owned.FirstOrDefault(w => w.Id == user.LastWorkspaceId);
-        if (last is not null)
+        WorkspaceAccess? access = await _access.GetAsync(userId, workspaceId);
+        if (access is null)
         {
-            return last;
+            _logger.LogWarning("Workspace {WorkspaceId} not reachable for {UserId}", workspaceId, userId);
+            throw new NotFoundException("Workspace not found.");
         }
 
+        return access;
+    }
+
+    public async Task<WorkspaceAccess> ResolveForSignInAsync(ApplicationUser user)
+    {
+        // The chosen default, then the last one; each owned or joined, as long
+        // as it can still be reached. A member removed from their default
+        // resumes instead, rather than being stopped at the door.
+        foreach (string? preferred in new[] { user.DefaultWorkspaceId, user.LastWorkspaceId })
+        {
+            if (preferred is not null && await _access.GetAsync(user.Id, preferred) is { } reachable)
+            {
+                return reachable;
+            }
+        }
+
+        IReadOnlyList<Workspace> owned = await _repository.ListByOwnerAsync(user.Id);
         if (owned.Count > 0)
         {
-            return owned[0];
+            return WorkspaceAccess.ForOwner(owned[0]);
+        }
+
+        // Someone who joined a team without ever making a workspace of their own.
+        foreach ((Workspace granted, _, _) in await ListGrantedAsync(user.Id))
+        {
+            if (await _access.GetAsync(user.Id, granted.Id) is { } joined)
+            {
+                return joined;
+            }
         }
 
         // The first workspace takes the user's own id: everything the account
@@ -119,16 +190,17 @@ public class WorkspaceService : IWorkspaceService
                 _logger.LogInformation("First workspace created for tenant {UserId}", user.Id);
             }
 
-            return first;
+            return WorkspaceAccess.ForOwner(first);
         }
 
         // Another sign-in made it a moment ago.
-        return await _repository.GetByIdAsync(user.Id)
+        Workspace made = await _repository.GetByIdAsync(user.Id)
             ?? throw new InvalidOperationException($"Workspace {user.Id} was reported as existing but could not be read.");
+        return WorkspaceAccess.ForOwner(made);
     }
 
-    internal static WorkspaceResponse ToResponse(Workspace workspace, string? currentWorkspaceId) =>
-        new(workspace.Id, workspace.Name, workspace.LogoUrl, workspace.Id == currentWorkspaceId, workspace.CreatedAt);
+    internal static WorkspaceResponse ToResponse(Workspace workspace, string? currentWorkspaceId, string role = WorkspaceRoles.Owner) =>
+        new(workspace.Id, workspace.Name, workspace.LogoUrl, workspace.Id == currentWorkspaceId, workspace.CreatedAt, role, workspace.OwnerId);
 
     private static string ToName(string value)
     {

@@ -661,6 +661,9 @@
   border: var(--ds-detail-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-full);
 }
+/* The step to do next, lit for a moment as the Overview opens from the end of telling it its job. */
+.agent-detail__ready-step.is-lit { animation: agent-ready-lit var(--ds-detail-ready-lit) var(--ds-motion-ease) both; }
+@keyframes agent-ready-lit { from { background-color: var(--colors-accent-brand-subtle); } }
 .agent-detail__ready-step.is-now .agent-detail__ready-mark { color: var(--colors-brand-primary); border-color: var(--colors-brand-primary); }
 .agent-detail__ready-step.is-done .agent-detail__ready-mark { color: var(--colors-brand-primary-foreground); background: var(--colors-brand-primary); border-color: var(--colors-brand-primary); }
 .agent-detail__ready-text { display: grid; flex: 1; gap: var(--spacing-xs); min-width: 0; }
@@ -669,8 +672,9 @@
 .agent-detail__ready-step.is-later .agent-detail__ready-text ::deep strong { color: var(--colors-text-secondary); }
 .agent-detail__ready-step > ::deep .ds-button { flex: none; }
 .agent-detail {
-  /* Missing from the token set: a numbered step's round mark. */
+  /* Missing from the token set: a numbered step's round mark, and how long the next step stays lit. */
   --ds-detail-ready-mark: 32px;
+  --ds-detail-ready-lit: 2.4s;
 }
 
 /* ── Told its job, in its view: it speaks for itself first ──────────────── */

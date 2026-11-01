@@ -1,31 +1,52 @@
 @page "/dashboard/team"
+@attribute [RequiresAccess(AccessRules.Team)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Team
-@using Parrot.Web.Components.Pages.Dashboard.Team
+@using Parrot.Web.Features.Dashboard.Team
+@inject TeamClient TeamApi
+@inject AuthState AuthState
+@inject Parrot.SharedComponents.Services.ToastService Toasts
 
-<PageTitle>Team · OmniAI</PageTitle>
+<PageTitle>Team · yára</PageTitle>
 
-@* The people in the workspace. Same page frame as Aurora's Products page:
-   a heading with its action, then an empty state or a table. *@
+@* The people in the owner's team, across all of their workspaces. Same page
+   frame as Aurora's Products page: a heading with its action, then an empty
+   state or a table. Only the owner runs the team; the API refuses anyone else. *@
 
 <div class="team">
     <header class="team__header">
         <div class="team__heading">
             <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Team</Typography>
             <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="team__lede">
-                Invite your team to help manage conversations and monitor activity.
+                Invite your team and choose, for each workspace, what they can do and which channels they see.
             </Typography>
         </div>
-
-        <div class="team__actions">
-            <Button @onclick="OpenInvite">
-                <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
-                <ChildContent>Invite team member</ChildContent>
-            </Button>
-        </div>
+        @if (IsOwner && _team is not null)
+        {
+            <div class="team__actions">
+                <Button @onclick="OpenInvite">
+                    <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
+                    <ChildContent>Invite team member</ChildContent>
+                </Button>
+            </div>
+        }
     </header>
 
-    @if (_members.Count == 0)
+    @if (!IsOwner)
+    {
+        <EmptyState Glyph="IconName.RiTeamFill"
+                    Title="Only the owner manages the team"
+                    Description="Ask the workspace owner to change who has access or what they can do." />
+    }
+    else if (_error is not null)
+    {
+        <InlineError Message="@_error" />
+    }
+    else if (_team is null)
+    {
+        <LoadingState />
+    }
+    else if (_team.Members.Count <= 1 && _team.Invites.Count == 0)
     {
         <EmptyState Glyph="IconName.RiTeamFill"
                     Title="No team members yet"
@@ -45,29 +66,59 @@
                 <div class="team__table-head" role="row">
                     @foreach (var column in Columns)
                     {
-                        <Typography TextStyle="TextStyle.Small10Semibold"
-                                    As="span"
-                                    Class="ds-overline"
-                                    role="columnheader">@column</Typography>
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">@column</Typography>
                     }
                 </div>
-
                 <div class="team__table-body">
-                    @foreach (var member in _members)
+                    @foreach (TeamMember member in _team.Members)
                     {
                         <article class="team-row" role="row">
                             <div class="team-row__name" role="cell">
-                                <PetalAvatar Seed="@member.Id" Initials="@Initials.From(member.FullName)" Size="AvatarSize.Sm" />
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@member.FullName</Typography>
+                                <PetalAvatar Seed="@member.UserId" Initials="@Initials.From(member.FullName ?? member.Email)" Size="AvatarSize.Sm" />
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@(member.FullName ?? member.Email)</Typography>
                             </div>
-                            <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__email" role="cell">
-                                @member.Email
+                            <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__email" role="cell">@member.Email</Typography>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__access" role="cell">
+                                @(member.IsOwner ? "Everything, in every workspace" : Summary(member.Grants))
                             </Typography>
-                            <div class="team-row__role" role="cell">
-                                <StatusBadge Tone="StatusTone.Brand">@member.Role</StatusBadge>
-                            </div>
                             <div class="team-row__status" role="cell">
-                                <StatusBadge Tone="StatusTone.Warning" Glyph="IconName.RiMailFill">Invited</StatusBadge>
+                                @if (member.IsOwner)
+                                {
+                                    <StatusBadge Tone="StatusTone.Brand">Owner</StatusBadge>
+                                }
+                                else
+                                {
+                                    <StatusBadge Tone="StatusTone.Success">Active</StatusBadge>
+                                }
+                            </div>
+                            <div class="team-row__actions" role="cell">
+                                @if (!member.IsOwner)
+                                {
+                                    <ActionMenu Label="@($"Options for {member.FullName ?? member.Email}")">
+                                        <ActionMenuItem Label="Edit access" Glyph="IconName.RiShieldCheckFill" OnClick="() => OpenEdit(member)" />
+                                        <ActionMenuItem Label="Remove from team" Glyph="IconName.RiDeleteBin6Fill" OnClick="() => RemoveAsync(member)" />
+                                    </ActionMenu>
+                                }
+                            </div>
+                        </article>
+                    }
+                    @foreach (TeamInvite invite in _team.Invites)
+                    {
+                        <article class="team-row" role="row">
+                            <div class="team-row__name" role="cell">
+                                <PetalAvatar Seed="@invite.Email" Initials="@Initials.From(invite.FullName)" Size="AvatarSize.Sm" />
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@invite.FullName</Typography>
+                            </div>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__email" role="cell">@invite.Email</Typography>
+                            <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__access" role="cell">@Summary(invite.Grants)</Typography>
+                            <div class="team-row__status" role="cell">
+                                <StatusBadge Tone="StatusTone.Warning" Glyph="IconName.RiMailFill">@InvitedLabel(invite.ExpiresAt)</StatusBadge>
+                            </div>
+                            <div class="team-row__actions" role="cell">
+                                <ActionMenu Label="@($"Options for the invite to {invite.Email}")">
+                                    <ActionMenuItem Label="Resend invite" Glyph="IconName.RiMailFill" OnClick="() => ResendAsync(invite)" />
+                                    <ActionMenuItem Label="Withdraw invite" Glyph="IconName.RiCloseFill" OnClick="() => RevokeAsync(invite)" />
+                                </ActionMenu>
                             </div>
                         </article>
                     }
@@ -75,25 +126,219 @@
             </div>
         </section>
     }
+
+    @if (IsOwner && _catalog is not null)
+    {
+        @* Roles: the built-in ones are the same in every business and read-only;
+           the owner's own are theirs to change. Duplicating any role is how to
+           start from one and adjust it. *@
+        <header class="team__header team__header--section">
+            <div class="team__heading">
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Roles</Typography>
+                <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="team__lede">
+                    Built-in roles cannot be changed. Duplicate one to make a role of your own, or create one from scratch.
+                </Typography>
+            </div>
+            <div class="team__actions">
+                <Button Variant="ButtonVariant.Secondary" @onclick="() => OpenRole(null)">
+                    <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                    <ChildContent>Create role</ChildContent>
+                </Button>
+            </div>
+        </header>
+
+        <section class="team__table-wrap">
+            <div class="team__table" role="table" aria-label="Roles">
+                <div class="team__table-head team-row--role" role="row">
+                    @foreach (var column in RoleColumns)
+                    {
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="ds-overline" role="columnheader">@column</Typography>
+                    }
+                </div>
+                @foreach (TeamRole role in _catalog.Roles)
+                {
+                    <article class="team-row team-row--role" role="row">
+                        <div class="team-row__name" role="cell">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>@role.Name</Typography>
+                        </div>
+                        <div class="team-row__status" role="cell">
+                            @if (role.IsCustom)
+                            {
+                                <StatusBadge Tone="StatusTone.Brand">Custom</StatusBadge>
+                            }
+                            else
+                            {
+                                <StatusBadge Tone="StatusTone.Neutral" Glyph="IconName.RiLockFill">Built-in</StatusBadge>
+                            }
+                        </div>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__access" role="cell">@PermissionSummary(role)</Typography>
+                        <Typography TextStyle="TextStyle.Small12Regular" As="span" Prose Class="team-row__email" role="cell">
+                            @(role.Holders == 1 ? "1 person" : $"{role.Holders} people")
+                        </Typography>
+                        <div class="team-row__actions" role="cell">
+                            <ActionMenu Label="@($"Options for the {role.Name} role")">
+                                <ActionMenuItem Label="Duplicate" Glyph="IconName.RiFileCopyFill" OnClick="() => DuplicateRoleAsync(role)" />
+                                @if (role.IsCustom)
+                                {
+                                    <ActionMenuItem Label="Edit role" Glyph="IconName.RiShieldCheckFill" OnClick="() => OpenRole(role)" />
+                                    <ActionMenuItem Label="Delete role" Glyph="IconName.RiDeleteBin6Fill" Disabled="@(role.Holders > 0)" OnClick="() => DeleteRoleAsync(role)" />
+                                }
+                            </ActionMenu>
+                        </div>
+                    </article>
+                }
+            </div>
+        </section>
+    }
 </div>
 
-@if (_showInvite)
+@if (_showInvite && _catalog is not null && _team is not null)
 {
-    <InviteModal OnCancel="CloseInvite" OnSend="HandleInviteSent" />
+    <InviteModal Catalog="_catalog" Workspaces="_team.Workspaces" Member="_editing" OnCancel="CloseInvite" OnSaved="SavedAsync" />
+}
+
+@if (_showRole && _catalog is not null)
+{
+    <RoleEditor Catalog="_catalog" Role="_role" OnCancel="() => _showRole = false" OnSaved="RoleSavedAsync" />
 }
 
 @code {
-    private static readonly string[] Columns = ["Name", "Email", "Workspace role", "Status"];
+    private static readonly string[] Columns = ["Name", "Email", "Access", "Status", ""];
+    private static readonly string[] RoleColumns = ["Role", "Kind", "Permissions", "Held by", ""];
 
-    List<TeamMember> _members = [];
-    bool _showInvite;
+    private TeamSnapshot? _team;
+    private TeamCatalog? _catalog;
+    private TeamMember? _editing;
+    private bool _showInvite;
+    private TeamRole? _role;
+    private bool _showRole;
+    private string? _error;
 
-    void OpenInvite() => _showInvite = true;
-    void CloseInvite() => _showInvite = false;
+    private bool IsOwner => AuthState.CurrentUser?.IsOwner ?? false;
 
-    void HandleInviteSent(TeamMember member)
+    protected override async Task OnInitializedAsync()
     {
-        _members.Add(member);
-        _showInvite = false;
+        if (IsOwner) await LoadAsync();
     }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            // Read each time: holders counts and the owner's own roles change.
+            _catalog = await TeamApi.GetCatalogAsync();
+            _team = await TeamApi.GetTeamAsync();
+            _error = null;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.UserMessage;
+        }
+        catch (Exception)
+        {
+            _error = "We could not load your team. Refresh to try again.";
+        }
+    }
+
+    // One line per person: where they work, as what, and on which channels.
+    private string Summary(IReadOnlyList<TeamGrant> grants)
+    {
+        string Describe(TeamGrant grant)
+        {
+            string where = grant.WorkspaceId is null
+                ? "All workspaces"
+                : _team?.Workspaces.FirstOrDefault(w => w.Id == grant.WorkspaceId)?.Name ?? "A workspace";
+            string channels = grant.Channels.Count == 0
+                ? "all channels"
+                : string.Join(", ", grant.Channels.Select(c => _catalog?.Channels.FirstOrDefault(o => o.Key == c)?.Label ?? c));
+            return $"{where} · {grant.RoleName}{(grant.IsCustomRole ? " (custom)" : "")} · {channels}";
+        }
+
+        return grants.Count switch
+        {
+            0 => "No access",
+            1 => Describe(grants[0]),
+            _ => $"{Describe(grants[0])} (+{grants.Count - 1} more)",
+        };
+    }
+
+    // How long the link has left; resending gives it a fresh 7 days.
+    private static string InvitedLabel(DateTime expiresAt)
+    {
+        int days = (int)Math.Ceiling((expiresAt - DateTime.UtcNow).TotalDays);
+        return days <= 1 ? "Invited · last day" : $"Invited · {days} days left";
+    }
+
+    private string PermissionSummary(TeamRole role)
+    {
+        List<string> labels = _catalog!.Permissions.Where(p => role.Permissions.Contains(p.Key)).Select(p => p.Label).ToList();
+        return labels.Count <= 3 ? string.Join(", ", labels) : $"{string.Join(", ", labels.Take(3))} and {labels.Count - 3} more";
+    }
+
+    private void OpenRole(TeamRole? role)
+    {
+        _role = role;
+        _showRole = true;
+    }
+
+    private async Task RoleSavedAsync()
+    {
+        Toasts.Show(_role is null ? "Role created" : "Role saved");
+        _showRole = false;
+        await LoadAsync();
+    }
+
+    private Task DuplicateRoleAsync(TeamRole role) =>
+        RunAsync(() => TeamApi.DuplicateRoleAsync(role.Id), $"Made a copy of {role.Name}. Edit it under Roles.", "We could not duplicate the role. Try again.");
+
+    private Task DeleteRoleAsync(TeamRole role) =>
+        RunAsync(() => TeamApi.DeleteRoleAsync(role.Id), $"{role.Name} deleted", "We could not delete the role. Try again.");
+
+    private void OpenInvite()
+    {
+        _editing = null;
+        _showInvite = true;
+    }
+
+    private void OpenEdit(TeamMember member)
+    {
+        _editing = member;
+        _showInvite = true;
+    }
+
+    private void CloseInvite() => _showInvite = false;
+
+    private async Task SavedAsync()
+    {
+        Toasts.Show(_editing is null ? "Invitation sent" : "Access saved");
+        _showInvite = false;
+        await LoadAsync();
+    }
+
+    private async Task RunAsync(Func<Task> action, string done, string failed)
+    {
+        try
+        {
+            await action();
+            Toasts.Show(done);
+            await LoadAsync();
+        }
+        catch (ApiException ex)
+        {
+            Toasts.ShowError(ex.UserMessage);
+        }
+        catch (Exception)
+        {
+            Toasts.ShowError(failed);
+        }
+    }
+
+    private Task RemoveAsync(TeamMember member) =>
+        RunAsync(() => TeamApi.RemoveMemberAsync(member.UserId), $"{member.FullName ?? member.Email} was removed", "We could not remove them. Try again.");
+
+    private Task ResendAsync(TeamInvite invite) =>
+        RunAsync(() => TeamApi.ResendAsync(invite.Id), $"Invite sent again to {invite.Email}", "We could not resend the invite. Try again.");
+
+    private Task RevokeAsync(TeamInvite invite) =>
+        RunAsync(() => TeamApi.RevokeAsync(invite.Id), $"Invite to {invite.Email} withdrawn", "We could not withdraw the invite. Try again.");
 }

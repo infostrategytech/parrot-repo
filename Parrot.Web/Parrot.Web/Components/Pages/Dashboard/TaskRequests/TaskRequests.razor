@@ -1,314 +1,410 @@
+@page "/dashboard/tasks"
+@page "/dashboard/tasks/{TaskId}"
 @page "/dashboard/task-requests"
-@page "/dashboard/task-requests/{RequestId}"
+@page "/dashboard/task-requests/{TaskId}"
+@attribute [RequiresAccess(AccessRules.Tasks)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
 @using Parrot.Web.Features.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.AiAgents.State
 @implements IDisposable
+@inject ITaskStore Store
+@inject AiAgentsState Agents
+@inject Parrot.Web.Services.UserClock Clock
 @inject NavigationManager Nav
 @inject ToastService Toasts
 
-<PageTitle>Task Requests · OmniAI</PageTitle>
+<PageTitle>Tasks · yára</PageTitle>
 
-@* Aurora's #task-requests?request=OM-12031 is Parrot's
-   /dashboard/task-requests/TR-001: the same page, with that request's panel
-   open. One component serves both routes so opening a row never remounts the
-   list behind the panel. *@
-
-<div class="task-requests">
-    <header class="task-requests__header">
-        <div class="task-requests__heading">
-            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Task Requests</Typography>
-            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="task-requests__lede">
-                See what needs to be done, who owns it and what the customer is waiting for.
+@* Tasks (designer, 20 October 2026): one list of what needs doing for customers, like a ticket queue.
+   An agent raises a task when a conversation needs a person (an order to confirm, a quote to send);
+   anyone on the team can add one. The title says the action, so the list reads as a to-do list.
+   Nothing leaves the list on its own: a task stays where it is until someone moves it.
+   The views are drawn as Products & Services and Settings draw theirs; Mine and Unassigned only appear
+   once the business has a team. *@
+<main class="tasks">
+    <header class="tasks__header">
+        <div class="tasks__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Tasks</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="tasks__lede">
+                What needs doing for your customers, raised by your agents or added by your team.
             </Typography>
         </div>
-        @* Requests reach Parrot from conversations; there is no way to add
-           one by hand yet, so the door is drawn but not open. *@
-        <Button disabled title="Requests are created from conversations">
-            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
-            <ChildContent>New task request</ChildContent>
-        </Button>
+        @if (Store.Available)
+        {
+            <Button @onclick="() => _creating = true">
+                <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                <ChildContent>New task</ChildContent>
+            </Button>
+        }
     </header>
 
-    <section class="task-request-summary" aria-label="Task request summary">
-        <article>
-            <span><Icon Name="IconName.RiFileList3Fill" Size="IconSize.Md" /></span>
-            <div>
-                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">@OpenCount</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="small">Open requests</Typography>
-            </div>
-        </article>
-        @* An em dash rather than a zero where Parrot keeps no count: a zero
-           would read as a real count of none. *@
-        <article>
-            <span><Icon Name="IconName.RiTeamFill" Size="IconSize.Md" /></span>
-            <div>
-                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">—</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="small">Unassigned</Typography>
-            </div>
-        </article>
-        <article>
-            <span><Icon Name="IconName.RiTimeFill" Size="IconSize.Md" /></span>
-            <div>
-                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">—</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="small">Due soon</Typography>
-            </div>
-        </article>
-        <article>
-            <span><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></span>
-            <div>
-                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong">@CompletedCount</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="small">Completed</Typography>
-            </div>
-        </article>
-    </section>
-
-    <section class="task-request-toolbar">
-        <label class="task-request-search">
-            <Icon Name="IconName.RiSearch2Fill" Size="IconSize.Sm" />
-            <input class="@TextStyle.Small12Regular.ToClassName()"
-                   type="search"
-                   placeholder="Search request, customer or item"
-                   aria-label="Search task requests"
-                   value="@_search"
-                   @oninput="OnSearchInput" />
-        </label>
-
-        <FilterPopover Label="@(_status ?? "All statuses")"
-                       Title="Status"
-                       Subtitle="Where the work has reached"
-                       Open='@(_openMenu == "status")'
-                       OpenChanged="@(open => _openMenu = open ? "status" : null)">
-            <PopoverOption Label="All statuses"
-                           Description="Every task request"
-                           Active="_status is null"
-                           OnSelect="() => SelectStatus(null)" />
-            @foreach (var status in TaskRequestPresentation.Statuses)
-            {
-                <PopoverOption Label="@status"
-                               Active="@(_status == status)"
-                               OnSelect="() => SelectStatus(status)" />
-            }
-        </FilterPopover>
-
-        @* Aurora filters by teammate and request type. Parrot has neither, but
-           it does know which channel a request came in on and which agent
-           captured it — the two filters the previous page offered. *@
-        <FilterPopover Label="@TaskRequestPresentation.ChannelFilterLabel(_channel)"
-                       Title="Channel"
-                       Subtitle="Where the request came in"
-                       Open='@(_openMenu == "channel")'
-                       OpenChanged="@(open => _openMenu = open ? "channel" : null)">
-            <PopoverOption Label="All channels"
-                           Description="Every connected channel"
-                           Active="_channel is null"
-                           OnSelect="() => SelectChannel(null)" />
-            @foreach (var option in TaskRequestPresentation.Channels)
-            {
-                <PopoverOption Label="@option.Label"
-                               Active="@(_channel == option.Value)"
-                               OnSelect="() => SelectChannel(option.Value)" />
-            }
-        </FilterPopover>
-
-        <FilterPopover Label="@TaskRequestPresentation.AgentFilterLabel(_agent)"
-                       Title="AI agent"
-                       Subtitle="Which agent captured the request"
-                       Open='@(_openMenu == "agent")'
-                       OpenChanged="@(open => _openMenu = open ? "agent" : null)">
-            <PopoverOption Label="All agents"
-                           Description="Every agent"
-                           Active="_agent is null"
-                           OnSelect="() => SelectAgent(null)" />
-            @foreach (var option in TaskRequestPresentation.Agents)
-            {
-                <PopoverOption Label="@option.Label"
-                               Active="@(_agent == option.Value)"
-                               OnSelect="() => SelectAgent(option.Value)" />
-            }
-        </FilterPopover>
-    </section>
-
-    @if (VisibleItems.Count == 0)
+    @if (!Store.Available)
     {
-        <EmptyState Glyph="IconName.RiSearch2Fill"
-                    Title="No matching task requests"
-                    Description="Try another search or clear your filters.">
-            <Action>
-                <Button Variant="ButtonVariant.Secondary" @onclick="ClearFilters">Clear filters</Button>
-            </Action>
-        </EmptyState>
+        @* Real mode until the backend keeps tasks: said plainly, nothing made up. *@
+        <DataTable Label="Tasks">
+            <Message>
+                <EmptyState Glyph="IconName.RiClipboardFill"
+                            Title="Tasks are on the way"
+                            Description="When an agent needs you to act on a conversation, such as an order to confirm or a quote to send, it will show here, with anything your team adds." />
+            </Message>
+        </DataTable>
+    }
+    else if (_tasks is null)
+    {
+        <DataTable Label="Tasks">
+            <Message><LoadingState Glyph="IconName.RiClipboardFill" Title="Getting your tasks" /></Message>
+        </DataTable>
     }
     else
     {
-        <section class="task-request-table-wrap">
-            <div class="task-request-table" role="table" aria-label="Task Requests">
-                <div class="task-request-table-head" role="row">
-                    @foreach (var column in Columns)
-                    {
-                        <Typography TextStyle="TextStyle.Small10Semibold"
-                                    As="span"
-                                    Class="ds-overline"
-                                    role="columnheader">@column</Typography>
-                    }
-                </div>
-
-                <div class="task-request-table-body">
-                    @foreach (var item in PagedItems)
-                    {
-                        <TaskRequestRow Item="item"
-                                        Open="@(Selected?.Id == item.Id)"
-                                        MenuOpen="@(_openMenu == "assign-" + item.Id)"
-                                        MenuOpenChanged="@(open => _openMenu = open ? "assign-" + item.Id : null)"
-                                        OnOpen="() => OpenRequest(item)" />
-                    }
-                </div>
+        @if (CustomerScope.Count > 0)
+        {
+            <div class="tasks__customer-scope">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p">Tasks for @ScopeName</Typography>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="ClearCustomerScope">Clear customer filter</Button>
             </div>
-
-            <footer class="task-request-table-footer">
-                <Typography TextStyle="TextStyle.Small12Regular" As="span">
-                    Showing @FirstShown–@LastShown of @VisibleItems.Count
-                </Typography>
-                <div>
-                    <Button Variant="ButtonVariant.Secondary"
-                            Size="ButtonSize.Small"
-                            disabled="@(CurrentPage == 1)"
-                            @onclick="() => _page = Math.Max(1, CurrentPage - 1)">Previous</Button>
-                    <Typography TextStyle="TextStyle.Small12Regular" As="span">
-                        Page @CurrentPage of @TotalPages
-                    </Typography>
-                    <Button Variant="ButtonVariant.Secondary"
-                            Size="ButtonSize.Small"
-                            disabled="@(CurrentPage == TotalPages)"
-                            @onclick="() => _page = Math.Min(TotalPages, CurrentPage + 1)">Next</Button>
-                </div>
-            </footer>
+        }
+        <section class="tasks__controls">
+            <Tabs Label="Which tasks" Variant="TabsVariant.Tray">
+                @foreach (var view in Views)
+                {
+                    var current = view;
+                    <Tab Selected="@(_view == current)" Count="@InView(current).Count().ToString()" OnClick="() => Show(current)">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@ViewLabel(current)</Typography>
+                    </Tab>
+                }
+            </Tabs>
+            <div class="tasks__tools">
+                <SearchField Value="@_search" ValueChanged="value => { _search = value ?? string.Empty; _page = 1; }"
+                             Placeholder="Search tasks or customers" AriaLabel="Search tasks" Class="tasks__search" />
+                <FilterPopover Label="@(_kind is { } kind ? TaskWords.Label(kind) : "All types")"
+                               Title="Type" Subtitle="What the task is about" AlignEnd
+                               Open='@(_openMenu == "kind")' OpenChanged="@(open => _openMenu = open ? "kind" : null)">
+                    <PopoverOption Label="All types" Active="_kind is null" OnSelect="() => PickKind(null)" />
+                    @foreach (var kind in TaskWords.Kinds)
+                    {
+                        var current = kind;
+                        <PopoverOption Label="@TaskWords.Label(current)" Description="@TaskWords.Describe(current)"
+                                       Active="@(_kind == current)" OnSelect="() => PickKind(current)">
+                            <Leading><TaskKindMark Kind="current" Small /></Leading>
+                        </PopoverOption>
+                    }
+                </FilterPopover>
+                @if (HasTeam)
+                {
+                    <FilterPopover Label="@(_person?.Name ?? "Anyone")" Title="Assignee" Subtitle="Who is on it" AlignEnd
+                                   Open='@(_openMenu == "person")' OpenChanged="@(open => _openMenu = open ? "person" : null)">
+                        <PopoverOption Label="Anyone" Active="_person is null" OnSelect="() => PickPerson(null)" />
+                        @foreach (var member in _team)
+                        {
+                            var current = member;
+                            <PopoverOption Label="@current.Name" Description="@(current.Id == Store.Me.Id ? "You" : null)"
+                                           Active="@(_person?.Id == current.Id)" OnSelect="() => PickPerson(current)">
+                                <Leading><PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /></Leading>
+                            </PopoverOption>
+                        }
+                    </FilterPopover>
+                }
+            </div>
         </section>
-    }
-</div>
 
-<TaskRequestPanel Item="Selected"
-                  OnClose="ClosePanel"
-                  OnStatusSelected="SetStatus" />
+        @if (Shown.Count == 0)
+        {
+            <DataTable Label="@ViewLabel(_view)">
+                <Message>
+                @if (Filtering)
+                {
+                    <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiSearch2Fill" Title="No tasks match"
+                                Description="Try other words, or clear the filters.">
+                        <Action><Button Variant="ButtonVariant.Secondary" @onclick="ClearFilters">Clear filters</Button></Action>
+                    </EmptyState>
+                }
+                else
+                {
+                    <EmptyState Size="EmptyStateSize.Panel" Glyph="@EmptyGlyph" Title="@EmptyTitle" Description="@EmptyText" />
+                }
+                </Message>
+            </DataTable>
+        }
+        else
+        {
+            <DataTable Label="@ViewLabel(_view)">
+                <ChildContent>
+                    <TaskRow Head Team="TeamForRows" Me="Store.Me" />
+                    @foreach (var task in Shown.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
+                    {
+                        <TaskRow Item="task" Now="_now" Zone="Clock.Zone" Look="@TaskWords.AgentLook(task, Agents.Agents)"
+                                 Team="TeamForRows" Me="Store.Me"
+                                 Open="@(task.Id == TaskId)" Fresh="@(task.Id == _fresh)"
+                                 MenuOpen="@(_openMenu == "state-" + task.Id)"
+                                 MenuOpenChanged="@(open => _openMenu = open ? "state-" + task.Id : null)"
+                                 AssignOpen="@(_openMenu == "assign-" + task.Id)"
+                                 AssignOpenChanged="@(open => _openMenu = open ? "assign-" + task.Id : null)"
+                                 OnOpen="() => OpenTask(task)" OnState="state => SetStateAsync(task, state)"
+                                 OnAssign="person => AssignAsync(task, person)"
+                                 StatusBusy="@_saving.Contains("state-" + task.Id)" AssignBusy="@_saving.Contains("assign-" + task.Id)" />
+                    }
+                </ChildContent>
+                @* The count, always; the pages when there are more than one. *@
+                <Footer><Pagination Page="CurrentPage" PageChanged="page => _page = page" Total="Shown.Count" PageSize="PageSize" AriaLabel="Pages of tasks" /></Footer>
+            </DataTable>
+        }
+    }
+</main>
+
+<TaskPanel Item="Selected" Now="_now" Team="TeamForRows"
+           Look="@(Selected is { } open ? TaskWords.AgentLook(open, Agents.Agents) : null)"
+           OnClose="ClosePanel" />
+
+<NewTaskDialog Open="_creating" OnClose="() => _creating = false" OnCreated="CreatedAsync" />
 
 @code {
+    private enum View { All, Mine, Unassigned, Waiting, Closed }
     private const int PageSize = 25;
 
-    private static readonly string[] Columns =
-        ["Items", "Customer", "Payment", "Due", "Assigned to", "Waiting on", "Next step"];
+    /// <summary>The task whose panel is open, from the route.</summary>
+    [Parameter] public string? TaskId { get; set; }
+    [SupplyParameterFromQuery(Name = "conversation")] public string[]? ConversationIds { get; set; }
+    [SupplyParameterFromQuery(Name = "customer")] public string? CustomerName { get; set; }
+    private HashSet<string> CustomerScope { get; set; } = [];
+    private string ScopeName => string.IsNullOrWhiteSpace(CustomerName) ? "this customer" : CustomerName;
+    private string ScopedListUrl => CustomerTaskScope.Url(ScopeName, CustomerScope);
+    private string? _scopeKey;
 
-    private readonly Debouncer _searchDebounce = new();
-
-    // Parrot's data. The list is the same static collection the previous
-    // page read and wrote, so a status change here is visible everywhere.
-    private readonly List<TaskRequest> _requests = TaskRequestsData.All;
-
-    private string _search = "";
-    private string _appliedSearch = "";
-    private string? _status;
-    private string? _channel;
-    private string? _agent;
-    private int _page = 1;
+    private IReadOnlyList<TaskRequest>? _tasks;
+    private IReadOnlyList<TaskPerson> _team = [];
+    private DateTime _now = DateTime.UtcNow;
+    private View _view = View.All;
+    private string _search = string.Empty;
+    private TaskKind? _kind;
+    private TaskPerson? _person;
     private string? _openMenu;
+    private bool _creating;
+    private string? _fresh;
+    private int _page = 1;
+    private int CurrentPage => Math.Clamp(_page, 1, Math.Max(1, (int)Math.Ceiling(Shown.Count / (double)PageSize)));
 
-    /// <summary>The request whose panel is open, from the route.</summary>
-    [Parameter] public string? RequestId { get; set; }
+    /// <summary>Two people or more: a team, so tasks can be given to someone.</summary>
+    private bool HasTeam => _team.Count > 1;
+    private IReadOnlyList<TaskPerson> TeamForRows => HasTeam ? _team : [];
 
-    private TaskRequest? Selected => RequestId is null
-        ? null
-        : _requests.FirstOrDefault(r => r.RequestId == RequestId);
+    private IEnumerable<View> Views => HasTeam
+        ? [View.All, View.Mine, View.Unassigned, View.Waiting, View.Closed]
+        : [View.All, View.Waiting, View.Closed];
 
-    private int OpenCount => _requests.Count(r => r.Status == TaskRequestPresentation.Pending);
-    private int CompletedCount => _requests.Count(r => r.Status == TaskRequestPresentation.Completed);
+    protected override async Task OnInitializedAsync()
+    {
+        // The page's old address still works, and lands here (the same page, so it carries on loading).
+        var path = new Uri(Nav.Uri).AbsolutePath;
+        if (path.StartsWith("/dashboard/task-requests", StringComparison.OrdinalIgnoreCase))
+            Nav.NavigateTo(TaskId is null ? "/dashboard/tasks" : $"/dashboard/tasks/{Uri.EscapeDataString(TaskId)}", replace: true);
+        Store.Changed += OnStoreChanged;
+        Clock.Changed += OnClockChanged;
+        if (!Store.Available) return;
+        _team = await Store.TeamAsync();
+        await LoadAsync();
+        // The agents' looks, for the tasks they raised.
+        try { await Agents.LoadAsync(); }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception)) { }
+    }
 
-    // Filtering is done in the browser, exactly as React does it.
-    private IReadOnlyList<TaskRequest> VisibleItems
+    // "Today" is the person's today: their browser says which zone that is.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Clock.ReadAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        CustomerScope = (ConversationIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).ToHashSet();
+        var key = string.Join("|", CustomerScope.Order());
+        if (_scopeKey != key) { _scopeKey = key; _page = 1; }
+        // A task opened by its link shows in a view that has it.
+        if (Selected is { } task && !InView(_view).Contains(task)) _view = task.IsClosed ? View.Closed : View.All;
+    }
+
+    private async Task LoadAsync()
+    {
+        _tasks = await Store.ListAsync();
+        _now = DateTime.UtcNow;
+    }
+
+    private void OnStoreChanged() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+    private void OnClockChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private TaskRequest? Selected => TaskId is null ? null : _tasks?.FirstOrDefault(t => t.Id == TaskId);
+
+    private IEnumerable<TaskRequest> InView(View view) => (_tasks ?? [])
+        .Where(task => CustomerScope.Count == 0 || task.Customer?.ConversationId is { } id && CustomerScope.Contains(id))
+        .Where(t => view switch
+    {
+        View.All => t.IsOpen,
+        View.Mine => t.IsOpen && t.Assignee?.Id == Store.Me.Id,
+        View.Unassigned => t.IsOpen && t.Assignee is null,
+        View.Waiting => t.State == TaskState.Waiting,
+        _ => t.IsClosed,
+    });
+
+    private static string ViewLabel(View view) => view switch
+    {
+        View.All => "All open",
+        View.Mine => "Mine",
+        View.Unassigned => "Unassigned",
+        View.Waiting => "Waiting on customer",
+        _ => "Closed",
+    };
+
+    private bool Filtering => _search.Trim().Length > 0 || _kind is not null || _person is not null || CustomerScope.Count > 0;
+
+    // What needs acting on first, then urgent, then what's late or due soonest, then the oldest: first
+    // come, first served, so a task nobody has touched rises rather than sinks. Closed shows the latest first.
+    private IReadOnlyList<TaskRequest> Shown
     {
         get
         {
-            var query = _appliedSearch.Trim();
-            return _requests.Where(item =>
-                (_status is null || item.Status == _status) &&
-                (_channel is null || item.Channel == _channel) &&
-                (_agent is null || item.AiAgent == _agent) &&
-                (query.Length == 0 || Searchable(item).Contains(query, StringComparison.CurrentCultureIgnoreCase))
-            ).ToList();
+            var query = _search.Trim();
+            var tasks = InView(_view).Where(t => (_kind is null || t.Kind == _kind) && (_person is null || t.Assignee?.Id == _person.Id) &&
+                (query.Length == 0 || $"{t.Title} {t.Customer?.Name} {t.RaisedBy} {t.Assignee?.Name} {t.Id} {t.Summary}".Contains(query, StringComparison.CurrentCultureIgnoreCase)));
+            return _view == View.Closed
+                ? tasks.OrderByDescending(t => t.LastActivityAt).ToList()
+                : tasks.OrderBy(t => t.NeedsAction ? 0 : 1).ThenBy(t => t.Urgent ? 0 : 1).ThenBy(t => t.DueAt ?? DateTime.MaxValue).ThenBy(t => t.RaisedAt).ToList();
         }
     }
 
-    private static string Searchable(TaskRequest item) =>
-        $"{item.RequestId} {item.Item} {item.CustomerName} {string.Join(' ', item.Items)}";
+    private IconName EmptyGlyph => _view == View.Closed ? IconName.RiCheckboxCircleFill : IconName.RiClipboardFill;
 
-    private int TotalPages => Math.Max(1, (int)Math.Ceiling(VisibleItems.Count / (double)PageSize));
-    private int CurrentPage => Math.Min(_page, TotalPages);
-    private IEnumerable<TaskRequest> PagedItems => VisibleItems.Skip((CurrentPage - 1) * PageSize).Take(PageSize);
-    private int FirstShown => VisibleItems.Count == 0 ? 0 : (CurrentPage - 1) * PageSize + 1;
-    private int LastShown => Math.Min(CurrentPage * PageSize, VisibleItems.Count);
-
-    private async Task OnSearchInput(ChangeEventArgs args)
+    private string EmptyTitle => _view switch
     {
-        _search = args.Value?.ToString() ?? "";
-        // Filtering happens locally, so the debounce is only to stop the list
-        // re-rendering on every keystroke.
-        await _searchDebounce.RunAsync(() =>
-        {
-            _appliedSearch = _search;
-            _page = 1;
-            return InvokeAsync(StateHasChanged);
-        });
+        View.All => "Nothing to do right now",
+        View.Mine => "Nothing on your list",
+        View.Unassigned => "Everything has someone on it",
+        View.Waiting => "Not waiting on anyone",
+        _ => "Nothing closed yet",
+    };
+
+    private string EmptyText => _view switch
+    {
+        View.All => "When an agent needs you to act on a conversation, or someone adds a task, it shows here.",
+        View.Mine => "Tasks given to you show here.",
+        View.Unassigned => "New tasks nobody has taken on show here.",
+        View.Waiting => "When you've asked a customer something and are waiting to hear back, set the task to Waiting on customer.",
+        _ => "Done and cancelled tasks are kept here.",
+    };
+
+    private void Show(View view)
+    {
+        _view = view;
+        _openMenu = null;
+        _page = 1;
     }
 
-    private void SelectStatus(string? status)
+    private void PickKind(TaskKind? kind)
     {
-        _status = status;
-        _page = 1;
+        _kind = kind;
         _openMenu = null;
+        _page = 1;
     }
 
-    private void SelectChannel(string? channel)
+    private void PickPerson(TaskPerson? person)
     {
-        _channel = channel;
-        _page = 1;
+        _person = person;
         _openMenu = null;
-    }
-
-    private void SelectAgent(string? agent)
-    {
-        _agent = agent;
         _page = 1;
-        _openMenu = null;
     }
 
     private void ClearFilters()
     {
-        _search = "";
-        _appliedSearch = "";
-        _status = null;
-        _channel = null;
-        _agent = null;
-        _page = 1;
+        _search = string.Empty;
+        _kind = null;
+        _person = null;
+        if (CustomerScope.Count > 0) ClearCustomerScope();
     }
 
-    private void OpenRequest(TaskRequest item)
+    private void ClearCustomerScope() => Nav.NavigateTo("/dashboard/tasks");
+
+    private void OpenTask(TaskRequest task)
     {
         _openMenu = null;
-        Nav.NavigateTo($"/dashboard/task-requests/{Uri.EscapeDataString(item.RequestId)}");
+        var query = Nav.ToAbsoluteUri(ScopedListUrl).Query;
+        Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.Id)}{query}");
     }
 
-    private void ClosePanel()
+    private void ClosePanel() => Nav.NavigateTo(ScopedListUrl);
+
+    // Changes saving now, by row and kind ("state-OM-10987"): their menus wait until it's done.
+    private readonly HashSet<string> _saving = [];
+
+    // A change saved, or said that it wasn't, with Try again (designer, 21 October 2026). Nothing on screen
+    // changes until the server has it, so a failure leaves the task as it was.
+    private async Task<bool> SaveAsync(string key, Func<Task> change, string failed, Func<Task> retry)
+    {
+        if (!_saving.Add(key)) return false;
+        try
+        {
+            await change();
+            return true;
+        }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception))
+        {
+            Toasts.Show(new ToastMessage(failed, "Check your connection and try again.", ToastStatus.Error, "Try again", () => _ = InvokeAsync(retry)));
+            return false;
+        }
+        finally
+        {
+            _saving.Remove(key);
+        }
+    }
+
+    // From the row's status menu. A task that moves to another view says where it went, with Undo.
+    private async Task SetStateAsync(TaskRequest task, TaskState state)
     {
         _openMenu = null;
-        Nav.NavigateTo("/dashboard/task-requests");
+        var before = task.State;
+        if (before == state) return;
+        if (!await SaveAsync("state-" + task.Id, () => Store.SetStateAsync(task.Id, state),
+                TaskWords.StateFailed(state, task.IsClosed), () => SetStateAsync(task, state))) return;
+        var moved = state switch
+        {
+            TaskState.Done => "Marked done.",
+            TaskState.Cancelled => "Cancelled.",
+            TaskState.Waiting => "Moved to Waiting on customer.",
+            _ when before is TaskState.Done or TaskState.Cancelled => "Opened again.",
+            _ => null,
+        };
+        if (moved is not null)
+            Toasts.Show(new ToastMessage(moved, ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(() => UndoStateAsync(task, before))));
     }
 
-    // The same in-memory write the previous page made from its row menu
-    // ("Mark as completed", "Cancel request"), reached from the panel instead.
-    private void SetStatus(string status)
+    private Task UndoStateAsync(TaskRequest task, TaskState before) =>
+        SaveAsync("state-" + task.Id, () => Store.SetStateAsync(task.Id, before), "Couldn't undo that.", () => UndoStateAsync(task, before));
+
+    private Task UndoAssignAsync(TaskRequest task, TaskPerson? before) =>
+        SaveAsync("assign-" + task.Id, () => Store.AssignAsync(task.Id, before), "Couldn't undo that.", () => UndoAssignAsync(task, before));
+
+    private async Task AssignAsync(TaskRequest task, TaskPerson? person)
     {
-        if (Selected is not { } item) return;
-        item.Status = status;
-        Toasts.Show($"{item.RequestId} is now {status.ToLowerInvariant()}.");
+        _openMenu = null;
+        var before = task.Assignee;
+        if (before?.Id == person?.Id) return;
+        if (!await SaveAsync("assign-" + task.Id, () => Store.AssignAsync(task.Id, person),
+                TaskWords.AssignFailed(person, Store.Me.Id), () => AssignAsync(task, person))) return;
+        var said = person is null ? "Unassigned." : person.Id == Store.Me.Id ? "It's yours." : $"Given to {person.Name}.";
+        Toasts.Show(new ToastMessage(said, ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(() => UndoAssignAsync(task, before))));
     }
 
-    public void Dispose() => _searchDebounce.Dispose();
+    private async Task CreatedAsync(TaskRequest task)
+    {
+        _creating = false;
+        await LoadAsync();
+        ClearFilters();
+        _view = View.All;
+        _fresh = task.Id;
+    }
+
+    public void Dispose()
+    {
+        Store.Changed -= OnStoreChanged;
+        Clock.Changed -= OnClockChanged;
+    }
 }

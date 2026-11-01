@@ -1,0 +1,110 @@
+/* A row of the Tasks table, and its column names (is-head). The table's look (padding, the line between
+   rows, the header band, hover, just added) is the shared DataTable's (designer, 28 October 2026: every
+   table alike); the columns and cells are this table's own. */
+.task-row {
+  /* Gaps in the token set: no border-width or compact-tile size, and the columns (with the assignee's,
+     for a team) are this table's own. The status column is as wide as its longest state, "Waiting on
+     customer" and its chevron, so the states line up from its start, as availability does on Products. */
+  --ds-tasks-hairline: 1px;
+  --ds-tasks-icon: 36px;
+  --ds-tasks-due: 120px;
+  --ds-tasks-status: 184px;
+  --ds-tasks-assignee: 150px;
+  /* The task gets the most room, so most titles sit on one line (designer, 25 October 2026); the customer's
+     name and channel are short. */
+  --ds-table-columns: minmax(0, 3fr) minmax(0, 0.7fr) minmax(0, 0.9fr) var(--ds-tasks-due) var(--ds-tasks-status);
+}
+.task-row.has-team { --ds-table-columns: minmax(0, 2.8fr) minmax(0, 0.6fr) minmax(0, 0.9fr) var(--ds-tasks-due) var(--ds-tasks-assignee) var(--ds-tasks-status); }
+.task-row__facts > * { min-width: 0; }
+.task-row__facts { display: contents; }
+.task-row ::deep p { margin: var(--spacing-none); }
+
+.task-row__task { display: flex; gap: var(--spacing-md); align-items: center; }
+.task-row__words { display: grid; gap: var(--spacing-xs); min-width: 0; }
+
+/* The title's button covers the row, so a click anywhere opens the task. */
+.task-row__words ::deep .task-row__title {
+  justify-content: start;
+  min-height: auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+  text-align: start;
+  background: transparent;
+}
+.task-row__words ::deep .task-row__title::after { position: absolute; inset: 0; content: ""; }
+.task-row__words ::deep .task-row__title:focus-visible { outline: none; }
+/* At most two lines, then "…": the end of a title is often what matters ("…before Friday"), so it wraps rather
+   than cuts; the full title is in the row's hover text and the panel. */
+.task-row__words ::deep .task-row__title-text {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+.task-row__words ::deep .task-row__title:focus-visible::after { outline: var(--ds-tasks-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-tasks-hairline) * -1); }
+.task-row.is-closed .task-row__words ::deep .task-row__title { color: var(--colors-text-secondary); }
+
+.task-row__words ::deep .task-row__meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); color: var(--colors-text-muted); }
+.task-row__words ::deep .task-row__urgent { color: var(--colors-text-destructive); }
+
+.task-row__customer { display: grid; gap: var(--spacing-xs); }
+.task-row__customer ::deep .task-row__name { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+.task-row__customer ::deep .task-row__channel { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
+.task-row ::deep .task-row__muted { color: var(--colors-text-muted); }
+
+.task-row__due ::deep .task-row__late { color: var(--colors-text-destructive); }
+.task-row__due ::deep .task-row__today { color: var(--colors-feedback-warning-text); }
+.task-row__due ::deep .task-row__date { color: var(--colors-text-secondary); }
+
+/* The menus: above the title's cover, so they can be used on their own; an open one above the rows after it. */
+.task-row__status,
+.task-row__assignee { position: relative; z-index: 1; }
+.task-row.is-menu-open .task-row__status,
+.task-row.is-menu-open .task-row__assignee { z-index: 2; }
+/* Their words line up with their column's name. The status starts its column, as every table's states do,
+   so the dots line up (designer, 28 October 2026; this replaces the right-aligned status of 21 October). */
+.task-row__assignee ::deep .filter-popover.is-quiet,
+.task-row__status ::deep .filter-popover.is-quiet { margin-left: calc(var(--spacing-sm) * -1); }
+.task-row__status { display: flex; justify-content: flex-start; }
+/* Who raised it, under the title: only where its column folds away. */
+.task-row__words ::deep .task-row__meta-by { display: none; }
+
+/* A smaller laptop (and a tablet, whose rows stack): six columns are too many to scan, so "Raised by" folds under the title (with the
+   agent's look still beside its name) and the other columns keep their room (designer, 21 October 2026). */
+@media (max-width: 1280px) {
+  .task-row { --ds-table-columns: minmax(0, 3fr) minmax(0, 1fr) var(--ds-tasks-due) var(--ds-tasks-status); }
+  .task-row.has-team { --ds-table-columns: minmax(0, 2.8fr) minmax(0, 1fr) var(--ds-tasks-due) var(--ds-tasks-assignee) var(--ds-tasks-status); }
+  .task-row__by,
+  .task-row.is-head .task-row__facts > ::deep :first-child { display: none; }
+  .task-row__words ::deep .task-row__meta-by { display: inline-flex; }
+}
+
+/* A tablet or phone: the task and its status on top, then who raised it, the customer and the due date in one line. */
+@media (max-width: 1024px) {
+  .task-row,
+  .task-row.has-team {
+    /* The status column, narrower on a tablet (no column-width token). */
+    --ds-tasks-status: 176px;
+    --ds-table-columns: minmax(0, 1fr) var(--ds-tasks-status);
+  }
+  .task-row__facts {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: var(--spacing-xs) var(--spacing-lg);
+    align-items: center;
+    padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md));
+  }
+  .task-row__customer { display: inline-flex; gap: var(--spacing-sm); align-items: center; }
+  .task-row__assignee { grid-column: 1 / -1; grid-row: 3; padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md)); }
+  .task-row__assignee ::deep .filter-popover.is-quiet { margin-left: var(--spacing-none); }
+}
+
+@media (max-width: 760px) {
+  .task-row,
+  .task-row.has-team { --ds-table-columns: minmax(0, 1fr); }
+  .task-row__status { grid-row: 4; justify-content: flex-start; padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md)); }
+  .task-row__status ::deep .filter-popover.is-quiet { margin-left: var(--spacing-none); }
+}

@@ -1,0 +1,44 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+
+@* A task's status, changed in place: its dot and its name, a menu of every state with what each means.
+   The same on a row of the list and in the task's panel. *@
+<div class="task-status @TaskWords.ToneClass(State)">
+    <FilterPopover Label="@TaskWords.Label(State)"
+                   Title="Status"
+                   Subtitle="Where it has got to"
+                   Quiet
+                   LabelStyle="LabelStyle"
+                   AlignEnd="AlignEnd"
+                   Busy="Busy"
+                   Open="Open"
+                   OpenChanged="OpenChanged">
+        <Leading><span class="task-status__dot"></span></Leading>
+        <ChildContent>
+            @foreach (var state in TaskWords.States)
+            {
+                var current = state;
+                <PopoverOption Label="@TaskWords.Label(current)" Description="@TaskWords.Describe(current)"
+                               Active="@(State == current)" OnSelect="() => OnState.InvokeAsync(current)">
+                    <Leading><span class="task-status__dot @TaskWords.ToneClass(current)"></span></Leading>
+                </PopoverOption>
+            }
+        </ChildContent>
+    </FilterPopover>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public TaskState State { get; set; }
+    [Parameter] public bool AlignEnd { get; set; }
+
+    /// <summary>A change is saving: the menu waits.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Body size in the panel, beside the other facts; the list's small type by default.</summary>
+    [Parameter] public TextStyle LabelStyle { get; set; } = TextStyle.Small12Medium;
+
+    /// <summary>Owned by the caller, so one menu on the page closes another.</summary>
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public EventCallback<TaskState> OnState { get; set; }
+}

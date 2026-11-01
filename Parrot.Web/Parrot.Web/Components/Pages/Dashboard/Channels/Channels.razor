@@ -1,4 +1,5 @@
 @page "/dashboard/channels"
+@attribute [RequiresAccess(AccessRules.Channels)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Channels
 @using global::Grpc.Core
@@ -12,7 +13,7 @@
 @inject NavigationManager Nav
 @inject IChannelCapabilities Capabilities
 
-<PageTitle>Channels · OmniAI</PageTitle>
+<PageTitle>Channels · yára</PageTitle>
 
 @* The landing screen. Each setup flow replaces this view entirely rather than
    opening over it, because an SME halfway through connecting WhatsApp should

@@ -1,0 +1,17 @@
+.customer-link { display: grid; gap: var(--spacing-lg); min-width: 0; }
+.customer-link ::deep p, .customer-link ::deep h3 { margin: var(--spacing-none); }
+.customer-link__profile { display: grid; align-content: start; gap: var(--spacing-xs); padding: var(--spacing-lg); min-width: 0; background: var(--colors-surface-card); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); overflow-wrap: anywhere; }
+.customer-link__profile > ::deep p { color: var(--colors-text-muted); }
+.customer-link__profile > ::deep h3 { color: var(--colors-text-primary); }
+.customer-link__identity { display: flex; align-items: center; gap: var(--spacing-xs); min-width: 0; }
+.customer-link__identity > ::deep span:last-child { overflow-wrap: anywhere; }
+.customer-link__results { display: grid; gap: var(--spacing-xs); max-height: 36dvh; overflow-y: auto; }
+.customer-link__results > ::deep p { padding: var(--spacing-lg); color: var(--colors-text-muted); }
+.customer-link ::deep .customer-link__choice { display: flex; gap: var(--spacing-md); align-items: center; padding: var(--spacing-md); border-radius: var(--radius-radius-lg); text-align: left; }
+.customer-link__choice-words { display: grid; flex: 1; gap: var(--spacing-xs); min-width: 0; }
+.customer-link__choice-words ::deep small { color: var(--colors-text-muted); }
+.customer-link__comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md); }
+.customer-link__notice { display: flex; align-items: start; gap: var(--spacing-sm); padding: var(--spacing-md); color: var(--colors-text-secondary); background: var(--colors-accent-brand-subtle); border-radius: var(--radius-radius-lg); }
+.customer-link__notice > ::deep svg { flex: 0 0 auto; margin-top: var(--spacing-2xs); color: var(--colors-brand-primary); }
+.customer-link__linked-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--spacing-sm); align-items: center; }
+@media (max-width: 760px) { .customer-link__comparison { grid-template-columns: minmax(0, 1fr); } }

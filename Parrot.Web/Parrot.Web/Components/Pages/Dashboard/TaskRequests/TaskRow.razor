@@ -1,0 +1,155 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* One task. The title is the way in: a button that stretches over the whole row, so a click anywhere
+   opens it and the keyboard reaches it once. Who is on it and its status sit above it as their own
+   menus, so a task can be given to someone or moved on without opening it (designer, 20 October 2026).
+   The assignee column only exists once the business has a team. *@
+@if (Head)
+{
+    @* The table's column names, drawn by the row so the two always share their columns. *@
+    <div class="ds-table__row is-head task-row @(HasTeam ? "has-team" : null)" role="row">
+        <TableHeading>Task</TableHeading>
+        <div class="task-row__facts">
+            <TableHeading>Raised by</TableHeading>
+            <TableHeading>Customer</TableHeading>
+            <TableHeading>Due</TableHeading>
+        </div>
+        @if (HasTeam)
+        {
+            <TableHeading>Assignee</TableHeading>
+        }
+        <TableHeading>Status</TableHeading>
+    </div>
+}
+else
+{
+    <div class="@ClassName" role="row">
+        <div class="task-row__task" role="cell">
+            <TaskKindMark Kind="Item.Kind" />
+            <div class="task-row__words">
+                <RowButton Class="task-row__title" OnClick="OnOpen" title="@Item.Title">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Prose Class="task-row__title-text">@Item.Title</Typography>
+                </RowButton>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="task-row__meta">
+                    @if (Item.Urgent && !Item.IsClosed)
+                    {
+                        <span class="task-row__urgent">Urgent</span>
+                        <span aria-hidden="true">·</span>
+                    }
+                    <span>@TaskWords.Label(Item.Kind)</span>
+                    <span aria-hidden="true">·</span>
+                    @* Who raised it, here only when its column is folded away (a narrower screen). *@
+                    <span class="task-row__meta-by"><TaskRaisedBy Item="Item" Look="@Look" Compact /></span>
+                    <span class="task-row__meta-by" aria-hidden="true">·</span>
+                    <span>@TaskWords.Ago(Item.RaisedAt, Now, Zone)</span>
+                </Typography>
+            </div>
+        </div>
+
+        @* One line under the task on a tablet or phone; three columns on a desktop. *@
+        <div class="task-row__facts">
+            <div class="task-row__by" role="cell">
+                <TaskRaisedBy Item="Item" Look="@Look" />
+            </div>
+
+            <div class="task-row__customer" role="cell">
+                @if (Item.Customer is { } customer)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-row__name">@customer.Name</Typography>
+                    @if (customer.Channel.Length > 0)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-row__channel">
+                            <ChannelGlyph Channel="@customer.Channel" Compact />
+                            @TaskWords.Channel(customer.Channel)
+                        </Typography>
+                    }
+                    else if (customer.Contact is { Length: > 0 } contact)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-row__muted">@contact</Typography>
+                    }
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-row__muted">No customer</Typography>
+                }
+            </div>
+
+            <div class="task-row__due" role="cell">
+                @if (Item.IsClosed)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-row__muted">@TaskWords.Ago(Item.LastActivityAt, Now, Zone)</Typography>
+                }
+                else
+                {
+                    var (text, tone) = TaskWords.Due(Item.DueAt, Item.DueHasTime, Now, Zone);
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="@DueClass(tone)">@text</Typography>
+                }
+            </div>
+        </div>
+
+        @if (HasTeam)
+        {
+            <div class="task-row__assignee" role="cell">
+                <TaskAssigneeMenu Assignee="Item.Assignee" Team="Team" Me="Me" LabelStyle="TextStyle.Small12Medium"
+                                  Busy="AssignBusy" Open="AssignOpen" OpenChanged="AssignOpenChanged" OnAssign="OnAssign" />
+            </div>
+        }
+
+        <div class="task-row__status" role="cell">
+            <TaskStatusMenu State="Item.State" AlignEnd Busy="StatusBusy" Open="MenuOpen" OpenChanged="MenuOpenChanged" OnState="OnState" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public TaskRequest Item { get; set; } = default!;
+
+    /// <summary>Draws the column names instead of a task.</summary>
+    [Parameter] public bool Head { get; set; }
+
+    [Parameter] public DateTime Now { get; set; } = DateTime.UtcNow;
+
+    /// <summary>The person's own time zone: "today" is their today.</summary>
+    [Parameter] public TimeZoneInfo Zone { get; set; } = TimeZoneInfo.Local;
+
+    /// <summary>The look of the agent that raised it (null for a person).</summary>
+    [Parameter] public string? Look { get; set; }
+
+    /// <summary>The team, when the business has one (two people or more): the assignee column appears.</summary>
+    [Parameter] public IReadOnlyList<TaskPerson> Team { get; set; } = [];
+    [Parameter] public TaskPerson? Me { get; set; }
+
+    /// <summary>This task is the one open in the panel.</summary>
+    [Parameter] public bool Open { get; set; }
+
+    /// <summary>Just added: lit for a moment so it can be found.</summary>
+    [Parameter] public bool Fresh { get; set; }
+
+    /// <summary>Its menus are open. Owned by the page so one menu closes another.</summary>
+    [Parameter] public bool MenuOpen { get; set; }
+    [Parameter] public EventCallback<bool> MenuOpenChanged { get; set; }
+    [Parameter] public bool AssignOpen { get; set; }
+    [Parameter] public EventCallback<bool> AssignOpenChanged { get; set; }
+
+    [Parameter] public EventCallback OnOpen { get; set; }
+    [Parameter] public EventCallback<TaskState> OnState { get; set; }
+
+    /// <summary>A status or an assignee change from this row is saving.</summary>
+    [Parameter] public bool StatusBusy { get; set; }
+    [Parameter] public bool AssignBusy { get; set; }
+    [Parameter] public EventCallback<TaskPerson?> OnAssign { get; set; }
+
+    private bool HasTeam => Team.Count > 1 && Me is not null;
+
+    private string ClassName => "ds-table__row task-row" + (HasTeam ? " has-team" : null) + (Open ? " is-open" : null) + (Fresh ? " is-fresh" : null)
+        + (Item?.IsClosed == true ? " is-closed" : null) + (MenuOpen || AssignOpen ? " is-menu-open" : null);
+
+    private static string DueClass(StatusTone? tone) => tone switch
+    {
+        StatusTone.Danger => "task-row__late",
+        StatusTone.Warning => "task-row__today",
+        _ => "task-row__date",
+    };
+}

@@ -1,4 +1,5 @@
 @page "/ai-operations/new-agent"
+@attribute [RequiresAccess(AccessRules.AgentCreate)]
 @layout Parrot.Web.Components.Layout.BareLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @using Parrot.Web.Features.Dashboard.AiAgents
@@ -18,7 +19,7 @@
    of business is the business's profile now, not an agent's. The agent never
    suggests its own name. *@
 
-<PageTitle>Create an agent · AI Operations · OmniAI</PageTitle>
+<PageTitle>Create an agent · AI Operations · yára</PageTitle>
 
 <NavigationLock OnBeforeInternalNavigation="OnNavigating" ConfirmExternalNavigation="@(HasProgress && !_done)" />
 

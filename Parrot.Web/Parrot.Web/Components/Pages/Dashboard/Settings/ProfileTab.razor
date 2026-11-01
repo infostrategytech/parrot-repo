@@ -25,7 +25,7 @@
                         @(_logoUrl is null ? "Upload image" : "Update image")
                     </Button>
                     <InputFile class="profile__upload-input"
-                               accept="image/png,image/jpeg,image/gif"
+                               accept="image/png,image/jpeg,image/webp"
                                aria-label="@(_logoUrl is null ? "Upload image" : "Update image")"
                                disabled="@ImageBusy"
                                OnChange="UploadImageAsync" />
@@ -35,7 +35,7 @@
                         @onclick="RemoveImageAsync">Remove</Button>
             </div>
             <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="profile__hint">
-                JPG, GIF or PNG. 1MB max.
+                PNG, JPG or WebP up to 2 MB
             </Typography>
         </div>
 
@@ -62,9 +62,13 @@
     </Footer>
 </SettingsCard>
 
+@* Where sign-in lands: the last workspace, or one chosen to always open. *@
+<SignInPreference />
+
 @code {
-    private const long MaxImageBytes = 1024 * 1024;
-    private static readonly HashSet<string> AcceptedImageTypes = ["image/png", "image/jpeg", "image/gif"];
+    // The same rule as the welcome card's logo.
+    private const long MaxImageBytes = 2 * 1024 * 1024;
+    private static readonly HashSet<string> AcceptedImageTypes = ["image/png", "image/jpeg", "image/webp"];
 
     private string? _firstName;
     private string? _lastName;
@@ -148,13 +152,13 @@
         // Checked here so a wrong file fails at once; the server checks again.
         if (!AcceptedImageTypes.Contains(file.ContentType))
         {
-            _imageError = "Choose a JPG, GIF or PNG image.";
+            _imageError = "Choose a PNG, JPG or WebP image.";
             return;
         }
 
         if (file.Size > MaxImageBytes)
         {
-            _imageError = "Choose an image of 1MB or less.";
+            _imageError = "Choose an image smaller than 2 MB.";
             return;
         }
 

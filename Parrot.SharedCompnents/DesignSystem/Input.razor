@@ -67,14 +67,16 @@
             <input @ref="_input"
                    id="@InputId"
                    class="@TextStyle.BodySmallMedium.ToClassName()"
-                   type="@Type"
+                   type="@InputType"
+                   inputmode="@InputMode"
+                   data-numeric-input="@(Numeric == NumericInputKind.None ? null : Numeric.ToString().ToLowerInvariant())"
                    value="@_initial"
 
                    placeholder=" "
                    disabled="@Disabled"
                    aria-labelledby="@LabelledBy"
-                   aria-describedby="@(string.IsNullOrWhiteSpace(HelperText) ? null : HelperId)"
-                   aria-invalid="@(Error ? "true" : null)"
+                   aria-describedby="@(string.IsNullOrWhiteSpace(ShownHelper) ? null : HelperId)"
+                   aria-invalid="@(Error || _numericError is not null ? "true" : null)"
                    @oninput="OnInput"
                    @attributes="AdditionalAttributes" />
             <span class="field__float" id="@FloatId">@FloatingLabel</span>
@@ -86,14 +88,14 @@
         }
     </label>
 
-    @if (!string.IsNullOrWhiteSpace(HelperText))
+    @if (!string.IsNullOrWhiteSpace(ShownHelper))
     {
         <p class="field__helper @TextStyle.Small12Regular.ToClassName()" id="@HelperId">
             @if (HelperIconLeft is not null)
             {
                 @HelperIconLeft
             }
-            <span>@HelperText</span>
+            <span>@ShownHelper</span>
             @if (HelperIconRight is not null)
             {
                 @HelperIconRight
@@ -106,6 +108,10 @@
     private readonly string _generatedId = "field-" + Guid.NewGuid().ToString("N");
     private ElementReference _input;
     private IAsyncDisposable? _autofillBinding;
+    private IAsyncDisposable? _numericBinding;
+    private Microsoft.JSInterop.DotNetObjectReference<Input>? _numericTarget;
+    private string? _numericError;
+    private string? ShownHelper => _numericError ?? HelperText;
 
     /// <summary>Moves focus into the field (an edit opened in place, a table cell).</summary>
     public ValueTask FocusAsync() => _input.FocusAsync();
@@ -159,6 +165,10 @@
 
     [Parameter] public string Type { get; set; } = "text";
 
+    /// <summary>Restricts typing/paste in the browser, without server-side caret rewrites. Opt-in only.
+    /// Callers must also validate with NumberText before saving; a keyboard filter is not validation.</summary>
+    [Parameter] public NumericInputKind Numeric { get; set; }
+
     [Parameter] public string? Id { get; set; }
 
     [Parameter] public string? Class { get; set; }
@@ -202,6 +212,7 @@
     // Typing wins over a change from the page that has not reached the field yet.
     private Task OnInput(ChangeEventArgs args)
     {
+        _numericError = null;
         _pending = null;
         _shown = args.Value?.ToString() ?? "";
         return ValueChanged.InvokeAsync(_shown);
@@ -209,6 +220,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (Numeric != NumericInputKind.None && _numericBinding is null)
+        {
+            _numericTarget = Microsoft.JSInterop.DotNetObjectReference.Create(this);
+            _numericBinding = await Interop.BindNumberInputAsync(_input, _numericTarget);
+        }
         if (firstRender)
         {
             // Password managers can fill after Blazor renders without raising
@@ -234,15 +250,47 @@
 
     public async ValueTask DisposeAsync()
     {
+        if (_numericBinding is not null) await _numericBinding.DisposeAsync();
+        _numericTarget?.Dispose();
         if (_autofillBinding is not null) await _autofillBinding.DisposeAsync();
     }
+
+    [Microsoft.JSInterop.JSInvokable]
+    public Task NumberRejectedAsync(string shown)
+    {
+        if (_shown != shown && (Numeric != NumericInputKind.Decimal || NumberText.Decimal(_shown) != NumberText.Decimal(shown))) return Task.CompletedTask;
+        _numericError = Numeric switch
+        {
+            NumericInputKind.Integer => "Use whole numbers only.",
+            NumericInputKind.Phone => "Use numbers only, such as 0803 555 1234.",
+            _ => "Use numbers only, such as 58,000 or 58,000.50.",
+        };
+        return InvokeAsync(StateHasChanged);
+    }
+
+    // Number entry keeps a text field (no spinner, no lost leading zeros); a phone number is "tel", so its keypad
+    // and autofill are a phone's. The keypad follows the kind.
+    private string InputType => Numeric switch
+    {
+        NumericInputKind.None => Type,
+        NumericInputKind.Phone => "tel",
+        _ => "text",
+    };
+
+    private string? InputMode => Numeric switch
+    {
+        NumericInputKind.Integer => "numeric",
+        NumericInputKind.Decimal => "decimal",
+        NumericInputKind.Phone => "tel",
+        _ => null,
+    };
 
     private string ClassName
     {
         get
         {
             var name = "field";
-            if (Error) name += " is-error";
+            if (Error || _numericError is not null) name += " is-error";
             if (Disabled) name += " is-disabled";
             return string.IsNullOrWhiteSpace(Class) ? name : name + " " + Class;
         }

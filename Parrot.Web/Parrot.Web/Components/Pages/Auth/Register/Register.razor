@@ -11,7 +11,7 @@
 @inject IConfiguration Configuration
 @implements IDisposable
 
-<PageTitle>Create Your Account · OmniAI</PageTitle>
+<PageTitle>Create Your Account · yára</PageTitle>
 
 @* Sign-up asks for the least it can: an email and a password. The business
    name is asked for on the workspace welcome card once they are inside. *@
@@ -66,7 +66,7 @@
 
     <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="signup-form__legal">
         @* New tabs, so reading the terms does not throw away the form. *@
-        By creating an account, you agree to OmniAI's
+        By creating an account, you agree to yára's
         <a class="@TextStyle.Small12Semibold.ToClassName()" href="/terms" target="_blank" rel="noopener">Terms</a> and
         <a class="@TextStyle.Small12Semibold.ToClassName()" href="/privacy" target="_blank" rel="noopener">Privacy Policy</a>.
     </Typography>
@@ -140,7 +140,7 @@
         Problem.AccountExists => "An account already exists with these details.",
         Problem.TooManyAttempts => "Too many attempts. Wait a few minutes, then try again.",
         Problem.Rejected => _apiMessage ?? "We could not create that account.",
-        Problem.Unreachable => "We could not reach OmniAI. Check your internet connection.",
+        Problem.Unreachable => "We could not reach yára. Check your internet connection.",
         _ => "Something went wrong on our side."
     };
 

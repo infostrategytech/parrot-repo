@@ -33,13 +33,14 @@
   --ds-rail-control: 30px;
   --ds-rail-mark: 24px;
   --ds-rail-mark-bar: 3px;
-  --ds-rail-tooltip-offset: 12px;
   --ds-rail-layer: 45;
   --ds-rail-collapsed-gutter: 8px;
   --ds-rail-collapsed-brand-gap: 14px;
-  --ds-rail-dot: 7px;
-  --ds-rail-dot-top: 7px;
-  --ds-rail-dot-right: 10px;
+  --ds-rail-dot: 8px;
+  --ds-rail-dot-ring: 2px;
+  /* The room the icon sits in on the compact rail, with space for the dot at its corner. */
+  --ds-rail-pill-width: 52px;
+  --ds-rail-pill-height: 20px;
   /* Room to breathe: a taller row, space between rows, and the label set a
      little apart from its icon. The list scrolls, so this never cuts anything. */
   --ds-rail-compact-item: 52px;
@@ -55,7 +56,7 @@
   color: var(--colors-text-primary);
 }
 
-/* The Cadence mark — the brand's three message bars — sits bare, as the
+/* The yára mark — the brand's three message bars — sits bare, as the
    sign-in screen sets it: no tile behind it. */
 .sidebar__mark {
   position: relative;
@@ -211,8 +212,28 @@
   background: transparent;
 }
 
+/* The workspace and the account light as the pages do: the whole item, the same step stronger. */
+.sidebar.is-collapsed ::deep .workspace__trigger,
+.sidebar.is-collapsed ::deep .user-card { border-radius: var(--radius-radius-xl); }
 .sidebar.is-collapsed ::deep .workspace__trigger:hover,
-.sidebar.is-collapsed ::deep .user-card:hover { background: var(--colors-interaction-hover); }
+.sidebar.is-collapsed ::deep .user-card:hover { background: var(--colors-interaction-pressed); }
+
+/* The compact rail (designer, 21 October 2026): hover and the current page light the whole item, icon and
+   label, as a soft rounded tile rather than an oval; the unread dot stays a badge on the icon's corner.
+   The rail is the same grey as the usual hover, so its hover is a step stronger to be seen. */
+/* Room inside the tile, and the label close to its icon (designer, 21 October 2026). */
+.sidebar.is-collapsed ::deep .nav-item {
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-md) var(--spacing-xs);
+  border-radius: var(--radius-radius-xl);
+}
+.sidebar.is-collapsed ::deep .nav-item:hover:not(:disabled) { color: var(--colors-text-secondary); background: var(--colors-interaction-pressed); }
+.sidebar.is-collapsed ::deep .nav-item.is-active,
+.sidebar.is-collapsed ::deep .nav-item.is-active:hover:not(:disabled) { color: var(--colors-interaction-selected-foreground); background: var(--colors-accent-brand-muted); }
+.sidebar.is-collapsed ::deep .nav-item__glyph { width: var(--ds-rail-pill-width); height: var(--ds-rail-pill-height); }
+/* The dot's ring takes the colour behind it, so it sits cleanly on a lit tile too. */
+.sidebar.is-collapsed ::deep .nav-item:hover:not(:disabled) .nav-item__count { box-shadow: 0 0 0 var(--ds-rail-dot-ring) var(--colors-interaction-pressed); }
+.sidebar.is-collapsed ::deep .nav-item.is-active .nav-item__count { box-shadow: 0 0 0 var(--ds-rail-dot-ring) var(--colors-accent-brand-muted); }
 
 .sidebar.is-collapsed ::deep .workspace__chevron,
 .sidebar.is-collapsed ::deep .user-card__chevron { display: none; }
@@ -253,8 +274,11 @@
    in the tooltip and in the row's accessible name. */
 .sidebar.is-collapsed ::deep .nav-item__count {
   position: absolute;
-  top: var(--ds-rail-dot-top);
-  right: var(--ds-rail-dot-right);
+  /* On the icon's top right corner, ringed in the rail's own colour, so it reads as a badge on the icon
+     (lit or not) rather than a dot cut by the edge of the highlight. */
+  top: calc(var(--spacing-md) - var(--spacing-2xs));
+  left: calc(50% + var(--spacing-xs) + var(--spacing-2xs));
+  box-shadow: 0 0 0 var(--ds-rail-dot-ring) var(--colors-sidebar-background);
   width: var(--ds-rail-dot);
   min-width: var(--ds-rail-dot);
   height: var(--ds-rail-dot);
@@ -266,38 +290,3 @@
   text-indent: -100%;
 }
 
-/* Tooltips still reveal full destination names when compact labels are
-   shortened, such as Products & Services becoming Products. */
-.sidebar.is-collapsed [data-tooltip],
-.sidebar.is-collapsed ::deep [data-tooltip] {
-  position: relative;
-}
-
-/* Placed against the window (fixed), not inside the rail, so the scrolling
-   list cannot clip them. Where to put each one is worked out when it is
-   pointed at or focused (followRailTooltips in aurora-interop.js): the
-   middle of the item's height, just past the rail's edge. */
-.sidebar.is-collapsed [data-tooltip]::after,
-.sidebar.is-collapsed ::deep [data-tooltip]::after {
-  content: attr(data-tooltip);
-  position: fixed;
-  top: var(--ds-tip-top, -100vh);
-  left: var(--ds-tip-left, 0);
-  z-index: calc(var(--ds-rail-layer) + 2);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  color: var(--colors-text-inverse);
-  background: var(--colors-surface-foreground);
-  border-radius: var(--radius-radius-sm);
-  white-space: nowrap;
-  transform: translateY(-50%);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--ds-rail-motion) ease;
-}
-
-.sidebar.is-collapsed [data-tooltip]:hover::after,
-.sidebar.is-collapsed [data-tooltip]:focus-visible::after,
-.sidebar.is-collapsed ::deep [data-tooltip]:hover::after,
-.sidebar.is-collapsed ::deep [data-tooltip]:focus-visible::after {
-  opacity: 1;
-}

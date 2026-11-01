@@ -23,4 +23,20 @@ public class AuthResponse
 
     // The current workspace's logo, or null when none has been uploaded.
     public string? LogoUrl { get; set; }
+
+    // "Owner", or the role the person was given in this workspace.
+    public string Role { get; set; } = "Owner";
+
+    // What the session may do here, e.g. "conversations.reply". The API checks
+    // every request itself; this is for showing only what can be used.
+    public List<string> Permissions { get; set; } = [];
+
+    // A session saved before teams carries no role, and was always its owner's.
+    [JsonIgnore]
+    public bool IsOwner => string.IsNullOrEmpty(Role) || Role == "Owner";
+
+    public bool Can(string permission) => IsOwner || Permissions.Contains(permission);
+
+    /// <summary>Whether this session passes an access rule (Parrot.SharedComponents.Layout.AccessRules).</summary>
+    public bool Allows(string rule) => Parrot.SharedComponents.Layout.AccessRules.Allows(rule, IsOwner, Can);
 }

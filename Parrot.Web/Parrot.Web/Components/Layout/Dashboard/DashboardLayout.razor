@@ -3,7 +3,9 @@
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Nav
 @inject Parrot.Web.Services.InboxUnreadState Unread
+@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
 @inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceClient Workspaces
+@inject Parrot.Web.Features.Dashboard.Team.PendingInvite PendingInvite
 @inject Parrot.Web.Features.Dashboard.Workspace.WorkspacePrompt WorkspacePrompt
 @inject Parrot.SharedComponents.Services.ToastService Toasts
 @implements IDisposable
@@ -15,7 +17,7 @@
 
 <ActivityBar />
 
-<AppShell BrandName="OmniAI"
+<AppShell BrandName="yára"
           WorkspaceId="@(AuthState.CurrentUser?.CurrentWorkspaceId ?? "")"
           WorkspaceName="@(AuthState.CurrentUser?.BusinessName ?? "")"
           WorkspaceLogoUrl="@AuthState.CurrentUser?.LogoUrl"
@@ -23,13 +25,19 @@
           OnWorkspaceSwitch="SwitchWorkspaceAsync"
           OnWorkspaceAdd="WorkspacePrompt.RequestCreate"
           WorkspaceSwitching="@_switching"
+          OnWorkspaceSetDefault="SetDefaultWorkspaceAsync"
+          IsAllowed="CanOpen"
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
-          InboxUnread="@Unread.Total">
+          InboxUnread="@Unread.Total"
+          TasksNeedYou="@_tasksNeedYou">
     <UserMenu>
         <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
-        <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
+        @if (AuthState.CurrentUser?.Allows(AccessRules.Team) ?? false)
+        {
+            <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
+        }
         <UserMenuItem Label="Business setup" Glyph="IconName.RiStore2Fill" Href="/dashboard/business-setup" />
         <UserMenuItem Label="@(_loggingOut ? "Signing out…" : "Sign out")"
                       Glyph="IconName.RiUserSharedFill"
@@ -42,6 +50,8 @@
         }
     </UserMenu>
     <ChildContent>
+        @* Pages the person's role does not reach never get here: the router
+           swaps them for the no-access screen (RequiresAccessAttribute). *@
         @Body
     </ChildContent>
 </AppShell>
@@ -75,6 +85,7 @@
     {
         AuthState.OnChange += AuthChanged;
         Unread.Changed += UnreadChanged;
+        Tasks.Changed += TasksChanged;
     }
 
     // The rail's inbox badge is the number of unread customer messages. It is kept here, not by
@@ -82,8 +93,58 @@
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (!firstRender) return;
+
+        // An invite opened before signing in: back to it, now that there is a session to accept it with.
+        if (AuthState.IsAuthenticated && await PendingInvite.TakeAsync() is { } invite)
+        {
+            // "resume": they already chose Accept in the email, so the page joins on its own.
+            Nav.NavigateTo($"/invite/{Uri.EscapeDataString(invite)}?resume=true", replace: true);
+            return;
+        }
+
+        await RefreshAccessAsync();
         await Unread.StartAsync();
+        await CountTasksAsync();
         await LoadWorkspacesAsync();
+    }
+
+    // The pin in the switcher: always open this workspace on sign-in, or (null) resume where you left off.
+    private async Task SetDefaultWorkspaceAsync(string? workspaceId)
+    {
+        try
+        {
+            await Workspaces.SetDefaultAsync(workspaceId);
+            string? name = _workspaces?.FirstOrDefault(w => w.Id == workspaceId)?.Name;
+            Toasts.Show(name is null ? "You will come back where you left off" : $"{name} opens when you sign in");
+            await LoadWorkspacesAsync();
+        }
+        catch (Exception)
+        {
+            Toasts.ShowError("We could not change where you sign in. Try again.");
+        }
+    }
+
+    // The owner opens everything; a member, what their role allows. The API
+    // enforces the same rules; this keeps the rail to what can be used.
+    private bool CanOpen(NavEntry entry) =>
+        entry.AnyPermission is null
+        || AuthState.CurrentUser is not { } user
+        || user.IsOwner
+        || entry.AnyPermission.Any(user.Can);
+
+    // The token's copy of the role can be older than the grant: read the grant.
+    private async Task RefreshAccessAsync()
+    {
+        if (!AuthState.IsAuthenticated) return;
+        try
+        {
+            await Workspaces.RefreshAccessAsync();
+            StateHasChanged();
+        }
+        catch (Exception)
+        {
+            // The rail keeps what the session already says; the API still checks each request.
+        }
     }
 
     // The switcher's list. Unnamed workspaces are left out: one is only
@@ -94,9 +155,18 @@
         try
         {
             IReadOnlyList<Parrot.Web.Features.Dashboard.Workspace.WorkspaceSummary> listed = await Workspaces.ListAsync();
+
+            // The session's workspace is no longer listed: the owner removed this person
+            // from it. Move to one they can still reach rather than failing on every page.
+            if (listed.Count > 0 && !listed.Any(w => w.IsCurrent) && !_switching)
+            {
+                Toasts.ShowError("You no longer have access to that workspace.");
+                await SwitchWorkspaceAsync(listed[0].Id);
+                return;
+            }
             _workspaces = listed
                 .Where(w => !string.IsNullOrWhiteSpace(w.Name))
-                .Select(w => new WorkspaceOption(w.Id, w.Name!, w.LogoUrl))
+                .Select(w => new WorkspaceOption(w.Id, w.Name!, w.LogoUrl, w.Role, w.Role == "Owner" ? null : w.TeamName ?? "Other businesses", w.IsDefault))
                 .ToList();
             StateHasChanged();
         }
@@ -124,6 +194,22 @@
             Toasts.ShowError("We could not switch workspaces. Try again.");
         }
     }
+
+    // The rail's Tasks badge: everything that needs the business now. Kept here for the same reason as the inbox's.
+    private int? _tasksNeedYou;
+
+    private async Task CountTasksAsync()
+    {
+        if (!Tasks.Available) return;
+        // With a team, what's yours or nobody's yet; alone, everything that needs acting on.
+        var team = await Tasks.TeamAsync();
+        var me = Tasks.Me.Id;
+        var count = (await Tasks.ListAsync()).Count(task => task.NeedsAction && (team.Count < 2 || task.Assignee is null || task.Assignee.Id == me));
+        _tasksNeedYou = count == 0 ? null : count;
+        StateHasChanged();
+    }
+
+    private void TasksChanged() => _ = InvokeAsync(CountTasksAsync);
 
     private void UnreadChanged() => _ = InvokeAsync(StateHasChanged);
 
@@ -164,5 +250,6 @@
     {
         AuthState.OnChange -= AuthChanged;
         Unread.Changed -= UnreadChanged;
+        Tasks.Changed -= TasksChanged;
     }
 }

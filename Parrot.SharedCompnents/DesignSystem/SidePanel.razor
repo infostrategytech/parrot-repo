@@ -14,7 +14,7 @@
 @if (Open)
 {
     <div class="ds-side-panel-backdrop" @onmousedown="RequestCloseAsync">
-        <section class="ds-side-panel @Class"
+        <section class="ds-side-panel @(Compact ? "is-compact" : null) @Class"
                  role="dialog"
                  aria-modal="true"
                  aria-labelledby="@_titleId"
@@ -31,14 +31,14 @@
                     {
                         <Typography TextStyle="TextStyle.Small10Semibold" As="p" Class="ds-side-panel__eyebrow ds-overline">@Eyebrow</Typography>
                     }
-                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="@_titleId">@Title</Typography>
+                    <Typography TextStyle="TitleStyle" As="h2" id="@_titleId">@Title</Typography>
                 </div>
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@CloseLabel" disabled="@Busy" @onclick="RequestCloseAsync">
-                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                    <IconLeft><Icon Name="IconName.RiCloseFill" Size="IconSize.Md" /></IconLeft>
                 </Button>
             </header>
 
-            <div class="ds-side-panel__body">@ChildContent</div>
+            <div class="ds-side-panel__body @(FlushBody ? "is-flush" : null)">@ChildContent</div>
 
             @if (Footer is not null)
             {
@@ -75,6 +75,11 @@
 
     [Parameter] public string? Class { get; set; }
 
+    /// <summary>A reference panel rather than a wide editing form.</summary>
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public bool FlushBody { get; set; }
+    [Parameter] public TextStyle TitleStyle { get; set; } = TextStyle.HeadingH3Semibold;
+
     private ElementReference _panel;
     private IAsyncDisposable? _trap;
     private DotNetObjectReference<SidePanel>? _self;
@@ -85,9 +90,9 @@
         if (Open && !_wasOpen)
         {
             _wasOpen = true;
-            await _panel.FocusAsync();
             _self ??= DotNetObjectReference.Create(this);
             _trap = await Interop.TrapFocusAsync(_panel, _self, nameof(OnEscapeAsync));
+            await _panel.FocusAsync();
         }
         else if (!Open && _wasOpen)
         {

@@ -31,6 +31,12 @@
   animation: ds-side-panel-in var(--ds-side-panel-enter) var(--ds-side-panel-ease);
 }
 
+.ds-side-panel.is-compact {
+  /* Gap in the token set: shared width for contextual reference panels. */
+  --ds-side-panel-width: 420px;
+}
+.ds-side-panel__body.is-flush { padding: var(--spacing-none); gap: var(--spacing-none); }
+
 .ds-side-panel-backdrop {
   /* Gaps in the token set: no z-index, panel-width, border-width or motion
      scale. The editor drawer's values, except the layer: under toasts (110)
@@ -76,7 +82,10 @@
   gap: var(--spacing-lg);
   overflow-y: auto;
   padding: var(--spacing-lg) var(--spacing-xl);
+  /* It still scrolls (wheel, trackpad, touch, keyboard); the bar itself stays out of the way (designer, 20 October 2026). */
+  scrollbar-width: none;
 }
+.ds-side-panel__body::-webkit-scrollbar { display: none; }
 
 .ds-side-panel__footer {
   display: flex;

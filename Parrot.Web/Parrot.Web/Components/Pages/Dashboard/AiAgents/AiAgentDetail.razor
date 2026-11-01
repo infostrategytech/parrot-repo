@@ -1,5 +1,6 @@
 @page "/ai-operations/{AgentId}"
 @page "/dashboard/ai-agents/{AgentId}"
+@attribute [RequiresAccess(AccessRules.Agents)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @using Parrot.Web.Features.Dashboard.AiAgents
@@ -18,6 +19,8 @@
 @inject IAgentBriefing Briefing
 @inject JobConversationDrafts Drafts
 @inject Parrot.Web.Features.Profile.ProfileClient Profile
+@inject BusinessKind Kind
+@inject AgentReadiness Readiness
 @inject VoiceInterop Voice
 @implements IDisposable
 
@@ -46,7 +49,7 @@
     var agent = AiAgentsState.GetAgent(AgentId);
 }
 
-<PageTitle>@(agent?.Name ?? "Agent") · AI Operations · OmniAI</PageTitle>
+<PageTitle>@(agent?.Name ?? "Agent") · AI Operations · yára</PageTitle>
 
 @if (!AiAgentsState.IsLoaded && !AiAgentsState.LoadFailed)
 {
@@ -193,16 +196,20 @@ else
                         </li>
                         @if (Briefing.CanTry)
                         {
-                            <li class="@($"agent-detail__ready-step {(told ? "is-now" : "is-later")}")">
-                                <span class="agent-detail__ready-mark" aria-hidden="true"><Typography TextStyle="TextStyle.Small12Semibold" As="span">2</Typography></span>
+                            var tested = Readiness.Tested(agent.Id);
+                            <li class="@($"agent-detail__ready-step {(!told ? "is-later" : tested ? "is-done" : "is-now")}{(told && !tested && _nextLit ? " is-lit" : null)}")">
+                                <span class="agent-detail__ready-mark" aria-hidden="true">
+                                    @if (tested) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> } else { <Typography TextStyle="TextStyle.Small12Semibold" As="span">2</Typography> }
+                                </span>
                                 <div class="agent-detail__ready-text">
                                     <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">Test as a customer</Typography>
-                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>@($"See how {agent.Name} replies before any customer does.")</Typography>
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>@(tested ? $"Done. You've seen how {agent.Name} replies." : $"See how {agent.Name} replies before any customer does.")</Typography>
                                 </div>
-                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(!told)" @onclick="() => _testing = true">Try it</Button>
+                                <Button Variant="@(told && !tested ? ButtonVariant.Primary : ButtonVariant.Ghost)" Size="ButtonSize.Small" disabled="@(!told)" @onclick="() => { _nextLit = false; _testing = true; }">@(tested ? "Test again" : "Try it")</Button>
                             </li>
                         }
-                        <li class="agent-detail__ready-step is-later">
+                        @{ var turnOnNow = told && (!Briefing.CanTry || Readiness.Tested(agent.Id)); }
+                        <li class="@($"agent-detail__ready-step {(turnOnNow ? "is-now" : "is-later")}")">
                             <span class="agent-detail__ready-mark" aria-hidden="true"><Typography TextStyle="TextStyle.Small12Semibold" As="span">@onStep</Typography></span>
                             <div class="agent-detail__ready-text">
                                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">Turn it on</Typography>
@@ -210,7 +217,7 @@ else
                             </div>
                             @if (Capabilities.CanReply)
                             {
-                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="_switching" disabled="@(agent.ChannelCount == 0 || !told || !KnowledgeReady)"
+                                <Button Variant="@(turnOnNow ? ButtonVariant.Primary : ButtonVariant.Secondary)" Size="ButtonSize.Small" Busy="_switching" disabled="@(agent.ChannelCount == 0 || !told || !KnowledgeReady)"
                                         @onclick="() => SetLiveAsync(agent, true)">Turn on</Button>
                             }
                         </li>
@@ -295,7 +302,7 @@ else
                                 }
                             </span>
                         </RowButton>
-                        <RowButton Class="agent-detail__stat" OnClick="OpenTasks" aria-label="@($"{today.TasksCreated} tasks created. See them in Task Requests.")">
+                        <RowButton Class="agent-detail__stat" OnClick="OpenTasks" aria-label="@($"{today.TasksCreated} tasks created. See them in Tasks.")">
                             <span class="agent-detail__stat-icon is-tasks"><Icon Name="IconName.RiTaskFill" Size="IconSize.Md" /></span>
                             <span class="agent-detail__stat-text">
                                 <Typography TextStyle="TextStyle.HeadingH2Semibold" As="strong">@today.TasksCreated</Typography>
@@ -574,14 +581,8 @@ else
                         <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="agent-detail__told-note">@note</Typography>
                     }
                     <div class="agent-detail__told-actions">
-                        @if (Briefing.CanTry)
-                        {
-                            <Button Size="ButtonSize.Large" @onclick="TestAfterTelling">@($"Test {telling.Name} as a customer")</Button>
-                        }
-                        else
-                        {
-                            <Button Size="ButtonSize.Large" @onclick="@(() => FinishTelling("overview"))">Done</Button>
-                        }
+                        @* On to its Overview: the next step waits there, lit (designer, 20 October 2026). *@
+                        <Button Size="ButtonSize.Large" @onclick="SeeWhatsNext">See what's next</Button>
                         <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Large" @onclick="@(() => FinishTelling("job"))">Change something</Button>
                     </div>
                 </section>
@@ -604,7 +605,7 @@ else
                     @JobSummary(JobBrief, [], _focusLine)
                 </div>
                 <AgentJobEditor @key="@($"update-{telling.Id}")" Brief="JobBrief" Name="@_form.DisplayName" Mascot="@_form.Mascot" Settings="_form.Settings" OnChange="StateHasChanged"
-                                UseCase="@_form.Settings.UseCase" CustomJob="@_form.Settings.CustomRole" Industry="@_form.Settings.Industry" Business="@Business"
+                                UseCase="@_form.Settings.UseCase" CustomJob="@_form.Settings.CustomRole" Industry="@(_form.Settings.Industry ?? Kind.Id)" Business="@Business"
                                 HideSummary OnUpdated="update => JobUpdatedAsync(telling, update)" />
             }
             else
@@ -619,7 +620,7 @@ else
                 </div>
             }
             <AgentJobEditor @key="@(newJob ? $"new-{settings.UseCase}" : $"tell-{telling.Id}")" Brief="@(settings.Brief ?? JobBrief)" Name="@_form.DisplayName" Mascot="@_form.Mascot" Settings="settings" OnChange="StateHasChanged"
-                            UseCase="@settings.UseCase" CustomJob="@settings.CustomRole" Industry="@settings.Industry" Business="@Business"
+                            UseCase="@settings.UseCase" CustomJob="@settings.CustomRole" Industry="@(settings.Industry ?? Kind.Id)" Business="@Business"
                             DraftKey="@(newJob ? null : telling.Id)" OnWritten="noted => newJob ? NewJobToldAsync(telling, noted) : JobToldAsync(telling, noted)"
                             TopicsSection="@TellTopics" HideSummary />
             }
@@ -632,8 +633,8 @@ else
     @* What is being edited is what is tested, saved or not. *@
     <AgentTestChat Open="_testing" OnClose="() => _testing = false"
                    Name="@_form.DisplayName" Mascot="@_form.Mascot" Business="@Business"
-                   Brief="JobBrief" UseCase="@_form.Settings.UseCase" Industry="@_form.Settings.Industry"
-                   OnChangeLine="ChangeLine" />
+                   Brief="JobBrief" UseCase="@_form.Settings.UseCase" Industry="@(_form.Settings.Industry ?? Kind.Id)"
+                   OnChangeLine="ChangeLine" OnReplied="() => Readiness.MarkTested(AgentId)" />
 }
 
 
@@ -815,6 +816,8 @@ else
     {
         TeachAi.Changed += KnowledgeChanged;
         Intro.Changed += IntroChanged;
+        Readiness.Changed += OnAgentsChanged;
+        await Kind.ReadAsync();
         AiAgentsState.Changed += OnAgentsChanged;
         Drafts.Changed += OnAgentsChanged;
         await AiAgentsState.LoadAsync();
@@ -1016,12 +1019,15 @@ else
         }
     }
 
-    // From the moment: on to a test (over its Overview), or to its job description to change something.
-    private void TestAfterTelling()
+    // From the moment: its Overview, the next step lit for a moment; or its job description, to change something.
+    private void SeeWhatsNext()
     {
         FinishTelling("overview");
-        _testing = true;
+        _nextLit = true;
     }
+
+    // The step to do next, lit as the Overview opens from the end of telling it its job.
+    private bool _nextLit;
 
     private void FinishTelling(string tab)
     {
@@ -1201,6 +1207,7 @@ else
         Intro.Changed -= IntroChanged;
         AiAgentsState.Changed -= OnAgentsChanged;
         Drafts.Changed -= OnAgentsChanged;
+        Readiness.Changed -= OnAgentsChanged;
         if (_speech is { } speech) _ = speech.DisposeAsync().AsTask();
         _self?.Dispose();
     }
@@ -1412,5 +1419,5 @@ else
 
     private void OpenInbox() => Nav.NavigateTo("/dashboard/conversations");
 
-    private void OpenTasks() => Nav.NavigateTo("/dashboard/task-requests");
+    private void OpenTasks() => Nav.NavigateTo("/dashboard/tasks");
 }

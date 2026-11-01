@@ -36,7 +36,13 @@
         <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h1">
             Good to see you, @WorkspaceDisplayName
         </Typography>
-        @if (Lede is { } lede)
+        @if (IsMember)
+        {
+            <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                You're working here as @AuthState.CurrentUser!.Role. Here's what your role covers.
+            </Typography>
+        }
+        else if (Lede is { } lede)
         {
             <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
                 @lede
@@ -44,7 +50,15 @@
         }
     </header>
 
-    <section class="workspace-actions" aria-label="Get started with OmniAI">
+    <section class="workspace-actions" aria-label="Get started with yára">
+        @* Setting the workspace up (channels, agents, the business) is the owner's;
+           a team member sees what their role opens instead. *@
+        @if (IsMember)
+        {
+            @MemberShortcuts
+        }
+        else
+        {
         @switch (Stage)
             {
                 case Step.New:
@@ -76,13 +90,14 @@
                     @Shortcuts
                     break;
         }
+        }
     </section>
 
-    @if (Stage is Step.New or Step.Channel)
+    @if (!IsMember && Stage is Step.New or Step.Channel)
     {
         <div class="workspace-onboarding__hint">
             <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-                You can explore the rest of OmniAI whenever you like.
+                You can explore the rest of yára whenever you like.
             </Typography>
         </div>
     }
@@ -413,6 +428,52 @@
             </div>
             <Button Variant="ButtonVariant.Ghost" @onclick="OpenChannels">Manage Channels</Button>
         </article>
+    };
+
+    // A team member, not the owner: they work in the workspace rather than set it up.
+    private bool IsMember => AuthState.CurrentUser is { IsOwner: false };
+
+    // One line under each part of the app a member's role may open, in the rail's order.
+    private static readonly Dictionary<string, string> MemberLines = new()
+    {
+        ["Inbox"] = "Customer conversations to answer.",
+        ["Customers"] = "The people who write to the business.",
+        ["Products & Services"] = "What the business sells.",
+        ["Tasks"] = "What needs doing for customers.",
+        ["Channels"] = "Where customers reach the business.",
+        ["AI Operations"] = "The AI agents and what they need.",
+        ["Insights"] = "How conversations are going.",
+        ["Knowledge"] = "What the AI knows about the business.",
+    };
+
+    private RenderFragment MemberShortcuts => __builder =>
+    {
+        List<NavEntry> open = NavMap.All
+            .Where(e => e.Path is not null && e.AnyPermission is not null && MemberLines.ContainsKey(e.Label))
+            .Where(e => e.AnyPermission!.Any(p => AuthState.CurrentUser!.Can(p)))
+            .ToList();
+
+        if (open.Count == 0)
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                Your role doesn't open any part of this workspace yet. Ask the owner for access.
+            </Typography>
+            return;
+        }
+
+        <nav class="workspace-shortcuts" aria-label="What your role covers">
+            @foreach (NavEntry entry in open)
+            {
+                NavEntry go = entry;
+                <RowButton Class="workspace-shortcut" OnClick="@(() => Nav.NavigateTo(go.Path!))">
+                    <span class="workspace-shortcut__top">
+                        <span class="workspace-shortcut__icon is-tone-emerald" aria-hidden="true"><Icon Name="@go.Glyph" Size="IconSize.Md" /></span>
+                    </span>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@go.Label</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="workspace-shortcut__line">@MemberLines[go.Label]</Typography>
+                </RowButton>
+            }
+        </nav>
     };
 
     private sealed record Shortcut(IconName Glyph, string Title, string Line, string? Href, string Tone);

@@ -5,7 +5,7 @@
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
 
-<PageTitle>Signing You In · OmniAI</PageTitle>
+<PageTitle>Signing You In · yára</PageTitle>
 
 @* The landing after Google: the API sends the session back on the query
    string, the page stores it and moves on. It only speaks if something is
@@ -51,6 +51,13 @@ else
     [SupplyParameterFromQuery]
     private string? workspaceId { get; set; }
 
+    [SupplyParameterFromQuery]
+    private string? role { get; set; }
+
+    // Comma-separated permission keys.
+    [SupplyParameterFromQuery]
+    private string? permissions { get; set; }
+
     private string? _error;
     private AuthResponse? _session;
 
@@ -83,6 +90,9 @@ else
             WorkspaceId = string.IsNullOrEmpty(workspaceId) ? userId : workspaceId,
             BusinessName = businessName,
             LogoUrl = string.IsNullOrEmpty(logoUrl) ? null : logoUrl,
+            // An API from before teams sends neither: the session was its owner's.
+            Role = string.IsNullOrEmpty(role) ? "Owner" : role,
+            Permissions = [.. (permissions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)],
         };
     }
 

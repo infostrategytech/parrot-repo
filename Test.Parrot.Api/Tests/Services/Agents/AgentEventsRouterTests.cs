@@ -1,3 +1,4 @@
+using Test.Parrot.Api.Tests.Services.Teams;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -30,7 +31,7 @@ public class AgentEventsRouterTests
     {
         Mock<IHubContext<MessagingHub>> hub = new();
         hub.SetupGet(h => h.Clients).Returns(_clients.Object);
-        return new AgentEventsRouter(_activity, _sessions, hub.Object, TimeProvider.System, NullLogger<AgentEventsRouter>.Instance);
+        return new AgentEventsRouter(_activity, _sessions, hub.Object, new PassThroughAudience(), TimeProvider.System, NullLogger<AgentEventsRouter>.Instance);
     }
 
     // The orchestrator's JSON, read exactly as the bus reads it.

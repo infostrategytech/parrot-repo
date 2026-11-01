@@ -1,260 +1,60 @@
-/* Task requests — the list.
+/* Tasks: one list of what needs doing, laid out as Products & Services is: the title, then the views and
+   filters on the page, then the table in a white card. As wide as the page before it (designer, 20 October
+   2026): the gutter outside, then everything on one 1440 measure, centred. */
+.tasks {
+  /* Gaps in the token set: no page-gutter, page-width, readable-measure, search-width or border-width scale.
+     The gutter and the cap are the earlier Task Requests page's. */
+  --ds-tasks-gutter: clamp(28px, 4vw, 66px);
+  --ds-tasks-max: 1440px;
+  --ds-tasks-measure: 680px;
+  --ds-tasks-search: 300px;
+  --ds-tasks-hairline: 1px;
 
-   Re-authored against tokens, but the LAYOUT follows the React page, because
-   layout is a design decision that was already made: content capped at 1440
-   and centred, a fluid gutter, one summary card divided into four, a toolbar
-   of search plus three menus, and a table whose right-hand columns are fixed
-   so every row lines up with the header. */
-
-.task-requests {
-  padding: var(--spacing-4xl) var(--ds-tr-gutter) var(--spacing-5xl);
+  display: grid;
+  padding: var(--spacing-4xl) var(--ds-tasks-gutter) var(--spacing-6xl);
+  color: var(--colors-text-primary);
 }
 
-/* Everything on the page shares one measure and sits centred, so the eye has
-   a single left edge to track down. */
-.task-requests > * {
-  width: min(var(--ds-tr-max), 100%);
-  margin-inline: auto;
-}
+/* One left edge for the eye to follow down the page. */
+.tasks > ::deep * { width: min(var(--ds-tasks-max), 100%); min-width: 0; margin-inline: auto; }
+.tasks ::deep p,
+.tasks ::deep h1,
+.tasks ::deep h2,
+.tasks ::deep h3 { margin: var(--spacing-none); }
+.tasks ::deep .tasks__muted { color: var(--colors-text-muted); }
 
-.task-requests {
-  /* Gaps in the token set: no page-gutter, content-width, control-height,
-     border-width, cell-height or column scale. The gutter, cap, heights and
-     column widths are the React page's. */
-  --ds-tr-gutter: clamp(28px, 4vw, 66px);
-  --ds-tr-max: 1440px;
-  --ds-tr-hairline: 1px;
-  --ds-tr-measure: 680px;
-  --ds-tr-control: 42px;
-  --ds-tr-tile-icon: 42px;
-  --ds-tr-tile-min: 88px;
-  --ds-tr-head-min: 45px;
-  --ds-tr-footer-min: 49px;
-  --ds-tr-search-min: 300px;
-  --ds-tr-menu-status: 170px;
-  --ds-tr-menu-channel: 180px;
-  --ds-tr-menu-agent: 190px;
-  --ds-tr-col-items: 220px;
-  --ds-tr-col-customer: 120px;
-  --ds-tr-col-payment: 118px;
-  --ds-tr-col-due: 74px;
-  --ds-tr-col-assignee: 116px;
-  --ds-tr-col-owner: 84px;
-  --ds-tr-col-action: 140px;
-}
-
-/* ── Header ──────────────────────────────────────────────────────────────── */
-
-.task-requests__header {
+/* The title and its line on the left; New task level with the line's foot. */
+.tasks__header {
   display: flex;
-  /* Baselines, not tops: the button sits level with the title's foot. */
+  gap: var(--spacing-3xl);
   align-items: flex-end;
   justify-content: space-between;
-  gap: var(--spacing-3xl);
   margin-bottom: var(--spacing-2xl);
 }
+.tasks__heading { display: grid; gap: var(--spacing-sm); }
+.tasks__heading ::deep .tasks__lede { max-width: var(--ds-tasks-measure); color: var(--colors-text-secondary); }
 
-.task-requests__heading { display: grid; gap: var(--spacing-sm); }
-
-::deep .task-requests__lede {
-  max-width: var(--ds-tr-measure);
-  color: var(--colors-text-muted);
-}
-
-/* ── Summary ─────────────────────────────────────────────────────────────── */
-/* One card divided into four, not four cards. The strip reads as a single
-   statement about the work; separate cards read as four unrelated facts. */
-
-.task-request-summary {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  overflow: hidden;
-  margin-bottom: var(--spacing-xl);
-  background: var(--colors-surface-card);
-  border: var(--ds-tr-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-2xl);
-  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
-}
-
-.task-request-summary article {
-  position: relative;
-  display: grid;
-  grid-template-columns: var(--ds-tr-tile-icon) minmax(0, 1fr);
-  gap: var(--spacing-md);
-  align-items: center;
-  min-height: var(--ds-tr-tile-min);
-  padding: var(--spacing-lg);
-}
-
-/* A hairline between cells, inset so it stops short of the card's edges. */
-.task-request-summary article + article::before {
-  content: "";
-  position: absolute;
-  top: var(--spacing-xl);
-  bottom: var(--spacing-xl);
-  left: 0;
-  width: var(--ds-tr-hairline);
-  background: var(--colors-accent-neutral-border);
-}
-
-.task-request-summary article > span {
-  display: grid;
-  place-items: center;
-  width: var(--ds-tr-tile-icon);
-  height: var(--ds-tr-tile-icon);
-  color: var(--colors-brand-primary);
-  background: var(--colors-interaction-selected);
-  border-radius: var(--radius-radius-lg);
-}
-
-/* The last tile counts what is finished, so it reads as done rather than as
-   another brand-coloured number. */
-.task-request-summary article:nth-child(4) > span {
-  color: var(--colors-accent-teal-text);
-  background: var(--colors-accent-teal-muted);
-}
-
-.task-request-summary article.has-attention > span,
-.task-request-summary article.has-warning > span {
-  color: var(--colors-feedback-warning-text);
-  background: var(--colors-feedback-warning-subtle);
-}
-
-.task-request-summary article > div { display: grid; gap: var(--spacing-2xs); }
-.task-request-summary ::deep strong { color: var(--colors-text-primary); }
-.task-request-summary ::deep small { color: var(--colors-text-muted); }
-
-/* ── Toolbar ─────────────────────────────────────────────────────────────── */
-
-.task-request-toolbar {
-  display: grid;
-  grid-template-columns:
-    minmax(var(--ds-tr-search-min), 1fr)
-    var(--ds-tr-menu-status)
-    var(--ds-tr-menu-channel)
-    var(--ds-tr-menu-agent);
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-lg);
-}
-
-.task-request-search {
-  display: flex;
-  gap: var(--spacing-sm);
-  align-items: center;
-  min-width: 0;
-  height: var(--ds-tr-control);
-  padding: var(--spacing-none) var(--spacing-md);
-  color: var(--colors-text-subtle);
-  background: var(--colors-surface-card);
-  border: var(--ds-tr-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-full);
-}
-
-.task-request-search:focus-within {
-  border-color: var(--colors-surface-ring);
-  box-shadow: 0 0 0 var(--spacing-2xs) color-mix(in srgb, var(--colors-brand-primary) 6%, transparent);
-}
-
-.task-request-search input {
-  width: 100%;
-  min-width: 0;
-  color: var(--colors-text-secondary);
-  background: transparent;
-  border: 0;
-  outline: 0;
-}
-
-/* The three menus stand level with the search. Reaching into FilterPopover
-   needs ::deep because it is a component of its own. */
-.task-request-toolbar ::deep .filter-popover__trigger { height: var(--ds-tr-control); }
-
-/* ── Table ───────────────────────────────────────────────────────────────── */
-/* A grid rather than a <table>: the columns have to stay aligned while each
-   row holds live controls, which a table layout fights. role="table" keeps the
-   semantics a screen reader needs. */
-
-.task-request-table-wrap {
-  overflow: hidden;
-  background: var(--colors-surface-card);
-  border: var(--ds-tr-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-2xl);
-  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
-}
-
-.task-request-table { min-width: 0; }
-
-.task-request-table-head,
-.task-request-table ::deep .task-request-row {
-  display: grid;
-  grid-template-columns:
-    minmax(var(--ds-tr-col-items), 1.5fr)
-    minmax(var(--ds-tr-col-customer), .85fr)
-    minmax(var(--ds-tr-col-payment), .8fr)
-    var(--ds-tr-col-due)
-    var(--ds-tr-col-assignee)
-    var(--ds-tr-col-owner)
-    var(--ds-tr-col-action);
-  gap: var(--spacing-sm);
-  align-items: center;
-}
-
-.task-request-table-head {
-  min-height: var(--ds-tr-head-min);
-  padding: var(--spacing-none) var(--spacing-md);
-  color: var(--colors-text-muted);
-  background: var(--colors-surface-background);
-  border-bottom: var(--ds-tr-hairline) solid var(--colors-surface-border);
-}
-
-.task-request-table ::deep .task-request-row {
-  border-bottom: var(--ds-tr-hairline) solid var(--colors-surface-border);
-}
-
-.task-request-table ::deep .task-request-row:last-child { border-bottom: 0; }
-
-.task-request-table-footer {
+/* The views on the left, search and filters on the right: Products' controls row. */
+.tasks__controls {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-md);
   align-items: center;
   justify-content: space-between;
-  min-width: 0;
-  min-height: var(--ds-tr-footer-min);
-  padding: var(--spacing-sm) var(--spacing-md);
-  color: var(--colors-text-subtle);
-  background: var(--colors-surface-background);
-  border-top: var(--ds-tr-hairline) solid var(--colors-surface-border);
+  margin-bottom: var(--spacing-lg);
+}
+.tasks__tools { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+.tasks__customer-scope { display: flex; flex-wrap: wrap; gap: var(--spacing-md); align-items: center; justify-content: space-between; margin-bottom: var(--spacing-lg); padding: var(--spacing-sm) var(--spacing-lg); background: var(--colors-accent-brand-subtle); border-radius: var(--radius-radius-lg); }
+.tasks__customer-scope ::deep p { overflow-wrap: anywhere; }
+.tasks__tools ::deep .tasks__search { width: var(--ds-tasks-search); }
+
+/* The table, its card and its pages are the shared DataTable's (designer, 28 October 2026). */
+
+@media (max-width: 1024px) {
+  .tasks__tools { width: 100%; }
+  .tasks__tools ::deep .tasks__search { flex: 1; width: auto; }
 }
 
-.task-request-table-footer > div {
-  display: flex;
-  gap: var(--spacing-sm);
-  align-items: center;
-}
-
-/* ── Narrow ──────────────────────────────────────────────────────────────── */
-
-@media (max-width: 1280px) {
-  .task-requests {
-    --ds-tr-search-min: 280px;
-    --ds-tr-menu-status: 160px;
-    --ds-tr-menu-channel: 160px;
-    --ds-tr-menu-agent: 160px;
-  }
-
-  .task-request-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .task-request-summary article:nth-child(3)::before { display: none; }
-}
-
-/* Tablets (below 1180px, designer, 14 October 2026): the search on a line of
-   its own with the three menus under it, and the table scrolling sideways
-   inside its card instead of cutting off its last columns. */
-@media not all and (min-width: 1180px) {
-  .task-request-toolbar { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .task-request-toolbar > .task-request-search { grid-column: 1 / -1; }
-  .task-request-table-wrap { overflow-x: auto; }
-  .task-request-table {
-    min-width: calc(var(--ds-tr-col-items) + var(--ds-tr-col-customer) + var(--ds-tr-col-payment) + var(--ds-tr-col-due)
-      + var(--ds-tr-col-assignee) + var(--ds-tr-col-owner) + var(--ds-tr-col-action) + var(--spacing-sm) * 6 + var(--spacing-md) * 2);
-  }
+@media (max-width: 760px) {
+  .tasks__header { flex-direction: column; align-items: stretch; gap: var(--spacing-lg); }
 }

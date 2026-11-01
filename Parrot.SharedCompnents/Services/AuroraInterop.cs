@@ -58,13 +58,24 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// handle is disposed. Intended for non-modal drawers and popovers that do
     /// not trap focus.
     /// </summary>
-    public async Task<IAsyncDisposable> BindEscapeAsync<T>(DotNetObjectReference<T> reference, string method)
+    public async Task<IAsyncDisposable> BindEscapeAsync<T>(DotNetObjectReference<T> reference, string method, ElementReference? owner = null)
         where T : class
     {
         var module = await _module.Value;
-        var handle = await module.InvokeAsync<IJSObjectReference>("bindEscape", reference, method);
+        var handle = await module.InvokeAsync<IJSObjectReference>("bindEscape", reference, method, owner);
         return new Handle(handle);
     }
+
+    /// <summary>Remembers a non-modal panel's trigger and restores it on disposal without trapping focus.</summary>
+    public async Task<IAsyncDisposable> RememberFocusAsync()
+    {
+        var module = await _module.Value;
+        return new Handle(await module.InvokeAsync<IJSObjectReference>("rememberFocus"));
+    }
+
+    /// <summary>Waits for a drawer's inert attribute to clear before focusing it after a server render.</summary>
+    public async Task<bool> FocusWhenInteractiveAsync(ElementReference element) =>
+        await (await _module.Value).InvokeAsync<bool>("focusWhenInteractive", element);
 
     /// <summary>
     /// Focuses the element on Ctrl+key (⌘+key on a Mac), for as long as the
@@ -82,6 +93,13 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// Opens a hidden file input. The browser only raises the picker for a
     /// genuine click on the input, so a styled button has to forward one.
     /// </summary>
+    /// <summary>The browser's time zone (an IANA id), or null when it can't say.</summary>
+    public async Task<string?> TimeZoneAsync()
+    {
+        var module = await _module.Value;
+        return await module.InvokeAsync<string?>("timeZone");
+    }
+
     public async Task ClickAsync(ElementReference element)
     {
         var module = await _module.Value;
@@ -150,6 +168,14 @@ public sealed class AuroraInterop : IAsyncDisposable
         return new Handle(handle);
     }
 
+    /// <summary>Opt-in numeric editing, enforced locally so server latency cannot move the caret.</summary>
+    public async Task<IAsyncDisposable> BindNumberInputAsync<T>(ElementReference input, DotNetObjectReference<T> target) where T : class
+    {
+        var module = await _module.Value;
+        var handle = await module.InvokeAsync<IJSObjectReference>("bindNumberInput", input, target);
+        return new Handle(handle);
+    }
+
     /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
     /// <summary>Inserts text at the field's caret (or over its selection) and returns the field's new text.</summary>
     public async Task<string?> InsertAtCaretAsync(ElementReference element, string text)
@@ -176,6 +202,7 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// now put in it with the focus and caret, or null. Call once, on the
     /// field's first render.
     /// </summary>
+    [Obsolete("The rail has no hover tooltips (designer, 21 October 2026).")]
     public async Task FollowRailTooltipsAsync(ElementReference rail)
     {
         var module = await _module.Value;
@@ -220,16 +247,29 @@ public sealed class AuroraInterop : IAsyncDisposable
     }
 
     /// <summary>Opens a menu upward when it would not fit below (see placeMenu).</summary>
+    [Obsolete("Menus float in the top layer now: FloatMenuAsync places them and keeps them on screen.")]
     public async Task PlaceMenuAsync(ElementReference menu)
     {
         var module = await _module.Value;
         await module.InvokeVoidAsync("placeMenu", menu);
     }
 
-    public async Task ScrollIntoViewAsync(ElementReference element)
+    /// <summary>
+    /// Draws a menu in the browser's top layer against its trigger, so a dialog or a panel that scrolls
+    /// can't cut it off (see floatMenu). <paramref name="layer"/> carries the popover attribute;
+    /// <paramref name="menu"/> is what gets placed inside it.
+    /// </summary>
+    public async Task FloatMenuAsync(ElementReference layer, ElementReference anchor, ElementReference menu, bool alignEnd = false, bool matchWidth = false)
     {
         var module = await _module.Value;
-        await module.InvokeVoidAsync("scrollIntoView", element);
+        await module.InvokeVoidAsync("floatMenu", layer, anchor, menu, alignEnd, matchWidth);
+    }
+
+    /// <summary>Scrolls an element into view: to the top ("start", the default), or "center".</summary>
+    public async Task ScrollIntoViewAsync(ElementReference element, string block = "start")
+    {
+        var module = await _module.Value;
+        await module.InvokeVoidAsync("scrollIntoView", element, block);
     }
 
     public async Task<string?> ReadStorageAsync(string key)

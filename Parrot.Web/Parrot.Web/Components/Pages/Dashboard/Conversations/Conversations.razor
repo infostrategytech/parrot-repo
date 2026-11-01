@@ -1,5 +1,6 @@
 @page "/dashboard/conversations"
 @page "/dashboard/conversations/{ConversationId}"
+@attribute [RequiresAccess(AccessRules.Inbox)]
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @layout DashboardLayout
 @implements IDisposable
@@ -13,8 +14,9 @@
 @inject Parrot.Web.Services.FeedbackService Feedback
 @inject Parrot.Web.Services.Realtime.RealtimeClient Realtime
 @inject Parrot.Web.Services.InboxUnreadState Unread
+@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
 
-<PageTitle>Inbox · OmniAI</PageTitle>
+<PageTitle>Inbox · yára</PageTitle>
 
 @* The React inbox (project aurora frontend) over Parrot's conversations.
    Parrot lists conversations in pages of 50, reads the selected thread, takes
@@ -240,7 +242,7 @@
                 </span>
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="inbox-customer-trigger"
                         aria-label="View customer details" title="View customer details"
-                        aria-controls="customer-details-panel" aria-expanded="@_customerOpen"
+                        aria-controls="customer-details-panel" aria-expanded="@_customerOpen.ToString().ToLowerInvariant()"
                         @onclick="OpenCustomerDetailsAsync">
                     <ChildContent>
                         <PetalAvatar Seed="@_selected.Id" Initials="@_selected.CustomerInitials" Size="AvatarSize.Md" />
@@ -311,6 +313,10 @@
                                         OnClick="() => TogglePinAsync(_selected)" />
                         <ActionMenuItem Label="Mark as unread" Glyph="IconName.RiMailFill" OnClick="MarkSelectedUnreadAsync" />
                         <ActionMenuItem Label="Copy conversation ID" Glyph="IconName.RiFileCopyFill" OnClick="CopyConversationIdAsync" />
+                        @if (Tasks.Available)
+                        {
+                            <ActionMenuItem Label="Create task" Glyph="IconName.RiClipboardFill" OnClick="StartTask" />
+                        }
                     </ActionMenu>
                 </div>
             </header>
@@ -319,7 +325,7 @@
                     <ConversationTimeline @key="_selected.Id" Conversation="@_selected"
                                           AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" Busy="@_busy"
                                           OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" OnChanged="RefreshAsync"
-                                          OnCustomerDetails="OpenCustomerDetailsAsync" />
+                                          OnCustomerDetails="OpenCustomerDetailsAsync" FocusMessageId="@FocusMessage" />
                 </div>
 
                 @* A raw full-area button is intentional: it is the drawer's
@@ -329,9 +335,10 @@
                         @onclick="CloseCustomerDetailsAsync"></button>
                 <div id="customer-details-panel"
                      class="@($"inbox-customer {(_customerOpen ? "is-open" : "")}")"
-                     aria-hidden="@(!_customerOpen)" inert="@(!_customerOpen)">
-                    <CustomerPanel Conversation="@_selected" Open="@_customerOpen" OnClose="CloseCustomerDetailsAsync"
-                                   OnPreview="item => _panelMedia = item" />
+                     role="region" aria-label="Customer details" tabindex="-1" @ref="_customerPanel"
+                     aria-hidden="@((!_customerOpen).ToString().ToLowerInvariant())" inert="@(!_customerOpen)">
+                    <CustomerPanel Customer="@CustomerView.From(_selected)" Open="@_customerOpen" OnClose="CloseCustomerDetailsAsync"
+                                   OnPreview="item => _panelMedia = item" OnAddTask="StartTask" OnOpenConversation="OpenProfileConversation" />
                 </div>
             </div>
         }
@@ -341,8 +348,32 @@
 @* Outside the drawer: it scrolls and slides, and would confine a full-screen viewer to itself. *@
 <MediaViewer Item="_panelMedia" OnClose="() => _panelMedia = null" />
 
+@* A task for the open conversation: from its menu, or from the customer details. *@
+@if (_selected is not null)
+{
+    <Parrot.Web.Components.Pages.Dashboard.TaskRequests.NewTaskDialog Open="_taskOpen" Customer="TaskCustomer(_selected)"
+                                                                      OnClose="() => _taskOpen = false" OnCreated="TaskAddedAsync" />
+}
+
 @code {
+    private bool _taskOpen;
+    private void StartTask() => _taskOpen = true;
+
+    private static Parrot.Web.Features.Dashboard.TaskRequests.TaskCustomer TaskCustomer(ConversationItem conversation) =>
+        new(conversation.CustomerName, conversation.Channel,
+            conversation.Username is { Length: > 0 } username ? "@" + username : conversation.Sender, conversation.Id);
+
+    private Task TaskAddedAsync(Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest task)
+    {
+        _taskOpen = false;
+        Toasts.Show(new ToastMessage("Task added.", ActionLabel: "View", OnAction: () => Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.Id)}")));
+        return Task.CompletedTask;
+    }
+
     [Parameter] public string? ConversationId { get; set; }
+
+    /// <summary>Opened at one line of the thread (a task's Reply: where the task was raised), brought into view and lit.</summary>
+    [SupplyParameterFromQuery(Name = "message")] public string? FocusMessage { get; set; }
 
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConversationFilters _filters = new();
@@ -357,6 +388,9 @@
     private int _loaded = 50;
     private DotNetObjectReference<Conversations>? _self;
     private IAsyncDisposable? _customerEscape;
+    private IAsyncDisposable? _customerFocus;
+    private ElementReference _customerPanel;
+    private bool _customerFocusPending;
 
     private static readonly (InboxScope Value, string Label)[] ScopeOptions =
         [(InboxScope.All, "All"), (InboxScope.Mine, "Mine"), (InboxScope.Unassigned, "Unassigned")];
@@ -476,6 +510,11 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_customerFocusPending && _customerOpen)
+        {
+            _customerFocusPending = false;
+            await Interop.FocusWhenInteractiveAsync(_customerPanel);
+        }
         if (!firstRender) return;
         _self = DotNetObjectReference.Create(this);
         await RefreshAsync();
@@ -829,21 +868,33 @@
 
     private async Task OpenCustomerDetailsAsync()
     {
-        if (_customerOpen || _selected is null) return;
+        if (_selected is null) return;
+        if (_customerOpen) { await CloseCustomerDetailsAsync(); return; }
+        _customerFocus = await Interop.RememberFocusAsync();
         _customerOpen = true;
+        _customerFocusPending = true;
         if (_self is not null)
-            _customerEscape = await Interop.BindEscapeAsync(_self, nameof(CloseCustomerDetailsAsync));
+            _customerEscape = await Interop.BindEscapeAsync(_self, nameof(CloseCustomerDetailsAsync), _customerPanel);
     }
+
+    private void OpenProfileConversation(CustomerChannel channel) =>
+        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(channel.ConversationId)}");
 
     [JSInvokable]
     public async Task CloseCustomerDetailsAsync()
     {
         if (!_customerOpen && _customerEscape is null) return;
         _customerOpen = false;
+        _customerFocusPending = false;
         if (_customerEscape is not null)
         {
             await _customerEscape.DisposeAsync();
             _customerEscape = null;
+        }
+        if (_customerFocus is not null)
+        {
+            await _customerFocus.DisposeAsync();
+            _customerFocus = null;
         }
         await InvokeAsync(StateHasChanged);
     }
@@ -949,6 +1000,7 @@
         _disposed = true; AuthState.OnChange -= AuthChanged;
         Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.MediaChanged -= OnMediaChanged; _mediaRefresh?.Cancel(); Realtime.Reconnected -= OnRealtimeReconnected;
         _lifetime.Cancel(); _lifetime.Dispose();
+        if (_customerFocus is not null) _ = _customerFocus.DisposeAsync();
         if (_customerEscape is not null) _ = _customerEscape.DisposeAsync().AsTask().ContinueWith(_ => _self?.Dispose());
         else _self?.Dispose();
     }

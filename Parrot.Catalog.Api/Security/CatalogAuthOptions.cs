@@ -23,5 +23,15 @@ public sealed class CatalogAuthOptions
 
     public int ClockSkewSeconds { get; set; } = 30;
 
+    /// <summary>
+    /// Parrot API's base address. When set, every request made with a Parrot
+    /// session token is checked against the member's current access there
+    /// (<see cref="SessionAccessCheck"/>). Unset: the token's scopes stand.
+    /// </summary>
+    public string? AccessCheckUrl { get; set; }
+
+    /// <summary>How long one answer is reused. 0, the default, asks on every request, so a change applies at once.</summary>
+    public int AccessCheckCacheSeconds { get; set; }
+
     public bool IsOidc => string.Equals(Mode, "Oidc", StringComparison.OrdinalIgnoreCase);
 }

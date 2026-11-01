@@ -1,0 +1,43 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Pages of a long list, as Products & Services draws them (designer, 21 October 2026: Tasks had "Show
+   more", which only appeared past 25 and was never seen): how many are showing out of how many, then
+   Previous, the page, Next. The count is always there under a list; the pages only when there are more
+   than one. The caller owns the page; a DataTable's footer band is its container. *@
+<nav class="ds-pagination @Class" aria-label="@AriaLabel">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span">
+        @(Total == 0 ? "Nothing to show" : $"Showing {First}–{Last} of {Total}")
+    </Typography>
+    @* The pages only when there's more than one (designer, 28 October 2026): Previous and Next that can't be
+       used are noise under a short list. *@
+    @if (Pages > 1)
+    {
+        <div class="ds-pagination__controls">
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Current <= 1)"
+                    @onclick="() => PageChanged.InvokeAsync(Current - 1)">Previous</Button>
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" aria-live="polite">Page @Current of @Pages</Typography>
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Current >= Pages)"
+                    @onclick="() => PageChanged.InvokeAsync(Current + 1)">Next</Button>
+        </div>
+    }
+</nav>
+
+@code {
+    /// <summary>The page shown, from 1.</summary>
+    [Parameter, EditorRequired] public int Page { get; set; } = 1;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    /// <summary>How many there are in all, after any search or filter.</summary>
+    [Parameter, EditorRequired] public int Total { get; set; }
+
+    [Parameter] public int PageSize { get; set; } = 25;
+    [Parameter] public string AriaLabel { get; set; } = "Pages";
+    [Parameter] public string? Class { get; set; }
+
+    /// <summary>How many pages: one at least, so "Page 1 of 1" reads right for a short list.</summary>
+    public int Pages => Math.Max(1, (int)Math.Ceiling(Total / (double)Math.Max(1, PageSize)));
+
+    private int Current => Math.Clamp(Page, 1, Pages);
+    private int First => Total == 0 ? 0 : (Current - 1) * PageSize + 1;
+    private int Last => Math.Min(Current * PageSize, Total);
+}

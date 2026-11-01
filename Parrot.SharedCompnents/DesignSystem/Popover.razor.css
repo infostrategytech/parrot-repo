@@ -1,0 +1,66 @@
+/* A trigger and the panel it opens, drawn above everything (the browser's top layer). */
+.ds-popover {
+  /* Gaps in the token set: no border-width scale and no component width scale. */
+  --ds-popover-hairline: 1px;
+  --ds-popover-panel: 268px;
+  --ds-popover-panel-wide: 360px;
+
+  position: relative;
+  display: inline-flex;
+  min-width: 0;
+}
+
+/* The layer covers the screen, transparent, so a click anywhere else lands on the dismiss button. The
+   browser's own popover styles (centred, bordered, filled) are undone. */
+.ds-popover__layer {
+  position: fixed;
+  inset: 0;
+  width: auto;
+  height: auto;
+  max-width: none;
+  max-height: none;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  overflow: visible;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+
+.ds-popover__dismiss {
+  position: absolute;
+  inset: 0;
+  padding: var(--spacing-none);
+  background: transparent;
+  border: 0;
+  cursor: default;
+}
+
+/* Placed against the trigger by floatMenu (top and left); the same card as FilterPopover's menu. */
+.ds-popover__panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  display: grid;
+  gap: var(--spacing-2xs);
+  align-content: start;
+  width: min(var(--ds-popover-panel), calc(100vw - var(--spacing-lg)));
+  padding: var(--spacing-sm);
+  overflow-y: auto;
+  scrollbar-width: none;
+  color: var(--colors-surface-popover-foreground);
+  background: var(--colors-surface-popover);
+  border: var(--ds-popover-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow), 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+}
+.ds-popover__panel::-webkit-scrollbar { display: none; }
+.ds-popover__panel.is-wide { width: min(var(--ds-popover-panel-wide), calc(100vw - var(--spacing-lg))); }
+
+.ds-popover__panel > header {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-xs);
+}
+.ds-popover__panel > header ::deep strong { color: var(--colors-text-primary); }
+.ds-popover__panel > header ::deep small { color: var(--colors-text-muted); }

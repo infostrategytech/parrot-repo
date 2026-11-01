@@ -2,107 +2,241 @@
 @using System.Globalization
 @inject AuroraInterop Interop
 @inject Parrot.Web.Services.ConversationClient Client
+@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
+@inject Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState Agents
+@inject Parrot.Web.Services.UserClock Clock
+@inject ToastService Toasts
+@inject Parrot.Web.Services.ICustomerLinks CustomerLinks
+@using Parrot.Web.Components.Pages.Dashboard.Contacts
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@using Parrot.Web.Components.Pages.Dashboard.TaskRequests
 @implements IDisposable
 
-@* A focused reference for the current conversation. Only details that help a
-   teammate act are shown; speculative CRM metrics stay out. *@
-<aside class="customer-panel" aria-label="Customer details">
-    <header class="customer-panel__header">
-        <div>
+@* Customer details: a focused reference for one customer. Only details that help a teammate act are
+   shown; speculative CRM metrics stay out. One panel for the Inbox (the open conversation's customer, in its
+   own drawer) and the Customers page (inside a side panel, Embedded) (designer, 21 October 2026). *@
+<aside class="customer-panel @(Embedded ? "is-embedded" : null)" aria-label="Customer details">
+    @if (!Embedded)
+    {
+        <header class="customer-panel__header">
             <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Customer details</Typography>
-            <Typography TextStyle="TextStyle.Small12Regular" As="p">Useful details for this conversation</Typography>
-        </div>
-        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
-                aria-label="Close customer details" title="Close customer details" @onclick="OnClose">
-            <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
-        </Button>
-    </header>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
+                    aria-label="Close customer details" title="Close customer details" @onclick="OnClose">
+                <IconLeft><Icon Name="IconName.RiCloseFill" Size="IconSize.Md" /></IconLeft>
+            </Button>
+        </header>
+    }
 
     <section class="customer-profile">
-        <PetalAvatar Seed="@Conversation.Id" Initials="@Conversation.CustomerInitials" Size="AvatarSize.Lg" />
-        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Conversation.CustomerName</Typography>
-        <div>
-            <ChannelGlyph Channel="@Conversation.Channel" Compact />
-            <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChannelLabel(Conversation.Channel)</Typography>
-            <span aria-hidden="true">·</span>
-            <Typography TextStyle="TextStyle.Small12Regular" As="span">@(Conversation.Username is { Length: > 0 } ? "@" + Conversation.Username : Conversation.Sender)</Typography>
-        </div>
+        <PetalAvatar Seed="@Customer.Seed" Initials="@Customer.Initials" Size="AvatarSize.Lg" />
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Customer.Name</Typography>
+        @if (Customer.Primary is { } primary)
+        {
+            <div>
+                <ChannelGlyph Channel="@primary.Platform" Compact />
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@ChannelLabel(primary.Platform)</Typography>
+                <span aria-hidden="true">·</span>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@primary.Handle</Typography>
+            </div>
+        }
+        @* Their own chat app, one tap away, under who they are rather than as a section of its own. *@
+        @if (Customer.Primary?.PlatformLink is { } link)
+        {
+            <a class="customer-profile__platform" href="@link.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"{link.ButtonLabel} (opens in a new tab)")">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@link.ButtonLabel</Typography>
+                <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
+            </a>
+        }
     </section>
 
     <div class="customer-panel__scroll">
-        <CustomerSection Title="Contact">
+        @* What's open for this customer, and a way to add a task from here: the customer and the
+           conversation come with it (designer, 20 October 2026). First, as what needs doing for them
+           matters most here. Hidden until tasks can be kept. *@
+        @if (Tasks.Available)
+        {
+            <CustomerSection Title="Tasks" Count="@(OpenTasks.Count == 0 ? null : OpenTasks.Count)">
+                <div class="customer-task-list">
+                    @if (_tasksError is not null)
+                    {
+                        <InlineError Message="@_tasksError">
+                            <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadTasksAsync">Try again</Button></Action>
+                        </InlineError>
+                    }
+                    @if (_tasksLoading)
+                    {
+                        <Skeleton Shape="SkeletonShape.Line" />
+                    }
+                    @foreach (var task in OpenTasks.Take(3))
+                    {
+                        <a href="@TaskUrl(task.Id)" class="customer-task" aria-label="@($"Open task: {task.Title}")">
+                            <TaskKindMark Kind="task.Kind" Small />
+                            <span class="customer-task__words">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="customer-task__title">@task.Title</Typography>
+                                @* Who raised it at a glance: an agent with the look the business chose for it (designer, 21 October 2026). *@
+                                <span class="customer-task__meta">
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{TaskWords.Label(task.State)} · {(task.RaisedByAgent ? "Raised by" : "Added by")}")</Typography>
+                                    @if (TaskWords.AgentLook(task, Agents.Agents) is { } look)
+                                    {
+                                        <img class="customer-task__look" src="@look" alt="" />
+                                    }
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@task.RaisedBy</Typography>
+                                </span>
+                            </span>
+                            <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" /></span>
+                        </a>
+                    }
+                    @if (OpenTasks.Count == 0 && !_tasksLoading && _tasksError is null)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="customer-empty">@($"Nothing open for {Customer.Name}.")</Typography>
+                    }
+                    else if (OpenTasks.Count > 3)
+                    {
+                        <a href="@CustomerTaskScope.Url(Customer.Name, Customer.Channels.Where(channel => channel.HasConversation).Select(channel => channel.ConversationId))" class="customer-tasks__more">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@($"See all {OpenTasks.Count} in Tasks")</Typography>
+                        </a>
+                    }
+                    @if (Customer.CanCreateTask && OnAddTask.HasDelegate)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="customer-tasks__add" @onclick="OnAddTask">
+                            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                            <ChildContent>Add a task</ChildContent>
+                        </Button>
+                    }
+                    else
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="customer-empty">You can link tasks after this customer's first conversation.</Typography>
+                    }
+                </div>
+            </CustomerSection>
+        }
+
+        @* What the team knows about them, after what the team is doing for them: more use mid-conversation than
+           their details or media (audit, 22 October 2026). *@
+        @if (NotesLoading || NotesError is not null)
+        {
+            <CustomerSection Title="Latest internal note">
+                @if (NotesLoading) { <Skeleton Shape="SkeletonShape.Line" /> }
+                @if (NotesError is not null)
+                {
+                    <InlineError Message="@NotesError">
+                        <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnRetryDetails">Try again</Button></Action>
+                    </InlineError>
+                }
+            </CustomerSection>
+        }
+        else if (Customer.LatestNote is { } note)
+        {
+            <CustomerSection Title="Latest internal note">
+                <article class="customer-latest-note">
+                    <header>
+                        <span><Icon Name="IconName.RiLock2Fill" Size="IconSize.Sm" /></span>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@note.Author</Typography>
+                        <Typography TextStyle="TextStyle.Small10Medium" As="time">@NoteDate(note.At)</Typography>
+                    </header>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@note.Text</Typography>
+                </article>
+            </CustomerSection>
+        }
+
+        <CustomerSection Title="Details">
+            @if (DetailsLoading)
+            {
+                <div class="customer-detail-loading" role="status" aria-label="Loading customer details">
+                    <Skeleton Shape="SkeletonShape.Line" /><Skeleton Shape="SkeletonShape.Line" />
+                </div>
+            }
+            @if (DetailsError is not null)
+            {
+                <InlineError Message="@DetailsError">
+                    <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnRetryDetails">Try again</Button></Action>
+                </InlineError>
+            }
             <div class="customer-contact-list">
-                @* Each row copies its value; the whole row is intentionally the control. *@
-                @if (Profile?.Email is { } email)
+                @* Each contact row copies its value; the whole row is intentionally the control. *@
+                @if (Customer.Email is { Length: > 0 } email)
                 {
                     <RowButton aria-label="@($"Copy email {email}")" OnClick='() => CopyAsync("email", email)'>
                         <Icon Name="IconName.RiMailFill" Size="IconSize.Sm" />
-                        <span><small>Email</small><strong>@email</strong></span>
+                        <span><Typography TextStyle="TextStyle.Small12Medium" As="small">Email</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@email</Typography></span>
                         <Icon Name="@(_copied == "email" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
                     </RowButton>
                 }
-                @if (Phone is { } phone)
+                @if (Customer.Phone is { Length: > 0 } stored)
                 {
+                    @* With its +, as the channel line above writes it (designer, 29 October 2026). *@
+                    var phone = ContactText.Phone(stored).Number ?? stored;
                     <RowButton aria-label="@($"Copy phone {phone}")" OnClick='() => CopyAsync("phone", phone)'>
                         <Icon Name="IconName.RiPhoneFill" Size="IconSize.Sm" />
-                        <span><small>Phone</small><strong>@phone</strong></span>
+                        <span><Typography TextStyle="TextStyle.Small12Medium" As="small">Phone</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@phone</Typography></span>
                         <Icon Name="@(_copied == "phone" ? IconName.RiCheckFill : IconName.RiFileCopyFill)" Size="IconSize.Sm" />
                     </RowButton>
                 }
-                @if (!string.IsNullOrWhiteSpace(Profile?.Location))
+                @if (Customer.Location is { Length: > 0 } location)
                 {
                     <div>
                         <Icon Name="IconName.RiMapPin2Fill" Size="IconSize.Sm" />
-                        <span><small>Location</small><strong>@Profile!.Location</strong></span>
+                        <span><Typography TextStyle="TextStyle.Small12Medium" As="small">Location</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@location</Typography></span>
                     </div>
                 }
-            </div>
-        </CustomerSection>
-
-        <CustomerSection Title="Conversation">
-            <div class="customer-contact-list">
-                <div>
-                    <Icon Name="IconName.RiMessage2Fill" Size="IconSize.Sm" />
-                    <span><small>Last message</small><strong>@DateTimeLabel(Conversation.UpdatedAt)</strong></span>
-                </div>
-                @if (FirstContact is { } first)
+                @if (Customer.LastMessageAt is { } lastAt)
                 {
                     <div>
-                        <Icon Name="IconName.RiCalendarCheckFill" Size="IconSize.Sm" />
-                        <span><small>@(Profile?.JoinedAt is null ? "First message" : "Customer since")</small><strong>@Date(first)</strong></span>
+                        <Icon Name="IconName.RiMessage2Fill" Size="IconSize.Sm" />
+                        <span><Typography TextStyle="TextStyle.Small12Medium" As="small">Last customer message</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@DateTimeLabel(lastAt)</Typography></span>
                     </div>
                 }
-                @if (Conversation.ReplyWindowEndsAt is { } windowEnd)
+                @if (Customer.ReplyWindowEndsAt is { } windowEnd)
                 {
                     <div>
                         <Icon Name="IconName.RiTimerFill" Size="IconSize.Sm" />
-                        <span><small>Reply window</small><strong>@ReplyWindowLabel.Describe(windowEnd, DateTime.UtcNow)</strong></span>
+                        <span><Typography TextStyle="TextStyle.Small12Medium" As="small">Reply window</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@ReplyWindowLabel.Describe(windowEnd, DateTime.UtcNow)</Typography></span>
                     </div>
                 }
-                @if (LocalTime is { } local)
+                @* Where a customer came from, when it wasn't a message: here rather than in the list (designer,
+                   22 October 2026), so the list reads one fact a column, and it names the teammate once there's a team. *@
+                @if (Customer.Added is { } added)
                 {
                     <div>
-                        <Icon Name="IconName.RiGlobalFill" Size="IconSize.Sm" />
-                        <span><small>Local time</small><strong>@local</strong></span>
+                        <Icon Name="IconName.RiUserAddFill" Size="IconSize.Sm" />
+                        <span><Typography TextStyle="TextStyle.Small12Medium" As="small">Added by</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@($"{added.By}, {Date(added.At)}")</Typography></span>
                     </div>
                 }
             </div>
-            @if (Profile is { Tags.Count: > 0 })
-            {
-                <div class="customer-tags" aria-label="Tags">
-                    @foreach (var tag in Profile.Tags)
-                    {
-                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@tag</Typography>
-                    }
-                </div>
-            }
         </CustomerSection>
 
+        @if (CustomerLinks.Available)
+        {
+            <CustomerProfiles Customer="Customer" Open="Open" OnOpenConversation="OnOpenConversation" OnChanged="OnProfilesChanged" />
+        }
+        else if (Customer.Channels.Count > 1)
+        {
+            <CustomerSection Title="Where they message you" Count="@Customer.Channels.Count">
+                <div class="customer-contact-list">
+                    @foreach (var channel in Customer.Channels)
+                    {
+                        var current = channel;
+                        <div class="customer-channel">
+                            <ChannelGlyph Channel="@current.Platform" Compact />
+                            <span><Typography TextStyle="TextStyle.Small12Medium" As="small">@ChannelLabel(current.Platform)</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="strong">@current.Handle</Typography></span>
+                            @if (OnOpenConversation.HasDelegate && current.HasConversation)
+                            {
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Open the {ChannelLabel(current.Platform)} conversation")"
+                                        @onclick="() => OnOpenConversation.InvokeAsync(current)">Open</Button>
+                            }
+                        </div>
+                    }
+                </div>
+            </CustomerSection>
+        }
+
+        @if (Customer.Primary is { HasConversation: true })
+        {
         <CustomerSection Title="Media & files" Count="@(_loaded && _next is null ? _items.Count : null)">
             @if (_failed)
             {
                 <div class="customer-media-state">
-                    <Typography TextStyle="TextStyle.Small12Regular" As="p">Media could not be loaded.</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p">Media could not be loaded.</Typography>
                     <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => LoadMediaAsync(true)">Try again</Button>
                 </div>
             }
@@ -117,7 +251,7 @@
             }
             else if (_items.Count == 0)
             {
-                <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">Photos, videos, voice notes and documents this customer sends will appear here.</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="customer-empty">Photos, videos, voice notes and documents this customer sends will appear here.</Typography>
             }
             else
             {
@@ -137,7 +271,7 @@
                 {
                     @if (!Visuals.Any())
                     {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No photos or videos yet.</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="customer-empty">No photos or videos yet.</Typography>
                     }
                     else
                     {
@@ -176,7 +310,7 @@
                 {
                     @if (!Files.Any())
                     {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No documents or audio yet.</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="customer-empty">No documents or audio yet.</Typography>
                     }
                     else
                     {
@@ -220,7 +354,7 @@
                 {
                     @if (!Links.Any())
                     {
-                        <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="customer-empty">No shared posts yet.</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="customer-empty">No shared posts yet.</Typography>
                     }
                     else
                     {
@@ -246,65 +380,35 @@
                 }
             }
         </CustomerSection>
-
-        @if (Conversation.PlatformLink is { } link)
-        {
-            <CustomerSection Title="Chat on their platform">
-                <div class="customer-tasks">
-                    <a href="@link.Url" target="_blank" rel="noopener noreferrer" aria-label="@($"{link.ButtonLabel} (opens in a new tab)")">
-                        <span><ChannelGlyph Channel="@Conversation.Channel" Compact /></span>
-                        <span>
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@link.ButtonLabel</Typography>
-                            <Typography TextStyle="TextStyle.Small12Medium" As="small">@link.Hint(Conversation.CustomerName)</Typography>
-                        </span>
-                        <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span>
-                    </a>
-                </div>
-            </CustomerSection>
         }
 
-        @if (LatestInternalNote is { } note)
-        {
-            <CustomerSection Title="Latest internal note">
-                <article class="customer-latest-note">
-                    <header>
-                        <span><Icon Name="IconName.RiLock2Fill" Size="IconSize.Sm" /></span>
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@(note.Author?.Name ?? "Team member")</Typography>
-                        <Typography TextStyle="TextStyle.Small10Regular" As="time">@NoteDate(note.ReceivedAt)</Typography>
-                    </header>
-                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@note.Text</Typography>
-                </article>
-            </CustomerSection>
-        }
 
-        @if (Profile is { RecentRequests.Count: > 0 })
-        {
-            <CustomerSection Title="Recent task requests" Count="@Profile.RecentRequests.Count">
-                <div class="customer-tasks">
-                    @foreach (var request in Profile.RecentRequests.Take(3))
-                    {
-                        <a href="@TaskUrl(request.Id)" aria-label="@($"Open task request {request.Id}")">
-                            <span><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span>
-                            <span>
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@request.Id</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="small">@Date(request.PlacedAt)</Typography>
-                            </span>
-                            <span class="customer-task__arrow"><Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" /></span>
-                        </a>
-                    }
-                </div>
-            </CustomerSection>
-        }
     </div>
 </aside>
 
+
 @code {
-    [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
+    /// <summary>Who: the open conversation's customer (CustomerView.From), or one from the customers API.</summary>
+    [Parameter, EditorRequired] public CustomerView Customer { get; set; } = default!;
+
+    /// <summary>Inside another panel that has its own heading and close (the Customers page): no drawer of its own.</summary>
+    [Parameter] public bool Embedded { get; set; }
+    [Parameter] public bool DetailsLoading { get; set; }
+    [Parameter] public string? DetailsError { get; set; }
+    [Parameter] public bool NotesLoading { get; set; }
+    [Parameter] public string? NotesError { get; set; }
+    [Parameter] public EventCallback OnRetryDetails { get; set; }
+    [Parameter] public EventCallback<Parrot.Web.Services.CustomerDetailDto> OnProfilesChanged { get; set; }
+
+    /// <summary>Open one of their conversations (Customers, for a customer on more than one channel).</summary>
+    [Parameter] public EventCallback<CustomerChannel> OnOpenConversation { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     /// <summary>Whether the drawer is showing. The media list is only read while it is, so closed panels cost no calls.</summary>
     [Parameter] public bool Open { get; set; }
     /// <summary>A picture was chosen: the inbox opens it full screen, outside this scrolling drawer.</summary>
     [Parameter] public EventCallback<MediaViewerItem> OnPreview { get; set; }
+    /// <summary>Add a task for this customer: the inbox opens its own form, over the whole app rather than inside this drawer.</summary>
+    [Parameter] public EventCallback OnAddTask { get; set; }
 
     private enum MediaTab { Media, Files, Links }
 
@@ -314,21 +418,37 @@
     private bool _loaded;
     private bool _failed;
     private bool _loadingMore;
-    private string? _loadedFor;
+    private string? _loadedFor, _mediaFor;
     private CancellationTokenSource _cts = new();
     private IEnumerable<InboxMediaItemDto> Visuals => _items.Where(i => i.Media.IsVisual);
     private IEnumerable<InboxMediaItemDto> Files => _items.Where(i => !i.Media.IsVisual && !i.Media.IsLink);
     private IEnumerable<InboxMediaItemDto> Links => _items.Where(i => i.Media.IsLink);
+    private bool _clockRead;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!Open || _clockRead) return;
+        _clockRead = true;
+        await Clock.ReadAsync();
+        if (!_disposed) await InvokeAsync(StateHasChanged);
+    }
 
     // Read again when the drawer opens on another customer, or when this thread gains a message with files.
     protected override async Task OnParametersSetAsync()
     {
-        if (!Open) return;
-        // Files that finish loading change the list without changing how many messages carry files.
-        var key = $"{Conversation.Id}:{Conversation.Messages.Count(m => m.Attachments.Count > 0)}:{Conversation.Messages.Sum(m => m.Attachments.Count(a => a.Status == "ready"))}";
+        if (!Open) { _loadedFor = null; _tasksFor = null; return; }
+        if (Tasks.Available && _tasksFor != TasksKey)
+        {
+            _tasksFor = TasksKey;
+            await LoadTasksAsync();
+        }
+        // Media is read for the conversation the panel is about; the key changes when its files do.
+        if (Customer.Primary is not { HasConversation: true } primary) return;
+        var key = Customer.MediaKey.Length > 0 ? Customer.MediaKey : primary.ConversationId;
         if (key == _loadedFor) return;
-        var sameCustomer = _loadedFor?.StartsWith(Conversation.Id + ":", StringComparison.Ordinal) == true;
+        var sameCustomer = _mediaFor == primary.ConversationId;
         _loadedFor = key;
+        _mediaFor = primary.ConversationId;
         if (!sameCustomer)
         {
             _items.Clear(); _next = null; _loaded = false; _failed = false; _tab = MediaTab.Media;
@@ -338,21 +458,22 @@
 
     private async Task LoadMediaAsync(bool fromStart)
     {
+        if (_disposed) return;
         var token = _cts.Token;
-        var forConversation = Conversation;
+        if (Customer.Primary is not { HasConversation: true } forChannel) return;
         try
         {
             _failed = false;
             if (!fromStart) _loadingMore = true;
-            var page = await Client.MediaAsync(forConversation.ConnectionId, forConversation.Sender, fromStart ? null : _next, token);
-            if (token.IsCancellationRequested || forConversation != Conversation) return;
+            var page = await Client.MediaAsync(forChannel.ConnectionId, forChannel.Sender, fromStart ? null : _next, token);
+            if (token.IsCancellationRequested || forChannel.ConversationId != Customer.Primary?.ConversationId) return;
             if (fromStart) _items.Clear();
             _items.AddRange(page.Items);
             _next = page.NextBefore;
             _loaded = true;
         }
         catch (OperationCanceledException) { }
-        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
         {
             if (!token.IsCancellationRequested) _failed = true;
         }
@@ -363,52 +484,83 @@
     }
 
     private Task PreviewAsync(InboxMediaItemDto item) => OnPreview.InvokeAsync(new MediaViewerItem(
-        item.Media.Url!, MediaLabels.Name(item.Media), Conversation.CustomerName, Conversation.Id, Conversation.CustomerInitials,
+        item.Media.Url!, MediaLabels.Name(item.Media), Customer.Name, Customer.Seed, Customer.Initials,
         DateTimeLabel(item.ReceivedAt)));
 
-    private static string FileDetail(InboxMediaItemDto item) =>
+    private string FileDetail(InboxMediaItemDto item) =>
         string.Join(" · ", new[] { MediaLabels.Type(item.Media), MediaLabels.Size(item.Media.SizeBytes), Date(item.ReceivedAt) }.Where(part => part.Length > 0));
 
-    public void Dispose() { _cts.Cancel(); _cts.Dispose(); }
+    private bool _disposed;
+    public void Dispose() { _disposed = true; _cts.Cancel(); _cts.Dispose(); Tasks.Changed -= TasksChanged; }
 
-    // The customer's first message, when the whole thread is loaded (the earliest loaded one is not the first otherwise).
-    private DateTime? FirstContact => Profile?.JoinedAt
-        ?? (Conversation.HistoryLoaded && Conversation.NextBefore is null
-            ? Conversation.Messages.Where(m => m.Kind != MessageKind.Note).Select(m => (DateTime?)m.ReceivedAt).Min()
-            : null);
+    // ── Tasks for this customer ──
 
-    private string? LocalTime
+    private IReadOnlyList<TaskRequest> OpenTasks { get; set; } = [];
+    private bool _tasksLoading;
+    private string? _tasksError;
+    private string? _tasksFor;
+    // Tasks for any of their conversations; for someone with none yet, the ones added for them by name.
+    private string TasksKey => string.Join("|", Customer.Channels.Select(channel => channel.ConversationId)) + "#" + Customer.Name;
+    private string? UnlinkedName => Customer.Channels.Any(channel => channel.HasConversation) ? null : Customer.Name;
+
+    protected override void OnInitialized() => Tasks.Changed += TasksChanged;
+
+    private void TasksChanged()
     {
-        get
-        {
-            if (string.IsNullOrWhiteSpace(Profile?.TimeZone)) return null;
-            try { return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, TimeZoneInfo.FindSystemTimeZoneById(Profile.TimeZone)).ToString("h:mm tt", CultureInfo.InvariantCulture); }
-            catch (Exception ex) when (ex is TimeZoneNotFoundException or InvalidTimeZoneException) { return null; }
-        }
+        if (!Open || _disposed) return;
+        _ = InvokeAsync(async () => { await LoadTasksAsync(); if (!_disposed) StateHasChanged(); });
     }
 
-    private static string DateTimeLabel(DateTime date) => date.ToLocalTime().ToString("d MMM yyyy, h:mm tt", CultureInfo.InvariantCulture);
+    private async Task LoadTasksAsync()
+    {
+        if (_disposed || !Tasks.Available) return;
+        var token = _cts.Token;
+        var key = TasksKey;
+        var ids = Customer.Channels.Where(channel => channel.HasConversation).Select(channel => channel.ConversationId).ToHashSet();
+        _tasksLoading = true; _tasksError = null; OpenTasks = [];
+        try
+        {
+            try { await Agents.LoadAsync(); }
+            catch (Exception exception) when (Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState.IsFailure(exception)) { }
+            var tasks = await Tasks.ListAsync(token);
+            if (key != TasksKey || token.IsCancellationRequested) return;
+            var unlinked = UnlinkedName;
+            OpenTasks = tasks.Where(task => !task.IsClosed && TaskWords.IsFor(task, ids, unlinked))
+                .OrderByDescending(task => task.Urgent).ThenByDescending(task => task.RaisedAt).ToList();
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException or System.Text.Json.JsonException)
+        {
+            if (key == TasksKey) _tasksError = "Tasks couldn't be loaded.";
+        }
+        finally { if (key == TasksKey) _tasksLoading = false; }
+    }
+
+    private string DateTimeLabel(DateTime date) => Clock.ToLocal(date).ToString("d MMM yyyy, h:mm tt", CultureInfo.InvariantCulture);
 
     private string? _copied;
-    private Parrot.Web.Services.InboxCustomerDto? Profile => Conversation.Customer;
-    // WhatsApp's sender is the customer's number; on TikTok and Facebook it is an opaque id, not a phone.
-    private string? Phone => Profile?.Phone ?? (Conversation.Channel == "whatsapp" ? Conversation.Sender : null);
-    private ConvMessage? LatestInternalNote => Conversation.Messages
-        .Where(message => message.Kind == MessageKind.Note)
-        .OrderByDescending(message => message.ReceivedAt)
-        .FirstOrDefault();
 
     private async Task CopyAsync(string field, string value)
     {
-        await Interop.CopyAsync(value);
-        _copied = field;
-        await Task.Delay(1400);
-        if (_copied == field) _copied = null;
+        try
+        {
+            await Interop.CopyAsync(value);
+            _copied = field;
+            Toasts.Show(field == "phone" ? "Phone number copied." : "Email copied.");
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(1400, _cts.Token);
+            if (_copied == field) _copied = null;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is JSException or InvalidOperationException)
+        {
+            Toasts.Show("Couldn't copy. Try again.", ToastStatus.Error);
+        }
     }
 
-    private static string Date(DateTime date) => date.ToLocalTime().ToString("d MMM yyyy", CultureInfo.InvariantCulture);
-    private static string NoteDate(DateTime date) => date.ToLocalTime().ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture);
-    private static string TaskUrl(string id) => $"/dashboard/task-requests/{Uri.EscapeDataString(id)}";
+    private string Date(DateTime date) => Clock.ToLocal(date).ToString("d MMM yyyy", CultureInfo.InvariantCulture);
+    private string NoteDate(DateTime date) => Clock.ToLocal(date).ToString("d MMM, h:mm tt", CultureInfo.InvariantCulture);
+    private static string TaskUrl(string id) => $"/dashboard/tasks/{Uri.EscapeDataString(id)}";
 
     private static string ChannelLabel(string channel) => channel switch
     {

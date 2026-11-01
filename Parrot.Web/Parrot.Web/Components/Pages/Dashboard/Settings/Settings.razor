@@ -4,7 +4,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Settings
 @using Parrot.Web.Components.Pages.Dashboard.Settings
 
-<PageTitle>Settings · OmniAI</PageTitle>
+<PageTitle>Settings · yára</PageTitle>
 
 @* Settings, one tab at a time. The tab tray is the same raised-pill control
    Aurora's Products page uses for its status filters. *@
@@ -13,14 +13,14 @@
     <header class="settings__header">
         <div class="settings__heading">
             <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Settings</Typography>
-            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="settings__lede">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="settings__lede">
                 Your account, your workspace and how the product behaves for everyone in it.
             </Typography>
         </div>
     </header>
 
     <nav class="settings__tabs" role="tablist" aria-label="Settings sections">
-        @foreach (var tab in Tabs)
+        @foreach (var tab in VisibleTabs)
         {
             var id = tab.Id;
             <button type="button"
@@ -65,24 +65,33 @@
 @code {
     [Parameter] public string? Tab { get; set; }
 
-    private sealed record SettingsTab(string Id, string Label, IconName Glyph);
+    [Inject] private AuthState AuthState { get; set; } = default!;
+
+    // Rule null: the person's own settings, open to every member. The business's
+    // settings (its name and logo, automation, billing) are the owner's.
+    private sealed record SettingsTab(string Id, string Label, IconName Glyph, string? Rule = null);
 
     private static readonly SettingsTab[] Tabs =
     [
         new("profile", "Profile", IconName.RiUser3Fill),
-        new("workspace", "Workspace", IconName.RiStore2Fill),
-        new("automation", "Automation", IconName.RiFlashlightFill),
+        new("workspace", "Workspace", IconName.RiStore2Fill, AccessRules.Business),
+        new("automation", "Automation", IconName.RiFlashlightFill, AccessRules.Business),
         new("security", "Security", IconName.RiShieldCheckFill),
         new("notification", "Notification", IconName.RiAlarmWarningFill),
-        new("billing", "Billing & Usage", IconName.RiRefund2Fill)
+        new("billing", "Billing & Usage", IconName.RiRefund2Fill, AccessRules.Business)
     ];
+
+    private IEnumerable<SettingsTab> VisibleTabs =>
+        Tabs.Where(t => t.Rule is null || (AuthState.CurrentUser?.Allows(t.Rule) ?? false));
 
     string ActiveTab = "profile";
 
+    // A tab the person may not open, even by its address, lands on Profile.
     protected override void OnParametersSet()
     {
-        if (!string.IsNullOrEmpty(Tab)) ActiveTab = Tab.ToLower();
+        string wanted = string.IsNullOrEmpty(Tab) ? ActiveTab : Tab.ToLower();
+        ActiveTab = VisibleTabs.Any(t => t.Id == wanted) ? wanted : "profile";
     }
 
-    void SetTab(string tab) => ActiveTab = tab;
+    void SetTab(string tab) => ActiveTab = VisibleTabs.Any(t => t.Id == tab) ? tab : "profile";
 }
