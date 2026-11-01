@@ -50,3 +50,18 @@ public sealed record UpdateStageRequest(string Stage);
 public sealed record UpdateTagsRequest(List<string> Tags);
 
 public sealed record UpdateChannelIdentifierRequest(string? ChannelPlatform, string? ChannelIdentifier);
+
+public sealed record LinkCustomerRequest(Guid CustomerId);
+
+/// <summary>One linked profile attached to a primary customer.</summary>
+public sealed record CustomerLinkResponse(Guid Id, CustomerDetailResponse Profile, DateTime LinkedAt);
+
+/// <summary>
+/// A primary customer together with all profiles linked to them. When the customer
+/// is not a primary, <see cref="Links"/> is empty. The <see cref="CustomerDetailResponse.Identities"/>
+/// on <see cref="Customer"/> includes identities from all linked profiles as well as its own.
+/// </summary>
+public sealed record LinkedCustomerProfileResponse(CustomerDetailResponse Customer, List<CustomerLinkResponse> Links);
+
+/// <summary>Result of a resolve lookup: the profile if found, null if the identity is unknown.</summary>
+public sealed record CustomerLinkLookupResponse(LinkedCustomerProfileResponse? Profile);

@@ -87,4 +87,63 @@ public sealed class CustomersController(CustomerService customers) : ControllerB
             Owner, id, request.ChannelPlatform, request.ChannelIdentifier, cancellationToken);
         return Ok(response);
     }
+
+    // ── Profile links ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Returns the linked-profile view for <paramref name="id"/>. If the customer is itself a linked
+    /// (non-primary) profile, the response is the primary's view — so the caller always gets the
+    /// root of the link tree.
+    /// </summary>
+    [HttpGet("{id:guid}/links")]
+    public async Task<IActionResult> GetLinks(Guid id, CancellationToken cancellationToken = default)
+    {
+        LinkedCustomerProfileResponse response = await customers.GetLinksAsync(Owner, id, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Links the customer at <paramref name="id"/> (the one that will be hidden) under the customer
+    /// whose id is in the request body (the primary that keeps its name).
+    /// </summary>
+    [HttpPost("{id:guid}/links")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
+    public async Task<IActionResult> Link(
+        Guid id,
+        [FromBody] LinkCustomerRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        LinkedCustomerProfileResponse response = await customers.LinkAsync(Owner, request.CustomerId, id, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Separates the link identified by <paramref name="linkId"/> from the primary customer at
+    /// <paramref name="id"/>. The previously linked customer reappears independently in the list.
+    /// </summary>
+    [HttpDelete("{id:guid}/links/{linkId:guid}")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
+    public async Task<IActionResult> Unlink(
+        Guid id,
+        Guid linkId,
+        CancellationToken cancellationToken = default)
+    {
+        LinkedCustomerProfileResponse response = await customers.UnlinkAsync(Owner, id, linkId, cancellationToken);
+        return Ok(response);
+    }
+
+    /// <summary>
+    /// Resolves a conversation identity (connectionId + sender) to a linked-profile view. Used by
+    /// the Inbox to show the customer profile panel for an open conversation. Returns 200 with a
+    /// null Profile when the identity is not yet associated with a customer.
+    /// </summary>
+    [HttpGet("resolve")]
+    public async Task<IActionResult> Resolve(
+        [FromQuery] Guid connectionId,
+        [FromQuery] string sender,
+        CancellationToken cancellationToken = default)
+    {
+        CustomerLinkLookupResponse response = await customers.FindByIdentityAsync(Owner, connectionId, sender, cancellationToken);
+        return Ok(response);
+    }
 }

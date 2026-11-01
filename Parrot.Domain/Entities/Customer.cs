@@ -37,4 +37,7 @@ public class Customer
 
     /// <summary>Phone number or @handle stored at creation time as free text; matched when a real message arrives.</summary>
     public string? ChannelIdentifier { get; set; }
+
+    /// <summary>Links where this customer is the primary (the one shown in the contacts list).</summary>
+    public List<CustomerLink> Links { get; set; } = [];
 }
