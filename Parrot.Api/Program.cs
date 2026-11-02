@@ -94,6 +94,7 @@ bool storageConfigured = !string.IsNullOrWhiteSpace(storageSettings.Bucket) &&
 builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
 builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
+builder.Services.AddScoped<IWhatsAppCatalogueItemRepository, WhatsAppCatalogueItemRepository>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
 builder.Services.Configure<TikTokSettings>(builder.Configuration.GetSection(TikTokSettings.SectionName));
