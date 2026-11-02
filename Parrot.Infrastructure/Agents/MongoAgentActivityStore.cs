@@ -24,6 +24,9 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
     public const string EventIndexName = "OwnerUserId_Type_EventKey_unique";
     public const string OwnerIndexName = "OwnerUserId_OccurredAt";
     public const string TurnIndexName = "OwnerUserId_TurnId";
+    public const string TtlIndexName = "OccurredAt_ttl";
+
+    private static readonly TimeSpan ActivityLifetime = TimeSpan.FromDays(90);
 
     private readonly IMongoCollection<AgentActivityDocument> _activity;
     private readonly SemaphoreSlim _indexing = new(1, 1);
@@ -143,6 +146,9 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
                 new CreateIndexModel<AgentActivityDocument>(
                     Builders<AgentActivityDocument>.IndexKeys.Ascending(x => x.OwnerUserId).Ascending(x => x.TurnId),
                     new CreateIndexOptions { Name = TurnIndexName }),
+                new CreateIndexModel<AgentActivityDocument>(
+                    Builders<AgentActivityDocument>.IndexKeys.Ascending(x => x.OccurredAt),
+                    new CreateIndexOptions { Name = TtlIndexName, ExpireAfter = ActivityLifetime }),
             ], cancellationToken);
             _indexed = true;
         }

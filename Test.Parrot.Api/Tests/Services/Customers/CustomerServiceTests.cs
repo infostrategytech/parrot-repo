@@ -250,6 +250,187 @@ public class CustomerServiceTests
             _service.UpdateTagsAsync(Owner, id, ["VIP"], CancellationToken.None));
     }
 
+    // ---- GetLinksAsync ----
+
+    [Fact]
+    public async Task GetLinksAsync_PrimaryWithNoLinks_ReturnsEmptyLinks()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
+
+        LinkedCustomerProfileResponse result = await _service.GetLinksAsync(Owner, id, CancellationToken.None);
+
+        Assert.Equal(id, result.Customer.Id);
+        Assert.Empty(result.Links);
+    }
+
+    [Fact]
+    public async Task GetLinksAsync_PrimaryWithLinks_ReturnsLinkedProfiles()
+    {
+        Guid primaryId = Guid.NewGuid();
+        Guid linkedId = Guid.NewGuid();
+        Customer primary = new() { Id = primaryId, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" };
+        Customer linked = new() { Id = linkedId, WorkspaceId = Owner, Name = "Ada Instagram", Stage = "Customer" };
+        _repository.Seed(primary);
+        _repository.Seed(linked);
+        _repository.SeedLink(new CustomerLink { Id = Guid.NewGuid(), WorkspaceId = Owner, PrimaryCustomerId = primaryId, LinkedCustomerId = linkedId, LinkedCustomer = linked });
+
+        LinkedCustomerProfileResponse result = await _service.GetLinksAsync(Owner, primaryId, CancellationToken.None);
+
+        Assert.Equal(primaryId, result.Customer.Id);
+        Assert.Single(result.Links);
+        Assert.Equal(linkedId, result.Links[0].Profile.Id);
+    }
+
+    [Fact]
+    public async Task GetLinksAsync_NotFound_ThrowsNotFoundException()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.GetLinksAsync(Owner, Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task GetLinksAsync_AnotherOwnersId_ThrowsNotFoundException()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, WorkspaceId = "other", Name = "Theirs", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.GetLinksAsync(Owner, id, CancellationToken.None));
+    }
+
+    // ---- LinkAsync ----
+
+    [Fact]
+    public async Task LinkAsync_ValidPair_CreatesLinkAndReturnsPrimary()
+    {
+        Guid primaryId = Guid.NewGuid();
+        Guid linkedId = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = primaryId, WorkspaceId = Owner, Name = "Ada WA", Stage = "Customer" });
+        _repository.Seed(new Customer { Id = linkedId, WorkspaceId = Owner, Name = "Ada IG", Stage = "Customer" });
+
+        LinkedCustomerProfileResponse result = await _service.LinkAsync(Owner, primaryId, linkedId, CancellationToken.None);
+
+        Assert.Equal(primaryId, result.Customer.Id);
+        Assert.Single(result.Links);
+        Assert.Equal(linkedId, result.Links[0].Profile.Id);
+    }
+
+    [Fact]
+    public async Task LinkAsync_SameId_ThrowsValidationException()
+    {
+        Guid id = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = id, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<ValidationException>(() =>
+            _service.LinkAsync(Owner, id, id, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LinkAsync_PrimaryNotFound_ThrowsNotFoundException()
+    {
+        Guid linkedId = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = linkedId, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.LinkAsync(Owner, Guid.NewGuid(), linkedId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LinkAsync_LinkedNotFound_ThrowsNotFoundException()
+    {
+        Guid primaryId = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = primaryId, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.LinkAsync(Owner, primaryId, Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LinkAsync_PrimaryIsAlreadyLinkedToAnotherPrimary_ThrowsConflictException()
+    {
+        Guid grandprimaryId = Guid.NewGuid();
+        Guid primaryId = Guid.NewGuid();
+        Guid linkedId = Guid.NewGuid();
+        Customer grandprimary = new() { Id = grandprimaryId, WorkspaceId = Owner, Name = "Grand", Stage = "Customer" };
+        Customer primary = new() { Id = primaryId, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" };
+        Customer linked = new() { Id = linkedId, WorkspaceId = Owner, Name = "Ada IG", Stage = "Customer" };
+        _repository.Seed(grandprimary);
+        _repository.Seed(primary);
+        _repository.Seed(linked);
+        // primaryId is the linked side of an existing link; it can't itself become a primary.
+        _repository.SeedLink(new CustomerLink { Id = Guid.NewGuid(), WorkspaceId = Owner, PrimaryCustomerId = grandprimaryId, LinkedCustomerId = primaryId, LinkedCustomer = primary });
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            _service.LinkAsync(Owner, primaryId, linkedId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task LinkAsync_LinkedAlreadyHasLinkedProfiles_ThrowsConflictException()
+    {
+        Guid primaryId = Guid.NewGuid();
+        Guid linkedId = Guid.NewGuid();
+        Guid subLinkedId = Guid.NewGuid();
+        Customer primary = new() { Id = primaryId, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" };
+        Customer linked = new() { Id = linkedId, WorkspaceId = Owner, Name = "Ada IG", Stage = "Customer" };
+        Customer subLinked = new() { Id = subLinkedId, WorkspaceId = Owner, Name = "Ada TikTok", Stage = "Customer" };
+        _repository.Seed(primary);
+        _repository.Seed(linked);
+        _repository.Seed(subLinked);
+        // linkedId already has its own links — a chain is not allowed.
+        _repository.SeedLink(new CustomerLink { Id = Guid.NewGuid(), WorkspaceId = Owner, PrimaryCustomerId = linkedId, LinkedCustomerId = subLinkedId, LinkedCustomer = subLinked });
+
+        await Assert.ThrowsAsync<ConflictException>(() =>
+            _service.LinkAsync(Owner, primaryId, linkedId, CancellationToken.None));
+    }
+
+    // ---- UnlinkAsync ----
+
+    [Fact]
+    public async Task UnlinkAsync_ExistingLink_RemovesItAndReturnsUpdatedPrimary()
+    {
+        Guid primaryId = Guid.NewGuid();
+        Guid linkedId = Guid.NewGuid();
+        Guid linkId = Guid.NewGuid();
+        Customer primary = new() { Id = primaryId, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" };
+        Customer linked = new() { Id = linkedId, WorkspaceId = Owner, Name = "Ada IG", Stage = "Customer" };
+        _repository.Seed(primary);
+        _repository.Seed(linked);
+        _repository.SeedLink(new CustomerLink { Id = linkId, WorkspaceId = Owner, PrimaryCustomerId = primaryId, LinkedCustomerId = linkedId, LinkedCustomer = linked });
+
+        LinkedCustomerProfileResponse result = await _service.UnlinkAsync(Owner, primaryId, linkId, CancellationToken.None);
+
+        Assert.Equal(primaryId, result.Customer.Id);
+        Assert.Empty(result.Links);
+    }
+
+    [Fact]
+    public async Task UnlinkAsync_PrimaryNotFound_ThrowsNotFoundException()
+    {
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.UnlinkAsync(Owner, Guid.NewGuid(), Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UnlinkAsync_LinkNotFound_ThrowsNotFoundException()
+    {
+        Guid primaryId = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = primaryId, WorkspaceId = Owner, Name = "Ada", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.UnlinkAsync(Owner, primaryId, Guid.NewGuid(), CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task UnlinkAsync_AnotherOwnersPrimary_ThrowsNotFoundException()
+    {
+        Guid primaryId = Guid.NewGuid();
+        _repository.Seed(new Customer { Id = primaryId, WorkspaceId = "other", Name = "Theirs", Stage = "Customer" });
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _service.UnlinkAsync(Owner, primaryId, Guid.NewGuid(), CancellationToken.None));
+    }
+
     // --------------- fake ---------------
 
     private sealed class FakeCustomerRepository : ICustomerRepository
@@ -257,8 +438,11 @@ public class CustomerServiceTests
         public List<UpsertCall> UpsertCalls { get; } = [];
         public List<Customer> Created { get; } = [];
         public List<Customer> Store { get; } = [];
+        public List<CustomerLink> Links { get; } = [];
 
         public void Seed(Customer customer) => Store.Add(customer);
+
+        public void SeedLink(CustomerLink link) => Links.Add(link);
 
         public Task UpsertAsync(string ownerUserId, Guid connectionId, string platform, string sender,
             string name, string? username, DateTime seenAt, CancellationToken ct)
@@ -310,6 +494,58 @@ public class CustomerServiceTests
                 customer.ChannelIdentifier = channelIdentifier;
             }
             return Task.FromResult(customer);
+        }
+
+        public Task<(Customer Primary, List<CustomerLink> Links)?> GetLinksAsync(string ownerUserId, Guid id, CancellationToken ct)
+        {
+            Customer? primary = Store.FirstOrDefault(c => c.Id == id && c.WorkspaceId == ownerUserId);
+            if (primary is null)
+            {
+                // Try resolving via a link.
+                CustomerLink? asLinked = Links.FirstOrDefault(l => l.LinkedCustomerId == id && l.WorkspaceId == ownerUserId);
+                if (asLinked is null) return Task.FromResult<(Customer, List<CustomerLink>)?>(null);
+                primary = Store.FirstOrDefault(c => c.Id == asLinked.PrimaryCustomerId && c.WorkspaceId == ownerUserId);
+                if (primary is null) return Task.FromResult<(Customer, List<CustomerLink>)?>(null);
+            }
+            List<CustomerLink> links = [.. Links.Where(l => l.PrimaryCustomerId == primary.Id)];
+            return Task.FromResult<(Customer, List<CustomerLink>)?>((primary, links));
+        }
+
+        public Task<(Customer Primary, List<CustomerLink> Links)?> FindByIdentityAsync(string ownerUserId, Guid connectionId, string sender, CancellationToken ct)
+        {
+            CustomerIdentity? identity = Store.SelectMany(c => c.Identities).FirstOrDefault(i => i.ConnectionId == connectionId && i.Sender == sender);
+            if (identity is null) return Task.FromResult<(Customer, List<CustomerLink>)?>(null);
+            Customer? owner = Store.FirstOrDefault(c => c.Id == identity.CustomerId && c.WorkspaceId == ownerUserId);
+            if (owner is null) return Task.FromResult<(Customer, List<CustomerLink>)?>(null);
+            CustomerLink? asLinked = Links.FirstOrDefault(l => l.LinkedCustomerId == owner.Id);
+            Customer primary = asLinked is null ? owner : Store.FirstOrDefault(c => c.Id == asLinked.PrimaryCustomerId) ?? owner;
+            List<CustomerLink> links = [.. Links.Where(l => l.PrimaryCustomerId == primary.Id)];
+            return Task.FromResult<(Customer, List<CustomerLink>)?>((primary, links));
+        }
+
+        public Task<(Customer Primary, List<CustomerLink> Links)> LinkAsync(string ownerUserId, Guid primaryId, Guid linkedId, CancellationToken ct)
+        {
+            Customer? primary = Store.FirstOrDefault(c => c.Id == primaryId && c.WorkspaceId == ownerUserId);
+            if (primary is null) throw new NotFoundException("Customer not found.");
+            Customer? linked = Store.FirstOrDefault(c => c.Id == linkedId && c.WorkspaceId == ownerUserId);
+            if (linked is null) throw new NotFoundException("Customer not found.");
+            if (Links.Any(l => l.LinkedCustomerId == primaryId)) throw new ConflictException("Customer is already a linked profile.");
+            if (Links.Any(l => l.PrimaryCustomerId == linkedId)) throw new ConflictException("Customer already has linked profiles.");
+            CustomerLink link = new() { Id = Guid.NewGuid(), WorkspaceId = ownerUserId, PrimaryCustomerId = primaryId, LinkedCustomerId = linkedId, LinkedCustomer = linked };
+            Links.Add(link);
+            List<CustomerLink> links = [.. Links.Where(l => l.PrimaryCustomerId == primaryId)];
+            return Task.FromResult((primary, links));
+        }
+
+        public Task<(Customer Primary, List<CustomerLink> Links)> UnlinkAsync(string ownerUserId, Guid primaryId, Guid linkId, CancellationToken ct)
+        {
+            Customer? primary = Store.FirstOrDefault(c => c.Id == primaryId && c.WorkspaceId == ownerUserId);
+            if (primary is null) throw new NotFoundException("Customer not found.");
+            CustomerLink? link = Links.FirstOrDefault(l => l.Id == linkId && l.PrimaryCustomerId == primaryId && l.WorkspaceId == ownerUserId);
+            if (link is null) throw new NotFoundException("Customer not found.");
+            Links.Remove(link);
+            List<CustomerLink> remaining = [.. Links.Where(l => l.PrimaryCustomerId == primaryId)];
+            return Task.FromResult((primary, remaining));
         }
 
         public sealed record UpsertCall(string OwnerUserId, Guid ConnectionId, string Platform,

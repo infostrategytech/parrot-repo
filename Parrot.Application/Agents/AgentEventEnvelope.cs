@@ -41,6 +41,9 @@ public sealed class AgentEventEnvelope
 /// <summary>Turns an event into the record the activity store keeps, or says why it cannot.</summary>
 public static class AgentActivityMapper
 {
+    /// <summary>Payload bytes above this size are dropped rather than stored verbatim.</summary>
+    public const int MaxPayloadBytes = 4096;
+
     public static bool TryMap(AgentEventEnvelope envelope, DateTime receivedAtUtc, out AgentActivityRecord? record, out string reason)
     {
         record = null;
@@ -103,11 +106,13 @@ public static class AgentActivityMapper
             Reason = Text(payload, "reason"),
             OccurredAt = Instant(envelope.OccurredAt) ?? receivedAtUtc,
             CorrelationId = envelope.CorrelationId,
-            Payload = payload.ValueKind == JsonValueKind.Object ? payload.GetRawText() : "{}",
+            Payload = payload.ValueKind == JsonValueKind.Object ? Cap(payload.GetRawText()) : "{}",
         };
         reason = string.Empty;
         return true;
     }
+
+    private static string Cap(string raw) => raw.Length <= MaxPayloadBytes ? raw : "{}";
 
     /// <summary>The instant the orchestrator wrote, in UTC; null when it is missing or not a date.</summary>
     public static DateTime? Instant(string? text) =>

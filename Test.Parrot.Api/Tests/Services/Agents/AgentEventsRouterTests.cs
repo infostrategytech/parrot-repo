@@ -223,4 +223,23 @@ public class AgentEventsRouterTests
         Assert.True(mapped);
         Assert.Equal(received, record!.OccurredAt);
     }
+
+    [Fact]
+    public void TryMap_WithAnOversizedPayload_StoresEmptyObjectInstead()
+    {
+        string bigJson = "{\"data\":\"" + new string('x', AgentActivityMapper.MaxPayloadBytes + 1) + "\"}";
+        AgentEventEnvelope envelope = new()
+        {
+            Type = AgentActivityTypes.TurnCompleted,
+            TenantId = Owner,
+            TurnId = "turn_1",
+            OccurredAt = "2026-10-08T12:00:00+00:00",
+            Payload = JsonSerializer.Deserialize<JsonElement>(bigJson),
+        };
+
+        bool mapped = AgentActivityMapper.TryMap(envelope, DateTime.UtcNow, out AgentActivityRecord? record, out _);
+
+        Assert.True(mapped);
+        Assert.Equal("{}", record!.Payload);
+    }
 }

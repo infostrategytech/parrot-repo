@@ -40,4 +40,32 @@ public interface ICustomerRepository
     Task<Customer?> UpdateTagsAsync(string ownerUserId, Guid id, List<string> tags, CancellationToken ct);
 
     Task<Customer?> UpdateChannelIdentifierAsync(string ownerUserId, Guid id, string? channelPlatform, string? channelIdentifier, CancellationToken ct);
+
+    /// <summary>
+    /// Returns the primary customer for <paramref name="id"/>. If <paramref name="id"/> is a linked
+    /// (non-primary) customer, the primary is returned instead. Returns null when neither is found
+    /// or neither belongs to <paramref name="ownerUserId"/>.
+    /// </summary>
+    Task<(Customer Primary, List<Domain.Entities.CustomerLink> Links)?> GetLinksAsync(string ownerUserId, Guid id, CancellationToken ct);
+
+    /// <summary>
+    /// Finds the primary customer whose identity matches <paramref name="connectionId"/> and
+    /// <paramref name="sender"/>. If that customer is itself linked to a primary, returns the primary.
+    /// Returns null when not found or not owned by <paramref name="ownerUserId"/>.
+    /// </summary>
+    Task<(Customer Primary, List<Domain.Entities.CustomerLink> Links)?> FindByIdentityAsync(string ownerUserId, Guid connectionId, string sender, CancellationToken ct);
+
+    /// <summary>
+    /// Links <paramref name="linkedId"/> under <paramref name="primaryId"/>. Returns the updated
+    /// primary with its links. Throws <see cref="Domain.Exceptions.ConflictException"/> when
+    /// the constraint would be violated.
+    /// </summary>
+    Task<(Customer Primary, List<Domain.Entities.CustomerLink> Links)> LinkAsync(string ownerUserId, Guid primaryId, Guid linkedId, CancellationToken ct);
+
+    /// <summary>
+    /// Removes the link identified by <paramref name="linkId"/> from <paramref name="primaryId"/>.
+    /// Returns the updated primary. Throws <see cref="Domain.Exceptions.NotFoundException"/> when
+    /// the link or either customer is not found.
+    /// </summary>
+    Task<(Customer Primary, List<Domain.Entities.CustomerLink> Links)> UnlinkAsync(string ownerUserId, Guid primaryId, Guid linkId, CancellationToken ct);
 }

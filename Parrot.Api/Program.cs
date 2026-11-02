@@ -703,4 +703,18 @@ MessageMetrics.StartAtZero();
 app.MapHub<Parrot.Api.Realtime.MessagingHub>(Parrot.Api.Realtime.MessagingHub.Path);
 app.MapDevelopmentRealtimeStub();
 
+// ASP.NET buffers IFormFile uploads larger than 64 KB to /tmp/aspnetcoreTempXXXXXX files.
+// These are normally deleted on request completion, but are orphaned when the process crashes
+// under upload load. This cleans up any files left behind by a previous run.
+string tempPath = Path.GetTempPath();
+foreach (string staleTemp in Directory.EnumerateFiles(tempPath, "aspnetcoreTemp*"))
+{
+    try
+    {
+        if (File.GetLastWriteTimeUtc(staleTemp) < DateTime.UtcNow.AddMinutes(-5))
+            File.Delete(staleTemp);
+    }
+    catch { /* best effort */ }
+}
+
 app.Run();
