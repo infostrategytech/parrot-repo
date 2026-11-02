@@ -285,10 +285,12 @@
 
     private bool CanSend => _typed.Trim().Length > 0 && _typing is null && !InCall;
 
-    private void StartTyping()
+    // Typing opens the conversation; with nothing said yet, the agent speaks first (trigger_user).
+    private Task StartTyping()
     {
         _started = true;
         _focusBox = true;
+        return _messages.Count == 0 ? StreamReplyAsync(token => Orientation.StartTextAsync(AgentId, token), opening: true) : Task.CompletedTask;
     }
 
     private async Task TypeKeyAsync(KeyboardEventArgs args)
@@ -304,18 +306,27 @@
         _typed = "";
         _notice = null;
         Add(new Message(Who.Owner, text));
+        await StreamReplyAsync(token => Orientation.SendTextAsync(AgentId, text, token));
+    }
+
+    // The AI's answer, arriving in pieces: the thinking dots until the first, then a bubble growing as they come.
+    // Opening: a service without trigger_user refuses it (400); then the box is simply ready, with nothing to report.
+    private async Task StreamReplyAsync(Func<CancellationToken, IAsyncEnumerable<string>> reply, bool opening = false)
+    {
+        if (_typing is not null) return;
+        _notice = null;
         _phase = Phase.Thinking;
         _typing = new CancellationTokenSource();
         StateHasChanged();
 
-        var reply = new StringBuilder();
+        var written = new StringBuilder();
         int? at = null;
         try
         {
-            await foreach (var piece in Orientation.SendTextAsync(AgentId, text, _typing.Token))
+            await foreach (var piece in reply(_typing.Token))
             {
-                reply.Append(piece);
-                var message = new Message(Who.Agent, reply.ToString().Trim());
+                written.Append(piece);
+                var message = new Message(Who.Agent, written.ToString().Trim());
                 if (at is { } index)
                 {
                     _messages[index] = message;
@@ -329,11 +340,14 @@
                 }
                 StateHasChanged();
             }
-            if (at is null) _notice = $"{Name} didn't answer. Try again.";
+            if (at is null && !opening) _notice = $"{Name} didn't answer. Try again.";
         }
         catch (OperationCanceledException) when (_disposed)
         {
             return;
+        }
+        catch (ApiException ex) when (opening && ex.StatusCode == HttpStatusCode.BadRequest)
+        {
         }
         catch (ApiException ex)
         {

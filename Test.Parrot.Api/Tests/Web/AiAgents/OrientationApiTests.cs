@@ -70,6 +70,23 @@ public class OrientationApiTests
     }
 
     [Fact]
+    public async Task TheAiCanSpeakFirstWithNothingSent()
+    {
+        (OrientationApi api, Routes routes) = Build();
+        routes.On("POST", "api/v1/orientation/text/agt_1", "Hi, I'm Tolu. Tell me about my job.");
+
+        string opening = "";
+        await foreach (string piece in api.StartTextAsync("agt_1")) opening += piece;
+
+        Assert.Equal("Hi, I'm Tolu. Tell me about my job.", opening);
+        string body = routes.Single("POST", "api/v1/orientation/text/agt_1").Body!;
+        Assert.Contains("name=trigger_user", body);
+        Assert.Contains("true", body);
+        Assert.DoesNotContain("name=text", body);
+        Assert.DoesNotContain("name=file", body);
+    }
+
+    [Fact]
     public async Task AnOrientationErrorShowsItsMessage()
     {
         (OrientationApi api, Routes routes) = Build();

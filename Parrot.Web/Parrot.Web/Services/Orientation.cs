@@ -45,6 +45,16 @@ public sealed class OrientationApi(OmniAiClient omni, OmniAiStreams streams)
         return StreamTextAsync(agentId, body, cancellationToken);
     }
 
+    /// <summary>
+    /// The AI speaking first, with nothing from the owner yet (trigger_user): its opening, piece
+    /// by piece as it is written, for a typed conversation the owner has just opened.
+    /// </summary>
+    public IAsyncEnumerable<string> StartTextAsync(string agentId, CancellationToken cancellationToken = default)
+    {
+        var body = new MultipartFormDataContent { { new StringContent("true"), "trigger_user" } };
+        return StreamTextAsync(agentId, body, cancellationToken);
+    }
+
     /// <summary>The AI's answer to a recording (audio/webm, audio/mp4…): the service transcribes it and answers in text.</summary>
     public IAsyncEnumerable<string> SendAudioAsync(string agentId, Stream audio, string contentType, string fileName,
         CancellationToken cancellationToken = default)
