@@ -18,4 +18,8 @@ public class WhatsAppSettings
     public string PhoneNumberId { get; set; } = string.Empty;
     public string BusinessAccountId { get; set; } = string.Empty;
     public string ApiVersion { get; set; } = "v25.0";
+
+    // When true, MetaCatalogueClient is replaced with a mock that returns fake products.
+    // For local development only — never enable in production.
+    public bool MockCatalogue { get; set; }
 }
