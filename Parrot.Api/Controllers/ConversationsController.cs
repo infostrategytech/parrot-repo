@@ -21,7 +21,8 @@ namespace Parrot.Api.Controllers;
 [RequirePermission(WorkspacePermissions.ConversationsView)]
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
-    ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram) : ControllerBase
+    ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
+    IHumanTakeoverStore humanTakeover) : ControllerBase
 {
     // The workspace owns the conversations; what has been read, what is pinned
     // or set aside, and who wrote a note, belong to the person signed in.
@@ -194,6 +195,19 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         ConversationMessage sent = await service.SendFileAsync(Owner, connectionId, sender, form.RequestId, form.Caption,
             new OutgoingFile(upload.FileName, upload.ContentType, upload.Length, upload.OpenReadStream), cancellationToken, form.ReplyToMessageId);
         return Ok(mediaLinks.Sign(sent));
+    }
+
+    // Hands the conversation back to the AI after a human has been handling it.
+    [HttpDelete("{connectionId:guid}/human-takeover")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
+    public async Task<IActionResult> ClearHumanTakeover(Guid connectionId, [FromQuery] string sender,
+        CancellationToken cancellationToken)
+    {
+        await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
+        if (!await humanTakeover.IsActiveAsync(Owner, connectionId, sender, cancellationToken))
+            throw new NotFoundException("No active human takeover found for this conversation.");
+        await humanTakeover.ClearAsync(Owner, connectionId, sender, cancellationToken);
+        return NoContent();
     }
 
     // The person's pins and marks, without conversations on channels their grant does not reach.

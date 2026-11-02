@@ -1,10 +1,13 @@
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using Microsoft.Extensions.Logging;
+using Parrot.Application.Agents;
+using Parrot.Application.Conversations;
 using Parrot.Application.Customers;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Entities.Messages;
+using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Messaging;
 
@@ -37,7 +40,10 @@ public sealed class InboundMessageProcessor(
     IInboundMediaStore? mediaStore = null,
     IMediaJobPublisher? mediaJobs = null,
     bool deferMedia = false,
-    ICustomerRepository? customerRepository = null)
+    ICustomerRepository? customerRepository = null,
+    IAgentChannelLookup? agentChannelLookup = null,
+    ITenantIdLookup? tenantIdLookup = null,
+    IHumanTakeoverStore? humanTakeover = null)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -83,10 +89,12 @@ public sealed class InboundMessageProcessor(
 
             // Only now, with the write in place. If this throws, the message comes
             // round again, takes the duplicate path and is announced then.
+            CommsType commsType = await ResolveCommsTypeAsync(stored, cancellationToken);
+            string? tenantId = await ResolveTenantIdAsync(stored, cancellationToken);
             MessagePersisted persisted = new MessagePersisted
             {
                 Source = inbound.Source,
-                Data = stored.ToStoredMessage(),
+                Data = stored.ToStoredMessage() with { CommsType = commsType, TenantId = tenantId },
                 CorrelationId = inbound.CorrelationId,
             };
             await TimedAsync("publish", () => publisher.PublishAsync(persisted, cancellationToken), "publish_failed");
@@ -307,6 +315,28 @@ public sealed class InboundMessageProcessor(
         {
             return reply;
         }
+    }
+
+    private async Task<string?> ResolveTenantIdAsync(MessageDocument stored, CancellationToken ct)
+    {
+        if (tenantIdLookup is null || stored.OwnerUserId is null) return stored.OwnerUserId;
+        return await tenantIdLookup.FindOwnerIdAsync(stored.OwnerUserId, ct) ?? stored.OwnerUserId;
+    }
+
+    private async Task<CommsType> ResolveCommsTypeAsync(MessageDocument stored, CancellationToken ct)
+    {
+        if (stored.Outgoing) return CommsType.TenantToUser;
+        if (agentChannelLookup is null || stored.OwnerUserId is null) return CommsType.UserToTenant;
+        string channel = stored.Platform.ToString().ToLowerInvariant();
+        bool isLive = await agentChannelLookup.IsAgentLiveAsync(stored.OwnerUserId, channel, ct);
+        if (!isLive) return CommsType.UserToTenant;
+        // Agent is live: if a human has taken over this conversation, the message still goes to a human.
+        if (humanTakeover is not null && stored.ConnectionId.HasValue && stored.From is not null)
+        {
+            bool taken = await humanTakeover.IsActiveAsync(stored.OwnerUserId, stored.ConnectionId.Value, stored.From, ct);
+            if (taken) return CommsType.UserToTenant;
+        }
+        return CommsType.UserToAgent;
     }
 
     // Carries a failed stage's reason to the one place that counts it; the

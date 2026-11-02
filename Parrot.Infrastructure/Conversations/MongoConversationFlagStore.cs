@@ -63,5 +63,7 @@ internal sealed class ConversationFlagDocument
     public string Sender { get; set; } = "";
     public DateTime? PinnedAt { get; set; }
     public bool MarkedUnread { get; set; }
+    public DateTime? HumanTookOverAt { get; set; }
+    public DateTime? HumanHandedBackAt { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

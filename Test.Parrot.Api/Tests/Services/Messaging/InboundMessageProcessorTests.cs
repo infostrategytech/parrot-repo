@@ -2,6 +2,9 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using MongoDB.Driver;
+using Parrot.Application.Agents;
+using Parrot.Application.Conversations;
+using Parrot.Application.Customers;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
@@ -174,13 +177,52 @@ public class InboundMessageProcessorTests
         }
     }
 
+    private sealed class FakeAgentChannelLookup(bool isLive) : IAgentChannelLookup
+    {
+        public Task<bool> IsAgentLiveAsync(string workspaceId, string channel, CancellationToken ct) =>
+            Task.FromResult(isLive);
+    }
+
+    private sealed class FakeTenantIdLookup(string? ownerId) : ITenantIdLookup
+    {
+        public Task<string?> FindOwnerIdAsync(string workspaceId, CancellationToken ct) =>
+            Task.FromResult(ownerId);
+    }
+
+    private sealed class FakeHumanTakeoverStore : IHumanTakeoverStore
+    {
+        private readonly HashSet<(string Owner, Guid Connection, string Sender)> _active = new();
+
+        public Task SetAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        {
+            _active.Add((owner, connection, sender));
+            return Task.CompletedTask;
+        }
+
+        public Task ClearAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        {
+            _active.Remove((owner, connection, sender));
+            return Task.CompletedTask;
+        }
+
+        public Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
+            Task.FromResult(_active.Contains((owner, connection, sender)));
+
+        public void Activate(string owner, Guid connection, string sender) =>
+            _active.Add((owner, connection, sender));
+    }
+
     private InboundMessageProcessor Processor(
         IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null,
-        IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false) => new(
+        IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false,
+        IAgentChannelLookup? agentChannelLookup = null, ITenantIdLookup? tenantIdLookup = null,
+        IHumanTakeoverStore? humanTakeover = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
-        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia);
+        _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia,
+        customerRepository: null, agentChannelLookup: agentChannelLookup, tenantIdLookup: tenantIdLookup,
+        humanTakeover: humanTakeover);
 
     private const string Psid = "6215837091842310";
 
@@ -626,5 +668,86 @@ public class InboundMessageProcessorTests
         MessageReplyTo quote = _store.Documents.Single(d => d.MessageId == "whatsapp:wamid.A").ReplyTo!;
         Assert.Equal("wamid.UNKNOWN", quote.ProviderMessageId);
         Assert.Null(quote.MessageId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_InboundWithLiveAgent_PublishesUserToAgent()
+    {
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToAgent, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_InboundWithNoLiveAgent_PublishesUserToTenant()
+    {
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: false))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToTenant, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithoutAgentLookup_InboundDefaultsToUserToTenant()
+    {
+        await Processor().ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToTenant, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_PublishesWorkspaceIdTenantIdAndConnectionId()
+    {
+        await Processor(tenantIdLookup: new FakeTenantIdLookup("root-account-1"))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        StoredMessage data = _publisher.Published.Single().Data;
+        Assert.Equal("user-1", data.WorkspaceId);    // workspace id (OwnerUserId on the message)
+        Assert.Equal("root-account-1", data.TenantId); // root user account from workspace lookup
+        Assert.Equal(Connection, data.ConnectionId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithoutTenantLookup_TenantIdFallsBackToWorkspaceId()
+    {
+        await Processor().ProcessAsync(Inbound(), CancellationToken.None);
+
+        StoredMessage data = _publisher.Published.Single().Data;
+        Assert.Equal("user-1", data.WorkspaceId);
+        Assert.Equal("user-1", data.TenantId);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LiveAgentAndHumanTookOver_PublishesUserToTenant()
+    {
+        FakeHumanTakeoverStore takeover = new();
+        takeover.Activate("user-1", Connection, "2348012345678");
+
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true), humanTakeover: takeover)
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToTenant, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LiveAgentAndNoHumanTakeover_PublishesUserToAgent()
+    {
+        FakeHumanTakeoverStore takeover = new();
+
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true), humanTakeover: takeover)
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToAgent, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_LiveAgentWithoutTakeoverStore_PublishesUserToAgent()
+    {
+        // No takeover store: the takeover check is skipped and the agent gets the message.
+        await Processor(agentChannelLookup: new FakeAgentChannelLookup(isLive: true))
+            .ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal(CommsType.UserToAgent, _publisher.Published.Single().Data.CommsType);
     }
 }
