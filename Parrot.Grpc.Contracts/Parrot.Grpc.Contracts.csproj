@@ -17,6 +17,9 @@
 
   <ItemGroup>
     <Protobuf Include="Protos\message_verification.proto" GrpcServices="Both" />
+    <!-- Defined by Omni-AI (pkg/infra/parrot/proto); keep both files byte-identical to theirs. -->
+    <Protobuf Include="Protos\ownership.proto" GrpcServices="Both" />
+    <Protobuf Include="Protos\user_validation.proto" GrpcServices="Both" />
   </ItemGroup>
 
 </Project>
