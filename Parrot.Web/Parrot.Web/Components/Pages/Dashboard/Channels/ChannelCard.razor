@@ -33,6 +33,13 @@
             {
                 <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OnDisconnect">Disconnect</Button>
             }
+            @if (OnViewCatalogue.HasDelegate)
+            {
+                <Button Variant="ButtonVariant.Secondary" Class="channel-card__action" @onclick="OnViewCatalogue">
+                    <ChildContent>Catalogue</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            }
             <span class="channel-card__ready">
                 <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                 <Typography TextStyle="TextStyle.Small12Semibold" As="span">Ready</Typography>
@@ -75,6 +82,9 @@
 
     /// <summary>Abandons a half-finished setup so another route can be chosen.</summary>
     [Parameter] public EventCallback OnStartOver { get; set; }
+
+    /// <summary>When set on a connected WhatsApp card, shows a Catalogue navigation button.</summary>
+    [Parameter] public EventCallback OnViewCatalogue { get; set; }
 
     /// <summary>
     /// Parrot only: a WhatsApp connection the backend has disabled cannot be

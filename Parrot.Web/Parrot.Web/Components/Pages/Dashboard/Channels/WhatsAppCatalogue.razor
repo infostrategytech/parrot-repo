@@ -1,0 +1,286 @@
+@page "/dashboard/channels/whatsapp-catalogue"
+@attribute [RequiresAccess(AccessRules.Channels)]
+@layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Channels
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@using Parrot.Web.Features.Dashboard.Channels.State
+@implements IDisposable
+@inject ChannelsState ChannelsState
+@inject IIntegrationsService IntegrationsService
+@inject AuthState AuthState
+@inject ToastService Toasts
+@inject NavigationManager Nav
+
+<PageTitle>WhatsApp Catalogue · yára</PageTitle>
+
+<div class="wac">
+    <header class="wac__header">
+        <div class="wac__heading">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="GoBack">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Channels</ChildContent>
+            </Button>
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">WhatsApp Catalogue</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="wac__lede">
+                Products imported from your WhatsApp Business catalogue.
+            </Typography>
+        </div>
+
+        @if (_connection is not null)
+        {
+            <div class="wac__actions">
+                @if (_syncResult is not null)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="wac__sync-summary">
+                        @SyncSummary
+                    </Typography>
+                }
+                <Button Variant="ButtonVariant.Primary"
+                        disabled="@_busy"
+                        @onclick="SyncAsync">
+                    <IconLeft><Icon Name="IconName.RiRefreshLine" /></IconLeft>
+                    <ChildContent>@(_syncing ? "Syncing…" : "Sync catalogue")</ChildContent>
+                </Button>
+            </div>
+        }
+    </header>
+
+    @if (_error is not null)
+    {
+        <InlineError Message="@_error" OnDismiss="() => _error = null" />
+    }
+
+    @if (_loading)
+    {
+        <LoadingState Glyph="IconName.RiShoppingBag3Fill"
+                      Title="Loading products"
+                      Description="Fetching your imported catalogue items." />
+    }
+    else if (_connection is null)
+    {
+        <EmptyState Glyph="IconName.RiShoppingBag3Fill"
+                    Title="WhatsApp not connected"
+                    Description="Connect and configure your WhatsApp Business account first, then sync your catalogue here.">
+            <Action>
+                <Button Variant="ButtonVariant.Secondary" @onclick="GoBack">Go to Channels</Button>
+            </Action>
+        </EmptyState>
+    }
+    else if (_items.Count == 0 && !_syncing)
+    {
+        <EmptyState Glyph="IconName.RiShoppingBag3Fill"
+                    Title="No products yet"
+                    Description="Sync your catalogue to import products from WhatsApp Business.">
+            <Action>
+                <Button Variant="ButtonVariant.Primary" disabled="@_busy" @onclick="SyncAsync">
+                    <IconLeft><Icon Name="IconName.RiRefreshLine" /></IconLeft>
+                    <ChildContent>Sync catalogue</ChildContent>
+                </Button>
+            </Action>
+        </EmptyState>
+    }
+    else
+    {
+        <section class="wac__grid" aria-label="Catalogue products">
+            @foreach (CatalogueItem item in _items)
+            {
+                <article class="wac__card">
+                    <div class="wac__card-image">
+                        @if (!string.IsNullOrEmpty(item.ImageUrl))
+                        {
+                            <img src="@item.ImageUrl" alt="@item.Name" loading="lazy" />
+                        }
+                        else
+                        {
+                            <span class="wac__card-image-placeholder">
+                                <Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Lg" />
+                            </span>
+                        }
+                    </div>
+
+                    <div class="wac__card-body">
+                        <Typography TextStyle="TextStyle.BodySmallBold" As="h3" Prose Class="wac__card-name">@item.Name</Typography>
+
+                        @if (!string.IsNullOrEmpty(item.Brand))
+                        {
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="wac__card-brand">@item.Brand</Typography>
+                        }
+
+                        @if (item.Price.HasValue)
+                        {
+                            <Typography TextStyle="TextStyle.BodyDefaultBold" As="p" Class="wac__card-price">
+                                @FormatPrice(item.Price.Value, item.Currency)
+                            </Typography>
+                        }
+
+                        @if (!string.IsNullOrEmpty(item.Availability))
+                        {
+                            <span class="wac__card-badge wac__card-badge--@item.Availability.Replace(" ", "-").ToLowerInvariant()">
+                                @item.Availability
+                            </span>
+                        }
+
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Class="wac__card-sku">SKU: @item.RetailerId</Typography>
+                    </div>
+                </article>
+            }
+        </section>
+
+        @if (_total > _items.Count)
+        {
+            <div class="wac__load-more">
+                <Button Variant="ButtonVariant.Secondary" disabled="@_busy" @onclick="LoadMoreAsync">
+                    Load more (@_items.Count of @_total)
+                </Button>
+            </div>
+        }
+    }
+</div>
+
+@code {
+    private const int PageSize = 24;
+
+    private readonly CancellationTokenSource _lifetime = new();
+    private bool _disposed;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _syncing;
+    private string? _error;
+
+    private WhatsAppConnectionInfo? _connection;
+    private List<CatalogueItem> _items = [];
+    private int _total;
+    private int _currentPage = 1;
+    private CatalogueSyncResult? _syncResult;
+
+    private string Token => AuthState.CurrentUser?.Token
+        ?? throw new InvalidOperationException("Sign in to continue.");
+
+    private string SyncSummary => _syncResult is null ? "" :
+        _syncResult.Added > 0 ? $"{_syncResult.Added} products added."
+        : _syncResult.Updated > 0 ? $"{_syncResult.Updated} products updated."
+        : "Catalogue is up to date.";
+
+    protected override void OnInitialized() => AuthState.OnChange += AuthChanged;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        // Use the connection already loaded on the Channels page, or fetch it.
+        _connection = ChannelsState.WhatsAppConnection is { DisabledAt: null } conn ? conn : null;
+
+        if (_connection is null)
+        {
+            try
+            {
+                List<WhatsAppConnectionInfo> connections = await IntegrationsService
+                    .GetWhatsAppConnectionsAsync(Token, _lifetime.Token);
+                _connection = connections.FirstOrDefault(c => c.DisabledAt is null);
+                ChannelsState.SetWhatsApp(_connection ?? connections.FirstOrDefault());
+            }
+            catch (HttpRequestException) { }
+            catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+        }
+
+        if (_connection is not null)
+            await LoadProductsAsync();
+
+        _loading = false;
+        if (!_disposed) StateHasChanged();
+    }
+
+    private async Task SyncAsync()
+    {
+        if (_connection is null || _busy) return;
+        _busy = true;
+        _syncing = true;
+        _error = null;
+        _syncResult = null;
+        try
+        {
+            _syncResult = await IntegrationsService.SyncCatalogueAsync(
+                _connection.Id, Token, _lifetime.Token);
+            _items = [];
+            _currentPage = 1;
+            await LoadProductsAsync();
+            Toasts.Show(SyncSummary.Length > 0 ? SyncSummary : "Catalogue synced.");
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
+        catch (HttpRequestException ex)
+        {
+            _error = ex.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity
+                ? ex.Message
+                : "Sync failed. Check your connection has an access token and try again.";
+        }
+        finally
+        {
+            _busy = false;
+            _syncing = false;
+            if (!_disposed) await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task LoadProductsAsync()
+    {
+        if (_connection is null) return;
+        try
+        {
+            CatalogueItemsResponse result = await IntegrationsService.GetCatalogueProductsAsync(
+                _connection.Id, _currentPage, PageSize, Token, _lifetime.Token);
+            _items.AddRange(result.Items);
+            _total = result.Total;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (HttpRequestException) { }
+    }
+
+    private async Task LoadMoreAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        _currentPage++;
+        await LoadProductsAsync();
+        _busy = false;
+        if (!_disposed) StateHasChanged();
+    }
+
+    private static string FormatPrice(decimal price, string? currency)
+    {
+        string formatted = price.ToString("N2");
+        return currency is { Length: > 0 } c ? $"{c} {formatted}" : formatted;
+    }
+
+    private void GoBack() => Nav.NavigateTo("/dashboard/channels");
+
+    private void AuthChanged() => _ = InvokeAsync(async () =>
+    {
+        if (_disposed) return;
+        _items = [];
+        _total = 0;
+        _currentPage = 1;
+        _connection = null;
+        _syncResult = null;
+        _loading = true;
+        StateHasChanged();
+        if (AuthState.CurrentUser is not null)
+        {
+            await OnAfterRenderAsync(firstRender: true);
+            StateHasChanged();
+        }
+        else
+        {
+            _loading = false;
+            StateHasChanged();
+        }
+    });
+
+    public void Dispose()
+    {
+        _disposed = true;
+        AuthState.OnChange -= AuthChanged;
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
+}

@@ -59,7 +59,10 @@
                              ActionDisabled="@(_busy || (channel.Status == ChannelStatus.NeedsAttention && channel.Id is not (ChannelId.TikTok or ChannelId.Instagram)))"
                              OnOpen="() => OpenSetupAsync(channel)"
                              OnDisconnect="() => AskDisconnect(channel)"
-                             OnStartOver="() => AskRestart(channel)" />
+                             OnStartOver="() => AskRestart(channel)"
+                             OnViewCatalogue="@(channel.Id == ChannelId.Whatsapp && channel.Status == ChannelStatus.Connected
+                                 ? EventCallback.Factory.Create(this, () => Nav.NavigateTo("/dashboard/channels/whatsapp-catalogue"))
+                                 : default)" />
             }
         </section>
     }

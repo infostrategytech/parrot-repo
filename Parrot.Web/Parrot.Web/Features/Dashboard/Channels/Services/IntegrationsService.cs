@@ -130,6 +130,12 @@ public class IntegrationsService : IIntegrationsService
     public Task<WhatsAppConnectionInfo> GetWhatsAppStatusAsync(Guid id, string token, CancellationToken cancellationToken = default) =>
         SendAsync<WhatsAppConnectionInfo>(HttpMethod.Get, $"api/whatsapp/connections/{id}", token, null, cancellationToken);
 
+    public Task<CatalogueSyncResult> SyncCatalogueAsync(Guid connectionId, string token, CancellationToken cancellationToken = default) =>
+        SendAsync<CatalogueSyncResult>(HttpMethod.Post, $"api/whatsapp/connections/{connectionId}/catalogue/sync", token, null, cancellationToken);
+
+    public Task<CatalogueItemsResponse> GetCatalogueProductsAsync(Guid connectionId, int page, int pageSize, string token, CancellationToken cancellationToken = default) =>
+        SendAsync<CatalogueItemsResponse>(HttpMethod.Get, $"api/whatsapp/connections/{connectionId}/catalogue/products?page={page}&pageSize={pageSize}", token, null, cancellationToken);
+
     private async Task<T> SendAsync<T>(HttpMethod method, string path, string token, object? body, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(method, path);

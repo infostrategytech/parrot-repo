@@ -1,0 +1,149 @@
+.wac {
+  padding: var(--spacing-4xl) var(--ds-channels-gutter) var(--spacing-5xl);
+}
+
+.wac > * {
+  width: min(var(--ds-wac-max), 100%);
+  margin-inline: auto;
+}
+
+.wac {
+  /* Gaps in the token set: no page-gutter, content-width, card-grid, border-width, motion or badge-font scale. */
+  --ds-channels-gutter: clamp(28px, 4vw, 66px);
+  --ds-wac-max: 1280px;
+  --ds-wac-measure: 480px;
+  --ds-wac-card-min: 200px;
+  --ds-wac-image: 180px;
+  --ds-wac-hairline: 1px;
+  --ds-wac-motion: 120ms;
+  --ds-wac-badge-font: 11px;
+}
+
+.wac__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-3xl);
+  margin-bottom: var(--spacing-3xl);
+  flex-wrap: wrap;
+}
+
+.wac__heading {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.wac__lede {
+  color: var(--colors-text-secondary);
+  max-width: var(--ds-wac-measure);
+}
+
+.wac__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+  flex-shrink: 0;
+}
+
+.wac__sync-summary {
+  color: var(--colors-text-secondary);
+}
+
+/* Product grid */
+.wac__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(var(--ds-wac-card-min), 1fr));
+  gap: var(--spacing-2xl);
+  width: min(var(--ds-wac-max), 100%);
+  margin-inline: auto;
+}
+
+/* Product card */
+.wac__card {
+  background: var(--colors-surface-card);
+  border: var(--ds-wac-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: var(--ds-wac-image) 1fr;
+  transition: box-shadow var(--ds-wac-motion) ease;
+}
+
+.wac__card:hover {
+  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow);
+}
+
+.wac__card-image {
+  background: var(--colors-surface-muted);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.wac__card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.wac__card-image-placeholder {
+  color: var(--colors-text-subtle);
+}
+
+.wac__card-body {
+  padding: var(--spacing-xl);
+  display: grid;
+  gap: var(--spacing-xs);
+  align-content: start;
+}
+
+.wac__card-name {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.wac__card-brand {
+  color: var(--colors-text-secondary);
+}
+
+.wac__card-price {
+  color: var(--colors-text-primary);
+}
+
+.wac__card-badge {
+  display: inline-block;
+  font-size: var(--ds-wac-badge-font); /* text-style-exempt: availability pill — sits below the type scale */
+  font-weight: 600; /* text-style-exempt: availability pill — sits below the type scale */
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  border-radius: var(--radius-radius-full);
+  text-transform: capitalize;
+  background: var(--colors-feedback-success-subtle);
+  color: var(--colors-feedback-success-text);
+}
+
+.wac__card-badge--out-of-stock {
+  background: var(--colors-feedback-destructive-subtle);
+  color: var(--colors-feedback-destructive-text);
+}
+
+.wac__card-badge--preorder {
+  background: var(--colors-feedback-warning-subtle);
+  color: var(--colors-feedback-warning-text);
+}
+
+.wac__card-sku {
+  color: var(--colors-text-subtle);
+  margin-top: var(--spacing-sm);
+}
+
+/* Load more */
+.wac__load-more {
+  margin-top: var(--spacing-3xl);
+  display: flex;
+  justify-content: center;
+  width: min(var(--ds-wac-max), 100%);
+  margin-inline: auto;
+}
