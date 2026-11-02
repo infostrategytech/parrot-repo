@@ -23,23 +23,39 @@ function library() {
 /**
  * Starts the conversation. session: { signedUrl, dynamicVariables, firstMessage }.
  * names: the .NET methods for a message (who, text), a mode (speaking or
- * listening), the end (reason) and a failure (message).
+ * listening), the end (reason) and a failure (message); optionally opened(),
+ * when the quiet start is over.
+ * options.quietStart (ms): the call starts with the microphone muted, so the AI
+ * hears a silent line and speaks first (a silence is its only cue to open). The
+ * microphone comes on once it has finished its first words, or after this long.
  * Returns { mute(on), end() }.
  */
-export async function converse(session, targets, dotnet, names) {
+export async function converse(session, targets, dotnet, names, options = {}) {
   const { VoiceConversation } = await library();
   const elements = (Array.isArray(targets) ? targets : [targets]).filter((e) => e instanceof Element);
   let conversation = null;
   let frame = 0;
   let ending = false;
   const seen = new Set();
+  let quiet = (options?.quietStart ?? 0) > 0;
+  let agentSpoke = false;
+  let quietTimer = 0;
 
   // If the page can no longer reach the server (the connection dropped, the server restarted,
   // the panel is gone), nobody can press End: the call ends itself rather than staying open.
   const call = (name, ...args) => dotnet.invokeMethodAsync(name, ...args).catch(() => end());
+  // The quiet start is over: the microphone comes on and the page is told.
+  const speakUp = () => {
+    if (!quiet) return;
+    quiet = false;
+    clearTimeout(quietTimer);
+    try { conversation?.setMicMuted(false); } catch { }
+    if (names.opened) call(names.opened);
+  };
   const stopLevel = () => {
     cancelAnimationFrame(frame);
     clearInterval(alive);
+    clearTimeout(quietTimer);
     for (const element of elements) element.style.setProperty("--level", "0");
   };
   let alive = 0;
@@ -73,7 +89,12 @@ export async function converse(session, targets, dotnet, names) {
       seen.add(key);
       call(names.message, source === "user" ? "user" : "agent", message);
     },
-    onModeChange: ({ mode }) => call(names.mode, mode),
+    onModeChange: ({ mode }) => {
+      call(names.mode, mode);
+      if (mode === "speaking") agentSpoke = true;
+      // Its first words are out: a moment for them to finish playing, so the speakers aren't heard as the owner.
+      else if (quiet && agentSpoke) setTimeout(speakUp, 300);
+    },
     onError: (message) => call(names.failed, String(message ?? "")),
     onDisconnect: (details) => {
       stopLevel();
@@ -86,6 +107,10 @@ export async function converse(session, targets, dotnet, names) {
     ending = false;
     await end();
     throw new Error("The voice chat ended while it was starting.");
+  }
+  if (quiet) {
+    conversation.setMicMuted(true);
+    quietTimer = setTimeout(speakUp, options.quietStart);
   }
   // Every few seconds the page asks whether this call should still be on. No answer (the
   // server is gone) or "no" (the page ended it but the message never arrived) ends it here.
@@ -101,7 +126,11 @@ export async function converse(session, targets, dotnet, names) {
   frame = requestAnimationFrame(tick);
 
   return {
-    mute: (on) => conversation.setMicMuted(Boolean(on)),
+    mute: (on) => {
+      // The owner's own choice ends the quiet start.
+      if (quiet) { quiet = false; clearTimeout(quietTimer); }
+      conversation.setMicMuted(Boolean(on));
+    },
     end,
   };
 }

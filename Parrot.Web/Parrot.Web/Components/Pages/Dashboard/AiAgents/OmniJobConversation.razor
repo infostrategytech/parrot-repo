@@ -50,7 +50,7 @@
                     {
                         @Bubble(message)
                     }
-                    @if (_phase == Phase.Thinking)
+                    @if (Waiting)
                     {
                         <li class="job-editor__msg is-agent">
                             <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
@@ -80,6 +80,19 @@
     </section>
 </div>
 
+@* Done ends the call: asked first, so a stray tap doesn't cut the owner off mid-thought. *@
+<Dialog Open="_confirmingDone"
+        Title="@($"Done talking to {Name}?")"
+        ConfirmLabel="I'm done"
+        CancelLabel="Keep talking"
+        OnCancel="() => _confirmingDone = false"
+        OnConfirm="FinishCallAsync">
+    <GlyphContent><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>The voice chat ends. What you've said so far stays with @Name, and you can talk or type again any time.</p>
+    </Body>
+</Dialog>
+
 @code {
     private enum Phase { Idle, Connecting, Listening, Speaking, Thinking }
 
@@ -91,6 +104,10 @@
     private sealed record AnsweredForm(string Title, IReadOnlyList<(string Question, string Answer)> Lines);
 
     private sealed record ArrivedForm(OrientationForm Delivery, OrientationQuestionnaire Questionnaire);
+
+    // The AI speaks first only after a silent second, and can take a while to answer: the
+    // microphone stays off until it has, or this long at most.
+    private static readonly TimeSpan QuietStart = TimeSpan.FromSeconds(12);
 
     private static readonly TimeSpan FormsRetryFirst = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan FormsRetryMost = TimeSpan.FromSeconds(30);
@@ -114,6 +131,11 @@
     private bool _formBusy;
     private bool _scroll;
     private bool _focusBox;
+    // In a call: the owner has spoken and the AI's answer hasn't come yet.
+    private bool _awaitingReply;
+    // The call's quiet start: the microphone is off until the AI has said its first words.
+    private bool _opening;
+    private bool _confirmingDone;
 
     private VoiceOrb? _orb;
     private VoiceAura? _aura;
@@ -131,6 +153,9 @@
 
     private bool InCall => _call is not null || _phase == Phase.Connecting;
 
+    // The thinking dots: a typed answer on its way, or in a call, the AI working out what to say.
+    private bool Waiting => _phase == Phase.Thinking || (InCall && _awaitingReply && _phase != Phase.Speaking);
+
     private ArrivedForm? Asking => _forms.FirstOrDefault();
 
     private bool Docked => Asking is not null && !InCall;
@@ -146,6 +171,7 @@
     private VoiceState OrbState => _phase switch
     {
         Phase.Speaking => VoiceState.Speaking,
+        _ when Waiting => VoiceState.Thinking,
         Phase.Listening => VoiceState.Listening,
         Phase.Thinking or Phase.Connecting => VoiceState.Thinking,
         _ => VoiceState.Idle,
@@ -160,6 +186,8 @@
     {
         Phase.Connecting => "One moment…",
         Phase.Speaking => "I'm talking",
+        _ when _opening => "One moment…",
+        _ when Waiting => "Thinking…",
         Phase.Listening => "I'm listening",
         _ => "Thinking…",
     };
@@ -241,7 +269,7 @@
                 <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__bar-orb" />
                 <div class="job-editor__bar-text">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" role="status">@BarTitle</Typography>
-                    @if (_phase == Phase.Listening)
+                    @if (_phase == Phase.Listening && !Waiting && !_opening)
                     {
                         <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="job-editor__muted">Talk as long as you like. Tap Done when you've finished.</Typography>
                     }
@@ -251,7 +279,7 @@
                         <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
                         <ChildContent>Type instead</ChildContent>
                     </Button>
-                    <Button Size="ButtonSize.Small" @onclick="EndCallAsync">
+                    <Button Size="ButtonSize.Small" @onclick="() => _confirmingDone = true">
                         <IconLeft><Icon Name="IconName.RiStopFill" /></IconLeft>
                         <ChildContent>Done</ChildContent>
                     </Button>
@@ -382,8 +410,12 @@
             var session = await Orientation.StartVoiceAsync(AgentId);
             if (generation != _generation) return;
             // The bar's orb is on screen by now; its level follows the voices.
+            // A quiet start, so the AI speaks first: the dots until it does.
+            _opening = true;
+            _awaitingReply = true;
             var call = await AiVoice.ConverseAsync(session, LevelTargets, _self!,
-                nameof(AiSaid), nameof(AiModeChanged), nameof(AiEnded), nameof(AiFailed), nameof(AiAlive));
+                nameof(AiSaid), nameof(AiModeChanged), nameof(AiEnded), nameof(AiFailed), nameof(AiAlive),
+                nameof(AiOpened), QuietStart);
             if (generation != _generation)
             {
                 await call.EndAsync();
@@ -409,8 +441,11 @@
     [JSInvokable]
     public Task AiSaid(string who, string text) => InvokeAsync(() =>
     {
-        if (!InCall || string.IsNullOrWhiteSpace(text)) return;
+        // "..." is the provider's report of a silence, not something the owner said.
+        if (!InCall || string.IsNullOrWhiteSpace(text) || (who == "user" && text.Trim() == "...")) return;
         Add(new Message(who == "user" ? Who.Owner : Who.Agent, text.Trim()));
+        _awaitingReply = who == "user";
+        _scroll = true;
         StateHasChanged();
     });
 
@@ -419,6 +454,16 @@
     {
         if (!InCall) return;
         _phase = mode == "speaking" ? Phase.Speaking : Phase.Listening;
+        StateHasChanged();
+    });
+
+    // The microphone is on: the AI has said its first words, or took too long to.
+    [JSInvokable]
+    public Task AiOpened() => InvokeAsync(() =>
+    {
+        if (!InCall) return;
+        _opening = false;
+        _awaitingReply = false;
         StateHasChanged();
     });
 
@@ -448,6 +493,9 @@
         _generation++;
         _call = null;
         _phase = Phase.Idle;
+        _awaitingReply = false;
+        _opening = false;
+        _confirmingDone = false;
         if (notice is not null) _notice = notice;
         _focusBox = true;
     }
@@ -460,6 +508,12 @@
         {
             try { await call.EndAsync(); } catch (JSException) { }
         }
+    }
+
+    private async Task FinishCallAsync()
+    {
+        _confirmingDone = false;
+        await EndCallAsync();
     }
 
     private async Task TypeInsteadAsync()
