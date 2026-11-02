@@ -77,6 +77,14 @@ public enum AvailabilityStatus
     Inactive,
 }
 
+// How the business supplies it: from stock on hand, made after the order, or booked for a time.
+public enum AvailabilityMode
+{
+    InStock,
+    MadeToOrder,
+    Bookings,
+}
+
 public enum RelationshipType
 {
     BundledWith,

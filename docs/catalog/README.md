@@ -111,12 +111,26 @@ Full contract: `/openapi/v1.json` at runtime, snapshot in [openapi.json](openapi
 | --- | --- | --- |
 | Write | `catalog:write` (+ `catalog:publish` for publish/retire, `catalog:admin` for catalogs and types) | `/api/catalog/admin/{catalogs,types,categories,products,offers,availability,relationships,media}`; `POST products/{id}/publish`, `POST products/{id}/retire`, `POST types/{id}/versions`, `GET types/{id}/schema` |
 | Read | `catalog:read` | `GET products`, `GET products/{id}`, `/offers?as_of=`, `/availability?region=&as_of=`, `/related?type=`, `/document`; `POST search`; `POST compare` |
+| Items (dashboard) | `catalog:read` to read; `catalog:write` to change (+ `catalog:publish` to save with `status: published`) | `GET items?status=all\|available\|unavailable\|draft&category_id=&q=&page=&page_size=`, `GET/PUT/DELETE items/{id}`, `POST items`, `PATCH items/{id}/availability`, `GET/POST categories` |
 | AI tools | `catalog:ai-tools` | `GET ai/tools/schemas`; `POST ai/tools/{search_catalog,get_product,get_product_offers,get_product_availability,compare_products,get_related_products}` |
 
 Conventions: JSON is snake_case; enums are snake_case strings; unknown fields are a 400;
 list endpoints take `cursor` and `limit` (max 100) and return `next_cursor`; every read
 response has an `ETag` and honours `If-None-Match`; errors use the Parrot envelope
 `{ success, errorCode, message, errors, traceId }`.
+
+### Items
+
+The dashboard's Products & Services page works on **items**: one product with its prices and
+availability, in the shape of the "Add an item" form. One `POST`/`PUT` runs the write services
+above inside one transaction, so an item is saved whole or not at all. The first write creates the
+workspace's `main` catalog (NGN) and two plain types, `general_product` and `general_service`.
+Pricing is `single` (`amount`, optional `per`), `variants` (one offer and list price per variant)
+or `on_request` (an offer with `price_on_request` and no prices). Availability is one row for all
+regions with a `mode`: `in_stock` (`quantity`), `made_to_order` (`lead_time_days`) or `bookings`;
+`available: false` makes it inactive. The list counts as available a live item with no row that is
+inactive or in stock with quantity 0. Items read the writer's tables, so drafts show and nothing is
+cached; `page`/`page_size` paging with a `total` replaces cursors because the page shows page numbers.
 
 ### The filter DSL
 

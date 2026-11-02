@@ -28,9 +28,9 @@ public sealed record AiProduct(
 
 public sealed record AiPrice(decimal Amount, string Currency, PriceType PriceType);
 
-public sealed record AiOffer(Guid Id, UntrustedTextField Name, BillingPeriod BillingPeriod, Guid? VariantId, IReadOnlyList<AiPrice> Prices, DateTime ValidFrom, DateTime? ValidUntil);
+public sealed record AiOffer(Guid Id, UntrustedTextField Name, BillingPeriod BillingPeriod, Guid? VariantId, string? Unit, bool PriceOnRequest, IReadOnlyList<AiPrice> Prices, DateTime ValidFrom, DateTime? ValidUntil);
 
-public sealed record AiAvailability(Guid? VariantId, string Region, int? StockQty, int? Capacity);
+public sealed record AiAvailability(Guid? VariantId, string Region, AvailabilityMode Mode, int? StockQty, int? LeadTimeDays, int? Capacity);
 
 public sealed record AiRelated(RelationshipType RelationshipType, AiProduct Product);
 

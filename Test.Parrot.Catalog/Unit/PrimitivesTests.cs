@@ -121,7 +121,7 @@ public class RendererTests
         Assert.Contains("  - Brand: Parrot", first.Text);
         Assert.Contains("  - Memory: 16 GB", first.Text);
         Assert.Contains("Starter (monthly): 25000 NGN (list)", first.Text);
-        Assert.Contains("  - NG: stock 3", first.Text);
+        Assert.Contains("  - NG: in stock, stock 3", first.Text);
         Assert.Contains("upsell: Onboarding (SKU SVC-1)", first.Text);
     }
 }

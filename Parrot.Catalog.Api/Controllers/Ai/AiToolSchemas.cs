@@ -57,7 +57,7 @@ public static class AiToolSchemas
                 ["id"]),
             Tool(
                 "get_product_offers",
-                "Active offers and prices (amount, ISO 4217 currency, price type) for a product. Pass as_of for a historical date; omit it for now.",
+                "Active offers and prices (amount, ISO 4217 currency, price type) for a product, with the unit one price buys. An offer marked price_on_request has no prices: say the business quotes it on request. Pass as_of for a historical date; omit it for now.",
                 new JsonObject
                 {
                     ["id"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" },
@@ -66,7 +66,7 @@ public static class AiToolSchemas
                 ["id"]),
             Tool(
                 "get_product_availability",
-                "Current availability (stock or capacity) of a product, optionally for one region (ISO 3166-1 alpha-2).",
+                "Current availability of a product, optionally for one region (ISO 3166-1 alpha-2): mode in_stock (with stock), made_to_order (with lead_time_days) or bookings (with capacity). An empty list means it is not on offer now or nothing is recorded: do not promise it.",
                 new JsonObject
                 {
                     ["id"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" },

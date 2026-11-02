@@ -23,6 +23,12 @@ public sealed class Offer : ITenantScoped, ITimestamped, ISoftDeletable
 
     public OfferStatus Status { get; set; } = OfferStatus.Draft;
 
+    // What one price buys, such as "person" or "hour"; null when it is simply the item.
+    public string? Unit { get; set; }
+
+    // The business quotes the price when asked; such an offer carries no prices.
+    public bool PriceOnRequest { get; set; }
+
     // Rules evaluated in Phase 4; stored and returned verbatim until then.
     public string Eligibility { get; set; } = "{}";
 
@@ -86,6 +92,11 @@ public sealed class Availability : ITenantScoped, ITimestamped, ISoftDeletable
     public int? StockQty { get; set; }
 
     public int? Capacity { get; set; }
+
+    public AvailabilityMode Mode { get; set; } = AvailabilityMode.InStock;
+
+    // Days needed to make it; only for made_to_order.
+    public int? LeadTimeDays { get; set; }
 
     public AvailabilityStatus Status { get; set; } = AvailabilityStatus.Active;
 

@@ -36,12 +36,14 @@ public sealed record OfferView(
     BillingPeriod BillingPeriod,
     Guid? ProductId,
     Guid? VariantId,
+    string? Unit,
+    bool PriceOnRequest,
     IReadOnlyList<PriceView> Prices,
     JsonElement Eligibility,
     DateTime ValidFrom,
     DateTime? ValidUntil);
 
-public sealed record AvailabilityView(Guid? ProductId, Guid? VariantId, string Region, int? StockQty, int? Capacity, DateTime ValidFrom, DateTime? ValidUntil);
+public sealed record AvailabilityView(Guid? ProductId, Guid? VariantId, string Region, int? StockQty, int? Capacity, AvailabilityMode Mode, int? LeadTimeDays, DateTime ValidFrom, DateTime? ValidUntil);
 
 public sealed record RelatedProductView(RelationshipType RelationshipType, string Direction, ProductSummary Product, JsonElement Metadata);
 

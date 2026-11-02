@@ -187,6 +187,7 @@ public class CatalogDbContext : DbContext
             e.HasKey(o => o.Id);
             e.Property(o => o.Name).HasMaxLength(256);
             e.Property(o => o.Description).HasMaxLength(4000);
+            e.Property(o => o.Unit).HasMaxLength(32);
             e.HasIndex(o => new { o.TenantId, o.ProductId });
             e.HasIndex(o => new { o.TenantId, o.VariantId });
             e.HasOne<Product>().WithMany().HasForeignKey(o => o.ProductId).OnDelete(DeleteBehavior.Cascade);
@@ -195,6 +196,7 @@ public class CatalogDbContext : DbContext
             {
                 t.HasCheckConstraint("ck_offers_target", "(product_id IS NULL) <> (variant_id IS NULL)");
                 t.HasCheckConstraint("ck_offers_validity", "valid_until IS NULL OR valid_until > valid_from");
+                t.HasCheckConstraint("ck_offers_unit", "unit IS NULL OR length(unit) > 0");
             });
         });
 
@@ -225,6 +227,7 @@ public class CatalogDbContext : DbContext
                 t.HasCheckConstraint("ck_availability_target", "(product_id IS NULL) <> (variant_id IS NULL)");
                 t.HasCheckConstraint("ck_availability_validity", "valid_until IS NULL OR valid_until > valid_from");
                 t.HasCheckConstraint("ck_availability_quantities", "(stock_qty IS NULL OR stock_qty >= 0) AND (capacity IS NULL OR capacity >= 0)");
+                t.HasCheckConstraint("ck_availability_lead_time", "lead_time_days IS NULL OR (lead_time_days >= 0 AND mode = 'made_to_order')");
             });
         });
 

@@ -114,6 +114,22 @@ public static class SecuritySql
         return string.Join("\n", sql);
     }
 
+    /// <summary>
+    /// Re-creates views over a table that gained columns. A view's <c>SELECT *</c> is expanded
+    /// when the view is created, so without this the reader never sees the new columns.
+    /// </summary>
+    public static string ReplaceViews(params string[] views)
+    {
+        List<string> sql = new List<string>();
+        foreach (string view in views)
+        {
+            string definition = ViewDefinitions().Single(d => d.Contains($"catalog.{view} AS", StringComparison.Ordinal));
+            sql.Add(definition.Replace("CREATE VIEW", "CREATE OR REPLACE VIEW", StringComparison.Ordinal));
+        }
+
+        return string.Join("\n", sql);
+    }
+
     public static string Down()
     {
         List<string> sql = new List<string>();

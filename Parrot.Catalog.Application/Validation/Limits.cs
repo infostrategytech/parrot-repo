@@ -27,5 +27,6 @@ public static class Limits
     public const int MaxAltTextLength = 512;
     public const int MaxAiTextLength = 2_000;
     public const int MaxCategoryDepth = 8;
+    public const int MaxLeadTimeDays = 365;
     public const decimal MaxPriceAmount = 99_999_999_999_999.9999m;
 }

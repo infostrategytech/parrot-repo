@@ -125,3 +125,23 @@ public interface ITypeVersionMigrator
 {
     Task<TypeVersionMigrationReport> MigrateAsync(Guid typeId, int fromVersion, int toVersion, bool dryRun, CancellationToken ct);
 }
+
+/// <summary>The dashboard's items: each call reads or writes one product with its prices and availability, in one transaction.</summary>
+public interface IItemService
+{
+    Task<ItemListResponse> ListAsync(ItemListQuery query, CancellationToken ct);
+
+    Task<ItemResponse> GetAsync(Guid id, CancellationToken ct);
+
+    Task<ItemResponse> CreateAsync(SaveItemRequest request, CancellationToken ct);
+
+    Task<ItemResponse> UpdateAsync(Guid id, SaveItemRequest request, CancellationToken ct);
+
+    Task<ItemResponse> SetAvailabilityAsync(Guid id, ItemAvailabilityInput request, CancellationToken ct);
+
+    Task DeleteAsync(Guid id, CancellationToken ct);
+
+    Task<IReadOnlyList<ItemCategory>> ListCategoriesAsync(CancellationToken ct);
+
+    Task<ItemCategory> CreateCategoryAsync(CreateItemCategoryRequest request, CancellationToken ct);
+}
