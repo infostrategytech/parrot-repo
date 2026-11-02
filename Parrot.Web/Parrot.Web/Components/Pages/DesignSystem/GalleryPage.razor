@@ -100,6 +100,14 @@
     </section>
 
     <section class="ds-gallery__section">
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Questionnaire from the AI</Typography>
+        @* The AI service's own sample form (agent_behaviour.json), as Teach your AI shows one. Send only pretends. *@
+        <div class="ds-gallery__questionnaire">
+            <Parrot.Web.Components.Pages.Dashboard.TeachAi.QuestionnaireCard Form="SampleQuestionnaire" Send="PretendSend" />
+        </div>
+    </section>
+
+    <section class="ds-gallery__section">
         <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Class="ds-gallery__section-title">Status and feedback</Typography>
 
         <div class="ds-gallery__cell">
@@ -310,6 +318,29 @@
 <ToastHost />
 
 @code {
+    private static readonly Parrot.Web.Services.OrientationQuestionnaire SampleQuestionnaire = Parrot.Web.Services.OrientationQuestionnaire.Read(
+        System.Text.Json.JsonDocument.Parse("""
+            {"id":"agent-behaviour","title":"How your AI should work","subtitle":"Choose how it communicates and when it should ask for help.",
+             "submitLabel":"Save behaviour","allowDecide":true,"step":3,"steps":4,"questions":[
+              {"id":"tone","type":"one","header":"Reply style","question":"How should your AI sound?","options":[
+                {"label":"Warm and friendly","description":"Relaxed, helpful and conversational"},
+                {"label":"Professional","description":"Clear, calm and business-focused"},
+                {"label":"Playful","description":"Energetic and expressive"}],"required":true,"value":"Warm and friendly"},
+              {"id":"replyLength","type":"select","question":"How long should its replies usually be?","placeholder":"Reply length","options":[
+                {"label":"Short","description":"One or two direct sentences"},
+                {"label":"Balanced","description":"Enough detail to answer clearly"},
+                {"label":"Detailed","description":"More explanation when helpful"}],"required":true,"value":"Balanced"},
+              {"id":"handoff","type":"yesno","question":"Should it hand over when a customer asks for a person?","required":true,"value":"true"},
+              {"id":"avoid","type":"text","question":"Is there anything it should never promise?","placeholder":"For example, never guarantee same-day delivery","required":false},
+              {"id":"approval","type":"consent","question":"Can this agent use these instructions?","consentLabel":"Use these approved instructions when replying","required":true,"value":"true"}]}
+            """).RootElement.Clone())!;
+
+    private static async Task<string?> PretendSend(IReadOnlyDictionary<string, object?> answers)
+    {
+        await Task.Delay(600);
+        return null;
+    }
+
     private static readonly ButtonVariant[] Variants = Enum.GetValues<ButtonVariant>();
     private static readonly ButtonSize[] Sizes = Enum.GetValues<ButtonSize>();
     private static readonly IconName[] AllIcons = Enum.GetValues<IconName>();

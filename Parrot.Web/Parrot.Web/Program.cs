@@ -121,6 +121,24 @@ if (builder.Configuration.GetValue<bool>("OmniAi:OrientationVoice"))
     builder.Services.AddSingleton<IBusinessKnowledge, OrientationBusinessKnowledge>();
 else
     builder.Services.AddSingleton<IBusinessKnowledge, UnavailableBusinessKnowledge>();
+// The AI service (Omni-AI), called as the signed-in person: it reads the user, workspace and
+// permissions from the session token. Streams (orientation answers, its forms) get their own
+// client with no timeout; each is cancelled by the page reading it. A free ngrok tunnel answers
+// a request it takes for a browser with its warning page, unless told to skip it.
+Uri? omniBaseUrl = Uri.TryCreate(builder.Configuration["OmniAi:BaseUrl"], UriKind.Absolute, out var omniUri) ? omniUri : null;
+builder.Services.AddScoped(sp => new OmniAiClient(
+    new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>()) { InnerHandler = new HttpClientHandler() })
+    {
+        BaseAddress = omniBaseUrl,
+        DefaultRequestHeaders = { { "ngrok-skip-browser-warning", "1" } },
+    },
+    sp.GetRequiredService<AuthState>()));
+builder.Services.AddScoped(_ => new OmniAiStreams(new HttpClient
+{
+    BaseAddress = omniBaseUrl,
+    Timeout = Timeout.InfiniteTimeSpan,
+    DefaultRequestHeaders = { { "ngrok-skip-browser-warning", "1" } },
+}));
 builder.Services.AddScoped<OrientationApi>();
 builder.Services.AddScoped<Parrot.SharedComponents.Services.AiVoiceInterop>();
 // "Teach your AI" before the first agent, and the browser's voice for it.
@@ -135,7 +153,12 @@ builder.Services.AddScoped<Parrot.SharedComponents.Services.VoiceInterop>();
 // only and saved as drafts, and the figures stay hidden.
 if (builder.Configuration.GetValue<bool>("OmniAi:Enabled"))
 {
-    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.ApiAgentStore>();
+    // OmniAi:AgentSetup: agents and their channels kept by the AI service itself (/api/v1/agents),
+    // instead of Parrot's api/agent. Needs OmniAi:BaseUrl and the service on the same signing key.
+    if (builder.Configuration.GetValue<bool>("OmniAi:AgentSetup"))
+        builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.OmniAgentStore>();
+    else
+        builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.ApiAgentStore>();
     builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.ApiAiOperationsFeed>();
     builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.AiAgents.IAgentCapabilities, Parrot.Web.Features.Dashboard.AiAgents.OmniAiAgentCapabilities>();
 }

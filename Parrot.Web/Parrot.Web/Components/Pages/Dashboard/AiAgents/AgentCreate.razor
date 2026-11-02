@@ -265,6 +265,11 @@
             _done = true;
             Nav.NavigateTo($"/ai-operations/{saved.Id}?created=1");
         }
+        catch (ApiException exception)
+        {
+            // The service said why (a channel another agent has, a refused sign-in): show its words, not a guess.
+            _error = $"We couldn't create {_form.DisplayName}. {exception.UserMessage} ({(int?)exception.StatusCode})";
+        }
         catch (Exception exception) when (AiAgentsState.IsFailure(exception))
         {
             _error = $"We couldn't create {_form.DisplayName}. Check your connection and try again.";

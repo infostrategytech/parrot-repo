@@ -1,4 +1,6 @@
+using System.Text;
 using Microsoft.AspNetCore.Components;
+using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using Parrot.SharedComponents.Services;
 using Parrot.Web.Services;
@@ -30,6 +32,12 @@ public partial class TeachAiOverlay
     private async Task StartAiVoiceAsync()
     {
         if (_conversation is null || _aiCall is not null || _aiStarting) return;
+        // The AI learns about one agent's job at a time; opened from no agent, there is no one to teach.
+        if (State.AgentId is not { } agentId)
+        {
+            BackToStart("Open Teach more from an agent to talk to the AI about its job.");
+            return;
+        }
         _aiStarting = true;
         var generation = ++_aiGeneration;
         _voiceNotice = null;
@@ -43,7 +51,7 @@ public partial class TeachAiOverlay
         await _rendered.Task;
         try
         {
-            var session = await Orientation.StartVoiceAsync();
+            var session = await Orientation.StartVoiceAsync(agentId);
             if (generation != _aiGeneration) return;
             IReadOnlyList<ElementReference> levels = _orb is null ? [] : LevelTargets;
             var call = await AiVoiceJs.ConverseAsync(session, levels, _self!,
@@ -136,6 +144,96 @@ public partial class TeachAiOverlay
         _pausedAway = !visible;
         if (_aiCall is not null) await _aiCall.SetMutedAsync(_muted || _pausedAway);
         StateHasChanged();
+    }
+
+    // ── Typing to the AI ─────────────────────────────────────────────────────
+
+    private bool _aiTyping;
+    private CancellationTokenSource? _aiTypingCancel;
+
+    private bool CanSendToAi => _text.Trim().Length > 0 && !_aiTyping && !AiActive;
+
+    private async Task AiComposerKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing) await SendToAiAsync();
+    }
+
+    // The owner's words join the thread at once; the AI's answer arrives in pieces and its line
+    // grows as they come (Omni-AI's /orientation/text), the thinking dots standing in until then.
+    private async Task SendToAiAsync()
+    {
+        if (_conversation is null || !CanSendToAi) return;
+        if (State.AgentId is not { } agentId)
+        {
+            BackToStart("Open Teach more from an agent to talk to the AI about its job.");
+            return;
+        }
+        var text = _text.Trim();
+        _text = "";
+        _voiceNotice = null;
+        if (_conversation.Step == TeachAiStep.Welcome) _conversation.StartLive();
+        _conversation.Lines.Add(new TeachAiLine(TeachAiSpeaker.Person, text));
+        _aiTyping = true;
+        _phase = Phase.Thinking;
+        _scrollPending = true;
+        _aiTypingCancel = new CancellationTokenSource();
+        StateHasChanged();
+
+        var reply = new StringBuilder();
+        int? at = null;
+        try
+        {
+            await foreach (var piece in Orientation.SendTextAsync(agentId, text, _aiTypingCancel.Token))
+            {
+                reply.Append(piece);
+                var line = new TeachAiLine(TeachAiSpeaker.Agent, reply.ToString().Trim());
+                if (at is { } index)
+                {
+                    _conversation.Lines[index] = line;
+                }
+                else
+                {
+                    _conversation.Lines.Add(line);
+                    at = _conversation.Lines.Count - 1;
+                    _phase = Phase.Idle;
+                }
+                _scrollPending = true;
+                StateHasChanged();
+            }
+            if (at is null) _voiceNotice = "The AI didn't answer. Try again.";
+        }
+        catch (OperationCanceledException) when (_aiTypingCancel?.IsCancellationRequested == true)
+        {
+            // The panel closed while the AI was answering.
+        }
+        catch (ApiException ex)
+        {
+            _voiceNotice = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        {
+            _voiceNotice = "We couldn't reach the AI. Check your connection and try again.";
+        }
+        finally
+        {
+            _aiTyping = false;
+            if (_phase == Phase.Thinking) _phase = Phase.Idle;
+            _aiTypingCancel?.Dispose();
+            _aiTypingCancel = null;
+            _focusComposer = true;
+            StateHasChanged();
+        }
+    }
+
+    private void StopTypingToAi() => _aiTypingCancel?.Cancel();
+
+    // From the start screen: open the conversation with the box ready, nothing sent yet.
+    private Task TypeToAi()
+    {
+        _conversation?.StartLive();
+        _mode = Mode.Text;
+        _focusComposer = true;
+        return Task.CompletedTask;
     }
 
     private async Task EndAiVoiceAsync()

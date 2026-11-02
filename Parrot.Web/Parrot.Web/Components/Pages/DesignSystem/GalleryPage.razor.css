@@ -185,3 +185,10 @@
   gap: var(--spacing-sm);
   flex: 1;
 }
+
+/* The questionnaire at about the width it has in Teach your AI's thread. */
+.ds-gallery__questionnaire {
+  /* Gap in the token set: the thread's width beside the orb. */
+  --ds-gallery-questionnaire: 560px;
+  max-width: var(--ds-gallery-questionnaire);
+}

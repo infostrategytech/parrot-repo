@@ -182,13 +182,10 @@
                                         <ChildContent>Talk</ChildContent>
                                     </Button>
                                 }
-                                @if (!AiVoice)
-                                {
-                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="TypeInsteadAsync">
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="@(AiVoice ? TypeToAi : TypeInsteadAsync)">
                                     <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
                                     <ChildContent>Type</ChildContent>
                                 </Button>
-                                }
                             </div>
                             @if (StartNote is { } note)
                             {
@@ -251,6 +248,14 @@
                                         }
                                         @row.Footer
                                     }
+                                </li>
+                            }
+                            @* Forms the AI sent while learning the job, answered where they arrive. *@
+                            @foreach (var form in _forms)
+                            {
+                                <li @key="form.Delivery.EventId" class="teach-ai__line is-agent is-turn teach-ai__form-line" aria-label="Questions from your AI">
+                                    <VoiceOrb Still Class="teach-ai__avatar" />
+                                    <QuestionnaireCard Form="form.Questionnaire" Send="SendAnswers(form)" />
                                 </li>
                             }
                         </ol>
@@ -518,10 +523,12 @@
             _wasOpen = true;
             _trap = await Interop.TrapFocusAsync(_root, _self!, nameof(EscapeAsync));
             await OpenAsync();
+            ListenForForms();
         }
         else if (!State.IsOpen && _wasOpen)
         {
             _wasOpen = false;
+            StopListeningForForms();
             await StopVoiceAsync();
             await CancelNoteAsync();
             if (_trap is not null) { await _trap.DisposeAsync(); _trap = null; }
@@ -1770,16 +1777,23 @@
     }
 
     // With the AI, between voice chats: talking is the way in for now (typing to it comes later).
+    // With the AI: type to it, or Talk. A typed answer streams back into the thread as it is written.
     private RenderFragment AiVoiceAgain => __builder =>
     {
         <div class="teach-ai__composer">
+            <TextArea @ref="_field" Value="@_text" ValueChanged="v => _text = v ?? string.Empty" AriaLabel="Your answer"
+                      Class="teach-ai__answer-field" Variant="TextAreaVariant.Plain" TextStyle="TextStyle.BodyDefaultMedium"
+                      Placeholder="Type to the AI…" Rows="2" MaxLength="1000"
+                      AutoGrow SubmitOnEnter FocusOnPush OnKeyDown="AiComposerKeyAsync" Disabled="@(AiActive || _aiTyping)" />
             <footer class="teach-ai__composer-footer">
-                <div class="teach-ai__composer-tools">
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Typing to the AI is coming soon.</Typography>
-                </div>
-                <Button Size="ButtonSize.Small" Busy="@(_askingMic || _aiStarting)" disabled="@(!CanTalk)" @onclick="TalkAsync">
-                    <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                <div class="teach-ai__composer-tools"></div>
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" title="Talk instead: the conversation carries on"
+                        Busy="@(_askingMic || _aiStarting)" disabled="@(!CanTalk || _aiTyping)" @onclick="TalkAsync">
+                    <IconLeft><Icon Name="IconName.RiVoiceprintFill" /></IconLeft>
                     <ChildContent>Talk</ChildContent>
+                </Button>
+                <Button Size="ButtonSize.Small" aria-label="Send" title="Send" disabled="@(!CanSendToAi)" @onclick="SendToAiAsync">
+                    <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
                 </Button>
             </footer>
         </div>
@@ -1807,6 +1821,7 @@
     {
         State.Changed -= StateChanged;
         _recordClock?.Cancel();
+        StopListeningForForms();
         try
         {
             await StopVoiceAsync();

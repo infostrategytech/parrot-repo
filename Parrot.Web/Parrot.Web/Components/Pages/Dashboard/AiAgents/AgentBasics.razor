@@ -124,7 +124,7 @@
                 @* Back into Teach your AI to add to what every agent knows. *@
                 @if (Knowledge.Available)
                 {
-                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="TeachAi.TeachMore">Teach more</Button>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => TeachAi.TeachMore()">Teach more</Button>
                 }
             </li>
             <li class="agent-basics__item @(_changing == Rule.Handover ? "is-changing" : null)">
