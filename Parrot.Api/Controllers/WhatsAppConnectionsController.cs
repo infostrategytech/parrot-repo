@@ -17,10 +17,14 @@ namespace Parrot.Api.Controllers;
 public class WhatsAppConnectionsController : ControllerBase
 {
     private readonly IWhatsAppConnectionService _service;
+    private readonly IWhatsAppCatalogueSyncService _catalogueSyncService;
 
-    public WhatsAppConnectionsController(IWhatsAppConnectionService service)
+    public WhatsAppConnectionsController(
+        IWhatsAppConnectionService service,
+        IWhatsAppCatalogueSyncService catalogueSyncService)
     {
         _service = service;
+        _catalogueSyncService = catalogueSyncService;
     }
 
     [HttpPost]
@@ -71,6 +75,16 @@ public class WhatsAppConnectionsController : ControllerBase
         await _service.SaveAppSecretAsync(Owner(), id, request);
         return NoContent();
     }
+
+    [HttpPost("{id:guid}/catalogue/sync")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
+    public async Task<IActionResult> SyncCatalogue(Guid id) =>
+        Ok(await _catalogueSyncService.SyncAsync(Owner(), id, HttpContext.RequestAborted));
+
+    [HttpGet("{id:guid}/catalogue/products")]
+    public async Task<IActionResult> GetCatalogueProducts(
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
+        Ok(await _catalogueSyncService.GetProductsAsync(Owner(), id, page, pageSize, HttpContext.RequestAborted));
 
     private string Owner() =>
         User.WorkspaceId()

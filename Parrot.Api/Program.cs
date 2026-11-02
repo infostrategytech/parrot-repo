@@ -96,6 +96,7 @@ builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
 builder.Services.AddScoped<IWhatsAppCatalogueItemRepository, WhatsAppCatalogueItemRepository>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
+builder.Services.AddScoped<IWhatsAppCatalogueSyncService, WhatsAppCatalogueSyncService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
 builder.Services.Configure<TikTokSettings>(builder.Configuration.GetSection(TikTokSettings.SectionName));
 builder.Services.Configure<InstagramSettings>(builder.Configuration.GetSection(InstagramSettings.SectionName));

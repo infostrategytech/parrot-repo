@@ -27,17 +27,18 @@ public class WhatsAppCatalogueItemRepository(ApplicationDbContext db) : IWhatsAp
     public async Task<int> TombstoneMissingAsync(
         Guid connectionId, IReadOnlyCollection<string> presentRetailerIds, DateTime tombstonedAt, CancellationToken ct)
     {
-        // When all items are present (first sync or full refresh) there is nothing to tombstone.
-        // Skip the query rather than sending a NOT IN () with every id.
-        if (presentRetailerIds.Count == 0) return 0;
+        // When presentRetailerIds is empty the catalogue had no approved products, so every
+        // existing item for this connection is absent — tombstone them all.
+        // PostgreSQL does not allow IN () with an empty list, so we omit the NOT IN clause.
+        IQueryable<WhatsAppCatalogueItem> query = db.WhatsAppCatalogueItems
+            .Where(i => i.ConnectionId == connectionId && i.DeletedAt == null);
 
-        return await db.WhatsAppCatalogueItems
-            .Where(i => i.ConnectionId == connectionId
-                && i.DeletedAt == null
-                && !presentRetailerIds.Contains(i.RetailerId))
-            .ExecuteUpdateAsync(s => s
-                .SetProperty(i => i.DeletedAt, tombstonedAt)
-                .SetProperty(i => i.UpdatedAt, tombstonedAt), ct);
+        if (presentRetailerIds.Count > 0)
+            query = query.Where(i => !presentRetailerIds.Contains(i.RetailerId));
+
+        return await query.ExecuteUpdateAsync(s => s
+            .SetProperty(i => i.DeletedAt, tombstonedAt)
+            .SetProperty(i => i.UpdatedAt, tombstonedAt), ct);
     }
 
     public async Task<(IReadOnlyList<WhatsAppCatalogueItem> Items, int Total)> GetPageByConnectionAsync(
