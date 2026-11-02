@@ -23,13 +23,18 @@ public sealed class AiVoiceInterop(IJSRuntime js) : IAsyncDisposable
     /// <paramref name="alive"/>() every few seconds, returning whether the call should still be on (false, or no
     /// answer because the page has lost the server, and the browser ends it by itself).
     /// The level of whoever is talking goes on <paramref name="elements"/> as --level.
+    /// With a <paramref name="quietStart"/>, the call starts with the microphone muted so the AI hears a silent line
+    /// and speaks first; it comes on once the AI has finished its first words, or after that long, and then
+    /// <paramref name="opened"/>() is called.
     /// </summary>
     public async Task<AiConversation> ConverseAsync<T>(AiVoiceSession session, IReadOnlyList<ElementReference> elements,
-        DotNetObjectReference<T> target, string message, string mode, string ended, string failed, string alive) where T : class
+        DotNetObjectReference<T> target, string message, string mode, string ended, string failed, string alive,
+        string? opened = null, TimeSpan? quietStart = null) where T : class
     {
         var module = await _module.Value;
         var reference = await module.InvokeAsync<IJSObjectReference>("converse", session, elements, target,
-            new { message, mode, ended, failed, alive });
+            new { message, mode, ended, failed, alive, opened },
+            new { quietStart = (int)(quietStart?.TotalMilliseconds ?? 0) });
         return new AiConversation(reference);
     }
 

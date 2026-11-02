@@ -619,10 +619,19 @@ else
                     <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-detail__job-lede">@(newJob ? "Until we finish, my job stays as it is." : "One topic at a time. Leave whenever you like.")</Typography>
                 </div>
             }
+            @if (Knowledge is OrientationBusinessKnowledge && !newJob)
+            {
+                @* With the AI service's orientation on, the same conversation runs on the AI itself:
+                   its ElevenLabs call, its typed answers and its question cards. *@
+                <OmniJobConversation @key="@($"omni-{telling.Id}")" AgentId="@telling.Id" Name="@_form.DisplayName" Mascot="@_form.Mascot" />
+            }
+            else
+            {
             <AgentJobEditor @key="@(newJob ? $"new-{settings.UseCase}" : $"tell-{telling.Id}")" Brief="@(settings.Brief ?? JobBrief)" Name="@_form.DisplayName" Mascot="@_form.Mascot" Settings="settings" OnChange="StateHasChanged"
                             UseCase="@settings.UseCase" CustomJob="@settings.CustomRole" Industry="@(settings.Industry ?? Kind.Id)" Business="@Business"
                             DraftKey="@(newJob ? null : telling.Id)" OnWritten="noted => newJob ? NewJobToldAsync(telling, noted) : JobToldAsync(telling, noted)"
                             TopicsSection="@TellTopics" HideSummary />
+            }
             }
         </ChildContent>
     </FocusView>
@@ -1180,10 +1189,10 @@ else
         if (!Knowledge.Available) return Task.CompletedTask;
         if (_knowledgeApproved)
         {
-            TeachAi.TeachMore();
+            TeachAi.TeachMore(AgentId);
             return Task.CompletedTask;
         }
-        return TeachAi.RequireAsync(() => Task.CompletedTask);
+        return TeachAi.RequireAsync(() => Task.CompletedTask, agentId: AgentId);
     }
 
     private string TurnOnReadinessLine(AiAgent agent) =>

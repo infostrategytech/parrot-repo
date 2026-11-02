@@ -1,0 +1,663 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@implements IAsyncDisposable
+@using System.Net
+@using System.Text
+@using Parrot.SharedComponents.Services
+@inject OrientationApi Orientation
+@inject AiVoiceInterop AiVoice
+@inject VoiceInterop Voice
+@inject AuroraInterop Interop
+
+@* "Tell its job" as designed (the job conversation's card, thread, box, voice bar and docked
+   question card: AgentJobEditor's look, its stylesheet copied alongside), run by the AI service
+   instead of Parrot's own script. Talk to me opens the AI's ElevenLabs call: what each side says
+   lands in the thread as it is said. Type sends to the AI and its answer streams into a bubble.
+   The forms the AI sends (its questions, e.g. how the agent should sound) come up where the box
+   is, as the designed question card, and nothing else happens until they are approved; Approve
+   hands the answers to the AI. What the AI learns it keeps itself. *@
+
+<div class="job-editor">
+    <section class="@CardClass" aria-label="@($"Talk to {Name}")">
+        <VoiceAura @ref="_aura" State="AuraState" />
+        @if (!InConversation)
+        {
+            @* The start: the orb, what to do, and the two ways in. *@
+            <div class="job-editor__stage">
+                <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__orb" />
+            </div>
+            <div class="job-editor__voice-text">
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p" role="status">@StartTitle</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="job-editor__muted">Tell me what to do, what never to do, and when to call you.</Typography>
+            </div>
+            <div class="job-editor__ways">
+                <div class="job-editor__start">
+                    <Button Size="ButtonSize.Large" Busy="@(_phase == Phase.Connecting)" disabled="@(!_canTalk)" @onclick="TalkAsync">
+                        <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                        <ChildContent>Talk to me</ChildContent>
+                    </Button>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" disabled="@(_phase == Phase.Connecting)" @onclick="StartTyping">
+                        <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
+                        <ChildContent>Type</ChildContent>
+                    </Button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="job-editor__log" role="log" aria-label="@($"You and {Name}")" @ref="_thread">
+                <ol class="job-editor__thread">
+                    @foreach (var message in _messages)
+                    {
+                        @Bubble(message)
+                    }
+                    @if (Waiting)
+                    {
+                        <li class="job-editor__msg is-agent">
+                            <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                            <div class="job-editor__bubble is-typing" aria-label="@($"{Name} is thinking")"><i></i><i></i><i></i></div>
+                        </li>
+                    }
+                </ol>
+            </div>
+            <div class="job-editor__foot">
+                @* One floating box: the box, or the voice bar; a question card from the AI takes its place until approved. *@
+                <div class="@($"job-editor__dock{(Docked ? " is-asking" : null)}")" role="@(Docked ? "region" : null)" aria-label="@(Docked ? "Approve" : null)">
+                    @if (Docked)
+                    {
+                        @Approval
+                    }
+                    else
+                    {
+                        @Foot
+                    }
+                </div>
+            </div>
+        }
+        @if (_notice is not null)
+        {
+            <InlineError Tone="InlineErrorTone.Warning" Message="@_notice" OnDismiss="() => _notice = null" />
+        }
+    </section>
+</div>
+
+@* Done ends the call: asked first, so a stray tap doesn't cut the owner off mid-thought. *@
+<Dialog Open="_confirmingDone"
+        Title="@($"Done talking to {Name}?")"
+        ConfirmLabel="I'm done"
+        CancelLabel="Keep talking"
+        OnCancel="() => _confirmingDone = false"
+        OnConfirm="FinishCallAsync">
+    <GlyphContent><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>The voice chat ends. What you've said so far stays with @Name, and you can talk or type again any time.</p>
+    </Body>
+</Dialog>
+
+@code {
+    private enum Phase { Idle, Connecting, Listening, Speaking, Thinking }
+
+    private enum Who { Owner, Agent }
+
+    // Answered is set on the AI's line that records a question card once approved.
+    private sealed record Message(Who Who, string Text, AnsweredForm? Answered = null);
+
+    private sealed record AnsweredForm(string Title, IReadOnlyList<(string Question, string Answer)> Lines);
+
+    private sealed record ArrivedForm(OrientationForm Delivery, OrientationQuestionnaire Questionnaire);
+
+    // The AI speaks first only after a silent second, and can take a while to answer: the
+    // microphone stays off until it has, or this long at most.
+    private static readonly TimeSpan QuietStart = TimeSpan.FromSeconds(12);
+
+    private static readonly TimeSpan FormsRetryFirst = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan FormsRetryMost = TimeSpan.FromSeconds(30);
+
+    /// <summary>The agent as the AI service knows it: the conversation is about this agent's job.</summary>
+    [Parameter, EditorRequired] public string AgentId { get; set; } = "";
+
+    [Parameter] public string Name { get; set; } = "your agent";
+
+    [Parameter] public string Mascot { get; set; } = "Nova";
+
+    private readonly List<Message> _messages = [];
+    private readonly List<ArrivedForm> _forms = [];
+    private readonly HashSet<string> _seenForms = [];
+    private Phase _phase = Phase.Idle;
+    private bool _started;
+    private bool _canTalk;
+    private string _typed = "";
+    private string? _notice;
+    private string? _formError;
+    private bool _formBusy;
+    private bool _scroll;
+    private bool _focusBox;
+    // In a call: the owner has spoken and the AI's answer hasn't come yet.
+    private bool _awaitingReply;
+    // The call's quiet start: the microphone is off until the AI has said its first words.
+    private bool _opening;
+    private bool _confirmingDone;
+
+    private VoiceOrb? _orb;
+    private VoiceAura? _aura;
+    private TextArea? _typeBox;
+    private ElementReference _thread;
+    private DotNetObjectReference<OmniJobConversation>? _self;
+    private AiConversation? _call;
+    // Bumped whenever a call ends or is abandoned, so one that finishes connecting late is ended at once.
+    private int _generation;
+    private CancellationTokenSource? _typing;
+    private CancellationTokenSource? _listening;
+    private bool _disposed;
+
+    private bool InConversation => _started || _messages.Count > 0 || _forms.Count > 0;
+
+    private bool InCall => _call is not null || _phase == Phase.Connecting;
+
+    // The thinking dots: a typed answer on its way, or in a call, the AI working out what to say.
+    private bool Waiting => _phase == Phase.Thinking || (InCall && _awaitingReply && _phase != Phase.Speaking);
+
+    private ArrivedForm? Asking => _forms.FirstOrDefault();
+
+    private bool Docked => Asking is not null && !InCall;
+
+    private string CardClass =>
+        $"job-editor__voice is-{(_phase is Phase.Connecting ? "thinking" : _phase.ToString().ToLowerInvariant())}"
+        + (InConversation ? " is-talking is-short" : null)
+        + (Docked ? " is-docked" : null);
+
+    private IReadOnlyList<ElementReference> LevelTargets =>
+        _orb is null ? [] : _aura is null ? [_orb.Element] : [_orb.Element, _aura.Element];
+
+    private VoiceState OrbState => _phase switch
+    {
+        Phase.Speaking => VoiceState.Speaking,
+        _ when Waiting => VoiceState.Thinking,
+        Phase.Listening => VoiceState.Listening,
+        Phase.Thinking or Phase.Connecting => VoiceState.Thinking,
+        _ => VoiceState.Idle,
+    };
+
+    // The light along the card's edges: only while a call is on.
+    private VoiceState? AuraState => InCall ? OrbState : null;
+
+    private string StartTitle => _canTalk ? "Talk to me like a new team member" : "Type to me";
+
+    private string BarTitle => _phase switch
+    {
+        Phase.Connecting => "One moment…",
+        Phase.Speaking => "I'm talking",
+        _ when _opening => "One moment…",
+        _ when Waiting => "Thinking…",
+        Phase.Listening => "I'm listening",
+        _ => "Thinking…",
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _self = DotNetObjectReference.Create(this);
+            try { _canTalk = (await Voice.CapabilitiesAsync()).Microphone; }
+            catch (JSException) { }
+            ListenForForms();
+            StateHasChanged();
+        }
+        if (_scroll)
+        {
+            _scroll = false;
+            try { await Interop.ScrollToBottomAsync(_thread); } catch (JSException) { }
+        }
+        if (_focusBox && _typeBox is not null)
+        {
+            _focusBox = false;
+            try { await _typeBox.FocusAsync(); } catch (JSException) { }
+        }
+    }
+
+    // ── The thread ──────────────────────────────────────────────────────────
+
+    private RenderFragment Bubble(Message message) => __builder =>
+    {
+        if (message.Who == Who.Owner)
+        {
+            <li class="job-editor__msg is-owner">
+                <div class="job-editor__bubble">
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@message.Text</Typography>
+                </div>
+            </li>
+            return;
+        }
+        <li class="job-editor__msg is-agent">
+            <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+            <div class="job-editor__reply">
+                @if (message.Text.Length > 0)
+                {
+                    <div class="job-editor__bubble">
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@message.Text</Typography>
+                    </div>
+                }
+                @if (message.Answered is { } answered)
+                {
+                    <div class="job-editor__checked">
+                        <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
+                        <div class="job-editor__checked-text">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="p">@answered.Title</Typography>
+                            @foreach (var (question, answer) in answered.Lines)
+                            {
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@question <span class="job-editor__checked-answer">@answer</span></Typography>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        </li>
+    };
+
+    private void Add(Message message)
+    {
+        _messages.Add(message);
+        _scroll = true;
+    }
+
+    // ── The foot: the box, or the bar while a call is on ──────────────────────
+
+    private RenderFragment Foot => __builder =>
+    {
+        if (InCall)
+        {
+            <div class="job-editor__bar">
+                <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__bar-orb" />
+                <div class="job-editor__bar-text">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" role="status">@BarTitle</Typography>
+                    @if (_phase == Phase.Listening && !Waiting && !_opening)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="job-editor__muted">Talk as long as you like. Tap Done when you've finished.</Typography>
+                    }
+                </div>
+                <div class="job-editor__bar-actions">
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="TypeInsteadAsync">
+                        <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
+                        <ChildContent>Type instead</ChildContent>
+                    </Button>
+                    <Button Size="ButtonSize.Small" @onclick="() => _confirmingDone = true">
+                        <IconLeft><Icon Name="IconName.RiStopFill" /></IconLeft>
+                        <ChildContent>Done</ChildContent>
+                    </Button>
+                </div>
+            </div>
+            return;
+        }
+        <div class="job-editor__composer">
+            <TextArea @ref="_typeBox" Value="@_typed" ValueChanged="value => _typed = value ?? string.Empty" AriaLabel="@($"Message {Name}")"
+                      Class="job-editor__answer" Placeholder="For example: Answer questions about our prices and delivery. Never give discounts."
+                      Variant="TextAreaVariant.Plain" TextStyle="TextStyle.BodyDefaultMedium"
+                      Rows="2" AutoGrow SubmitOnEnter OnKeyDown="TypeKeyAsync" MaxLength="2000" Disabled="@(_typing is not null)" />
+            <footer class="job-editor__composer-foot">
+                <div class="job-editor__composer-tools"></div>
+                @if (_canTalk)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" title="Talk instead: the conversation carries on"
+                            disabled="@(_typing is not null)" @onclick="TalkAsync">
+                        <IconLeft><Icon Name="IconName.RiVoiceprintFill" /></IconLeft>
+                        <ChildContent>Talk</ChildContent>
+                    </Button>
+                }
+                <Button Size="ButtonSize.Small" aria-label="Send" title="Send" disabled="@(!CanSend)" @onclick="SendTypedAsync">
+                    <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                </Button>
+            </footer>
+        </div>
+    };
+
+    // ── Typing to the AI ──────────────────────────────────────────────────────
+
+    private bool CanSend => _typed.Trim().Length > 0 && _typing is null && !InCall;
+
+    // Typing opens the conversation; with nothing said yet, the agent speaks first (trigger_user).
+    private Task StartTyping()
+    {
+        _started = true;
+        _focusBox = true;
+        return _messages.Count == 0 ? StreamReplyAsync(token => Orientation.StartTextAsync(AgentId, token), opening: true) : Task.CompletedTask;
+    }
+
+    private async Task TypeKeyAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter" && !args.ShiftKey && !args.IsComposing) await SendTypedAsync();
+    }
+
+    // Their words join the thread at once; the AI's answer arrives in pieces, its bubble growing as they come.
+    private async Task SendTypedAsync()
+    {
+        if (!CanSend) return;
+        var text = _typed.Trim();
+        _typed = "";
+        _notice = null;
+        Add(new Message(Who.Owner, text));
+        await StreamReplyAsync(token => Orientation.SendTextAsync(AgentId, text, token));
+    }
+
+    // The AI's answer, arriving in pieces: the thinking dots until the first, then a bubble growing as they come.
+    // Opening: a service without trigger_user refuses it (400); then the box is simply ready, with nothing to report.
+    private async Task StreamReplyAsync(Func<CancellationToken, IAsyncEnumerable<string>> reply, bool opening = false)
+    {
+        if (_typing is not null) return;
+        _notice = null;
+        _phase = Phase.Thinking;
+        _typing = new CancellationTokenSource();
+        StateHasChanged();
+
+        var written = new StringBuilder();
+        int? at = null;
+        try
+        {
+            await foreach (var piece in reply(_typing.Token))
+            {
+                written.Append(piece);
+                var message = new Message(Who.Agent, written.ToString().Trim());
+                if (at is { } index)
+                {
+                    _messages[index] = message;
+                    _scroll = true;
+                }
+                else
+                {
+                    Add(message);
+                    at = _messages.Count - 1;
+                    _phase = Phase.Idle;
+                }
+                StateHasChanged();
+            }
+            if (at is null && !opening) _notice = $"{Name} didn't answer. Try again.";
+        }
+        catch (OperationCanceledException) when (_disposed)
+        {
+            return;
+        }
+        catch (ApiException ex) when (opening && ex.StatusCode == HttpStatusCode.BadRequest)
+        {
+        }
+        catch (ApiException ex)
+        {
+            _notice = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or IOException)
+        {
+            _notice = $"We couldn't reach {Name}. Check your connection and try again.";
+        }
+        finally
+        {
+            _typing?.Dispose();
+            _typing = null;
+            if (_phase == Phase.Thinking) _phase = Phase.Idle;
+            _focusBox = true;
+            if (!_disposed) StateHasChanged();
+        }
+    }
+
+    // ── Talking: the AI service's ElevenLabs call ─────────────────────────────
+
+    private async Task TalkAsync()
+    {
+        if (InCall || !_canTalk) return;
+        _started = true;
+        _notice = null;
+        _phase = Phase.Connecting;
+        var generation = ++_generation;
+        StateHasChanged();
+        try
+        {
+            var session = await Orientation.StartVoiceAsync(AgentId);
+            if (generation != _generation) return;
+            // The bar's orb is on screen by now; its level follows the voices.
+            // A quiet start, so the AI speaks first: the dots until it does.
+            _opening = true;
+            _awaitingReply = true;
+            var call = await AiVoice.ConverseAsync(session, LevelTargets, _self!,
+                nameof(AiSaid), nameof(AiModeChanged), nameof(AiEnded), nameof(AiFailed), nameof(AiAlive),
+                nameof(AiOpened), QuietStart);
+            if (generation != _generation)
+            {
+                await call.EndAsync();
+                return;
+            }
+            _call = call;
+            if (_phase == Phase.Connecting) _phase = Phase.Listening;
+        }
+        catch (ApiException ex)
+        {
+            CallOver(ex.UserMessage);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or JSException)
+        {
+            CallOver("We couldn't start the voice chat. Check your connection and try again.");
+        }
+        finally
+        {
+            if (!_disposed) StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public Task AiSaid(string who, string text) => InvokeAsync(() =>
+    {
+        // "..." is the provider's report of a silence, not something the owner said.
+        if (!InCall || string.IsNullOrWhiteSpace(text) || (who == "user" && text.Trim() == "...")) return;
+        Add(new Message(who == "user" ? Who.Owner : Who.Agent, text.Trim()));
+        _awaitingReply = who == "user";
+        _scroll = true;
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task AiModeChanged(string mode) => InvokeAsync(() =>
+    {
+        if (!InCall) return;
+        _phase = mode == "speaking" ? Phase.Speaking : Phase.Listening;
+        StateHasChanged();
+    });
+
+    // The microphone is on: the AI has said its first words, or took too long to.
+    [JSInvokable]
+    public Task AiOpened() => InvokeAsync(() =>
+    {
+        if (!InCall) return;
+        _opening = false;
+        _awaitingReply = false;
+        StateHasChanged();
+    });
+
+    // Ended from the other side: the AI finished, the link expired, the connection dropped.
+    [JSInvokable]
+    public Task AiEnded(string reason) => InvokeAsync(() =>
+    {
+        if (!InCall) return;
+        CallOver("The voice chat ended. Press Talk to carry on, or type.");
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task AiFailed(string message) => InvokeAsync(() =>
+    {
+        if (!InCall) return;
+        _notice = "Something went wrong with the voice chat. Press Talk to try again.";
+        StateHasChanged();
+    });
+
+    // Asked by the browser every few seconds: false once the call was ended here, so it always closes.
+    [JSInvokable]
+    public bool AiAlive() => InCall && !_disposed;
+
+    private void CallOver(string? notice)
+    {
+        _generation++;
+        _call = null;
+        _phase = Phase.Idle;
+        _awaitingReply = false;
+        _opening = false;
+        _confirmingDone = false;
+        if (notice is not null) _notice = notice;
+        _focusBox = true;
+    }
+
+    private async Task EndCallAsync()
+    {
+        var call = _call;
+        CallOver(null);
+        if (call is not null)
+        {
+            try { await call.EndAsync(); } catch (JSException) { }
+        }
+    }
+
+    private async Task FinishCallAsync()
+    {
+        _confirmingDone = false;
+        await EndCallAsync();
+    }
+
+    private async Task TypeInsteadAsync()
+    {
+        await EndCallAsync();
+        _focusBox = true;
+    }
+
+    // ── The AI's questions, as the designed question card ──────────────────────
+
+    private RenderFragment Approval => __builder =>
+    {
+        if (Asking is not { } form) return;
+        var q = form.Questionnaire;
+        <QuestionForm @key="form.Delivery.EventId" Title="@q.Title" Subtitle="@FormSubtitle(q)" Questions="q.AsForm()" Answers="q.SuggestedForm()"
+                      SubmitLabel="Approve" Busy="_formBusy"
+                      OnSubmit="answers => ApproveAsync(form, answers)"
+                      OnDecide="@(q.AllowDecide ? EventCallback.Factory.Create<IReadOnlyDictionary<string, FormAnswer>>(this, _ => LetAiDecideAsync(form)) : default)"
+                      Class="job-editor__approve" />
+        @if (_formError is not null)
+        {
+            <InlineError Message="@_formError" OnDismiss="() => _formError = null" />
+        }
+    };
+
+    private static string? FormSubtitle(OrientationQuestionnaire q) => q.Step is { } step && q.Steps is { } steps && steps > 1
+        ? $"Step {step} of {steps}. {q.Subtitle}".Trim()
+        : q.Subtitle ?? "Answer what's left, and change anything that isn't right.";
+
+    private Task ApproveAsync(ArrivedForm form, IReadOnlyDictionary<string, FormAnswer> picked)
+    {
+        var q = form.Questionnaire;
+        var answers = q.FromForm(picked);
+        if (q.Missing(answers) is { Count: > 0 } missing)
+        {
+            var first = q.Questions.First(x => x.Id == missing[0]);
+            _formError = first.Type == OrientationQuestionnaire.Consent
+                ? $"Tick \"{first.ConsentLabel ?? "I agree"}\" to approve."
+                : $"Answer \"{first.Text}\" to approve.";
+            return Task.CompletedTask;
+        }
+        var lines = q.Questions
+            .Select(x => (x.Text, Shown(x, answers.GetValueOrDefault(x.Id))))
+            .Where(line => line.Item2 is not null)
+            .Select(line => (line.Text, line.Item2!))
+            .ToList();
+        return DeliverAsync(form, answers, new AnsweredForm(q.Title, lines));
+    }
+
+    private Task LetAiDecideAsync(ArrivedForm form) =>
+        DeliverAsync(form, new Dictionary<string, object?>(OrientationQuestionnaire.AiDecides),
+            new AnsweredForm(form.Questionnaire.Title, [("Your answer", $"{Name} decides")]));
+
+    private async Task DeliverAsync(ArrivedForm form, IReadOnlyDictionary<string, object?> answers, AnsweredForm record)
+    {
+        _formBusy = true;
+        _formError = null;
+        try
+        {
+            await Orientation.AnswerFormAsync(AgentId, form.Delivery, answers);
+            _forms.Remove(form);
+            Add(new Message(Who.Agent, "", record));
+            _focusBox = _forms.Count == 0;
+        }
+        catch (ApiException ex)
+        {
+            _formError = ex.UserMessage;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _formError = "We couldn't send your answers. Check your connection and try again.";
+        }
+        finally
+        {
+            _formBusy = false;
+        }
+    }
+
+    private static string? Shown(Question q, object? answer) => answer switch
+    {
+        true => q.Type == OrientationQuestionnaire.Consent ? "Agreed" : "Yes",
+        false => q.Type == OrientationQuestionnaire.Consent ? null : "No",
+        List<string> { Count: > 0 } many => string.Join(", ", many),
+        string { Length: > 0 } text => text,
+        _ => null,
+    };
+
+    // The AI's form stream, read while the conversation is open: the same form can arrive again until
+    // it is answered, so each is kept once; the stream drops when the token expires, so it is reopened.
+    private void ListenForForms()
+    {
+        if (string.IsNullOrEmpty(AgentId) || _listening is not null) return;
+        _listening = new CancellationTokenSource();
+        _ = ReadFormsAsync(_listening.Token);
+    }
+
+    private async Task ReadFormsAsync(CancellationToken cancellationToken)
+    {
+        var wait = FormsRetryFirst;
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                await foreach (var form in Orientation.ReadFormsAsync(AgentId, cancellationToken))
+                {
+                    wait = FormsRetryFirst;
+                    await InvokeAsync(() => Arrived(form));
+                }
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                return;
+            }
+            catch (ApiException ex) when (ex.StatusCode is HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden or HttpStatusCode.NotFound)
+            {
+                return;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or ApiException or TaskCanceledException or IOException)
+            {
+            }
+
+            try { await Task.Delay(wait, cancellationToken); }
+            catch (OperationCanceledException) { return; }
+            wait = TimeSpan.FromTicks(Math.Min(wait.Ticks * 2, FormsRetryMost.Ticks));
+        }
+    }
+
+    private void Arrived(OrientationForm form)
+    {
+        if (!_seenForms.Add(form.EventId)) return;
+        if (OrientationQuestionnaire.Read(form.Form) is not { } questionnaire) return;
+        _forms.Add(new ArrivedForm(form, questionnaire));
+        _started = true;
+        _scroll = true;
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        _listening?.Cancel();
+        _listening?.Dispose();
+        _typing?.Cancel();
+        try { await EndCallAsync(); } catch (JSDisconnectedException) { }
+        _self?.Dispose();
+    }
+}

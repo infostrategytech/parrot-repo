@@ -1,0 +1,40 @@
+/* While it is being answered, the card is QuestionForm itself (its own look, as in Tell its
+   job); this only stacks a send error under it. Once sent, it folds to a quiet record of what
+   was answered, on the same surface. */
+.questionnaire-form {
+  display: grid;
+  gap: var(--spacing-sm);
+  width: 100%;
+  min-width: 0;
+}
+
+.questionnaire {
+  display: grid;
+  gap: var(--spacing-md);
+  width: 100%;
+  min-width: 0;
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+
+.questionnaire__head { display: grid; gap: var(--spacing-2xs); }
+.questionnaire__head ::deep h3 { margin: 0; }
+
+/* Sent: what was answered, question above answer, then a quiet receipt. */
+.questionnaire__answers { display: grid; gap: var(--spacing-sm); margin: 0; }
+.questionnaire__answer { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.questionnaire__answer dt,
+.questionnaire__answer dd { margin: 0; }
+.questionnaire__answer dt { color: var(--colors-text-muted); }
+.questionnaire__answer dd { overflow-wrap: anywhere; }
+
+.questionnaire__done {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  color: var(--colors-text-success);
+}
