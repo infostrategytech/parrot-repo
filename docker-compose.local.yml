@@ -195,8 +195,8 @@ services:
       EmailSettings__FromName: Parrot Local
       EmailSettings__BaseUrl: http://localhost:5255
       FrontendSettings__BaseUrl: http://localhost:5255
-      # The AI orchestrator (Omni-AI). Off until one is running beside this
-      # stack; then agents answer customers and the AI Operations figures show.
+      # The AI orchestrator (Omni-AI): on, so agents are its own and answer customers,
+      # and the AI Operations figures show. OMNI_AI_ENABLED=false runs without one.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
