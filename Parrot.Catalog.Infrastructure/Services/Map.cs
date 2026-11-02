@@ -44,11 +44,11 @@ internal static class Map
 
     public static OfferAdminResponse Offer(Offer o, IEnumerable<Price> prices)
         => new(o.Id, o.CatalogId, o.ProductId, o.VariantId, o.Name, o.Description, o.BillingPeriod, o.Status, Json.Element(o.Eligibility),
-            o.ValidFrom, o.ValidUntil, o.SortOrder, prices.OrderBy(p => p.Currency, StringComparer.Ordinal).ThenBy(p => p.ValidFrom).Select(Price).ToArray(),
+            o.ValidFrom, o.ValidUntil, o.SortOrder, o.Unit, o.PriceOnRequest, prices.OrderBy(p => p.Currency, StringComparer.Ordinal).ThenBy(p => p.ValidFrom).Select(Price).ToArray(),
             o.CreatedAt, o.UpdatedAt);
 
     public static AvailabilityResponse Availability(Availability a)
-        => new(a.Id, a.ProductId, a.VariantId, a.Region, a.StockQty, a.Capacity, a.Status, a.ValidFrom, a.ValidUntil, a.CreatedAt, a.UpdatedAt);
+        => new(a.Id, a.ProductId, a.VariantId, a.Region, a.StockQty, a.Capacity, a.Mode, a.LeadTimeDays, a.Status, a.ValidFrom, a.ValidUntil, a.CreatedAt, a.UpdatedAt);
 
     public static RelationshipResponse Relationship(ProductRelationship r)
         => new(r.Id, r.SourceId, r.TargetId, r.RelationshipType, Json.Element(r.Metadata), r.SortOrder, r.CreatedAt);

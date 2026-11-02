@@ -12,6 +12,9 @@ namespace Parrot.Catalog.Api.Middleware;
 /// </summary>
 public sealed class WriteInvalidationFilter : IAsyncActionFilter
 {
+    // The routes that change catalog data: the write API and the dashboard's items view of it.
+    private static readonly string[] WritePaths = ["/api/catalog/admin", "/api/catalog/items", "/api/catalog/categories"];
+
     private readonly ICatalogReadCache _cache;
     private readonly ITenantContext _tenant;
 
@@ -25,7 +28,7 @@ public sealed class WriteInvalidationFilter : IAsyncActionFilter
     {
         ActionExecutedContext executed = await next();
         if (executed.Exception is null && _tenant.IsSet && !HttpMethods.IsGet(context.HttpContext.Request.Method)
-            && context.HttpContext.Request.Path.StartsWithSegments("/api/catalog/admin"))
+            && WritePaths.Any(path => context.HttpContext.Request.Path.StartsWithSegments(path)))
         {
             await _cache.BumpGenerationAsync(_tenant.TenantId, context.HttpContext.RequestAborted);
         }

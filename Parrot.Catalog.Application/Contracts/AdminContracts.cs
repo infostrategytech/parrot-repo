@@ -153,7 +153,9 @@ public sealed record CreateOfferRequest(
     string? Description = null,
     OfferStatus Status = OfferStatus.Draft,
     JsonElement? Eligibility = null,
-    int SortOrder = 0);
+    int SortOrder = 0,
+    [property: Description("What one price buys, such as person or hour.")] string? Unit = null,
+    [property: Description("The business quotes the price when asked; the offer then carries no prices.")] bool PriceOnRequest = false);
 
 public sealed record UpdateOfferRequest(
     string Name,
@@ -163,7 +165,9 @@ public sealed record UpdateOfferRequest(
     string? Description,
     OfferStatus Status,
     JsonElement? Eligibility,
-    int SortOrder);
+    int SortOrder,
+    string? Unit = null,
+    bool PriceOnRequest = false);
 
 public sealed record CreatePriceRequest(decimal Amount, string Currency, PriceType PriceType, DateTime ValidFrom, DateTime? ValidUntil = null, PriceStatus Status = PriceStatus.Active);
 
@@ -184,6 +188,8 @@ public sealed record OfferAdminResponse(
     DateTime ValidFrom,
     DateTime? ValidUntil,
     int SortOrder,
+    string? Unit,
+    bool PriceOnRequest,
     IReadOnlyList<PriceResponse> Prices,
     DateTime CreatedAt,
     DateTime UpdatedAt);
@@ -198,11 +204,21 @@ public sealed record CreateAvailabilityRequest(
     DateTime? ValidUntil = null,
     int? StockQty = null,
     int? Capacity = null,
-    AvailabilityStatus Status = AvailabilityStatus.Active);
+    AvailabilityStatus Status = AvailabilityStatus.Active,
+    AvailabilityMode Mode = AvailabilityMode.InStock,
+    [property: Description("Days needed to make it; only with mode made_to_order.")] int? LeadTimeDays = null);
 
-public sealed record UpdateAvailabilityRequest(string Region, DateTime ValidFrom, DateTime? ValidUntil, int? StockQty, int? Capacity, AvailabilityStatus Status);
+public sealed record UpdateAvailabilityRequest(
+    string Region,
+    DateTime ValidFrom,
+    DateTime? ValidUntil,
+    int? StockQty,
+    int? Capacity,
+    AvailabilityStatus Status,
+    AvailabilityMode Mode = AvailabilityMode.InStock,
+    int? LeadTimeDays = null);
 
-public sealed record AvailabilityResponse(Guid Id, Guid? ProductId, Guid? VariantId, string Region, int? StockQty, int? Capacity, AvailabilityStatus Status, DateTime ValidFrom, DateTime? ValidUntil, DateTime CreatedAt, DateTime UpdatedAt);
+public sealed record AvailabilityResponse(Guid Id, Guid? ProductId, Guid? VariantId, string Region, int? StockQty, int? Capacity, AvailabilityMode Mode, int? LeadTimeDays, AvailabilityStatus Status, DateTime ValidFrom, DateTime? ValidUntil, DateTime CreatedAt, DateTime UpdatedAt);
 
 // ---- relationships --------------------------------------------------------
 

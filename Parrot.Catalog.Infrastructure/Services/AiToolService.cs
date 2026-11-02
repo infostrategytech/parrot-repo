@@ -59,7 +59,7 @@ public sealed class AiToolService : IAiToolService
     {
         IReadOnlyList<OfferView> offers = await _read.GetOffersAsync(RequireId(request.Id), request.AsOf, ct);
         AiOffer[] result = offers.Select(o => new AiOffer(
-            o.Id, Text(o.Name), o.BillingPeriod, o.VariantId,
+            o.Id, Text(o.Name), o.BillingPeriod, o.VariantId, o.Unit, o.PriceOnRequest,
             o.Prices.Select(p => new AiPrice(p.Amount, p.Currency, p.PriceType)).ToArray(), o.ValidFrom, o.ValidUntil)).ToArray();
         return Wrap("get_product_offers", new AiOffersResult(request.Id, result));
     }
@@ -67,7 +67,7 @@ public sealed class AiToolService : IAiToolService
     public async Task<AiToolResponse<AiAvailabilityResult>> GetProductAvailabilityAsync(GetProductAvailabilityToolRequest request, CancellationToken ct)
     {
         IReadOnlyList<AvailabilityView> rows = await _read.GetAvailabilityAsync(RequireId(request.Id), request.Region, null, ct);
-        return Wrap("get_product_availability", new AiAvailabilityResult(request.Id, rows.Select(a => new AiAvailability(a.VariantId, a.Region, a.StockQty, a.Capacity)).ToArray()));
+        return Wrap("get_product_availability", new AiAvailabilityResult(request.Id, rows.Select(a => new AiAvailability(a.VariantId, a.Region, a.Mode, a.StockQty, a.LeadTimeDays, a.Capacity)).ToArray()));
     }
 
     public async Task<AiToolResponse<AiCompareResult>> CompareProductsAsync(CompareProductsToolRequest request, CancellationToken ct)

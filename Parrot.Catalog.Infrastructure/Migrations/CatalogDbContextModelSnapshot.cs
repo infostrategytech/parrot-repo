@@ -217,6 +217,16 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deleted_at");
 
+                    b.Property<int?>("LeadTimeDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("lead_time_days");
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("mode");
+
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uuid")
                         .HasColumnName("product_id");
@@ -274,6 +284,10 @@ namespace Parrot.Catalog.Infrastructure.Migrations
 
                     b.ToTable("availability", "catalog", t =>
                         {
+                            t.HasCheckConstraint("ck_availability_lead_time", "lead_time_days IS NULL OR (lead_time_days >= 0 AND mode = 'made_to_order')");
+
+                            t.HasCheckConstraint("ck_availability_mode", "mode IN ('in_stock', 'made_to_order', 'bookings')");
+
                             t.HasCheckConstraint("ck_availability_quantities", "(stock_qty IS NULL OR stock_qty >= 0) AND (capacity IS NULL OR capacity >= 0)");
 
                             t.HasCheckConstraint("ck_availability_status", "status IN ('active', 'inactive')");
@@ -672,6 +686,10 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasColumnType("character varying(256)")
                         .HasColumnName("name");
 
+                    b.Property<bool>("PriceOnRequest")
+                        .HasColumnType("boolean")
+                        .HasColumnName("price_on_request");
+
                     b.Property<Guid?>("ProductId")
                         .HasColumnType("uuid")
                         .HasColumnName("product_id");
@@ -689,6 +707,11 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
+
+                    b.Property<string>("Unit")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("unit");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")
@@ -728,6 +751,8 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_offers_status", "status IN ('draft', 'active', 'inactive')");
 
                             t.HasCheckConstraint("ck_offers_target", "(product_id IS NULL) <> (variant_id IS NULL)");
+
+                            t.HasCheckConstraint("ck_offers_unit", "unit IS NULL OR length(unit) > 0");
 
                             t.HasCheckConstraint("ck_offers_validity", "valid_until IS NULL OR valid_until > valid_from");
                         });

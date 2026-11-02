@@ -111,7 +111,7 @@ public sealed class CatalogReadService : ICatalogReadService
             .Where(p => offerIds.Contains(p.OfferId) && p.Status == PriceStatus.Active && p.ValidFrom <= at && (p.ValidUntil == null || p.ValidUntil > at))
             .ToListAsync(ct);
         return offers.Select(o => new OfferView(
-            o.Id, o.Name, o.Description, o.BillingPeriod, o.ProductId, o.VariantId,
+            o.Id, o.Name, o.Description, o.BillingPeriod, o.ProductId, o.VariantId, o.Unit, o.PriceOnRequest,
             prices.Where(p => p.OfferId == o.Id).OrderBy(p => p.Currency).ThenBy(p => p.PriceType)
                 .Select(p => new PriceView(p.Amount, p.Currency, p.PriceType, p.ValidFrom, p.ValidUntil)).ToArray(),
             Json.Element(o.Eligibility), o.ValidFrom, o.ValidUntil)).ToArray();
@@ -133,7 +133,7 @@ public sealed class CatalogReadService : ICatalogReadService
             .Where(a => region == null || a.Region == region || a.Region == "*")
             .OrderBy(a => a.Region)
             .ToListAsync(ct);
-        return rows.Select(a => new AvailabilityView(a.ProductId, a.VariantId, a.Region, a.StockQty, a.Capacity, a.ValidFrom, a.ValidUntil)).ToArray();
+        return rows.Select(a => new AvailabilityView(a.ProductId, a.VariantId, a.Region, a.StockQty, a.Capacity, a.Mode, a.LeadTimeDays, a.ValidFrom, a.ValidUntil)).ToArray();
     }
 
     public async Task<IReadOnlyList<RelatedProductView>> GetRelatedAsync(Guid productId, RelationshipType? type, CancellationToken ct)

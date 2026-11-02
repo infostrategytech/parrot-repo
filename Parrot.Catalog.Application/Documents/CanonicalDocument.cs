@@ -73,12 +73,20 @@ public sealed class CanonicalDocumentRenderer : ICanonicalDocumentRenderer
                 }
 
                 sb.Append(" (").Append(EnumNames.ToSnake(offer.BillingPeriod)).Append(')');
-                if (prices.Count > 0)
+                if (offer.PriceOnRequest)
+                {
+                    sb.Append(": price on request");
+                }
+                else if (prices.Count > 0)
                 {
                     sb.Append(": ");
                     sb.Append(string.Join(", ", prices
                         .OrderBy(pr => pr.Currency, StringComparer.Ordinal).ThenBy(pr => pr.PriceType)
                         .Select(pr => $"{pr.Amount.ToString("0.####", CultureInfo.InvariantCulture)} {pr.Currency} ({EnumNames.ToSnake(pr.PriceType)})")));
+                    if (offer.Unit is { } unit)
+                    {
+                        sb.Append(" per ").Append(unit);
+                    }
                 }
 
                 sb.Append('\n');
@@ -98,14 +106,20 @@ public sealed class CanonicalDocumentRenderer : ICanonicalDocumentRenderer
                     sb.Append(" [").Append(forVariant.Sku).Append(']');
                 }
 
+                sb.Append(": ").Append(EnumNames.ToSnake(a.Mode).Replace('_', ' '));
+                if (a.LeadTimeDays.HasValue)
+                {
+                    sb.Append(", ready in ").Append(a.LeadTimeDays.Value.ToString(CultureInfo.InvariantCulture)).Append(" days");
+                }
+
                 if (a.StockQty.HasValue)
                 {
-                    sb.Append(": stock ").Append(a.StockQty.Value.ToString(CultureInfo.InvariantCulture));
+                    sb.Append(", stock ").Append(a.StockQty.Value.ToString(CultureInfo.InvariantCulture));
                 }
 
                 if (a.Capacity.HasValue)
                 {
-                    sb.Append(": capacity ").Append(a.Capacity.Value.ToString(CultureInfo.InvariantCulture));
+                    sb.Append(", capacity ").Append(a.Capacity.Value.ToString(CultureInfo.InvariantCulture));
                 }
 
                 sb.Append('\n');

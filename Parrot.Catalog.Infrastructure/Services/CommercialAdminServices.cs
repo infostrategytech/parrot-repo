@@ -67,7 +67,7 @@ public sealed class OfferAdminService : CommercialServiceBase, IOfferAdminServic
             Status = request.Status,
             SortOrder = request.SortOrder,
         };
-        Apply(offer, request.Name, request.Description, request.ValidFrom, request.ValidUntil, request.Eligibility);
+        Apply(offer, request.Name, request.Description, request.ValidFrom, request.ValidUntil, request.Eligibility, request.Unit, request.PriceOnRequest);
         Stamp(offer, created: true);
         Db.Offers.Add(offer);
         await SaveAsync(c);
@@ -87,7 +87,12 @@ public sealed class OfferAdminService : CommercialServiceBase, IOfferAdminServic
         offer.BillingPeriod = request.BillingPeriod;
         offer.Status = request.Status;
         offer.SortOrder = request.SortOrder;
-        Apply(offer, request.Name, request.Description, request.ValidFrom, request.ValidUntil, request.Eligibility);
+        if (request.PriceOnRequest && prices.Any(p => p.Status == PriceStatus.Active))
+        {
+            throw new ValidationException("An offer with active prices cannot be price on request; remove its prices first.");
+        }
+
+        Apply(offer, request.Name, request.Description, request.ValidFrom, request.ValidUntil, request.Eligibility, request.Unit, request.PriceOnRequest);
         Stamp(offer, created: false);
         await SaveAsync(c);
         Guid productId = await ProductOfAsync(offer.ProductId, offer.VariantId, c);
@@ -132,6 +137,11 @@ public sealed class OfferAdminService : CommercialServiceBase, IOfferAdminServic
     public Task<PriceResponse> AddPriceAsync(Guid offerId, CreatePriceRequest request, CancellationToken ct) => WriteAsync(async c =>
     {
         Offer offer = await LoadOfferAsync(offerId, c);
+        if (offer.PriceOnRequest)
+        {
+            throw new ValidationException("The offer is price on request; it carries no prices.");
+        }
+
         Price price = new Price { Id = Guid.NewGuid(), TenantId = TenantId, CatalogId = offer.CatalogId, OfferId = offer.Id };
         Apply(price, request.Amount, request.Currency, request.PriceType, request.Status, request.ValidFrom, request.ValidUntil);
         Stamp(price, created: true);
@@ -179,9 +189,11 @@ public sealed class OfferAdminService : CommercialServiceBase, IOfferAdminServic
         Enqueue(AggregateTypes.Price, price.Id, CatalogEventTypes.PriceChanged, new { price_id = price.Id, offer_id = offer.Id, product_id = productId, currency = price.Currency });
     }, ct);
 
-    private static void Apply(Offer offer, string name, string? description, DateTime validFrom, DateTime? validUntil, System.Text.Json.JsonElement? eligibility)
+    private static void Apply(Offer offer, string name, string? description, DateTime validFrom, DateTime? validUntil, System.Text.Json.JsonElement? eligibility, string? unit, bool priceOnRequest)
     {
         offer.Name = Guards.RequireText(name, "name", Limits.MaxNameLength);
+        offer.Unit = Guards.OptionalText(unit, "unit", Limits.MaxUnitLength);
+        offer.PriceOnRequest = priceOnRequest;
         offer.Description = Guards.OptionalText(description, "description", 4000);
         offer.ValidFrom = Guards.Utc(validFrom);
         offer.ValidUntil = Guards.Utc(validUntil);
@@ -233,7 +245,7 @@ public sealed class AvailabilityAdminService : CommercialServiceBase, IAvailabil
     {
         (Guid catalogId, Guid productId) = await ResolveTargetAsync(request.ProductId, request.VariantId, c);
         Availability row = new Availability { Id = Guid.NewGuid(), TenantId = TenantId, CatalogId = catalogId, ProductId = request.ProductId, VariantId = request.VariantId };
-        Apply(row, request.Region, request.ValidFrom, request.ValidUntil, request.StockQty, request.Capacity, request.Status);
+        Apply(row, request.Region, request.ValidFrom, request.ValidUntil, request.StockQty, request.Capacity, request.Status, request.Mode, request.LeadTimeDays);
         Stamp(row, created: true);
         Db.Availability.Add(row);
         await SaveAsync(c);
@@ -248,7 +260,7 @@ public sealed class AvailabilityAdminService : CommercialServiceBase, IAvailabil
     {
         Availability row = await LoadAsync(id, c);
         AvailabilityResponse before = Map.Availability(row);
-        Apply(row, request.Region, request.ValidFrom, request.ValidUntil, request.StockQty, request.Capacity, request.Status);
+        Apply(row, request.Region, request.ValidFrom, request.ValidUntil, request.StockQty, request.Capacity, request.Status, request.Mode, request.LeadTimeDays);
         Stamp(row, created: false);
         await SaveAsync(c);
         Guid productId = await ProductOfAsync(row.ProductId, row.VariantId, c);
@@ -281,7 +293,7 @@ public sealed class AvailabilityAdminService : CommercialServiceBase, IAvailabil
         Enqueue(AggregateTypes.Availability, row.Id, CatalogEventTypes.AvailabilityChanged, new { availability_id = row.Id, product_id = productId, region = row.Region });
     }, ct);
 
-    private static void Apply(Availability row, string region, DateTime validFrom, DateTime? validUntil, int? stockQty, int? capacity, AvailabilityStatus status)
+    private static void Apply(Availability row, string region, DateTime validFrom, DateTime? validUntil, int? stockQty, int? capacity, AvailabilityStatus status, AvailabilityMode mode, int? leadTimeDays)
     {
         row.Region = Guards.RequireMatch(region, Guards.Region(), "region", "must be * or an ISO 3166-1 alpha-2 code, optionally with a subdivision (NG, NG-LA).");
         if (stockQty is < 0 || capacity is < 0)
@@ -289,8 +301,20 @@ public sealed class AvailabilityAdminService : CommercialServiceBase, IAvailabil
             throw new ValidationException("stock_qty and capacity must not be negative.");
         }
 
+        if (leadTimeDays is not null && mode != AvailabilityMode.MadeToOrder)
+        {
+            throw new ValidationException("lead_time_days is only for mode made_to_order.");
+        }
+
+        if (leadTimeDays is < 0 or > Limits.MaxLeadTimeDays)
+        {
+            throw new ValidationException($"lead_time_days must be between 0 and {Limits.MaxLeadTimeDays}.");
+        }
+
         row.StockQty = stockQty;
         row.Capacity = capacity;
+        row.Mode = mode;
+        row.LeadTimeDays = leadTimeDays;
         row.Status = status;
         row.ValidFrom = Guards.Utc(validFrom);
         row.ValidUntil = Guards.Utc(validUntil);
