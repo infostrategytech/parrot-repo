@@ -551,6 +551,7 @@ builder.Services.AddScoped<ChannelReadReceipts>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
 builder.Services.AddHttpClient<IInstagramSender, InstagramSender>();
+builder.Services.AddHttpClient<IMetaCatalogueClient, MetaCatalogueClient>();
 
 // Realtime: Redis is only the registry of who is online, never a message store.
 builder.Services.AddRedis(builder.Configuration);
