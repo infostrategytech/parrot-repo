@@ -8,15 +8,10 @@
 }
 
 .wac {
-  /* Gaps in the token set: no page-gutter, content-width, card-grid, border-width, motion or badge-font scale. */
+  /* Gaps in the token set: no page-gutter or content-width. */
   --ds-channels-gutter: clamp(28px, 4vw, 66px);
   --ds-wac-max: 1280px;
   --ds-wac-measure: 480px;
-  --ds-wac-card-min: 200px;
-  --ds-wac-image: 180px;
-  --ds-wac-hairline: 1px;
-  --ds-wac-motion: 120ms;
-  --ds-wac-badge-font: 11px;
 }
 
 .wac__header {
@@ -49,95 +44,30 @@
   color: var(--colors-text-secondary);
 }
 
-/* Product grid */
-.wac__grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--ds-wac-card-min), 1fr));
-  gap: var(--spacing-2xl);
-  width: min(var(--ds-wac-max), 100%);
-  margin-inline: auto;
+/* Product table rows — 3 columns: item, price, availability */
+.wac__row {
+  --ds-table-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  --ds-wac-thumb: 48px;
 }
 
-/* Product card */
-.wac__card {
-  background: var(--colors-surface-card);
-  border: var(--ds-wac-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-xl);
-  overflow: hidden;
-  display: grid;
-  grid-template-rows: var(--ds-wac-image) 1fr;
-  transition: box-shadow var(--ds-wac-motion) ease;
+/* Item column: avatar beside name + type */
+.wac__item { display: flex; gap: var(--spacing-md); align-items: center; min-width: 0; }
+
+.wac__picture { display: grid; flex: none; }
+.wac__picture ::deep .petal-avatar {
+  width: var(--ds-wac-thumb);
+  height: var(--ds-wac-thumb);
+  border-radius: var(--radius-radius-lg);
 }
 
-.wac__card:hover {
-  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow);
-}
+.wac__words { display: grid; gap: var(--spacing-xs); min-width: 0; overflow: hidden; }
 
-.wac__card-image {
-  background: var(--colors-surface-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
+.wac__meta { color: var(--colors-text-muted); }
 
-.wac__card-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
+.wac__price { color: var(--colors-text-primary); }
+.wac__no-price { color: var(--colors-text-subtle); }
 
-.wac__card-image-placeholder {
-  color: var(--colors-text-subtle);
-}
-
-.wac__card-body {
-  padding: var(--spacing-xl);
-  display: grid;
-  gap: var(--spacing-xs);
-  align-content: start;
-}
-
-.wac__card-name {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.wac__card-brand {
-  color: var(--colors-text-secondary);
-}
-
-.wac__card-price {
-  color: var(--colors-text-primary);
-}
-
-.wac__card-badge {
-  display: inline-block;
-  font-size: var(--ds-wac-badge-font); /* text-style-exempt: availability pill — sits below the type scale */
-  font-weight: 600; /* text-style-exempt: availability pill — sits below the type scale */
-  padding: var(--spacing-2xs) var(--spacing-sm);
-  border-radius: var(--radius-radius-full);
-  text-transform: capitalize;
-  background: var(--colors-feedback-success-subtle);
-  color: var(--colors-feedback-success-text);
-}
-
-.wac__card-badge--out-of-stock {
-  background: var(--colors-feedback-destructive-subtle);
-  color: var(--colors-feedback-destructive-text);
-}
-
-.wac__card-badge--preorder {
-  background: var(--colors-feedback-warning-subtle);
-  color: var(--colors-feedback-warning-text);
-}
-
-.wac__card-sku {
-  color: var(--colors-text-subtle);
-  margin-top: var(--spacing-sm);
-}
+.wac__available { position: relative; z-index: 1; }
 
 /* Load more */
 .wac__load-more {
@@ -146,4 +76,16 @@
   justify-content: center;
   width: min(var(--ds-wac-max), 100%);
   margin-inline: auto;
+}
+
+/* On tablet and smaller the table row stacks; item takes full width, price and
+   availability sit side by side on the next line. */
+@media (max-width: 1024px) {
+  .wac__row {
+    --ds-table-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "item item" "price available";
+  }
+  .wac__item { grid-area: item; }
+  .wac__price { grid-area: price; padding-left: calc(var(--ds-wac-thumb) + var(--spacing-md)); }
+  .wac__available { grid-area: available; }
 }

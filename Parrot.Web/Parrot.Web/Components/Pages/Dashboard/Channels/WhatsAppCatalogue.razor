@@ -19,7 +19,7 @@
         <div class="wac__heading">
             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="GoBack">
                 <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
-                <ChildContent>Channels</ChildContent>
+                <ChildContent>Back</ChildContent>
             </Button>
             <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">WhatsApp Catalogue</Typography>
             <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="wac__lede">
@@ -82,50 +82,50 @@
     }
     else
     {
-        <section class="wac__grid" aria-label="Catalogue products">
-            @foreach (CatalogueItem item in _items)
-            {
-                <article class="wac__card">
-                    <div class="wac__card-image">
-                        @if (!string.IsNullOrEmpty(item.ImageUrl))
-                        {
-                            <img src="@item.ImageUrl" alt="@item.Name" loading="lazy" />
-                        }
-                        else
-                        {
-                            <span class="wac__card-image-placeholder">
-                                <Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Lg" />
-                            </span>
-                        }
-                    </div>
-
-                    <div class="wac__card-body">
-                        <Typography TextStyle="TextStyle.BodySmallBold" As="h3" Prose Class="wac__card-name">@item.Name</Typography>
-
-                        @if (!string.IsNullOrEmpty(item.Brand))
-                        {
-                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="wac__card-brand">@item.Brand</Typography>
-                        }
-
-                        @if (item.Price.HasValue)
-                        {
-                            <Typography TextStyle="TextStyle.BodyDefaultBold" As="p" Class="wac__card-price">
-                                @FormatPrice(item.Price.Value, item.Currency)
-                            </Typography>
-                        }
-
-                        @if (!string.IsNullOrEmpty(item.Availability))
-                        {
-                            <span class="wac__card-badge wac__card-badge--@AvailabilityClass(item.Availability)">
-                                @AvailabilityLabel(item.Availability)
-                            </span>
-                        }
-
-                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Class="wac__card-sku">SKU: @item.RetailerId</Typography>
-                    </div>
-                </article>
-            }
-        </section>
+        <DataTable Label="Catalogue products">
+            <ChildContent>
+                <div class="ds-table__row wac__row is-head" role="row">
+                    <div class="ds-table__heading" role="columnheader">Item</div>
+                    <div class="ds-table__heading" role="columnheader">Price</div>
+                    <div class="ds-table__heading" role="columnheader">Availability</div>
+                </div>
+                <div role="rowgroup">
+                    @foreach (CatalogueItem item in _items)
+                    {
+                        <div class="ds-table__row wac__row" role="row">
+                            <div class="wac__item">
+                                <div class="wac__picture">
+                                    <PetalAvatar Seed="@item.Id.ToString()"
+                                                 Initials="@Initials.From(item.Name)"
+                                                 Size="AvatarSize.Lg"
+                                                 ImageUrl="@item.ImageUrl" />
+                                </div>
+                                <div class="wac__words">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@item.Name</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="wac__meta">Product</Typography>
+                                </div>
+                            </div>
+                            <div class="wac__price">
+                                @if (item.Price.HasValue)
+                                {
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@FormatPrice(item.Price.Value, item.Currency)</Typography>
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="wac__no-price">—</Typography>
+                                }
+                            </div>
+                            <div class="wac__available">
+                                @if (!string.IsNullOrEmpty(item.Availability))
+                                {
+                                    <StatusBadge Tone="@AvailabilityTone(item.Availability)">@AvailabilityLabel(item.Availability)</StatusBadge>
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </ChildContent>
+        </DataTable>
 
         @if (_total > _items.Count)
         {
@@ -140,6 +140,9 @@
 
 @code {
     private const int PageSize = 24;
+
+    [SupplyParameterFromQuery(Name = "back")]
+    public string? Back { get; set; }
 
     private readonly CancellationTokenSource _lifetime = new();
     private bool _disposed;
@@ -252,16 +255,20 @@
         return currency is { Length: > 0 } c ? $"{c} {formatted}" : formatted;
     }
 
-    // The catalogue answers in snake_case ("in_stock", "out_of_stock"). The badge
-    // styles below are hyphenated, and text-transform: capitalize only breaks on
-    // spaces, so both spellings are normalised here rather than at each call site.
-    private static string AvailabilityClass(string availability) =>
-        availability.Replace('_', '-').Replace(' ', '-').ToLowerInvariant();
+    // The catalogue answers in snake_case ("in_stock", "out_of_stock"). Replace
+    // underscores with spaces and capitalise for display in the StatusBadge.
+    private static string AvailabilityLabel(string availability)
+    {
+        string label = availability.Replace('_', ' ');
+        return label.Length > 0 ? char.ToUpperInvariant(label[0]) + label[1..] : label;
+    }
 
-    private static string AvailabilityLabel(string availability) =>
-        availability.Replace('_', ' ');
+    private static StatusTone AvailabilityTone(string availability) =>
+        availability is "in_stock" or "available" ? StatusTone.Success
+        : availability is "out_of_stock" ? StatusTone.Danger
+        : StatusTone.Neutral;
 
-    private void GoBack() => Nav.NavigateTo("/dashboard/channels");
+    private void GoBack() => Nav.NavigateTo(Back ?? "/dashboard/channels");
 
     private void AuthChanged() => _ = InvokeAsync(async () =>
     {

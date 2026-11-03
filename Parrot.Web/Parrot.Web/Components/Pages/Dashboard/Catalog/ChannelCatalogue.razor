@@ -1,0 +1,71 @@
+@page "/dashboard/catalog/channels"
+@attribute [RequiresAccess(AccessRules.Catalog)]
+@layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.State
+@inject ChannelsState ChannelsState
+@inject NavigationManager Nav
+
+<PageTitle>Channel Catalogues · yára</PageTitle>
+
+<div class="chan-cat">
+    <header class="chan-cat__header">
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="GoBack">
+            <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+            <ChildContent>Back</ChildContent>
+        </Button>
+        <div class="chan-cat__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Channel Catalogues</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="chan-cat__lede">
+                Import products from your connected channels.
+            </Typography>
+        </div>
+    </header>
+
+    @if (WhatsAppChannel is not null)
+    {
+        <section class="chan-cat__channels" aria-label="Available channels">
+            <article class="chan-cat__card">
+                <span class="chan-cat__mark">
+                    <ChannelIcon Channel="whatsapp" Size="IconSize.Lg" Plain />
+                </span>
+                <div class="chan-cat__copy">
+                    <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2" Prose>WhatsApp Business</Typography>
+                    @if (!string.IsNullOrEmpty(WhatsAppChannel.DisplayPhoneNumber))
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="chan-cat__account">
+                            @WhatsAppChannel.DisplayPhoneNumber
+                        </Typography>
+                    }
+                </div>
+                <div class="chan-cat__action">
+                    <Button Variant="ButtonVariant.Secondary" @onclick="OpenWhatsAppCatalogue">
+                        <ChildContent>Catalogue</ChildContent>
+                        <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                    </Button>
+                </div>
+            </article>
+        </section>
+    }
+    else
+    {
+        <EmptyState Glyph="IconName.RiLinksFill"
+                    Title="No channels connected"
+                    Description="Connect a channel with a catalogue — like WhatsApp Business — to import products.">
+            <Action>
+                <Button Variant="ButtonVariant.Secondary" @onclick="GoBack">Back to Products</Button>
+            </Action>
+        </EmptyState>
+    }
+</div>
+
+@code {
+    private WhatsAppConnectionInfo? WhatsAppChannel =>
+        ChannelsState.WhatsAppConnection is { DisabledAt: null } conn ? conn : null;
+
+    private void GoBack() => Nav.NavigateTo("/dashboard/catalog");
+
+    private void OpenWhatsAppCatalogue() =>
+        Nav.NavigateTo("/dashboard/channels/whatsapp-catalogue?back=/dashboard/catalog/channels");
+}

@@ -1,0 +1,67 @@
+.chan-cat {
+  padding: var(--spacing-4xl) clamp(28px, 4vw, 66px) var(--spacing-5xl);
+}
+
+.chan-cat > * {
+  width: min(1280px, 100%);
+  margin-inline: auto;
+}
+
+.chan-cat__header {
+  display: grid;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-3xl);
+}
+
+.chan-cat__heading {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.chan-cat__lede {
+  color: var(--colors-text-secondary);
+  max-width: 480px;
+}
+
+.chan-cat__channels {
+  display: grid;
+  gap: var(--spacing-md);
+  max-width: 600px;
+}
+
+.chan-cat__card {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: 0.5px solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+.chan-cat__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+  color: var(--colors-text-secondary);
+}
+
+.chan-cat__copy {
+  flex: 1;
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.chan-cat__account {
+  color: var(--colors-text-muted);
+}
+
+.chan-cat__action {
+  flex: none;
+}

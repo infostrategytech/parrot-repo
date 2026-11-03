@@ -85,36 +85,6 @@ else
         }
     </header>
 
-    @if (ChannelState.WhatsAppConnection is { DisabledAt: null } whatsappConn)
-    {
-        <section class="products-e__channel" aria-label="WhatsApp catalogue">
-            <article class="channel-card channel-whatsapp">
-                <span class="channel-card__mark">
-                    <ChannelIcon Channel="whatsapp" Size="IconSize.Lg" Plain />
-                </span>
-                <div class="channel-card__copy">
-                    <div class="channel-card__title">
-                        <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2" Prose>WhatsApp</Typography>
-                        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="channel-card__status is-connected">Connected</Typography>
-                    </div>
-                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose Class="channel-card__meta">
-                        @(whatsappConn.DisplayPhoneNumber ?? whatsappConn.PhoneNumberId ?? "WhatsApp Business")
-                    </Typography>
-                </div>
-                <div class="channel-card__actions">
-                    <Button Variant="ButtonVariant.Secondary" Class="channel-card__action" @onclick="@(() => Nav.NavigateTo("/dashboard/channels/whatsapp-catalogue"))">
-                        <ChildContent>Catalogue</ChildContent>
-                        <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
-                    </Button>
-                    <span class="channel-card__ready">
-                        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Ready</Typography>
-                    </span>
-                </div>
-            </article>
-        </section>
-    }
-
     @if (_loading)
     {
         <DataTable Label="Loading your items" Busy>
@@ -430,6 +400,13 @@ else
                            OnSelect="() => Import(PriceLists.CanReadPhotos ? ImportSource.Photo : ImportSource.Sheet)">
                 <Leading><span class="products-e__way-mark is-list"><Icon Name="IconName.RiFileList3Fill" Size="IconSize.Sm" /></span></Leading>
             </PopoverOption>
+            @if (HasChannelCatalogue)
+            {
+                <PopoverOption Label="Import from Channel's Catalogue" Description="Sync products from a connected channel"
+                               OnSelect="OpenChannelCatalogue">
+                    <Leading><span class="products-e__way-mark is-channel"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span></Leading>
+                </PopoverOption>
+            }
         </ChildContent>
     </Popover>;
 
@@ -912,6 +889,15 @@ else
     {
         _importOpen = false;
         _linkOpen = true;
+    }
+
+    private bool HasChannelCatalogue =>
+        ChannelState.WhatsAppConnection is { DisabledAt: null };
+
+    private void OpenChannelCatalogue()
+    {
+        _importOpen = false;
+        Nav.NavigateTo("/dashboard/catalog/channels");
     }
 
     // The post behind the link was read: the item's form opens, filled in, beside it.
