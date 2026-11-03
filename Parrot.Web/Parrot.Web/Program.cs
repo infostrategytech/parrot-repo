@@ -1,3 +1,4 @@
+using Parrot.Application.Integrations;
 using Parrot.Grpc.Contracts.Messaging.V1;
 using Parrot.Web.Components;
 using Parrot.Web.Features.Auth.ForgotPassword.Services;
@@ -128,13 +129,17 @@ else
 // a request it takes for a browser with its warning page, unless told to skip it.
 Uri? omniBaseUrl = Uri.TryCreate(builder.Configuration["OmniAi:BaseUrl"], UriKind.Absolute, out var omniUri) ? omniUri : null;
 builder.Services.AddScoped(sp => new OmniAiClient(
-    new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>()) { InnerHandler = new HttpClientHandler() })
+    new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>())
+    {
+        InnerHandler = new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()) { InnerHandler = new HttpClientHandler() },
+    })
     {
         BaseAddress = omniBaseUrl,
         DefaultRequestHeaders = { { "ngrok-skip-browser-warning", "1" } },
     },
     sp.GetRequiredService<AuthState>()));
-builder.Services.AddScoped(_ => new OmniAiStreams(new HttpClient
+builder.Services.AddScoped(sp => new OmniAiStreams(new HttpClient(
+    new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()) { InnerHandler = new HttpClientHandler() })
 {
     BaseAddress = omniBaseUrl,
     Timeout = Timeout.InfiniteTimeSpan,
