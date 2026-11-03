@@ -210,9 +210,9 @@ services:
       FacebookOAuth__AppId: ${FACEBOOK_APP_ID:-}
       FacebookOAuth__AppSecret: ${FACEBOOK_APP_SECRET:-}
       Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
-      # The AI orchestrator (Omni-AI). Off until one is deployed; then agents
-      # answer customers and the AI Operations figures show.
-      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      # The AI orchestrator (Omni-AI): on, so agents are its own and answer customers,
+      # and the AI Operations figures show. OMNI_AI_ENABLED=false runs without one.
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
       OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
@@ -374,10 +374,14 @@ services:
       ApiSettings__BaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}/
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
       # Must match the API's: with it on, agents live in the API and can be turned on.
-      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       # Shows "Continue with Facebook" on Sign in and Sign up; turn on with the API's Facebook app.
       Sso__Facebook: ${FACEBOOK_SSO_ENABLED:-false}
-      OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
+      OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-true}
+      # The AI service as the web app calls it (as the signed-in person), and agents and their
+      # channels kept by it (/api/v1/agents). Without these the web app makes session-only agents.
+      OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
+      OmniAi__AgentSetup: ${OMNI_AGENT_SETUP:-true}
       # Products & Services, kept by the catalog service, over the compose network.
       CatalogApi__BaseUrl: http://catalog-api:8080/
     depends_on:
