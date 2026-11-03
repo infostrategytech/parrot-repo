@@ -18,7 +18,7 @@ public class ThirdPartyCallLoggerTests
 
         (LogLevel level, string message) = Assert.Single(logger.Lines);
         Assert.Equal(LogLevel.Information, level);
-        Assert.StartsWith("third_party.call Service=Omni-AI Method=GET Path=/api/v1/agents Status=200 ElapsedMs=", message);
+        Assert.StartsWith("third_party.call Service=Omni-AI Host=omni-ai:8000 Method=GET Path=/api/v1/agents Status=200 ElapsedMs=", message);
         Assert.DoesNotContain("secret-cursor", message);
     }
 
@@ -26,13 +26,45 @@ public class ThirdPartyCallLoggerTests
     public async Task An_error_status_is_a_warning()
     {
         CapturingLogger logger = new();
-        HttpClient client = Client(logger, _ => new HttpResponseMessage(HttpStatusCode.BadGateway));
+        HttpClient client = Client(logger, _ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable)
+        {
+            Content = new StringContent("""{"success":false,"errorCode":"USER_VALIDATION_UNAVAILABLE","message":"user validation is not configured","traceId":"t-42"}"""),
+            Headers = { RetryAfter = new System.Net.Http.Headers.RetryConditionHeaderValue(TimeSpan.FromSeconds(5)) },
+        });
 
-        await client.PostAsync("api/v1/orientation/text/a1", null);
+        HttpResponseMessage response = await client.PostAsync("api/v1/orientation/text/a1", null);
 
         (LogLevel level, string message) = Assert.Single(logger.Lines);
         Assert.Equal(LogLevel.Warning, level);
-        Assert.Contains("Method=POST Path=/api/v1/orientation/text/a1 Status=502", message);
+        Assert.Contains("Method=POST Path=/api/v1/orientation/text/a1 Status=503", message);
+        Assert.Contains("ErrorCode=USER_VALIDATION_UNAVAILABLE Message=user validation is not configured TraceId=t-42 RetryAfter=5", message);
+        Assert.Contains("USER_VALIDATION_UNAVAILABLE", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task A_refused_token_says_what_it_claimed_but_never_the_token()
+    {
+        CapturingLogger logger = new();
+        HttpClient client = Client(logger, _ => new HttpResponseMessage(HttpStatusCode.Unauthorized)
+        {
+            Content = new StringContent("""{"detail":{"errorCode":"UNAUTHORIZED","message":"invalid or missing authentication token"}}"""),
+            Headers = { WwwAuthenticate = { new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer") } },
+        });
+        long exp = DateTimeOffset.UtcNow.AddMinutes(30).ToUnixTimeSeconds();
+        string payload = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(
+            $$"""{"sub":"u1","iss":"ParrotApi","aud":"ParrotApp","exp":{{exp}},"workspace_id":"w1"}""")).TrimEnd('=').Replace('+', '-').Replace('/', '_');
+        string token = $"eyJhbGciOiJIUzI1NiJ9.{payload}.c2lnbmF0dXJl";
+        client.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
+
+        await client.GetAsync("api/v1/agents");
+
+        (_, string message) = Assert.Single(logger.Lines);
+        Assert.Contains("Status=401", message);
+        Assert.Contains("ErrorCode=UNAUTHORIZED Message=invalid or missing authentication token", message);
+        Assert.Contains("Challenge=Bearer TokenSent=True TokenIssuer=ParrotApi TokenAudience=ParrotApp TokenExpiresInS=", message);
+        Assert.EndsWith("TokenHasTenant=False TokenHasWorkspace=True", message);
+        Assert.DoesNotContain(payload, message);
+        Assert.DoesNotContain("c2lnbmF0dXJl", message);
     }
 
     [Fact]
@@ -45,7 +77,7 @@ public class ThirdPartyCallLoggerTests
 
         (LogLevel level, string message) = Assert.Single(logger.Lines);
         Assert.Equal(LogLevel.Warning, level);
-        Assert.StartsWith("third_party.failed Service=Omni-AI Method=GET Path=/api/v1/agents", message);
+        Assert.StartsWith("third_party.failed Service=Omni-AI Host=omni-ai:8000 Method=GET Path=/api/v1/agents", message);
         Assert.Contains("Error=HttpRequestException: Connection refused", message);
     }
 
