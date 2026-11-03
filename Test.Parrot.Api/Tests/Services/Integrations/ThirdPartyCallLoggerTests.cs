@@ -46,7 +46,21 @@ public class ThirdPartyCallLoggerTests
         (LogLevel level, string message) = Assert.Single(logger.Lines);
         Assert.Equal(LogLevel.Warning, level);
         Assert.StartsWith("third_party.failed Service=Omni-AI Method=GET Path=/api/v1/agents", message);
-        Assert.EndsWith("Error=HttpRequestException: Connection refused", message);
+        Assert.Contains("Error=HttpRequestException: Connection refused", message);
+    }
+
+    [Fact]
+    public async Task A_failed_handshake_says_why_not_just_see_inner_exception()
+    {
+        CapturingLogger logger = new();
+        HttpClient client = Client(logger, _ => throw new HttpRequestException(
+            "The SSL connection could not be established, see inner exception.",
+            new System.Security.Authentication.AuthenticationException("The remote certificate is invalid because of errors in the certificate chain: UntrustedRoot")));
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => client.GetAsync("api/v1/channels"));
+
+        (_, string message) = Assert.Single(logger.Lines);
+        Assert.EndsWith("Cause=AuthenticationException: The remote certificate is invalid because of errors in the certificate chain: UntrustedRoot", message);
     }
 
     private static HttpClient Client(CapturingLogger logger, Func<HttpRequestMessage, HttpResponseMessage> respond) =>

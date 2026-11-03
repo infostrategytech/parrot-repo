@@ -44,15 +44,20 @@ public sealed class ThirdPartyCallLogger(string service, ILogger<ThirdPartyCallL
         }
         catch (Exception ex)
         {
-            // Unreachable, refused or timed out: the type and message say which, never a body.
+            // Unreachable, refused or timed out: the type and message say which, never a body. The
+            // innermost error is the real reason ("see inner exception" says nothing on its own).
+            Exception cause = ex;
+            while (cause.InnerException is not null) cause = cause.InnerException;
             logger.LogWarning(
-                "third_party.failed Service={Service} Method={Method} Path={Path} ElapsedMs={ElapsedMs} Error={Error}: {Reason}",
+                "third_party.failed Service={Service} Method={Method} Path={Path} ElapsedMs={ElapsedMs} Error={Error}: {Reason} Cause={Cause}: {CauseReason}",
                 service,
                 method,
                 path,
                 ElapsedMs(started),
                 ex.GetType().Name,
-                ex.Message);
+                ex.Message,
+                cause.GetType().Name,
+                cause.Message);
             throw;
         }
     }
