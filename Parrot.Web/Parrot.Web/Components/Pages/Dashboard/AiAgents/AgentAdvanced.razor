@@ -135,7 +135,8 @@
                             }
                             @Switch("Recommends products", "Suggests what to buy, from what you sell.", Form.Settings.CanRecommend, v => Form.Settings.CanRecommend = v)
                             @Switch("Checks order status", "Tells customers where their order is.", Form.Settings.CanCheckOrders, v => Form.Settings.CanCheckOrders = v)
-                            @Switch("Takes customer details", "Asks for a name and phone number before handing over.", Form.Settings.CanTakeDetails, v => Form.Settings.CanTakeDetails = v)
+                            @* No switch for taking customer details (designer, 3 November 2026): every agent asks when it needs them, for an
+                               order, a booking or a hand-over, and saves them to Customers. Not wanting it is said in the job. *@
                         </div>
                     }
                 </section>

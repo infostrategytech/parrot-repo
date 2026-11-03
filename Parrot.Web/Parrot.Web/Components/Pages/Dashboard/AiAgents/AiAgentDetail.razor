@@ -12,6 +12,7 @@
 @inject AgentGate Gate
 @inject IAiOperationsFeed Feed
 @inject IAgentCapabilities Capabilities
+@inject IJSRuntime JS
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.BusinessIntroState Intro
 @inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
@@ -470,7 +471,16 @@ else
                                         </Button>
                                     </div>
                                 </header>
-                                <div class="agent-detail__job-body">@JobSummary(JobBrief, _freshLines, null, aloud: true)</div>
+                                @* A long job reads as its first lines, with Show all (designer, 2 November 2026), so
+                                   what it can do stays in view; hearing it, or a change just made, shows all of it. *@
+                                @{ var clamped = !_jobOpen && !_hearing && _freshLines.Count == 0; }
+                                <div class="@(clamped ? "agent-detail__job-body is-clamped" : "agent-detail__job-body")">
+                                    @JobSummary(JobBrief, _freshLines, null, aloud: true)
+                                    @if ((_jobOverflows || _jobOpen) && !_hearing && _freshLines.Count == 0)
+                                    {
+                                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="agent-detail__job-more" aria-expanded="@(_jobOpen ? "true" : "false")" @onclick="() => _jobOpen = !_jobOpen">@(_jobOpen ? "Show less" : "Show all")</Button>
+                                    }
+                                </div>
                             </section>
                             <section class="agent-detail__group" aria-labelledby="agent-can-title">
                                 <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
@@ -699,7 +709,9 @@ else
     private IReadOnlyCollection<string> _freshLines = [];
 
     // Hear it: its job description read aloud, each sentence reached lighting in turn.
-    private bool _canSpeak, _hearing;
+    private bool _canSpeak, _hearing, _jobOpen, _jobOverflows;
+    // Show all only when the job runs past its four lines at the width it has now (designer, 3 November 2026).
+    private IJSObjectReference? _textFit;
     private int _readKey;
     private ElementReference _summaryText;
     private VoiceSpeech? _speech;
@@ -790,6 +802,18 @@ else
         {
             try { _canSpeak = (await Voice.CapabilitiesAsync()).Speak; StateHasChanged(); }
             catch (JSException) { }
+        }
+        // Measured where it's cut to four lines, so Show all only appears when there's more to read.
+        if (_activeTab == "job" && !_jobOpen && !_hearing && _freshLines.Count == 0)
+        {
+            try
+            {
+                _textFit ??= await JS.InvokeAsync<IJSObjectReference>("import", "/js/text-fit.js");
+                var overflows = await _textFit.InvokeAsync<bool>("overflows", _summaryText, "p");
+                if (overflows != _jobOverflows) { _jobOverflows = overflows; StateHasChanged(); }
+            }
+            catch (JSException) { }
+            catch (JSDisconnectedException) { }
         }
         if (_activeTab == "knowledge" && _countedFor != _formFor)
         {
@@ -1224,6 +1248,7 @@ else
         Drafts.Changed -= OnAgentsChanged;
         Readiness.Changed -= OnAgentsChanged;
         if (_speech is { } speech) _ = speech.DisposeAsync().AsTask();
+        if (_textFit is { } fit) { _textFit = null; _ = fit.DisposeAsync().AsTask(); }
         _self?.Dispose();
     }
 
