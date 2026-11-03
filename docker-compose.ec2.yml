@@ -286,8 +286,13 @@ services:
       MongoDB__ConnectionString: mongodb://mongodb:27017
       MongoDB__Database: parrot
       MongoDB__Collection: messages
+      # Omni-AI's ownership and user checks read connections and team grants.
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD}
     depends_on:
       mongodb:
+        condition: service_healthy
+      # The API applies the migrations the checks read.
+      parrot-api:
         condition: service_healthy
     networks: [parrot]
 

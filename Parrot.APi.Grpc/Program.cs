@@ -1,12 +1,20 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
+using Parrot.Application.Agents;
 using Parrot.Application.Auth;
 using Parrot.Application.Integrations;
+using Parrot.Application.Teams;
+using Parrot.Application.Workspaces;
 using Parrot.APi.Grpc.Services;
+using Parrot.Infrastructure.Agents;
+using Parrot.Infrastructure.Data;
 using Parrot.Infrastructure.Messaging;
+using Parrot.Infrastructure.Teams;
+using Parrot.Infrastructure.Workspaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -38,7 +46,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-builder.Services.AddAuthorization();
+// Omni-AI's service tokens carry agent:service, which sign-in never grants; the same policy as the API's.
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy(ServiceScopes.PolicyName, policy => policy
+        .RequireAuthenticatedUser()
+        .RequireAssertion(context => ServiceScopes.HasScope(context.User, ServiceScopes.AgentService)));
 
 // gRPC
 builder.Services.AddGrpc();
@@ -63,12 +75,27 @@ builder.Services.AddSingleton<IMessageDocumentMapperFactory, MessageDocumentMapp
 Parrot.Domain.Entities.Messages.MessageSerializationRegistry.Register();
 builder.Services.AddSingleton<IMessageRepository, MongoMessageRepository>();
 
+// Postgres, read only here: who owns a connection, and what a person may do in a workspace (Omni-AI's checks).
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+builder.Services.AddScoped<IConnectionRepository, ConnectionRepository>();
+builder.Services.AddScoped<IConnectionService, ConnectionService>();
+builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
+builder.Services.AddScoped<ITeamRepository, TeamRepository>();
+builder.Services.AddScoped<IWorkspaceConnectionDirectory, WorkspaceConnectionDirectory>();
+builder.Services.AddScoped<IWorkspaceAccessService, WorkspaceAccessService>();
+builder.Services.AddMemoryCache();
+// Nothing here changes a team, so there is nothing to tell other instances; answers expire within seconds.
+builder.Services.AddSingleton<IAccessCacheBroadcast, NoAccessCacheBroadcast>();
+
 var app = builder.Build();
 
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGrpcService<MessageVerificationGrpcService>();
+app.MapGrpcService<OwnershipGrpcService>();
+app.MapGrpcService<UserValidationGrpcService>();
 app.MapGet("/", () => "Parrot gRPC — use a gRPC client to connect.");
 
 app.Run();
