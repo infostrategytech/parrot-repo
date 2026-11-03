@@ -27,6 +27,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<CustomerIdentity> CustomerIdentities => Set<CustomerIdentity>();
+    public DbSet<CustomerLink> CustomerLinks => Set<CustomerLink>();
 
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
     public DbSet<WorkTaskEvent> WorkTaskEvents => Set<WorkTaskEvent>();
@@ -298,6 +299,20 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(c => c.WorkspaceId);
             entity.HasMany(c => c.Identities).WithOne(i => i.Customer).HasForeignKey(i => i.CustomerId)
                 .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(c => c.Links).WithOne(l => l.PrimaryCustomer).HasForeignKey(l => l.PrimaryCustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        builder.Entity<CustomerLink>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+            entity.Property(l => l.WorkspaceId).HasMaxLength(450).IsRequired();
+            entity.HasOne(l => l.LinkedCustomer).WithMany().HasForeignKey(l => l.LinkedCustomerId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(l => l.LinkedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            // Each customer can be the linked (non-primary) side of at most one link.
+            entity.HasIndex(l => l.LinkedCustomerId).IsUnique();
+            entity.HasIndex(l => l.PrimaryCustomerId);
         });
 
         builder.Entity<CustomerIdentity>(entity =>

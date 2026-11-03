@@ -54,6 +54,7 @@
 .task-row ::deep .task-row__muted { color: var(--colors-text-muted); }
 
 .task-row__due ::deep .task-row__late { color: var(--colors-text-destructive); }
+.task-row__due ::deep .task-row__today { color: var(--colors-feedback-warning-text); }
 .task-row__due ::deep .task-row__date { color: var(--colors-text-secondary); }
 
 /* The menus: above the title's cover, so they can be used on their own; an open one above the rows after it. */

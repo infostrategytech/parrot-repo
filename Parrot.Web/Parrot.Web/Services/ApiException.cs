@@ -47,6 +47,14 @@ public static class ApiResponseExtensions
             {
                 using JsonDocument document = JsonDocument.Parse(body);
                 JsonElement root = document.RootElement;
+                // The AI service's orientation routes (FastAPI) wrap theirs in detail: a
+                // string, or the same { errorCode, message } object.
+                if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("detail", out JsonElement detail))
+                {
+                    if (detail.ValueKind == JsonValueKind.String) message = detail.GetString()!;
+                    else root = detail;
+                }
+
                 if (root.ValueKind == JsonValueKind.Object)
                 {
                     if (root.TryGetProperty("errorCode", out JsonElement code) && code.ValueKind == JsonValueKind.String)

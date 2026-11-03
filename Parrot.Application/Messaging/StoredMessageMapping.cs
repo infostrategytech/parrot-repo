@@ -20,6 +20,8 @@ public static class StoredMessageMapping
         Platform = document.Platform,
         ConnectionId = document.ConnectionId,
         OwnerUserId = document.OwnerUserId,
+        WorkspaceId = document.OwnerUserId,
+        TenantId = document.OwnerUserId,
         Outgoing = document.Outgoing,
 
         // From is always the customer, for both directions (the inbox groups by it);

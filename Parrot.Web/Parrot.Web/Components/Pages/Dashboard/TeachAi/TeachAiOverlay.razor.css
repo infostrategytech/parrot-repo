@@ -57,7 +57,7 @@
 }
 
 /* The current entry screen remains visible, so this reads as guided work inside
-   OmniAI rather than a separate full-screen product. It may open from the
+   yára rather than a separate full-screen product. It may open from the
    Dashboard, the standalone AI Operations module or Business Setup. Keep the
    blur on its own layer so chat updates do not repaint the whole backdrop. */
 .teach-ai::before {
@@ -320,6 +320,10 @@
    its later messages keep the same indent. */
 .teach-ai__line ::deep .teach-ai__avatar { flex: none; --ds-voice-orb-size: var(--ds-teach-ai-avatar); }
 .teach-ai__avatar-space { flex: none; width: var(--ds-teach-ai-avatar); }
+/* A form from the AI takes the thread's width beside the orb: its questions need the room a bubble does not. */
+.teach-ai__line.teach-ai__form-line { width: 88%; }
+.teach-ai__form-line ::deep .questionnaire,
+.teach-ai__form-line ::deep .questionnaire-form { flex: 1; }
 .teach-ai__bubble {
   min-width: 0;
   padding: var(--spacing-sm) var(--spacing-md);

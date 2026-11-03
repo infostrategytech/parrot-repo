@@ -19,7 +19,7 @@
    of business is the business's profile now, not an agent's. The agent never
    suggests its own name. *@
 
-<PageTitle>Create an agent · AI Operations · OmniAI</PageTitle>
+<PageTitle>Create an agent · AI Operations · yára</PageTitle>
 
 <NavigationLock OnBeforeInternalNavigation="OnNavigating" ConfirmExternalNavigation="@(HasProgress && !_done)" />
 
@@ -264,6 +264,11 @@
             var saved = await AiAgentsState.CreateAsync(_form.ToAgent(live: false));
             _done = true;
             Nav.NavigateTo($"/ai-operations/{saved.Id}?created=1");
+        }
+        catch (ApiException exception)
+        {
+            // The service said why (a channel another agent has, a refused sign-in): show its words, not a guess.
+            _error = $"We couldn't create {_form.DisplayName}. {exception.UserMessage} ({(int?)exception.StatusCode})";
         }
         catch (Exception exception) when (AiAgentsState.IsFailure(exception))
         {

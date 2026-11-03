@@ -1,0 +1,248 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Contacts
+@using Parrot.Web.Services
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+@inject CustomerClient Customers
+@inject ICustomerLinks Links
+@implements IDisposable
+
+<Dialog Open="Open" Title="@Title" Subtitle="@Subtitle" Size="DialogSize.Wide"
+        ConfirmLabel="@ConfirmLabel" BusyLabel="@(_separating is null ? "Linking profiles…" : "Separating profiles…")"
+        Busy="_saving" ConfirmDisabled="@(!CanConfirm)" HideFooter="@(_selected is null && _separating is null)"
+        CancelLabel="Cancel" OnCancel="CloseAsync" OnConfirm="ConfirmAsync">
+    <GlyphContent><Icon Name="IconName.RiLinksFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <div class="customer-link" tabindex="-1" role="group" aria-label="@Title" @ref="_content">
+            @if (_separating is { } separating)
+            {
+                @ProfileCard(separating.Profile, "Separate profile")
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                    @($"{separating.Profile.Name} will appear separately in Customers again. Neither profile's messages or original contact details will be deleted.")
+                </Typography>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_saving" @onclick="BackToLinks">Back to linked profiles</Button>
+            }
+            else if (_managing)
+            {
+                @ProfileCard(RetainedProfile, "Customer profile")
+                <div class="customer-link__results" aria-label="Linked profiles">
+                    @foreach (var link in Source.Links)
+                    {
+                        var current = link;
+                        <div class="customer-link__linked-row">
+                            @ProfileCard(current.Profile, "Linked profile")
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Separate {current.Profile.Name}")"
+                                    @onclick="() => PickSeparate(current)">Separate</Button>
+                        </div>
+                    }
+                </div>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Linked profiles share a customer entry. Their conversations stay separate.</Typography>
+            }
+            else if (_selected is { } selected)
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_saving" @onclick="BackToSearch">Choose someone else</Button>
+                <div class="customer-link__comparison">
+                    @ProfileCard(Source.Customer, "Profile to link")
+                    @ProfileCard(selected.Customer, "Keep as customer")
+                </div>
+                <div class="customer-link__notice">
+                    <Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" />
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                        @($"Both will appear under {selected.Customer.Name}. Keep that customer's name and contact details; the other profile stays attached. Chats won't be combined. You can separate them later.")
+                    </Typography>
+                </div>
+                <Checkbox @bind-State="_confirmed" Label="I've checked that these are the same customer"
+                          Description="A matching name or photo isn't enough." Disabled="_saving" />
+            }
+            else
+            {
+                @ProfileCard(Source.Customer, "Profile to link")
+                <SearchField Value="@_search" ValueChanged="SearchAsync" AriaLabel="Search for an existing customer"
+                             Placeholder="Search name, number or username" AutoFocus Disabled="_reading" />
+                <div class="customer-link__results" aria-label="Existing customers" aria-busy="@(_loading || _reading ? "true" : "false")">
+                    @if (_loading || _reading)
+                    {
+                        <LoadingState Title="Loading customers" />
+                    }
+                    else if (_results.Count == 0 && _error is null)
+                    {
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>No customers found. Try another name, number or username.</Typography>
+                    }
+                    else
+                    {
+                        @foreach (var row in _results)
+                        {
+                            var current = row;
+                            <RowButton Class="customer-link__choice" OnClick="() => ChooseAsync(current)" aria-label="@($"Choose {current.Name}")">
+                                <PetalAvatar Seed="@CustomerView.SeedFor(current)" Initials="@Initials.From(current.Name)" Size="AvatarSize.Md" />
+                                <span class="customer-link__choice-words">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@current.Name</Typography>
+                                    @foreach (var identity in current.Identities.Take(2))
+                                    {
+                                        <span class="customer-link__identity"><ChannelGlyph Channel="@identity.Platform" Compact />
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@(CustomerChannel.HandleFor(identity.Platform, identity.Sender, identity.Username) ?? ChannelLinks.PlatformName(identity.Platform))</Typography>
+                                        </span>
+                                    }
+                                    @if (current.Identities.Count == 0) { <Typography TextStyle="TextStyle.Small12Medium" As="small">No messages yet</Typography> }
+                                </span>
+                                <Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" />
+                            </RowButton>
+                        }
+                        @if (_hasMore)
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="MoreAsync">Show more customers</Button>
+                        }
+                    }
+                </div>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Only link profiles you've confirmed belong to the same person.</Typography>
+            }
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error">
+                    <Action>
+                        @if (_selected is null && !_managing)
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => LoadAsync()">Try again</Button>
+                        }
+                    </Action>
+                </InlineError>
+            }
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter, EditorRequired] public LinkedCustomerProfile Source { get; set; } = default!;
+    [Parameter] public bool Manage { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<LinkedCustomerProfile> OnChanged { get; set; }
+    private bool _wasOpen, _managing, _loading, _reading, _saving, _hasMore, _disposed;
+    private string _search = "";
+    private string? _error;
+    private int _skip;
+    private const int PageSize = 20;
+    private List<CustomerListItemDto> _results = [];
+    private LinkedCustomerProfile? _selected;
+    private CustomerProfileLink? _separating;
+    private CheckboxState _confirmed;
+    private CancellationTokenSource? _load;
+    private readonly CancellationTokenSource _lifetime = new();
+    private ElementReference _content;
+    private bool _focusPending;
+    private int _generation;
+    private CustomerDetailDto RetainedProfile => Source.Customer with
+    {
+        Identities = Source.Customer.Identities.Where(identity => !Source.Links.Any(link => link.Profile.Identities.Any(item => item.Id == identity.Id))).ToList(),
+    };
+    private string Title => _separating is not null ? "Separate these profiles?" : _managing ? "Linked profiles" : _selected is null ? "Link to existing customer" : "Are these the same customer?";
+    private string Subtitle => _managing ? "Your original profiles and conversations are kept." : "One person can message you on different channels.";
+    private string ConfirmLabel => _separating is not null ? "Separate profiles" : _selected is null ? "Continue" : "Link profiles";
+    private bool CanConfirm => !_loading && !_reading && (_separating is not null || _selected is not null && _confirmed == CheckboxState.Checked);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            _generation++;
+            _managing = Manage;
+            _selected = null;
+            _separating = null;
+            _reading = _focusPending = false;
+            _search = "";
+            _error = null;
+            _confirmed = CheckboxState.Unchecked;
+            if (!_managing) await LoadAsync();
+        }
+        else if (!Open && _wasOpen) { _generation++; _wasOpen = false; _load?.Cancel(); }
+    }
+
+    private RenderFragment ProfileCard(CustomerDetailDto customer, string label) => @<section class="customer-link__profile">
+        <Typography TextStyle="TextStyle.Small12Medium" As="p">@label</Typography>
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3">@customer.Name</Typography>
+        @foreach (var identity in customer.Identities)
+        {
+            <span class="customer-link__identity"><ChannelGlyph Channel="@identity.Platform" Compact />
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@(CustomerChannel.HandleFor(identity.Platform, identity.Sender, identity.Username) ?? identity.Sender)</Typography>
+            </span>
+        }
+        @if (customer.Phone is { Length: > 0 } phone && !PhoneShownOnChannel(customer, phone)) { <Typography TextStyle="TextStyle.Small12Medium" As="p">@phone</Typography> }
+        @if (customer.Email is { Length: > 0 } email) { <Typography TextStyle="TextStyle.Small12Medium" As="p">@email</Typography> }
+    </section>;
+
+    private Task SearchAsync(string? value) { _search = value ?? ""; return LoadAsync(delay: true); }
+    private Task MoreAsync() => LoadAsync(more: true);
+    private async Task LoadAsync(bool more = false, bool delay = false)
+    {
+        _load?.Cancel();
+        _load?.Dispose();
+        var mine = _load = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
+        var ct = mine.Token;
+        _loading = true;
+        _error = null;
+        if (!more) { _skip = 0; _results = []; }
+        try
+        {
+            if (delay) await Task.Delay(250, ct);
+            var page = await Customers.ListAsync(_search.Trim(), null, null, _skip, PageSize, ct);
+            if (ct.IsCancellationRequested || _disposed) return;
+            _skip += page.Items.Count;
+            _results.AddRange(page.Items.Where(row => row.Id != Source.Customer.Id && Source.Links.All(link => link.Profile.Id != row.Id)));
+            _hasMore = _skip < page.Total;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        { if (!ct.IsCancellationRequested) _error = "Customers couldn't be loaded. Check your connection and try again."; }
+        finally { if (_load == mine) _loading = false; }
+    }
+
+    private async Task ChooseAsync(CustomerListItemDto row)
+    {
+        if (_reading || _loading) return;
+        _reading = true;
+        _error = null;
+        var generation = _generation;
+        try
+        {
+            var selected = await Links.GetAsync(row.Id, _lifetime.Token);
+            if (generation != _generation || _disposed || !Open) return;
+            _selected = selected; _confirmed = CheckboxState.Unchecked; _focusPending = true;
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        { if (generation == _generation) _error = "This profile couldn't be loaded. Try choosing it again."; }
+        finally { _reading = false; }
+    }
+    private static bool PhoneShownOnChannel(CustomerDetailDto customer, string phone) => customer.Identities.Any(identity => identity.Platform == "whatsapp"
+        && string.Concat(identity.Sender.Where(char.IsDigit)) == string.Concat(phone.Where(char.IsDigit)));
+    private void BackToSearch() { _selected = null; _confirmed = CheckboxState.Unchecked; _error = null; _focusPending = true; }
+    private void BackToLinks() { _separating = null; _error = null; _focusPending = true; }
+    private void PickSeparate(CustomerProfileLink link) { _separating = link; _error = null; _focusPending = true; }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusPending && Open) { _focusPending = false; await _content.FocusAsync(); }
+    }
+
+    private async Task ConfirmAsync()
+    {
+        if (!CanConfirm || _saving) return;
+        _saving = true;
+        _error = null;
+        try
+        {
+            var result = _separating is { } separate
+                ? await Links.UnlinkAsync(Source.Customer.Id, separate.Id, _lifetime.Token)
+                : await Links.LinkAsync(Source.Customer.Id, _selected!.Customer.Id, _lifetime.Token);
+            if (!_disposed) await OnChanged.InvokeAsync(result);
+        }
+        catch (OperationCanceledException) { }
+        catch (HttpRequestException exception)
+        {
+            _error = exception.StatusCode is System.Net.HttpStatusCode.Conflict or System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Forbidden
+                ? exception.Message : "The update couldn't be confirmed. Check your connection, then close this window and check the profiles before trying again.";
+        }
+        catch (System.Text.Json.JsonException) { _error = "The update couldn't be confirmed. Close this window and check the profile before trying again."; }
+        finally { _saving = false; }
+    }
+    private Task CloseAsync() => _saving ? Task.CompletedTask : OnClose.InvokeAsync();
+    public void Dispose() { _disposed = true; _lifetime.Cancel(); _load?.Cancel(); _load?.Dispose(); _lifetime.Dispose(); }
+}

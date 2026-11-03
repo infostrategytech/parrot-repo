@@ -1,6 +1,9 @@
+using System.Diagnostics;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Options;
+using Parrot.Application.Agents;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
 using Parrot.Domain.Entities;
@@ -16,7 +19,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     IFacebookCredentialProtector facebookProtector, IInstagramConnectionRepository instagramConnections,
     IInstagramSender instagramSender, IInstagramCredentialProtector instagramProtector, TikTokReplyService? tikTok = null,
     IDeliveryReceipts? receipts = null, IPrivateObjectStorage? mediaStorage = null,
-    IOutboundJobPublisher? outboundJobs = null, IOptions<OutboundSettings>? outboundSettings = null)
+    IOutboundJobPublisher? outboundJobs = null, IOptions<OutboundSettings>? outboundSettings = null,
+    IHumanTakeoverStore? humanTakeover = null, IAppLogger<ConversationService>? logger = null,
+    IMessagePersistedPublisher? publisher = null, ITenantIdLookup? tenantLookup = null)
 {
     // A picture or file is queued for the send worker instead of being sent before the request answers.
     private bool DeferFileSends => outboundJobs is not null && outboundSettings?.Value.DeferFileSends == true;
@@ -30,6 +35,59 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     // A reply goes out on whichever channel the thread is on: a WhatsApp number, a Facebook Page,
     // TikTok or an Instagram account.
     public async Task<ConversationMessage> SendAsync(string owner, Guid connectionId, string recipient,
+        SendReplyRequest request, CancellationToken ct)
+    {
+        ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct);
+
+        // Best-effort: a human sent this reply, so mark the conversation as under human control.
+        if (humanTakeover is not null)
+        {
+            try { await humanTakeover.SetAsync(owner, connectionId, recipient, ct); }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger?.LogWarning(ex, "human_takeover_set_failed ConnectionId={ConnectionId} Sender={Sender}; continuing",
+                    connectionId, recipient);
+            }
+        }
+        return result;
+    }
+
+    // Called by the AI orchestrator. Sends as a human reply would, but does not set the human takeover
+    // flag and explicitly publishes MessagePersisted with AgentToUser so Omni-AI sees its own send.
+    public async Task<ConversationMessage> SendAgentReplyAsync(string owner, Guid connectionId, string recipient,
+        SendReplyRequest request, CancellationToken ct)
+    {
+        ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct);
+
+        if (publisher is not null)
+        {
+            try
+            {
+                MessageDocument? doc = await store.FindRequestAsync(owner, request.RequestId, ct);
+                if (doc?.ConversationKey is not null && doc.Sequence is not null)
+                {
+                    string? tenantId = tenantLookup is not null && doc.OwnerUserId is not null
+                        ? await tenantLookup.FindOwnerIdAsync(doc.OwnerUserId, ct) ?? doc.OwnerUserId
+                        : doc.OwnerUserId;
+                    MessagePersisted persisted = new MessagePersisted
+                    {
+                        Source = doc.Platform,
+                        Data = doc.ToStoredMessage() with { CommsType = CommsType.AgentToUser, TenantId = tenantId },
+                        CorrelationId = InboundMessagePublisher.CurrentCorrelationId(),
+                    };
+                    await publisher.PublishAsync(persisted, ct);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger?.LogWarning(ex, "agent_reply_persisted_failed ConnectionId={ConnectionId} Sender={Sender}; continuing",
+                    connectionId, recipient);
+            }
+        }
+        return result;
+    }
+
+    private async Task<ConversationMessage> SendCoreAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
     {
         // A TikTok customer's id is not a phone number, so the reply is routed before WhatsApp's checks.

@@ -59,6 +59,15 @@ public class KafkaSettings
     /// <summary>The API's group on the agent events topic; it reads from the beginning, since every event is kept.</summary>
     public string AgentEventsConsumerGroupId { get; set; } = "parrot-agent-events";
 
+    /// <summary>Where Omni-AI publishes outbound reply requests for Parrot to send on the appropriate channel.</summary>
+    public string AiReplyTopic { get; set; } = "ai.reply.requested";
+
+    /// <summary>Events that Parrot cannot process (missing connection, invalid payload), with the reason in a header.</summary>
+    public string AiReplyDeadLetterTopic { get; set; } = "ai.reply.requested.dlq";
+
+    /// <summary>The AI reply worker's consumer group. Every worker instance shares it, so events are split between them.</summary>
+    public string AiReplyConsumerGroupId { get; set; } = "parrot-ai-reply";
+
     /// <summary>
     /// Use Google Application Default Credentials (SASL_SSL + OAuthBearer).
     /// Required for GCP Managed Service for Apache Kafka.

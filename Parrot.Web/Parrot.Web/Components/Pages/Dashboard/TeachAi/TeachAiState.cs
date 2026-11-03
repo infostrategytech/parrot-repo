@@ -26,9 +26,13 @@ public sealed class TeachAiState(IBusinessKnowledge knowledge)
     /// <summary>Opened on the way to setting up an agent, so it can say what comes next.</summary>
     public bool SetsUpAgent { get; private set; }
 
-    public async Task RequireAsync(Func<Task> then, bool setsUpAgent = false)
+    /// <summary>The agent being taught, when opened from one: the AI's orientation is about one agent's job.</summary>
+    public string? AgentId { get; private set; }
+
+    public async Task RequireAsync(Func<Task> then, bool setsUpAgent = false, string? agentId = null)
     {
         SetsUpAgent = setsUpAgent;
+        AgentId = agentId;
         if (!knowledge.Available || await knowledge.HasApprovedAsync())
         {
             await then();
@@ -44,9 +48,10 @@ public sealed class TeachAiState(IBusinessKnowledge knowledge)
     /// knowledge to add to it, with nothing waiting on it. Approving again
     /// updates what every agent knows.
     /// </summary>
-    public void TeachMore()
+    public void TeachMore(string? agentId = null)
     {
         if (!knowledge.Available) return;
+        AgentId = agentId;
         _then = null;
         SetsUpAgent = false;
         Conversation = null;

@@ -531,6 +531,7 @@ builder.Services.AddSingleton<IConversationStore, MongoConversationStore>();
 builder.Services.Configure<InboxSettings>(builder.Configuration.GetSection(InboxSettings.SectionName));
 builder.Services.AddSingleton<IConversationReadStore, MongoConversationReadStore>();
 builder.Services.AddSingleton<IConversationFlagStore, MongoConversationFlagStore>();
+builder.Services.AddSingleton<IHumanTakeoverStore, MongoHumanTakeoverStore>();
 builder.Services.AddSingleton<IConversationNoteStore, MongoConversationNoteStore>();
 // Creating the store at startup is what fixes the unread baseline at the deploy, not at the first request.
 builder.Services.AddHostedService<Parrot.Api.Realtime.UnreadBaselineInitializer>();
@@ -701,5 +702,19 @@ app.Services.GetRequiredService<MeterProvider>();
 MessageMetrics.StartAtZero();
 app.MapHub<Parrot.Api.Realtime.MessagingHub>(Parrot.Api.Realtime.MessagingHub.Path);
 app.MapDevelopmentRealtimeStub();
+
+// ASP.NET buffers IFormFile uploads larger than 64 KB to /tmp/aspnetcoreTempXXXXXX files.
+// These are normally deleted on request completion, but are orphaned when the process crashes
+// under upload load. This cleans up any files left behind by a previous run.
+string tempPath = Path.GetTempPath();
+foreach (string staleTemp in Directory.EnumerateFiles(tempPath, "aspnetcoreTemp*"))
+{
+    try
+    {
+        if (File.GetLastWriteTimeUtc(staleTemp) < DateTime.UtcNow.AddMinutes(-5))
+            File.Delete(staleTemp);
+    }
+    catch { /* best effort */ }
+}
 
 app.Run();

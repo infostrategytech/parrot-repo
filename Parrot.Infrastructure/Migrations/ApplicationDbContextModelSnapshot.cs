@@ -428,6 +428,38 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("CustomerIdentities");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.CustomerLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("LinkedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<Guid>("LinkedCustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("PrimaryCustomerId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LinkedCustomerId")
+                        .IsUnique();
+
+                    b.HasIndex("PrimaryCustomerId");
+
+                    b.ToTable("CustomerLinks");
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.FacebookConnection", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1168,6 +1200,25 @@ namespace Parrot.Infrastructure.Migrations
                     b.Navigation("Customer");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.CustomerLink", b =>
+                {
+                    b.HasOne("Parrot.Domain.Entities.Customer", "LinkedCustomer")
+                        .WithMany()
+                        .HasForeignKey("LinkedCustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Parrot.Domain.Entities.Customer", "PrimaryCustomer")
+                        .WithMany("Links")
+                        .HasForeignKey("PrimaryCustomerId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("LinkedCustomer");
+
+                    b.Navigation("PrimaryCustomer");
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.FacebookConnection", b =>
                 {
                     b.HasOne("Parrot.Domain.Entities.Workspace", null)
@@ -1277,6 +1328,8 @@ namespace Parrot.Infrastructure.Migrations
             modelBuilder.Entity("Parrot.Domain.Entities.Customer", b =>
                 {
                     b.Navigation("Identities");
+
+                    b.Navigation("Links");
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.WorkTask", b =>

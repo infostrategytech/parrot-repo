@@ -12,7 +12,7 @@ namespace Parrot.Application.Messaging;
 /// </summary>
 public sealed record MessagePersisted
 {
-    public int SchemaVersion { get; init; } = 1;
+    public int SchemaVersion { get; init; } = 2;
 
     /// <summary>Where the message came from. Written as text on the wire, e.g. "whatsapp".</summary>
     required public MessagingPlatform Source { get; init; }
@@ -50,6 +50,12 @@ public sealed record StoredMessage
     /// <summary>The CRM user to deliver it to.</summary>
     public string? OwnerUserId { get; init; }
 
+    /// <summary>The specific business workspace that owns this conversation.</summary>
+    public string? WorkspaceId { get; init; }
+
+    /// <summary>The root user account that owns the workspace.</summary>
+    public string? TenantId { get; init; }
+
     /// <summary>True for a reply the business sent, false for a customer's message.</summary>
     required public bool Outgoing { get; init; }
 
@@ -76,6 +82,9 @@ public sealed record StoredMessage
 
     /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
     public Parrot.Application.Conversations.MessageQuote? ReplyTo { get; init; }
+
+    /// <summary>The direction and intent of the message relative to the AI agent.</summary>
+    public CommsType CommsType { get; init; } = CommsType.UserToTenant;
 }
 
 /// <param name="Kind">See <see cref="MediaKinds"/>.</param>

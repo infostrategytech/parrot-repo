@@ -58,6 +58,13 @@
     }
     else
     {
+        @if (CustomerScope.Count > 0)
+        {
+            <div class="tasks__customer-scope">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p">Tasks for @ScopeName</Typography>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="ClearCustomerScope">Clear customer filter</Button>
+            </div>
+        }
         <section class="tasks__controls">
             <Tabs Label="Which tasks" Variant="TabsVariant.Tray">
                 @foreach (var view in Views)
@@ -158,6 +165,12 @@
 
     /// <summary>The task whose panel is open, from the route.</summary>
     [Parameter] public string? TaskId { get; set; }
+    [SupplyParameterFromQuery(Name = "conversation")] public string[]? ConversationIds { get; set; }
+    [SupplyParameterFromQuery(Name = "customer")] public string? CustomerName { get; set; }
+    private HashSet<string> CustomerScope { get; set; } = [];
+    private string ScopeName => string.IsNullOrWhiteSpace(CustomerName) ? "this customer" : CustomerName;
+    private string ScopedListUrl => CustomerTaskScope.Url(ScopeName, CustomerScope);
+    private string? _scopeKey;
 
     private IReadOnlyList<TaskRequest>? _tasks;
     private IReadOnlyList<TaskPerson> _team = [];
@@ -204,6 +217,9 @@
 
     protected override void OnParametersSet()
     {
+        CustomerScope = (ConversationIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).ToHashSet();
+        var key = string.Join("|", CustomerScope.Order());
+        if (_scopeKey != key) { _scopeKey = key; _page = 1; }
         // A task opened by its link shows in a view that has it.
         if (Selected is { } task && !InView(_view).Contains(task)) _view = task.IsClosed ? View.Closed : View.All;
     }
@@ -219,7 +235,9 @@
 
     private TaskRequest? Selected => TaskId is null ? null : _tasks?.FirstOrDefault(t => t.Id == TaskId);
 
-    private IEnumerable<TaskRequest> InView(View view) => (_tasks ?? []).Where(t => view switch
+    private IEnumerable<TaskRequest> InView(View view) => (_tasks ?? [])
+        .Where(task => CustomerScope.Count == 0 || task.Customer?.ConversationId is { } id && CustomerScope.Contains(id))
+        .Where(t => view switch
     {
         View.All => t.IsOpen,
         View.Mine => t.IsOpen && t.Assignee?.Id == Store.Me.Id,
@@ -237,7 +255,7 @@
         _ => "Closed",
     };
 
-    private bool Filtering => _search.Trim().Length > 0 || _kind is not null || _person is not null;
+    private bool Filtering => _search.Trim().Length > 0 || _kind is not null || _person is not null || CustomerScope.Count > 0;
 
     // What needs acting on first, then urgent, then what's late or due soonest, then the oldest: first
     // come, first served, so a task nobody has touched rises rather than sinks. Closed shows the latest first.
@@ -300,15 +318,19 @@
         _search = string.Empty;
         _kind = null;
         _person = null;
+        if (CustomerScope.Count > 0) ClearCustomerScope();
     }
+
+    private void ClearCustomerScope() => Nav.NavigateTo("/dashboard/tasks");
 
     private void OpenTask(TaskRequest task)
     {
         _openMenu = null;
-        Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.Id)}");
+        var query = Nav.ToAbsoluteUri(ScopedListUrl).Query;
+        Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.Id)}{query}");
     }
 
-    private void ClosePanel() => Nav.NavigateTo("/dashboard/tasks");
+    private void ClosePanel() => Nav.NavigateTo(ScopedListUrl);
 
     // Changes saving now, by row and kind ("state-OM-10987"): their menus wait until it's done.
     private readonly HashSet<string> _saving = [];

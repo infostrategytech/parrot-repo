@@ -330,6 +330,12 @@ services:
       OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
       # Products & Services, kept by the catalog service.
       CatalogApi__BaseUrl: http://catalog-api:8080/
+      # The AI service as the web app calls it, with the owner's own token (agents, channels,
+      # orientation). It must verify Parrot's tokens: OMNI_JWT_SECRET = JWT_SECRET, issuer
+      # ParrotApi, audience ParrotApp.
+      OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
+      # Agents and channels kept by the AI service (/api/v1/agents) instead of Parrot's api/agent.
+      OmniAi__AgentSetup: ${OMNI_AGENT_SETUP:-false}
     ports:
       - "5255:8080"
     depends_on:

@@ -1,0 +1,434 @@
+/* An agent's job description: the conversation on top (at the start, the orb
+   in a stage of its own with Talk and Type; once it starts, a chat: the
+   agent's words on the left, the owner's on the right, the topics along the
+   top, and at the foot the box with the mic, or a small bar saying whose turn
+   it is; Teach your AI's light along the card's edges while a voice turn
+   happens), then its job description to read and edit, with Hear it. White
+   cards on the muted page. */
+
+.job-editor {
+  /* Missing from the token set: the orb's size and the stage around it (room
+     for it to swell when loud), the start card's height (so it doesn't jump),
+     the text's measure, the motion of a just-written job description, the
+     conversation's height in the window, the avatar beside the agent's words,
+     how wide a message runs, the bar's orb, and the typing dots. */
+  --ds-job-editor-orb: 96px;
+  --ds-job-editor-stage: 136px;
+  --ds-job-editor-orb-small: 56px;
+  --ds-job-editor-stage-small: 72px;
+  --ds-job-editor-voice: 412px;
+  --ds-job-editor-measure: 560px;
+  --ds-job-editor-new: 2400ms;
+  --ds-job-editor-word: 180ms;
+  --ds-job-editor-unsaid: 0.28;
+  --ds-job-editor-pause: 3s;
+  --ds-job-editor-bar: 160px;
+  --ds-job-editor-aura: 0.6;
+  --ds-job-editor-chat: min(860px, calc(100dvh - 136px));
+  --ds-job-editor-answer: 64px;
+  --ds-job-editor-answer-most: 168px;
+  --ds-job-editor-chat-least: 420px;
+  --ds-job-editor-face: 32px;
+  --ds-job-editor-bubble: 80%;
+  --ds-job-editor-bar-orb: 36px;
+  --ds-job-editor-dot: 6px;
+  --ds-job-editor-pulse: 1.2s;
+  --ds-job-editor-interim: 0.7;
+  --ds-job-editor-scroll-room: 72px;
+  --ds-job-editor-asking: calc(var(--ds-job-editor-chat) - 200px);
+  --ds-job-editor-dock-shadow: 36px;
+  --ds-job-editor-asking-lift: 0 -12px 40px;
+
+  display: grid;
+  gap: var(--spacing-lg);
+  min-width: 0;
+}
+/* In a full-screen view (telling an agent its job on its page): the window under its bar (the topics in it), with room above and below. */
+.ds-focus-view .job-editor { --ds-job-editor-chat: min(860px, calc(100dvh - 200px)); }
+.job-editor > * { min-width: 0; }
+::deep .job-editor__muted { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+/* ── The start ───────────────────────────────────────────────────────────── */
+
+/* The card is the light's frame (VoiceAura, its first child). At the start it
+   keeps one height, and its content starts from the top, so the orb stays put. */
+.job-editor__voice {
+  position: relative;
+  isolation: isolate;
+  display: grid;
+  align-content: start;
+  justify-items: center;
+  min-height: var(--ds-job-editor-voice);
+  padding: var(--spacing-3xl) var(--spacing-xl) var(--spacing-xl);
+  overflow: hidden;
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  scroll-margin-top: var(--ds-job-editor-scroll-room);
+}
+.job-editor__voice > :not(.ds-voice-aura) { position: relative; z-index: 1; }
+/* Room between the parts: the orb, 24px, what to do, 24px, the ways in. */
+.job-editor__voice > .job-editor__voice-text,
+.job-editor__voice > .job-editor__ways { margin-top: var(--spacing-2xl); }
+.job-editor__voice > ::deep .inline-error { justify-self: stretch; margin-top: var(--spacing-lg); text-align: start; }
+/* Once there is a job description: the way to add more, not the main thing. */
+.job-editor__voice.is-compact {
+  --ds-job-editor-orb: var(--ds-job-editor-orb-small);
+  --ds-job-editor-stage: var(--ds-job-editor-stage-small);
+  min-height: 0;
+  padding-top: var(--spacing-xl);
+}
+.job-editor__voice.is-compact > .job-editor__voice-text { margin-top: var(--spacing-md); }
+.job-editor__voice.is-compact > .job-editor__ways { margin-top: var(--spacing-xl); }
+
+/* The light, kept soft for a card this size. */
+.job-editor .job-editor__voice ::deep .ds-voice-aura {
+  /* Missing from the token set: the light's bands for a small card,
+     thinner than for Teach your AI's large panel. */
+  --ds-voice-aura-tight: 2px;
+  --ds-voice-aura-tight-blur: 6px;
+  --ds-voice-aura-wide: 6px;
+  --ds-voice-aura-wide-blur: 16px;
+  opacity: var(--ds-job-editor-aura);
+}
+
+/* The orb in its stage: room to swell, never near the edge. */
+.job-editor__stage {
+  display: grid;
+  place-items: center;
+  width: var(--ds-job-editor-stage);
+  height: var(--ds-job-editor-stage);
+}
+.job-editor__voice ::deep .ds-voice-orb.job-editor__orb { --ds-voice-orb-size: var(--ds-job-editor-orb); }
+.job-editor__voice-text { display: grid; gap: var(--spacing-xs); justify-items: center; max-width: var(--ds-job-editor-measure); }
+.job-editor__voice-text ::deep p { margin: var(--spacing-none); }
+.job-editor__voice-text ::deep p:first-child { color: var(--colors-text-primary); }
+
+.job-editor__ways { display: grid; gap: var(--spacing-xl); justify-items: center; }
+.job-editor__start { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; justify-content: center; }
+
+/* ── The conversation ────────────────────────────────────────────────────── */
+
+/* A chat in the card: the topics on top, the messages in between (scrolling
+   when there are many), and the foot always in reach. */
+.job-editor__voice.is-talking {
+  display: flex;
+  flex-direction: column;
+  align-content: stretch;
+  justify-items: stretch;
+  height: var(--ds-job-editor-chat);
+  min-height: var(--ds-job-editor-chat-least);
+  padding: var(--spacing-none);
+  text-align: start;
+}
+/* A short exchange (adding to it): as tall as it needs, up to the same height. */
+.job-editor__voice.is-talking.is-short { height: auto; min-height: 0; max-height: var(--ds-job-editor-chat); }
+
+.job-editor__topics {
+  flex: none;
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+
+.job-editor__log {
+  flex: 1;
+  min-height: 0;
+  padding: var(--spacing-xl);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+/* The chat and its approval scroll with no bar showing (designer, 19 October 2026): the
+   conversation is the focus. The wheel, a trackpad and the keyboard still scroll them. */
+.job-editor__log,
+.job-editor__dock.is-asking { scrollbar-width: none; }
+.job-editor__log::-webkit-scrollbar,
+.job-editor__dock.is-asking::-webkit-scrollbar { display: none; }
+.job-editor__thread {
+  display: grid;
+  gap: var(--spacing-lg);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+
+/* A new topic, like a new day in a chat: its name between two hairlines. */
+.job-editor__divider {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  margin-block: var(--spacing-xs);
+  color: var(--colors-text-muted);
+}
+.job-editor__divider::before,
+.job-editor__divider::after {
+  flex: 1;
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+  content: "";
+}
+
+/* The messages, in the test chat's colours: the agent in the soft brand tint
+   on the left, beside its face; the owner in solid brand on the right. */
+.job-editor__msg { display: flex; gap: var(--spacing-sm); align-items: flex-start; min-width: 0; animation: job-editor-in var(--ds-motion-base) var(--ds-motion-enter) both; }
+.job-editor__msg > img { flex: none; width: var(--ds-job-editor-face); height: var(--ds-job-editor-face); object-fit: cover; border-radius: var(--radius-radius-full); }
+.job-editor__msg.is-owner { justify-content: flex-end; }
+.job-editor__reply { display: grid; flex: 1; gap: var(--spacing-sm); justify-items: start; min-width: 0; }
+
+.job-editor__bubble {
+  max-width: var(--ds-job-editor-bubble);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-radius-2xl);
+}
+.job-editor__bubble ::deep p { margin: var(--spacing-none); }
+.is-agent .job-editor__bubble {
+  color: var(--colors-text-secondary);
+  background: var(--colors-accent-brand-subtle);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-muted);
+  border-top-left-radius: var(--radius-radius-sm);
+}
+.is-owner .job-editor__bubble {
+  color: var(--colors-brand-primary-foreground);
+  background: var(--colors-brand-primary);
+  border-top-right-radius: var(--radius-radius-sm);
+}
+/* Said aloud now: each word lights as it is said. */
+.job-editor__bubble.is-speaking ::deep span { transition: opacity var(--ds-job-editor-word) ease-out; }
+.job-editor__bubble.is-speaking ::deep span:not([data-on]) { opacity: var(--ds-job-editor-unsaid); }
+/* Their words as they talk: the part still being heard, quieter. */
+.is-live .job-editor__bubble ::deep .job-editor__interim { opacity: var(--ds-job-editor-interim); }
+
+/* Thinking: three dots. */
+.job-editor__bubble.is-typing { display: flex; gap: var(--spacing-2xs); padding-block: var(--spacing-md); }
+.job-editor__bubble.is-typing i {
+  width: var(--ds-job-editor-dot);
+  height: var(--ds-job-editor-dot);
+  background: var(--colors-icon-brand);
+  border-radius: var(--radius-radius-full);
+  animation: job-editor-typing var(--ds-job-editor-pulse) ease-in-out infinite;
+}
+.job-editor__bubble.is-typing i:nth-child(2) { animation-delay: calc(var(--ds-job-editor-pulse) / 6); }
+.job-editor__bubble.is-typing i:nth-child(3) { animation-delay: calc(var(--ds-job-editor-pulse) / 3); }
+@keyframes job-editor-typing {
+  0%, 60%, 100% { opacity: 0.3; }
+  30% { opacity: 1; }
+}
+
+
+/* A topic confirmed: what was given, to read. */
+.job-editor__checked {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: flex-start;
+  width: 100%;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.job-editor__checked > ::deep .ds-icon { flex: none; margin-top: var(--spacing-2xs); color: var(--colors-feedback-success-text); }
+.job-editor__checked-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.job-editor__checked-text ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.job-editor__checked-text ::deep p:first-child { color: var(--colors-text-primary); }
+.job-editor__checked-text ::deep .job-editor__checked-answer { color: var(--colors-text-primary); }
+
+/* The foot: the box with the mic, or the bar while a voice turn happens. */
+.job-editor__foot {
+  flex: none;
+  padding: var(--spacing-none) var(--spacing-md) var(--spacing-md);
+}
+/* The box: one floating dock at the foot of the chat (Teach your AI's), holding the box or
+   the voice bar. An approval grows out of it in their place: the dock rises, lifted, the chat
+   giving it room above; long, it scrolls inside itself. Nothing else until it's approved. */
+.job-editor__dock {
+  display: grid;
+  padding: var(--spacing-md);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-lg) var(--ds-job-editor-dock-shadow) var(--colors-surface-shadow);
+  transition: border-color var(--ds-motion-base) ease-out, box-shadow var(--ds-motion-base) ease-out;
+}
+/* Typing: a soft brand edge says where the words go. */
+.job-editor__dock:focus-within { border-color: var(--colors-accent-brand-border); }
+.job-editor__dock.is-asking {
+  max-height: var(--ds-job-editor-asking);
+  padding: var(--spacing-none);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-color: var(--colors-accent-brand-border);
+  box-shadow: var(--ds-job-editor-asking-lift) var(--colors-surface-shadow);
+  transform-origin: bottom center;
+  animation: job-editor-grow var(--ds-motion-base) var(--ds-motion-enter);
+}
+/* The approval is the dock's content: no frame of its own. */
+.job-editor__dock.is-asking > ::deep .job-editor__approve {
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  animation: none;
+}
+@keyframes job-editor-grow {
+  from { opacity: 0; transform: translateY(var(--spacing-md)) scaleY(0.96); }
+}
+@keyframes job-editor-rise {
+  from { opacity: 0; transform: translateY(var(--spacing-lg)); }
+}
+
+/* The box, as in Teach your AI: the answer gets the room, the tools sit under it. */
+.job-editor__composer { display: grid; gap: var(--spacing-xs); }
+.job-editor__composer ::deep .job-editor__answer {
+  --ds-text-area-plain-min-height: var(--ds-job-editor-answer);
+  --ds-text-area-plain-max-height: var(--ds-job-editor-answer-most);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-primary);
+}
+.job-editor__composer-foot { display: flex; gap: var(--spacing-sm); align-items: center; }
+.job-editor__composer-tools { display: flex; flex: 1; gap: var(--spacing-2xs); align-items: center; }
+
+/* A suggested reply above the box, in line with the agent's words. */
+.job-editor__replies {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-none) var(--spacing-xl) var(--spacing-sm) calc(var(--spacing-xl) + var(--ds-job-editor-face) + var(--spacing-sm));
+  animation: job-editor-rise var(--ds-motion-base) var(--ds-motion-enter);
+}
+
+.job-editor__bar { display: flex; flex-wrap: wrap; gap: var(--spacing-sm) var(--spacing-md); align-items: center; }
+.job-editor__bar ::deep .ds-voice-orb.job-editor__bar-orb { --ds-voice-orb-size: var(--ds-job-editor-bar-orb); flex: none; }
+.job-editor__bar-text { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.job-editor__bar-text ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.job-editor__bar-text ::deep p.job-editor__muted { color: var(--colors-text-muted); }
+.job-editor__bar-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; justify-content: flex-end; margin-inline-start: auto; }
+.job-editor__voice.is-talking > ::deep .inline-error { flex: none; margin: var(--spacing-none) var(--spacing-md) var(--spacing-md); }
+
+/* The pause running out: a thin bar that fills, then their turn is sent. */
+.job-editor__countdown {
+  display: block;
+  width: var(--ds-job-editor-bar);
+  height: var(--spacing-2xs);
+  margin-top: var(--spacing-2xs);
+  overflow: hidden;
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.job-editor__countdown > span {
+  display: block;
+  height: 100%;
+  background: var(--colors-brand-primary);
+  border-radius: inherit;
+  animation: job-editor-countdown var(--ds-job-editor-pause) linear forwards;
+}
+@keyframes job-editor-countdown {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+/* ── Its job description, with Hear it ──────────────────────────────────── */
+
+.job-editor__brief {
+  display: grid;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  outline: none;
+  animation: job-editor-in var(--ds-motion-base) var(--ds-motion-enter);
+}
+@keyframes job-editor-in {
+  from { opacity: 0; transform: translateY(var(--spacing-sm)); }
+}
+.job-editor__brief-head { display: flex; gap: var(--spacing-lg); align-items: flex-start; justify-content: space-between; }
+.job-editor__brief-title { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.job-editor__brief-title ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.job-editor__brief-head > ::deep .ds-button { flex: none; }
+.job-editor__brief-actions { display: flex; flex: none; gap: var(--spacing-sm); align-items: center; }
+
+/* Being written: placeholder lines, then the text arriving sentence by sentence. */
+.job-editor__writing,
+.job-editor__streaming {
+  display: grid;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  border: var(--ds-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-xl);
+}
+.job-editor__streaming ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.job-editor__streaming ::deep span { animation: job-editor-in var(--ds-motion-base) var(--ds-motion-enter); }
+
+/* Just written: the box is marked for a moment. */
+.job-editor__brief ::deep .ds-text-area.is-new { animation: job-editor-new var(--ds-job-editor-new) ease-out; }
+@keyframes job-editor-new {
+  from { background: var(--colors-accent-brand-subtle); border-color: var(--colors-accent-brand-border); }
+}
+
+/* Just updated: one quiet line, with Undo. */
+.job-editor__added {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-lg);
+  color: var(--colors-feedback-success-text);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+.job-editor__added ::deep p { flex: 1; margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+/* What an addition changes, before it goes in: each sentence going in, and
+   any it takes the place of, struck through. */
+.job-editor__change {
+  display: grid;
+  gap: var(--spacing-xs);
+  margin: var(--spacing-none);
+  padding: var(--spacing-md);
+  list-style: none;
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+.job-editor__change li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: var(--spacing-sm); align-items: start; }
+.job-editor__change li > ::deep .ds-icon { margin-top: var(--spacing-2xs); }
+.job-editor__change ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.job-editor__change li.is-in > ::deep .ds-icon { color: var(--colors-feedback-success-text); }
+.job-editor__change li.is-out > ::deep .ds-icon,
+.job-editor__change li.is-out ::deep p { color: var(--colors-text-muted); }
+
+/* What else was noted, in plain words. */
+.job-editor__noted {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-lg);
+  color: var(--colors-accent-blue-text);
+  background: var(--colors-accent-blue-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+.job-editor__noted,
+.job-editor__added { transition: opacity var(--ds-motion-base) ease-out; }
+.job-editor__noted.is-leaving,
+.job-editor__added.is-leaving { opacity: 0; }
+.job-editor__noted ::deep p { flex: 1; margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+/* A ready-made one's check: part of the job description's card, under a line. */
+.job-editor__brief ::deep .job-editor__ready {
+  padding: var(--spacing-lg) var(--spacing-none) var(--spacing-none);
+  background: transparent;
+  border: 0;
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .job-editor__brief,
+  .job-editor__msg,
+  .job-editor__streaming ::deep span,
+  .job-editor__brief ::deep .ds-text-area.is-new { animation: none; }
+  .job-editor__bubble.is-speaking ::deep span:not([data-on]) { opacity: 1; }
+  .job-editor__bubble.is-typing i { animation: none; opacity: 1; }
+  .job-editor__countdown > span { animation: none; width: 100%; }
+  .job-editor__noted,
+  .job-editor__added { transition: none; }
+  .job-editor__dock.is-asking,
+  .job-editor__replies { animation: none; }
+}

@@ -14,7 +14,7 @@
    business name (required) and, optionally, a logo. The phone number is the
    person's, not the business's, and lives on the profile.
 
-   Aurora's Original design: the channels flowing into the OmniAI hub, over a
+   Aurora's Original design: the channels flowing into the yára hub, over a
    slow colour wash. *@
 
 <Dialog Open="@_open"
@@ -175,7 +175,7 @@
     private bool HasEnteredBusinessName => !string.IsNullOrWhiteSpace(_businessName);
     private bool CanCreateWorkspace => !_creating && !_reading && HasEnteredBusinessName;
 
-    private string Title => _another ? "Create a workspace" : "Welcome to OmniAI";
+    private string Title => _another ? "Create a workspace" : "Welcome to yára";
 
     protected override void OnInitialized()
     {

@@ -11,7 +11,7 @@
 @inject IConfiguration Configuration
 @implements IDisposable
 
-<PageTitle>Sign In · OmniAI</PageTitle>
+<PageTitle>Sign In · yára</PageTitle>
 
 <div class="login-intro">
     <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1" Id="login-title">
@@ -82,7 +82,7 @@
     }
 
     <p class="login-form__signup @TextStyle.BodySmallMedium.ToClassName()">
-        New to OmniAI?
+        New to yára?
         <a href="/register" @onclick="() => Forms.Remember(_email)">Create Account</a>
     </p>
 </form>
@@ -134,7 +134,7 @@
         Problem.FacebookFailed => "Facebook sign-in did not finish. Try again, or use your email and password.",
         Problem.FacebookNoEmail => "Your Facebook account has no email address we can use. Sign up with your email or Google instead.",
         Problem.FacebookUnavailable => "Facebook sign-in is not available yet. Use your email and password, or Google.",
-        Problem.Unreachable => "We could not reach OmniAI. Check your internet connection.",
+        Problem.Unreachable => "We could not reach yára. Check your internet connection.",
         _ => "Something went wrong on our side."
     };
 

@@ -1,0 +1,133 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TeachAi
+
+@* A form the AI sends while it learns an agent's job, shown as the designed question card
+   (QuestionForm, as "Common questions" in Tell its job): choices as tiles with "Something
+   else", yes/no as two tiles, consent as one to tick, words in a box, the AI's suggestions
+   already picked. "Decide for me" when the AI offers to choose. Once sent it folds to what
+   was answered, so the thread reads as a record. Sending only delivers the answers: the
+   screen must not say they were saved. *@
+
+@if (_sent)
+{
+    <article class="questionnaire is-sent" aria-labelledby="@_titleId">
+        <header class="questionnaire__head">
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@_titleId">@Form.Title</Typography>
+        </header>
+        <dl class="questionnaire__answers">
+            @if (_aiDecides)
+            {
+                <div class="questionnaire__answer">
+                    <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Your answer</Typography></dt>
+                    <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Let your AI decide</Typography></dd>
+                </div>
+            }
+            else
+            {
+                @foreach (var q in Form.Questions)
+                {
+                    <div class="questionnaire__answer">
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">@q.Text</Typography></dt>
+                        <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@Shown(q)</Typography></dd>
+                    </div>
+                }
+            }
+        </dl>
+        <p class="questionnaire__done">
+            <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">Sent to your AI</Typography>
+        </p>
+    </article>
+}
+else
+{
+    <div class="questionnaire-form">
+        <QuestionForm Title="@Form.Title" Subtitle="@Subtitle" Questions="_questions" Answers="_answers"
+                      SubmitLabel="@Form.SubmitLabel" Busy="_sending"
+                      OnChange="answers => _answers = answers"
+                      OnSubmit="SendAsync"
+                      OnDecide="@(Form.AllowDecide ? EventCallback.Factory.Create<IReadOnlyDictionary<string, FormAnswer>>(this, LetAiDecideAsync) : default)" />
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" OnDismiss="() => _error = null" />
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public OrientationQuestionnaire Form { get; set; } = default!;
+
+    /// <summary>Delivers the answers; returns what went wrong for the owner to read, or null once delivered.</summary>
+    [Parameter, EditorRequired] public Func<IReadOnlyDictionary<string, object?>, Task<string?>> Send { get; set; } = default!;
+
+    private readonly string _titleId = $"questionnaire-{Guid.NewGuid():N}";
+    private OrientationQuestionnaire? _for;
+    private IReadOnlyList<FormQuestion> _questions = [];
+    private IReadOnlyDictionary<string, FormAnswer> _answers = new Dictionary<string, FormAnswer>();
+    private Dictionary<string, object?> _given = [];
+    private string? _error;
+    private bool _sending;
+    private bool _sent;
+    private bool _aiDecides;
+
+    // Where it sits among the AI's forms, ahead of what it asks.
+    private string? Subtitle => Form.Step is { } step && Form.Steps is { } steps && steps > 1
+        ? $"Step {step} of {steps}. {Form.Subtitle}".Trim()
+        : Form.Subtitle;
+
+    protected override void OnParametersSet()
+    {
+        // A new form starts from the AI's suggestions; the same one keeps what the owner chose.
+        if (ReferenceEquals(_for, Form)) return;
+        _for = Form;
+        _questions = Form.AsForm();
+        _answers = Form.SuggestedForm();
+    }
+
+    private Task SendAsync(IReadOnlyDictionary<string, FormAnswer> form)
+    {
+        _answers = form;
+        var answers = Form.FromForm(form);
+        var missing = Form.Missing(answers);
+        if (missing.Count > 0)
+        {
+            var first = Form.Questions.First(q => q.Id == missing[0]);
+            _error = first.Type == OrientationQuestionnaire.Consent
+                ? $"Tick \"{first.ConsentLabel ?? "I agree"}\" to send your answers."
+                : $"Answer \"{first.Text}\" to send your answers.";
+            return Task.CompletedTask;
+        }
+        return DeliverAsync(answers, aiDecides: false);
+    }
+
+    private Task LetAiDecideAsync(IReadOnlyDictionary<string, FormAnswer> _) =>
+        DeliverAsync(new Dictionary<string, object?>(OrientationQuestionnaire.AiDecides), aiDecides: true);
+
+    private async Task DeliverAsync(Dictionary<string, object?> answers, bool aiDecides)
+    {
+        _sending = true;
+        _error = null;
+        try
+        {
+            _error = await Send(answers);
+            if (_error is null)
+            {
+                _sent = true;
+                _aiDecides = aiDecides;
+                _given = answers;
+            }
+        }
+        finally
+        {
+            _sending = false;
+        }
+    }
+
+    private string Shown(Question q) => _given.GetValueOrDefault(q.Id) switch
+    {
+        true => q.Type == OrientationQuestionnaire.Consent ? "Agreed" : "Yes",
+        false => q.Type == OrientationQuestionnaire.Consent ? "Not agreed" : "No",
+        List<string> { Count: > 0 } many => string.Join(", ", many),
+        string { Length: > 0 } text => text.Trim(),
+        _ => "No answer",
+    };
+}

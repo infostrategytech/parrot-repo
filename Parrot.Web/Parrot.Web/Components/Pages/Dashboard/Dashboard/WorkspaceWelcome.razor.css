@@ -194,7 +194,7 @@
   border-radius: var(--radius-radius-full);
 }
 
-/* The real Cadence mark on the brand fill: its slate bars take the
+/* The real yára mark on the brand fill: its slate bars take the
    foreground colour so they read on the hub; the reply stays terracotta. */
 .workspace-omniai-hub { --cadence-bar: var(--colors-brand-primary-foreground); }
 
