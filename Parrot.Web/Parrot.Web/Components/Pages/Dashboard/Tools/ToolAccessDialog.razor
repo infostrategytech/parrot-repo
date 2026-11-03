@@ -1,0 +1,159 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+@inject IWorkspaceTools Store
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* Who can use a tool: every agent with a tick, saved together (designer, 2 November 2026). Several agents can use
+   one tool; each gets everything the provider allowed. A tool that acts (payment links, bookings) keeps one choice,
+   ask first or go straight ahead; each agent can change its own on its page. *@
+<Dialog Open="Open" Title="@(_discard ? "Discard changes?" : $"Who can use {Definition.Name}?")"
+        Subtitle="@(_discard ? "Who can use it hasn't changed." : WhatTheyDo)" Size="DialogSize.Wide" Dismissible
+        ConfirmLabel="@(_discard ? "Discard changes" : "Save")" CancelLabel="@(_discard ? "Keep editing" : CancelLabel)"
+        Type="@(_discard ? DialogType.Destructive : DialogType.Default)" Busy="_busy" BusyLabel="Saving…"
+        ConfirmDisabled="@(!_discard && (!Snapshot.CanManage || Connection.Status != ToolConnectionStatus.Connected || !Changed))"
+        OnConfirm="SaveAsync" OnCancel="CloseAsync">
+    <GlyphContent><ToolMark Provider="@Connection.ToolId" Small /></GlyphContent>
+    <Body>
+        <div class="tool-access" tabindex="-1" role="group" aria-label="@($"Who can use {Definition.Name}")" @ref="_content">
+            @if (_discard)
+            {
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p">Leave without saving who can use it?</Typography>
+            }
+            else if (Rows.Count == 0)
+            {
+                <EmptyState Size="EmptyStateSize.Panel" Title="No agents yet" Description="Your tool stays connected. Create an agent, then choose it here.">
+                    <Action><Button Variant="ButtonVariant.Secondary" @onclick="CreateAgent">Go to AI Operations</Button></Action>
+                </EmptyState>
+            }
+            else
+            {
+                <ul class="tool-access__agents">
+                    @foreach (var agent in Rows)
+                    {
+                        var current = agent;
+                        var on = _chosen.Contains(current.Id);
+                        <li>
+                            @* The whole row is the choice: face, then name with its job under it, then the tick. *@
+                            <RowButton Class="@(on ? "tool-access__agent is-on" : "tool-access__agent")" Disabled="_busy" role="checkbox" aria-checked="@(on ? "true" : "false")"
+                                       OnClick="() => Choose(current.Id, !on)">
+                                @if (current.Look is { } look) { <img class="tool-access__face" src="@look" alt="" /> }
+                                else { <PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /> }
+                                <span class="tool-access__who">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@current.Name</Typography>
+                                    @if (!string.IsNullOrWhiteSpace(Note(current))) { <Typography TextStyle="TextStyle.Small12Medium" As="span">@Note(current)</Typography> }
+                                </span>
+                                <span class="tool-access__tick" aria-hidden="true">@if (on) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> }</span>
+                            </RowButton>
+                        </li>
+                    }
+                </ul>
+                @if (ToolAccessCopy.AskWords(Connection.ToolId) is { } ask && Definition.Actions.Any(action => action.CanAskFirst) && _chosen.Count > 0)
+                {
+                    <SelectField FloatingLabel="@ask.Label" Value="@(_mode == ToolActionMode.Automatic ? ask.Straight : "Ask me first")"
+                                 Open="_modeOpen" OpenChanged="value => _modeOpen = value" Disabled="_busy">
+                        <PopoverOption Label="Ask me first" Description="@ask.AskDetail" Active="@(_mode == ToolActionMode.AskFirst)" OnSelect="() => SetMode(ToolActionMode.AskFirst)" />
+                        <PopoverOption Label="@ask.Straight" Description="@ask.StraightDetail" Active="@(_mode == ToolActionMode.Automatic)" OnSelect="() => SetMode(ToolActionMode.Automatic)" />
+                    </SelectField>
+                }
+            }
+            @if (_error is not null) { <InlineError Message="@_error" /> }
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    /// <summary>Opened from an agent's page: that agent is ticked to start.</summary>
+    [Parameter, EditorRequired] public string AgentId { get; set; } = "";
+    [Parameter, EditorRequired] public string AgentName { get; set; } = "";
+    [Parameter] public IReadOnlyList<ToolAgentOption> Agents { get; set; } = [];
+    [Parameter, EditorRequired] public ToolConnection Connection { get; set; } = default!;
+    [Parameter, EditorRequired] public WorkspaceToolsSnapshot Snapshot { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnSaved { get; set; }
+    [Parameter] public string CancelLabel { get; set; } = "Cancel";
+    private ToolDefinition Definition => ToolCatalog.Find(Connection.ToolId)!;
+    private readonly HashSet<string> _chosen = new(StringComparer.Ordinal);
+    private HashSet<string> _saved = new(StringComparer.Ordinal);
+    private ToolActionMode _mode = ToolActionMode.AskFirst, _savedMode = ToolActionMode.AskFirst;
+    private bool _wasOpen, _busy, _modeOpen, _discard, _disposed, _focusPending;
+    private ElementReference _content;
+    private string? _error;
+    private CancellationTokenSource? _request;
+
+    // The agents to show: everyone, or the one agent this was opened for when no list was given.
+    private IReadOnlyList<ToolAgentOption> Rows => Agents.Count > 0 ? Agents : string.IsNullOrEmpty(AgentId) ? [] : [new(AgentId, AgentName, "")];
+    private IReadOnlyList<ToolAction> Allowed => [.. Definition.Actions.Where(action => Connection.Granted.Contains(action.Id))];
+    private string WhatTheyDo => Connection.ToolId switch
+    {
+        "calendly" or "google-calendar" => "They check open times and book appointments for customers.",
+        "accelerate" => "They send payment links for the agreed amount, and see when they're paid.",
+        "google-sheets" => "They check your sheets for answers, like delivery fees or wholesale prices.",
+        _ => $"They can {string.Join(" and ", Allowed.Select(action => char.ToLowerInvariant(action.Name[0]) + action.Name[1..]))}.",
+    };
+    private bool Changed => !_chosen.SetEquals(_saved) || (_chosen.Count > 0 && _mode != _savedMode && Definition.Actions.Any(action => action.CanAskFirst));
+    private string? BooksElsewhere(string agentId) => ToolAccessCopy.BooksThrough(agentId, Connection, Snapshot);
+    private string Note(ToolAgentOption agent) => BooksElsewhere(agent.Id) is { } other
+        ? $"Already books through {other}, so here it only checks times." : agent.Job;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true; _request?.Cancel(); _request?.Dispose(); _request = new();
+            var grants = Snapshot.AgentAccess.Where(access => access.ConnectionId == Connection.Id && access.Actions.Count > 0).ToList();
+            _saved = new(grants.Select(access => access.AgentId), StringComparer.Ordinal);
+            _chosen.Clear(); _chosen.UnionWith(_saved);
+            if (!string.IsNullOrEmpty(AgentId)) _chosen.Add(AgentId);
+            _mode = _savedMode = grants.FirstOrDefault()?.Mode ?? ToolActionMode.AskFirst;
+            _busy = _modeOpen = _discard = false; _error = null;
+        }
+        else if (!Open && _wasOpen) { _wasOpen = false; _request?.Cancel(); }
+    }
+    private void Choose(string id, bool on) { if (on) _chosen.Add(id); else _chosen.Remove(id); _error = null; }
+    private void SetMode(ToolActionMode mode) { _mode = mode; _modeOpen = false; }
+
+    // Each agent ticked gets everything the provider allowed (only checking times where it already books elsewhere);
+    // each one unticked loses access. Only what changed is sent.
+    private async Task SaveAsync()
+    {
+        if (_discard) { await OnClose.InvokeAsync(); return; }
+        if (_busy || !Store.Available || !Snapshot.CanManage || !Changed) return;
+        _busy = true; _error = null;
+        try
+        {
+            var ct = _request?.Token ?? CancellationToken.None;
+            var latest = await Store.ReadAsync(ct);
+            var mode = Definition.Actions.Any(action => action.CanAskFirst) ? _mode : ToolActionMode.Automatic;
+            foreach (var agent in Rows)
+            {
+                var existing = latest.AgentAccess.FirstOrDefault(access => access.AgentId == agent.Id && access.ConnectionId == Connection.Id);
+                var want = _chosen.Contains(agent.Id);
+                var had = existing is { Actions.Count: > 0 };
+                if (!want && !had) continue;
+                var actions = !want ? [] : ToolAccessCopy.ActionsToGrant(agent.Id, Connection, Snapshot);
+                if (want && had && existing!.Actions.Order().SequenceEqual(actions.Order()) && existing.Mode == mode) continue;
+                await Store.SetAccessAsync(new(agent.Id, Connection.Id, actions, mode, existing?.Revision ?? 0), ct);
+            }
+            _saved = new(_chosen, StringComparer.Ordinal); _savedMode = _mode;
+            await OnSaved.InvokeAsync();
+        }
+        catch (OperationCanceledException) { }
+        catch (HttpRequestException exception) { _error = exception.StatusCode is { } status && (int)status < 500 ? exception.Message : "This couldn't be saved. Check your connection and try again."; }
+        catch (System.Text.Json.JsonException) { _error = "This couldn't be confirmed. Close this window and check it before trying again."; }
+        finally { if (!_disposed) { _busy = false; _focusPending = true; } }
+    }
+    private Task CloseAsync()
+    {
+        if (_busy) return Task.CompletedTask;
+        if (_discard) { _discard = false; _focusPending = true; return Task.CompletedTask; }
+        if (Changed) { _discard = true; _focusPending = true; return Task.CompletedTask; }
+        return OnClose.InvokeAsync();
+    }
+    // Straight to AI Operations: closing first would reopen Manage as the page leaves, and that half-open window
+    // broke the next window opened there (designer found, 2 November 2026).
+    private void CreateAgent() => Nav.NavigateTo("/dashboard/ai-operations");
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (_focusPending && Open) { _focusPending = false; await _content.FocusAsync(); } }
+    public void Dispose() { _disposed = true; _request?.Cancel(); _request?.Dispose(); }
+}

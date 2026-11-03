@@ -210,6 +210,10 @@ builder.Services.AddScoped<QaInsightsState>();
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore, Parrot.Web.Features.Dashboard.TaskRequests.ApiTaskStore>();
 // The person's own time zone, read from their browser, so "Today" is their today.
 builder.Services.AddScoped<Parrot.Web.Services.UserClock>();
+// Tools: the screens are ready, the API isn't yet, so these say so rather than pretend (integrations backend requests).
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Tools.IWorkspaceTools, Parrot.Web.Features.Dashboard.Tools.UnavailableWorkspaceTools>();
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Tools.IToolActionRequests, Parrot.Web.Features.Dashboard.Tools.UnavailableToolActionRequests>();
+builder.Services.AddSingleton<Parrot.Web.Features.Settings.IBusinessDetailsStore, Parrot.Web.Features.Settings.UnavailableBusinessDetails>();
 builder.Services.AddScoped<TeamState>();
 
 WebApplication app = builder.Build();

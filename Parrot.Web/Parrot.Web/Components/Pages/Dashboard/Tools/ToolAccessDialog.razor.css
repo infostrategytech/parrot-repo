@@ -1,0 +1,41 @@
+.tool-access { display: grid; gap: var(--spacing-xl); min-width: 0; outline: none; }
+.tool-access ::deep p { margin: var(--spacing-none); }
+.tool-access__account { display: grid; gap: var(--spacing-xs); padding: var(--spacing-lg); background: var(--colors-accent-brand-subtle); border-radius: var(--radius-radius-xl); overflow-wrap: anywhere; }
+.tool-access__account > ::deep p:last-child { color: var(--colors-text-muted); }
+.tool-access__choices { display: grid; gap: var(--spacing-lg); }
+.tool-access > ::deep p { color: var(--colors-text-secondary); }
+.tool-access ::deep .tool-access__muted { color: var(--colors-text-muted); }
+
+/* Who can use it: an agent a row, the whole row the choice: face, name with its job under it, tick on the right. */
+.tool-access__agents { display: grid; gap: var(--spacing-sm); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.tool-access__agents ::deep .tool-access__agent {
+  /* Gaps in the token set: no avatar size beside a name in a list, and no tick-box size. */
+  --ds-tool-access-face: 36px;
+  --ds-tool-access-tick: 22px;
+
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-lg) var(--spacing-xl);
+  text-align: left;
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+.tool-access__agents ::deep .tool-access__agent.is-on { background: var(--colors-accent-brand-subtle); }
+.tool-access__agents ::deep .tool-access__face { flex: none; width: var(--ds-tool-access-face); height: var(--ds-tool-access-face); border-radius: var(--radius-radius-full); object-fit: cover; }
+.tool-access__agents ::deep .tool-access__who { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
+.tool-access__agents ::deep .tool-access__who > span:first-child { color: var(--colors-text-primary); }
+.tool-access__agents ::deep .tool-access__who > span:last-child:not(:first-child) { color: var(--colors-text-muted); }
+.tool-access__agents ::deep .tool-access__tick {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--ds-tool-access-tick);
+  height: var(--ds-tool-access-tick);
+  color: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-sm);
+  background: var(--colors-surface-card);
+}
+.tool-access__agents ::deep .tool-access__agent.is-on .tool-access__tick { background: var(--colors-brand-primary); border-color: var(--colors-brand-primary); }

@@ -1,0 +1,74 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+
+@* The sheets the agent looks things up in (designer, 2 November 2026): picked in Google's own file picker, which
+   keeps yára to those files. Each tab is on or off, with the columns the agent sees; private-looking columns start
+   off. No preview and no description: the business knows its sheet, and the agent reads what a tab is from its
+   names; how an agent uses it is taught on the agent's page. yára only reads. *@
+<div class="sheet-lookups">
+    @if (Draft.Sheets.Count == 0)
+    {
+        <div class="sheet-lookups__start">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Pick the sheets your agent can check, like delivery fees or wholesale prices. yára can only see the sheets you pick, and never changes them.</Typography>
+            <Button Variant="ButtonVariant.Primary" Size="ButtonSize.Small" disabled="@Disabled" @onclick="OnChoose">Choose from Google Drive</Button>
+        </div>
+    }
+    else
+    {
+        @foreach (var sheet in Draft.Sheets)
+        {
+            var current = sheet;
+            <section class="sheet-lookups__sheet" aria-label="@current.Sheet.Name">
+                <header class="sheet-lookups__sheet-head">
+                    <ToolMark Provider="google-sheets" Small />
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3">@current.Sheet.Name</Typography>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Disabled" aria-label="@($"Remove {current.Sheet.Name}")" @onclick="() => RemoveAsync(current)">Remove</Button>
+                </header>
+                @foreach (var tab in current.Tabs)
+                {
+                    var item = tab;
+                    <div class="sheet-lookups__tab @(item.On ? "is-on" : null)">
+                        <Toggle Checked="item.On" CheckedChanged="on => SetAsync(() => item.On = on)" Label="@item.Tab.Name" Description="@Columns(item)" Disabled="@(Disabled || !item.Readable)" Stretch />
+                        @if (!item.Readable)
+                        {
+                            <InlineError Tone="InlineErrorTone.Info" Message="This tab has no column names in its first row, so your agent can't read it. Add them in Google Sheets, then come back." />
+                        }
+                        else if (item.On)
+                        {
+                            <div class="sheet-lookups__columns" role="group" aria-label="@($"Columns your agent can see in {item.Tab.Name}")">
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p">Columns your agent can see</Typography>
+                                <div>
+                                    @foreach (var header in item.Tab.Headers)
+                                    {
+                                        var column = header;
+                                        <ChoiceChip Selected="@(!item.LeftOut.Contains(column))" Disabled="Disabled" OnClick="() => ToggleColumnAsync(item, column)">@column</ChoiceChip>
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                }
+            </section>
+        }
+        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="sheet-lookups__add" disabled="@Disabled" @onclick="OnChoose">Add another sheet</Button>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public SheetDraft Draft { get; set; } = default!;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    /// <summary>Opens Google's file picker.</summary>
+    [Parameter] public EventCallback OnChoose { get; set; }
+
+    private static string Columns(LookupTabChoice tab) => !tab.Readable ? "Can't be read yet" : tab.LeftOut.Count == 0
+        ? $"{tab.Tab.Headers.Count} columns" : $"{tab.Shown.Count} of {tab.Tab.Headers.Count} columns · the rest stay private";
+    private Task SetAsync(Action change) { change(); return OnChanged.InvokeAsync(); }
+    private Task RemoveAsync(LookupSheetChoice sheet) { Draft.Remove(sheet.Sheet.Id); return OnChanged.InvokeAsync(); }
+    private Task ToggleColumnAsync(LookupTabChoice tab, string column)
+    {
+        if (!tab.LeftOut.Remove(column)) tab.LeftOut.Add(column);
+        return OnChanged.InvokeAsync();
+    }
+}

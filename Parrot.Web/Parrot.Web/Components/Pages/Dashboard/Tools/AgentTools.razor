@@ -1,0 +1,159 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+@inject IWorkspaceTools Store
+@inject NavigationManager Nav
+@inject ToastService Toasts
+@implements IDisposable
+
+@if (Store.Available && SummaryOnly && Readiness is { } summary)
+{
+    <InlineError Tone="InlineErrorTone.Info" Message="@summary">
+        <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="OpenTools">Choose a booking tool</Button></Action>
+    </InlineError>
+}
+else if (Store.Available && !SummaryOnly)
+{
+    @* What it can do with the business's tools (designer, 2 November 2026): one row per connected tool, in plain words,
+       with one switch. A tool that acts keeps one choice under it: ask first, or go straight ahead. The same access as
+       a tool's Manage window, saved as it's switched. *@
+    <div class="agent-tools" aria-labelledby="@_titleId">
+        <Typography TextStyle="TextStyle.Small12Semibold" As="h3" id="@_titleId" Class="agent-tools__label">With your tools</Typography>
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action></InlineError>
+        }
+        @if (_snapshot is null && _loading) { <Skeleton Shape="SkeletonShape.Block" /> }
+        else if (_snapshot is { } snapshot)
+        {
+            var usable = snapshot.Connections.Where(connection => connection.Status != ToolConnectionStatus.SetupIncomplete && ToolCatalog.Find(connection.ToolId) is not null).ToList();
+            <div class="agent-tools__card" tabindex="-1" @ref="_list">
+                @if (usable.Count == 0)
+                {
+                    <div class="agent-tools__row is-empty">
+                        <span class="agent-tools__words">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">No tools connected yet</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@($"Connect a tool so {AgentName} can book appointments, look things up in your sheets or send payment links.")</Typography>
+                        </span>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="OpenTools">Explore tools</Button>
+                    </div>
+                }
+                @foreach (var connection in usable)
+                {
+                    var current = connection;
+                    var tool = ToolCatalog.Find(current.ToolId)!;
+                    var access = snapshot.AgentAccess.FirstOrDefault(item => item.ConnectionId == current.Id && item.AgentId == AgentId);
+                    var on = access is { Actions.Count: > 0 };
+                    var actions = on ? access!.Actions : (IReadOnlyList<string>)ToolAccessCopy.ActionsToGrant(AgentId, current, snapshot);
+                    var ability = ToolAccessCopy.Ability(current.ToolId, actions);
+                    <div class="agent-tools__item @(on ? "is-on" : null)">
+                        <div class="agent-tools__row">
+                            <ToolMark Provider="@tool.Id" Small />
+                            <span class="agent-tools__words">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@tool.Name</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@Detail(current, ability, snapshot)</Typography>
+                            </span>
+                            @* Its one choice, beside its switch (designer, 2 November 2026). *@
+                            @if (on && current.Status == ToolConnectionStatus.Connected && ToolAccessCopy.AskWords(current.ToolId) is { } ask && ToolAccessCopy.CanAskFirst(current.ToolId, access!.Actions))
+                            {
+                                <div class="agent-tools__mode">
+                                    <SelectField FloatingLabel="@ask.Label" Value="@(access.Mode == ToolActionMode.Automatic ? ask.Straight : "Ask me first")"
+                                                 Open="@(_modeOpen == current.Id)" OpenChanged="open => _modeOpen = open ? current.Id : null" Disabled="@(_busy || !snapshot.CanManage)">
+                                        <PopoverOption Label="Ask me first" Description="@ask.AskDetail" Active="@(access.Mode == ToolActionMode.AskFirst)" OnSelect="() => SetModeAsync(current, ToolActionMode.AskFirst)" />
+                                        <PopoverOption Label="@ask.Straight" Description="@ask.StraightDetail" Active="@(access.Mode == ToolActionMode.Automatic)" OnSelect="() => SetModeAsync(current, ToolActionMode.Automatic)" />
+                                    </SelectField>
+                                </div>
+                            }
+                            else { <span class="agent-tools__no-mode" aria-hidden="true"></span> }
+                            @if (current.Status == ToolConnectionStatus.NeedsAttention)
+                            {
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="OpenTools">Reconnect</Button>
+                            }
+                            else
+                            {
+                                <Toggle Checked="on" CheckedChanged="value => SetOnAsync(current, value)" Disabled="@(_busy || !snapshot.CanManage)"
+                                        AriaLabel="@($"{tool.Name}: {ability}")" />
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+            @if (usable.Count > 0 && usable.Count < ToolCatalog.All.Count)
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="agent-tools__more" @onclick="OpenTools">
+                    <ChildContent>Connect more tools</ChildContent>
+                    <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+                </Button>
+            }
+        }
+    </div>
+}
+
+@code {
+    [Parameter, EditorRequired] public string AgentId { get; set; } = "";
+    [Parameter, EditorRequired] public string AgentName { get; set; } = "";
+    [Parameter] public string? UseCase { get; set; }
+    [Parameter] public bool SummaryOnly { get; set; }
+    private readonly string _titleId = "agent-tools-" + Guid.NewGuid().ToString("N");
+    private WorkspaceToolsSnapshot? _snapshot;
+    private bool _loading, _busy, _disposed, _focusPending;
+    private Guid? _modeOpen;
+    private string? Readiness => _snapshot is { } snapshot ? ToolAccessCopy.Readiness(AgentId, AgentName, UseCase, snapshot) : null;
+    private string? _forAgent, _error;
+    private CancellationTokenSource? _load;
+    private ElementReference _list;
+
+    // Under the tool's name (designer, 2 November 2026: the name stays the title, as what a tool does may grow): what
+    // it does, and what's worth knowing, such as the sheets it reads or that it only checks times here.
+    private string Detail(ToolConnection connection, string ability, WorkspaceToolsSnapshot snapshot)
+    {
+        if (connection.Status == ToolConnectionStatus.NeedsAttention) return "Needs reconnecting in Tools.";
+        if (ToolAccessCopy.BooksThrough(AgentId, connection, snapshot) is { } other) return $"{ability} · {AgentName} books through {other}";
+        return connection.ToolId == "google-sheets" && connection.Summary is { } sheets ? $"{ability} · {sheets}" : ability;
+    }
+
+    protected override Task OnParametersSetAsync()
+    {
+        if (!Store.Available || AgentId == _forAgent) return Task.CompletedTask;
+        _snapshot = null; _modeOpen = null;
+        _forAgent = AgentId; return LoadAsync();
+    }
+    private async Task LoadAsync()
+    {
+        _load?.Cancel(); _load?.Dispose();
+        var mine = _load = new CancellationTokenSource(); var ct = mine.Token;
+        _loading = true; _error = null;
+        try { var snapshot = await Store.ReadAsync(ct); if (!ct.IsCancellationRequested && !_disposed) _snapshot = snapshot; }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException) { if (!ct.IsCancellationRequested) _error = "Tools couldn't be loaded. Try again."; }
+        finally { if (_load == mine) _loading = false; }
+    }
+
+    // On: everything the provider allowed (asking first where it acts); off: no access.
+    private Task SetOnAsync(ToolConnection connection, bool on)
+    {
+        if (_snapshot is not { } snapshot) return Task.CompletedTask;
+        var existing = snapshot.AgentAccess.FirstOrDefault(item => item.ConnectionId == connection.Id && item.AgentId == AgentId);
+        var actions = on ? ToolAccessCopy.ActionsToGrant(AgentId, connection, snapshot) : [];
+        var mode = existing?.Mode ?? (ToolAccessCopy.CanAskFirst(connection.ToolId, actions) ? ToolActionMode.AskFirst : ToolActionMode.Automatic);
+        var name = ToolCatalog.Find(connection.ToolId)?.Name ?? "this tool";
+        return SaveAsync(new(AgentId, connection.Id, actions, mode, existing?.Revision ?? 0), on ? $"{AgentName} can use {name}." : $"{AgentName} no longer uses {name}.");
+    }
+    private Task SetModeAsync(ToolConnection connection, ToolActionMode mode)
+    {
+        _modeOpen = null;
+        if (_snapshot?.AgentAccess.FirstOrDefault(item => item.ConnectionId == connection.Id && item.AgentId == AgentId) is not { } existing || existing.Mode == mode) return Task.CompletedTask;
+        return SaveAsync(existing with { Mode = mode }, "Saved.");
+    }
+    private async Task SaveAsync(ToolAgentAccess access, string said)
+    {
+        if (_busy) return;
+        _busy = true; _error = null;
+        try { await Store.SetAccessAsync(access, _load?.Token ?? CancellationToken.None); Toasts.Show(said); await LoadAsync(); _focusPending = true; }
+        catch (OperationCanceledException) { }
+        catch (HttpRequestException exception) { _error = exception.StatusCode is { } status && (int)status < 500 ? exception.Message : "This couldn't be saved. Check your connection and try again."; await LoadAsync(); }
+        finally { if (!_disposed) _busy = false; }
+    }
+    private void OpenTools() => Nav.NavigateTo($"/dashboard/tools?agent={Uri.EscapeDataString(AgentId)}");
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (_focusPending && !_loading) { _focusPending = false; await _list.FocusAsync(); } }
+    public void Dispose() { _disposed = true; _load?.Cancel(); _load?.Dispose(); }
+}

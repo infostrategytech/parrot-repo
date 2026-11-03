@@ -392,6 +392,7 @@ else
             }
 
             @* Where it answers, then how it is set up: each row opens the tab where it is set. *@
+                <Parrot.Web.Components.Pages.Dashboard.Tools.AgentTools AgentId="@agent.Id" AgentName="@agent.Name" UseCase="@agent.Settings.UseCase" SummaryOnly />
                 @* Where it answers, here rather than a tab of its own: the thing to
                    check before turning it on. *@
                 @if (_form is not null)
@@ -439,6 +440,10 @@ else
                                     </Action>
                                 </EmptyState>
                             </section>
+                            <section class="agent-detail__group" aria-labelledby="agent-can-title">
+                                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
+                                <Parrot.Web.Components.Pages.Dashboard.Tools.AgentTools AgentId="@agent.Id" AgentName="@agent.Name" UseCase="@agent.Settings.UseCase" />
+                            </section>
                         }
                         else
                         {
@@ -470,6 +475,8 @@ else
                             <section class="agent-detail__group" aria-labelledby="agent-can-title">
                                 <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
                                 <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Actions" ShowAlways="false" />
+                                @* Its tools are things it can do too, so they're listed here, not as a section of their own (designer, 2 November 2026). *@
+                                <Parrot.Web.Components.Pages.Dashboard.Tools.AgentTools AgentId="@agent.Id" AgentName="@agent.Name" UseCase="@agent.Settings.UseCase" />
                             </section>
                         }
                         break;

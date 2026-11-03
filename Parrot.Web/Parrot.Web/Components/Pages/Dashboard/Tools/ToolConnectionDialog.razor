@@ -1,0 +1,690 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Catalog
+@inject IWorkspaceTools Store
+@inject Parrot.Web.Features.Settings.IBusinessDetailsStore Business
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* Connecting a tool the way each provider really works (researched 1 November 2026): Calendly and Google by
+   signing in at the provider, Accelerate with its API keys. Connect goes straight to the provider; coming back is
+   one window with the confirmation, the few choices left and the agent (designer, 2 November 2026). Refusing at
+   the provider comes back to the card, with no window. *@
+<Dialog Open="@(Open && !_providerOpen && !_pickerOpen && _step != Step.Authorization)" Title="@Title" Subtitle="@Subtitle" Size="DialogSize.Wide" Dismissible
+        Type="@(_step == Step.Disconnect ? DialogType.Destructive : DialogType.Default)"
+        ConfirmLabel="@ConfirmLabel" CancelLabel="@(_step == Step.Disconnect ? "Keep connection" : "Cancel")"
+        Busy="_busy" BusyLabel="@(_step == Step.Keys ? "Checking your keys…" : "Working…")" HideFooter="@(_step is Step.Manage or Step.Loading)" OnConfirm="ContinueAsync" OnCancel="CloseAsync">
+    <GlyphContent><ToolMark Provider="@Tool.Id" Small /></GlyphContent>
+    <Body>
+        <div class="tool-dialog" tabindex="-1" role="group" aria-label="@Title" @ref="_content">
+            @if (_step == Step.Loading)
+            {
+                @* Back from the provider: what the API is doing, as it does it, then the choices. *@
+                <div class="tool-dialog__loading" role="status" aria-live="polite">
+                    <div class="@(_loadPhase > 0 ? "tool-dialog__phase is-done" : "tool-dialog__phase")">
+                        <Icon Name="@(_loadPhase > 0 ? IconName.RiCheckboxCircleFill : IconName.RiLoader4Fill)" Size="IconSize.Sm" />
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@(_loadPhase > 0 ? $"Access allowed in {Words.Provider}" : $"Checking access in {Words.Provider}…")</Typography>
+                    </div>
+                    <div class="@(_loadPhase > 0 ? "tool-dialog__phase" : "tool-dialog__phase is-waiting")">
+                        <Icon Name="IconName.RiLoader4Fill" Size="IconSize.Sm" />
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@LoadingWhat</Typography>
+                    </div>
+                    <div class="tool-dialog__placeholders" aria-hidden="true">
+                        <Skeleton Shape="SkeletonShape.Block" /><Skeleton Shape="SkeletonShape.Block" /><Skeleton Shape="SkeletonShape.Block" />
+                    </div>
+                </div>
+            }
+            else if (_step == Step.Keys)
+            {
+                <div class="tool-dialog__notice"><Icon Name="IconName.RiInformationFill" Size="IconSize.Md" />
+                    <div><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Payment links need an Accelerate account registered as a business, with your CAC details.</Typography>
+                        <a class="tool-dialog__link @TextStyle.Small12Semibold.ToClassName()" href="https://accelerate.ng" target="_blank" rel="noopener noreferrer" aria-label="Open Accelerate (opens in a new tab)">Open Accelerate</a></div></div>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>In Accelerate, open Account, then API Keys. Switch to Live and copy both keys here.</Typography>
+                <Input FloatingLabel="Public key" Value="@_publicKey" ValueChanged="value => _publicKey = value ?? string.Empty" Disabled="_busy" autocomplete="off" spellcheck="false" />
+                <Input FloatingLabel="Secret key" Type="password" Value="@_secretKey" ValueChanged="value => _secretKey = value ?? string.Empty" Disabled="_busy"
+                       HelperText="Kept securely by yára and never shown again." autocomplete="new-password" spellcheck="false" />
+            }
+            else if (_step == Step.Configure && _setup is { } setup)
+            {
+                @* Connected, said plainly and first: the account it's connected as, and a way to use another. *@
+                <div class="tool-dialog__connected">
+                    <span class="tool-dialog__tick"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" /></span>
+                    <div>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">@($"Connected as {setup.AccountName}")</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p">@(Tool.SignIn == ToolSignIn.Keys ? setup.Resources.FirstOrDefault()?.Detail : $"{Tool.Name} account")</Typography>
+                    </div>
+                    @if (Tool.SignIn == ToolSignIn.Provider)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_busy" @onclick="AnotherAccountAsync">Use a different account</Button>
+                    }
+                </div>
+                @if (Tool.Id == "calendly" && _calendly is not null)
+                {
+                    <CalendlyServices Services="setup.Resources" BooksInChat="setup.BooksInChat" Draft="_calendly" Disabled="_busy" OnChanged="Changed" />
+                }
+                else if (Tool.Id == "google-calendar" && _calendar is not null)
+                {
+                    @CalendarUse(_calendar.CanBook, false)
+                }
+                else if (Tool.Id == "google-sheets" && _sheet is not null)
+                {
+                    <SheetLookups Draft="_sheet" Disabled="_busy" OnChanged="Changed" OnChoose="OpenPicker" />
+                }
+                @if (AsksWho) { @WhoCanUseIt }
+            }
+            else if (_step == Step.ReviewChange)
+            {
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@($"Switching to {_setup?.AccountName} removes the permissions listed below. Your agents keep their jobs and conversations, but need access granted again.")</Typography>
+                @AffectedAgents
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_busy" @onclick="BackFromReview">Back</Button>
+            }
+            else if (_step == Step.Manage && _current is { } managed)
+            {
+                @* Manage, said in the order people check it (designer, 2 November 2026): which account, what it uses,
+                   which agents can use it, then disconnecting on its own at the bottom. Each part has its one action. *@
+                <div class="tool-dialog__connected">
+                    <span class="tool-dialog__tick"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" /></span>
+                    <div>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">@($"Connected as {managed.AccountName}")</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p">@(Tool.SignIn == ToolSignIn.Keys ? managed.Summary : $"{Tool.Name} account")</Typography>
+                    </div>
+                    @if (Tool.SignIn == ToolSignIn.Provider)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_busy" @onclick="AnotherAccountAsync">Use a different account</Button>
+                    }
+                </div>
+
+                @if (Tool.Id == "google-calendar")
+                {
+                    @CalendarUse(managed.Granted.Contains("create-events"), true)
+                }
+                else
+                {
+                <section class="tool-dialog__section" aria-labelledby="@($"{_ids}-uses")">
+                    <div class="tool-dialog__section-head">
+                        <div>
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_ids}-uses")">@UsesTitle</Typography>
+                            @if (UsesLine(managed) is { } line) { <Typography TextStyle="TextStyle.Small12Medium" As="p">@line</Typography> }
+                        </div>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="_busy" @onclick="ChangeSetupAsync">@ChangeLabel</Button>
+                    </div>
+                    @if (Tool.Id is "calendly" or "google-sheets")
+                    {
+                        <ul class="tool-dialog__found">
+                            @foreach (var (name, detail) in Found(managed))
+                            {
+                                <li><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@name</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@detail</Typography></li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <dl class="tool-dialog__facts">
+                            @foreach (var (label, value) in Facts(managed))
+                            {
+                                <div><dt><Typography TextStyle="TextStyle.Small12Medium" As="span">@label</Typography></dt>
+                                    <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@value</Typography></dd></div>
+                            }
+                        </dl>
+                    }
+                </section>
+                }
+
+                <section class="tool-dialog__section" aria-labelledby="@($"{_ids}-agents")">
+                    <div class="tool-dialog__section-head">
+                        <div>
+                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_ids}-agents")">Agents</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p">@(AgentCount == 0 ? $"No agent can use {Tool.Name} yet." : AgentCount == 1 ? $"1 agent can use {Tool.Name}." : $"{AgentCount} agents can use {Tool.Name}.")</Typography>
+                        </div>
+                        <Button Variant="@(AgentCount == 0 ? ButtonVariant.Primary : ButtonVariant.Secondary)" Size="ButtonSize.Small" disabled="@_busy" @onclick="OpenAgents">@(AgentCount == 0 ? "Choose agents" : "Change")</Button>
+                    </div>
+                    @if (AgentCount > 0)
+                    {
+                        @* Who can use it, by face and name; what each may do is in Change access. *@
+                        <ul class="tool-dialog__people">
+                            @foreach (var access in Access.Where(access => access.ConnectionId == managed.Id && access.Actions.Count > 0))
+                            {
+                                var agent = Agents.FirstOrDefault(item => item.Id == access.AgentId);
+                                <li>
+                                    @if (agent?.Look is { } look) { <img src="@look" alt="" /> }
+                                    else { <PetalAvatar Seed="@access.AgentId" Initials="@Initials.From(agent?.Name ?? "?")" Size="AvatarSize.Sm" /> }
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(agent?.Name ?? "Unavailable agent")</Typography>
+                                </li>
+                            }
+                        </ul>
+                    }
+                </section>
+
+                <div class="tool-dialog__foot">
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="tool-dialog__disconnect" disabled="@_busy" @onclick="() => Go(Step.Disconnect)">@($"Disconnect {Tool.Name}")</Button>
+                </div>
+            }
+            else if (_step == Step.Disconnect)
+            {
+                @if (Unfinished)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>This removes the unfinished setup. No agent permissions or business records are affected.</Typography>
+                }
+                else
+                {
+                    @if (AgentCount > 0)
+                    {
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(AgentCount == 1 ? $"This agent will stop using {Tool.Name}." : $"These agents will stop using {Tool.Name}.")</Typography>
+                        @AffectedAgents
+                    }
+                    <div class="tool-dialog__notice"><Icon Name="IconName.RiInformationFill" Size="IconSize.Md" />
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@DisconnectLine</Typography></div>
+                }
+            }
+            @if (Unfinished && !_isNew && _step is Step.Keys or Step.Configure)
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_busy" @onclick="() => Go(Step.Disconnect)">Discard setup</Button>
+            }
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error">
+                    <Action>
+                        @if (_loadFailed && _step == Step.Loading)
+                        {
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="RetryLoadAsync">Try again</Button>
+                        }
+                    </Action>
+                </InlineError>
+            }
+            @if (_restart)
+            { <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_busy" @onclick="BeginAsync">Start connection again</Button> }
+        </div>
+    </Body>
+</Dialog>
+
+@* For real, the provider's own window (a new tab) is where people sign in and allow access; the backend hears
+   back from the provider. In the demo this stands in for that window, in the provider's words: Google's has a
+   checkbox per permission, and people can untick them. *@
+@if (Open && _providerOpen && _setup is not null)
+{
+    <ProviderWindow Title="@($"{Words.Provider} · Sign in")" Cta="@Words.Cta" Busy="_busy" OnCancel="CloseProviderEarlyAsync" OnComplete="AllowAsync">
+        <Mark><ToolMark Provider="@Tool.Id" Small /></Mark>
+        <ChildContent>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" Prose>@(Words.Google ? "yára wants access to your Google Account" : $"yára wants to access your {Words.Provider} account")</Typography>
+            <div class="tool-dialog__provider-account"><Icon Name="IconName.RiUser3Fill" Size="IconSize.Sm" />
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@SignedInAs</Typography></div>
+            <div class="tool-dialog__provider-scopes">
+                @if (Words.Tickable)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Select what yára can access</Typography>
+                    @foreach (var permission in Words.Permissions)
+                    {
+                        var current = permission;
+                        <Checkbox State="@(_ticked.Contains(current.Key) ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                                  StateChanged="state => Tick(current.Key, state == CheckboxState.Checked)" Label="@current.Text" Disabled="_busy" />
+                    }
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">This will allow yára to:</Typography>
+                    <ul>
+                        @foreach (var permission in Words.Permissions)
+                        {
+                            <li><Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@permission.Text</Typography></li>
+                        }
+                    </ul>
+                }
+            </div>
+            @if (Words.Google)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Make sure you trust yára. You can see or remove its access in your Google Account.</Typography>
+            }
+        </ChildContent>
+    </ProviderWindow>
+}
+
+@* For real, Google's own file picker opens here (the API gives the page a short-lived token for it); yára only
+   learns the sheets picked. In the demo this stands in for it. *@
+@if (Open && _pickerOpen && _setup is not null && Store is IToolProviderPreview picker)
+{
+    <ProviderWindow Title="Google Drive · Choose a file" Cta="Select" CtaDisabled="@(_picked is null)" CancelLabel="Cancel" Busy="_busy" OnCancel="ClosePicker" OnComplete="PickAsync">
+        <Mark><ToolMark Provider="google-sheets" Small /></Mark>
+        <ChildContent>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Choose a spreadsheet</Typography>
+            <div class="tool-dialog__files" role="listbox" aria-label="Spreadsheets in your Google Drive">
+                @foreach (var file in picker.PickerFiles(_setup.Id))
+                {
+                    var current = file;
+                    var taken = _sheet?.Sheets.Any(sheet => sheet.Sheet.Id == current.Id) == true;
+                    <RowButton Class="@(_picked == current.Id ? "tool-dialog__file is-picked" : "tool-dialog__file")" Disabled="@(_busy || taken)" role="option" aria-selected="@(_picked == current.Id ? "true" : "false")"
+                               OnClick="() => _picked = current.Id">
+                        <ToolMark Provider="google-sheets" Small />
+                        <span><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@current.Name</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@(taken ? "Already chosen" : current.Detail)</Typography></span>
+                    </RowButton>
+                }
+            </div>
+        </ChildContent>
+    </ProviderWindow>
+}
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter, EditorRequired] public ToolDefinition Tool { get; set; } = default!;
+    [Parameter] public ToolConnection? Connection { get; set; }
+    [Parameter] public IReadOnlyList<ToolAgentAccess> Access { get; set; } = [];
+    [Parameter] public IReadOnlyList<ToolAgentOption> Agents { get; set; } = [];
+    [Parameter] public bool CanManage { get; set; }
+    [Parameter] public bool CanTry { get; set; }
+    [Parameter] public string? ContextAgentId { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<string> OnChanged { get; set; }
+    [Parameter] public EventCallback<ToolConnection> OnManageAccess { get; set; }
+    [Parameter] public EventCallback<ToolConnection> OnTry { get; set; }
+
+    /// <summary>Refused, closed early or expired at the provider: the card says so, and no window stays open.</summary>
+    [Parameter] public EventCallback<string> OnNotConnected { get; set; }
+
+    /// <summary>Back from the provider's page (for real, the API returns people to /dashboard/tools?setup=…): the
+    /// setup to check, so this opens on its choices.</summary>
+    [Parameter] public Guid? ReturnedSetup { get; set; }
+    private enum Step { Authorization, Loading, Keys, Configure, ReviewChange, Manage, Disconnect }
+    // Loading, back from the provider: 0 checking access, 1 reading what the account has.
+    private int _loadPhase;
+    private string LoadingWhat => Tool.Id switch
+    {
+        "calendly" => "Finding your services…", "google-calendar" => "Finding your calendars…", "google-sheets" => "Opening your spreadsheets…", _ => "Getting your account ready…",
+    };
+    private Step _step;
+    private ToolSetup? _setup;
+    private ToolConnection? _current;
+    private bool _loadFailed;
+    private bool _wasOpen, _busy, _focusPending, _disposed, _restart, _beginPending, _returnPending, _providerOpen, _isNew, _agentOpen;
+    private string? _agentId;
+    private CalendlyDraft? _calendly;
+    private CalendarDraft? _calendar;
+    private SheetDraft? _sheet;
+    // Google's file picker (its demo stand-in) and the sheet picked in it.
+    private bool _pickerOpen;
+    private string? _picked;
+    // Accelerate's keys stay in this window only until they're sent, and are cleared when it closes.
+    private string _publicKey = "", _secretKey = "";
+    private readonly HashSet<string> _ticked = new(StringComparer.Ordinal);
+    private ToolSetupWords Words => ToolSetupCopy.For(Tool.Id);
+    private string SignedInAs => Store is IToolProviderPreview preview && _setup is not null ? preview.SignedInAs(_setup.Id) : "";
+    private string? _error;
+    private ElementReference _content;
+    private CancellationTokenSource? _request;
+    private int AgentCount => Access.Count(access => access.ConnectionId == _current?.Id && access.Actions.Count > 0);
+    private bool Unfinished => _current?.Status == ToolConnectionStatus.SetupIncomplete;
+    private bool WasConnected => _current?.Status == ToolConnectionStatus.Connected;
+    private bool ChangesAccount => WasConnected && _setup is { Authorized: true } setup && _current!.AccountName != setup.AccountName;
+    // The agents affected, by face and name, so they're recognised at a glance (designer, 2 November 2026).
+    private RenderFragment AffectedAgents => @<ul class="tool-dialog__people">
+        @foreach (var access in Access.Where(access => access.ConnectionId == _current?.Id && access.Actions.Count > 0))
+        {
+            var agent = Agents.FirstOrDefault(item => item.Id == access.AgentId);
+            <li>
+                @if (agent?.Look is { } look) { <img src="@look" alt="" /> }
+                else { <PetalAvatar Seed="@access.AgentId" Initials="@Initials.From(agent?.Name ?? "?")" Size="AvatarSize.Sm" /> }
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(agent?.Name ?? "Unavailable agent")</Typography>
+            </li>
+        }
+    </ul>;
+    // A first connection: the agent is chosen in this window, the last thing before Finish.
+    private bool ChoosesAgentHere => !WasConnected;
+    // Calendly, Google Calendar and Sheets only show what was found or what the agent does (designer, 2 November
+    // 2026); their agents are chosen after, in Manage.
+    private bool AsksWho => ChoosesAgentHere && Tool.Id is not ("calendly" or "google-calendar" or "google-sheets");
+    private string Title => _step switch
+    {
+        Step.Authorization or Step.Keys => $"Connect {Tool.Name}",
+        Step.Loading => $"Connecting {Tool.Name}…",
+        Step.Configure when !WasConnected || Tool.Id == "google-calendar" => $"{Tool.Name} is connected",
+        Step.Configure => Tool.Id switch { "calendly" => "Choose what your agent can book", _ => "Choose the sheets your agent can check" },
+        Step.Manage => $"Manage {Tool.Name}", Step.ReviewChange => "Review who this affects",
+        _ => Unfinished ? $"Discard {Tool.Name} setup?" : $"Disconnect {Tool.Name}?",
+    };
+    // A line under the title only where it says something the window doesn't.
+    private string? Subtitle => _step switch
+    {
+        Step.ReviewChange => "Your current connection stays as it is until you confirm.",
+        _ => null,
+    };
+    private string FinishLabel => ChangesAccount && AgentCount > 0 ? "Review change" : WasConnected ? "Save changes" : "Finish";
+    private string ConfirmLabel => _step switch
+    {
+        Step.Keys => WasConnected ? "Save keys" : "Connect",
+        Step.Configure => FinishLabel,
+        Step.ReviewChange => "Change and remove access", Step.Disconnect => Unfinished ? "Discard setup" : "Disconnect", _ => "Done",
+    };
+    private readonly string _ids = "tool-manage-" + Guid.NewGuid().ToString("N");
+    private string UsesTitle => Tool.Id switch { "calendly" => "Services your agent can offer", "google-sheets" => "Sheets your agent can check", _ => "Account" };
+    private static string? UsesLine(ToolConnection connection) => connection.ToolId switch
+    {
+        "calendly" when connection.Settings?.Services is not null => "Your agent checks open times and books these for customers.",
+        "google-sheets" => "Your agent reads the latest from these when customers ask. yára never changes them.",
+        _ => null,
+    };
+    // What Manage lists as cards: Calendly's services, or each sheet with the tabs the agent can check.
+    private static IEnumerable<(string Name, string Detail)> Found(ToolConnection connection) => connection.ToolId == "google-sheets"
+        ? (connection.Settings?.Sheet?.Sheets ?? []).Select(sheet => (sheet.Name, sheet.Tabs.Count <= 2 ? string.Join(", ", sheet.Tabs.Select(tab => tab.Name)) : $"{sheet.Tabs.Count} tabs"))
+        : (connection.Settings?.Services ?? []).Select(service => (service.Name, service.Detail ?? ""));
+    private string DisconnectLine => Tool.Id switch
+    {
+        "calendly" => "Nothing in your Calendly changes, and you can connect again any time.",
+        "accelerate" => "Your agents stop sending payment links. Payments already made stay in Accelerate.",
+        _ => $"Your agents stop using {Tool.Name}. Nothing in {Tool.Name} is deleted.",
+    };
+    private string ChangeLabel => Tool.Id switch { "accelerate" => "Change keys", _ => "Change" };
+
+    // Google Calendar, said once (designer, 2 November 2026): what the agent does with it, and when customers can
+    // book, which is the business's opening hours. What they book stays in Products & Services.
+    private string? _hours;
+    private RenderFragment CalendarUse(bool canBook, bool canChange) => @<section class="tool-dialog__section" aria-labelledby="@($"{_ids}-hours")">
+        <div class="tool-dialog__section-head">
+            <div>
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_ids}-hours")">When customers can book</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p">@(canBook ? "Your agent offers times you're free and adds each booking to your main calendar." : "Your agent offers times you're free.")</Typography>
+            </div>
+            @if (canChange) { <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_busy" @onclick="ChangeHours">Change hours</Button> }
+        </div>
+        <ul class="tool-dialog__found">
+            <li><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(_hours ?? "Checking your opening hours…")</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">Your opening hours</Typography></li>
+        </ul>
+        @if (!canBook)
+        {
+            <InlineError Tone="InlineErrorTone.Info" Message="You didn't allow yára to add events, so your agent can't book them yet.">
+                <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_busy" @onclick="AllowMoreAsync">Allow in Google</Button></Action>
+            </InlineError>
+        }
+    </section>;
+    // Hours are kept in one place, Settings (its Business section comes with the Settings work); straight there.
+    private void ChangeHours() => Nav.NavigateTo("/dashboard/settings");
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Open || Tool.Id != "google-calendar" || _hours is not null) return;
+        try { _hours = BookingFormat.OpeningHours((await Business.ReadAsync(_request?.Token ?? CancellationToken.None)).Hours) ?? "No opening hours set yet"; }
+        catch (OperationCanceledException) { }
+        catch (HttpRequestException) { _hours = "Your opening hours couldn't be read"; }
+    }
+
+    // Who can use it: the agent this page came from, the only agent, or none yet ("Not now").
+    private ToolAgentOption? ChosenAgent => Agents.FirstOrDefault(agent => agent.Id == _agentId);
+    private IReadOnlyList<ToolAction> Allowed => [.. Tool.Actions.Where(action => (_setup?.Granted ?? _current?.Granted ?? []).Contains(action.Id))];
+    private string GrantLine => ChosenAgent is not { } agent ? "You can give an agent access later, from Manage."
+        : $"{agent.Name} can {string.Join(" and ", Allowed.Select(action => char.ToLowerInvariant(action.Name[0]) + action.Name[1..]))}."
+          + (Allowed.Any(action => action.CanAskFirst) ? " It asks you first, on its task." : "") + " Change this any time in Manage.";
+    private RenderFragment WhoCanUseIt => @<div class="tool-dialog__who">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Who can use it</Typography>
+        @if (Agents.Count == 0)
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>No agents yet. Create one in AI Operations, then give it access from Manage.</Typography>
+        }
+        else
+        {
+            <SelectField FloatingLabel="Agent" Value="@(ChosenAgent?.Name ?? "Not now")" Open="_agentOpen" OpenChanged="open => _agentOpen = open" Disabled="_busy">
+                @foreach (var agent in Agents)
+                {
+                    var current = agent;
+                    <PopoverOption Label="@current.Name" Description="@current.Job" Active="@(current.Id == _agentId)" OnSelect="() => { _agentId = current.Id; _agentOpen = false; }" />
+                }
+                <PopoverOption Label="Not now" Description="Choose an agent later, from Manage." Active="@(_agentId is null)" OnSelect="() => { _agentId = null; _agentOpen = false; }" />
+            </SelectField>
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@GrantLine</Typography>
+        }
+    </div>;
+
+    protected override void OnParametersSet()
+    {
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true; _request?.Cancel(); _request?.Dispose(); _request = new();
+            _current = Connection; _setup = null; _error = null; _busy = _providerOpen = _agentOpen = false;
+            _calendly = null; _calendar = null; _sheet = null; _hours = null; _pickerOpen = false; _picked = null; _isNew = Connection is null;
+            _agentId = Agents.FirstOrDefault(agent => agent.Id == ContextAgentId)?.Id ?? (Agents.Count == 1 ? Agents[0].Id : null);
+            _step = Connection?.Status == ToolConnectionStatus.Connected ? Step.Manage : Step.Authorization;
+            _returnPending = _step == Step.Authorization && ReturnedSetup is not null;
+            _beginPending = _step == Step.Authorization && !_returnPending;
+        }
+        else if (!Open && _wasOpen) { _wasOpen = false; _request?.Cancel(); _publicKey = _secretKey = ""; }
+    }
+    private Task ContinueAsync() => _step switch
+    {
+        Step.Keys => RunAsync(SubmitKeysCoreAsync),
+        Step.Configure => RunAsync(ReviewOrConfigureAsync),
+        Step.ReviewChange => RunAsync(ConfigureCoreAsync), Step.Disconnect => RunAsync(DisconnectCoreAsync), _ => CloseAsync(),
+    };
+    private Task BeginAsync() => RunAsync(ct => BeginCoreAsync(false, false, ct));
+    private Task ChangeSetupAsync() => RunAsync(ct => BeginCoreAsync(false, false, ct));
+    private Task AnotherAccountAsync() => RunAsync(ct => BeginCoreAsync(true, true, ct));
+    private Task AllowMoreAsync() => RunAsync(ct => BeginCoreAsync(true, false, ct));
+
+    // Still allowed (changing settings): straight to the choices. Keys: Accelerate's step. Otherwise the provider.
+    private async Task BeginCoreAsync(bool signInAgain, bool anotherAccount, CancellationToken ct)
+    {
+        _setup = await Store.BeginAsync(Tool.Id, _current?.Id, signInAgain, ct);
+        _current ??= (await Store.ReadAsync(ct)).Connections.FirstOrDefault(connection => connection.Id == _setup.ConnectionId);
+        if (Tool.SignIn == ToolSignIn.Keys) { _publicKey = _secretKey = ""; Go(Step.Keys); return; }
+        if (_setup.Authorized) { await EnterConfigureAsync(_setup, ct); return; }
+        if (anotherAccount && Store is IToolProviderPreview preview) preview.UseAnotherAccount(_setup.Id);
+        Go(Step.Authorization);
+        await OpenProviderAsync(ct);
+    }
+    // For real, the page moves to the provider in this tab (it works on phones and is never blocked as a popup);
+    // the API brings people back here. In the demo, the provider's stand-in opens over the page instead.
+    private Task OpenProviderAsync(CancellationToken ct)
+    {
+        if (_setup is null) return Task.CompletedTask;
+        if (Store is IToolProviderPreview)
+        {
+            _ticked.Clear(); _ticked.UnionWith(Words.Permissions.Select(permission => permission.Key));
+            _providerOpen = true;
+        }
+        else if (_setup.AuthorizationUrl is { } url && Uri.TryCreate(url, UriKind.Absolute, out var uri) && uri.Scheme == Uri.UriSchemeHttps)
+            Nav.NavigateTo(url, forceLoad: true);
+        return Task.CompletedTask;
+    }
+    private void Tick(string key, bool on) { if (on) _ticked.Add(key); else _ticked.Remove(key); }
+
+    // The stand-in window's answers. Allowed: on to the choices, if what yára needs was kept. Closed early: nothing.
+    private Task AllowAsync() => RunAsync(async ct =>
+    {
+        if (Store is not IToolProviderPreview preview || _setup is null) return;
+        await preview.AnswerAsync(_setup.Id, Words.Tickable ? [.. _ticked] : [.. Words.Permissions.Select(permission => permission.Key)], ct);
+        _providerOpen = false;
+        await LoadBackAsync(ct);
+    });
+    private async Task LoadBackAsync(CancellationToken ct)
+    {
+        _loadPhase = 0; Go(Step.Loading);
+        StateHasChanged();
+        await AuthorizeCoreAsync(ct);
+    }
+    private Task CloseProviderEarlyAsync() => RunAsync(async ct =>
+    {
+        if (Store is not IToolProviderPreview preview || _setup is null) return;
+        await preview.AnswerAsync(_setup.Id, null, ct);
+        _providerOpen = false;
+        await NotConnectedAsync($"{Tool.Name} wasn't connected.", ct);
+    });
+    // The provider's answer, as the API heard it: allowed goes on to the choices; anything else goes back to the card.
+    private async Task AuthorizeCoreAsync(CancellationToken ct)
+    {
+        if (_setup is null) return;
+        _setup = await Store.CheckAuthorizationAsync(_setup.Id, ct);
+        if (_setup.Authorized)
+        {
+            if (_step == Step.Loading)
+            {
+                _loadPhase = 1; StateHasChanged();
+                // The demo keeps each moment on screen as long as a real round trip would take.
+                if (Store.IsPreview) await Task.Delay(900, ct);
+            }
+            await EnterConfigureAsync(_setup, ct);
+            return;
+        }
+        var needed = Words.Permissions.FirstOrDefault(permission => permission.Required && !_setup.Granted.Contains(permission.Key));
+        await NotConnectedAsync(_setup.Granted.Count > 0 && needed is not null
+            ? $"{Tool.Name} wasn't connected. yára needs “{needed.Text}”, so keep it ticked."
+            : $"{Tool.Name} wasn't connected.", ct);
+    }
+    private async Task ReturnAsync(CancellationToken ct)
+    {
+        if (ReturnedSetup is not { } id) return;
+        _setup = new(id, Guid.Empty, Tool.Id, null, null, false, [], [], false, DateTimeOffset.MaxValue, 0);
+        await LoadBackAsync(ct);
+        _current ??= (await Store.ReadAsync(ct)).Connections.FirstOrDefault(connection => connection.Id == _setup?.ConnectionId);
+    }
+    // Nothing half-made is left behind: a connection started here and refused is removed, so the card stays as it was.
+    private async Task NotConnectedAsync(string? message, CancellationToken ct)
+    {
+        if (_isNew && _current is { Status: ToolConnectionStatus.SetupIncomplete } unfinished)
+        {
+            try { await Store.DisconnectAsync(unfinished.Id, unfinished.Revision, ct); } catch (HttpRequestException) { }
+        }
+        if (message is not null) await OnNotConnected.InvokeAsync(message);
+        await OnClose.InvokeAsync();
+    }
+    private async Task EnterConfigureAsync(ToolSetup setup, CancellationToken ct)
+    {
+        var saved = _current?.Settings;
+        switch (Tool.Id)
+        {
+            case "calendly": _calendly = CalendlyDraft.From(setup, saved); break;
+            case "google-calendar": _calendar = CalendarDraft.From(setup); break;
+            case "google-sheets":
+                // The sheets already chosen, as they are in Google now; one that's gone or no longer shared drops out.
+                var found = new List<SheetDetails>();
+                foreach (var kept in saved?.Sheet?.Sheets ?? [])
+                {
+                    try { found.Add(await Store.ReadSheetAsync(setup.Id, kept.SpreadsheetId, ct)); }
+                    catch (HttpRequestException exception) when (exception.StatusCode is System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.Forbidden) { }
+                }
+                _sheet = SheetDraft.From(saved?.Sheet, found);
+                break;
+        }
+        Go(Step.Configure);
+    }
+    private void OpenPicker() { if (_busy || _setup is null) return; _picked = null; _pickerOpen = true; }
+    private void ClosePicker() { _pickerOpen = false; _picked = null; _focusPending = true; }
+    private Task PickAsync() => RunAsync(async ct =>
+    {
+        if (_setup is null || _sheet is null || _picked is not { } id) return;
+        _sheet.Add(await Store.ReadSheetAsync(_setup.Id, id, ct));
+        ClosePicker();
+    });
+    private async Task SubmitKeysCoreAsync(CancellationToken ct)
+    {
+        if (_setup is null) return;
+        if (string.IsNullOrWhiteSpace(_publicKey) || string.IsNullOrWhiteSpace(_secretKey)) { _error = "Paste both keys from Accelerate."; return; }
+        _setup = await Store.SubmitKeysAsync(_setup.Id, _publicKey, _secretKey, ct);
+        _publicKey = _secretKey = "";
+        // A first connection shows it connected, with who can use it, before Finish; new keys just save.
+        if (!WasConnected) { Go(Step.Configure); return; }
+        await ReviewOrConfigureAsync(ct);
+    }
+    private string? DraftProblem => Tool.Id switch
+    {
+        "calendly" => _calendly?.Problem, "google-calendar" => _calendar?.Problem, "google-sheets" => _sheet?.Problem,
+        _ => null,
+    };
+    private ToolSettings? Settings => Tool.Id switch
+    {
+        "calendly" => _calendly?.ToSettings(), "google-calendar" => _calendar?.ToSettings(), "google-sheets" => _sheet?.ToSettings(),
+        _ => null,
+    };
+    private Task ReviewOrConfigureAsync(CancellationToken ct)
+    {
+        if (DraftProblem is { } problem) { _error = problem; return Task.CompletedTask; }
+        if (ChangesAccount && AgentCount > 0) { Go(Step.ReviewChange); return Task.CompletedTask; }
+        return ConfigureCoreAsync(ct);
+    }
+    // A first connection is done in this window, agent included; a change goes back to Manage.
+    private async Task ConfigureCoreAsync(CancellationToken ct)
+    {
+        if (_setup is null) return;
+        var wasConnected = WasConnected;
+        _current = await Store.ConfigureAsync(_setup.Id, new(Settings, _setup.ConnectionRevision), ct);
+        _setup = null;
+        if (!wasConnected)
+        {
+            var note = await GrantChosenAgentAsync(_current, ct);
+            await OnChanged.InvokeAsync($"{Tool.Name} connected.{note}");
+            await OnClose.InvokeAsync();
+            return;
+        }
+        await OnChanged.InvokeAsync($"{Tool.Name} updated.");
+        Go(Step.Manage);
+    }
+    private async Task DisconnectCoreAsync(CancellationToken ct)
+    {
+        if (_current is null) return;
+        await Store.DisconnectAsync(_current.Id, _current.Revision, ct);
+        await OnChanged.InvokeAsync($"{Tool.Name} disconnected. Existing records are kept.");
+        await OnClose.InvokeAsync();
+    }
+
+    // Everything the provider allowed, asking first where that's offered. An agent that already books through
+    // another tool keeps that one, and here only offers times.
+    private async Task<string> GrantChosenAgentAsync(ToolConnection connection, CancellationToken ct)
+    {
+        if (!AsksWho || ChosenAgent is not { } agent) return "";
+        var actions = Tool.Actions.Where(action => connection.Granted.Contains(action.Id)).ToList();
+        var mode = actions.Any(action => action.CanAskFirst) ? ToolActionMode.AskFirst : ToolActionMode.Automatic;
+        try { await Store.SetAccessAsync(new(agent.Id, connection.Id, [.. actions.Select(action => action.Id)], mode, 0), ct); return $" {agent.Name} can use it."; }
+        catch (HttpRequestException)
+        {
+            var offersOnly = actions.Where(action => action.Id is not ("create-bookings" or "create-events")).Select(action => action.Id).ToArray();
+            if (offersOnly.Length == actions.Count || offersOnly.Length == 0) return $" Give {agent.Name} access from Manage.";
+            try { await Store.SetAccessAsync(new(agent.Id, connection.Id, offersOnly, mode, 0), ct); }
+            catch (HttpRequestException) { return $" Give {agent.Name} access from Manage."; }
+            return $" {agent.Name} already books through another tool, so here it only offers times.";
+        }
+    }
+    private void BackFromReview() => Go(Step.Configure);
+    private void Changed() => _error = null;
+
+    // What was chosen, said plainly; the agents' access is listed separately.
+    private IEnumerable<(string Label, string Value)> Facts(ToolConnection connection)
+    {
+        var settings = connection.Settings;
+        switch (Tool.Id)
+        {
+            case "accelerate":
+                yield return ("Account", connection.Summary ?? "Registered business");
+                break;
+            case "calendly":
+                var services = settings?.Services ?? [];
+                yield return ("Services", string.Join(", ", services.Select(service => service.Name)));
+                yield return ("Customers book", !connection.BooksInChat ? "Through booking links"
+                    : services.Any(service => service.Paid) ? "In the chat, with a booking link for deposits" : "In the chat");
+                break;
+        }
+    }
+
+    private async Task RunAsync(Func<CancellationToken, Task> action)
+    {
+        if (_busy || !CanManage || !Store.Available) return;
+        _busy = true; _error = null; _restart = false;
+        try { await action(_request?.Token ?? CancellationToken.None); }
+        catch (OperationCanceledException) { }
+        catch (HttpRequestException) when (_step == Step.Loading) { _error = $"Your {Tool.Name} account couldn't be read. Try again."; _loadFailed = true; }
+        catch (HttpRequestException exception) { _restart = exception.StatusCode is System.Net.HttpStatusCode.Gone or System.Net.HttpStatusCode.NotFound && _step != Step.Configure; _error = exception.StatusCode is { } status && (int)status < 500 ? exception.Message : "This couldn't be completed. Check your connection and try again."; }
+        catch (System.Text.Json.JsonException) { _error = "The connection couldn't be confirmed. Close this window and check its status before trying again."; }
+        finally { if (!_disposed) { _busy = false; _focusPending = true; } }
+    }
+    private Task RetryLoadAsync() { _loadFailed = false; return RunAsync(LoadBackAsync); }
+    private void Go(Step step) { _step = step; _error = null; _focusPending = true; }
+    private Task OpenAgents() => _busy || _current is null ? Task.CompletedTask : OnManageAccess.InvokeAsync(_current);
+    private Task TryTaskAsync() => _busy || _current is null ? Task.CompletedTask : OnTry.InvokeAsync(_current);
+    private void OpenAgentJobs() => Nav.NavigateTo(string.IsNullOrEmpty(ContextAgentId) ? "/dashboard/ai-operations" : $"/dashboard/ai-operations/{Uri.EscapeDataString(ContextAgentId)}?tab=job");
+    // Cancelling a new connection before Finish leaves nothing half-made: no "Setup incomplete" row to clear up.
+    private Task CloseAsync() => _busy ? Task.CompletedTask
+        : _isNew && Unfinished && _step is Step.Keys or Step.Configure ? RunAsync(ct => NotConnectedAsync(null, ct)) : OnClose.InvokeAsync();
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_beginPending && Open) { _beginPending = false; await BeginAsync(); StateHasChanged(); }
+        if (_returnPending && Open) { _returnPending = false; await RunAsync(ReturnAsync); StateHasChanged(); }
+        if (_focusPending && Open && !_providerOpen && !_pickerOpen && _step != Step.Authorization) { _focusPending = false; await _content.FocusAsync(); }
+    }
+    public void Dispose() { _disposed = true; _request?.Cancel(); _request?.Dispose(); }
+}

@@ -1,0 +1,104 @@
+/* Tools: the same page frame as Customers and Tasks (designer, 31 October 2026): the gutter outside, then
+   everything on one 1440 measure, centred, so the heading and left edge stay put between pages. */
+.workspace-tools {
+  /* Gaps in the token set: no page-gutter, page-width, readable-measure or card-width scale. The gutter
+     and the cap are the other pages'. */
+  --ds-tools-gutter: clamp(28px, 4vw, 66px);
+  --ds-tools-max: 1440px;
+  --ds-tools-measure: 680px;
+
+  display: grid;
+  padding: var(--spacing-4xl) var(--ds-tools-gutter) var(--spacing-6xl);
+  color: var(--colors-text-secondary);
+}
+
+/* One left edge for the eye to follow down the page. */
+.workspace-tools > ::deep * { width: min(var(--ds-tools-max), 100%); min-width: 0; margin-inline: auto; }
+.workspace-tools ::deep h1, .workspace-tools ::deep h2, .workspace-tools ::deep h3, .workspace-tools ::deep h4, .workspace-tools ::deep p { margin: var(--spacing-none); }
+.workspace-tools ::deep h1, .workspace-tools ::deep h2, .workspace-tools ::deep h3, .workspace-tools ::deep h4 { color: var(--colors-text-primary); }
+
+/* The title and its line on the left; Back to an agent's job level with the line's foot. */
+.workspace-tools__header {
+  display: flex;
+  gap: var(--spacing-3xl);
+  align-items: flex-end;
+  justify-content: space-between;
+  /* A section heading comes next, not a controls row: the larger step of the 48/16/20 rhythm. */
+  margin-bottom: var(--spacing-3xl);
+  outline: none;
+}
+.workspace-tools__heading { display: grid; gap: var(--spacing-sm); }
+.workspace-tools__heading ::deep .workspace-tools__lede { max-width: var(--ds-tools-measure); color: var(--colors-text-secondary); }
+
+.workspace-tools__section + .workspace-tools__section { margin-top: var(--spacing-3xl); }
+.workspace-tools__section-head { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); margin-bottom: var(--spacing-lg); }
+.workspace-tools__section-head > ::deep span { color: var(--colors-text-muted); }
+
+/* Two cards across, as the first draft arranged them (designer, 31 October 2026); one on a phone. */
+.workspace-tools__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-xl); }
+.workspace-tools__card {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.workspace-tools__card > header { display: flex; gap: var(--spacing-md); align-items: center; }
+.workspace-tools__card > header > div { display: grid; gap: var(--spacing-2xs); }
+.workspace-tools__card > header ::deep p { color: var(--colors-text-muted); }
+.workspace-tools__card-copy { display: grid; gap: var(--spacing-sm); align-content: start; }
+.workspace-tools__card-copy > ::deep p { max-width: var(--ds-tools-measure); }
+/* Refused or closed early at the provider: said quietly on the card, with Try again on its button. */
+.workspace-tools__not-connected { display: flex; align-items: center; gap: var(--spacing-xs); margin: var(--spacing-none); color: var(--colors-text-muted); }
+/* Connect, at the foot of the card as the first draft placed it. Limits and requirements are explained in the
+   connect window, not on the card (designer, 1 November 2026). */
+.workspace-tools__card > footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-lg);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+  color: var(--colors-text-muted);
+}
+
+.workspace-tools__connected { background: var(--colors-surface-card); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-2xl); }
+.workspace-tools__connection { display: flex; align-items: center; gap: var(--spacing-lg); padding: var(--spacing-xl); }
+.workspace-tools__connection > ::deep button { flex-shrink: 0; }
+.workspace-tools__connection + .workspace-tools__connection { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.workspace-tools__connection-words { display: grid; flex: 1; gap: var(--spacing-xs); min-width: 0; overflow-wrap: anywhere; }
+.workspace-tools__connection-words > div { display: flex; gap: var(--spacing-sm); flex-wrap: wrap; align-items: center; }
+.workspace-tools__connection-words > ::deep p:last-child { color: var(--colors-text-muted); }
+
+/* Said once, under everything: agents only get what they're given. */
+.workspace-tools__footnote { display: flex; gap: var(--spacing-sm); justify-content: center; align-items: center; margin-top: var(--spacing-2xl); color: var(--colors-text-muted); }
+.workspace-tools__footnote > ::deep svg { flex: 0 0 auto; }
+
+@media (max-width: 1024px) {
+  .workspace-tools__card { padding: var(--spacing-xl); }
+  .workspace-tools__connection { flex-wrap: wrap; }
+}
+
+@media (max-width: 760px) {
+  .workspace-tools__grid { grid-template-columns: minmax(0, 1fr); }
+  .workspace-tools__header, .workspace-tools__section-head { flex-direction: column; align-items: stretch; gap: var(--spacing-lg); }
+  .workspace-tools__connection-words { flex-basis: 60%; }
+  .workspace-tools__footnote { align-items: start; }
+}
+
+/* A connected tool's agents, as overlapping faces. */
+.workspace-tools__faces {
+  /* Gaps in the token set: no avatar size for a row of faces, and no overlap step. */
+  --ds-tools-face: 28px;
+  --ds-tools-face-overlap: -6px;
+
+  display: flex;
+  margin: var(--spacing-xs) var(--spacing-none) var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+.workspace-tools__faces li { display: grid; border: var(--ds-hairline) solid var(--colors-surface-card); border-radius: var(--radius-radius-full); }
+.workspace-tools__faces li + li { margin-left: var(--ds-tools-face-overlap); }
+.workspace-tools__faces img { width: var(--ds-tools-face); height: var(--ds-tools-face); border-radius: var(--radius-radius-full); object-fit: cover; }

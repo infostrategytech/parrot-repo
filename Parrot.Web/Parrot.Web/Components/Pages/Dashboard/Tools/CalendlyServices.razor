@@ -1,0 +1,50 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+
+@* What we found in their Calendly, to pick from (designer, 2 November 2026): each event type as a row with its
+   length and place, all on to start, and nothing else to read. *@
+<div class="tool-choices calendly-services" role="group" aria-labelledby="@_titleId">
+    <div class="calendly-services__head">
+        <div>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@_titleId">Services your agent can offer</Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="p">@($"Your agent checks open times and books these for customers · {Draft.Services.Count} of {Services.Count} selected")</Typography>
+        </div>
+        @if (Draft.Services.Count < Services.Count)
+        {
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Disabled" @onclick="AllAsync">Select all</Button>
+        }
+    </div>
+    <ul class="calendly-services__list">
+        @foreach (var service in Services)
+        {
+            var current = service;
+            var on = Draft.Services.Contains(current.Id);
+            <li class="@(on ? "calendly-services__row is-on" : "calendly-services__row")">
+                <Checkbox State="@(on ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                          StateChanged="state => SetAsync(current.Id, state == CheckboxState.Checked)"
+                          Label="@current.Name" Description="@current.Detail" Disabled="Disabled" />
+            </li>
+        }
+    </ul>
+</div>
+
+@code {
+    private readonly string _titleId = "calendly-services-" + Guid.NewGuid().ToString("N");
+    [Parameter, EditorRequired] public IReadOnlyList<ToolResource> Services { get; set; } = [];
+    [Parameter] public bool BooksInChat { get; set; }
+    [Parameter, EditorRequired] public CalendlyDraft Draft { get; set; } = default!;
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private Task SetAsync(string id, bool on)
+    {
+        if (on) Draft.Services.Add(id); else Draft.Services.Remove(id);
+        return OnChanged.InvokeAsync();
+    }
+
+    private Task AllAsync()
+    {
+        Draft.Services.UnionWith(Services.Select(service => service.Id));
+        return OnChanged.InvokeAsync();
+    }
+}
