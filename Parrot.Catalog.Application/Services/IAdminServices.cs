@@ -64,6 +64,8 @@ public interface IProductAdminService
 
     Task<ProductAdminResponse> RetireAsync(Guid id, CancellationToken ct);
 
+    Task<ProductAdminResponse> ReactivateAsync(Guid id, CancellationToken ct);
+
     Task<VariantResponse> CreateVariantAsync(Guid productId, CreateVariantRequest request, CancellationToken ct);
 
     Task<VariantResponse> UpdateVariantAsync(Guid productId, Guid variantId, UpdateVariantRequest request, CancellationToken ct);

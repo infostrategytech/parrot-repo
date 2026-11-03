@@ -56,6 +56,7 @@ public static class CatalogInfrastructureExtensions
         services.AddScoped<IAvailabilityAdminService, AvailabilityAdminService>();
         services.AddScoped<IRelationshipAdminService, RelationshipAdminService>();
         services.AddScoped<IMediaAdminService, MediaAdminService>();
+        services.AddScoped<IWhatsAppImportService, WhatsAppImportService>();
         services.AddScoped<IItemService, ItemService>();
         services.AddScoped<ITypeVersionMigrator, TypeVersionMigrator>();
         services.AddScoped<ICatalogReadService, CatalogReadService>();
