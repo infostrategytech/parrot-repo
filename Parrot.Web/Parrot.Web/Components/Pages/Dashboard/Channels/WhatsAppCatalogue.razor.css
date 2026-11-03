@@ -47,6 +47,7 @@
 /* Product table rows — 3 columns: item, price, availability */
 .wac__row {
   --ds-table-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  /* Gaps in the token set: no avatar-size token yet. */
   --ds-wac-thumb: 48px;
 }
 

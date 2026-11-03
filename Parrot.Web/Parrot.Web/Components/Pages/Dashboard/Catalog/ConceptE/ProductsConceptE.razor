@@ -8,6 +8,8 @@
 @inject ToastService Toasts
 @inject NavigationManager Nav
 @inject Parrot.Web.Features.Dashboard.Channels.State.ChannelsState ChannelState
+@inject Parrot.Web.Features.Dashboard.Channels.Services.ChannelStatusLoader ChannelStatus
+@inject AuthState AuthState
 
 @* Products & Services, Concept E (designer, 25–26 October 2026), kept clean and simple. It's what the agent
    knows about what the business sells and for how much, so it can answer, suggest and take payment; not a
@@ -422,6 +424,20 @@ else
     {
         await LoadAsync();
         await FindNewPostsAsync();
+    }
+
+    // Which channels are connected is read here too, not only when the Channels
+    // page ran: the "Import from Channel's Catalogue" option has to know whether
+    // WhatsApp is connected before it can be offered at all.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (AuthState.CurrentUser?.Token is { Length: > 0 } token)
+        {
+            try { await ChannelStatus.RefreshAsync(token, CancellationToken.None); }
+            catch (OperationCanceledException) { return; }
+            StateHasChanged();
+        }
     }
 
     // The demo: posts not yet seen, not added and not over 3 months old. For real, the backend finds new posts
