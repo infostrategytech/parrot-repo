@@ -39,9 +39,8 @@ public static class NavMap
         new("/dashboard/tasks", "Tasks", IconName.RiClipboardFill, "Tasks", AccessRules.For(AccessRules.Tasks)),
         new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels", AccessRules.For(AccessRules.Channels)),
         new("/dashboard/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI", AccessRules.For(AccessRules.Agents)),
-        // The apps the business connects for its agents: managing them is managing the business.
+        // The apps the business connects for its agents, where the unused Campaigns entry was; managing them is managing the business.
         new("/dashboard/tools", "Tools", IconName.RiExchangeBoxFill, "Tools", AccessRules.For(AccessRules.Business)),
-        new(null, "Campaigns", IconName.RiMegaphoneFill, "Campaigns"),
         new("/dashboard/insights", "Insights", IconName.RiBarChartBoxFill, "Insights", AccessRules.For(AccessRules.Insights))
     ];
 
