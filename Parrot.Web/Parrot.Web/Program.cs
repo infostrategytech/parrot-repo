@@ -186,8 +186,17 @@ builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.BusinessKind>(
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.AgentReadiness>();
 // Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
-// Products & Services: no catalog API connected yet, so items last for the session (catalog-backend-requests).
-builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore, Parrot.Web.Features.Dashboard.Catalog.SessionCatalogStore>();
+// Products & Services: kept by the catalog service (CatalogApi:BaseUrl), called as the signed-in person.
+// Without one, items last for the session.
+if (Uri.TryCreate(builder.Configuration["CatalogApi:BaseUrl"], UriKind.Absolute, out var catalogUri))
+    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore>(sp => new Parrot.Web.Features.Dashboard.Catalog.ApiCatalogStore(
+        new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>())
+        {
+            InnerHandler = new SessionExpiryHandler(sp.GetRequiredService<AuthState>()) { InnerHandler = new HttpClientHandler() },
+        }) { BaseAddress = catalogUri },
+        sp.GetRequiredService<AuthState>()));
+else
+    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore, Parrot.Web.Features.Dashboard.Catalog.SessionCatalogStore>();
 // The backend does not expose owned social content or extraction yet: posts and post links are not offered.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDiscovery, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDiscovery>();
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDraftReader, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDraftReader>();

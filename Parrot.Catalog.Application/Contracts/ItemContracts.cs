@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Text.Json;
 using Parrot.Catalog.Domain.Enums;
 
 namespace Parrot.Catalog.Application.Contracts;
@@ -13,6 +14,8 @@ public enum ItemKind
 {
     Product,
     Service,
+    Food,
+    Digital,
 }
 
 public enum PricingMode
@@ -30,8 +33,8 @@ public enum ItemFilter
     Draft,
 }
 
-[Description("One way to buy the item, such as a size, with its price. Send id to keep an existing variant; leave it out to add one.")]
-public sealed record ItemVariantInput(string Name, decimal Amount, Guid? Id = null);
+[Description("One way to buy the item, such as a size, with its price. Send id to keep an existing variant; leave it out to add one. available false: sold out for now. amount may be left out only on a draft.")]
+public sealed record ItemVariantInput(string Name, decimal? Amount, Guid? Id = null, bool Available = true);
 
 [Description("single: amount, optionally per (\"person\", \"hour\"). variants: one price each. on_request: no amount; the business quotes it when asked.")]
 public sealed record ItemPricingInput(
@@ -44,17 +47,28 @@ public sealed record ItemPricingInput(
 [Description("in_stock: optionally quantity. made_to_order: optionally lead_time_days. bookings: neither. available false takes it off offer without deleting it.")]
 public sealed record ItemAvailabilityInput(AvailabilityMode Mode, bool Available = true, int? Quantity = null, int? LeadTimeDays = null);
 
-[Description("What the Add an item form sends. status draft saves a draft; published makes it live, which needs the publish permission.")]
+[Description("What the Add an item form sends. status draft saves a draft; published makes it live, which needs the publish permission. "
+    + "A draft may leave out amounts and availability. photos: keys from POST items/photos, cover first; leave it out to keep the photos as they are. "
+    + "form_draft: the form as left, kept for a draft only.")]
 public sealed record SaveItemRequest(
     string Name,
     ItemKind Kind,
     ItemPricingInput Pricing,
-    ItemAvailabilityInput Availability,
+    ItemAvailabilityInput? Availability,
     Guid? CategoryId = null,
     string? Description = null,
-    ProductStatus Status = ProductStatus.Draft);
+    ProductStatus Status = ProductStatus.Draft,
+    [property: Description("A service's length in the owner's words, such as \"3 hours\".")] string? Duration = null,
+    [property: Description("How long making it takes, in the owner's words, such as \"About 1 week\".")] string? LeadTime = null,
+    IReadOnlyList<string>? Photos = null,
+    JsonElement? FormDraft = null,
+    [property: Description("Kept but not offered, unlike sold out for now. A hidden item's availability is off.")] bool Hidden = false);
 
-public sealed record ItemVariant(Guid Id, string Name, decimal? Amount);
+[Description("available false: sold out for now.")]
+public sealed record ItemVariant(Guid Id, string Name, decimal? Amount, bool Available = true);
+
+[Description("key goes back in an item's photos; url is where it can be seen.")]
+public sealed record ItemPhoto(string Key, string Url);
 
 [Description("mode is null when no price has been set. min_amount and max_amount span the variants' prices.")]
 public sealed record ItemPricing(PricingMode? Mode, string Currency, decimal? Amount, string? Per, decimal? MinAmount, decimal? MaxAmount, IReadOnlyList<ItemVariant> Variants);
@@ -74,7 +88,12 @@ public sealed record ItemResponse(
     ItemPricing Pricing,
     ItemAvailability? Availability,
     DateTime CreatedAt,
-    DateTime UpdatedAt);
+    DateTime UpdatedAt,
+    string? Duration = null,
+    string? LeadTime = null,
+    IReadOnlyList<ItemPhoto>? Photos = null,
+    JsonElement? FormDraft = null,
+    bool Hidden = false);
 
 [Description("Counts for the list's tabs, after the category and search filters.")]
 public sealed record ItemCounts(int All, int Available, int Unavailable, int Draft);

@@ -328,6 +328,8 @@ services:
       # Shows "Continue with Facebook" on Sign in and Sign up; turn on with the API's Facebook app.
       Sso__Facebook: ${FACEBOOK_SSO_ENABLED:-false}
       OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
+      # Products & Services, kept by the catalog service.
+      CatalogApi__BaseUrl: http://catalog-api:8080/
       # The AI service as the web app calls it, with the owner's own token (agents, channels,
       # orientation). It must verify Parrot's tokens: OMNI_JWT_SECRET = JWT_SECRET, issuer
       # ParrotApi, audience ParrotApp.
@@ -339,6 +341,7 @@ services:
     depends_on:
       - parrot-api
       - parrot-grpc
+      - catalog-api
     networks: [parrot]
 
   # ---- Catalog service ------------------------------------------------------
@@ -412,6 +415,13 @@ services:
       # Each request with a Parrot session token is checked against the member's
       # current access, so a removed member or a changed role applies at once.
       Catalog__Auth__AccessCheckUrl: http://parrot-api:8080/
+      # Items' photos: the API's public bucket in MinIO, read by the browser through the published port.
+      Catalog__Photos__Bucket: parrot
+      Catalog__Photos__Region: us-east-1
+      Catalog__Photos__ServiceUrl: http://minio:9000
+      Catalog__Photos__PublicBaseUrl: http://localhost:9000/parrot
+      Catalog__Photos__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
+      Catalog__Photos__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
     ports:
       - "5240:8080"
     depends_on:

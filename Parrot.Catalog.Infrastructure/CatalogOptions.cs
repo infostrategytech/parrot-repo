@@ -11,6 +11,8 @@ public sealed class CatalogOptions
 
     public CatalogRelayOptions Relay { get; set; } = new CatalogRelayOptions();
 
+    public CatalogPhotoOptions Photos { get; set; } = new CatalogPhotoOptions();
+
     public bool ApplyMigrations { get; set; }
 }
 
@@ -60,4 +62,22 @@ public sealed class CatalogRelayOptions
 
     /// <summary>"Kafka" or "Null" (logs and drops; development only).</summary>
     public string Bus { get; set; } = "Kafka";
+}
+
+/// <summary>The S3 bucket items' photos go in. With no bucket, photos can't be added.</summary>
+public sealed class CatalogPhotoOptions
+{
+    public string Bucket { get; set; } = string.Empty;
+
+    public string Region { get; set; } = "us-east-1";
+
+    /// <summary>An S3-compatible endpoint such as MinIO; empty for Amazon's own.</summary>
+    public string ServiceUrl { get; set; } = string.Empty;
+
+    /// <summary>Where browsers read the bucket from, such as https://cdn.example.com or http://localhost:9000/parrot.</summary>
+    public string PublicBaseUrl { get; set; } = string.Empty;
+
+    public string AccessKey { get; set; } = string.Empty;
+
+    public string SecretKey { get; set; } = string.Empty;
 }
