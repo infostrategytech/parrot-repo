@@ -948,6 +948,24 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasColumnType("character varying(20000)")
                         .HasColumnName("description");
 
+                    b.Property<string>("Duration")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("duration");
+
+                    b.Property<string>("FormDraft")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("form_draft");
+
+                    b.Property<bool>("Hidden")
+                        .HasColumnType("boolean")
+                        .HasColumnName("hidden");
+
+                    b.Property<string>("LeadTime")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("lead_time");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -1057,6 +1075,8 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                             t.HasCheckConstraint("ck_products_attributes_object", "jsonb_typeof(attributes) = 'object'");
 
                             t.HasCheckConstraint("ck_products_attributes_size", "pg_column_size(attributes) <= 65536");
+
+                            t.HasCheckConstraint("ck_products_form_draft_object", "form_draft IS NULL OR jsonb_typeof(form_draft) = 'object'");
 
                             t.HasCheckConstraint("ck_products_status", "status IN ('draft', 'review', 'published', 'retired')");
 

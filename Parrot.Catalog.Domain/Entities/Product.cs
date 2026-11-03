@@ -32,6 +32,19 @@ public sealed class Product : ITenantScoped, ITimestamped, ISoftDeletable
     // Derived: name, sku, description and searchable attribute values (ADR-002).
     public string SearchText { get; set; } = string.Empty;
 
+    // A service's length as the owner says it ("About 1 week", "3 hours").
+    public string? Duration { get; set; }
+
+    // A made-to-order wait as the owner says it; availability keeps a day count when there is one.
+    public string? LeadTime { get; set; }
+
+    // Kept but not offered (a seasonal item, one coming back), unlike sold out for now. Its availability is off while hidden.
+    public bool Hidden { get; set; }
+
+    // The dashboard's unfinished form (amounts and variant rows as typed), so a draft resumes as it was left.
+    // A JSON object the dashboard owns; dropped once the item goes live.
+    public string? FormDraft { get; set; }
+
     // Incremented on every product_versions snapshot.
     public int Version { get; set; }
 

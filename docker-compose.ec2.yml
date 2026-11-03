@@ -378,8 +378,11 @@ services:
       # Shows "Continue with Facebook" on Sign in and Sign up; turn on with the API's Facebook app.
       Sso__Facebook: ${FACEBOOK_SSO_ENABLED:-false}
       OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
+      # Products & Services, kept by the catalog service, over the compose network.
+      CatalogApi__BaseUrl: http://catalog-api:8080/
     depends_on:
       - parrot-api
+      - catalog-api
       - parrot-grpc
     networks: [parrot]
 
@@ -437,6 +440,13 @@ services:
       JwtSettings__Secret: ${JWT_SECRET}
       JwtSettings__Issuer: ParrotApi
       JwtSettings__Audience: ParrotApp
+      # Items' photos: the same public bucket as the API's image uploads.
+      Catalog__Photos__Bucket: ${STORAGE_BUCKET:-parrot}
+      Catalog__Photos__Region: ${STORAGE_REGION:-us-east-1}
+      Catalog__Photos__ServiceUrl: ${STORAGE_SERVICE_URL-http://minio:9000}
+      Catalog__Photos__PublicBaseUrl: ${STORAGE_PUBLIC_BASE_URL:-${PUBLIC_SCHEME:-https}://${API_DOMAIN}/media}
+      Catalog__Photos__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
+      Catalog__Photos__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
     ports:
       - "127.0.0.1:5240:8080"
     # The image's own check runs every 30 s; the relay waits on this one.

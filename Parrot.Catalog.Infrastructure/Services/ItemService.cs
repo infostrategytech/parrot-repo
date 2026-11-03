@@ -1,6 +1,7 @@
 using System.Linq.Expressions;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using Parrot.Catalog.Application.Contracts;
 using Parrot.Catalog.Application.Pagination;
 using Parrot.Catalog.Application.Security;
@@ -17,22 +18,38 @@ namespace Parrot.Catalog.Infrastructure.Services;
 /// <summary>
 /// The dashboard's items. Each write runs the existing admin services inside one
 /// transaction, so an item is saved whole or not at all, and keeps their validation,
-/// audit, derived data and events. The workspace's catalog and its two plain product
-/// types are created the first time they are needed.
+/// audit, derived data and events. The workspace's catalog and its plain product
+/// types (one per kind) are created the first time they are needed. Photos' files are
+/// in a bucket: one taken off an item, or on a deleted item, is removed once the change
+/// is saved.
 /// </summary>
 public sealed class ItemService : AdminServiceBase, IItemService
 {
     public const string CatalogKey = "main";
     public const string ProductTypeKey = "general_product";
     public const string ServiceTypeKey = "general_service";
+    public const string FoodTypeKey = "general_food";
+    public const string DigitalTypeKey = "general_digital";
     public const string DefaultCurrency = "NGN";
+    public const int MaxPhotos = 10;
+    public const long MaxPhotoBytes = 5 * 1024 * 1024;
 
     // The region an item's own availability row covers; rows for other regions are left alone.
     private const string AllRegions = "*";
     private const string OfferName = "Standard";
     private const int MaxVariants = 50;
+    private const int MaxWordsLength = 64;
+    private const int MaxFormDraftLength = 20000;
 
     private static readonly JsonElement NoAttributes = JsonDocument.Parse("{}").RootElement.Clone();
+
+    // The photo types a browser shows, by the extension their key ends in.
+    private static readonly Dictionary<string, string> PhotoTypes = new(StringComparer.Ordinal)
+    {
+        ["image/jpeg"] = "jpg",
+        ["image/png"] = "png",
+        ["image/webp"] = "webp",
+    };
 
     private readonly ICatalogAdminService _catalogs;
     private readonly IProductTypeAdminService _types;
@@ -40,6 +57,9 @@ public sealed class ItemService : AdminServiceBase, IItemService
     private readonly IProductAdminService _products;
     private readonly IOfferAdminService _offers;
     private readonly IAvailabilityAdminService _availability;
+    private readonly IMediaAdminService _media;
+    private readonly IItemPhotoStorage _photos;
+    private readonly ILogger<ItemService> _log;
 
     public ItemService(
         CatalogDbContext db,
@@ -51,7 +71,10 @@ public sealed class ItemService : AdminServiceBase, IItemService
         ICategoryAdminService categories,
         IProductAdminService products,
         IOfferAdminService offers,
-        IAvailabilityAdminService availability)
+        IAvailabilityAdminService availability,
+        IMediaAdminService media,
+        IItemPhotoStorage photos,
+        ILogger<ItemService> log)
         : base(db, tenant, clock, metrics)
     {
         _catalogs = catalogs;
@@ -60,7 +83,13 @@ public sealed class ItemService : AdminServiceBase, IItemService
         _products = products;
         _offers = offers;
         _availability = availability;
+        _media = media;
+        _photos = photos;
+        _log = log;
     }
+
+    // An item's photos live under the workspace's own prefix, which the media table also requires.
+    private string PhotoPrefix => $"tenants/{TenantId:D}/items/";
 
     public async Task<ItemListResponse> ListAsync(ItemListQuery query, CancellationToken ct)
     {
@@ -117,57 +146,73 @@ public sealed class ItemService : AdminServiceBase, IItemService
         return (await ShapeAsync([product], ct))[0];
     }
 
-    public Task<ItemResponse> CreateAsync(SaveItemRequest request, CancellationToken ct) => WriteAsync(async c =>
+    public async Task<ItemResponse> CreateAsync(SaveItemRequest request, CancellationToken ct)
     {
-        RequireSaveableStatus(request.Status);
-        ValidatePricing(request.Pricing);
-        ValidateAvailability(request.Availability);
-
-        CatalogEntity catalog = await EnsureCatalogAsync(c);
-        Guid typeId = await EnsureTypeAsync(request.Kind, c);
-        string name = Guards.RequireText(request.Name, "name", Limits.MaxNameLength);
-        ProductAdminResponse product = await _products.CreateAsync(
-            new CreateProductRequest(catalog.Id, typeId, request.CategoryId, NewSku("ITM"), name, NoAttributes, await FreeSlugAsync(catalog.Id, name, c), request.Description),
-            c);
-
-        await ApplyPricingAsync(product.Id, catalog, request.Pricing, c);
-        await ApplyAvailabilityAsync(product.Id, request.Availability, c);
-        if (request.Status == ProductStatus.Published)
+        ValidateSave(request);
+        return await WriteAsync(async c =>
         {
-            await _products.PublishAsync(product.Id, c);
-        }
+            CatalogEntity catalog = await EnsureCatalogAsync(c);
+            Guid typeId = await EnsureTypeAsync(request.Kind, c);
+            string name = Guards.RequireText(request.Name, "name", Limits.MaxNameLength);
+            ProductAdminResponse product = await _products.CreateAsync(
+                new CreateProductRequest(catalog.Id, typeId, request.CategoryId, NewSku("ITM"), name, NoAttributes, await FreeSlugAsync(catalog.Id, name, c), request.Description),
+                c);
 
-        return await GetAsync(product.Id, c);
-    }, ct);
+            await ApplyFormFieldsAsync(product.Id, request, c);
+            await ApplyPricingAsync(product.Id, catalog, request.Pricing, c);
+            if (Offered(request) is { } availability)
+            {
+                await ApplyAvailabilityAsync(product.Id, availability, c);
+            }
 
-    public Task<ItemResponse> UpdateAsync(Guid id, SaveItemRequest request, CancellationToken ct) => WriteAsync(async c =>
+            await ApplyPhotosAsync(product.Id, request.Photos, c);
+            if (request.Status == ProductStatus.Published)
+            {
+                await _products.PublishAsync(product.Id, c);
+            }
+
+            return await GetAsync(product.Id, c);
+        }, ct);
+    }
+
+    public async Task<ItemResponse> UpdateAsync(Guid id, SaveItemRequest request, CancellationToken ct)
     {
-        RequireSaveableStatus(request.Status);
-        ValidatePricing(request.Pricing);
-        ValidateAvailability(request.Availability);
-
-        ProductAdminResponse product = await _products.GetAsync(id, c);
-        if (KindOf(product.Type.Kind) != request.Kind)
+        ValidateSave(request);
+        List<string> removed = [];
+        ItemResponse saved = await WriteAsync(async c =>
         {
-            throw new ValidationException("kind cannot change once an item exists; add a new item instead.");
-        }
+            ProductAdminResponse product = await _products.GetAsync(id, c);
+            if (KindOf(product.Type.Key) != request.Kind)
+            {
+                throw new ValidationException("kind cannot change once an item exists; add a new item instead.");
+            }
 
-        if (product.Status == ProductStatus.Published && request.Status == ProductStatus.Draft)
-        {
-            throw new ConflictException("A live item cannot go back to being a draft.");
-        }
+            if (product.Status == ProductStatus.Published && request.Status == ProductStatus.Draft)
+            {
+                throw new ConflictException("A live item cannot go back to being a draft.");
+            }
 
-        CatalogEntity catalog = await Db.Catalogs.AsNoTracking().FirstAsync(x => x.Id == product.CatalogId, c);
-        await _products.UpdateAsync(id, new UpdateProductRequest(request.CategoryId, request.Name, product.Attributes, Description: request.Description), c);
-        await ApplyPricingAsync(id, catalog, request.Pricing, c);
-        await ApplyAvailabilityAsync(id, request.Availability, c);
-        if (request.Status == ProductStatus.Published && product.Status != ProductStatus.Published)
-        {
-            await _products.PublishAsync(id, c);
-        }
+            CatalogEntity catalog = await Db.Catalogs.AsNoTracking().FirstAsync(x => x.Id == product.CatalogId, c);
+            await _products.UpdateAsync(id, new UpdateProductRequest(request.CategoryId, request.Name, product.Attributes, Description: request.Description), c);
+            await ApplyFormFieldsAsync(id, request, c);
+            await ApplyPricingAsync(id, catalog, request.Pricing, c);
+            if (Offered(request) is { } availability)
+            {
+                await ApplyAvailabilityAsync(id, availability, c);
+            }
 
-        return await GetAsync(id, c);
-    }, ct);
+            removed = await ApplyPhotosAsync(id, request.Photos, c);
+            if (request.Status == ProductStatus.Published && product.Status != ProductStatus.Published)
+            {
+                await _products.PublishAsync(id, c);
+            }
+
+            return await GetAsync(id, c);
+        }, ct);
+
+        await DeleteFilesAsync(removed);
+        return saved;
+    }
 
     public Task<ItemResponse> SetAvailabilityAsync(Guid id, ItemAvailabilityInput request, CancellationToken ct) => WriteAsync(async c =>
     {
@@ -181,7 +226,46 @@ public sealed class ItemService : AdminServiceBase, IItemService
         return await GetAsync(id, c);
     }, ct);
 
-    public Task DeleteAsync(Guid id, CancellationToken ct) => _products.DeleteAsync(id, ct);
+    public async Task DeleteAsync(Guid id, CancellationToken ct)
+    {
+        List<string> files = [];
+        await WriteAsync(async c =>
+        {
+            List<MediaAsset> media = await Db.Media.AsNoTracking().Where(m => m.ProductId == id && m.DeletedAt == null).ToListAsync(c);
+            await _products.DeleteAsync(id, c);
+            foreach (MediaAsset photo in media)
+            {
+                await _media.DeleteAsync(photo.Id, c);
+            }
+
+            files = media.Select(m => m.S3Key).ToList();
+        }, ct);
+
+        await DeleteFilesAsync(files);
+    }
+
+    public async Task<ItemPhoto> UploadPhotoAsync(Stream content, string contentType, long length, CancellationToken ct)
+    {
+        if (!_photos.IsConfigured)
+        {
+            throw new ServiceUnavailableException("Photos can't be added yet: no photo storage is set up.", new InvalidOperationException("Catalog:Photos:Bucket is not set."));
+        }
+
+        string type = (contentType ?? string.Empty).Split(';')[0].Trim().ToLowerInvariant();
+        if (!PhotoTypes.TryGetValue(type, out string? extension))
+        {
+            throw new ValidationException("A photo must be a JPEG, PNG or WebP image.");
+        }
+
+        if (length is <= 0 or > MaxPhotoBytes)
+        {
+            throw new ValidationException($"A photo must be at most {MaxPhotoBytes / (1024 * 1024)} MB.");
+        }
+
+        string key = $"{PhotoPrefix}{Guid.NewGuid():N}.{extension}";
+        await _photos.PutAsync(key, content, type, ct);
+        return new ItemPhoto(key, _photos.UrlFor(key));
+    }
 
     public async Task<IReadOnlyList<ItemCategory>> ListCategoriesAsync(CancellationToken ct)
     {
@@ -270,6 +354,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
                 Offer? variantOffer = offers.FirstOrDefault(o => o.VariantId == variantId);
                 Guid offerId = await UpsertOfferAsync(variantOffer, null, variantId, pricing.Per, priceOnRequest: false, ct);
                 await SetPriceAsync(offerId, input.Amount, currency, ct);
+                await ApplyVariantAvailabilityAsync(variantId, input.Available, ct);
             }
 
             return;
@@ -290,10 +375,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
         {
             if (current is not null)
             {
-                foreach (Price price in await Db.Prices.AsNoTracking().Where(p => p.OfferId == current.Id && p.DeletedAt == null).ToListAsync(ct))
-                {
-                    await _offers.DeletePriceAsync(current.Id, price.Id, ct);
-                }
+                await ClearPricesAsync(current.Id, ct);
             }
 
             await UpsertOfferAsync(current, productId, null, null, priceOnRequest: true, ct);
@@ -301,8 +383,115 @@ public sealed class ItemService : AdminServiceBase, IItemService
         }
 
         Guid singleOffer = await UpsertOfferAsync(current, productId, null, pricing.Per, priceOnRequest: false, ct);
-        await SetPriceAsync(singleOffer, pricing.Amount!.Value, currency, ct);
+        await SetPriceAsync(singleOffer, pricing.Amount, currency, ct);
     }
+
+    private async Task ClearPricesAsync(Guid offerId, CancellationToken ct)
+    {
+        foreach (Price price in await Db.Prices.AsNoTracking().Where(p => p.OfferId == offerId && p.DeletedAt == null).ToListAsync(ct))
+        {
+            await _offers.DeletePriceAsync(offerId, price.Id, ct);
+        }
+    }
+
+    /// <summary>A sold-out variant has its own row saying so; one on sale again has it switched back on.</summary>
+    private async Task ApplyVariantAvailabilityAsync(Guid variantId, bool available, CancellationToken ct)
+    {
+        Availability? row = await Db.Availability.AsNoTracking()
+            .FirstOrDefaultAsync(a => a.VariantId == variantId && a.DeletedAt == null && a.Region == AllRegions, ct);
+        AvailabilityStatus status = available ? AvailabilityStatus.Active : AvailabilityStatus.Inactive;
+        if (row is null)
+        {
+            if (!available)
+            {
+                await _availability.CreateAsync(new CreateAvailabilityRequest(null, variantId, AllRegions, Now, Status: status), ct);
+            }
+
+            return;
+        }
+
+        if (row.Status != status)
+        {
+            await _availability.UpdateAsync(row.Id, new UpdateAvailabilityRequest(AllRegions, row.ValidFrom, row.ValidUntil, row.StockQty, row.Capacity, status, row.Mode, row.LeadTimeDays), ct);
+        }
+    }
+
+    /// <summary>What only this form has: a service's length, a wait in words, and a draft's unfinished values.</summary>
+    private async Task ApplyFormFieldsAsync(Guid productId, SaveItemRequest request, CancellationToken ct)
+    {
+        Product product = await Db.Products.FirstAsync(p => p.Id == productId, ct);
+        product.Duration = Words(request.Duration);
+        product.LeadTime = Words(request.LeadTime);
+        product.Hidden = request.Hidden;
+        product.FormDraft = request.Status == ProductStatus.Draft && request.FormDraft is { } draft ? draft.GetRawText() : null;
+        await Db.SaveChangesAsync(ct);
+    }
+
+    /// <summary>Keeps the photos given, in their order; returns the files of those taken off, to remove once saved.</summary>
+    private async Task<List<string>> ApplyPhotosAsync(Guid productId, IReadOnlyList<string>? keys, CancellationToken ct)
+    {
+        if (keys is null)
+        {
+            return [];
+        }
+
+        List<MediaAsset> current = await Db.Media.AsNoTracking()
+            .Where(m => m.ProductId == productId && m.VariantId == null && m.Kind == MediaKind.Image && m.DeletedAt == null)
+            .ToListAsync(ct);
+        List<string> removed = [];
+        foreach (MediaAsset gone in current.Where(m => !keys.Contains(m.S3Key, StringComparer.Ordinal)))
+        {
+            await _media.DeleteAsync(gone.Id, ct);
+            removed.Add(gone.S3Key);
+        }
+
+        for (int i = 0; i < keys.Count; i++)
+        {
+            string key = keys[i];
+            MediaAsset? existing = current.FirstOrDefault(m => m.S3Key == key);
+            if (existing is null)
+            {
+                if (!key.StartsWith(PhotoPrefix, StringComparison.Ordinal) || PhotoType(key) is not { } type)
+                {
+                    throw new ValidationException("photos must be keys returned by POST /api/catalog/items/photos.");
+                }
+
+                await _media.CreateAsync(new CreateMediaRequest(productId, null, MediaKind.Image, key, type, SortOrder: i), ct);
+            }
+            else if (existing.SortOrder != i)
+            {
+                await _media.UpdateAsync(existing.Id, new UpdateMediaRequest(existing.AltText, existing.Title, i), ct);
+            }
+        }
+
+        return removed;
+    }
+
+    /// <summary>Removes photos' files once the change that let them go is saved. A failure leaves an orphaned file, not a broken item.</summary>
+    private async Task DeleteFilesAsync(IReadOnlyCollection<string> keys)
+    {
+        if (keys.Count == 0 || !_photos.IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            await _photos.DeleteAsync(keys, CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            _log.LogWarning(ex, "Could not delete {Count} item photo file(s); they are no longer used.", keys.Count);
+        }
+    }
+
+    // A hidden item is off, whatever its availability says, so nothing offers it.
+    private static ItemAvailabilityInput? Offered(SaveItemRequest request)
+        => request.Hidden && request.Availability is { } availability ? availability with { Available = false } : request.Availability;
+
+    private static string? PhotoType(string key) => PhotoTypes.FirstOrDefault(t => key.EndsWith("." + t.Value, StringComparison.Ordinal)).Key;
+
+    private static string? Words(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
     private async Task DeleteVariantAsync(Guid productId, ProductVariant variant, List<Offer> offers, CancellationToken ct)
     {
@@ -330,20 +519,33 @@ public sealed class ItemService : AdminServiceBase, IItemService
         return offer.Id;
     }
 
-    /// <summary>Keeps one current list price in the currency. Prices in other currencies and other price types are left alone.</summary>
-    private async Task SetPriceAsync(Guid offerId, decimal amount, string currency, CancellationToken ct)
+    /// <summary>
+    /// Keeps one current list price in the currency. Prices in other currencies and other price types are left alone.
+    /// No amount (a draft not priced yet) removes the price.
+    /// </summary>
+    private async Task SetPriceAsync(Guid offerId, decimal? amount, string currency, CancellationToken ct)
     {
         Price? current = await Db.Prices.AsNoTracking()
             .Where(p => p.OfferId == offerId && p.DeletedAt == null && p.Status == PriceStatus.Active && p.Currency == currency && p.PriceType == PriceType.List)
             .OrderByDescending(p => p.ValidFrom)
             .FirstOrDefaultAsync(ct);
+        if (amount is null)
+        {
+            if (current is not null)
+            {
+                await _offers.DeletePriceAsync(offerId, current.Id, ct);
+            }
+
+            return;
+        }
+
         if (current is null)
         {
-            await _offers.AddPriceAsync(offerId, new CreatePriceRequest(amount, currency, PriceType.List, Now), ct);
+            await _offers.AddPriceAsync(offerId, new CreatePriceRequest(amount.Value, currency, PriceType.List, Now), ct);
         }
         else if (current.Amount != amount)
         {
-            await _offers.UpdatePriceAsync(offerId, current.Id, new UpdatePriceRequest(amount, currency, PriceType.List, current.ValidFrom, current.ValidUntil, PriceStatus.Active), ct);
+            await _offers.UpdatePriceAsync(offerId, current.Id, new UpdatePriceRequest(amount.Value, currency, PriceType.List, current.ValidFrom, current.ValidUntil, PriceStatus.Active), ct);
         }
     }
 
@@ -382,18 +584,30 @@ public sealed class ItemService : AdminServiceBase, IItemService
 
     private async Task<Guid> EnsureTypeAsync(ItemKind kind, CancellationToken ct)
     {
-        string key = kind == ItemKind.Service ? ServiceTypeKey : ProductTypeKey;
+        string key = TypeKeyOf(kind);
         ProductType? type = await Db.ProductTypes.AsNoTracking().FirstOrDefaultAsync(t => t.Key == key, ct);
         if (type is not null)
         {
             return type.Id;
         }
 
-        CreateProductTypeRequest request = kind == ItemKind.Service
-            ? new CreateProductTypeRequest(key, "Service", ProductTypeKind.Service)
-            : new CreateProductTypeRequest(key, "Product", ProductTypeKind.Good);
+        CreateProductTypeRequest request = kind switch
+        {
+            ItemKind.Service => new CreateProductTypeRequest(key, "Service", ProductTypeKind.Service),
+            ItemKind.Food => new CreateProductTypeRequest(key, "Food", ProductTypeKind.Good),
+            ItemKind.Digital => new CreateProductTypeRequest(key, "Digital item", ProductTypeKind.Good),
+            _ => new CreateProductTypeRequest(key, "Product", ProductTypeKind.Good),
+        };
         return (await _types.CreateAsync(request, ct)).Id;
     }
+
+    private static string TypeKeyOf(ItemKind kind) => kind switch
+    {
+        ItemKind.Service => ServiceTypeKey,
+        ItemKind.Food => FoodTypeKey,
+        ItemKind.Digital => DigitalTypeKey,
+        _ => ProductTypeKey,
+    };
 
     private async Task<string> FreeSlugAsync(Guid catalogId, string name, CancellationToken ct)
     {
@@ -416,6 +630,44 @@ public sealed class ItemService : AdminServiceBase, IItemService
 
     // ---- validation ----------------------------------------------------------
 
+    private void ValidateSave(SaveItemRequest request)
+    {
+        RequireSaveableStatus(request.Status);
+        bool draft = request.Status == ProductStatus.Draft;
+        ValidatePricing(request.Pricing, draft);
+        if (request.Availability is null)
+        {
+            if (!draft)
+            {
+                throw new ValidationException("availability is required to make an item live.");
+            }
+        }
+        else
+        {
+            ValidateAvailability(request.Availability);
+        }
+
+        Guards.OptionalText(request.Duration, "duration", MaxWordsLength);
+        Guards.OptionalText(request.LeadTime, "lead_time", MaxWordsLength);
+        if (request.Photos is { } photos)
+        {
+            if (photos.Count > MaxPhotos)
+            {
+                throw new ValidationException($"An item can have at most {MaxPhotos} photos.");
+            }
+
+            if (photos.Distinct(StringComparer.Ordinal).Count() != photos.Count)
+            {
+                throw new ValidationException("Each photo may appear once.");
+            }
+        }
+
+        if (request.FormDraft is { } form && (form.ValueKind != JsonValueKind.Object || form.GetRawText().Length > MaxFormDraftLength))
+        {
+            throw new ValidationException($"form_draft must be a JSON object of at most {MaxFormDraftLength} characters.");
+        }
+    }
+
     private void RequireSaveableStatus(ProductStatus status)
     {
         if (status is not (ProductStatus.Draft or ProductStatus.Published))
@@ -429,7 +681,8 @@ public sealed class ItemService : AdminServiceBase, IItemService
         }
     }
 
-    private static void ValidatePricing(ItemPricingInput? pricing)
+    /// <summary>A draft may leave amounts out; a live item is priced in full.</summary>
+    private static void ValidatePricing(ItemPricingInput? pricing, bool draft)
     {
         if (pricing is null)
         {
@@ -440,7 +693,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
         switch (pricing.Mode)
         {
             case PricingMode.Single:
-                if (pricing.Amount is null)
+                if (pricing.Amount is null && !draft)
                 {
                     throw new ValidationException("pricing.amount is required for a single price.");
                 }
@@ -475,6 +728,10 @@ public sealed class ItemService : AdminServiceBase, IItemService
                 foreach (ItemVariantInput variant in pricing.Variants!)
                 {
                     Guards.RequireText(variant.Name, "pricing.variants.name", Limits.MaxNameLength);
+                    if (variant.Amount is null && !draft)
+                    {
+                        throw new ValidationException("Each variant needs an amount to make the item live.");
+                    }
                 }
 
                 break;
@@ -516,7 +773,13 @@ public sealed class ItemService : AdminServiceBase, IItemService
     private static Expression<Func<Product, bool>> Not(Expression<Func<Product, bool>> predicate)
         => Expression.Lambda<Func<Product, bool>>(Expression.Not(predicate.Body), predicate.Parameters);
 
-    private static ItemKind KindOf(ProductTypeKind kind) => kind == ProductTypeKind.Service ? ItemKind.Service : ItemKind.Product;
+    private static ItemKind KindOf(string typeKey) => typeKey switch
+    {
+        ServiceTypeKey => ItemKind.Service,
+        FoodTypeKey => ItemKind.Food,
+        DigitalTypeKey => ItemKind.Digital,
+        _ => ItemKind.Product,
+    };
 
     private async Task<IReadOnlyList<ItemResponse>> ShapeAsync(List<Product> products, CancellationToken ct)
     {
@@ -530,7 +793,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
         List<Guid> catalogIds = products.Select(p => p.CatalogId).Distinct().ToList();
         List<Guid> categoryIds = products.Where(p => p.CategoryId != null).Select(p => p.CategoryId!.Value).Distinct().ToList();
 
-        Dictionary<Guid, ProductTypeKind> kinds = await Db.ProductTypes.AsNoTracking().Where(t => typeIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Kind, ct);
+        Dictionary<Guid, string> typeKeys = await Db.ProductTypes.AsNoTracking().Where(t => typeIds.Contains(t.Id)).ToDictionaryAsync(t => t.Id, t => t.Key, ct);
         Dictionary<Guid, string> currencies = await Db.Catalogs.AsNoTracking().Where(x => catalogIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.DefaultCurrency, ct);
         Dictionary<Guid, string> categories = await Db.Categories.AsNoTracking().Where(x => categoryIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.Name, ct);
         List<ProductVariant> variants = await Db.ProductVariants.AsNoTracking().Where(v => ids.Contains(v.ProductId) && v.DeletedAt == null).ToListAsync(ct);
@@ -544,6 +807,13 @@ public sealed class ItemService : AdminServiceBase, IItemService
             .ToListAsync(ct);
         List<Availability> availability = await Db.Availability.AsNoTracking()
             .Where(a => a.ProductId != null && ids.Contains(a.ProductId.Value) && a.DeletedAt == null)
+            .ToListAsync(ct);
+        HashSet<Guid> soldOut = (await Db.Availability.AsNoTracking()
+            .Where(a => a.VariantId != null && variantIds.Contains(a.VariantId.Value) && a.DeletedAt == null && a.Status == AvailabilityStatus.Inactive)
+            .Select(a => a.VariantId!.Value)
+            .ToListAsync(ct)).ToHashSet();
+        List<MediaAsset> photos = await Db.Media.AsNoTracking()
+            .Where(m => ids.Contains(m.ProductId) && m.VariantId == null && m.Kind == MediaKind.Image && m.DeletedAt == null)
             .ToListAsync(ct);
 
         return products.Select(p =>
@@ -566,7 +836,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
             ItemPricing pricing;
             if (ownVariants.Count > 0)
             {
-                List<ItemVariant> shaped = ownVariants.Select(v => new ItemVariant(v.Id, v.Name, AmountOf(offers.FirstOrDefault(o => o.VariantId == v.Id)))).ToList();
+                List<ItemVariant> shaped = ownVariants.Select(v => new ItemVariant(v.Id, v.Name, AmountOf(offers.FirstOrDefault(o => o.VariantId == v.Id)), !soldOut.Contains(v.Id))).ToList();
                 List<decimal> amounts = shaped.Where(v => v.Amount is not null).Select(v => v.Amount!.Value).ToList();
                 string? per = offers.FirstOrDefault(o => o.VariantId != null && ownVariants.Any(v => v.Id == o.VariantId))?.Unit;
                 pricing = new ItemPricing(PricingMode.Variants, currency, null, per, amounts.Count > 0 ? amounts.Min() : null, amounts.Count > 0 ? amounts.Max() : null, shaped);
@@ -590,7 +860,12 @@ public sealed class ItemService : AdminServiceBase, IItemService
                 : new ItemAvailability(row.Mode, row.Status == AvailabilityStatus.Active, row.StockQty, row.LeadTimeDays);
             ItemCategory? category = p.CategoryId is { } cid && categories.TryGetValue(cid, out string? categoryName) ? new ItemCategory(cid, categoryName) : null;
 
-            return new ItemResponse(p.Id, p.Name, KindOf(kinds[p.ProductTypeId]), category, p.Description, p.Status, pricing, shapedAvailability, p.CreatedAt, p.UpdatedAt);
+            List<ItemPhoto> ownPhotos = photos.Where(m => m.ProductId == p.Id).OrderBy(m => m.SortOrder).ThenBy(m => m.CreatedAt)
+                .Select(m => new ItemPhoto(m.S3Key, _photos.UrlFor(m.S3Key))).ToList();
+            JsonElement? formDraft = p.FormDraft is { } draft ? JsonDocument.Parse(draft).RootElement.Clone() : null;
+
+            return new ItemResponse(p.Id, p.Name, KindOf(typeKeys[p.ProductTypeId]), category, p.Description, p.Status, pricing, shapedAvailability, p.CreatedAt, p.UpdatedAt,
+                p.Duration, p.LeadTime, ownPhotos, formDraft, p.Hidden);
         }).ToList();
     }
 }

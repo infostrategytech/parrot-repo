@@ -139,7 +139,11 @@ public interface IItemService
 
     Task<ItemResponse> SetAvailabilityAsync(Guid id, ItemAvailabilityInput request, CancellationToken ct);
 
+    /// <summary>Deletes the item and its photos' files.</summary>
     Task DeleteAsync(Guid id, CancellationToken ct);
+
+    /// <summary>Stores a photo for an item not yet saved with it; its key goes in the item's photos.</summary>
+    Task<ItemPhoto> UploadPhotoAsync(Stream content, string contentType, long length, CancellationToken ct);
 
     Task<IReadOnlyList<ItemCategory>> ListCategoriesAsync(CancellationToken ct);
 

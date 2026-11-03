@@ -239,6 +239,195 @@ public class ItemsApiTests
         Assert.True(unchanged.Availability!.Available);
     }
 
+    [PostgresFact]
+    public async Task A_draft_keeps_the_form_as_left_and_going_live_drops_it()
+    {
+        Guid workspace = Guid.NewGuid();
+        using HttpClient owner = _fx.Client(workspace, Owner);
+
+        // Half done: no price yet, availability not chosen, a variant row without its amount.
+        HttpResponseMessage created = await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Raw("""
+            {"name":"Jollof party tray","kind":"food","lead_time":"About 2 days",
+             "pricing":{"mode":"variants","variants":[{"name":"Small","amount":15000},{"name":"Large"}]},
+             "status":"draft","form_draft":{"pricing":"variants","variants":[{"name":"Large","price":"25k"}]}}
+            """));
+        Assert.Equal(HttpStatusCode.Created, created.StatusCode);
+        ItemResponse draft = await CatalogApiFixture.ReadAsync<ItemResponse>(created);
+        Assert.Equal(ItemKind.Food, draft.Kind);
+        Assert.Equal("About 2 days", draft.LeadTime);
+        Assert.Null(draft.Availability);
+        Assert.Equal([15000m, null], draft.Pricing.Variants.Select(v => v.Amount));
+        Assert.Equal("25k", draft.FormDraft!.Value.GetProperty("variants")[0].GetProperty("price").GetString());
+
+        // A live item needs every amount and its availability.
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsync($"/api/catalog/items/{draft.Id}", CatalogApiFixture.Raw("""
+            {"name":"Jollof party tray","kind":"food","pricing":{"mode":"variants","variants":[{"name":"Small","amount":15000},{"name":"Large"}]},
+             "availability":{"mode":"made_to_order"},"status":"published"}
+            """))).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PutAsync($"/api/catalog/items/{draft.Id}", CatalogApiFixture.Raw("""
+            {"name":"Jollof party tray","kind":"food","pricing":{"mode":"single","amount":15000},"status":"published"}
+            """))).StatusCode);
+
+        Guid small = draft.Pricing.Variants[0].Id;
+        ItemResponse live = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PutAsync($"/api/catalog/items/{draft.Id}", CatalogApiFixture.Body(new
+        {
+            name = "Jollof party tray",
+            kind = "food",
+            lead_time = "About 2 days",
+            pricing = new { mode = "variants", variants = new object[] { new { id = small, name = "Small", amount = 15000 }, new { name = "Large", amount = 25000 } } },
+            availability = new { mode = "made_to_order", lead_time_days = 2 },
+            status = "published",
+            form_draft = new { pricing = "variants" },
+        })));
+        Assert.Equal(ProductStatus.Published, live.Status);
+        Assert.Null(live.FormDraft);
+        Assert.Equal([15000m, 25000m], live.Pricing.Variants.Select(v => v.Amount));
+        Assert.Equal(ItemKind.Food, live.Kind);
+    }
+
+    [PostgresFact]
+    public async Task A_variant_can_be_sold_out_and_a_service_keeps_its_length()
+    {
+        Guid workspace = Guid.NewGuid();
+        using HttpClient owner = _fx.Client(workspace, Owner);
+
+        ItemResponse dress = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Raw("""
+            {"name":"Ankara wrap dress","kind":"product",
+             "pricing":{"mode":"variants","variants":[{"name":"M","amount":30000},{"name":"L","amount":32000,"available":false}]},
+             "availability":{"mode":"in_stock"},"status":"published"}
+            """)));
+        Assert.Equal([true, false], dress.Pricing.Variants.Select(v => v.Available));
+
+        // Back on sale; the other one sold out.
+        ItemResponse turned = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PutAsync($"/api/catalog/items/{dress.Id}", CatalogApiFixture.Body(new
+        {
+            name = "Ankara wrap dress",
+            kind = "product",
+            pricing = new
+            {
+                mode = "variants",
+                variants = new object[]
+                {
+                    new { id = dress.Pricing.Variants[0].Id, name = "M", amount = 30000, available = false },
+                    new { id = dress.Pricing.Variants[1].Id, name = "L", amount = 32000, available = true },
+                },
+            },
+            availability = new { mode = "in_stock" },
+            status = "published",
+        })));
+        Assert.Equal([false, true], turned.Pricing.Variants.Select(v => v.Available));
+
+        ItemResponse braids = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Raw("""
+            {"name":"Knotless braids","kind":"service","duration":"  5 hours ",
+             "pricing":{"mode":"single","amount":25000},"availability":{"mode":"bookings"},"status":"published"}
+            """)));
+        Assert.Equal("5 hours", braids.Duration);
+
+        // Hidden: kept, and off so nothing offers it.
+        ItemResponse hidden = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PutAsync($"/api/catalog/items/{braids.Id}", CatalogApiFixture.Raw("""
+            {"name":"Knotless braids","kind":"service","duration":"5 hours","hidden":true,
+             "pricing":{"mode":"single","amount":25000},"availability":{"mode":"bookings"},"status":"published"}
+            """)));
+        Assert.True(hidden.Hidden);
+        Assert.False(hidden.Availability!.Available);
+
+        ItemResponse ebook = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Raw("""
+            {"name":"Adire pattern book","kind":"digital","pricing":{"mode":"single","amount":5000},"availability":{"mode":"in_stock"},"status":"published"}
+            """)));
+        Assert.Equal(ItemKind.Digital, ebook.Kind);
+    }
+
+    [PostgresFact]
+    public async Task Photos_are_kept_in_order_and_their_files_go_when_taken_off_or_the_item_is_deleted()
+    {
+        Guid workspace = Guid.NewGuid();
+        using HttpClient owner = _fx.Client(workspace, Owner);
+
+        ItemPhoto front = await Upload(owner, "image/jpeg");
+        ItemPhoto back = await Upload(owner, "image/png");
+        Assert.StartsWith($"tenants/{workspace:D}/items/", front.Key);
+        Assert.True(_fx.Photos.Has(front.Key));
+
+        ItemResponse item = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Body(new
+        {
+            name = "Beaded clutch",
+            kind = "product",
+            pricing = new { mode = "single", amount = 18000 },
+            availability = new { mode = "in_stock" },
+            status = "published",
+            photos = new[] { front.Key, back.Key },
+        })));
+        Assert.Equal([front.Key, back.Key], item.Photos!.Select(p => p.Key));
+        Assert.Equal($"https://photos.test/{front.Key}", item.Photos![0].Url);
+
+        // Reordered, one taken off: its file is removed.
+        ItemResponse changed = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PutAsync($"/api/catalog/items/{item.Id}", CatalogApiFixture.Body(new
+        {
+            name = "Beaded clutch",
+            kind = "product",
+            pricing = new { mode = "single", amount = 18000 },
+            availability = new { mode = "in_stock" },
+            status = "published",
+            photos = new[] { back.Key },
+        })));
+        Assert.Equal([back.Key], changed.Photos!.Select(p => p.Key));
+        Assert.False(_fx.Photos.Has(front.Key));
+        Assert.True(_fx.Photos.Has(back.Key));
+
+        // Leaving photos out keeps them.
+        ItemResponse kept = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PutAsync($"/api/catalog/items/{item.Id}", CatalogApiFixture.Raw("""
+            {"name":"Beaded clutch","kind":"product","pricing":{"mode":"single","amount":19000},"availability":{"mode":"in_stock"},"status":"published"}
+            """)));
+        Assert.Equal([back.Key], kept.Photos!.Select(p => p.Key));
+
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/api/catalog/items/{item.Id}")).StatusCode);
+        Assert.False(_fx.Photos.Has(back.Key));
+    }
+
+    [PostgresFact]
+    public async Task Only_this_workspaces_uploaded_images_can_be_photos()
+    {
+        Guid workspace = Guid.NewGuid();
+        using HttpClient owner = _fx.Client(workspace, Owner);
+
+        using MultipartFormDataContent text = new MultipartFormDataContent();
+        ByteArrayContent file = new ByteArrayContent([1, 2, 3]);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("text/plain");
+        text.Add(file, "file", "notes.txt");
+        Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsync("/api/catalog/items/photos", text)).StatusCode);
+
+        ItemPhoto theirs = await Upload(_fx.Client(Guid.NewGuid(), Owner), "image/jpeg");
+        HttpResponseMessage borrowed = await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Body(new
+        {
+            name = "Borrowed photo",
+            kind = "product",
+            pricing = new { mode = "single", amount = 1000 },
+            availability = new { mode = "in_stock" },
+            status = "draft",
+            photos = new[] { theirs.Key },
+        }));
+        Assert.Equal(HttpStatusCode.BadRequest, borrowed.StatusCode);
+
+        using HttpClient reader = _fx.Client(workspace, CatalogScopes.Read);
+        using MultipartFormDataContent image = Image("image/jpeg");
+        Assert.Equal(HttpStatusCode.Forbidden, (await reader.PostAsync("/api/catalog/items/photos", image)).StatusCode);
+    }
+
+    private static async Task<ItemPhoto> Upload(HttpClient client, string contentType)
+    {
+        using MultipartFormDataContent form = Image(contentType);
+        HttpResponseMessage response = await client.PostAsync("/api/catalog/items/photos", form);
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        return await CatalogApiFixture.ReadAsync<ItemPhoto>(response);
+    }
+
+    private static MultipartFormDataContent Image(string contentType)
+    {
+        ByteArrayContent file = new ByteArrayContent([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4]);
+        file.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        return new MultipartFormDataContent { { file, "file", "photo" } };
+    }
+
     private static async Task<ItemResponse> Add(HttpClient client, string name, string availability, string status, Guid? categoryId = null)
     {
         string category = categoryId is { } id ? $",\"category_id\":\"{id}\"" : string.Empty;
