@@ -19,10 +19,13 @@ public sealed class HttpCatalogImportClient(
 {
     private const int MaxPageSize = 100;
 
-    private static readonly JsonSerializerOptions JsonOptions = new ()
+    // Parrot.Catalog answers in snake_case and rejects any field it does not
+    // know, so the client has to speak the same format on the way out and in.
+    private static readonly JsonSerializerOptions JsonOptions = new()
     {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
         PropertyNameCaseInsensitive = true,
-        Converters = { new JsonStringEnumConverter() },
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower) },
     };
 
     public async Task<CatalogImportSyncResult> SyncProductsAsync(

@@ -167,6 +167,7 @@ services:
       DataProtection__KeyRingPath: /app/data-protection-keys
       WhatsApp__WebhookBaseUrl: ${WHATSAPP_WEBHOOK_BASE_URL:-http://localhost:5222}
       WhatsApp__AppSecret: ${WHATSAPP_APP_SECRET:-your-app-secret}
+      CatalogClient__BaseUrl: http://catalog-api:8080
       Facebook__WebhookBaseUrl: ${FACEBOOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
       Facebook__AppSecret: ${FACEBOOK_APP_SECRET:-your-facebook-app-secret}
       TikTok__WebhookBaseUrl: ${TIKTOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}

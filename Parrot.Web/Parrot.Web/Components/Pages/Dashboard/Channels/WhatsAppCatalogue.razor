@@ -116,8 +116,8 @@
 
                         @if (!string.IsNullOrEmpty(item.Availability))
                         {
-                            <span class="wac__card-badge wac__card-badge--@item.Availability.Replace(" ", "-").ToLowerInvariant()">
-                                @item.Availability
+                            <span class="wac__card-badge wac__card-badge--@AvailabilityClass(item.Availability)">
+                                @AvailabilityLabel(item.Availability)
                             </span>
                         }
 
@@ -251,6 +251,15 @@
         string formatted = price.ToString("N2");
         return currency is { Length: > 0 } c ? $"{c} {formatted}" : formatted;
     }
+
+    // The catalogue answers in snake_case ("in_stock", "out_of_stock"). The badge
+    // styles below are hyphenated, and text-transform: capitalize only breaks on
+    // spaces, so both spellings are normalised here rather than at each call site.
+    private static string AvailabilityClass(string availability) =>
+        availability.Replace('_', '-').Replace(' ', '-').ToLowerInvariant();
+
+    private static string AvailabilityLabel(string availability) =>
+        availability.Replace('_', ' ');
 
     private void GoBack() => Nav.NavigateTo("/dashboard/channels");
 
