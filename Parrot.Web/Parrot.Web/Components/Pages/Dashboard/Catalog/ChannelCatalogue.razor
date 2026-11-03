@@ -3,30 +3,37 @@
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Catalog
 @using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
 @using Parrot.Web.Features.Dashboard.Channels.State
 @inject ChannelsState ChannelsState
+@inject ChannelStatusLoader ChannelStatus
+@inject AuthState AuthState
 @inject NavigationManager Nav
 
 <PageTitle>Channel Catalogues · yára</PageTitle>
 
 <div class="chan-cat">
-    <header class="chan-cat__header">
-        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="GoBack">
-            <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
-            <ChildContent>Back</ChildContent>
-        </Button>
-        <div class="chan-cat__heading">
-            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Channel Catalogues</Typography>
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="chan-cat__lede">
-                Import products from your connected channels.
-            </Typography>
-        </div>
-    </header>
-
-    @if (WhatsAppChannel is not null)
+    @if (!_ready)
     {
+        <LoadingState Glyph="IconName.RiHome5Fill" Title="Loading your channels" />
+    }
+    else if (WhatsAppChannel is not null)
+    {
+        <header class="chan-cat__header">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="GoBack">
+                <IconLeft><Icon Name="IconName.RiArrowLeftLine" /></IconLeft>
+                <ChildContent>Back</ChildContent>
+            </Button>
+            <div class="chan-cat__heading">
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Channel Catalogues</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="chan-cat__lede">
+                    Import products from your connected channels.
+                </Typography>
+            </div>
+        </header>
+
         <section class="chan-cat__channels" aria-label="Available channels">
-            <article class="chan-cat__card">
+            <article class="chan-cat__card is-whatsapp">
                 <span class="chan-cat__mark">
                     <ChannelIcon Channel="whatsapp" Size="IconSize.Lg" Plain />
                 </span>
@@ -61,8 +68,29 @@
 </div>
 
 @code {
+    private bool _ready;
+    private readonly CancellationTokenSource _lifetime = new();
+
     private WhatsAppConnectionInfo? WhatsAppChannel =>
         ChannelsState.WhatsAppConnection is { DisabledAt: null } conn ? conn : null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (AuthState.CurrentUser?.Token is { Length: > 0 } token)
+        {
+            try { await ChannelStatus.RefreshAsync(token, _lifetime.Token); }
+            catch (OperationCanceledException) { return; }
+        }
+        _ready = true;
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _lifetime.Cancel();
+        _lifetime.Dispose();
+    }
 
     private void GoBack() => Nav.NavigateTo("/dashboard/catalog");
 
