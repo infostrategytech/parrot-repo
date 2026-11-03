@@ -28,6 +28,7 @@ public static partial class CustomerImport
     public const int MaxRows = 1000;
     public const long MaxTextBytes = 1024 * 1024;
     public const long MaxSheetBytes = 5 * 1024 * 1024;
+    public const long MaxVcfBytes = 10 * 1024 * 1024;
     public const long MaxPhotoBytes = 10 * 1024 * 1024;
 
     /// <summary>The country a local number (0803…) belongs to, until the workspace keeps its own.</summary>
@@ -71,7 +72,11 @@ public static partial class CustomerImport
                 ".txt" => ReadText(ReadAll(file)),
                 _ => FromGrid(Grid(ReadAll(file))),
             };
-            return Checked(entries, extension == ".vcf" ? "contacts in that file" : "customers in that file");
+            if (extension == ".vcf")
+                return entries.Count == 0
+                    ? ([], "There are no contacts in that file. Check it has names or numbers in it.")
+                    : (entries, null);
+            return Checked(entries, "customers in that file");
         }
         catch (InvalidDataException)
         {
@@ -310,7 +315,6 @@ public static partial class CustomerImport
                     var fullName = name is { Length: > 0 } ? name : $"{given} {family}".Trim();
                     var phone = phones.OrderByDescending(p => p.Mobile).Select(p => p.Number).FirstOrDefault();
                     if (fullName.Length > 0 || phone is not null) entries.Add(new ImportEntry(fullName, phone, email));
-                    if (entries.Count > MaxRows) return entries;
                     break;
             }
         }
