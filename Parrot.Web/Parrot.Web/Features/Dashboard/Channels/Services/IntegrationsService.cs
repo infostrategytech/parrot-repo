@@ -133,8 +133,13 @@ public class IntegrationsService : IIntegrationsService
     public Task<CatalogueSyncResult> SyncCatalogueAsync(Guid connectionId, string token, CancellationToken cancellationToken = default) =>
         SendAsync<CatalogueSyncResult>(HttpMethod.Post, $"api/whatsapp/connections/{connectionId}/catalogue/sync", token, null, cancellationToken);
 
-    public Task<CatalogueItemsResponse> GetCatalogueProductsAsync(Guid connectionId, int page, int pageSize, string token, CancellationToken cancellationToken = default) =>
-        SendAsync<CatalogueItemsResponse>(HttpMethod.Get, $"api/whatsapp/connections/{connectionId}/catalogue/products?page={page}&pageSize={pageSize}", token, null, cancellationToken);
+    public Task<CatalogueItemsResponse> GetCatalogueProductsAsync(Guid connectionId, int page, int pageSize, string token, string? cursor = null, CancellationToken cancellationToken = default)
+    {
+        string url = $"api/whatsapp/connections/{connectionId}/catalogue/products?page={page}&pageSize={pageSize}";
+        if (cursor is not null)
+            url += $"&cursor={Uri.EscapeDataString(cursor)}";
+        return SendAsync<CatalogueItemsResponse>(HttpMethod.Get, url, token, null, cancellationToken);
+    }
 
     private async Task<T> SendAsync<T>(HttpMethod method, string path, string token, object? body, CancellationToken cancellationToken)
     {

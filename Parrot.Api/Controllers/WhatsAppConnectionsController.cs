@@ -83,8 +83,9 @@ public class WhatsAppConnectionsController : ControllerBase
 
     [HttpGet("{id:guid}/catalogue/products")]
     public async Task<IActionResult> GetCatalogueProducts(
-        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50) =>
-        Ok(await _catalogueSyncService.GetProductsAsync(Owner(), id, page, pageSize, HttpContext.RequestAborted));
+        Guid id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50,
+        [FromQuery] string? cursor = null) =>
+        Ok(await _catalogueSyncService.GetProductsAsync(Owner(), id, page, pageSize, cursor, HttpContext.RequestAborted));
 
     private string Owner() =>
         User.WorkspaceId()

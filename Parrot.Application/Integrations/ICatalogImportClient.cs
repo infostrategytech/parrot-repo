@@ -39,6 +39,7 @@ public interface ICatalogImportClient
         Guid connectionId,
         int page,
         int pageSize,
+        string? cursor,
         CancellationToken ct);
 }
 

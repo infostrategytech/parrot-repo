@@ -90,7 +90,7 @@ public class WhatsAppCatalogueSyncService(
     }
 
     public async Task<CatalogueItemsResponse> GetProductsAsync(
-        string workspaceId, Guid connectionId, int page, int pageSize, CancellationToken ct)
+        string workspaceId, Guid connectionId, int page, int pageSize, string? cursor, CancellationToken ct)
     {
         WhatsAppConnection? connection = await connectionRepository.GetByOwnerAndIdAsync(workspaceId, connectionId);
         if (connection is null) throw new NotFoundException("WhatsApp connection not found.");
@@ -98,6 +98,6 @@ public class WhatsAppCatalogueSyncService(
         int size = Math.Clamp(pageSize, 1, MaxPageSize);
         int p = Math.Max(1, page);
 
-        return await catalogImportClient.GetProductsAsync(workspaceId, connectionId, p, size, ct);
+        return await catalogImportClient.GetProductsAsync(workspaceId, connectionId, p, size, cursor, ct);
     }
 }

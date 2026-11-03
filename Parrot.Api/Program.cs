@@ -438,13 +438,14 @@ builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
 // out while the orchestrator is off, so a blank URL costs nothing at boot.
 builder.Services.AddScoped<IServiceTokenFactory, ServiceTokenFactory>();
 
-builder.Services.Configure<CatalogClientSettings>(builder.Configuration.GetSection(CatalogClientSettings.SectionName));
-CatalogClientSettings catalogClientSettings = builder.Configuration.GetSection(CatalogClientSettings.SectionName).Get<CatalogClientSettings>()
-    ?? new CatalogClientSettings();
-builder.Services.AddHttpClient<ICatalogImportClient, HttpCatalogImportClient>(client =>
+builder.Services.AddOptions<CatalogClientSettings>()
+    .BindConfiguration(CatalogClientSettings.SectionName)
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddHttpClient<ICatalogImportClient, HttpCatalogImportClient>((sp, client) =>
 {
-    if (Uri.TryCreate(catalogClientSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? catalogBaseUrl))
-        client.BaseAddress = catalogBaseUrl;
+    string baseUrl = sp.GetRequiredService<IOptions<CatalogClientSettings>>().Value.BaseUrl.TrimEnd('/') + "/";
+    client.BaseAddress = new Uri(baseUrl);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 });
 

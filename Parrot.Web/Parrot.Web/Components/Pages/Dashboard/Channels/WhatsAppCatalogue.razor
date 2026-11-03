@@ -228,7 +228,7 @@
         try
         {
             CatalogueItemsResponse result = await IntegrationsService.GetCatalogueProductsAsync(
-                _connection.Id, _currentPage, PageSize, Token, _lifetime.Token);
+                _connection.Id, _currentPage, PageSize, Token, cancellationToken: _lifetime.Token);
             _items.AddRange(result.Items);
             _total = result.Total;
         }

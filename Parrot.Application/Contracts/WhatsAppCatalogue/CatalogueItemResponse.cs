@@ -22,4 +22,5 @@ public record CatalogueItemsResponse(
     IReadOnlyList<CatalogueItemResponse> Items,
     int Total,
     int Page,
-    int PageSize);
+    int PageSize,
+    string? NextCursor = null);

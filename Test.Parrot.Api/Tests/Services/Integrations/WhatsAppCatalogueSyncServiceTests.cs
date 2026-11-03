@@ -235,7 +235,7 @@ public class WhatsAppCatalogueSyncServiceTests
             .ReturnsAsync((WhatsAppConnection?)null);
 
         await Assert.ThrowsAsync<NotFoundException>(
-            () => CreateService().GetProductsAsync("ws", Guid.NewGuid(), 1, 50, default));
+            () => CreateService().GetProductsAsync("ws", Guid.NewGuid(), 1, 50, null, default));
     }
 
     [Fact]
@@ -245,7 +245,7 @@ public class WhatsAppCatalogueSyncServiceTests
             .ReturnsAsync((WhatsAppConnection?)null);
 
         await Assert.ThrowsAsync<NotFoundException>(
-            () => CreateService().GetProductsAsync("other-ws", Guid.NewGuid(), 1, 50, default));
+            () => CreateService().GetProductsAsync("other-ws", Guid.NewGuid(), 1, 50, null, default));
     }
 
     [Fact]
@@ -256,7 +256,7 @@ public class WhatsAppCatalogueSyncServiceTests
         _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 1, 50);
 
         CatalogueItemsResponse response =
-            await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, default);
+            await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, null, default);
 
         Assert.True(_catalogClient.GetProductsCalled);
         Assert.Equal("ws", _catalogClient.LastGetProductsWorkspaceId);
@@ -270,7 +270,7 @@ public class WhatsAppCatalogueSyncServiceTests
         SetupConnection("ws", connection);
         _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 1, 100);
 
-        await CreateService().GetProductsAsync("ws", connection.Id, 1, 9999, default);
+        await CreateService().GetProductsAsync("ws", connection.Id, 1, 9999, null, default);
 
         Assert.Equal(100, _catalogClient.LastGetProductsPageSize);
     }
@@ -282,10 +282,35 @@ public class WhatsAppCatalogueSyncServiceTests
         SetupConnection("ws", connection);
         _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 2, 25);
 
-        await CreateService().GetProductsAsync("ws", connection.Id, 2, 25, default);
+        await CreateService().GetProductsAsync("ws", connection.Id, 2, 25, null, default);
 
         Assert.Equal(2, _catalogClient.LastGetProductsPage);
         Assert.Equal(25, _catalogClient.LastGetProductsPageSize);
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_PassesCursorToCatalogClient()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 1, 50);
+
+        await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, "next-page-token", default);
+
+        Assert.Equal("next-page-token", _catalogClient.LastGetProductsCursor);
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_PropagatesNextCursorFromCatalogClient()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 1, 50, NextCursor: "page-2-token");
+
+        CatalogueItemsResponse response =
+            await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, null, default);
+
+        Assert.Equal("page-2-token", response.NextCursor);
     }
 
     [Fact]
@@ -302,7 +327,7 @@ public class WhatsAppCatalogueSyncServiceTests
         _catalogClient.ProductsResult = new CatalogueItemsResponse(items, 1, 1, 50);
 
         CatalogueItemsResponse response =
-            await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, default);
+            await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, null, default);
 
         Assert.Equal(1, response.Total);
         CatalogueItemResponse first = Assert.Single(response.Items);
@@ -364,6 +389,7 @@ public class WhatsAppCatalogueSyncServiceTests
         public Guid LastGetProductsConnectionId;
         public int LastGetProductsPage;
         public int LastGetProductsPageSize;
+        public string? LastGetProductsCursor;
         public CatalogueItemsResponse ProductsResult = new([], 0, 1, 50);
 
         public Task<CatalogImportSyncResult> SyncProductsAsync(
@@ -391,13 +417,14 @@ public class WhatsAppCatalogueSyncServiceTests
         }
 
         public Task<CatalogueItemsResponse> GetProductsAsync(
-            string workspaceId, Guid connectionId, int page, int pageSize, CancellationToken ct)
+            string workspaceId, Guid connectionId, int page, int pageSize, string? cursor, CancellationToken ct)
         {
             GetProductsCalled = true;
             LastGetProductsWorkspaceId = workspaceId;
             LastGetProductsConnectionId = connectionId;
             LastGetProductsPage = page;
             LastGetProductsPageSize = pageSize;
+            LastGetProductsCursor = cursor;
             return Task.FromResult(ProductsResult);
         }
     }

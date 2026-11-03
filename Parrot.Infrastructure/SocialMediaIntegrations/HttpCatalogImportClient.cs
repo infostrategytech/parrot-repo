@@ -101,13 +101,14 @@ public sealed class HttpCatalogImportClient(
         Guid connectionId,
         int page,
         int pageSize,
+        string? cursor,
         CancellationToken ct)
     {
         int size = Math.Clamp(pageSize, 1, MaxPageSize);
 
-        // The catalog uses cursor-based pagination; we only support fetching
-        // a single page (cursor=null) to preserve the existing response shape.
         string url = $"api/catalog/internal/whatsapp/products?connectionId={connectionId}&limit={size}";
+        if (cursor is not null)
+            url += $"&cursor={Uri.EscapeDataString(cursor)}";
 
         using HttpRequestMessage request = BuildRequest(HttpMethod.Get, url, workspaceId);
         using HttpResponseMessage response = await http.SendAsync(request, ct);
@@ -125,7 +126,7 @@ public sealed class HttpCatalogImportClient(
                 LastSyncedAt: p.UpdatedAt, CreatedAt: p.CreatedAt))
             .ToList();
 
-        return new CatalogueItemsResponse(items, items.Count, page, size);
+        return new CatalogueItemsResponse(items, items.Count, page, size, result.NextCursor);
     }
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string relativeUrl, string workspaceId)

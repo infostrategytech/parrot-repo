@@ -18,4 +18,5 @@ public sealed record CatalogueItemsResponse(
     List<CatalogueItem> Items,
     int Total,
     int Page,
-    int PageSize);
+    int PageSize,
+    string? NextCursor = null);
