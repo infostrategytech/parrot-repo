@@ -455,7 +455,7 @@ builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient
         client.BaseAddress = baseUrl;
     client.Timeout = TimeSpan.FromSeconds(Math.Max(1, omniAiSettings.TimeoutSeconds));
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
-});
+}).AddHttpMessageHandler(sp => new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()));
 // The orientation service (voice, through ElevenLabs); a separate service from the orchestrator for now.
 builder.Services.AddHttpClient<IOrientationClient, OrientationClient>(client =>
 {
@@ -463,7 +463,7 @@ builder.Services.AddHttpClient<IOrientationClient, OrientationClient>(client =>
         client.BaseAddress = orientationUrl;
     client.Timeout = TimeSpan.FromSeconds(30);
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
-});
+}).AddHttpMessageHandler(sp => new ThirdPartyCallLogger("Omni-AI orientation", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()));
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();

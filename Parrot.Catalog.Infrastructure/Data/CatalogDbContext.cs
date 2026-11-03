@@ -131,6 +131,9 @@ public class CatalogDbContext : DbContext
             e.Property(p => p.Name).HasMaxLength(256);
             e.Property(p => p.Slug).HasMaxLength(256);
             e.Property(p => p.Description).HasMaxLength(20000);
+            e.Property(p => p.Duration).HasMaxLength(64);
+            e.Property(p => p.LeadTime).HasMaxLength(64);
+            e.Property(p => p.FormDraft).HasColumnType("jsonb");
             e.Property(p => p.CreatedBy).HasMaxLength(256);
             e.Property(p => p.UpdatedBy).HasMaxLength(256);
             e.Property<NpgsqlTsVector>("SearchTsv").HasComputedColumnSql("to_tsvector('simple', search_text)", stored: true);
@@ -147,6 +150,7 @@ public class CatalogDbContext : DbContext
             {
                 t.HasCheckConstraint("ck_products_type_version", "type_version >= 1");
                 t.HasCheckConstraint("ck_products_attributes_object", "jsonb_typeof(attributes) = 'object'");
+                t.HasCheckConstraint("ck_products_form_draft_object", "form_draft IS NULL OR jsonb_typeof(form_draft) = 'object'");
                 t.HasCheckConstraint("ck_products_attributes_size", "pg_column_size(attributes) <= 65536");
             });
         });

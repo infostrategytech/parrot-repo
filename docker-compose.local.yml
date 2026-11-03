@@ -195,9 +195,9 @@ services:
       EmailSettings__FromName: Parrot Local
       EmailSettings__BaseUrl: http://localhost:5255
       FrontendSettings__BaseUrl: http://localhost:5255
-      # The AI orchestrator (Omni-AI). Off until one is running beside this
-      # stack; then agents answer customers and the AI Operations figures show.
-      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      # The AI orchestrator (Omni-AI): on, so agents are its own and answer customers,
+      # and the AI Operations figures show. OMNI_AI_ENABLED=false runs without one.
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
       OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
@@ -250,11 +250,16 @@ services:
       MongoDB__ConnectionString: mongodb://mongodb:27017
       MongoDB__Database: parrot
       MongoDB__Collection: messages
+      # Omni-AI's ownership and user checks read connections and team grants.
+      ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
     ports:
       - "5288:8080"
     depends_on:
       mongodb:
         condition: service_healthy
+      # The API applies the migrations the checks read; it has no health check locally.
+      parrot-api:
+        condition: service_started
     networks: [parrot]
 
   # One program, three jobs, each its own service so each scales on its own backlog (Worker__Roles):
@@ -324,21 +329,24 @@ services:
       ApiSettings__PublicBaseUrl: http://localhost:5222/
       GrpcSettings__BaseUrl: http://parrot-grpc:8080
       # Must match the API's: with it on, agents live in the API and can be turned on.
-      OmniAi__Enabled: ${OMNI_AI_ENABLED:-false}
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       # Shows "Continue with Facebook" on Sign in and Sign up; turn on with the API's Facebook app.
       Sso__Facebook: ${FACEBOOK_SSO_ENABLED:-false}
-      OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-false}
+      OmniAi__OrientationVoice: ${OMNI_ORIENTATION_VOICE:-true}
+      # Products & Services, kept by the catalog service.
+      CatalogApi__BaseUrl: http://catalog-api:8080/
       # The AI service as the web app calls it, with the owner's own token (agents, channels,
       # orientation). It must verify Parrot's tokens: OMNI_JWT_SECRET = JWT_SECRET, issuer
       # ParrotApi, audience ParrotApp.
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # Agents and channels kept by the AI service (/api/v1/agents) instead of Parrot's api/agent.
-      OmniAi__AgentSetup: ${OMNI_AGENT_SETUP:-false}
+      OmniAi__AgentSetup: ${OMNI_AGENT_SETUP:-true}
     ports:
       - "5255:8080"
     depends_on:
       - parrot-api
       - parrot-grpc
+      - catalog-api
     networks: [parrot]
 
   # ---- Catalog service ------------------------------------------------------
@@ -412,6 +420,13 @@ services:
       # Each request with a Parrot session token is checked against the member's
       # current access, so a removed member or a changed role applies at once.
       Catalog__Auth__AccessCheckUrl: http://parrot-api:8080/
+      # Items' photos: the API's public bucket in MinIO, read by the browser through the published port.
+      Catalog__Photos__Bucket: parrot
+      Catalog__Photos__Region: us-east-1
+      Catalog__Photos__ServiceUrl: http://minio:9000
+      Catalog__Photos__PublicBaseUrl: http://localhost:9000/parrot
+      Catalog__Photos__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
+      Catalog__Photos__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
     ports:
       - "5240:8080"
     depends_on:

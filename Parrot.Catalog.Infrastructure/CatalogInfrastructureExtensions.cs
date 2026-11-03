@@ -58,6 +58,7 @@ public static class CatalogInfrastructureExtensions
         services.AddScoped<IMediaAdminService, MediaAdminService>();
         services.AddScoped<IWhatsAppImportService, WhatsAppImportService>();
         services.AddScoped<IItemService, ItemService>();
+        services.TryAddSingleton<IItemPhotoStorage, Storage.S3ItemPhotoStorage>();
         services.AddScoped<ITypeVersionMigrator, TypeVersionMigrator>();
         services.AddScoped<ICatalogReadService, CatalogReadService>();
         services.AddScoped<IAiToolService, AiToolService>();

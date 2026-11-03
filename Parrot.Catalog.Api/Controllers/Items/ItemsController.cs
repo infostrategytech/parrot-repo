@@ -5,6 +5,7 @@ using Parrot.Catalog.Api.Security;
 using Parrot.Catalog.Application.Contracts;
 using Parrot.Catalog.Application.Security;
 using Parrot.Catalog.Application.Services;
+using Parrot.Catalog.Infrastructure.Services;
 
 namespace Parrot.Catalog.Api.Controllers.Items;
 
@@ -69,10 +70,23 @@ public sealed class ItemsController : ControllerBase
     [HttpDelete("items/{id:guid}")]
     [Authorize(Policy = CatalogPolicies.Write)]
     [EnableRateLimiting(RateLimiting.Write)]
+    [EndpointSummary("Delete an item. Its photos' files are removed too.")]
     public async Task<IActionResult> Delete(Guid id, CancellationToken ct)
     {
         await _items.DeleteAsync(id, ct);
         return NoContent();
+    }
+
+    [HttpPost("items/photos")]
+    [Authorize(Policy = CatalogPolicies.Write)]
+    [EnableRateLimiting(RateLimiting.Write)]
+    [Consumes("multipart/form-data")]
+    [RequestSizeLimit(ItemService.MaxPhotoBytes + (64 * 1024))]
+    [EndpointSummary("Upload one photo (JPEG, PNG or WebP, up to 5 MB) as the form field file. Put its key in an item's photos to keep it.")]
+    public async Task<ActionResult<ItemPhoto>> UploadPhoto(IFormFile file, CancellationToken ct)
+    {
+        await using Stream content = file.OpenReadStream();
+        return StatusCode(StatusCodes.Status201Created, await _items.UploadPhotoAsync(content, file.ContentType, file.Length, ct));
     }
 
     [HttpGet("categories")]

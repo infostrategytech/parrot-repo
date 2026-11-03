@@ -923,6 +923,11 @@ else
             await AddCategoryAsync(entry.Group);
             await LoadAsync();
         }
+        catch (ApiException exception) when (exception.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict or System.Net.HttpStatusCode.Forbidden)
+        {
+            // The service's own reason (a price missing, no permission to make it live) says what to fix.
+            return exception.UserMessage;
+        }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             return $"We couldn't save {entry.Name}. Check your connection and try again.";
@@ -953,6 +958,11 @@ else
             else _justUpdated.Add(entry.Id);
             await AddCategoryAsync(entry.Group);
             await LoadAsync();
+        }
+        catch (ApiException exception) when (exception.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict or System.Net.HttpStatusCode.Forbidden)
+        {
+            // The service's own reason (a price missing, no permission to make it live) says what to fix.
+            return exception.UserMessage;
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {

@@ -1,3 +1,4 @@
+using Parrot.Application.Integrations;
 using Parrot.Grpc.Contracts.Messaging.V1;
 using Parrot.Web.Components;
 using Parrot.Web.Features.Auth.ForgotPassword.Services;
@@ -128,13 +129,17 @@ else
 // a request it takes for a browser with its warning page, unless told to skip it.
 Uri? omniBaseUrl = Uri.TryCreate(builder.Configuration["OmniAi:BaseUrl"], UriKind.Absolute, out var omniUri) ? omniUri : null;
 builder.Services.AddScoped(sp => new OmniAiClient(
-    new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>()) { InnerHandler = new HttpClientHandler() })
+    new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>())
+    {
+        InnerHandler = new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()) { InnerHandler = new HttpClientHandler() },
+    })
     {
         BaseAddress = omniBaseUrl,
         DefaultRequestHeaders = { { "ngrok-skip-browser-warning", "1" } },
     },
     sp.GetRequiredService<AuthState>()));
-builder.Services.AddScoped(_ => new OmniAiStreams(new HttpClient
+builder.Services.AddScoped(sp => new OmniAiStreams(new HttpClient(
+    new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()) { InnerHandler = new HttpClientHandler() })
 {
     BaseAddress = omniBaseUrl,
     Timeout = Timeout.InfiniteTimeSpan,
@@ -186,8 +191,17 @@ builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.BusinessKind>(
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.AgentReadiness>();
 // Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
-// Products & Services: no catalog API connected yet, so items last for the session (catalog-backend-requests).
-builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore, Parrot.Web.Features.Dashboard.Catalog.SessionCatalogStore>();
+// Products & Services: kept by the catalog service (CatalogApi:BaseUrl), called as the signed-in person.
+// Without one, items last for the session.
+if (Uri.TryCreate(builder.Configuration["CatalogApi:BaseUrl"], UriKind.Absolute, out var catalogUri))
+    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore>(sp => new Parrot.Web.Features.Dashboard.Catalog.ApiCatalogStore(
+        new HttpClient(new ActivityHandler(sp.GetRequiredService<ActivityState>())
+        {
+            InnerHandler = new SessionExpiryHandler(sp.GetRequiredService<AuthState>()) { InnerHandler = new HttpClientHandler() },
+        }) { BaseAddress = catalogUri },
+        sp.GetRequiredService<AuthState>()));
+else
+    builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore, Parrot.Web.Features.Dashboard.Catalog.SessionCatalogStore>();
 // The backend does not expose owned social content or extraction yet: posts and post links are not offered.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDiscovery, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDiscovery>();
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.IOfferingDraftReader, Parrot.Web.Features.Dashboard.Catalog.UnavailableOfferingDraftReader>();

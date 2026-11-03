@@ -1,0 +1,45 @@
+// VerifyOwnership: Omni-AI asks Parrot whether a channel (one of Parrot's connections) belongs to
+// the workspace Omni is acting for, before an agent may answer on it.
+//
+// Contract defined by Omni-AI for Parrot to implement (see
+// docs/integration/parrot-agent-setup-handoff.md). Keep this file byte-identical on both sides.
+// Parrot's logic for it already exists: GET /api/internal/connections/{id}/validate
+// (IConnectionService.ValidateForWorkspaceAsync); this is that check over gRPC.
+//
+// Call metadata: "authorization: Bearer <Omni service token for the workspace>" (scope
+// "agent:service", "tenant_id" and "sub" = the workspace id, "svc" = "omni-ai"; Parrot refuses a
+// session token here) and "x-correlation-id". Omni has already verified the signed-in user's token
+// and their live access to that workspace before it asks.
+//
+// tenant_id and workspace_id in the request are the workspace id from the user's verified claims
+// (in Parrot each workspace is its own tenant); Parrot must refuse a request whose workspace is not
+// the token's.
+//
+// Answers:
+//   OK, owned = true, platform set   the connection belongs to the workspace
+//   PERMISSION_DENIED                it belongs to another workspace of the same owner (the "403")
+//   NOT_FOUND                        no such connection, or another owner's (the "404"; identical)
+//   OK, owned = false                treated like NOT_FOUND
+//   UNAUTHENTICATED                  the token was refused
+//   INVALID_ARGUMENT                 a malformed id
+//   anything else                    Parrot could not answer; Omni fails closed
+syntax = "proto3";
+
+package parrot.ownership.v1;
+
+option csharp_namespace = "Parrot.Grpc.Contracts.Ownership.V1";
+
+service OwnershipService {
+  rpc VerifyOwnership (VerifyOwnershipRequest) returns (VerifyOwnershipResponse);
+}
+
+message VerifyOwnershipRequest {
+  string channel_id = 1;    // Parrot connection id (GUID string)
+  string tenant_id = 2;     // the workspace id, from the user's verified claims, never a request body
+  string workspace_id = 3;  // the same workspace id
+}
+
+message VerifyOwnershipResponse {
+  bool owned = 1;
+  string platform = 2;      // "whatsapp" | "facebook" | "instagram" | "tiktok" when owned
+}

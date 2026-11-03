@@ -6,9 +6,11 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Parrot.Catalog.Application.Security;
+using Parrot.Catalog.Application.Services;
 using Parrot.Catalog.Application.Tenancy;
 using Parrot.Catalog.Tools.Commands;
 
@@ -36,6 +38,9 @@ public sealed class CatalogApiFixture : IAsyncLifetime
     public Guid TenantA { get; } = Guid.NewGuid();
 
     public Guid TenantB { get; } = Guid.NewGuid();
+
+    /// <summary>The bucket items' photos go in, in memory.</summary>
+    public FakePhotoStorage Photos { get; } = new FakePhotoStorage();
 
     public SeedResult? SeedA { get; private set; }
 
@@ -66,6 +71,7 @@ public sealed class CatalogApiFixture : IAsyncLifetime
             b.UseSetting("Catalog:RateLimits:WritePerMinute", "100000");
             b.UseSetting("Catalog:RateLimits:AiPerMinute", "100000");
             b.UseSetting("Catalog:RateLimits:TenantPerMinute", "1000000");
+            b.ConfigureTestServices(services => services.AddSingleton<IItemPhotoStorage>(Photos));
         });
 
         SeedA = await SeedAsync(TenantA);
