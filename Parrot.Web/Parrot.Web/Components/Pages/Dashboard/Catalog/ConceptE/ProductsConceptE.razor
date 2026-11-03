@@ -8,6 +8,8 @@
 @inject ToastService Toasts
 @inject NavigationManager Nav
 @inject Parrot.Web.Features.Dashboard.Channels.State.ChannelsState ChannelState
+@inject AuthState AuthState
+@inject IIntegrationsService IntegrationsService
 
 @* Products & Services, Concept E (designer, 25–26 October 2026), kept clean and simple. It's what the agent
    knows about what the business sells and for how much, so it can answer, suggest and take payment; not a
@@ -84,6 +86,44 @@ else
             @AddActions
         }
     </header>
+
+    @if (ChannelState.WhatsAppConnection is { DisabledAt: null } whatsappConn)
+    {
+        <section class="products-e__channel" aria-label="WhatsApp catalogue">
+            <article class="channel-card channel-whatsapp">
+                <span class="channel-card__mark">
+                    <ChannelIcon Channel="whatsapp" Size="IconSize.Lg" Plain />
+                </span>
+                <div class="channel-card__copy">
+                    <div class="channel-card__title">
+                        <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2" Prose>WhatsApp</Typography>
+                        <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="channel-card__status is-connected">Connected</Typography>
+                    </div>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose Class="channel-card__meta">
+                        @(whatsappConn.DisplayPhoneNumber ?? whatsappConn.PhoneNumberId ?? "WhatsApp Business")
+                    </Typography>
+                </div>
+                <div class="channel-card__actions">
+                    @if (_catalogueSyncError is not null)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="products-e__sync-note">@_catalogueSyncError</Typography>
+                    }
+                    else if (_catalogueSyncSummary is not null)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="products-e__sync-note">@_catalogueSyncSummary</Typography>
+                    }
+                    <Button Variant="ButtonVariant.Secondary" Class="channel-card__action" disabled="@_catalogueSyncing" @onclick="SyncCatalogueAsync">
+                        <IconLeft><Icon Name="IconName.RiRefreshLine" /></IconLeft>
+                        <ChildContent>@(_catalogueSyncing ? "Syncing…" : "Sync Catalogue")</ChildContent>
+                    </Button>
+                    <span class="channel-card__ready">
+                        <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Ready</Typography>
+                    </span>
+                </div>
+            </article>
+        </section>
+    }
 
     @if (_loading)
     {
@@ -353,6 +393,8 @@ else
     private int _page = 1;
     private readonly HashSet<string> _selected = [];
     private bool _loading = true, _loadFailed, _categoryOpen, _moveOpen, _markOpen, _importOpen, _linkOpen, _manageOpen, _bulkBusy, _deleting;
+    private bool _catalogueSyncing;
+    private string? _catalogueSyncError, _catalogueSyncSummary;
     private CatalogEntry? _composing;
     // Posts already brought in, left out the next time posts are chosen.
     private readonly HashSet<string> _brought = [];
@@ -459,6 +501,40 @@ else
         finally
         {
             _loading = false;
+        }
+    }
+
+    private async Task SyncCatalogueAsync()
+    {
+        if (_catalogueSyncing || ChannelState.WhatsAppConnection is not { DisabledAt: null } connection) return;
+        _catalogueSyncing = true;
+        _catalogueSyncError = null;
+        _catalogueSyncSummary = null;
+        try
+        {
+            string token = AuthState.CurrentUser?.Token
+                ?? throw new InvalidOperationException("Sign in to continue.");
+            CatalogueSyncResult result = await IntegrationsService.SyncCatalogueAsync(
+                connection.Id, token, CancellationToken.None);
+            _catalogueSyncSummary = result.Added > 0 ? $"{result.Added} products added."
+                : result.Updated > 0 ? $"{result.Updated} products updated."
+                : "Catalogue is up to date.";
+            await LoadAsync();
+            Toasts.Show(_catalogueSyncSummary);
+        }
+        catch (HttpRequestException ex)
+        {
+            _catalogueSyncError = ex.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity
+                ? ex.Message
+                : "Sync failed. Check your WhatsApp connection has an access token and try again.";
+        }
+        catch (InvalidOperationException)
+        {
+            _catalogueSyncError = "Sign in to continue.";
+        }
+        finally
+        {
+            _catalogueSyncing = false;
         }
     }
 
