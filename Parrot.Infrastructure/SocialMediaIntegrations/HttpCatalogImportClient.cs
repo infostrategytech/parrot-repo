@@ -2,7 +2,6 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.Extensions.Options;
 using Parrot.Application.Auth;
 using Parrot.Application.Contracts.WhatsAppCatalogue;
 using Parrot.Application.DTOs.Integrations;
@@ -16,12 +15,11 @@ namespace Parrot.Infrastructure.SocialMediaIntegrations;
 /// </summary>
 public sealed class HttpCatalogImportClient(
     HttpClient http,
-    IServiceTokenFactory tokenFactory,
-    IOptions<CatalogClientSettings> options) : ICatalogImportClient
+    IServiceTokenFactory tokenFactory) : ICatalogImportClient
 {
     private const int MaxPageSize = 100;
 
-    private static readonly JsonSerializerOptions JsonOptions = new()
+    private static readonly JsonSerializerOptions JsonOptions = new ()
     {
         PropertyNameCaseInsensitive = true,
         Converters = { new JsonStringEnumConverter() },
@@ -108,7 +106,9 @@ public sealed class HttpCatalogImportClient(
 
         string url = $"api/catalog/internal/whatsapp/products?connectionId={connectionId}&limit={size}";
         if (cursor is not null)
+        {
             url += $"&cursor={Uri.EscapeDataString(cursor)}";
+        }
 
         using HttpRequestMessage request = BuildRequest(HttpMethod.Get, url, workspaceId);
         using HttpResponseMessage response = await http.SendAsync(request, ct);
@@ -119,11 +119,22 @@ public sealed class HttpCatalogImportClient(
 
         List<CatalogueItemResponse> items = result.Items
             .Select(p => new CatalogueItemResponse(
-                p.Id, p.RetailerId, p.Name, p.Description,
-                p.Price, p.Currency, p.ImageUrl, p.Availability,
-                Url: null, p.Brand, p.Condition, p.SalePrice,
-                Inventory: null, ChannelSource: "whatsapp",
-                LastSyncedAt: p.UpdatedAt, CreatedAt: p.CreatedAt))
+                p.Id,
+                p.RetailerId,
+                p.Name,
+                p.Description,
+                p.Price,
+                p.Currency,
+                p.ImageUrl,
+                p.Availability,
+                Url: null,
+                p.Brand,
+                p.Condition,
+                p.SalePrice,
+                Inventory: null,
+                ChannelSource: "whatsapp",
+                LastSyncedAt: p.UpdatedAt,
+                CreatedAt: p.CreatedAt))
             .ToList();
 
         return new CatalogueItemsResponse(items, items.Count, page, size, result.NextCursor);
@@ -131,14 +142,13 @@ public sealed class HttpCatalogImportClient(
 
     private HttpRequestMessage BuildRequest(HttpMethod method, string relativeUrl, string workspaceId)
     {
-        HttpRequestMessage request = new(method, relativeUrl);
+        HttpRequestMessage request = new (method, relativeUrl);
         string token = tokenFactory.MintForCatalog(workspaceId);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         return request;
     }
 
     // ── Private response DTOs ────────────────────────────────────────────────
-
     private sealed record CatalogSyncResponseDto(
         Guid CatalogId, Guid ProductTypeId,
         int Created, int Updated, int Failed,
