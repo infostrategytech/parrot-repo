@@ -94,7 +94,6 @@ bool storageConfigured = !string.IsNullOrWhiteSpace(storageSettings.Bucket) &&
 builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
 builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
-builder.Services.AddScoped<IWhatsAppCatalogueItemRepository, WhatsAppCatalogueItemRepository>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.AddScoped<IWhatsAppCatalogueSyncService, WhatsAppCatalogueSyncService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
@@ -438,6 +437,17 @@ builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
 // The base address is only set when it parses; the client refuses to call
 // out while the orchestrator is off, so a blank URL costs nothing at boot.
 builder.Services.AddScoped<IServiceTokenFactory, ServiceTokenFactory>();
+
+builder.Services.Configure<CatalogClientSettings>(builder.Configuration.GetSection(CatalogClientSettings.SectionName));
+CatalogClientSettings catalogClientSettings = builder.Configuration.GetSection(CatalogClientSettings.SectionName).Get<CatalogClientSettings>()
+    ?? new CatalogClientSettings();
+builder.Services.AddHttpClient<ICatalogImportClient, HttpCatalogImportClient>(client =>
+{
+    if (Uri.TryCreate(catalogClientSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? catalogBaseUrl))
+        client.BaseAddress = catalogBaseUrl;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+});
+
 builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient>(client =>
 {
     if (Uri.TryCreate(omniAiSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))

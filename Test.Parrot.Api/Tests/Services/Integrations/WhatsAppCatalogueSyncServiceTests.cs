@@ -13,13 +13,13 @@ namespace Test.Parrot.Api.Tests.Services.Integrations;
 public class WhatsAppCatalogueSyncServiceTests
 {
     private readonly Mock<IWhatsAppConnectionRepository> _connectionRepo = new();
-    private readonly FakeItemRepository _itemRepo = new();
-    private readonly FakeMetaCatalogueClient _catalogueClient = new();
+    private readonly FakeCatalogImportClient _catalogClient = new();
+    private readonly FakeMetaCatalogueClient _metaClient = new();
     private readonly IWhatsAppTokenProtector _protector =
         new WhatsAppTokenProtector(new EphemeralDataProtectionProvider());
 
     private WhatsAppCatalogueSyncService CreateService() =>
-        new(_connectionRepo.Object, _itemRepo, _catalogueClient, _protector,
+        new(_connectionRepo.Object, _catalogClient, _metaClient, _protector,
             Mock.Of<IAppLogger<WhatsAppCatalogueSyncService>>());
 
     // ── Connection guard tests ───────────────────────────────────────────────
@@ -37,7 +37,7 @@ public class WhatsAppCatalogueSyncServiceTests
     [Fact]
     public async Task SyncAsync_WhenAnotherOwnersConnection_ThrowsNotFoundException()
     {
-        // Identical to the not-found case — no existence leak.
+        // Identical response to not-found — no existence leak.
         _connectionRepo.Setup(r => r.GetByOwnerAndIdAsync("other-ws", It.IsAny<Guid>()))
             .ReturnsAsync((WhatsAppConnection?)null);
 
@@ -78,14 +78,14 @@ public class WhatsAppCatalogueSyncServiceTests
             () => CreateService().SyncAsync("ws", connection.Id, default));
     }
 
-    // ── Sync behaviour tests ─────────────────────────────────────────────────
+    // ── Sync delegation tests ────────────────────────────────────────────────
 
     [Fact]
-    public async Task SyncAsync_WhenNoCatalogueFound_ReturnsZeroResult()
+    public async Task SyncAsync_WhenNoCatalogueFound_ReturnsZeroResultWithoutCallingCatalogClient()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = null;
+        _metaClient.CatalogueId = null;
 
         CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
 
@@ -94,136 +94,136 @@ public class WhatsAppCatalogueSyncServiceTests
         Assert.Equal(0, result.Deleted);
         Assert.Equal(0, result.Failed);
         Assert.Null(result.CatalogueId);
+        Assert.False(_catalogClient.SyncCalled);
     }
 
     [Fact]
-    public async Task SyncAsync_WithNewProducts_InsertsAll()
+    public async Task SyncAsync_WithProducts_DelegatesToCatalogClient()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = "cat-1";
-        _catalogueClient.Products = [Product("SKU-A", "Alpha"), Product("SKU-B", "Beta")];
+        _metaClient.Products = [Product("SKU-A", "Alpha"), Product("SKU-B", "Beta")];
+        _catalogClient.SyncResult = new CatalogImportSyncResult(Created: 2, Updated: 0, Failed: 0);
 
         CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
 
+        Assert.True(_catalogClient.SyncCalled);
+        Assert.Equal(2, _catalogClient.LastSyncedProducts!.Count);
         Assert.Equal(2, result.Added);
         Assert.Equal(0, result.Updated);
-        Assert.Equal(0, result.Deleted);
         Assert.Equal("cat-1", result.CatalogueId);
-        Assert.Equal(2, _itemRepo.Inserted.Count);
-        Assert.All(_itemRepo.Inserted, i => Assert.Equal(connection.Id, i.ConnectionId));
     }
 
     [Fact]
-    public async Task SyncAsync_WithExistingProducts_UpdatesNameAndPrice()
+    public async Task SyncAsync_WithExistingProducts_CountsUpdatesFromCatalogClient()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = "cat-1";
-        _catalogueClient.Products = [Product("SKU-A", "Alpha Updated", price: 20.00m)];
-
-        // Seed an existing item.
-        WhatsAppCatalogueItem existing = ExistingItem(connection.Id, "SKU-A", "Alpha", 10.00m);
-        _itemRepo.ExistingItems = [existing];
+        _metaClient.Products = [Product("SKU-A", "Alpha Updated")];
+        _catalogClient.SyncResult = new CatalogImportSyncResult(Created: 0, Updated: 1, Failed: 0);
 
         CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
 
         Assert.Equal(0, result.Added);
         Assert.Equal(1, result.Updated);
-        Assert.Equal("Alpha Updated", _itemRepo.Updated.Single().Name);
-        Assert.Equal(20.00m, _itemRepo.Updated.Single().Price);
     }
 
     [Fact]
-    public async Task SyncAsync_WhenProductsRemovedFromMeta_TombstonesAbsentItems()
+    public async Task SyncAsync_WithProducts_PassesConnectionIdAndWorkspaceIdToCatalogClient()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = "cat-1";
-        _catalogueClient.Products = [Product("SKU-A", "Alpha")]; // SKU-B is gone
+        _metaClient.Products = [Product("SKU-A", "Alpha")];
 
-        _itemRepo.ExistingItems = [
-            ExistingItem(connection.Id, "SKU-A", "Alpha"),
-            ExistingItem(connection.Id, "SKU-B", "Beta"), // should be tombstoned
-        ];
+        await CreateService().SyncAsync("ws", connection.Id, default);
+
+        Assert.Equal("ws", _catalogClient.LastSyncWorkspaceId);
+        Assert.Equal(connection.Id, _catalogClient.LastSyncConnectionId);
+    }
+
+    [Fact]
+    public async Task SyncAsync_WithProducts_CallsRetireMissingWithPresentSkus()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        _metaClient.Products = [Product("SKU-A", "Alpha"), Product("SKU-B", "Beta")];
+
+        await CreateService().SyncAsync("ws", connection.Id, default);
+
+        Assert.True(_catalogClient.RetireCalled);
+        Assert.Equal(2, _catalogClient.LastRetirePresentSkus!.Count);
+        Assert.Contains("SKU-A", _catalogClient.LastRetirePresentSkus);
+        Assert.Contains("SKU-B", _catalogClient.LastRetirePresentSkus);
+        Assert.True(_catalogClient.LastRetirePaginationCompleted);
+    }
+
+    [Fact]
+    public async Task SyncAsync_RetiredCountMapsToDeletedInResult()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        _metaClient.Products = [Product("SKU-A", "Alpha")];
+        _catalogClient.RetireResult = 3;
 
         CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
 
-        Assert.Equal(0, result.Added);
-        Assert.Equal(1, result.Updated);
-        Assert.Equal(1, result.Deleted);
-        Assert.Equal(["SKU-A"], _itemRepo.LastPresentRetailerIds);
+        Assert.Equal(3, result.Deleted);
     }
 
     [Fact]
-    public async Task SyncAsync_WithEmptyCatalogue_TombstonesAllExisting()
+    public async Task SyncAsync_WithMultiplePages_FetchesAllProductsBeforeSyncing()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = "cat-1";
-        _catalogueClient.Products = []; // catalogue has no approved products
-
-        _itemRepo.ExistingItems = [ExistingItem(connection.Id, "SKU-A", "Alpha")];
-
-        CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
-
-        Assert.Equal(0, result.Added);
-        Assert.Equal(0, result.Updated);
-        Assert.Equal(1, result.Deleted);
-        Assert.Empty(_itemRepo.LastPresentRetailerIds ?? []);
-    }
-
-    [Fact]
-    public async Task SyncAsync_WhenAllProductsMissingRetailerId_CountsFailedAndDoesNotTombstone()
-    {
-        WhatsAppConnection connection = ConnectedConnection();
-        SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = "cat-1";
-        _catalogueClient.Products = [Product("", "Bad product 1"), Product("   ", "Bad product 2")];
-
-        _itemRepo.ExistingItems = [ExistingItem(connection.Id, "SKU-A", "Alpha")];
-
-        CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
-
-        Assert.Equal(2, result.Failed);
-        Assert.Equal(0, result.Added);
-        Assert.Equal(0, result.Updated);
-        // Tombstoning is skipped when all products failed.
-        Assert.Null(_itemRepo.LastPresentRetailerIds);
-    }
-
-    [Fact]
-    public async Task SyncAsync_WithMultiplePages_FetchesAllProducts()
-    {
-        WhatsAppConnection connection = ConnectedConnection();
-        SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = "cat-1";
-        _catalogueClient.Pages = [
+        _metaClient.Pages = [
             new(Products: [Product("SKU-A", "Alpha"), Product("SKU-B", "Beta")], NextCursor: "cursor-1"),
             new(Products: [Product("SKU-C", "Gamma")], NextCursor: null),
         ];
 
-        CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
+        await CreateService().SyncAsync("ws", connection.Id, default);
 
-        Assert.Equal(3, result.Added);
-        Assert.Equal(3, _itemRepo.Inserted.Count);
+        Assert.Equal(3, _catalogClient.LastSyncedProducts!.Count);
     }
 
     [Fact]
-    public async Task SyncAsync_IsIdempotent_SecondRunUpdatesNotInserts()
+    public async Task SyncAsync_WhenAllProductsMissingRetailerId_CountsFailedAndDoesNotCallRetire()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
-        _catalogueClient.CatalogueId = "cat-1";
-        _catalogueClient.Products = [Product("SKU-A", "Alpha", 10.00m)];
-
-        // Simulate first sync having already inserted SKU-A.
-        _itemRepo.ExistingItems = [ExistingItem(connection.Id, "SKU-A", "Alpha", 10.00m)];
+        _metaClient.Products = [Product("", "Bad 1"), Product("   ", "Bad 2")];
 
         CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
 
-        Assert.Equal(0, result.Added);
-        Assert.Equal(1, result.Updated);
+        Assert.Equal(2, result.Failed);
+        // No valid SKUs and failed > 0 → retire is skipped to avoid wiping the catalogue.
+        Assert.False(_catalogClient.RetireCalled);
+    }
+
+    [Fact]
+    public async Task SyncAsync_FailedFromMetaAndCatalogAreAddedTogether()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        // One bad Meta product (no retailer id) + one catalog failure
+        _metaClient.Products = [Product("", "Bad"), Product("SKU-A", "Good")];
+        _catalogClient.SyncResult = new CatalogImportSyncResult(Created: 0, Updated: 0, Failed: 1);
+
+        CatalogueSyncResult result = await CreateService().SyncAsync("ws", connection.Id, default);
+
+        Assert.Equal(2, result.Failed); // 1 meta + 1 catalog
+    }
+
+    [Fact]
+    public async Task SyncAsync_WithEmptyCatalogue_PassesEmptySkusToCatalogRetire()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        _metaClient.Products = [];
+
+        await CreateService().SyncAsync("ws", connection.Id, default);
+
+        Assert.True(_catalogClient.RetireCalled);
+        Assert.Empty(_catalogClient.LastRetirePresentSkus ?? []);
     }
 
     // ── GetProductsAsync tests ───────────────────────────────────────────────
@@ -239,27 +239,67 @@ public class WhatsAppCatalogueSyncServiceTests
     }
 
     [Fact]
+    public async Task GetProductsAsync_WhenAnotherOwnersConnection_ThrowsNotFoundException()
+    {
+        _connectionRepo.Setup(r => r.GetByOwnerAndIdAsync("other-ws", It.IsAny<Guid>()))
+            .ReturnsAsync((WhatsAppConnection?)null);
+
+        await Assert.ThrowsAsync<NotFoundException>(
+            () => CreateService().GetProductsAsync("other-ws", Guid.NewGuid(), 1, 50, default));
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_DelegatesToCatalogClient()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 1, 50);
+
+        CatalogueItemsResponse response =
+            await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, default);
+
+        Assert.True(_catalogClient.GetProductsCalled);
+        Assert.Equal("ws", _catalogClient.LastGetProductsWorkspaceId);
+        Assert.Equal(connection.Id, _catalogClient.LastGetProductsConnectionId);
+    }
+
+    [Fact]
     public async Task GetProductsAsync_CapsPageSizeAt100()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
-        _itemRepo.PageResult = ([], 0);
+        _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 1, 100);
 
-        CatalogueItemsResponse response =
-            await CreateService().GetProductsAsync("ws", connection.Id, 1, 9999, default);
+        await CreateService().GetProductsAsync("ws", connection.Id, 1, 9999, default);
 
-        Assert.Equal(100, response.PageSize);
+        Assert.Equal(100, _catalogClient.LastGetProductsPageSize);
     }
 
     [Fact]
-    public async Task GetProductsAsync_MapsItemsToResponse()
+    public async Task GetProductsAsync_PassesPageAndPageSizeToCatalogClient()
     {
         WhatsAppConnection connection = ConnectedConnection();
         SetupConnection("ws", connection);
+        _catalogClient.ProductsResult = new CatalogueItemsResponse([], 0, 2, 25);
 
-        WhatsAppCatalogueItem item = ExistingItem(connection.Id, "SKU-A", "Alpha", 9.99m);
-        item.Currency = "USD";
-        _itemRepo.PageResult = ([item], 1);
+        await CreateService().GetProductsAsync("ws", connection.Id, 2, 25, default);
+
+        Assert.Equal(2, _catalogClient.LastGetProductsPage);
+        Assert.Equal(25, _catalogClient.LastGetProductsPageSize);
+    }
+
+    [Fact]
+    public async Task GetProductsAsync_ReturnsResponseFromCatalogClient()
+    {
+        WhatsAppConnection connection = ConnectedConnection();
+        SetupConnection("ws", connection);
+        List<CatalogueItemResponse> items =
+        [
+            new(Guid.NewGuid(), "SKU-A", "Alpha", null, 9.99m, "USD",
+                null, null, null, null, null, null, null, "whatsapp",
+                DateTime.UtcNow, DateTime.UtcNow),
+        ];
+        _catalogClient.ProductsResult = new CatalogueItemsResponse(items, 1, 1, 50);
 
         CatalogueItemsResponse response =
             await CreateService().GetProductsAsync("ws", connection.Id, 1, 50, default);
@@ -269,8 +309,6 @@ public class WhatsAppCatalogueSyncServiceTests
         Assert.Equal("SKU-A", first.RetailerId);
         Assert.Equal("Alpha", first.Name);
         Assert.Equal(9.99m, first.Price);
-        Assert.Equal("USD", first.Currency);
-        Assert.Equal("whatsapp", first.ChannelSource);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -304,61 +342,64 @@ public class WhatsAppCatalogueSyncServiceTests
             Price = price,
         };
 
-    private static WhatsAppCatalogueItem ExistingItem(
-        Guid connectionId, string retailerId, string name, decimal? price = null) =>
-        new()
-        {
-            ConnectionId = connectionId,
-            MetaCatalogueId = "cat-1",
-            MetaProductId = "mp-" + retailerId,
-            RetailerId = retailerId,
-            Name = name,
-            Price = price,
-            LastSyncedAt = DateTime.UtcNow.AddHours(-1),
-        };
-
     // ── In-memory fakes ──────────────────────────────────────────────────────
 
-    private sealed class FakeItemRepository : IWhatsAppCatalogueItemRepository
+    private sealed class FakeCatalogImportClient : ICatalogImportClient
     {
-        public List<WhatsAppCatalogueItem> ExistingItems = [];
-        public List<WhatsAppCatalogueItem> Inserted = [];
-        public List<WhatsAppCatalogueItem> Updated = [];
-        public IReadOnlyCollection<string>? LastPresentRetailerIds;
-        public (IReadOnlyList<WhatsAppCatalogueItem> Items, int Total) PageResult = ([], 0);
+        public bool SyncCalled;
+        public string? LastSyncWorkspaceId;
+        public Guid LastSyncConnectionId;
+        public IReadOnlyList<MetaCatalogueProduct>? LastSyncedProducts;
+        public CatalogImportSyncResult SyncResult = new(0, 0, 0);
 
-        public Task<IReadOnlyList<WhatsAppCatalogueItem>> GetActiveByConnectionAsync(
-            Guid connectionId, CancellationToken ct) =>
-            Task.FromResult<IReadOnlyList<WhatsAppCatalogueItem>>(
-                ExistingItems.Where(i => i.ConnectionId == connectionId && i.DeletedAt == null).ToList());
+        public bool RetireCalled;
+        public string? LastRetireWorkspaceId;
+        public Guid LastRetireConnectionId;
+        public IReadOnlyList<string>? LastRetirePresentSkus;
+        public bool LastRetirePaginationCompleted;
+        public int RetireResult;
 
-        public Task AddRangeAsync(IEnumerable<WhatsAppCatalogueItem> items, CancellationToken ct)
+        public bool GetProductsCalled;
+        public string? LastGetProductsWorkspaceId;
+        public Guid LastGetProductsConnectionId;
+        public int LastGetProductsPage;
+        public int LastGetProductsPageSize;
+        public CatalogueItemsResponse ProductsResult = new([], 0, 1, 50);
+
+        public Task<CatalogImportSyncResult> SyncProductsAsync(
+            string workspaceId, Guid connectionId,
+            IReadOnlyList<MetaCatalogueProduct> products, CancellationToken ct)
         {
-            Inserted.AddRange(items);
-            return Task.CompletedTask;
+            SyncCalled = true;
+            LastSyncWorkspaceId = workspaceId;
+            LastSyncConnectionId = connectionId;
+            LastSyncedProducts = products;
+            return Task.FromResult(SyncResult);
         }
 
-        public Task UpdateRangeAsync(IEnumerable<WhatsAppCatalogueItem> items, CancellationToken ct)
+        public Task<int> RetireMissingAsync(
+            string workspaceId, Guid connectionId,
+            IReadOnlyList<string> presentSkus, bool paginationCompleted,
+            int validSkuCount, int failedProductCount, CancellationToken ct)
         {
-            Updated.AddRange(items);
-            return Task.CompletedTask;
+            RetireCalled = true;
+            LastRetireWorkspaceId = workspaceId;
+            LastRetireConnectionId = connectionId;
+            LastRetirePresentSkus = presentSkus;
+            LastRetirePaginationCompleted = paginationCompleted;
+            return Task.FromResult(RetireResult);
         }
 
-        public Task<int> TombstoneMissingAsync(
-            Guid connectionId, IReadOnlyCollection<string> presentRetailerIds,
-            DateTime tombstonedAt, CancellationToken ct)
+        public Task<CatalogueItemsResponse> GetProductsAsync(
+            string workspaceId, Guid connectionId, int page, int pageSize, CancellationToken ct)
         {
-            LastPresentRetailerIds = presentRetailerIds;
-            int count = ExistingItems.Count(i =>
-                i.ConnectionId == connectionId
-                && i.DeletedAt == null
-                && !presentRetailerIds.Contains(i.RetailerId));
-            return Task.FromResult(count);
+            GetProductsCalled = true;
+            LastGetProductsWorkspaceId = workspaceId;
+            LastGetProductsConnectionId = connectionId;
+            LastGetProductsPage = page;
+            LastGetProductsPageSize = pageSize;
+            return Task.FromResult(ProductsResult);
         }
-
-        public Task<(IReadOnlyList<WhatsAppCatalogueItem> Items, int Total)> GetPageByConnectionAsync(
-            Guid connectionId, int page, int pageSize, CancellationToken ct) =>
-            Task.FromResult(PageResult);
     }
 
     private sealed class FakeMetaCatalogueClient : IMetaCatalogueClient
@@ -375,7 +416,6 @@ public class WhatsAppCatalogueSyncServiceTests
         {
             if (Pages is not null)
             {
-                // Return pages in sequence based on cursor.
                 int index = cursor is null ? 0 : int.Parse(cursor.Replace("cursor-", ""));
                 return Task.FromResult(Pages[index]);
             }

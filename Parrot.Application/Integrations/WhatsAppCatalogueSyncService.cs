@@ -8,7 +8,7 @@ namespace Parrot.Application.Integrations;
 
 public class WhatsAppCatalogueSyncService(
     IWhatsAppConnectionRepository connectionRepository,
-    IWhatsAppCatalogueItemRepository itemRepository,
+    ICatalogImportClient catalogImportClient,
     IMetaCatalogueClient catalogueClient,
     IWhatsAppTokenProtector tokenProtector,
     IAppLogger<WhatsAppCatalogueSyncService> logger) : IWhatsAppCatalogueSyncService
@@ -40,12 +40,6 @@ public class WhatsAppCatalogueSyncService(
             return new CatalogueSyncResult(Added: 0, Updated: 0, Deleted: 0, Failed: 0, CatalogueId: null);
         }
 
-        IReadOnlyList<WhatsAppCatalogueItem> existing =
-            await itemRepository.GetActiveByConnectionAsync(connectionId, ct);
-        Dictionary<string, WhatsAppCatalogueItem> existingByRetailerId =
-            existing.ToDictionary(i => i.RetailerId);
-
-        // Fetch all approved products from Meta before making any writes.
         List<MetaCatalogueProduct> allProducts = [];
         int failed = 0;
         string? cursor = null;
@@ -70,40 +64,29 @@ public class WhatsAppCatalogueSyncService(
         }
         while (cursor is not null);
 
-        DateTime now = DateTime.UtcNow;
-        HashSet<string> seenRetailerIds = new(allProducts.Count);
-        List<WhatsAppCatalogueItem> toInsert = [];
-        List<WhatsAppCatalogueItem> toUpdate = [];
+        CatalogImportSyncResult syncResult = await catalogImportClient.SyncProductsAsync(
+            workspaceId, connectionId, allProducts, ct);
 
-        foreach (MetaCatalogueProduct product in allProducts)
+        HashSet<string> presentSkus = new(allProducts.Select(p => p.RetailerId));
+        int retired = 0;
+        // Only retire when we received clean data: if every product had a bad
+        // retailer id, skip retiring to avoid silently wiping the existing catalogue.
+        if (presentSkus.Count > 0 || failed == 0)
         {
-            seenRetailerIds.Add(product.RetailerId);
-
-            if (existingByRetailerId.TryGetValue(product.RetailerId, out WhatsAppCatalogueItem? item))
-            {
-                ApplyFields(item, product, catalogueId, now);
-                toUpdate.Add(item);
-            }
-            else
-            {
-                toInsert.Add(CreateItem(connectionId, catalogueId, product, now));
-            }
+            retired = await catalogImportClient.RetireMissingAsync(
+                workspaceId, connectionId,
+                presentSkus.ToList(),
+                paginationCompleted: true,
+                validSkuCount: allProducts.Count,
+                failedProductCount: failed,
+                ct);
         }
-
-        if (toInsert.Count > 0) await itemRepository.AddRangeAsync(toInsert, ct);
-        if (toUpdate.Count > 0) await itemRepository.UpdateRangeAsync(toUpdate, ct);
-
-        // Only tombstone when we received clean data. If every product had a bad retailer id,
-        // skip tombstoning to avoid silently wiping the existing catalogue.
-        int deleted = 0;
-        if (seenRetailerIds.Count > 0 || failed == 0)
-            deleted = await itemRepository.TombstoneMissingAsync(connectionId, seenRetailerIds, now, ct);
 
         logger.LogInformation(
             "whatsapp.catalogue.sync.completed ConnectionId={ConnectionId} CatalogueId={CatalogueId} Added={Added} Updated={Updated} Deleted={Deleted} Failed={Failed}",
-            connectionId, catalogueId, toInsert.Count, toUpdate.Count, deleted, failed);
+            connectionId, catalogueId, syncResult.Created, syncResult.Updated, retired, syncResult.Failed + failed);
 
-        return new CatalogueSyncResult(toInsert.Count, toUpdate.Count, deleted, failed, catalogueId);
+        return new CatalogueSyncResult(syncResult.Created, syncResult.Updated, retired, syncResult.Failed + failed, catalogueId);
     }
 
     public async Task<CatalogueItemsResponse> GetProductsAsync(
@@ -115,64 +98,6 @@ public class WhatsAppCatalogueSyncService(
         int size = Math.Clamp(pageSize, 1, MaxPageSize);
         int p = Math.Max(1, page);
 
-        (IReadOnlyList<WhatsAppCatalogueItem> items, int total) =
-            await itemRepository.GetPageByConnectionAsync(connectionId, p, size, ct);
-
-        return new CatalogueItemsResponse(
-            items.Select(ToResponse).ToList(),
-            total, p, size);
+        return await catalogImportClient.GetProductsAsync(workspaceId, connectionId, p, size, ct);
     }
-
-    private static void ApplyFields(
-        WhatsAppCatalogueItem item, MetaCatalogueProduct product, string catalogueId, DateTime now)
-    {
-        item.MetaCatalogueId = catalogueId;
-        item.MetaProductId = product.MetaProductId;
-        item.Name = product.Name;
-        item.Description = product.Description;
-        item.Price = product.Price;
-        item.Currency = product.Currency;
-        item.ImageUrl = product.ImageUrl;
-        item.Availability = product.Availability;
-        item.ReviewStatus = product.ReviewStatus;
-        item.Url = product.Url;
-        item.Brand = product.Brand;
-        item.Condition = product.Condition;
-        item.SalePrice = product.SalePrice;
-        item.Inventory = product.Inventory;
-        item.DeletedAt = null;
-        item.LastSyncedAt = now;
-        item.UpdatedAt = now;
-    }
-
-    private static WhatsAppCatalogueItem CreateItem(
-        Guid connectionId, string catalogueId, MetaCatalogueProduct product, DateTime now) =>
-        new()
-        {
-            ConnectionId = connectionId,
-            MetaCatalogueId = catalogueId,
-            MetaProductId = product.MetaProductId,
-            RetailerId = product.RetailerId,
-            Name = product.Name,
-            Description = product.Description,
-            Price = product.Price,
-            Currency = product.Currency,
-            ImageUrl = product.ImageUrl,
-            Availability = product.Availability,
-            ReviewStatus = product.ReviewStatus,
-            Url = product.Url,
-            Brand = product.Brand,
-            Condition = product.Condition,
-            SalePrice = product.SalePrice,
-            Inventory = product.Inventory,
-            LastSyncedAt = now,
-            CreatedAt = now,
-            UpdatedAt = now,
-        };
-
-    private static CatalogueItemResponse ToResponse(WhatsAppCatalogueItem item) =>
-        new(item.Id, item.RetailerId, item.Name, item.Description,
-            item.Price, item.Currency, item.ImageUrl, item.Availability,
-            item.Url, item.Brand, item.Condition, item.SalePrice, item.Inventory,
-            item.ChannelSource, item.LastSyncedAt, item.CreatedAt);
 }

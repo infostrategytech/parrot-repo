@@ -18,6 +18,9 @@ public static class ServiceScopes
     /// <summary>Lets a service act for a tenant: resolve its agent, read its conversations, decide its approvals.</summary>
     public const string AgentService = "agent:service";
 
+    /// <summary>Lets the main API read and write the catalog on behalf of a tenant.</summary>
+    public const string CatalogAdmin = "catalog:admin";
+
     /// <summary>The authorization policy that requires <see cref="AgentService"/>.</summary>
     public const string PolicyName = "ServiceScope";
 

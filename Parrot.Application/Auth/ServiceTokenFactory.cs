@@ -18,6 +18,11 @@ public interface IServiceTokenFactory
     /// the owner's account, so the two look alike there and differ everywhere else.
     /// </param>
     string Mint(string ownerUserId);
+
+    /// <summary>
+    /// Mints a token with <c>catalog:admin</c> scope for calling the Catalog service.
+    /// </summary>
+    string MintForCatalog(string ownerUserId);
 }
 
 /// <summary>
@@ -65,6 +70,24 @@ public sealed class ServiceTokenFactory(IJwtHelper jwt) : IServiceTokenFactory
 
             // A fresh id and the issue time: the orchestrator requires iat,
             // which the token helper does not add on its own.
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new Claim(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+        ];
+
+        return jwt.GenerateToken(claims, now.Add(Lifetime).UtcDateTime);
+    }
+
+    public string MintForCatalog(string ownerUserId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        Claim[] claims =
+        [
+            new Claim(JwtRegisteredClaimNames.Sub, ownerUserId),
+            new Claim(ServiceScopes.TenantClaim, ownerUserId),
+            new Claim(ServiceScopes.ScopeClaim, ServiceScopes.CatalogAdmin),
+            new Claim(ServiceScopes.ServiceClaim, Service),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new Claim(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
         ];

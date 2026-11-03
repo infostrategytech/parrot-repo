@@ -20,7 +20,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<Agent> Agents => Set<Agent>();
 
     public DbSet<WhatsAppConnection> WhatsAppConnections => Set<WhatsAppConnection>();
-    public DbSet<WhatsAppCatalogueItem> WhatsAppCatalogueItems => Set<WhatsAppCatalogueItem>();
     public DbSet<FacebookConnection> FacebookConnections => Set<FacebookConnection>();
     public DbSet<TikTokConnection> TikTokConnections => Set<TikTokConnection>();
     public DbSet<InstagramConnection> InstagramConnections => Set<InstagramConnection>();
@@ -207,33 +206,6 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.HasIndex(c => c.WorkspaceId);
             entity.HasIndex(c => c.PhoneNumberId).IsUnique()
                 .HasFilter("\"PhoneNumberId\" IS NOT NULL AND \"DisabledAt\" IS NULL");
-        });
-
-        builder.Entity<WhatsAppCatalogueItem>(entity =>
-        {
-            entity.HasKey(i => i.Id);
-            entity.Property(i => i.ChannelSource).HasMaxLength(32).IsRequired();
-            entity.Property(i => i.MetaCatalogueId).HasMaxLength(64).IsRequired();
-            entity.Property(i => i.MetaProductId).HasMaxLength(64).IsRequired();
-            entity.Property(i => i.RetailerId).HasMaxLength(256).IsRequired();
-            entity.Property(i => i.Name).HasMaxLength(512).IsRequired();
-            entity.Property(i => i.Description).HasMaxLength(5000);
-            entity.Property(i => i.Price).HasPrecision(18, 4);
-            entity.Property(i => i.Currency).HasMaxLength(3);
-            entity.Property(i => i.ImageUrl).HasMaxLength(2048);
-            entity.Property(i => i.Availability).HasMaxLength(64);
-            entity.Property(i => i.ReviewStatus).HasMaxLength(32);
-            entity.Property(i => i.Url).HasMaxLength(2048);
-            entity.Property(i => i.Brand).HasMaxLength(256);
-            entity.Property(i => i.Condition).HasMaxLength(32);
-            entity.Property(i => i.SalePrice).HasPrecision(18, 4);
-            entity.Property(i => i.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.Property(i => i.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
-            entity.HasOne<WhatsAppConnection>().WithMany().HasForeignKey(i => i.ConnectionId)
-                .OnDelete(DeleteBehavior.Restrict);
-            // Idempotency key: one row per merchant SKU per connection.
-            entity.HasIndex(i => new { i.ConnectionId, i.RetailerId }).IsUnique();
-            entity.HasIndex(i => i.ConnectionId);
         });
 
         builder.Entity<FacebookConnection>(entity =>
