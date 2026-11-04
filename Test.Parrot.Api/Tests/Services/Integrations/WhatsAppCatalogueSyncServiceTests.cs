@@ -320,8 +320,8 @@ public class WhatsAppCatalogueSyncServiceTests
         SetupConnection("ws", connection);
         List<CatalogueItemResponse> items =
         [
-            new(Guid.NewGuid(), "SKU-A", "Alpha", null, 9.99m, "USD",
-                null, null, null, null, null, null, null, "whatsapp",
+            new(Guid.NewGuid(), "SKU-A", "Alpha", null, "9.99 USD", null,
+                null, null, null, null, null, null, "whatsapp",
                 DateTime.UtcNow, DateTime.UtcNow),
         ];
         _catalogClient.ProductsResult = new CatalogueItemsResponse(items, 1, 1, 50);
@@ -333,7 +333,7 @@ public class WhatsAppCatalogueSyncServiceTests
         CatalogueItemResponse first = Assert.Single(response.Items);
         Assert.Equal("SKU-A", first.RetailerId);
         Assert.Equal("Alpha", first.Name);
-        Assert.Equal(9.99m, first.Price);
+        Assert.Equal("9.99 USD", first.RawPrice);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -358,13 +358,13 @@ public class WhatsAppCatalogueSyncServiceTests
         return connection;
     }
 
-    private static MetaCatalogueProduct Product(string retailerId, string name, decimal? price = null) =>
+    private static MetaCatalogueProduct Product(string retailerId, string name, string? rawPrice = null) =>
         new()
         {
             MetaProductId = "mp-" + retailerId,
             RetailerId = retailerId,
             Name = name,
-            Price = price,
+            RawPrice = rawPrice,
         };
 
     // ── In-memory fakes ──────────────────────────────────────────────────────

@@ -86,9 +86,6 @@ public sealed class MetaCatalogueClient(HttpClient http, IOptions<WhatsAppSettin
 
     private static MetaCatalogueProduct ParseProduct(JsonElement item)
     {
-        (decimal? price, string? priceCurrency) = ParseMetaPrice(Text(item, "price"));
-        (decimal? salePrice, _) = ParseMetaPrice(Text(item, "sale_price"));
-
         List<string> additionalImages = [];
         if (item.TryGetProperty("additional_image_urls", out JsonElement extra) && extra.ValueKind == JsonValueKind.Array)
         {
@@ -109,8 +106,9 @@ public sealed class MetaCatalogueClient(HttpClient http, IOptions<WhatsAppSettin
             RetailerId = Text(item, "retailer_id") ?? string.Empty,
             Name = Text(item, "name") ?? string.Empty,
             Description = Text(item, "description"),
-            Price = price,
-            Currency = Text(item, "currency") ?? priceCurrency,
+            RawPrice = Text(item, "price"),
+            RawSalePrice = Text(item, "sale_price"),
+            Currency = Text(item, "currency"),
             ImageUrl = Text(item, "image_url"),
             AdditionalImageUrls = additionalImages,
             Availability = Text(item, "availability"),
@@ -118,21 +116,8 @@ public sealed class MetaCatalogueClient(HttpClient http, IOptions<WhatsAppSettin
             Url = Text(item, "url"),
             Brand = Text(item, "brand"),
             Condition = Text(item, "condition"),
-            SalePrice = salePrice,
             Inventory = inventory,
         };
-    }
-
-    // Meta sends price as "{integer_minor_units} {ISO_4217}", e.g. "1000 USD" = $10.00.
-    internal static (decimal? Amount, string? Currency) ParseMetaPrice(string? raw)
-    {
-        if (raw is null) return (null, null);
-        int lastSpace = raw.LastIndexOf(' ');
-        if (lastSpace < 0) return (null, null);
-        string currencyPart = raw[(lastSpace + 1)..].Trim();
-        return long.TryParse(raw.AsSpan(0, lastSpace), out long minorUnits)
-            ? (minorUnits / 100m, currencyPart.Length == 3 ? currencyPart : null)
-            : (null, null);
     }
 
     private static string? Text(JsonElement element, string property) =>

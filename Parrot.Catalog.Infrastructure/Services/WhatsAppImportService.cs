@@ -20,7 +20,6 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
     private const string CatalogKeyPrefix = "whatsapp_";
     private const string ProductTypeKey = "whatsapp_product";
     private const string ProductTypeName = "WhatsApp Import";
-    private const string DefaultOfferName = "Default";
     private const string GlobalRegion = "*";
 
     private static readonly Dictionary<string, string> AvailabilityMap = new(StringComparer.OrdinalIgnoreCase)
@@ -86,22 +85,6 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
 
         List<Guid> existingIds = [.. existingBySku.Values.Select(p => p.Id)];
 
-        Dictionary<Guid, Offer> offerByProductId = existingIds.Count == 0
-            ? []
-            : await Db.Offers
-                .Where(o => o.ProductId != null && existingIds.Contains(o.ProductId.Value) && o.DeletedAt == null)
-                .ToDictionaryAsync(o => o.ProductId!.Value, c);
-
-        List<Guid> offerIds = [.. offerByProductId.Values.Select(o => o.Id)];
-
-        Dictionary<Guid, List<Price>> pricesByOfferId = offerIds.Count == 0
-            ? []
-            : (await Db.Prices
-                .Where(p => offerIds.Contains(p.OfferId) && p.DeletedAt == null)
-                .ToListAsync(c))
-                .GroupBy(p => p.OfferId)
-                .ToDictionary(g => g.Key, g => g.ToList());
-
         Dictionary<Guid, Availability> availByProductId = existingIds.Count == 0
             ? []
             : await Db.Availability
@@ -118,7 +101,7 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
             {
                 (Product product, bool isNew) = ProcessProduct(
                     input, catalog.Id, productType, schema,
-                    existingBySku, offerByProductId, pricesByOfferId, availByProductId);
+                    existingBySku, availByProductId);
                 processed.Add((product, isNew));
                 if (isNew) created++; else updated++;
             }
@@ -262,46 +245,12 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
             rows.RemoveAt(rows.Count - 1);
         }
 
-        List<Guid> ids = rows.Select(p => p.Id).ToList();
-
-        // Load offers and prices for the page
-        Dictionary<Guid, Offer> offerByProduct = ids.Count == 0
-            ? []
-            : await Db.Offers.AsNoTracking()
-                .Where(o => o.ProductId != null && ids.Contains(o.ProductId.Value) && o.DeletedAt == null)
-                .ToDictionaryAsync(o => o.ProductId!.Value, ct);
-
-        List<Guid> offerIds = [.. offerByProduct.Values.Select(o => o.Id)];
-
-        List<Price> allPrices = offerIds.Count == 0
-            ? []
-            : await Db.Prices.AsNoTracking()
-                .Where(p => offerIds.Contains(p.OfferId) && p.DeletedAt == null && p.Status == PriceStatus.Active)
-                .ToListAsync(ct);
-
-        // Load global availability
-        Dictionary<Guid, Availability> availByProduct = ids.Count == 0
-            ? []
-            : await Db.Availability.AsNoTracking()
-                .Where(a => a.ProductId != null && ids.Contains(a.ProductId.Value)
-                         && a.Region == GlobalRegion && a.DeletedAt == null)
-                .ToDictionaryAsync(a => a.ProductId!.Value, ct);
-
         List<WhatsAppProductResponse> items = rows.Select(p =>
         {
-            offerByProduct.TryGetValue(p.Id, out Offer? offer);
-            availByProduct.TryGetValue(p.Id, out Availability? avail);
-
-            Price? listPrice = offer is not null
-                ? allPrices.FirstOrDefault(pr => pr.OfferId == offer.Id && pr.PriceType == PriceType.List)
-                : null;
-            Price? promoPrice = offer is not null
-                ? allPrices.FirstOrDefault(pr => pr.OfferId == offer.Id && pr.PriceType == PriceType.Promo)
-                : null;
-
-            // Extract availability from stored attributes (the original Meta value, e.g. "out_of_stock").
+            // Extract availability and price strings from stored attributes.
             // avail.Mode alone can't reconstruct "out_of_stock" vs "in_stock" since both use InStock mode.
-            (string? availability, string? brand, string? condition, string? imageUrl) = ExtractAttributes(p.Attributes);
+            (string? availability, string? brand, string? condition, string? imageUrl,
+                string? rawPrice, string? rawSalePrice) = ExtractAttributes(p.Attributes);
 
             return new WhatsAppProductResponse(
                 Id: p.Id,
@@ -312,9 +261,8 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
                 Brand: brand,
                 Availability: availability,
                 Condition: condition,
-                Price: listPrice?.Amount,
-                Currency: listPrice?.Currency,
-                SalePrice: promoPrice?.Amount,
+                RawPrice: rawPrice,
+                RawSalePrice: rawSalePrice,
                 Status: p.Status,
                 PublishedAt: p.PublishedAt,
                 RetiredAt: p.RetiredAt,
@@ -371,6 +319,8 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
                 new AttributeDefinitionInput("image_url", "Image URL", AttributeDataType.String, Required: false),
                 new AttributeDefinitionInput("meta_product_id", "Meta Product ID", AttributeDataType.String, Required: false),
                 new AttributeDefinitionInput("meta_catalogue_id", "Meta Catalogue ID", AttributeDataType.String, Required: false),
+                new AttributeDefinitionInput("meta_price_raw", "Meta Price", AttributeDataType.String, Required: false),
+                new AttributeDefinitionInput("meta_sale_price_raw", "Meta Sale Price", AttributeDataType.String, Required: false),
             ]), ct);
     }
 
@@ -382,8 +332,6 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
         ProductTypeResponse productType,
         TypeSchema schema,
         Dictionary<string, Product> existingBySku,
-        Dictionary<Guid, Offer> offerByProductId,
-        Dictionary<Guid, List<Price>> pricesByOfferId,
         Dictionary<Guid, Availability> availByProductId)
     {
         string sku = Guards.RequireMatch(
@@ -398,7 +346,7 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
         string? normalizedCondition = NormalizeCondition(input.Condition);
 
         string attrsJson = BuildAttributes(normalizedAvailability, input.Brand, normalizedCondition,
-            input.ImageUrl, input.MetaProductId, input.MetaCatalogueId);
+            input.ImageUrl, input.MetaProductId, input.MetaCatalogueId, input.RawPrice, input.RawSalePrice);
 
         IReadOnlyList<string> validationErrors = schema.Validate(attrsJson, AttributeScope.Product);
         if (validationErrors.Count > 0)
@@ -445,152 +393,9 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
             Stamp(product, created: false);
         }
 
-        UpsertOffer(product, catalogId, offerByProductId);
-        offerByProductId.TryGetValue(product.Id, out Offer? offer);
-        if (offer is not null)
-        {
-            UpsertListPrice(offer, input.Price, input.Currency, pricesByOfferId);
-            UpsertPromoPrice(offer, input.SalePrice, input.Currency, pricesByOfferId);
-        }
-
         UpsertAvailability(product, catalogId, normalizedAvailability, input.Inventory, availByProductId);
 
         return (product, isNew);
-    }
-
-    private void UpsertOffer(Product product, Guid catalogId, Dictionary<Guid, Offer> offerByProductId)
-    {
-        if (offerByProductId.ContainsKey(product.Id))
-        {
-            return;
-        }
-
-        Offer offer = new Offer
-        {
-            Id = Guid.NewGuid(),
-            TenantId = TenantId,
-            CatalogId = catalogId,
-            ProductId = product.Id,
-            BillingPeriod = BillingPeriod.OneTime,
-            Status = OfferStatus.Active,
-            Name = DefaultOfferName,
-            ValidFrom = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-            Eligibility = "{}",
-        };
-        Stamp(offer, created: true);
-        Db.Offers.Add(offer);
-        offerByProductId[product.Id] = offer;
-    }
-
-    private void UpsertListPrice(Offer offer, decimal? amount, string? currency, Dictionary<Guid, List<Price>> pricesByOfferId)
-    {
-        if (!amount.HasValue || string.IsNullOrEmpty(currency))
-        {
-            return;
-        }
-
-        if (!Iso4217.IsValid(currency))
-        {
-            throw new ValidationException($"currency '{currency}' is not a valid ISO 4217 code.");
-        }
-
-        pricesByOfferId.TryGetValue(offer.Id, out List<Price>? prices);
-        Price? existing = prices?.FirstOrDefault(p => p.PriceType == PriceType.List && p.Status == PriceStatus.Active);
-
-        if (existing is not null)
-        {
-            if (existing.Amount == amount.Value && string.Equals(existing.Currency, currency, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            existing.Amount = amount.Value;
-            existing.Currency = currency;
-            Stamp(existing, created: false);
-            return;
-        }
-
-        Price price = new Price
-        {
-            Id = Guid.NewGuid(),
-            TenantId = TenantId,
-            CatalogId = offer.CatalogId,
-            OfferId = offer.Id,
-            Amount = amount.Value,
-            Currency = currency,
-            PriceType = PriceType.List,
-            Status = PriceStatus.Active,
-            ValidFrom = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        };
-        Stamp(price, created: true);
-        Db.Prices.Add(price);
-        if (prices is null)
-        {
-            pricesByOfferId[offer.Id] = [price];
-        }
-        else
-        {
-            prices.Add(price);
-        }
-    }
-
-    private void UpsertPromoPrice(Offer offer, decimal? saleAmount, string? currency, Dictionary<Guid, List<Price>> pricesByOfferId)
-    {
-        pricesByOfferId.TryGetValue(offer.Id, out List<Price>? prices);
-        Price? existing = prices?.FirstOrDefault(p => p.PriceType == PriceType.Promo && p.Status == PriceStatus.Active);
-
-        if (!saleAmount.HasValue || string.IsNullOrEmpty(currency))
-        {
-            // Deactivate promo price if it was previously set
-            if (existing is not null)
-            {
-                existing.Status = PriceStatus.Inactive;
-                Stamp(existing, created: false);
-            }
-
-            return;
-        }
-
-        if (!Iso4217.IsValid(currency))
-        {
-            return;
-        }
-
-        if (existing is not null)
-        {
-            if (existing.Amount == saleAmount.Value && string.Equals(existing.Currency, currency, StringComparison.Ordinal))
-            {
-                return;
-            }
-
-            existing.Amount = saleAmount.Value;
-            existing.Currency = currency;
-            Stamp(existing, created: false);
-            return;
-        }
-
-        Price promo = new Price
-        {
-            Id = Guid.NewGuid(),
-            TenantId = TenantId,
-            CatalogId = offer.CatalogId,
-            OfferId = offer.Id,
-            Amount = saleAmount.Value,
-            Currency = currency,
-            PriceType = PriceType.Promo,
-            Status = PriceStatus.Active,
-            ValidFrom = new DateTime(2000, 1, 1, 0, 0, 0, DateTimeKind.Utc),
-        };
-        Stamp(promo, created: true);
-        Db.Prices.Add(promo);
-        if (prices is null)
-        {
-            pricesByOfferId[offer.Id] = [promo];
-        }
-        else
-        {
-            prices.Add(promo);
-        }
     }
 
     private void UpsertAvailability(
@@ -637,7 +442,8 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
 
     private static string BuildAttributes(
         string? availability, string? brand, string? condition,
-        string? imageUrl, string? metaProductId, string? metaCatalogueId)
+        string? imageUrl, string? metaProductId, string? metaCatalogueId,
+        string? rawPrice, string? rawSalePrice)
     {
         Dictionary<string, string> attrs = new(StringComparer.Ordinal);
         if (!string.IsNullOrWhiteSpace(availability))
@@ -670,6 +476,16 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
             attrs["meta_catalogue_id"] = metaCatalogueId.Trim();
         }
 
+        if (!string.IsNullOrWhiteSpace(rawPrice))
+        {
+            attrs["meta_price_raw"] = rawPrice.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(rawSalePrice))
+        {
+            attrs["meta_sale_price_raw"] = rawSalePrice.Trim();
+        }
+
         return Json.Serialize(attrs);
     }
 
@@ -694,7 +510,7 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
         return lower is "new" or "refurbished" or "used" ? lower : null;
     }
 
-    private static (string? Availability, string? Brand, string? Condition, string? ImageUrl) ExtractAttributes(string attributesJson)
+    private static (string? Availability, string? Brand, string? Condition, string? ImageUrl, string? RawPrice, string? RawSalePrice) ExtractAttributes(string attributesJson)
     {
         try
         {
@@ -703,11 +519,13 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
             string? brand = doc.RootElement.TryGetProperty("brand", out System.Text.Json.JsonElement b) ? b.GetString() : null;
             string? condition = doc.RootElement.TryGetProperty("condition", out System.Text.Json.JsonElement cond) ? cond.GetString() : null;
             string? imageUrl = doc.RootElement.TryGetProperty("image_url", out System.Text.Json.JsonElement img) ? img.GetString() : null;
-            return (availability, brand, condition, imageUrl);
+            string? rawPrice = doc.RootElement.TryGetProperty("meta_price_raw", out System.Text.Json.JsonElement rp) ? rp.GetString() : null;
+            string? rawSalePrice = doc.RootElement.TryGetProperty("meta_sale_price_raw", out System.Text.Json.JsonElement rsp) ? rsp.GetString() : null;
+            return (availability, brand, condition, imageUrl, rawPrice, rawSalePrice);
         }
         catch
         {
-            return (null, null, null, null);
+            return (null, null, null, null, null, null);
         }
     }
 

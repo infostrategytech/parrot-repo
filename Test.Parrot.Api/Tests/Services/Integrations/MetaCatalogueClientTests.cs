@@ -151,7 +151,7 @@ public class MetaCatalogueClientTests
         Assert.Equal("SKU-001", product.RetailerId);
         Assert.Equal("Blue T-Shirt", product.Name);
         Assert.Equal("A cool shirt", product.Description);
-        Assert.Equal(25.00m, product.Price);
+        Assert.Equal("2500 NGN", product.RawPrice);
         Assert.Equal("NGN", product.Currency);
         Assert.Equal("https://example.com/img.jpg", product.ImageUrl);
         Assert.Equal(["https://example.com/img2.jpg"], product.AdditionalImageUrls);
@@ -160,7 +160,7 @@ public class MetaCatalogueClientTests
         Assert.Equal("https://example.com/product", product.Url);
         Assert.Equal("BrandX", product.Brand);
         Assert.Equal("new", product.Condition);
-        Assert.Equal(20.00m, product.SalePrice);
+        Assert.Equal("2000 NGN", product.RawSalePrice);
         Assert.Equal(42, product.Inventory);
     }
 
@@ -184,37 +184,47 @@ public class MetaCatalogueClientTests
         Assert.Equal("80009", ex.ErrorCode);
     }
 
-    // ── Price parsing (via round-trip) ─────────────────────────────────────────
+    // ── Price preservation (via round-trip) ────────────────────────────────────
 
     [Theory]
-    [InlineData("1000 USD", 10.00, "USD")]
-    [InlineData("2500 NGN", 25.00, "NGN")]
-    [InlineData("50 GBP", 0.50, "GBP")]
-    [InlineData("0 EUR", 0.00, "EUR")]
-    public async Task GetApprovedProducts_ParsesPriceMinorUnitsToMajor(string rawPrice, double expectedAmount, string expectedCurrency)
+    [InlineData("1000 USD")]
+    [InlineData("2500 NGN")]
+    [InlineData("1000 JPY")]
+    [InlineData("0 EUR")]
+    public async Task GetApprovedProducts_PreservesRawPriceStringExactly(string rawPrice)
     {
         string body = "{\"data\":[{\"id\":\"p1\",\"retailer_id\":\"r1\",\"name\":\"Item\","
-            + "\"price\":\"" + rawPrice + "\",\"currency\":\"" + expectedCurrency + "\"}],\"paging\":{}}";
+            + "\"price\":\"" + rawPrice + "\",\"currency\":\"USD\"}],\"paging\":{}}";
         FakeHandler handler = new(HttpStatusCode.OK, body);
 
         MetaCatalogueProductsPage page = await Client(handler).GetApprovedProductsAsync("cat-1", "tok", null, default);
 
-        Assert.Equal((decimal)expectedAmount, page.Products[0].Price);
-        Assert.Equal(expectedCurrency, page.Products[0].Currency);
+        Assert.Equal(rawPrice, page.Products[0].RawPrice);
     }
 
-    [Theory]
-    [InlineData("nospace")]
-    [InlineData("notanumber USD")]
-    public async Task GetApprovedProducts_PriceIsNullForUnparsableValue(string rawPrice)
+    [Fact]
+    public async Task GetApprovedProducts_PreservesRawSalePriceString()
     {
         string body = "{\"data\":[{\"id\":\"p1\",\"retailer_id\":\"r1\",\"name\":\"Item\","
-            + "\"price\":\"" + rawPrice + "\"}],\"paging\":{}}";
+            + "\"price\":\"5000 NGN\",\"sale_price\":\"4000 NGN\",\"currency\":\"NGN\"}],\"paging\":{}}";
         FakeHandler handler = new(HttpStatusCode.OK, body);
 
         MetaCatalogueProductsPage page = await Client(handler).GetApprovedProductsAsync("cat-1", "tok", null, default);
 
-        Assert.Null(page.Products[0].Price);
+        Assert.Equal("5000 NGN", page.Products[0].RawPrice);
+        Assert.Equal("4000 NGN", page.Products[0].RawSalePrice);
+    }
+
+    [Fact]
+    public async Task GetApprovedProducts_RawPriceIsNullWhenPriceFieldAbsent()
+    {
+        string body = "{\"data\":[{\"id\":\"p1\",\"retailer_id\":\"r1\",\"name\":\"Item\"}],\"paging\":{}}";
+        FakeHandler handler = new(HttpStatusCode.OK, body);
+
+        MetaCatalogueProductsPage page = await Client(handler).GetApprovedProductsAsync("cat-1", "tok", null, default);
+
+        Assert.Null(page.Products[0].RawPrice);
+        Assert.Null(page.Products[0].RawSalePrice);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────────────

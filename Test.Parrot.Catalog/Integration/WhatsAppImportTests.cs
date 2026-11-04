@@ -29,7 +29,7 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse result = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("SKU-001", "Test Product", null, 1000m, null, "NGN", null, "in stock", null, null, null, null, null)
+            new WhatsAppProductInput("SKU-001", "Test Product", null, "1000 NGN", null, null, "in stock", null, null, null, null, null)
         ]);
 
         Assert.NotEqual(Guid.Empty, result.CatalogId);
@@ -49,11 +49,11 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse first = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("SKU-A", "Product A", null, 500m, null, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("SKU-A", "Product A", null, "500 NGN", null, null, null, null, null, null, null, null)
         ]);
 
         WhatsAppSyncResponse second = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("SKU-B", "Product B", null, 600m, null, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("SKU-B", "Product B", null, "600 NGN", null, null, null, null, null, null, null, null)
         ]);
 
         Assert.Equal(first.CatalogId, second.CatalogId);
@@ -70,10 +70,10 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse conn1 = await SyncAsync(client, Guid.NewGuid(), [
-            new WhatsAppProductInput("SKU-X", "Item X", null, null, null, null, null, null, null, null, null, null, null)
+            new WhatsAppProductInput("SKU-X", "Item X", null, null, null, null, null, null, null, null, null, null)
         ]);
         WhatsAppSyncResponse conn2 = await SyncAsync(client, Guid.NewGuid(), [
-            new WhatsAppProductInput("SKU-X", "Item X", null, null, null, null, null, null, null, null, null, null, null)
+            new WhatsAppProductInput("SKU-X", "Item X", null, null, null, null, null, null, null, null, null, null)
         ]);
 
         Assert.NotEqual(conn1.CatalogId, conn2.CatalogId);
@@ -90,7 +90,7 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse result = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("ATTR-001", "Branded Item", "A nice product", 2000m, 1800m, "NGN",
+            new WhatsAppProductInput("ATTR-001", "Branded Item", "A nice product", "2000 NGN", "1800 NGN",
                 "https://example.com/img.jpg", "in stock", "Samsung", "new", 50, "meta-p-1", "meta-c-1")
         ]);
 
@@ -121,11 +121,11 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("UPDATE-SKU", "Original Name", null, 100m, null, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("UPDATE-SKU", "Original Name", null, "100 NGN", null, null, null, null, null, null, null, null)
         ]);
 
         WhatsAppSyncResponse second = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("UPDATE-SKU", "Updated Name", null, 200m, null, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("UPDATE-SKU", "Updated Name", null, "200 NGN", null, null, null, null, null, null, null, null)
         ]);
 
         Assert.Equal(0, second.Created);
@@ -135,46 +135,45 @@ public class WhatsAppImportTests
         PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
         Assert.Single(products.Items);
         Assert.Equal("Updated Name", products.Items[0].Name);
-        Assert.Equal(200m, products.Items[0].Price);
+        Assert.Equal("200 NGN", products.Items[0].RawPrice);
     }
 
-    // ---- test 6: list price is set from Price field ----
+    // ---- test 6: raw price string is stored and returned ----
 
     [PostgresFact]
-    public async Task Sync_WithPrice_SetsListPrice()
+    public async Task Sync_WithPrice_StoresRawPriceString()
     {
         Guid tenantId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
         using HttpClient client = AdminClient(tenantId);
 
         await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("PRICE-001", "Priced Item", null, 15000m, null, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("PRICE-001", "Priced Item", null, "15000 NGN", null, null, null, null, null, null, null, null)
         ]);
 
         PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
         WhatsAppProductResponse p = products.Items[0];
-        Assert.Equal(15000m, p.Price);
-        Assert.Equal("NGN", p.Currency);
-        Assert.Null(p.SalePrice);
+        Assert.Equal("15000 NGN", p.RawPrice);
+        Assert.Null(p.RawSalePrice);
     }
 
-    // ---- test 7: promo price from SalePrice field ----
+    // ---- test 7: raw sale price string is stored and returned ----
 
     [PostgresFact]
-    public async Task Sync_WithSalePrice_SetsPromoPrice()
+    public async Task Sync_WithSalePrice_StoresRawSalePriceString()
     {
         Guid tenantId = Guid.NewGuid();
         Guid connectionId = Guid.NewGuid();
         using HttpClient client = AdminClient(tenantId);
 
         await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("PROMO-001", "Sale Item", null, 10000m, 8000m, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("PROMO-001", "Sale Item", null, "10000 NGN", "8000 NGN", null, null, null, null, null, null, null)
         ]);
 
         PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
         WhatsAppProductResponse p = products.Items[0];
-        Assert.Equal(10000m, p.Price);
-        Assert.Equal(8000m, p.SalePrice);
+        Assert.Equal("10000 NGN", p.RawPrice);
+        Assert.Equal("8000 NGN", p.RawSalePrice);
     }
 
     // ---- test 8: Meta availability "in stock" → InStock availability ----
@@ -187,7 +186,7 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("AVAIL-IN", "In Stock Item", null, null, null, null, null, "in stock", null, null, 100, null, null)
+            new WhatsAppProductInput("AVAIL-IN", "In Stock Item", null, null, null, null, "in stock", null, null, 100, null, null)
         ]);
 
         PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
@@ -204,7 +203,7 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("AVAIL-OUT", "OOS Item", null, null, null, null, null, "out of stock", null, null, 0, null, null)
+            new WhatsAppProductInput("AVAIL-OUT", "OOS Item", null, null, null, null, "out of stock", null, null, 0, null, null)
         ]);
 
         PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
@@ -223,7 +222,7 @@ public class WhatsAppImportTests
 
         // Sync and retire
         WhatsAppSyncResponse first = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("REACTIVATE-001", "Was Retired", null, 500m, null, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("REACTIVATE-001", "Was Retired", null, "500 NGN", null, null, null, null, null, null, null, null)
         ]);
 
         await RetireMissingAsync(client, connectionId, [], first.CatalogId);
@@ -235,7 +234,7 @@ public class WhatsAppImportTests
 
         // Resync — should reactivate
         WhatsAppSyncResponse second = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("REACTIVATE-001", "Was Retired", null, 500m, null, "NGN", null, null, null, null, null, null, null)
+            new WhatsAppProductInput("REACTIVATE-001", "Was Retired", null, "500 NGN", null, null, null, null, null, null, null, null)
         ]);
 
         Assert.Equal(0, second.Created);
@@ -257,8 +256,8 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse sync = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("KEEP-001", "Keep Me", null, null, null, null, null, null, null, null, null, null, null),
-            new WhatsAppProductInput("RETIRE-001", "Retire Me", null, null, null, null, null, null, null, null, null, null, null),
+            new WhatsAppProductInput("KEEP-001", "Keep Me", null, null, null, null, null, null, null, null, null, null),
+            new WhatsAppProductInput("RETIRE-001", "Retire Me", null, null, null, null, null, null, null, null, null, null),
         ]);
 
         WhatsAppRetireMissingResponse retire = await RetireMissingAsync(
@@ -282,7 +281,7 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse sync = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("SKIP-001", "Should Not Retire", null, null, null, null, null, null, null, null, null, null, null)
+            new WhatsAppProductInput("SKIP-001", "Should Not Retire", null, null, null, null, null, null, null, null, null, null)
         ]);
 
         WhatsAppRetireMissingResponse result = await RetireMissingAsync(
@@ -303,7 +302,7 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse sync = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("GUARD-001", "Guard Me", null, null, null, null, null, null, null, null, null, null, null)
+            new WhatsAppProductInput("GUARD-001", "Guard Me", null, null, null, null, null, null, null, null, null, null)
         ]);
 
         WhatsAppRetireMissingResponse result = await RetireMissingAsync(
@@ -324,7 +323,7 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("PUBLISHED-001", "Published Item", null, null, null, null, null, null, null, null, null, null, null)
+            new WhatsAppProductInput("PUBLISHED-001", "Published Item", null, null, null, null, null, null, null, null, null, null)
         ]);
 
         PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
@@ -349,9 +348,9 @@ public class WhatsAppImportTests
         using HttpClient client = AdminClient(tenantId);
 
         WhatsAppSyncResponse result = await SyncAsync(client, connectionId, [
-            new WhatsAppProductInput("VALID-SKU-1", "Good Product", null, null, null, null, null, null, null, null, null, null, null),
-            new WhatsAppProductInput("invalid sku!", "Bad Product", null, null, null, null, null, null, null, null, null, null, null),
-            new WhatsAppProductInput("VALID-SKU-2", "Another Good Product", null, null, null, null, null, null, null, null, null, null, null),
+            new WhatsAppProductInput("VALID-SKU-1", "Good Product", null, null, null, null, null, null, null, null, null, null),
+            new WhatsAppProductInput("invalid sku!", "Bad Product", null, null, null, null, null, null, null, null, null, null),
+            new WhatsAppProductInput("VALID-SKU-2", "Another Good Product", null, null, null, null, null, null, null, null, null, null),
         ]);
 
         Assert.Equal(2, result.Created);
@@ -405,7 +404,7 @@ public class WhatsAppImportTests
 
         // Tenant A syncs products
         await SyncAsync(clientA, connectionId, [
-            new WhatsAppProductInput("ISOLATED-001", "Tenant A Product", null, null, null, null, null, null, null, null, null, null, null)
+            new WhatsAppProductInput("ISOLATED-001", "Tenant A Product", null, null, null, null, null, null, null, null, null, null)
         ]);
 
         // Tenant B uses the same connection ID — must see nothing (empty page, not 404)
@@ -430,7 +429,7 @@ public class WhatsAppImportTests
         List<WhatsAppProductInput> products = [];
         for (int i = 1; i <= 5; i++)
         {
-            products.Add(new WhatsAppProductInput($"PAGE-{i:D3}", $"Product {i}", null, null, null, null, null, null, null, null, null, null, null));
+            products.Add(new WhatsAppProductInput($"PAGE-{i:D3}", $"Product {i}", null, null, null, null, null, null, null, null, null, null));
         }
 
         await SyncAsync(client, connectionId, products);
@@ -477,6 +476,63 @@ public class WhatsAppImportTests
             CatalogApiFixture.Raw($$"""{"connection_id":"00000000-0000-0000-0000-000000000000","products":[]}"""));
         Assert.NotEqual(HttpStatusCode.Unauthorized, syncResp.StatusCode);
         Assert.NotEqual(HttpStatusCode.Forbidden, syncResp.StatusCode);
+    }
+
+    // ---- test 21: raw price string preserved exactly, no conversion ----
+
+    [PostgresFact]
+    public async Task Sync_WithRawPrice_PreservesOriginalPriceString()
+    {
+        Guid tenantId = Guid.NewGuid();
+        Guid connectionId = Guid.NewGuid();
+        using HttpClient client = AdminClient(tenantId);
+
+        await SyncAsync(client, connectionId, [
+            new WhatsAppProductInput("RAWPRICE-001", "Priced Item", null, "1000 USD", null, null, null, null, null, null, null, null)
+        ]);
+
+        PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
+        WhatsAppProductResponse p = products.Items[0];
+        Assert.Equal("1000 USD", p.RawPrice);
+        Assert.Null(p.RawSalePrice);
+    }
+
+    // ---- test 22: raw sale price preserved, JPY included as a non-subunit currency ----
+
+    [PostgresFact]
+    public async Task Sync_WithRawSalePrice_PreservesOriginalSalePriceString()
+    {
+        Guid tenantId = Guid.NewGuid();
+        Guid connectionId = Guid.NewGuid();
+        using HttpClient client = AdminClient(tenantId);
+
+        await SyncAsync(client, connectionId, [
+            new WhatsAppProductInput("RAWSALE-001", "Sale Item", null, "1000 JPY", "800 JPY", null, null, null, null, null, null, null)
+        ]);
+
+        PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
+        WhatsAppProductResponse p = products.Items[0];
+        Assert.Equal("1000 JPY", p.RawPrice);
+        Assert.Equal("800 JPY", p.RawSalePrice);
+    }
+
+    // ---- test 23: null price field → RawPrice null on response ----
+
+    [PostgresFact]
+    public async Task Sync_WithNullPrice_RawPriceIsNull()
+    {
+        Guid tenantId = Guid.NewGuid();
+        Guid connectionId = Guid.NewGuid();
+        using HttpClient client = AdminClient(tenantId);
+
+        await SyncAsync(client, connectionId, [
+            new WhatsAppProductInput("NOPRICE-001", "No Price Item", null, null, null, null, null, null, null, null, null, null)
+        ]);
+
+        PagedResponse<WhatsAppProductResponse> products = await GetProductsAsync(client, connectionId);
+        WhatsAppProductResponse p = products.Items[0];
+        Assert.Null(p.RawPrice);
+        Assert.Null(p.RawSalePrice);
     }
 
     // ---------- helpers ----------

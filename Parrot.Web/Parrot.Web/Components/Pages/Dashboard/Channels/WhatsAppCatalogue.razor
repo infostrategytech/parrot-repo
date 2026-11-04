@@ -106,9 +106,9 @@
                                 </div>
                             </div>
                             <div class="wac__price">
-                                @if (item.Price.HasValue)
+                                @if (!string.IsNullOrEmpty(item.RawPrice))
                                 {
-                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@FormatPrice(item.Price.Value, item.Currency)</Typography>
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@item.RawPrice</Typography>
                                 }
                                 else
                                 {
@@ -127,11 +127,11 @@
             </ChildContent>
         </DataTable>
 
-        @if (_total > _items.Count)
+        @if (_nextCursor is not null)
         {
             <div class="wac__load-more">
                 <Button Variant="ButtonVariant.Secondary" disabled="@_busy" @onclick="LoadMoreAsync">
-                    Load more (@_items.Count of @_total)
+                    Load more
                 </Button>
             </div>
         }
@@ -153,8 +153,7 @@
 
     private WhatsAppConnectionInfo? _connection;
     private List<CatalogueItem> _items = [];
-    private int _total;
-    private int _currentPage = 1;
+    private string? _nextCursor;
     private CatalogueSyncResult? _syncResult;
 
     private string Token => AuthState.CurrentUser?.Token
@@ -206,7 +205,7 @@
             _syncResult = await IntegrationsService.SyncCatalogueAsync(
                 _connection.Id, Token, _lifetime.Token);
             _items = [];
-            _currentPage = 1;
+            _nextCursor = null;
             await LoadProductsAsync();
             Toasts.Show(SyncSummary.Length > 0 ? SyncSummary : "Catalogue synced.");
         }
@@ -231,9 +230,9 @@
         try
         {
             CatalogueItemsResponse result = await IntegrationsService.GetCatalogueProductsAsync(
-                _connection.Id, _currentPage, PageSize, Token, cancellationToken: _lifetime.Token);
+                _connection.Id, 1, PageSize, Token, cursor: _nextCursor, cancellationToken: _lifetime.Token);
             _items.AddRange(result.Items);
-            _total = result.Total;
+            _nextCursor = result.NextCursor;
         }
         catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
         catch (HttpRequestException) { }
@@ -243,16 +242,9 @@
     {
         if (_busy) return;
         _busy = true;
-        _currentPage++;
         await LoadProductsAsync();
         _busy = false;
         if (!_disposed) StateHasChanged();
-    }
-
-    private static string FormatPrice(decimal price, string? currency)
-    {
-        string formatted = price.ToString("N2");
-        return currency is { Length: > 0 } c ? $"{c} {formatted}" : formatted;
     }
 
     // The catalogue answers in snake_case ("in_stock", "out_of_stock"). Replace
@@ -274,8 +266,7 @@
     {
         if (_disposed) return;
         _items = [];
-        _total = 0;
-        _currentPage = 1;
+        _nextCursor = null;
         _connection = null;
         _syncResult = null;
         _loading = true;

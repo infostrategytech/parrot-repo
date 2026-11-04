@@ -2,14 +2,13 @@ using Parrot.Catalog.Domain.Enums;
 
 namespace Parrot.Catalog.Application.Contracts;
 
-/// <summary>One product as Meta reports it. Prices are expected in the tenant's minor unit (e.g. kobo for NGN).</summary>
+/// <summary>One product as Meta reports it. The original Meta price strings are preserved without conversion.</summary>
 public sealed record WhatsAppProductInput(
     string RetailerId,
     string Name,
     string? Description,
-    decimal? Price,
-    decimal? SalePrice,
-    string? Currency,
+    string? RawPrice,
+    string? RawSalePrice,
     string? ImageUrl,
     string? Availability,
     string? Brand,
@@ -57,9 +56,8 @@ public sealed record WhatsAppProductResponse(
     string? Brand,
     string? Availability,
     string? Condition,
-    decimal? Price,
-    string? Currency,
-    decimal? SalePrice,
+    string? RawPrice,
+    string? RawSalePrice,
     ProductStatus Status,
     DateTime? PublishedAt,
     DateTime? RetiredAt,

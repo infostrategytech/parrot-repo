@@ -42,9 +42,8 @@ public sealed class HttpCatalogImportClient(
                 RetailerId = p.RetailerId,
                 Name = p.Name,
                 Description = p.Description,
-                Price = p.Price,
-                SalePrice = p.SalePrice,
-                Currency = p.Currency,
+                RawPrice = p.RawPrice,
+                RawSalePrice = p.RawSalePrice,
                 ImageUrl = p.ImageUrl,
                 Availability = p.Availability,
                 Brand = p.Brand,
@@ -107,7 +106,7 @@ public sealed class HttpCatalogImportClient(
     {
         int size = Math.Clamp(pageSize, 1, MaxPageSize);
 
-        string url = $"api/catalog/internal/whatsapp/products?connectionId={connectionId}&limit={size}";
+        string url = $"api/catalog/internal/whatsapp/products?connection_id={connectionId}&limit={size}";
         if (cursor is not null)
         {
             url += $"&cursor={Uri.EscapeDataString(cursor)}";
@@ -126,20 +125,21 @@ public sealed class HttpCatalogImportClient(
                 p.RetailerId,
                 p.Name,
                 p.Description,
-                p.Price,
-                p.Currency,
+                p.RawPrice,
+                p.RawSalePrice,
                 p.ImageUrl,
                 p.Availability,
                 Url: null,
                 p.Brand,
                 p.Condition,
-                p.SalePrice,
                 Inventory: null,
                 ChannelSource: "whatsapp",
                 LastSyncedAt: p.UpdatedAt,
                 CreatedAt: p.CreatedAt))
             .ToList();
 
+        // The catalog service has no total count; signal "has more" via NextCursor.
+        // Total is set to items.Count so the UI can rely solely on NextCursor != null.
         return new CatalogueItemsResponse(items, items.Count, page, size, result.NextCursor);
     }
 
@@ -163,7 +163,7 @@ public sealed class HttpCatalogImportClient(
     private sealed record CatalogProductItemDto(
         Guid Id, string RetailerId, string Name, string? Description,
         string? ImageUrl, string? Brand, string? Availability, string? Condition,
-        decimal? Price, string? Currency, decimal? SalePrice,
+        string? RawPrice, string? RawSalePrice,
         string Status, DateTime? PublishedAt, DateTime? RetiredAt,
         DateTime CreatedAt, DateTime UpdatedAt);
 
