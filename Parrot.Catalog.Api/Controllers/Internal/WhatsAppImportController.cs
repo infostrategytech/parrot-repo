@@ -44,7 +44,7 @@ public sealed class WhatsAppImportController : ControllerBase
     [EnableRateLimiting(RateLimiting.Read)]
     [EndpointSummary("Paginated product list for a WhatsApp connection.")]
     public async Task<ActionResult<PagedResponse<WhatsAppProductResponse>>> GetProducts(
-        [FromQuery] Guid connectionId,
+        [FromQuery(Name = "connection_id")] Guid connectionId,
         [FromQuery] string? cursor,
         [FromQuery] int? limit,
         CancellationToken ct)
