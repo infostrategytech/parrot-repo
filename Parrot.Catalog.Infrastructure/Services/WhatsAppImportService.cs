@@ -299,10 +299,9 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
                 ? allPrices.FirstOrDefault(pr => pr.OfferId == offer.Id && pr.PriceType == PriceType.Promo)
                 : null;
 
-            string? availability = avail is not null ? EnumNames.ToSnake(avail.Mode) : null;
-
-            // Extract brand/condition from attributes JSON (best-effort)
-            (string? brand, string? condition, string? imageUrl) = ExtractAttributes(p.Attributes);
+            // Extract availability from stored attributes (the original Meta value, e.g. "out_of_stock").
+            // avail.Mode alone can't reconstruct "out_of_stock" vs "in_stock" since both use InStock mode.
+            (string? availability, string? brand, string? condition, string? imageUrl) = ExtractAttributes(p.Attributes);
 
             return new WhatsAppProductResponse(
                 Id: p.Id,
@@ -695,19 +694,20 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
         return lower is "new" or "refurbished" or "used" ? lower : null;
     }
 
-    private static (string? Brand, string? Condition, string? ImageUrl) ExtractAttributes(string attributesJson)
+    private static (string? Availability, string? Brand, string? Condition, string? ImageUrl) ExtractAttributes(string attributesJson)
     {
         try
         {
             System.Text.Json.JsonDocument doc = System.Text.Json.JsonDocument.Parse(attributesJson);
+            string? availability = doc.RootElement.TryGetProperty("availability", out System.Text.Json.JsonElement av) ? av.GetString() : null;
             string? brand = doc.RootElement.TryGetProperty("brand", out System.Text.Json.JsonElement b) ? b.GetString() : null;
             string? condition = doc.RootElement.TryGetProperty("condition", out System.Text.Json.JsonElement cond) ? cond.GetString() : null;
             string? imageUrl = doc.RootElement.TryGetProperty("image_url", out System.Text.Json.JsonElement img) ? img.GetString() : null;
-            return (brand, condition, imageUrl);
+            return (availability, brand, condition, imageUrl);
         }
         catch
         {
-            return (null, null, null);
+            return (null, null, null, null);
         }
     }
 
