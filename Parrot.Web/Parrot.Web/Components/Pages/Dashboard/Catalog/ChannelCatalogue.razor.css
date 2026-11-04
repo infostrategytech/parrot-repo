@@ -14,6 +14,8 @@
   --ds-chan-cat-mark: 48px;
   /* The card's edge. */
   --ds-chan-cat-hairline: 1px;
+  /* No motion token: matches --ds-channel-motion on ChannelCard. */
+  --ds-chan-cat-motion: 140ms;
 
   padding: var(--spacing-4xl) var(--ds-chan-cat-gutter) var(--spacing-5xl);
 }
@@ -55,7 +57,7 @@
   background: var(--colors-surface-card);
   border: var(--ds-chan-cat-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-2xl);
-  transition: box-shadow 140ms ease;
+  transition: box-shadow var(--ds-chan-cat-motion) ease;
 }
 
 .chan-cat__card:hover {
