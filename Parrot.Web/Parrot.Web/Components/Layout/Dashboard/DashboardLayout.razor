@@ -201,11 +201,16 @@
     private async Task CountTasksAsync()
     {
         if (!Tasks.Available) return;
-        // With a team, what's yours or nobody's yet; alone, everything that needs acting on.
-        var team = await Tasks.TeamAsync();
-        var me = Tasks.Me.Id;
-        var count = (await Tasks.ListAsync()).Count(task => task.NeedsAction && (team.Count < 2 || task.Assignee is null || task.Assignee.Id == me));
-        _tasksNeedYou = count == 0 ? null : count;
+        try
+        {
+            // With a team, what's yours or nobody's yet; alone, everything that needs acting on.
+            var team = await Tasks.TeamAsync();
+            var me = Tasks.Me.Id;
+            var count = (await Tasks.ListAsync()).Count(task => task.NeedsAction && (team.Count < 2 || task.Assignee is null || task.Assignee.Id == me));
+            _tasksNeedYou = count == 0 ? null : count;
+        }
+        // A count that can't be read shows none: it must never take the page down with it.
+        catch (Exception exception) when (Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState.IsFailure(exception)) { _tasksNeedYou = null; }
         StateHasChanged();
     }
 
