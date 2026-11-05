@@ -1,4 +1,4 @@
-@page "/ai-operations/new-agent"
+@page "/dashboard/ai-operations/new-agent"
 @attribute [RequiresAccess(AccessRules.AgentCreate)]
 @layout Parrot.Web.Components.Layout.BareLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
@@ -192,14 +192,14 @@
         // Without a way to write the job description there is nothing to set up here.
         if (!Briefing.Available)
         {
-            Nav.NavigateTo("/ai-operations", replace: true);
+            Nav.NavigateTo("/dashboard/ai-operations", replace: true);
             return;
         }
         // The first agent comes after "Tell us about your business" (the gate on AI Operations opens it).
         if (Knowledge.Available && !await Knowledge.HasApprovedAsync())
         {
             _done = true;
-            Nav.NavigateTo("/ai-operations?new=1", replace: true);
+            Nav.NavigateTo("/dashboard/ai-operations?new=1", replace: true);
             return;
         }
         await AiAgentsState.LoadAsync();
@@ -208,7 +208,7 @@
         if (_channels.Count == 0)
         {
             _done = true;
-            Nav.NavigateTo("/ai-operations?new=1", replace: true);
+            Nav.NavigateTo("/dashboard/ai-operations?new=1", replace: true);
             return;
         }
         // A look no other agent wears, the channels no live agent answers yet, and no name.
@@ -263,7 +263,7 @@
         {
             var saved = await AiAgentsState.CreateAsync(_form.ToAgent(live: false));
             _done = true;
-            Nav.NavigateTo($"/ai-operations/{saved.Id}?created=1");
+            Nav.NavigateTo($"/dashboard/ai-operations/{saved.Id}?created=1");
         }
         catch (ApiException exception)
         {
@@ -284,8 +284,8 @@
 
     private async Task RequestLeaveAsync()
     {
-        if (!HasProgress) { _done = true; Nav.NavigateTo("/ai-operations"); return; }
-        _leaveTo = "/ai-operations";
+        if (!HasProgress) { _done = true; Nav.NavigateTo("/dashboard/ai-operations"); return; }
+        _leaveTo = "/dashboard/ai-operations";
         _confirmingLeave = true;
         await Task.CompletedTask;
     }
@@ -302,7 +302,7 @@
     {
         _confirmingLeave = false;
         _done = true;
-        Nav.NavigateTo(_leaveTo ?? "/ai-operations");
+        Nav.NavigateTo(_leaveTo ?? "/dashboard/ai-operations");
     }
 
     private void Stay() => _confirmingLeave = false;

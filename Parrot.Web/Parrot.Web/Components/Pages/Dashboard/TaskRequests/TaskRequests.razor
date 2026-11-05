@@ -1,7 +1,5 @@
 @page "/dashboard/tasks"
 @page "/dashboard/tasks/{TaskId}"
-@page "/dashboard/task-requests"
-@page "/dashboard/task-requests/{TaskId}"
 @attribute [RequiresAccess(AccessRules.Tasks)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
@@ -195,10 +193,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // The page's old address still works, and lands here (the same page, so it carries on loading).
-        var path = new Uri(Nav.Uri).AbsolutePath;
-        if (path.StartsWith("/dashboard/task-requests", StringComparison.OrdinalIgnoreCase))
-            Nav.NavigateTo(TaskId is null ? "/dashboard/tasks" : $"/dashboard/tasks/{Uri.EscapeDataString(TaskId)}", replace: true);
         Store.Changed += OnStoreChanged;
         Clock.Changed += OnClockChanged;
         if (!Store.Available) return;

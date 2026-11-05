@@ -1,5 +1,5 @@
-@page "/dashboard/conversations"
-@page "/dashboard/conversations/{ConversationId}"
+@page "/dashboard/inbox"
+@page "/dashboard/inbox/{ConversationId}"
 @attribute [RequiresAccess(AccessRules.Inbox)]
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @layout DashboardLayout
@@ -498,7 +498,7 @@
             return;
         }
 
-        // Deep link: /dashboard/conversations/{id}. The list may not be loaded
+        // Deep link: /dashboard/inbox/{id}. The list may not be loaded
         // yet on first render; RefreshAsync honours the route then.
         if (ConversationId == _selected?.Id) return;
         var item = ConversationsState.GetConversation(ConversationId);
@@ -681,7 +681,7 @@
     private async Task BackToListAsync()
     {
         await CloseCustomerDetailsAsync();
-        Nav.NavigateTo("/dashboard/conversations");
+        Nav.NavigateTo("/dashboard/inbox");
     }
 
     private async Task SelectConversationAsync(string id)
@@ -690,7 +690,7 @@
         if (item is null) return;
         await CloseCustomerDetailsAsync();
         _selected = item;
-        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(id)}");
+        Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(id)}");
         // If a refresh is in flight, the new selection is read as soon as it is done.
         await ReadSelectedSoonAsync();
     }
@@ -835,7 +835,7 @@
         {
             await CloseCustomerDetailsAsync();
             _selected = null;
-            Nav.NavigateTo("/dashboard/conversations");
+            Nav.NavigateTo("/dashboard/inbox");
         }
     }
 
@@ -878,7 +878,7 @@
     }
 
     private void OpenProfileConversation(CustomerChannel channel) =>
-        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(channel.ConversationId)}");
+        Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(channel.ConversationId)}");
 
     [JSInvokable]
     public async Task CloseCustomerDetailsAsync()

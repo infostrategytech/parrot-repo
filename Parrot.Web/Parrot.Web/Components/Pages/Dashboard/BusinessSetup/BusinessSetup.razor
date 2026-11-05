@@ -31,7 +31,7 @@
                 </Typography>
                 <div class="guided__success-actions">
                     <Button Variant="ButtonVariant.Secondary" @onclick="@(() => Nav.NavigateTo("/dashboard"))">Go to overview</Button>
-                    <Button @onclick="@(() => Nav.NavigateTo("/ai-operations"))">
+                    <Button @onclick="@(() => Nav.NavigateTo("/dashboard/ai-operations"))">
                         <ChildContent>View AI agents</ChildContent>
                         <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
                     </Button>
@@ -540,7 +540,7 @@
     // As on the dashboard: a connected channel, then "Teach your AI", then setup.
     private Task CreateNewAgent() => AgentGate.RequireAsync(() =>
     {
-        Nav.NavigateTo("/ai-operations?new=1");
+        Nav.NavigateTo("/dashboard/ai-operations?new=1");
         return Task.CompletedTask;
     });
 
