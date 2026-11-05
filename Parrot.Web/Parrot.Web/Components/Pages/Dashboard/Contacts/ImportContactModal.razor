@@ -316,7 +316,7 @@
                 : "That kind of file can't be read. Choose a spreadsheet (Excel or CSV) or a contacts file (.vcf).";
             return;
         }
-        var limit = photo ? CustomerImport.MaxPhotoBytes : extension == ".xlsx" ? CustomerImport.MaxSheetBytes : CustomerImport.MaxTextBytes;
+        var limit = photo ? CustomerImport.MaxPhotoBytes : extension == ".xlsx" ? CustomerImport.MaxSheetBytes : extension == ".vcf" ? CustomerImport.MaxVcfBytes : CustomerImport.MaxTextBytes;
         if (file.Size > limit)
         {
             _problem = $"That file is bigger than {limit / (1024 * 1024)} MB. {(photo ? "Try a smaller photo." : "Split it and import it in parts.")}";

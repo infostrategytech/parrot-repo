@@ -167,6 +167,7 @@ services:
       DataProtection__KeyRingPath: /app/data-protection-keys
       WhatsApp__WebhookBaseUrl: ${WHATSAPP_WEBHOOK_BASE_URL:-http://localhost:5222}
       WhatsApp__AppSecret: ${WHATSAPP_APP_SECRET:-your-app-secret}
+      CatalogClient__BaseUrl: http://catalog-api:8080
       Facebook__WebhookBaseUrl: ${FACEBOOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
       Facebook__AppSecret: ${FACEBOOK_APP_SECRET:-your-facebook-app-secret}
       TikTok__WebhookBaseUrl: ${TIKTOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
@@ -419,7 +420,9 @@ services:
       JwtSettings__Audience: ParrotApp
       # Each request with a Parrot session token is checked against the member's
       # current access, so a removed member or a changed role applies at once.
-      Catalog__Auth__AccessCheckUrl: http://parrot-api:8080/
+      # Override with PARROT_API_ACCESS_CHECK_URL when Parrot's API runs on the
+      # host instead of in this stack (dotnet run), e.g. http://host.docker.internal:5222/
+      Catalog__Auth__AccessCheckUrl: ${PARROT_API_ACCESS_CHECK_URL:-http://parrot-api:8080/}
       # Items' photos: the API's public bucket in MinIO, read by the browser through the published port.
       Catalog__Photos__Bucket: parrot
       Catalog__Photos__Region: us-east-1
