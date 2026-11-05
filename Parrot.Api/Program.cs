@@ -439,13 +439,12 @@ builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
 builder.Services.AddScoped<IServiceTokenFactory, ServiceTokenFactory>();
 
 builder.Services.AddOptions<CatalogClientSettings>()
-    .BindConfiguration(CatalogClientSettings.SectionName)
-    .ValidateDataAnnotations()
-    .ValidateOnStart();
+    .BindConfiguration(CatalogClientSettings.SectionName);
 builder.Services.AddHttpClient<ICatalogImportClient, HttpCatalogImportClient>((sp, client) =>
 {
-    string baseUrl = sp.GetRequiredService<IOptions<CatalogClientSettings>>().Value.BaseUrl.TrimEnd('/') + "/";
-    client.BaseAddress = new Uri(baseUrl);
+    string? rawUrl = sp.GetRequiredService<IOptions<CatalogClientSettings>>().Value.BaseUrl;
+    if (Uri.TryCreate(rawUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 });
 
