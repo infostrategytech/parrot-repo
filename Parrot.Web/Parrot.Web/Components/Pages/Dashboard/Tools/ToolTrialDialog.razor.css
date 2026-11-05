@@ -1,0 +1,2 @@
+.tool-access { display: grid; gap: var(--spacing-xl); }
+.tool-access ::deep p { margin: var(--spacing-none); }

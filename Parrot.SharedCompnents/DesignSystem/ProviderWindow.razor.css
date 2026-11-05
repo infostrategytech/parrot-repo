@@ -1,0 +1,72 @@
+/* Deliberately unlike the rest of the product, as Channels' stand-in for Meta's window is. */
+.provider-window-backdrop {
+  /* Gaps in the token set: no z-index, window-width, blur or motion scale (Channels' values). */
+  --ds-provider-window-layer: 140;
+  --ds-provider-window-width: 440px;
+  --ds-provider-window-blur: 4px;
+  --ds-provider-window-enter: 160ms;
+  --ds-provider-window-hairline: 1px;
+
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-provider-window-layer);
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-2xl);
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-provider-window-blur));
+  animation: provider-window-backdrop-in var(--ds-provider-window-enter) ease;
+}
+
+.provider-window {
+  display: grid;
+  width: min(var(--ds-provider-window-width), 100%);
+  overflow: hidden;
+  outline: none;
+  background: var(--colors-surface-elevated);
+  border-radius: var(--radius-radius-lg);
+  box-shadow: 0 var(--spacing-2xl) var(--spacing-6xl) var(--colors-surface-shadow-diffuse);
+  animation: provider-window-in var(--ds-provider-window-enter) ease;
+}
+.provider-window ::deep h2, .provider-window ::deep p { margin: var(--spacing-none); }
+.provider-window ::deep h2 { color: var(--colors-text-primary); }
+
+/* Neutral chrome, like any browser title bar: only the mark carries the provider's colour. */
+.provider-window__chrome {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border-bottom: var(--ds-provider-window-hairline) solid var(--colors-surface-border);
+}
+
+.provider-window__body {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl) var(--spacing-lg);
+  color: var(--colors-text-muted);
+}
+
+.provider-window__footer {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: flex-end;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-top: var(--ds-provider-window-hairline) solid var(--colors-surface-border);
+}
+/* The button belongs to the provider, so it isn't yára's colour: neutral, as Channels draws X's window. */
+.provider-window__footer ::deep .provider-window__cta.ds-button--primary { color: var(--colors-surface-card); background: var(--colors-text-primary); }
+.provider-window__footer ::deep .provider-window__cta.ds-button--primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--colors-text-primary) 85%, var(--colors-surface-card));
+}
+
+@keyframes provider-window-backdrop-in { from { opacity: 0; } }
+@keyframes provider-window-in { from { opacity: 0; transform: scale(0.97); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-window-backdrop, .provider-window { animation: none; }
+}

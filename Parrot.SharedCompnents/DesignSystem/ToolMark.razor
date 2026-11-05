@@ -1,0 +1,23 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Provider artwork is a third-party brand mark, not a yára colour token. Local assets work offline. *@
+<span class="tool-mark tool-mark--@Provider @(Small ? "is-small" : null)" aria-hidden="true">
+    @if (FileName is { } file)
+    {
+        <span class="tool-mark__art"><img src="@($"_content/Parrot.SharedComponents/brands/tools/{file}")" alt="" /></span>
+    }
+    else { <Icon Name="IconName.RiExchangeBoxFill" Size="IconSize.Md" /> }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public string Provider { get; set; } = "";
+    [Parameter] public bool Small { get; set; }
+    private string? FileName => Provider switch
+    {
+        "accelerate" => "accelerate.png",
+        "calendly" => "calendly.png",
+        "google-calendar" => "google-calendar.png",
+        "google-sheets" => "google-sheets.png",
+        _ => null,
+    };
+}

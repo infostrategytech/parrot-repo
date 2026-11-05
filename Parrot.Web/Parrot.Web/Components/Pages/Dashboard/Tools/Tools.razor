@@ -1,0 +1,249 @@
+@page "/dashboard/tools"
+@attribute [RequiresAccess(AccessRules.Business)]
+@layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.AiAgents.State
+@using Parrot.Web.Components.Pages.Dashboard.AiAgents
+@inject IWorkspaceTools Store
+@inject IToolActionRequests Requests
+@inject AiAgentsState AgentsState
+@inject AuthState Auth
+@inject NavigationManager Nav
+@inject ToastService Toasts
+@implements IDisposable
+
+<PageTitle>Tools · yára</PageTitle>
+
+<main class="workspace-tools">
+    <header class="workspace-tools__header" tabindex="-1" @ref="_heading">
+        <div class="workspace-tools__heading">
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Tools</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="workspace-tools__lede">Connect the apps your team and agents work with.</Typography>
+        </div>
+        @if (ContextAgent is { } context) { <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="ReturnToAgent">@($"Back to {context.Name}'s job")</Button> }
+    </header>
+
+    @if (!Store.Available)
+    {
+        <InlineError Tone="InlineErrorTone.Info" Message="Tool connections aren't available in this workspace yet. Your messaging channels are still managed in Channels." />
+    }
+
+    @if (_error is not null)
+    {
+        <InlineError Message="@_error"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action></InlineError>
+    }
+
+    @if (_snapshot is null && _loading)
+    {
+        <LoadingState Title="Opening your tools" Description="Checking the apps connected to this workspace." />
+    }
+    else if (_snapshot is { } snapshot)
+    {
+        @if (snapshot.Connections.Count > 0)
+        {
+        <section class="workspace-tools__section" aria-labelledby="your-tools-title">
+            <div class="workspace-tools__section-head">
+                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="your-tools-title">Your tools</Typography>
+            </div>
+                <div class="workspace-tools__connected" aria-busy="@(_loading ? "true" : "false")">
+                    @foreach (var connection in snapshot.Connections)
+                    {
+                        var tool = ToolCatalog.Find(connection.ToolId);
+                        if (tool is null) { continue; }
+                        var current = connection;
+                        var agents = snapshot.AgentAccess.Count(access => access.ConnectionId == current.Id && access.Actions.Count > 0);
+                        <article class="workspace-tools__connection">
+                            <ToolMark Provider="@tool.Id" Small />
+                            <div class="workspace-tools__connection-words">
+                                <div><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3">@tool.Name</Typography>
+                                    <StatusBadge Tone="@(current.Status == ToolConnectionStatus.Connected ? StatusTone.Success : StatusTone.Warning)">@Status(current.Status)</StatusBadge></div>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p">@(current.AccountName ?? "Finish connecting your account")@(current.Summary is { } summary ? " · " + summary : "")</Typography>
+                                @if (current.Status == ToolConnectionStatus.Connected && agents > 0)
+                                {
+                                    @* The agents that can use it, as their faces only (designer, 2 November 2026); names on hover and for screen readers. *@
+                                    <ul class="workspace-tools__faces" aria-label="@($"Agents that can use {tool.Name}: {string.Join(", ", ToolAccessCopy.Grants(current.Id, snapshot).Select(grant => ToolAccessCopy.AgentName(grant.AgentId, _agents)))}")">
+                                        @foreach (var grant in ToolAccessCopy.Grants(current.Id, snapshot))
+                                        {
+                                            var agent = _agents.FirstOrDefault(item => item.Id == grant.AgentId);
+                                            <li title="@(agent?.Name ?? "Unavailable agent")">
+                                                @if (agent?.Look is { } look) { <img src="@look" alt="" /> }
+                                                else { <PetalAvatar Seed="@grant.AgentId" Initials="@Initials.From(agent?.Name ?? "?")" Size="AvatarSize.Sm" /> }
+                                            </li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                            @if (current.Status == ToolConnectionStatus.Connected && agents == 0)
+                            {
+                                <Button Variant="ButtonVariant.Primary" Size="ButtonSize.Small" disabled="@(!snapshot.CanManage)" aria-label="@($"Choose an agent for {tool.Name}")" @onclick="() => OpenAccess(current)">Choose an agent</Button>
+                            }
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(!snapshot.CanManage)"
+                                    aria-label="@($"{Action(current.Status)} {tool.Name}")" @onclick="() => Open(tool, current)">@Action(current.Status)</Button>
+                        </article>
+                    }
+                </div>
+        </section>
+        }
+
+        @if (Explore.Count > 0)
+        {
+            <section class="workspace-tools__section" aria-labelledby="explore-tools-title">
+                <div class="workspace-tools__section-head">
+                    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="explore-tools-title">@(snapshot.Connections.Count == 0 ? "Choose a tool to get started" : "Explore tools")</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Pick what helps your business</Typography>
+                </div>
+                <div class="workspace-tools__grid">
+                    @foreach (var tool in Explore)
+                    {
+                        var current = tool;
+                        <article class="workspace-tools__card">
+                            <header><ToolMark Provider="@tool.Id" />
+                                <div><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3">@tool.Name</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="p">@tool.Category</Typography></div>
+                            </header>
+                            <div class="workspace-tools__card-copy">
+                                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h4">@tool.Headline</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@tool.Description</Typography>
+                            </div>
+                            @if (_notConnected.GetValueOrDefault(tool.Id) is { } notConnected)
+                            {
+                                <p class="workspace-tools__not-connected" role="status">
+                                    <Icon Name="IconName.RiInformationFill" Size="IconSize.Sm" />
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span">@notConnected</Typography>
+                                </p>
+                            }
+                            <footer>
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(!Store.Available || !snapshot.CanManage)"
+                                        aria-label="@($"Connect {tool.Name}")" @onclick="() => Open(current, null)">@(!Store.Available ? "Coming soon" : _notConnected.ContainsKey(tool.Id) ? "Try again" : "Connect")</Button></footer>
+                        </article>
+                    }
+                </div>
+            </section>
+        }
+        <div class="workspace-tools__footnote"><Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>You choose what each agent can do. Nothing gets access automatically.</Typography></div>
+    }
+</main>
+
+@if (_selected is { } selected && _snapshot is { } data)
+{
+    @if (_accessOpen && _connection is { } accessConnection)
+    {
+        <ToolAccessDialog Open="true" AgentId="@(ContextAgent?.Id ?? "")" AgentName="@(ContextAgent?.Name ?? "")" Agents="_agents"
+                          Connection="accessConnection" Snapshot="data" CancelLabel="@(_accessFrom == AccessFrom.Connected ? "Skip for now" : "Cancel")"
+                          OnClose="CloseAccess" OnSaved="AccessSavedAsync" />
+    }
+    else if (_trialOpen && _connection is { } trialConnection)
+    {
+        <ToolTrialDialog Open="true" Connection="trialConnection" Snapshot="data" Agents="_agents" OnClose="() => _trialOpen = false" />
+    }
+    else
+    {
+    <ToolConnectionDialog Open="_dialogOpen" Tool="selected" Connection="_connection" Access="data.AgentAccess" CanManage="data.CanManage"
+                          ContextAgentId="@(ContextAgent?.Id)" ReturnedSetup="_returned" OnNotConnected="NotConnected"
+                          Agents="_agents" CanTry="Requests.CanTry" OnManageAccess="OpenAccessFromManage" OnTry="OpenTrial"
+                          OnClose="CloseAsync" OnChanged="ChangedAsync" />
+    }
+}
+
+@code {
+    private WorkspaceToolsSnapshot? _snapshot;
+    private ToolDefinition? _selected;
+    private ToolConnection? _connection;
+    private IReadOnlyList<ToolAgentOption> _agents = [];
+    private bool _dialogOpen, _accessOpen, _trialOpen, _loading = true, _disposed, _focusPending;
+    private string? _error;
+    [SupplyParameterFromQuery(Name = "agent")] public string? ContextAgentId { get; set; }
+    [SupplyParameterFromQuery(Name = "tool")] public string? ContextTool { get; set; }
+
+    // Back from the provider's page: the API returns people to /dashboard/tools?tool=…&setup=…&result=allowed|refused|expired.
+    [SupplyParameterFromQuery(Name = "setup")] public Guid? ReturnSetup { get; set; }
+    [SupplyParameterFromQuery(Name = "result")] public string? ReturnResult { get; set; }
+    private Guid? _returned;
+    private bool _returnApplied;
+    private readonly Dictionary<string, string> _notConnected = new(StringComparer.Ordinal);
+    private string? _appliedContext;
+    private ToolAgentOption? ContextAgent => _agents.FirstOrDefault(agent => agent.Id == ContextAgentId);
+    private ElementReference _heading;
+    private CancellationTokenSource? _load;
+    private IReadOnlyList<ToolDefinition> Explore => ToolCatalog.All.Where(tool => _snapshot?.Connections.All(connection => connection.ToolId != tool.Id) != false).ToList();
+    private static string Status(ToolConnectionStatus status) => status switch { ToolConnectionStatus.Connected => "Connected", ToolConnectionStatus.NeedsAttention => "Needs attention", _ => "Setup incomplete" };
+    private static string Action(ToolConnectionStatus status) => status switch { ToolConnectionStatus.Connected => "Manage", ToolConnectionStatus.NeedsAttention => "Reconnect", _ => "Continue setup" };
+
+    protected override void OnInitialized() => Auth.OnChange += AuthChanged;
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && Auth.IsAuthenticated) await LoadAsync();
+        if (_snapshot is not null && !_returnApplied && ReturnSetup is { } setup && ToolCatalog.Find(ContextTool ?? "") is { } returnedTool)
+        {
+            _returnApplied = true;
+            if (ReturnResult == "allowed") { _returned = setup; Open(returnedTool, null); }
+            else _notConnected[returnedTool.Id] = ReturnResult == "expired" ? $"That took too long, so {returnedTool.Name} wasn't connected." : $"{returnedTool.Name} wasn't connected.";
+            Nav.NavigateTo("/dashboard/tools", replace: true);
+            StateHasChanged();
+        }
+        if (_snapshot is not null && _appliedContext != ContextAgentId + ":" + ContextTool)
+        {
+            _appliedContext = ContextAgentId + ":" + ContextTool;
+            if (ContextAgent is not null && ToolCatalog.Find(ContextTool ?? "") is { } tool)
+            { Open(tool, _snapshot.Connections.FirstOrDefault(connection => connection.ToolId == tool.Id)); StateHasChanged(); }
+        }
+        if (_focusPending && !_dialogOpen && !_accessOpen && !_trialOpen) { _focusPending = false; await _heading.FocusAsync(); }
+    }
+    private void AuthChanged() => _ = InvokeAsync(async () => { _load?.Cancel(); _snapshot = null; _dialogOpen = _accessOpen = _trialOpen = false; if (Auth.IsAuthenticated) await LoadAsync(); });
+    private async Task LoadAsync()
+    {
+        // The newest load wins; an older one still running sees it was cancelled.
+        var previous = _load;
+        var mine = _load = new CancellationTokenSource();
+        try { previous?.Cancel(); } catch (ObjectDisposedException) { }
+        previous?.Dispose();
+        var ct = mine.Token;
+        _loading = true; _error = null;
+        StateHasChanged();
+        try
+        {
+            var snapshot = await Store.ReadAsync(ct);
+            if (Store.Available) await AgentsState.LoadAsync();
+            if (!ct.IsCancellationRequested && !_disposed)
+            {
+                _snapshot = snapshot;
+                _agents = AgentsState.Agents.Select(agent => new ToolAgentOption(agent.Id, agent.Name, AgentUseCase.NameOf(agent.Settings), agent.Settings.UseCase,
+                    AgentBuilderCopy.MascotImage(agent.Mascot ?? AgentBuilderCopy.Mascots[agent.Name.Sum(c => c) % AgentBuilderCopy.Mascots.Count]))).ToArray();
+                if (_connection is { } current) _connection = snapshot.Connections.FirstOrDefault(connection => connection.Id == current.Id);
+                if (AgentsState.LoadFailed) _error = "Your connections loaded, but agents couldn't be loaded. Try again before changing access.";
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException)
+        { if (!ct.IsCancellationRequested) _error = "Your tools couldn't be loaded. Check your connection and try again."; }
+        finally { if (_load == mine && !_disposed) { _loading = false; StateHasChanged(); } }
+    }
+    private void NotConnected(string message) { if (_selected is { } tool) _notConnected[tool.Id] = message; _returned = null; }
+    private void Open(ToolDefinition tool, ToolConnection? connection) { _notConnected.Remove(tool.Id); _selected = tool; _connection = connection; _dialogOpen = true; }
+    private async Task CloseAsync() { _dialogOpen = _accessOpen = _trialOpen = false; _returned = null; _focusPending = true; await LoadAsync(); }
+    private async Task ChangedAsync(string message) { Toasts.Show(message); await LoadAsync(); }
+    // Where agent access was opened from decides where closing it goes: back to Manage, or back to the page.
+    private enum AccessFrom { Page, Manage, Connected }
+    private AccessFrom _accessFrom;
+    private void OpenAccess(ToolConnection connection) => OpenAccess(connection, AccessFrom.Page);
+    private void OpenAccessFromManage(ToolConnection connection) => OpenAccess(connection, AccessFrom.Manage);
+    private void OpenAccess(ToolConnection connection, AccessFrom from)
+    {
+        _selected = ToolCatalog.Find(connection.ToolId); _connection = connection; _accessFrom = from;
+        _dialogOpen = false; _accessOpen = true;
+    }
+    private async Task CloseAccess()
+    {
+        _accessOpen = false;
+        // Back to Manage with the access just saved, so the agents chosen show there.
+        if (_accessFrom == AccessFrom.Manage) { await LoadAsync(); _dialogOpen = true; return; }
+        _focusPending = true;
+        await LoadAsync();
+    }
+    private async Task AccessSavedAsync() { Toasts.Show("Saved."); await CloseAccess(); }
+    private void OpenTrial(ToolConnection connection) { _connection = connection; _dialogOpen = false; _trialOpen = true; }
+    private void ReturnToAgent() { if (ContextAgent is { } agent) Nav.NavigateTo($"/dashboard/ai-operations/{Uri.EscapeDataString(agent.Id)}?tab=job"); }
+    public void Dispose() { _disposed = true; Auth.OnChange -= AuthChanged; try { _load?.Cancel(); } catch (ObjectDisposedException) { } _load?.Dispose(); _load = null; }
+}

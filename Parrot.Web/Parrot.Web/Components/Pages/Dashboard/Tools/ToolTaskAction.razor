@@ -1,0 +1,56 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+@inject IToolActionRequests Requests
+
+@if (_request is { } request)
+{
+    <section class="tool-task-action" aria-label="Tool action">
+        <div class="tool-task-action__heading"><ToolMark Provider="@request.ToolId" Small />
+            <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">@Heading(request)</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p">@request.AgentName · @ToolCatalog.Find(request.ToolId)?.Name</Typography></div>
+        </div>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@request.Description</Typography>
+        @if (request.IsTest) { <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Test task · No external changes.</Typography> }
+        @if (request.State == ToolRequestState.AwaitingApproval)
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>The agent is waiting. Approve this action or decline it without making a change.</Typography>
+            <div class="tool-task-action__buttons"><Button Variant="ButtonVariant.Secondary" disabled="@_busy" @onclick="() => DecideAsync(false)">Decline</Button>
+                <Button Busy="_busy" @onclick="() => DecideAsync(true)">Approve action</Button></div>
+        }
+        else
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" role="status">@request.Result</Typography>
+            @if (request.State == ToolRequestState.Failed) { <Button Variant="ButtonVariant.Secondary" Busy="_busy" @onclick="RetryAsync">Retry action</Button> }
+        }
+        @if (_error is not null) { <InlineError Message="@_error" /> }
+    </section>
+}
+else if (_error is not null) { <InlineError Message="@_error"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action></InlineError> }
+
+@code {
+    [Parameter, EditorRequired] public string TaskId { get; set; } = "";
+    [Parameter] public EventCallback<bool> OnPendingChanged { get; set; }
+    private ToolActionRequest? _request;
+    private string? _for, _error;
+    private bool _busy;
+    protected override async Task OnParametersSetAsync() { if (_for == TaskId) return; _for = TaskId; await LoadAsync(); }
+    private async Task LoadAsync()
+    {
+        _request = null; _error = null;
+        try { _request = await Requests.ForTaskAsync(TaskId); await NotifyAsync(); }
+        catch (HttpRequestException) { _error = "The tool action couldn't be loaded. Try again before completing the task."; await OnPendingChanged.InvokeAsync(true); }
+    }
+    private static string Heading(ToolActionRequest request) => request.State switch
+    { ToolRequestState.AwaitingApproval => "Needs your approval", ToolRequestState.Failed => "Action needs attention", ToolRequestState.Declined => "Action declined", _ => request.IsTest ? "Test complete" : "Action completed" };
+    private Task DecideAsync(bool approved) => RunAsync(() => Requests.DecideAsync(_request!.Id, approved, _request.Revision));
+    private Task RetryAsync() => RunAsync(() => Requests.RetryAsync(_request!.Id, _request.Revision));
+    private async Task RunAsync(Func<Task<ToolActionRequest>> action)
+    {
+        if (_busy || _request is null) return;
+        _busy = true; _error = null;
+        try { _request = await action(); await NotifyAsync(); }
+        catch (HttpRequestException exception) { _error = exception.StatusCode is { } status && (int)status < 500 ? exception.Message : "The action couldn't be confirmed. Check its status before trying again."; }
+        finally { _busy = false; }
+    }
+    private Task NotifyAsync() => OnPendingChanged.InvokeAsync(_request?.State is ToolRequestState.AwaitingApproval or ToolRequestState.Failed);
+}

@@ -1,0 +1,37 @@
+.tool-mark {
+  /* Provider marks need a consistent optical box; Figma has no app-logo size token. */
+  --ds-tool-mark-size: 48px;
+  --ds-tool-mark-art: 30px;
+  display: inline-grid; place-items: center; flex: 0 0 auto;
+  width: var(--ds-tool-mark-size); height: var(--ds-tool-mark-size);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl); background: var(--colors-surface-card);
+  color: var(--colors-brand-primary);
+}
+.tool-mark__art { display: grid; place-items: center; width: var(--ds-tool-mark-art); height: var(--ds-tool-mark-art); }
+.tool-mark img { width: 100%; height: 100%; object-fit: contain; }
+/* Compact provider-logo sizes are also absent from the Figma token export. */
+.tool-mark.is-small { --ds-tool-mark-size: 40px; --ds-tool-mark-art: 26px; }
+
+/* Calendly's file is its app icon: a blue rounded square on a white tile with a margin. Its frame crops the tile and
+   rounds to the icon's own corners, so it sits centred in the mark like the others, in both themes. */
+.tool-mark--calendly .tool-mark__art {
+  /* Gaps in the token set: the crop is the icon file's own geometry (its blue square is 70% of the file, measured, with corners about 40% round). */
+  --ds-tool-mark-calendly-crop: 147%;
+  --ds-tool-mark-calendly-corner: 40%;
+
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--ds-tool-mark-calendly-corner);
+}
+.tool-mark--calendly img {
+  /* Gap in the token set: the inset is (crop − 100%) ÷ 2, the icon file's margin. */
+  --ds-tool-mark-calendly-inset: -23.5%;
+
+  position: absolute;
+  top: var(--ds-tool-mark-calendly-inset);
+  left: var(--ds-tool-mark-calendly-inset);
+  width: var(--ds-tool-mark-calendly-crop);
+  height: var(--ds-tool-mark-calendly-crop);
+  max-width: none;
+}

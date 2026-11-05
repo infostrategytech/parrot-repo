@@ -1,0 +1,171 @@
+.tool-dialog { display: grid; gap: var(--spacing-xl); min-width: 0; outline: none; }
+.tool-dialog ::deep h3, .tool-dialog ::deep h4, .tool-dialog ::deep p { margin: var(--spacing-none); }
+.tool-dialog ::deep h3, .tool-dialog ::deep h4 { color: var(--colors-text-primary); }
+.tool-dialog ::deep .tool-dialog__notice { display: flex; align-items: start; gap: var(--spacing-md); padding: var(--spacing-lg); background: var(--colors-accent-brand-subtle); border-radius: var(--radius-radius-xl); }
+.tool-dialog ::deep .tool-dialog__notice > svg { flex: 0 0 auto; color: var(--colors-brand-primary); margin-top: var(--spacing-2xs); }
+.tool-dialog ::deep .tool-dialog__notice > div { display: grid; gap: var(--spacing-xs); }
+.tool-dialog__authorize { display: grid; justify-items: center; text-align: center; gap: var(--spacing-md); padding-block: var(--spacing-xl); }
+.tool-dialog__authorize-icon { padding: var(--spacing-lg); border-radius: var(--radius-radius-full); color: var(--colors-brand-primary); background: var(--colors-accent-brand-subtle); }
+.tool-dialog__facts { display: grid; gap: var(--spacing-md); margin: var(--spacing-none); }
+.tool-dialog__facts > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: var(--spacing-lg); align-items: start; padding-bottom: var(--spacing-md); border-bottom: var(--ds-hairline) solid var(--colors-surface-border); }
+.tool-dialog__facts dt { color: var(--colors-text-muted); }
+.tool-dialog__facts dd { margin: var(--spacing-none); color: var(--colors-text-primary); overflow-wrap: anywhere; }
+/* Inside the provider's stand-in window: who is signed in, and what yára asks to allow. */
+.tool-dialog__provider-account {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+  width: max-content;
+  max-width: 100%;
+  padding: var(--spacing-xs) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.tool-dialog__provider-scopes { display: grid; gap: var(--spacing-sm); color: var(--colors-text-secondary); }
+.tool-dialog__provider-scopes ul { display: grid; gap: var(--spacing-sm); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.tool-dialog__provider-scopes li { display: flex; gap: var(--spacing-sm); align-items: start; }
+.tool-dialog__provider-scopes li ::deep svg { flex: 0 0 auto; color: var(--colors-feedback-success-text); }
+/* Back from the provider: each moment of loading, then placeholders where the choices will be. */
+.tool-dialog__loading { display: grid; gap: var(--spacing-md); }
+.tool-dialog__phase { display: flex; align-items: center; gap: var(--spacing-sm); color: var(--colors-text-primary); }
+.tool-dialog__phase ::deep .ds-icon { flex: none; color: var(--colors-icon-brand); animation: tool-dialog-spin var(--ds-tool-spin) linear infinite; }
+.tool-dialog__phase.is-done ::deep .ds-icon { color: var(--colors-feedback-success-text); animation: none; }
+.tool-dialog__phase.is-waiting { color: var(--colors-text-muted); }
+.tool-dialog__phase.is-waiting ::deep .ds-icon { color: var(--colors-text-muted); animation: none; }
+.tool-dialog__placeholders { display: grid; gap: var(--spacing-sm); margin-top: var(--spacing-md); }
+@keyframes tool-dialog-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .tool-dialog__phase ::deep .ds-icon { animation: none; } }
+
+/* Connected, first: the mark, the account, and a way to use another. A quiet surface, so it reads in both themes;
+   only the tick is green. */
+.tool-dialog__connected {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.tool-dialog__connected > div { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; overflow-wrap: anywhere; }
+.tool-dialog__connected { align-items: flex-start; }
+.tool-dialog__connected > .tool-dialog__tick { display: grid; place-items: center; flex: none; padding-top: var(--spacing-2xs); color: var(--colors-feedback-success-text); }
+.tool-dialog__connected > div > ::deep p:first-child { color: var(--colors-text-primary); }
+.tool-dialog__connected > ::deep button { align-self: center; }
+.tool-dialog__connected > div > ::deep p:last-child { color: var(--colors-text-muted); }
+
+/* Calendly's services: a row each, its labels on the right, a count and Select all above. */
+.tool-dialog ::deep .calendly-services__head { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--spacing-md); }
+.tool-dialog ::deep .calendly-services__head > div { display: grid; gap: var(--spacing-2xs); }
+.tool-dialog ::deep .calendly-services__head p { color: var(--colors-text-muted); }
+.tool-dialog ::deep .calendly-services__list { display: grid; gap: var(--spacing-sm); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.tool-dialog ::deep .calendly-services__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.tool-dialog ::deep .calendly-services__row.is-on { background: var(--colors-accent-brand-subtle); border-color: transparent; }
+
+/* Who can use it: the agent, chosen in the same window, the last thing before Finish. */
+.tool-dialog ::deep .tool-dialog__who { display: grid; gap: var(--spacing-md); padding-top: var(--spacing-xl); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.tool-dialog ::deep .tool-dialog__who > p { color: var(--colors-text-muted); }
+
+/* The choices after signing in, from the per-tool parts (Calendly's services, the sheets):
+   a heading, then its options, with the same rhythm as the agent-access choices. */
+.tool-dialog {
+  /* Gap in the token set: no motion scale. */
+  --ds-tool-spin: 900ms;
+}
+.tool-dialog ::deep .tool-choices { display: grid; gap: var(--spacing-md); min-width: 0; }
+.tool-dialog ::deep .tool-choices__list { display: grid; gap: var(--spacing-lg); }
+.tool-dialog ::deep .tool-choices > p { color: var(--colors-text-secondary); }
+.tool-dialog__link { width: max-content; color: var(--colors-brand-primary); }
+/* Inside Google's stand-in file picker: one row per spreadsheet, the chosen one tinted. */
+.tool-dialog__files { display: grid; gap: var(--spacing-xs); }
+.tool-dialog__files ::deep .tool-dialog__file { display: flex; gap: var(--spacing-md); align-items: center; width: 100%; padding: var(--spacing-md); text-align: left; border-radius: var(--radius-radius-lg); }
+.tool-dialog__files ::deep .tool-dialog__file > span { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.tool-dialog__files ::deep .tool-dialog__file > span > span:last-child { color: var(--colors-text-muted); }
+.tool-dialog__files ::deep .tool-dialog__file.is-picked { background: var(--colors-accent-brand-subtle); }
+
+/* The sheets the agent checks: a card per sheet, a row per tab (muted when on), its columns as chips and a short
+   preview of what the agent sees. */
+.tool-dialog ::deep .sheet-lookups { display: grid; gap: var(--spacing-lg); min-width: 0; }
+.tool-dialog ::deep .sheet-lookups__start { display: grid; justify-items: start; gap: var(--spacing-lg); padding: var(--spacing-xl); color: var(--colors-text-secondary); background: var(--colors-surface-muted); border-radius: var(--radius-radius-xl); }
+.tool-dialog ::deep .sheet-lookups__sheet { display: grid; gap: var(--spacing-md); min-width: 0; padding: var(--spacing-lg); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); }
+.tool-dialog ::deep .sheet-lookups__sheet-head { display: flex; align-items: center; gap: var(--spacing-md); }
+.tool-dialog ::deep .sheet-lookups__sheet-head > h3 { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.tool-dialog ::deep .sheet-lookups__tab { display: grid; gap: var(--spacing-lg); min-width: 0; padding: var(--spacing-lg); border-radius: var(--radius-radius-lg); }
+.tool-dialog ::deep .sheet-lookups__tab.is-on { background: var(--colors-surface-muted); }
+.tool-dialog ::deep .sheet-lookups__columns { display: grid; gap: var(--spacing-sm); }
+.tool-dialog ::deep .sheet-lookups__columns > p { color: var(--colors-text-muted); }
+.tool-dialog ::deep .sheet-lookups__columns > div { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+.tool-dialog ::deep .sheet-lookups__add { justify-self: start; }
+
+/* Manage: each part a heading with its one action on the right, then what it holds. */
+.tool-dialog__section { display: grid; gap: var(--spacing-lg); padding-top: var(--spacing-2xl); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.tool-dialog__section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--spacing-md); }
+.tool-dialog__section-head > div { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.tool-dialog__section-head > div > ::deep p { color: var(--colors-text-muted); }
+/* What it uses: a card each, roomy and spaced, with no lines between (designer, 2 November 2026). */
+.tool-dialog__found { display: grid; gap: var(--spacing-md); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+.tool-dialog__found li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl) var(--spacing-2xl);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+
+/* Agents that can use it: face and name, side by side. */
+.tool-dialog__people {
+  /* Gap in the token set: no avatar size beside a name in a list. */
+  --ds-tool-person-face: 32px;
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+.tool-dialog__people li {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-lg) var(--spacing-xs) var(--spacing-xs);
+  color: var(--colors-text-primary);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.tool-dialog__people img { width: var(--ds-tool-person-face); height: var(--ds-tool-person-face); border-radius: var(--radius-radius-full); object-fit: cover; }
+.tool-dialog__found li > ::deep span:first-child { color: var(--colors-text-primary); }
+.tool-dialog__found li > ::deep span:last-child { color: var(--colors-text-muted); white-space: nowrap; }
+
+/* Disconnecting: a quiet red action, centred at the foot (designer, 2 November 2026); the confirm step says what happens. */
+.tool-dialog__foot { display: flex; justify-content: center; padding-top: var(--spacing-xl); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.tool-dialog__foot ::deep .tool-dialog__disconnect { color: var(--colors-feedback-destructive-text); }
+.tool-dialog__foot ::deep .tool-dialog__disconnect:hover:not(:disabled) { background: var(--colors-feedback-destructive-subtle); }
+
+/* Kept for other windows: a red-outlined box. */
+.tool-dialog__danger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
+  border: var(--ds-hairline) solid var(--colors-feedback-destructive-border);
+  border-radius: var(--radius-radius-xl);
+}
+.tool-dialog__danger > div { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.tool-dialog__danger > div > ::deep p:first-child { color: var(--colors-text-primary); }
+.tool-dialog__danger > div > ::deep p:last-child { color: var(--colors-text-muted); }
+@media (max-width: 760px) {
+  .tool-dialog__danger, .tool-dialog__section-head { flex-direction: column; align-items: stretch; }
+}

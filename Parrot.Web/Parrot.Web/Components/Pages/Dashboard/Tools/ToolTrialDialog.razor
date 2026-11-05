@@ -1,0 +1,59 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Tools
+@using Parrot.Web.Features.Dashboard.Tools
+@inject IToolActionRequests Requests
+@inject NavigationManager Nav
+
+<Dialog Open="Open" Title="Try a task" Subtitle="See how this agent's tool permissions work." Size="DialogSize.Wide" Dismissible
+        Busy="_busy" BusyLabel="Preparing task…" ConfirmLabel="Open test task" ConfirmDisabled="@(SelectedAccess is null || string.IsNullOrEmpty(_action))"
+        OnConfirm="StartAsync" OnCancel="OnClose">
+    <GlyphContent><ToolMark Provider="@Connection.ToolId" Small /></GlyphContent>
+    <Body>
+        <div class="tool-access">
+            <InlineError Tone="InlineErrorTone.Info" Message="This is a test task. It won't contact the provider, take payments or change bookings." />
+            <SelectField FloatingLabel="Agent" Value="@Agents.FirstOrDefault(agent => agent.Id == _agent)?.Name" Open="_agentOpen" OpenChanged="open => _agentOpen = open" Disabled="_busy">
+                @foreach (var agent in Eligible)
+                { var current = agent; <PopoverOption Label="@agent.Name" Description="@agent.Job" Active="@(agent.Id == _agent)" OnSelect="() => PickAgent(current.Id)" /> }
+            </SelectField>
+            @if (SelectedAccess is not null)
+            {
+                <SelectField FloatingLabel="Action" Value="@Definition.Actions.FirstOrDefault(action => action.Id == _action)?.Name" Open="_actionOpen" OpenChanged="open => _actionOpen = open" Disabled="_busy">
+                    @foreach (var action in Definition.Actions.Where(action => SelectedAccess.Actions.Contains(action.Id)))
+                    { var current = action; <PopoverOption Label="@action.Name" Description="@action.Description" Active="@(action.Id == _action)" OnSelect="() => { _action = current.Id; _actionOpen = false; _key = Guid.NewGuid(); }" /> }
+                </SelectField>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(Definition.Actions.Any(action => action.Id == _action && action.CanAskFirst) && SelectedAccess.Mode == ToolActionMode.AskFirst
+                    ? "The task will wait for your approval. You'll be able to approve or decline the action there."
+                    : "This agent can run the selected action without asking. The task will show its result.")</Typography>
+            }
+            @if (_error is not null) { <InlineError Message="@_error" /> }
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    [Parameter] public bool Open { get; set; }
+    [Parameter, EditorRequired] public ToolConnection Connection { get; set; } = default!;
+    [Parameter, EditorRequired] public WorkspaceToolsSnapshot Snapshot { get; set; } = default!;
+    [Parameter] public IReadOnlyList<ToolAgentOption> Agents { get; set; } = [];
+    [Parameter] public EventCallback OnClose { get; set; }
+    private ToolDefinition Definition => ToolCatalog.Find(Connection.ToolId)!;
+    private IEnumerable<ToolAgentOption> Eligible => Agents.Where(agent => Snapshot.AgentAccess.Any(access => access.AgentId == agent.Id && access.ConnectionId == Connection.Id && access.Actions.Count > 0));
+    private ToolAgentAccess? SelectedAccess => Snapshot.AgentAccess.FirstOrDefault(access => access.AgentId == _agent && access.ConnectionId == Connection.Id && access.Actions.Count > 0);
+    private string _agent = "", _action = "";
+    private Guid _key = Guid.NewGuid();
+    private bool _busy, _agentOpen, _actionOpen;
+    private string? _error;
+    private void PickAgent(string id) { _agent = id; _action = ""; _agentOpen = false; _key = Guid.NewGuid(); }
+    private async Task StartAsync()
+    {
+        if (_busy || SelectedAccess is null || string.IsNullOrEmpty(_action)) return;
+        _busy = true; _error = null;
+        try
+        {
+            var task = await Requests.TryAsync(new(_key, Connection.Id, _agent, _action));
+            await OnClose.InvokeAsync();
+            Nav.NavigateTo($"/dashboard/tasks/{Uri.EscapeDataString(task.TaskId)}");
+        }
+        catch (HttpRequestException exception) { _error = exception.StatusCode is { } status && (int)status < 500 ? exception.Message : "The task couldn't be prepared. Try again."; }
+        finally { _busy = false; }
+    }
+}
