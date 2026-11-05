@@ -1,5 +1,4 @@
-@page "/ai-operations/{AgentId}"
-@page "/dashboard/ai-agents/{AgentId}"
+@page "/dashboard/ai-operations/{AgentId}"
 @attribute [RequiresAccess(AccessRules.Agents)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
@@ -1424,9 +1423,9 @@ else
     };
 
 
-    private void BackToAgents() => Nav.NavigateTo("/ai-operations");
+    private void BackToAgents() => Nav.NavigateTo("/dashboard/ai-operations");
 
-    private void OpenInbox() => Nav.NavigateTo("/dashboard/conversations");
+    private void OpenInbox() => Nav.NavigateTo("/dashboard/inbox");
 
     private void OpenTasks() => Nav.NavigateTo("/dashboard/tasks");
 }

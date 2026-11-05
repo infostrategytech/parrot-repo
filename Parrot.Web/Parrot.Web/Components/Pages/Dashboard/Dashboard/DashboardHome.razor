@@ -124,7 +124,7 @@
     // The agent the page speaks about: a live one, else the draft, else the first.
     private AiAgent? Lead => LiveAgents.FirstOrDefault() ?? Agents.FirstOrDefault(agent => agent.IsDraft) ?? Agents.FirstOrDefault();
     private string LeadName => Lead?.Name ?? "Your AI";
-    private string LeadPage => Lead is null ? "/ai-operations" : $"/ai-operations/{Lead.Id}";
+    private string LeadPage => Lead is null ? "/dashboard/ai-operations" : $"/dashboard/ai-operations/{Lead.Id}";
     private bool Waiting => Feed.Available && Feed.Waiting(Agents).Count > 0;
 
     // What the agents need from the owner, as the Knowledge page reviews it:
@@ -481,8 +481,8 @@
     // Integrations has no page yet (it is coming for the MVP): there, and marked Soon.
     private static readonly Shortcut[] ShortcutList =
     [
-        new(IconName.RiInbox2Fill, "Inbox", "Your customer conversations.", "/dashboard/conversations", "pink"),
-        new(IconName.RiRobot3Fill, "AI Agents", "Your agents and their jobs.", "/ai-operations", "emerald"),
+        new(IconName.RiInbox2Fill, "Inbox", "Your customer conversations.", "/dashboard/inbox", "pink"),
+        new(IconName.RiRobot3Fill, "AI Agents", "Your agents and their jobs.", "/dashboard/ai-operations", "emerald"),
         new(IconName.RiBookOpenFill, "Business Knowledge", "What your AI knows.", "/dashboard/knowledge", "blue"),
         new(IconName.RiExchangeBoxFill, "Integrations", "Connect the tools you use.", null, "indigo"),
     ];
@@ -510,13 +510,13 @@
 
     // Connecting a channel comes back here once it is connected.
     private void OpenChannels() => Nav.NavigateTo("/dashboard/channels?from=dashboard");
-    private void OpenInbox() => Nav.NavigateTo("/dashboard/conversations");
+    private void OpenInbox() => Nav.NavigateTo("/dashboard/inbox");
     // An agent needs a connected channel, then knowledge the business has
     // approved ("Teach your AI"); then setup opens.
     // Straight to the create page, not AI Operations on the way.
     private Task OpenAiAgents() => AgentGate.RequireAsync(() =>
     {
-        Nav.NavigateTo("/ai-operations/new-agent");
+        Nav.NavigateTo("/dashboard/ai-operations/new-agent");
         return Task.CompletedTask;
     });
 

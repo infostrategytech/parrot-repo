@@ -33,14 +33,14 @@ public static class NavMap
     public static readonly IReadOnlyList<NavEntry> Primary =
     [
         new("/dashboard", "Overview", IconName.RiHome5Fill, "Overview"),
-        new("/dashboard/conversations", "Inbox", IconName.RiInbox2Fill, "Inbox", AccessRules.For(AccessRules.Inbox)),
-        new("/dashboard/contacts", "Customers", IconName.RiContactsBook3Fill, "Customers", AccessRules.For(AccessRules.Customers)),
-        new("/dashboard/catalog", "Products & Services", IconName.RiShoppingBag3Fill, "Products", AccessRules.For(AccessRules.Catalog)),
+        new("/dashboard/inbox", "Inbox", IconName.RiInbox2Fill, "Inbox", AccessRules.For(AccessRules.Inbox)),
+        new("/dashboard/customers", "Customers", IconName.RiContactsBook3Fill, "Customers", AccessRules.For(AccessRules.Customers)),
+        new("/dashboard/products", "Products & Services", IconName.RiShoppingBag3Fill, "Products", AccessRules.For(AccessRules.Catalog)),
         new("/dashboard/tasks", "Tasks", IconName.RiClipboardFill, "Tasks", AccessRules.For(AccessRules.Tasks)),
         new("/dashboard/channels", "Channels", IconName.RiLinksFill, "Channels", AccessRules.For(AccessRules.Channels)),
-        new("/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI", AccessRules.For(AccessRules.Agents)),
+        new("/dashboard/ai-operations", "AI Operations", IconName.RiRobot3Fill, "AI", AccessRules.For(AccessRules.Agents)),
         new(null, "Campaigns", IconName.RiMegaphoneFill, "Campaigns"),
-        new("/dashboard/qa-insights", "Insights", IconName.RiBarChartBoxFill, "Insights", AccessRules.For(AccessRules.Insights))
+        new("/dashboard/insights", "Insights", IconName.RiBarChartBoxFill, "Insights", AccessRules.For(AccessRules.Insights))
     ];
 
     public static readonly IReadOnlyList<NavEntry> Footer =
@@ -55,7 +55,7 @@ public static class NavMap
     /// <summary>
     /// The entry a URL belongs to, by longest matching path — so
     /// /dashboard/tasks/OM-12031 still highlights Tasks, and
-    /// /dashboard/catalog is Products rather than Overview.
+    /// /dashboard/products is Products rather than Overview.
     /// </summary>
     public static NavEntry? Match(string path)
     {
