@@ -145,6 +145,8 @@ public class ConversationsState
             case AgentActivityTypes.ApprovalRequested:
                 if (activity.ApprovalId is not null)
                     item.PendingApproval = new PendingApprovalInfo(activity.ApprovalId, activity.Tool, activity.Reason);
+                // The AI is waiting for a decision, not generating a reply: approval card takes over from the typing indicator.
+                item.AiTurnInProgress = false;
                 break;
 
             case AgentActivityTypes.EscalationOpened:
@@ -154,6 +156,7 @@ public class ConversationsState
 
             case AgentActivityTypes.TurnCompleted:
                 item.PendingApproval = null;
+                item.AiTurnInProgress = false;
                 // Carry escalation info from the turn event when escalation.opened hasn't landed yet.
                 if (activity.Status is AgentActivityTypes.TurnStatus.Escalated or AgentActivityTypes.TurnStatus.Failed
                     && activity.EscalationId is not null)

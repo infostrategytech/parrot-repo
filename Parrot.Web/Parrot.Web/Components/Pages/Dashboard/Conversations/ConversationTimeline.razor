@@ -94,6 +94,20 @@
                                 Description="Add private context for teammates from the composer." />
                 }
 
+                @if (_view == ThreadView.Messages && Conversation.AiTurnInProgress
+                     && Conversation.AiState == AiState.Active && Conversation.PendingApproval is null)
+                {
+                    <div class="ai-typing-indicator" role="status"
+                         aria-label="@($"{Conversation.AiAgent?.Name ?? "AI agent"} is replying")">
+                        <span class="ai-typing-indicator__avatar" aria-hidden="true">
+                            <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                        </span>
+                        <div class="ai-typing-indicator__dots" aria-hidden="true">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                }
+
                 @if (_view == ThreadView.Messages && Conversation.PendingApproval is { } approval)
                 {
                     <div class="approval-card @(_approvalDecision is not null ? $"is-{_approvalDecision}" : null)" role="region"

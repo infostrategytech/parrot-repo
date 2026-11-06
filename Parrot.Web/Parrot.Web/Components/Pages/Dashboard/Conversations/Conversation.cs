@@ -86,6 +86,13 @@ public class ConversationItem
     /// <summary>An escalation the AI opened for this conversation. Set from the agentActivity push; cleared when the AI becomes active again.</summary>
     public AgentEscalationInfo? ActiveEscalation { get; set; }
 
+    /// <summary>
+    /// The AI agent has started a turn and has not yet replied or handed off.
+    /// Set when an inbound message arrives while the AI is active; cleared by turn.completed,
+    /// approval.requested (the approval card takes over), an AI reply, or a reconnect.
+    /// </summary>
+    public bool AiTurnInProgress { get; set; }
+
     public string CustomerInitials => Customer?.Initials ?? Initials.From(CustomerName);
 }
 

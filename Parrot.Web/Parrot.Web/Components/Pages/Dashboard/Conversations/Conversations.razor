@@ -546,6 +546,14 @@
         }
 
         ConversationsState.Touch(item, message);
+
+        // Track the AI turn lifecycle: an inbound message starts a turn; an outbound AI reply ends it.
+        if (item.AiState == AiState.Active)
+        {
+            if (!message.Outgoing) item.AiTurnInProgress = true;
+            else if (message.Outgoing) item.AiTurnInProgress = false;
+        }
+
         if (item == _selected && item.HistoryLoaded)
         {
             if (message.Outgoing)
@@ -605,7 +613,14 @@
 
     // Pushes sent while the connection was down were missed. The thread read
     // pages back until it meets a message it already has, so it fills the gap.
-    private Task OnRealtimeReconnected() => InvokeAsync(RefreshAsync);
+    // Turn-in-progress state driven by pushes cannot be trusted after a gap: clear it so the indicator
+    // doesn't stay frozen, then let the refresh bring back the authoritative AiState.
+    private Task OnRealtimeReconnected() => InvokeAsync(() =>
+    {
+        foreach (ConversationItem conversation in ConversationsState.Conversations)
+            conversation.AiTurnInProgress = false;
+        return RefreshAsync();
+    });
 
     // An orchestrator event: a turn ended, the AI asked for approval, or it escalated.
     // The event carries enough to update approval / escalation state without a network call.
