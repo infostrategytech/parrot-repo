@@ -68,6 +68,11 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             agentByChannel[channel] = agent is null ? null : new ConversationAgentRef(agent.Id.ToString(), agent.Name);
         }
 
+        // One batch query for active human takeovers across the whole page.
+        List<(Guid, string)> keys = [.. rows.Select(c => (c.ConnectionId, c.Sender))];
+        IReadOnlyDictionary<(Guid, string), DateTime?> activeTakeovers =
+            await humanTakeover.GetActiveAsync(Owner, keys, cancellationToken);
+
         return Ok(rows
             .Select(c =>
             {
@@ -78,6 +83,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
                     Pinned = mark?.Pinned ?? false,
                     MarkedUnread = mark?.MarkedUnread ?? false,
                     ChannelAgent = agentByChannel.GetValueOrDefault(c.Channel),
+                    ControlUntil = activeTakeovers.TryGetValue((c.ConnectionId, c.Sender), out DateTime? until) ? until : null,
                 };
             })
             .OrderByDescending(c => c.Pinned).ThenByDescending(c => c.UpdatedAt));
@@ -209,6 +215,18 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         return Ok(mediaLinks.Sign(sent));
     }
 
+    // Human takes over from the AI for a fixed duration or until they hand back.
+    [HttpPost("{connectionId:guid}/human-takeover")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
+    public async Task<IActionResult> SetHumanTakeover(Guid connectionId, [FromQuery] string sender,
+        [FromBody] HumanTakeoverRequest request, CancellationToken cancellationToken)
+    {
+        await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
+        DateTime? controlUntil = request.Minutes is { } m ? DateTime.UtcNow.AddMinutes(m) : null;
+        await humanTakeover.SetAsync(Owner, connectionId, sender, controlUntil, cancellationToken);
+        return Ok(new { ControlUntil = controlUntil });
+    }
+
     // Hands the conversation to the AI: clears an active human takeover, or is a no-op when the AI
     // was already handling it. Safe to call on a cold-start conversation that has never had a takeover.
     [HttpDelete("{connectionId:guid}/human-takeover")]
@@ -240,6 +258,9 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             throw new NotFoundException("Connection not found.");
     }
 }
+
+/// <summary>How long a human wants to take over for. Null minutes means until they hand back manually.</summary>
+public sealed record HumanTakeoverRequest(int? Minutes);
 
 /// <summary>The multipart body of a file reply.</summary>
 public sealed class SendFileForm

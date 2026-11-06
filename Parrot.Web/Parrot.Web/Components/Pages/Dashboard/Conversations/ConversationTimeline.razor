@@ -178,7 +178,7 @@
             }
             else
             {
-                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Features.Available" Countdown="@CountdownLabel"
+                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Conversation.HasChannelAgent" Countdown="@CountdownLabel"
                                  Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" OnDismiss="() => _quoteOnTakeOver = null" />
             }
 
@@ -392,7 +392,13 @@
                 await InvokeAsync(StateHasChanged);
                 if (DateTime.UtcNow >= until.ToUniversalTime())
                 {
-                    // The window is over: the API hands back to the agent; read it.
+                    // The timed window is over: clear the takeover server-side so the AI picks up the next message,
+                    // then refresh the conversation so the control bar switches back immediately.
+                    try { await Client.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender, _lifetime.Token); }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // Best-effort: the backend already expired it via ControlUntil; the refresh will catch up.
+                    }
                     await InvokeAsync(() => OnChanged.InvokeAsync());
                     return;
                 }
@@ -595,7 +601,7 @@
 
     private async Task TakeOverAsync(int? minutes)
     {
-        await ActAsync(() => Features.TakeOverAsync(Conversation.ConnectionId, Conversation.Sender, minutes));
+        await ActAsync(() => Client.TakeOverAsync(Conversation.ConnectionId, Conversation.Sender, minutes, _lifetime.Token));
         // Taken over from Reply: the message it asked for is quoted, ready to type under.
         if (_quoteOnTakeOver is { } message && _actionError is null) Quote(message);
         _quoteOnTakeOver = null;

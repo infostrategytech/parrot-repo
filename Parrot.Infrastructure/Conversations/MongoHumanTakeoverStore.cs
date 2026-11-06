@@ -14,11 +14,12 @@ public sealed class MongoHumanTakeoverStore : IHumanTakeoverStore
         _flags = client.GetDatabase(mongo.Value.Database).GetCollection<ConversationFlagDocument>("conversation_flags");
     }
 
-    // Sets HumanTookOverAt to now and clears HumanHandedBackAt so a re-takeover after handback works.
-    public Task SetAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
+    // Sets HumanTookOverAt to now, stores the expiry, and clears HumanHandedBackAt so a re-takeover after handback works.
+    public Task SetAsync(string owner, Guid connection, string sender, DateTime? controlUntil, CancellationToken ct) =>
         UpsertAsync(owner, connection, sender,
             Builders<ConversationFlagDocument>.Update
                 .Set(x => x.HumanTookOverAt, DateTime.UtcNow)
+                .Set(x => x.ControlUntil, controlUntil)
                 .Unset(x => x.HumanHandedBackAt),
             ct);
 
@@ -28,14 +29,35 @@ public sealed class MongoHumanTakeoverStore : IHumanTakeoverStore
             Builders<ConversationFlagDocument>.Update.Set(x => x.HumanHandedBackAt, DateTime.UtcNow),
             ct);
 
-    // Active when a human took over and has not yet handed back.
+    // Active when a human took over, has not handed back, and the timed window has not expired.
     public async Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct)
     {
+        DateTime now = DateTime.UtcNow;
         ConversationFlagDocument? doc = await _flags
             .Find(x => x.ReaderUserId == owner && x.ConnectionId == connection && x.Sender == sender
                        && x.HumanTookOverAt != null && x.HumanHandedBackAt == null)
             .FirstOrDefaultAsync(ct);
-        return doc is not null;
+        return doc is not null && (doc.ControlUntil == null || doc.ControlUntil > now);
+    }
+
+    // Returns active takeovers (not expired, not handed back) for a batch of conversations.
+    public async Task<IReadOnlyDictionary<(Guid Connection, string Sender), DateTime?>> GetActiveAsync(
+        string owner, IReadOnlyList<(Guid Connection, string Sender)> conversations, CancellationToken ct)
+    {
+        if (conversations.Count == 0) return new Dictionary<(Guid, string), DateTime?>();
+
+        DateTime now = DateTime.UtcNow;
+        List<Guid> connectionIds = [.. conversations.Select(c => c.Connection).Distinct()];
+
+        List<ConversationFlagDocument> docs = await _flags
+            .Find(x => x.ReaderUserId == owner && connectionIds.Contains(x.ConnectionId)
+                       && x.HumanTookOverAt != null && x.HumanHandedBackAt == null)
+            .ToListAsync(ct);
+
+        HashSet<(Guid, string)> keys = [.. conversations];
+        return docs
+            .Where(d => keys.Contains((d.ConnectionId, d.Sender)) && (d.ControlUntil == null || d.ControlUntil > now))
+            .ToDictionary(d => (d.ConnectionId, d.Sender), d => d.ControlUntil);
     }
 
     private async Task UpsertAsync(string owner, Guid connection, string sender,

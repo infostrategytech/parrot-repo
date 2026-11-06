@@ -857,7 +857,7 @@ public class ConversationServiceTests
         public List<(string Owner, Guid Connection, string Sender)> SetCalls { get; } = new();
         public List<(string Owner, Guid Connection, string Sender)> ClearCalls { get; } = new();
 
-        public Task SetAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        public Task SetAsync(string owner, Guid connection, string sender, DateTime? controlUntil, CancellationToken ct)
         {
             SetCalls.Add((owner, connection, sender));
             _active.Add((owner, connection, sender));
@@ -873,6 +873,10 @@ public class ConversationServiceTests
 
         public Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
             Task.FromResult(_active.Contains((owner, connection, sender)));
+
+        public Task<IReadOnlyDictionary<(Guid Connection, string Sender), DateTime?>> GetActiveAsync(
+            string owner, IReadOnlyList<(Guid Connection, string Sender)> conversations, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyDictionary<(Guid, string), DateTime?>>(new Dictionary<(Guid, string), DateTime?>());
     }
 
     private sealed class NullAppLogger : IAppLogger<ConversationService>

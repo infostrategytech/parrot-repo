@@ -34,6 +34,9 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>The signed-in user marked it unread to come back to: the inbox shows "!" when no message is unread.</summary>
     public bool MarkedUnread { get; init; }
+
+    /// <summary>When a timed human takeover expires and the AI resumes; null when no takeover is active or it has no time limit.</summary>
+    public DateTime? ControlUntil { get; init; }
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt)
 {
