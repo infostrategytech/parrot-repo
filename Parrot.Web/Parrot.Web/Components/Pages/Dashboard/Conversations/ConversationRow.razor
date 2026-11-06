@@ -28,6 +28,13 @@
             <Icon Name="StateGlyph" Size="IconSize.Inherit" />
             <Typography TextStyle="TextStyle.Small12Medium" As="span">@StateLabel</Typography>
         </span>
+        @if (Conversation.ActiveEscalation is { } escalation)
+        {
+            <span class="conversation-row__meta state-escalated">
+                <Icon Name="IconName.RiAlarmWarningFill" Size="IconSize.Inherit" />
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@EscalationMeta(escalation)</Typography>
+            </span>
+        }
     </span>
 
     @if (Conversation.UnreadCount > 0)
@@ -113,4 +120,15 @@
         : Conversation.NeedsAnswer
             ? "state-needs-answer"
             : $"state-{Conversation.AiState.ToString()!.ToLowerInvariant()}";
+
+    private static string EscalationMeta(AgentEscalationInfo esc)
+    {
+        string priority = esc.Priority ?? "normal";
+        if (esc.Problem is { Length: > 0 } problem)
+        {
+            string truncated = problem.Length > 40 ? problem[..37] + "…" : problem;
+            return $"Escalated · {priority} · {truncated}";
+        }
+        return $"Escalated · {priority}";
+    }
 }

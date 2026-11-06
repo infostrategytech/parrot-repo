@@ -35,6 +35,8 @@ public class ConversationsState
             item.Status = Parse<ConversationStatus>(summary.Status);
             item.Priority = Parse<ConversationPriority>(summary.Priority);
             item.AiState = Parse<AiState>(summary.AiState);
+            // The server now owns AiState: when the AI is back in control, the in-memory escalation is gone too.
+            if (item.AiState == AiState.Active) item.ActiveEscalation = null;
             item.AiAgent = summary.AiAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;

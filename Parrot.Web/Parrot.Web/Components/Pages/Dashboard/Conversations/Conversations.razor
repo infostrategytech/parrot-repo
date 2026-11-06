@@ -275,6 +275,13 @@
                             <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.AiState</Typography>
                         </span>
                     }
+                    @if (_selected.HasAiAgent && _selected.ActiveEscalation is { } esc)
+                    {
+                        <span class="inbox-escalation-chip" title="@(esc.Problem is { Length: > 0 } p ? p : null)">
+                            <Icon Name="IconName.RiAlarmWarningFill" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@HeaderEscalationText(esc)</Typography>
+                        </span>
+                    }
                     @if (_selected.Assignee is { } assignee)
                     {
                         <span class="inbox-ownership">
@@ -1033,6 +1040,9 @@
         "tiktok" => "TikTok",
         _ => channel
     };
+
+    private static string HeaderEscalationText(AgentEscalationInfo esc) =>
+        esc.Priority is { Length: > 0 } priority ? $"Escalated · {priority}" : "Escalated";
 
     public void Dispose()
     {
