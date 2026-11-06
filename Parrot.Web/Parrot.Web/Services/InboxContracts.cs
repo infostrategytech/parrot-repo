@@ -40,6 +40,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     /// <summary>The AI agent has asked the team a question it could not answer.</summary>
     public bool? NeedsAnswer { get; init; }
     public InboxCustomerDto? Customer { get; init; }
+    /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
+    public InboxPersonDto? ChannelAgent { get; init; }
 }
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>

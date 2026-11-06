@@ -3,10 +3,16 @@ using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Conversations;
 
+/// <summary>An agent that covers this conversation's channel (id and display name).</summary>
+public sealed record ConversationAgentRef(string Id, string Name);
+
 public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
 {
     /// <summary>whatsapp, facebook, tiktok or instagram: which channel the conversation is on.</summary>
     public string Channel { get; init; } = "whatsapp";
+
+    /// <summary>The live agent covering this conversation's channel, or null when no agent is connected to it.</summary>
+    public ConversationAgentRef? ChannelAgent { get; init; }
 
     /// <summary>Customer messages the signed-in user has not read. Zero for a read conversation.</summary>
     public int UnreadCount { get; init; }

@@ -6,7 +6,9 @@ using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
 using Parrot.Api.Utils;
+using Parrot.Application.Agents;
 using Parrot.Application.Conversations;
+using Parrot.Application.DTOs.Agents;
 using Parrot.Application.Integrations;
 using Parrot.Application.Teams;
 using Parrot.Domain.Exceptions;
@@ -22,7 +24,7 @@ namespace Parrot.Api.Controllers;
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
-    IHumanTakeoverStore humanTakeover) : ControllerBase
+    IHumanTakeoverStore humanTakeover, IAgentService agents) : ControllerBase
 {
     // The workspace owns the conversations; what has been read, what is pinned
     // or set aside, and who wrote a note, belong to the person signed in.
@@ -57,6 +59,15 @@ public sealed class ConversationsController(IConversationStore store, IConversat
 
         IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Reader,
             rows.Select(c => (c.ConnectionId, c.Sender)).ToList(), cancellationToken);
+
+        // Look up the live agent once per distinct channel, so a 50-row page with 4 channels is 4 queries.
+        Dictionary<string, ConversationAgentRef?> agentByChannel = [];
+        foreach (string channel in rows.Select(c => c.Channel).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            AgentResponse? agent = await agents.ResolveForChannelAsync(Owner, channel);
+            agentByChannel[channel] = agent is null ? null : new ConversationAgentRef(agent.Id.ToString(), agent.Name);
+        }
+
         return Ok(rows
             .Select(c =>
             {
@@ -66,6 +77,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
                     UnreadCount = unread.GetValueOrDefault((c.ConnectionId, c.Sender)),
                     Pinned = mark?.Pinned ?? false,
                     MarkedUnread = mark?.MarkedUnread ?? false,
+                    ChannelAgent = agentByChannel.GetValueOrDefault(c.Channel),
                 };
             })
             .OrderByDescending(c => c.Pinned).ThenByDescending(c => c.UpdatedAt));
@@ -197,15 +209,14 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         return Ok(mediaLinks.Sign(sent));
     }
 
-    // Hands the conversation back to the AI after a human has been handling it.
+    // Hands the conversation to the AI: clears an active human takeover, or is a no-op when the AI
+    // was already handling it. Safe to call on a cold-start conversation that has never had a takeover.
     [HttpDelete("{connectionId:guid}/human-takeover")]
     [RequirePermission(WorkspacePermissions.ConversationsReply)]
     public async Task<IActionResult> ClearHumanTakeover(Guid connectionId, [FromQuery] string sender,
         CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        if (!await humanTakeover.IsActiveAsync(Owner, connectionId, sender, cancellationToken))
-            throw new NotFoundException("No active human takeover found for this conversation.");
         await humanTakeover.ClearAsync(Owner, connectionId, sender, cancellationToken);
         return NoContent();
     }

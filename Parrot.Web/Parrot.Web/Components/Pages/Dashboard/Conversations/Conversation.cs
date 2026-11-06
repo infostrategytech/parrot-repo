@@ -74,8 +74,14 @@ public class ConversationItem
     public bool NeedsAnswer { get; set; }
     public InboxCustomerDto? Customer { get; set; }
 
+    /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
+    public InboxPersonDto? ChannelAgent { get; set; }
+
     /// <summary>An AI agent owns this conversation, so the AI controls apply.</summary>
     public bool HasAiAgent => AiAgent is not null && AiState is not null;
+
+    /// <summary>An agent is connected to this conversation's channel (whether or not it is currently handling it).</summary>
+    public bool HasChannelAgent => ChannelAgent is not null;
 
     /// <summary>Customer replies are held while the AI agent is responding.</summary>
     public bool ReplyLocked => AiState == global::Parrot.Web.Components.Pages.Dashboard.Conversations.AiState.Active;
