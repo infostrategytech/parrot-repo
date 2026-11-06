@@ -291,6 +291,11 @@
                         </Button>
                     }
                     <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
+                        @if (_selected.HasAiAgent && _selected.AiState != AiState.Active)
+                        {
+                            <ActionMenuItem Label="@($"Return to {_selected.AiAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
+                                            OnClick="() => ActAsync(conversation => Client.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender, _lifetime.Token))" />
+                        }
                         @if (Features.Available && _selected.HasAiAgent)
                         {
                             @if (_selected.Assignee is not null)
@@ -298,12 +303,9 @@
                                 <ActionMenuItem Label="Unassign conversation" Glyph="IconName.RiUserUnfollowFill"
                                                 OnClick="() => ActAsync(conversation => Features.UnassignAsync(conversation.ConnectionId, conversation.Sender))" />
                             }
-                            @if (_selected.AiState != AiState.Active)
-                            {
-                                <ActionMenuItem Label="@($"Return to {_selected.AiAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
-                                                OnClick="() => ActAsync(conversation => Features.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender))" />
-                            }
-                            else
+                            @* Pause AI: shown when the AI is active and the agent wants to take over without sending a message first.
+                               Requires POST /api/conversations/{connectionId}/human-takeover — pending backend implementation. *@
+                            @if (_selected.AiState == AiState.Active)
                             {
                                 <ActionMenuItem Label="Pause AI and assign to me" Glyph="IconName.RiRobot3Fill"
                                                 OnClick="() => ActAsync(conversation => Features.PauseAiAsync(conversation.ConnectionId, conversation.Sender))" />
@@ -819,7 +821,7 @@
         if (_selected is not { } conversation || _acting) return;
         _acting = true;
         try { await action(conversation); }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); }
         finally { _acting = false; }
         await RefreshAsync();
     }
