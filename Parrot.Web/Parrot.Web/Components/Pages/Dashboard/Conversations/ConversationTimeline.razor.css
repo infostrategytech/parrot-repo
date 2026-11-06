@@ -182,17 +182,21 @@
 }
 
 .ai-typing-indicator__dots > span {
+  /* no motion token for looping dot-pulse; gap filed */
+  --ds-ai-typing-pulse-duration: 1.4s;
+  --ds-ai-typing-delay-2: 0.2s;
+  --ds-ai-typing-delay-3: 0.4s;
   display: block;
   width: var(--spacing-sm);
   height: var(--spacing-sm);
   background: var(--colors-brand-primary);
   border-radius: var(--radius-radius-full);
   opacity: 0.4;
-  animation: ai-dot-pulse 1.4s ease-in-out infinite;
+  animation: ai-dot-pulse var(--ds-ai-typing-pulse-duration) ease-in-out infinite;
 }
 
-.ai-typing-indicator__dots > span:nth-child(2) { animation-delay: 0.2s; }
-.ai-typing-indicator__dots > span:nth-child(3) { animation-delay: 0.4s; }
+.ai-typing-indicator__dots > span:nth-child(2) { animation-delay: var(--ds-ai-typing-delay-2); }
+.ai-typing-indicator__dots > span:nth-child(3) { animation-delay: var(--ds-ai-typing-delay-3); }
 
 @keyframes ai-dot-pulse {
   0%, 60%, 100% { opacity: 0.4; transform: scale(1); }
@@ -205,13 +209,15 @@
 
 /* ── Approval request card ───────────────────────────────────────────────── */
 .approval-card {
+  /* accent border is thicker than ds-hairline; no token for this width */
+  --ds-approval-accent-width: 3px;
   display: flex;
   gap: var(--spacing-md);
   align-self: stretch;
   padding: var(--spacing-md) var(--spacing-lg);
   background: var(--colors-surface-card);
   border: var(--ds-hairline) solid var(--colors-surface-border);
-  border-left: 3px solid var(--colors-brand-primary);
+  border-left: var(--ds-approval-accent-width) solid var(--colors-brand-primary);
   border-radius: var(--radius-radius-lg);
 }
 .approval-card.is-approved { border-left-color: var(--colors-accent-teal-solid); }
