@@ -35,8 +35,9 @@ public class ConversationsState
             item.Status = Parse<ConversationStatus>(summary.Status);
             item.Priority = Parse<ConversationPriority>(summary.Priority);
             item.AiState = Parse<AiState>(summary.AiState);
-            // The server now owns AiState: when the AI is back in control, the in-memory escalation is gone too.
+            // The server owns AiState. Clear derived state that only makes sense while the AI is active.
             if (item.AiState == AiState.Active) item.ActiveEscalation = null;
+            if (item.AiState != AiState.Active) item.PendingApproval = null;
             item.AiAgent = summary.AiAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
