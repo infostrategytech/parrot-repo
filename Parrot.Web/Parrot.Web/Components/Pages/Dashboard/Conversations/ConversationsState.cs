@@ -1,5 +1,6 @@
-using Parrot.Web.Services;
+using Parrot.Application.Agents;
 using Parrot.Application.Messaging;
+using Parrot.Web.Services;
 
 namespace Parrot.Web.Components.Pages.Dashboard.Conversations;
 
@@ -34,6 +35,9 @@ public class ConversationsState
             item.Status = Parse<ConversationStatus>(summary.Status);
             item.Priority = Parse<ConversationPriority>(summary.Priority);
             item.AiState = Parse<AiState>(summary.AiState);
+            // The server owns AiState. Clear derived state that only makes sense while the AI is active.
+            if (item.AiState == AiState.Active) item.ActiveEscalation = null;
+            if (item.AiState != AiState.Active) item.PendingApproval = null;
             item.AiAgent = summary.AiAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
@@ -111,6 +115,64 @@ public class ConversationsState
         string customer = message.Outgoing ? message.Receiver : message.Sender;
         return Conversations.FirstOrDefault(c => c.ConnectionId == message.ConnectionId && c.Sender == customer);
     }
+
+    /// <summary>
+    /// Finds the conversation that the orchestrator's conversation key refers to, or null when the
+    /// inbox has not loaded it. The key is "{platform}:{min}:{max}" with both participants' normalized ids
+    /// sorted ordinally; we match by channel prefix and whether the customer's sender appears as one of them.
+    /// </summary>
+    public ConversationItem? FindByConversationKey(string? conversationKey)
+    {
+        if (string.IsNullOrEmpty(conversationKey)) return null;
+        string[] parts = conversationKey.Split(':', 3);
+        if (parts.Length != 3) return null;
+        string platform = parts[0];
+        string participantA = parts[1];
+        string participantB = parts[2];
+        return Conversations.FirstOrDefault(item =>
+            item.Channel == platform &&
+            (NormalizeSender(item.Sender, platform) == participantA ||
+             NormalizeSender(item.Sender, platform) == participantB));
+    }
+
+    /// <summary>
+    /// Applies an agent activity event to a conversation, updating in-memory approval and escalation
+    /// state without a network call. Callers refresh from the server when the AiState badge must change.
+    /// </summary>
+    public static void ApplyAgentActivity(ConversationItem item, AgentActivityEvent activity)
+    {
+        switch (activity.Type)
+        {
+            case AgentActivityTypes.ApprovalRequested:
+                if (activity.ApprovalId is not null)
+                    item.PendingApproval = new PendingApprovalInfo(activity.ApprovalId, activity.Tool, activity.Reason);
+                // The AI is waiting for a decision, not generating a reply: approval card takes over from the typing indicator.
+                item.AiTurnInProgress = false;
+                break;
+
+            case AgentActivityTypes.EscalationOpened:
+                if (activity.EscalationId is not null)
+                    item.ActiveEscalation = new AgentEscalationInfo(activity.EscalationId, activity.Priority, activity.Problem);
+                break;
+
+            case AgentActivityTypes.TurnCompleted:
+                item.PendingApproval = null;
+                item.AiTurnInProgress = false;
+                // Carry escalation info from the turn event when escalation.opened hasn't landed yet.
+                if (activity.Status is AgentActivityTypes.TurnStatus.Escalated or AgentActivityTypes.TurnStatus.Failed
+                    && activity.EscalationId is not null)
+                {
+                    item.ActiveEscalation ??= new AgentEscalationInfo(activity.EscalationId, activity.Priority, activity.Problem);
+                }
+                break;
+        }
+    }
+
+    // WhatsApp phone numbers are stored with their digits; opaque ids for other platforms are kept as-is.
+    private static string NormalizeSender(string sender, string platform) =>
+        platform == "whatsapp"
+            ? new string(sender.Where(char.IsAsciiDigit).ToArray())
+            : sender.Trim();
 
     /// <summary>
     /// Moves a conversation to the top with the pushed message as its preview,

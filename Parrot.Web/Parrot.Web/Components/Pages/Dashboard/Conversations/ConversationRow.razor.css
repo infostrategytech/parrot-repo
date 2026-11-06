@@ -48,6 +48,7 @@
 
 .conversation-row__meta.state-needs-answer { color: var(--colors-feedback-warning-text); }
 .conversation-row__meta.state-handoff { color: var(--colors-brand-primary); }
+.conversation-row__meta.state-escalated { color: var(--colors-feedback-warning-text); overflow: hidden; max-width: 100%; text-overflow: ellipsis; white-space: nowrap; }
 
 ::deep .conversation-row__unread {
   position: absolute;
