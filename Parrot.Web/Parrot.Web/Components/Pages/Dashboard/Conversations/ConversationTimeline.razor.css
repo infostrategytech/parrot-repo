@@ -150,6 +150,28 @@
 }
 .learning-dialog-host ::deep .learning-dialog__source .ds-overline { color: var(--colors-text-subtle); }
 
+/* ── Approval request card ───────────────────────────────────────────────── */
+.approval-card {
+  display: flex;
+  gap: var(--spacing-md);
+  align-self: stretch;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-left: 3px solid var(--colors-brand-primary);
+  border-radius: var(--radius-radius-lg);
+}
+.approval-card.is-approved { border-left-color: var(--colors-accent-teal-solid); }
+.approval-card.is-denied { border-left-color: var(--colors-accent-neutral-base); }
+.approval-card__icon { flex: 0 0 auto; padding-top: var(--spacing-2xs); color: var(--colors-brand-primary); }
+.approval-card.is-approved .approval-card__icon { color: var(--colors-accent-teal-text); }
+.approval-card.is-denied .approval-card__icon { color: var(--colors-text-muted); }
+.approval-card__body { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.approval-card__body ::deep strong { color: var(--colors-text-primary); }
+.approval-card__body ::deep p { color: var(--colors-text-secondary); }
+.approval-card__tool { display: inline-block; padding: var(--spacing-2xs) var(--spacing-xs); font-family: var(--typography-family-mono, monospace); color: var(--colors-text-secondary); background: var(--colors-surface-muted); border-radius: var(--radius-radius-sm); }
+.approval-card__actions { display: flex; gap: var(--spacing-sm); flex-wrap: wrap; }
+
 /* Narrow screens: tighter gutters, and a shorter reserve under the last message
    now that the composer is smaller. */
 @media (max-width: 760px) {
