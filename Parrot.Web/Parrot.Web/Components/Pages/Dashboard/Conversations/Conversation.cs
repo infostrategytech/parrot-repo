@@ -80,8 +80,20 @@ public class ConversationItem
     /// <summary>Customer replies are held while the AI agent is responding.</summary>
     public bool ReplyLocked => AiState == global::Parrot.Web.Components.Pages.Dashboard.Conversations.AiState.Active;
 
+    /// <summary>An approval the AI agent is waiting on before it can continue. Set from the agentActivity push; cleared when the turn ends.</summary>
+    public PendingApprovalInfo? PendingApproval { get; set; }
+
+    /// <summary>An escalation the AI opened for this conversation. Set from the agentActivity push; cleared when the AI becomes active again.</summary>
+    public AgentEscalationInfo? ActiveEscalation { get; set; }
+
     public string CustomerInitials => Customer?.Initials ?? Initials.From(CustomerName);
 }
+
+/// <summary>An approval the AI agent asked for before proceeding. Tool and Reason may be absent for older orchestrator versions.</summary>
+public sealed record PendingApprovalInfo(string ApprovalId, string? Tool, string? Reason);
+
+/// <summary>An escalation the AI opened: the conversation needs a human. Priority is low / normal / high / urgent.</summary>
+public sealed record AgentEscalationInfo(string EscalationId, string? Priority, string? Problem);
 
 public class ConvMessage
 {
