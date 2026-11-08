@@ -1,10 +1,12 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Caching.Memory;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Application.Agents;
 using Parrot.Application.Auth;
+using Parrot.Application.Conversations;
 using Parrot.Application.DTOs.Agents;
 using Parrot.Application.Workspaces;
 using Parrot.Domain.Entities;
@@ -22,7 +24,10 @@ namespace Parrot.Api.Controllers;
 [Authorize(Policy = ServiceScopes.PolicyName)]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "internal.agents")]
-public sealed class InternalAgentsController(IAgentService agents, IWorkspaceRepository workspaces) : ControllerBase
+public sealed class InternalAgentsController(
+    IAgentOrchestratorClient orchestrator,
+    IMemoryCache cache,
+    IWorkspaceRepository workspaces) : ControllerBase
 {
     /// <summary>The turned-on agent answering a channel for the tenant, with the business name its persona uses.</summary>
     /// <remarks>
@@ -31,30 +36,44 @@ public sealed class InternalAgentsController(IAgentService agents, IWorkspaceRep
     /// thrown and logged as a failure.
     /// </remarks>
     [HttpGet("resolve")]
-    public async Task<IActionResult> Resolve([FromQuery] string? channel)
+    public async Task<IActionResult> Resolve([FromQuery] string? channel, CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(channel))
             throw new ValidationException("Supply the channel to resolve an agent for.");
 
         string owner = Tenant();
-        AgentResponse? agent = await agents.ResolveForChannelAsync(owner, channel);
-        if (agent is null)
+        string key = channel.Trim().ToLowerInvariant();
+
+        // The channel→agent map is shared with the inbox controller's cache (same key).
+        string cacheKey = $"channel_agents:{owner}";
+        if (!cache.TryGetValue(cacheKey, out IReadOnlyDictionary<string, ConversationAgentRef>? agentByChannel) || agentByChannel is null)
+        {
+            agentByChannel = await orchestrator.GetChannelAgentMapAsync(owner, cancellationToken);
+            cache.Set(cacheKey, agentByChannel, TimeSpan.FromSeconds(30));
+        }
+
+        if (!agentByChannel.TryGetValue(key, out ConversationAgentRef? agentRef))
         {
             return NotFound(new ErrorResponse
             {
                 ErrorCode = "NOT_FOUND",
-                Message = $"No live agent answers {channel.Trim().ToLowerInvariant()}.",
+                Message = $"No live agent answers {key}.",
             });
         }
 
+        // All channels this agent covers (the map may carry several entries for the same agent id).
+        List<string> agentChannels = [.. agentByChannel.Where(e => e.Value.Id == agentRef.Id).Select(e => e.Key)];
+
         Workspace? workspace = await workspaces.GetByIdAsync(owner);
+        // The orchestrator owns its own persona settings; we return defaults so the shape is valid.
+        // BusinessName and OwnerUserId are what it needs from Parrot's side.
         return Ok(new AgentResolution(
-            agent.Id.ToString(),
-            agent.Name,
-            agent.IsActive && !agent.IsDraft,
-            agent.Channels,
-            agent.Settings,
-            agent.Version,
+            agentRef.Id,
+            agentRef.Name,
+            true, // only live agents appear in GetChannelAgentMapAsync
+            agentChannels,
+            new AgentSettingsDto(),
+            1,
             workspace?.Name,
             owner));
     }
