@@ -2,13 +2,13 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Caching.Memory;
 using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
 using Parrot.Api.Utils;
 using Parrot.Application.Agents;
 using Parrot.Application.Conversations;
-using Parrot.Application.DTOs.Agents;
 using Parrot.Application.Integrations;
 using Parrot.Application.Teams;
 using Parrot.Domain.Exceptions;
@@ -24,7 +24,7 @@ namespace Parrot.Api.Controllers;
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
-    IHumanTakeoverStore humanTakeover, IAgentService agents) : ControllerBase
+    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache) : ControllerBase
 {
     // The workspace owns the conversations; what has been read, what is pinned
     // or set aside, and who wrote a note, belong to the person signed in.
@@ -60,12 +60,23 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Reader,
             rows.Select(c => (c.ConnectionId, c.Sender)).ToList(), cancellationToken);
 
-        // Look up the live agent once per distinct channel, so a 50-row page with 4 channels is 4 queries.
-        Dictionary<string, ConversationAgentRef?> agentByChannel = [];
-        foreach (string channel in rows.Select(c => c.Channel).Distinct(StringComparer.OrdinalIgnoreCase))
+        // One call to the AI service returns every live agent mapped to its channel platform.
+        // The result is cached per workspace for 30 s; agents rarely change and the cache stays fresh enough.
+        // If the AI service is unreachable the inbox degrades gracefully: no channel agent shown.
+        IReadOnlyDictionary<string, ConversationAgentRef> agentByChannel;
+        try
         {
-            AgentResponse? agent = await agents.ResolveForChannelAsync(Owner, channel);
-            agentByChannel[channel] = agent is null ? null : new ConversationAgentRef(agent.Id.ToString(), agent.Name);
+            string cacheKey = $"channel_agents:{Owner}";
+            if (!cache.TryGetValue(cacheKey, out IReadOnlyDictionary<string, ConversationAgentRef>? cached) || cached is null)
+            {
+                cached = await orchestrator.GetChannelAgentMapAsync(Owner, cancellationToken);
+                cache.Set(cacheKey, cached, TimeSpan.FromSeconds(30));
+            }
+            agentByChannel = cached;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            agentByChannel = new Dictionary<string, ConversationAgentRef>();
         }
 
         // One batch query for active human takeovers across the whole page.

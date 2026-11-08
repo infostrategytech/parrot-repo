@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Parrot.Application.Conversations;
 
 namespace Parrot.Application.Agents;
 
@@ -30,4 +31,10 @@ public interface IAgentOrchestratorClient
     Task<JsonElement> GetRegistryAsync(string ownerUserId, CancellationToken cancellationToken = default);
 
     Task<TestTurnResult> RunTestTurnAsync(string ownerUserId, TestTurnRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The live agents covering each channel platform (whatsapp, facebook, instagram, tiktok) for this workspace.
+    /// Keyed by platform (lowercase). Returns an empty dictionary when OmniAi is not enabled.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, ConversationAgentRef>> GetChannelAgentMapAsync(string ownerUserId, CancellationToken cancellationToken = default);
 }
