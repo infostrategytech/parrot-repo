@@ -37,6 +37,9 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>When a timed human takeover expires and the AI resumes; null when no takeover is active or it has no time limit.</summary>
     public DateTime? ControlUntil { get; init; }
+
+    /// <summary>active when an AI agent covers this channel and no human has taken over; handoff when a human is in control; null when no agent is connected.</summary>
+    public string? AiState { get; init; }
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt)
 {

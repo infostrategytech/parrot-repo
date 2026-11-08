@@ -77,13 +77,16 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             .Select(c =>
             {
                 marks.TryGetValue((c.ConnectionId, c.Sender), out ConversationFlags? mark);
+                bool hasActiveTakeover = activeTakeovers.ContainsKey((c.ConnectionId, c.Sender));
+                ConversationAgentRef? channelAgent = agentByChannel.GetValueOrDefault(c.Channel);
                 return c with
                 {
                     UnreadCount = unread.GetValueOrDefault((c.ConnectionId, c.Sender)),
                     Pinned = mark?.Pinned ?? false,
                     MarkedUnread = mark?.MarkedUnread ?? false,
-                    ChannelAgent = agentByChannel.GetValueOrDefault(c.Channel),
+                    ChannelAgent = channelAgent,
                     ControlUntil = activeTakeovers.TryGetValue((c.ConnectionId, c.Sender), out DateTime? until) ? until : null,
+                    AiState = hasActiveTakeover ? "handoff" : channelAgent is not null ? "active" : null,
                 };
             })
             .OrderByDescending(c => c.Pinned).ThenByDescending(c => c.UpdatedAt));
