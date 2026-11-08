@@ -609,7 +609,7 @@
 
     private async Task ReturnToAiAsync()
     {
-        await ActAsync(() => Features.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender));
+        await ActAsync(() => Client.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender, _lifetime.Token));
         _composerMode = ComposerMode.Reply;
         Conversation.Draft = "";
         _draftedBy = null;
