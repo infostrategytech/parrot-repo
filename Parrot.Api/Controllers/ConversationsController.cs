@@ -10,6 +10,7 @@ using Parrot.Api.Utils;
 using Parrot.Application.Agents;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Application.Teams;
 using Parrot.Domain.Exceptions;
 
@@ -24,7 +25,8 @@ namespace Parrot.Api.Controllers;
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
-    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache) : ControllerBase
+    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache,
+    IAppLogger<ConversationsController> logger) : ControllerBase
 {
     // The workspace owns the conversations; what has been read, what is pinned
     // or set aside, and who wrote a note, belong to the person signed in.
@@ -76,6 +78,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            logger.LogWarning(ex, "channel_agents.unavailable OwnerId={OwnerId} — inbox degrades: no channel agent shown", Owner);
             agentByChannel = new Dictionary<string, ConversationAgentRef>();
         }
 
