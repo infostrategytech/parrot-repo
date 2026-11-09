@@ -123,8 +123,8 @@ public sealed class InboundMessageProcessor(
 
             Processed("success", "none");
             logger.LogInformation(
-                "message.persisted MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} Sequence={Sequence} Outcome={Outcome} DurationMs={DurationMs}",
-                inbound.MessageId, inbound.Source, inbound.ConnectionId, stored.Sequence, outcome,
+                "message.persisted MessageId={MessageId} Source={Source} ConnectionId={ConnectionId} Sequence={Sequence} Outcome={Outcome} CommsType={CommsType} DurationMs={DurationMs}",
+                inbound.MessageId, inbound.Source, inbound.ConnectionId, stored.Sequence, outcome, commsType,
                 Stopwatch.GetElapsedTime(started).TotalMilliseconds);
         }
         catch (UnprocessableMessageException ex)
