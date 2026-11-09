@@ -296,10 +296,11 @@ services:
         condition: service_healthy
     networks: [parrot]
 
-  # One program, three jobs, each its own service so each scales on its own backlog (Worker__Roles):
+  # One program, four jobs, each its own service so each scales on its own backlog (Worker__Roles):
   #   message-processor: messages.inbound -> MongoDB -> messages.persisted, the only thing that stores incoming messages.
   #   media-worker: copies customers' pictures and files into private storage (messages.media).
   #   outbound-worker: hands agents' pictures and files to WhatsApp or Messenger (messages.outbound).
+  #   ai-reply-worker: consumes ai.reply.requested events and routes AI-generated replies back through the channel.
   # The media and outbound workers idle until Storage__DeferInboundMedia / Outbound__DeferFileSends are turned on.
   message-processor: &message-worker
     build:
@@ -333,6 +334,14 @@ services:
       # true: store a message at once with its files loading and copy them from the messages.media topic.
       # Leave false until the inbox refreshes a thread when a file finishes.
       Storage__DeferInboundMedia: ${DEFER_INBOUND_MEDIA:-false}
+      # The AI service: needed so inbound messages are tagged UserToAgent (not UserToTenant)
+      # when an agent is live on the channel, routing them to the AI orchestrator.
+      # Uses the same JWT secret as the API to mint service tokens for the AI service.
+      JwtSettings__Secret: ${JWT_SECRET}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
+      OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     secrets:
@@ -361,6 +370,12 @@ services:
     environment:
       <<: *message-worker-env
       Worker__Roles: outbound
+
+  ai-reply-worker:
+    <<: *message-worker
+    environment:
+      <<: *message-worker-env
+      Worker__Roles: aireplies
 
   parrot-web:
     build:

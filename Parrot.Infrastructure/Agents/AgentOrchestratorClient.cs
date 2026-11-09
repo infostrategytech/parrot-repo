@@ -98,7 +98,7 @@ public sealed class AgentOrchestratorClient(
         }
 
         using HttpRequestMessage request = new(method, path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.Mint(ownerUserId));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.MintForAiService(ownerUserId));
         if (body is not null) request.Content = JsonContent.Create(body, body.GetType(), options: Wire);
 
         HttpResponseMessage response;

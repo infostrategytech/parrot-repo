@@ -138,5 +138,7 @@ TestResults/
 # The conversations and AI orchestrator setup/audit guides ship with the code they describe.
 !docs/CONVERSATIONS.md
 !docs/AI_INTEGRATION.md
-# Nginx configuration
+
+# nginx config is managed directly on the live server and must not be overwritten on deploy.
 nginx.conf
+infra/ec2/nginx/
