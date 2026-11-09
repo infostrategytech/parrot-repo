@@ -193,7 +193,7 @@ public class InboundMessageProcessorTests
     {
         private readonly HashSet<(string Owner, Guid Connection, string Sender)> _active = new();
 
-        public Task SetAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        public Task SetAsync(string owner, Guid connection, string sender, DateTime? controlUntil, CancellationToken ct)
         {
             _active.Add((owner, connection, sender));
             return Task.CompletedTask;
@@ -207,6 +207,10 @@ public class InboundMessageProcessorTests
 
         public Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
             Task.FromResult(_active.Contains((owner, connection, sender)));
+
+        public Task<IReadOnlyDictionary<(Guid Connection, string Sender), DateTime?>> GetActiveAsync(
+            string owner, IReadOnlyList<(Guid Connection, string Sender)> conversations, CancellationToken ct) =>
+            Task.FromResult<IReadOnlyDictionary<(Guid, string), DateTime?>>(new Dictionary<(Guid, string), DateTime?>());
 
         public void Activate(string owner, Guid connection, string sender) =>
             _active.Add((owner, connection, sender));

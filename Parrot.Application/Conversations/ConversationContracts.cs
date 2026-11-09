@@ -3,10 +3,16 @@ using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Conversations;
 
+/// <summary>An agent that covers this conversation's channel (id and display name).</summary>
+public sealed record ConversationAgentRef(string Id, string Name);
+
 public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
 {
     /// <summary>whatsapp, facebook, tiktok or instagram: which channel the conversation is on.</summary>
     public string Channel { get; init; } = "whatsapp";
+
+    /// <summary>The live agent covering this conversation's channel, or null when no agent is connected to it.</summary>
+    public ConversationAgentRef? ChannelAgent { get; init; }
 
     /// <summary>Customer messages the signed-in user has not read. Zero for a read conversation.</summary>
     public int UnreadCount { get; init; }
@@ -28,6 +34,12 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>The signed-in user marked it unread to come back to: the inbox shows "!" when no message is unread.</summary>
     public bool MarkedUnread { get; init; }
+
+    /// <summary>When a timed human takeover expires and the AI resumes; null when no takeover is active or it has no time limit.</summary>
+    public DateTime? ControlUntil { get; init; }
+
+    /// <summary>active when an AI agent covers this channel and no human has taken over; handoff when a human is in control; null when no agent is connected.</summary>
+    public string? AiState { get; init; }
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt)
 {

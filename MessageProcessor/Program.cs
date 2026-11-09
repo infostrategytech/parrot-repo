@@ -5,12 +5,14 @@ using MessageProcessor;
 using MessageProcessor.Monitoring;
 using OpenTelemetry.Metrics;
 using Parrot.Application.Agents;
+using Parrot.Application.Auth;
 using Parrot.Application.Conversations;
 using Parrot.Application.Customers;
 using Parrot.Application.Integrations;
 using Parrot.Application.Logging;
 using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
+using Parrot.Application.Utils;
 using Parrot.Infrastructure.Agents;
 using Parrot.Infrastructure.Conversations;
 using Parrot.Infrastructure.Customers;
@@ -49,8 +51,29 @@ string postgresConnection = builder.Configuration.GetConnectionString("DefaultCo
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options => options.UseNpgsql(postgresConnection));
 builder.Services.AddSingleton<IConnectionMessageReceipt, ConnectionMessageReceipt>();
 builder.Services.AddSingleton<ICustomerRepository, EfCustomerRepository>();
-builder.Services.AddSingleton<IAgentChannelLookup, EfAgentChannelLookup>();
 builder.Services.AddSingleton<ITenantIdLookup, EfTenantIdLookup>();
+
+// Agent channel lookup: asks the AI service whether an agent is live on a channel,
+// so messages.persisted carries UserToAgent (not UserToTenant) when the AI should reply.
+// Requires JwtSettings (to mint service tokens) and OmniAi:BaseUrl.
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection(JwtSettings.SectionName));
+builder.Services.Configure<OmniAiSettings>(builder.Configuration.GetSection(OmniAiSettings.SectionName));
+OmniAiSettings omniAiSettings = builder.Configuration.GetSection(OmniAiSettings.SectionName).Get<OmniAiSettings>()
+    ?? new OmniAiSettings();
+builder.Services.AddSingleton<IJwtHelper, JwtHelper>();
+builder.Services.AddSingleton<IServiceTokenFactory, ServiceTokenFactory>();
+builder.Services.AddHttpClient("AgentOrchestrator", client =>
+{
+    if (Uri.TryCreate(omniAiSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, omniAiSettings.TimeoutSeconds));
+});
+builder.Services.AddSingleton<IAgentOrchestratorClient>(sp => new AgentOrchestratorClient(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient("AgentOrchestrator"),
+    sp.GetRequiredService<IServiceTokenFactory>(),
+    sp.GetRequiredService<IOptions<OmniAiSettings>>(),
+    sp.GetRequiredService<ILogger<AgentOrchestratorClient>>()));
+builder.Services.AddSingleton<IAgentChannelLookup, OmniAiAgentChannelLookup>();
 builder.Services.AddSingleton<IHumanTakeoverStore, MongoHumanTakeoverStore>();
 
 // Messenger and Instagram webhooks name the customer only by id; the worker asks Meta for the name

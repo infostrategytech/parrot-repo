@@ -298,9 +298,9 @@
                         </Button>
                     }
                     <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
-                        @if (_selected.HasAiAgent && _selected.AiState != AiState.Active)
+                        @if (_selected.HasChannelAgent && _selected.AiState != AiState.Active)
                         {
-                            <ActionMenuItem Label="@($"Return to {_selected.AiAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
+                            <ActionMenuItem Label="@($"Handover to {_selected.AiAgent?.Name ?? _selected.ChannelAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
                                             OnClick="() => ActAsync(conversation => Client.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender, _lifetime.Token))" />
                         }
                         @if (Features.Available && _selected.HasAiAgent)
@@ -413,7 +413,7 @@
 
     // What the loaded conversations carry decides which parts of the design
     // are drawn; today's API sends none of these optional fields.
-    private bool HasAiData => Loaded.Any(c => c.HasAiAgent);
+    private bool HasAiData => Loaded.Any(c => c.HasAiAgent || c.HasChannelAgent);
     private bool HasAssignment => HasAiData;
     private bool HasStatus => Loaded.Any(c => c.Status is not null);
     private bool HasPriority => Loaded.Any(c => c.Priority is not null);

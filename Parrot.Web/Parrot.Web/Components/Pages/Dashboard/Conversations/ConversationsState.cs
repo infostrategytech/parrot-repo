@@ -43,6 +43,7 @@ public class ConversationsState
             item.ControlUntil = summary.ControlUntil;
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
             item.Customer = summary.Customer;
+            item.ChannelAgent = summary.ChannelAgent;
         }
         Resort();
     }

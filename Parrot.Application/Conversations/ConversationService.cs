@@ -42,7 +42,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         // Best-effort: a human sent this reply, so mark the conversation as under human control.
         if (humanTakeover is not null)
         {
-            try { await humanTakeover.SetAsync(owner, connectionId, recipient, ct); }
+            try { await humanTakeover.SetAsync(owner, connectionId, recipient, null, ct); }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 logger?.LogWarning(ex, "human_takeover_set_failed ConnectionId={ConnectionId} Sender={Sender}; continuing",

@@ -62,7 +62,11 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
         RequestAsync<InboxNoteDto>(HttpMethod.Post, NotesPath(connection, sender), new InboxAddNoteDto(text), ct);
     public async Task DeleteNoteAsync(Guid connection, string sender, string noteId, CancellationToken ct) =>
         await SendAsync(HttpMethod.Delete, $"api/conversations/{connection}/notes/{Uri.EscapeDataString(noteId)}?sender={Uri.EscapeDataString(sender)}", null, ct);
-    /// <summary>Hands the conversation back to the AI after a human has been handling it. 404 when no active takeover exists.</summary>
+    /// <summary>Human takes over from the AI. Minutes null means until they hand back manually.</summary>
+    public async Task TakeOverAsync(Guid connection, string sender, int? minutes, CancellationToken ct) =>
+        await SendAsync(HttpMethod.Post, $"api/conversations/{connection}/human-takeover?sender={Uri.EscapeDataString(sender)}",
+            new { Minutes = minutes }, ct);
+    /// <summary>Hands the conversation back to the AI. Safe to call even when no takeover is active.</summary>
     public async Task ReturnToAiAsync(Guid connection, string sender, CancellationToken ct) =>
         await SendAsync(HttpMethod.Delete, $"api/conversations/{connection}/human-takeover?sender={Uri.EscapeDataString(sender)}", null, ct);
     /// <summary>Approves or denies an AI agent's pending approval request. Decision is "approved" or "denied".</summary>
