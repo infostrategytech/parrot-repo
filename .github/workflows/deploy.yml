@@ -73,4 +73,5 @@ jobs:
             # API request landed on gRPC as a 404), so make it look them up
             # again; fall back to a restart if a reload is refused.
             sudo docker compose --env-file .env.prod exec -T nginx nginx -s reload || sudo docker compose --env-file .env.prod restart nginx
-            sudo docker system prune -f --volumes=false
+            sudo docker system prune -af --volumes=false
+            sudo docker builder prune -af
