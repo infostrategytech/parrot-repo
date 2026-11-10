@@ -167,6 +167,7 @@ services:
       DataProtection__KeyRingPath: /app/data-protection-keys
       WhatsApp__WebhookBaseUrl: ${WHATSAPP_WEBHOOK_BASE_URL:-http://localhost:5222}
       WhatsApp__AppSecret: ${WHATSAPP_APP_SECRET:-your-app-secret}
+      CatalogClient__BaseUrl: http://catalog-api:8080
       Facebook__WebhookBaseUrl: ${FACEBOOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
       Facebook__AppSecret: ${FACEBOOK_APP_SECRET:-your-facebook-app-secret}
       TikTok__WebhookBaseUrl: ${TIKTOK_WEBHOOK_BASE_URL:-https://api.parrot.irechargetech.com}
@@ -262,10 +263,11 @@ services:
         condition: service_started
     networks: [parrot]
 
-  # One program, three jobs, each its own service so each scales on its own backlog (Worker__Roles):
+  # One program, four jobs, each its own service so each scales on its own backlog (Worker__Roles):
   #   message-processor: messages.inbound -> MongoDB -> messages.persisted, the only thing that stores incoming messages.
   #   media-worker: copies customers' pictures and files into private storage (messages.media).
   #   outbound-worker: hands agents' pictures and files to WhatsApp or Messenger (messages.outbound).
+  #   ai-reply-worker: consumes ai.reply.requested events and routes AI-generated replies back through the channel.
   # The media and outbound workers idle until Storage__DeferInboundMedia / Outbound__DeferFileSends are turned on.
   message-processor: &message-worker
     build:
@@ -289,6 +291,12 @@ services:
       Storage__ServiceUrl: http://minio:9000
       Storage__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
+      # The AI service: needed so inbound messages are tagged UserToAgent when an agent is live.
+      JwtSettings__Secret: ${JWT_SECRET:-dev-secret-at-least-32-characters-long}
+      JwtSettings__Issuer: ParrotApi
+      JwtSettings__Audience: ParrotApp
+      OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
+      OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     depends_on:
@@ -314,6 +322,12 @@ services:
     environment:
       <<: *message-worker-env
       Worker__Roles: outbound
+
+  ai-reply-worker:
+    <<: *message-worker
+    environment:
+      <<: *message-worker-env
+      Worker__Roles: aireplies
 
   parrot-web:
     build:
@@ -416,7 +430,9 @@ services:
       JwtSettings__Audience: ParrotApp
       # Each request with a Parrot session token is checked against the member's
       # current access, so a removed member or a changed role applies at once.
-      Catalog__Auth__AccessCheckUrl: http://parrot-api:8080/
+      # Override with PARROT_API_ACCESS_CHECK_URL when Parrot's API runs on the
+      # host instead of in this stack (dotnet run), e.g. http://host.docker.internal:5222/
+      Catalog__Auth__AccessCheckUrl: ${PARROT_API_ACCESS_CHECK_URL:-http://parrot-api:8080/}
       # Items' photos: the API's public bucket in MinIO, read by the browser through the published port.
       Catalog__Photos__Bucket: parrot
       Catalog__Photos__Region: us-east-1

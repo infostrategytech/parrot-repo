@@ -1,0 +1,6 @@
+.tool-task-action { display: grid; gap: var(--spacing-lg); padding: var(--spacing-xl); background: var(--colors-accent-brand-subtle); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); color: var(--colors-text-secondary); }
+.tool-task-action ::deep h3, .tool-task-action ::deep p { margin: var(--spacing-none); }
+.tool-task-action ::deep h3 { color: var(--colors-text-primary); }
+.tool-task-action__heading { display: flex; gap: var(--spacing-md); align-items: center; }
+.tool-task-action__heading > div { display: grid; gap: var(--spacing-xs); }
+.tool-task-action__buttons { display: flex; gap: var(--spacing-sm); justify-content: end; flex-wrap: wrap; }

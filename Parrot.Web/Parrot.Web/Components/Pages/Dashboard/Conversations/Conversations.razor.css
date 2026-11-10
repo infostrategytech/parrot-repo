@@ -191,6 +191,19 @@
 
 .inbox-ownership { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); white-space: nowrap; }
 
+.inbox-escalation-chip {
+  display: inline-flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  height: var(--ds-inbox-chip);
+  padding: 0 var(--spacing-sm);
+  color: var(--colors-feedback-warning-text);
+  white-space: nowrap;
+  background: var(--colors-feedback-warning-subtle);
+  border: var(--ds-hairline) solid var(--colors-feedback-warning-border);
+  border-radius: var(--radius-radius-full);
+}
+
 .inbox-workspace {
   /* Gaps in the token set: no illustration, chip or status-dot sizes. React's. */
   --ds-inbox-mascot: 132px;
@@ -253,7 +266,8 @@
   .inbox-conversation__actions { flex: 0 0 auto; }
   /* The AI and owner chips would crowd the name; they are in the customer drawer's reach on desktop. */
   .inbox-conversation__actions > .inbox-agent-presence,
-  .inbox-conversation__actions > .inbox-ownership { display: none; }
+  .inbox-conversation__actions > .inbox-ownership,
+  .inbox-conversation__actions > .inbox-escalation-chip { display: none; }
   .inbox-filters { grid-template-columns: minmax(0, 1fr); }
   .inbox-filters ::deep .inbox-filter-sort { grid-column: auto; }
   /* The customer panel covers the thread edge to edge. */

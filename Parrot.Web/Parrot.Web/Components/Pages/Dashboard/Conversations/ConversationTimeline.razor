@@ -93,6 +93,69 @@
                                 Title="No internal notes yet"
                                 Description="Add private context for teammates from the composer." />
                 }
+
+                @if (_view == ThreadView.Messages && Conversation.AiTurnInProgress
+                     && Conversation.AiState == AiState.Active && Conversation.PendingApproval is null)
+                {
+                    <div class="ai-typing-indicator" role="status"
+                         aria-label="@($"{Conversation.AiAgent?.Name ?? "AI agent"} is replying")">
+                        <span class="ai-typing-indicator__avatar" aria-hidden="true">
+                            <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                        </span>
+                        <div class="ai-typing-indicator__dots" aria-hidden="true">
+                            <span></span><span></span><span></span>
+                        </div>
+                    </div>
+                }
+
+                @if (_view == ThreadView.Messages && Conversation.PendingApproval is { } approval)
+                {
+                    <div class="approval-card @(_approvalDecision is not null ? $"is-{_approvalDecision}" : null)" role="region"
+                         aria-label="Approval request from AI agent">
+                        <div class="approval-card__icon">
+                            <Icon Name="@ApprovalIcon(_approvalDecision)" Size="IconSize.Sm" />
+                        </div>
+                        <div class="approval-card__body">
+                            @if (_approvalDecision is null)
+                            {
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">
+                                    @(Conversation.AiAgent?.Name ?? "AI agent") needs approval
+                                </Typography>
+                                @if (approval.Reason is { Length: > 0 } reason)
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose>@reason</Typography>
+                                }
+                                @if (approval.Tool is { Length: > 0 } tool)
+                                {
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="code" Class="approval-card__tool">@tool</Typography>
+                                }
+                                @if (_approvalError is not null)
+                                {
+                                    <InlineError Message="@_approvalError" OnDismiss="() => _approvalError = null" />
+                                }
+                                <div class="approval-card__actions">
+                                    <Button Size="ButtonSize.Small" disabled="@_deciding"
+                                            @onclick="ApproveAsync">
+                                        <ChildContent>Approve</ChildContent>
+                                    </Button>
+                                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_deciding"
+                                            @onclick="DenyAsync">
+                                        <ChildContent>Deny</ChildContent>
+                                    </Button>
+                                </div>
+                            }
+                            else
+                            {
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">
+                                    @(_approvalDecision == "approved" ? "Approved" : "Denied")
+                                </Typography>
+                                <Typography TextStyle="TextStyle.Small12Regular" As="p">
+                                    Decision sent. Waiting for the AI agent to continue.
+                                </Typography>
+                            }
+                        </div>
+                    </div>
+                }
             </div>
         </section>
 
@@ -115,7 +178,7 @@
             }
             else
             {
-                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Features.Available" Countdown="@CountdownLabel"
+                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Conversation.HasChannelAgent" Countdown="@CountdownLabel"
                                  Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" OnDismiss="() => _quoteOnTakeOver = null" />
             }
 
@@ -217,6 +280,12 @@
     private string? _actionError;
     private DateTime? _clockFor;
 
+    // Approval card state: the approval id we last saw, the decision sent, and any send error.
+    private string? _pendingApprovalId;
+    private string? _approvalDecision;
+    private string? _approvalError;
+    private bool _deciding;
+
     private ConvMessage? _learningMessage;
     private LearningMode _learningMode;
     private string _learningText = "";
@@ -240,6 +309,16 @@
         {
             _tailId = tail;
             if (tail is not null) _scrollPending = true;
+        }
+
+        // A new approval card scrolls into view, and resets the decision for a fresh request.
+        string? incomingApprovalId = Conversation.PendingApproval?.ApprovalId;
+        if (incomingApprovalId != _pendingApprovalId)
+        {
+            _pendingApprovalId = incomingApprovalId;
+            _approvalDecision = null;
+            _approvalError = null;
+            if (incomingApprovalId is not null) _scrollPending = true;
         }
 
         // A timed take-over counts down in the control bar.
@@ -313,7 +392,13 @@
                 await InvokeAsync(StateHasChanged);
                 if (DateTime.UtcNow >= until.ToUniversalTime())
                 {
-                    // The window is over: the API hands back to the agent; read it.
+                    // The timed window is over: clear the takeover server-side so the AI picks up the next message,
+                    // then refresh the conversation so the control bar switches back immediately.
+                    try { await Client.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender, _lifetime.Token); }
+                    catch (Exception ex) when (ex is not OperationCanceledException)
+                    {
+                        // Best-effort: the backend already expired it via ControlUntil; the refresh will catch up.
+                    }
                     await InvokeAsync(() => OnChanged.InvokeAsync());
                     return;
                 }
@@ -516,7 +601,7 @@
 
     private async Task TakeOverAsync(int? minutes)
     {
-        await ActAsync(() => Features.TakeOverAsync(Conversation.ConnectionId, Conversation.Sender, minutes));
+        await ActAsync(() => Client.TakeOverAsync(Conversation.ConnectionId, Conversation.Sender, minutes, _lifetime.Token));
         // Taken over from Reply: the message it asked for is quoted, ready to type under.
         if (_quoteOnTakeOver is { } message && _actionError is null) Quote(message);
         _quoteOnTakeOver = null;
@@ -524,7 +609,7 @@
 
     private async Task ReturnToAiAsync()
     {
-        await ActAsync(() => Features.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender));
+        await ActAsync(() => Client.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender, _lifetime.Token));
         _composerMode = ComposerMode.Reply;
         Conversation.Draft = "";
         _draftedBy = null;
@@ -542,7 +627,8 @@
             _scrollPending = true;
             await OnChanged.InvokeAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _actionError = ex.Message; }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or NotSupportedException)
+        { _actionError = ex.Message; }
         finally { _acting = false; }
     }
 
@@ -615,6 +701,31 @@
         if (date == today.AddDays(-1)) return "Yesterday";
         return date.ToString("d MMM yyyy", CultureInfo.InvariantCulture);
     }
+
+    private Task ApproveAsync() => DecideAsync("approved");
+    private Task DenyAsync() => DecideAsync("denied");
+
+    private async Task DecideAsync(string decision)
+    {
+        if (_deciding || Conversation.PendingApproval is not { } approval) return;
+        _deciding = true;
+        _approvalError = null;
+        try
+        {
+            await Client.DecideApprovalAsync(approval.ApprovalId, decision, null, _lifetime.Token);
+            _approvalDecision = decision;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException)
+        { _approvalError = ex is HttpRequestException ? ex.Message : "Could not send the decision. Try again."; }
+        finally { _deciding = false; }
+    }
+
+    private static IconName ApprovalIcon(string? decision) => decision switch
+    {
+        "approved" => IconName.RiCheckFill,
+        "denied" => IconName.RiCloseFill,
+        _ => IconName.RiRobot3Fill,
+    };
 
     public void Dispose()
     {

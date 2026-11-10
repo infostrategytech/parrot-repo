@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Parrot.Application.Agents;
 using Parrot.Application.Auth;
+using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Exceptions;
 
@@ -62,6 +63,36 @@ public sealed class AgentOrchestratorClient(
         return new TestTurnResult(result.TurnId, result.Status, result.Decision, result.Reply, result.Confidence ?? 0);
     }
 
+    public async Task<IReadOnlyDictionary<string, ConversationAgentRef>> GetChannelAgentMapAsync(
+        string ownerUserId, CancellationToken cancellationToken = default)
+    {
+        if (!settings.Value.Enabled || http.BaseAddress is null)
+        {
+            logger.LogWarning(
+                "channel_agent_map.disabled OwnerUserId={OwnerUserId} Enabled={Enabled} HasBaseUrl={HasBaseUrl} — returning empty map; CommsType will be UserToTenant",
+                ownerUserId, settings.Value.Enabled, http.BaseAddress is not null);
+            return new Dictionary<string, ConversationAgentRef>();
+        }
+
+        // A workspace has a handful of agents and channels; limit=100 is effectively all.
+        AgentListWire agentList = await SendAsync<AgentListWire>(
+            HttpMethod.Get, "api/v1/agents?limit=100", ownerUserId, null, cancellationToken);
+        ChannelListWire channelList = await SendAsync<ChannelListWire>(
+            HttpMethod.Get, "api/v1/channels?limit=100", ownerUserId, null, cancellationToken);
+
+        Dictionary<string, AgentItemWire> liveById = agentList.Items
+            .Where(a => a.IsLive)
+            .ToDictionary(a => a.AgentId);
+
+        Dictionary<string, ConversationAgentRef> map = [];
+        foreach (ChannelItemWire channel in channelList.Items.Where(c => c.Enabled))
+        {
+            if (liveById.TryGetValue(channel.AgentId, out AgentItemWire? agent))
+                map[channel.Platform.ToLowerInvariant()] = new ConversationAgentRef(agent.AgentId, agent.Name);
+        }
+        return map;
+    }
+
     private async Task<T> SendAsync<T>(HttpMethod method, string path, string ownerUserId, object? body, CancellationToken cancellationToken)
     {
         if (!settings.Value.Enabled || http.BaseAddress is null)
@@ -72,7 +103,7 @@ public sealed class AgentOrchestratorClient(
         }
 
         using HttpRequestMessage request = new(method, path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.Mint(ownerUserId));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.MintForAiService(ownerUserId));
         if (body is not null) request.Content = JsonContent.Create(body, body.GetType(), options: Wire);
 
         HttpResponseMessage response;
@@ -147,4 +178,20 @@ public sealed class AgentOrchestratorClient(
         [property: JsonPropertyName("decision")] string? Decision,
         [property: JsonPropertyName("reply")] string? Reply,
         [property: JsonPropertyName("confidence")] double? Confidence);
+
+    private sealed record AgentListWire(
+        [property: JsonPropertyName("items")] List<AgentItemWire> Items);
+
+    private sealed record AgentItemWire(
+        [property: JsonPropertyName("agent_id")] string AgentId,
+        [property: JsonPropertyName("name")] string Name,
+        [property: JsonPropertyName("is_live")] bool IsLive);
+
+    private sealed record ChannelListWire(
+        [property: JsonPropertyName("items")] List<ChannelItemWire> Items);
+
+    private sealed record ChannelItemWire(
+        [property: JsonPropertyName("agent_id")] string AgentId,
+        [property: JsonPropertyName("platform")] string Platform,
+        [property: JsonPropertyName("enabled")] bool Enabled);
 }

@@ -1,0 +1,96 @@
+/* A connected-but-not-catalogued channel: the "Import from Channel's Catalogue"
+   picker, reached from the channel card and from the catalogue page's back route.
+
+   The page sits in the main area, so it fills the column rather than the window. */
+.chan-cat {
+  /* Gaps in the token set: no page-gutter, page-width or readable-measure scale. */
+  --ds-chan-cat-gutter: clamp(28px, 4vw, 66px);
+  --ds-chan-cat-max: 1280px;
+  --ds-chan-cat-measure: 480px;
+  /* Card dimensions taken from ChannelCard (designer, channel page): 104px min-height,
+     48px mark on a 15px gutter. */
+  --ds-chan-cat-min: 104px;
+  --ds-chan-cat-gutter-inner: 15px;
+  --ds-chan-cat-mark: 48px;
+  /* The card's edge. */
+  --ds-chan-cat-hairline: 1px;
+  /* No motion token: matches --ds-channel-motion on ChannelCard. */
+  --ds-chan-cat-motion: 140ms;
+
+  padding: var(--spacing-4xl) var(--ds-chan-cat-gutter) var(--spacing-5xl);
+}
+
+.chan-cat > * {
+  width: min(var(--ds-chan-cat-max), 100%);
+  margin-inline: auto;
+}
+
+.chan-cat__header {
+  display: grid;
+  gap: var(--spacing-md);
+  margin-bottom: var(--spacing-3xl);
+}
+
+.chan-cat__heading {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.chan-cat__lede {
+  color: var(--colors-text-secondary);
+  max-width: var(--ds-chan-cat-measure);
+}
+
+.chan-cat__channels {
+  display: grid;
+  gap: var(--spacing-md);
+}
+
+/* Matches ChannelCard exactly: same height, gap, padding and corners so the two
+   pages read as one system. */
+.chan-cat__card {
+  display: flex;
+  gap: var(--ds-chan-cat-gutter-inner);
+  align-items: center;
+  min-height: var(--ds-chan-cat-min);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-chan-cat-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  transition: box-shadow var(--ds-chan-cat-motion) ease;
+}
+
+.chan-cat__card:hover {
+  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+}
+
+/* The brand disc: same size and corners as ChannelCard's mark (48px, radius-xl).
+   Each channel variant sets its own background; the icon is painted inverse (white)
+   so it reads on the coloured disc — the same one-place-in-the-product rule as the
+   Channels page. */
+.chan-cat__mark {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: var(--ds-chan-cat-mark);
+  height: var(--ds-chan-cat-mark);
+  color: var(--colors-text-inverse);
+  border-radius: var(--radius-radius-xl);
+}
+
+.chan-cat__card.is-whatsapp .chan-cat__mark { background: #22a968; }
+
+.chan-cat__copy {
+  flex: 1;
+  display: grid;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+}
+
+.chan-cat__account {
+  color: var(--colors-text-muted);
+}
+
+.chan-cat__action {
+  flex: none;
+}

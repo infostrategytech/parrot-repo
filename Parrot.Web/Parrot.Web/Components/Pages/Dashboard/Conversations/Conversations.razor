@@ -1,5 +1,5 @@
-@page "/dashboard/conversations"
-@page "/dashboard/conversations/{ConversationId}"
+@page "/dashboard/inbox"
+@page "/dashboard/inbox/{ConversationId}"
 @attribute [RequiresAccess(AccessRules.Inbox)]
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @layout DashboardLayout
@@ -275,6 +275,13 @@
                             <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.AiState</Typography>
                         </span>
                     }
+                    @if (_selected.HasAiAgent && _selected.ActiveEscalation is { } esc)
+                    {
+                        <span class="inbox-escalation-chip" title="@(esc.Problem is { Length: > 0 } p ? p : null)">
+                            <Icon Name="IconName.RiAlarmWarningFill" Size="IconSize.Sm" />
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@HeaderEscalationText(esc)</Typography>
+                        </span>
+                    }
                     @if (_selected.Assignee is { } assignee)
                     {
                         <span class="inbox-ownership">
@@ -291,6 +298,11 @@
                         </Button>
                     }
                     <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
+                        @if (_selected.HasChannelAgent && _selected.AiState != AiState.Active)
+                        {
+                            <ActionMenuItem Label="@($"Handover to {_selected.AiAgent?.Name ?? _selected.ChannelAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
+                                            OnClick="() => ActAsync(conversation => Client.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender, _lifetime.Token))" />
+                        }
                         @if (Features.Available && _selected.HasAiAgent)
                         {
                             @if (_selected.Assignee is not null)
@@ -298,12 +310,9 @@
                                 <ActionMenuItem Label="Unassign conversation" Glyph="IconName.RiUserUnfollowFill"
                                                 OnClick="() => ActAsync(conversation => Features.UnassignAsync(conversation.ConnectionId, conversation.Sender))" />
                             }
-                            @if (_selected.AiState != AiState.Active)
-                            {
-                                <ActionMenuItem Label="@($"Return to {_selected.AiAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
-                                                OnClick="() => ActAsync(conversation => Features.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender))" />
-                            }
-                            else
+                            @* Pause AI: shown when the AI is active and the agent wants to take over without sending a message first.
+                               Requires POST /api/conversations/{connectionId}/human-takeover — pending backend implementation. *@
+                            @if (_selected.AiState == AiState.Active)
                             {
                                 <ActionMenuItem Label="Pause AI and assign to me" Glyph="IconName.RiRobot3Fill"
                                                 OnClick="() => ActAsync(conversation => Features.PauseAiAsync(conversation.ConnectionId, conversation.Sender))" />
@@ -404,7 +413,7 @@
 
     // What the loaded conversations carry decides which parts of the design
     // are drawn; today's API sends none of these optional fields.
-    private bool HasAiData => Loaded.Any(c => c.HasAiAgent);
+    private bool HasAiData => Loaded.Any(c => c.HasAiAgent || c.HasChannelAgent);
     private bool HasAssignment => HasAiData;
     private bool HasStatus => Loaded.Any(c => c.Status is not null);
     private bool HasPriority => Loaded.Any(c => c.Priority is not null);
@@ -483,6 +492,7 @@
         Realtime.ReceiptsChanged += OnReceiptsChanged;
         Realtime.MediaChanged += OnMediaChanged;
         Realtime.Reconnected += OnRealtimeReconnected;
+        Realtime.AgentActivityReceived += OnAgentActivityPushed;
     }
 
     protected override async Task OnParametersSetAsync()
@@ -498,7 +508,7 @@
             return;
         }
 
-        // Deep link: /dashboard/conversations/{id}. The list may not be loaded
+        // Deep link: /dashboard/inbox/{id}. The list may not be loaded
         // yet on first render; RefreshAsync honours the route then.
         if (ConversationId == _selected?.Id) return;
         var item = ConversationsState.GetConversation(ConversationId);
@@ -536,6 +546,14 @@
         }
 
         ConversationsState.Touch(item, message);
+
+        // Track the AI turn lifecycle: an inbound message starts a turn; an outbound AI reply ends it.
+        if (item.AiState == AiState.Active)
+        {
+            if (!message.Outgoing) item.AiTurnInProgress = true;
+            else if (message.Outgoing) item.AiTurnInProgress = false;
+        }
+
         if (item == _selected && item.HistoryLoaded)
         {
             if (message.Outgoing)
@@ -595,7 +613,50 @@
 
     // Pushes sent while the connection was down were missed. The thread read
     // pages back until it meets a message it already has, so it fills the gap.
-    private Task OnRealtimeReconnected() => InvokeAsync(RefreshAsync);
+    // Turn-in-progress state driven by pushes cannot be trusted after a gap: clear it so the indicator
+    // doesn't stay frozen, then let the refresh bring back the authoritative AiState.
+    private Task OnRealtimeReconnected() => InvokeAsync(() =>
+    {
+        foreach (ConversationItem conversation in ConversationsState.Conversations)
+            conversation.AiTurnInProgress = false;
+        return RefreshAsync();
+    });
+
+    // An orchestrator event: a turn ended, the AI asked for approval, or it escalated.
+    // The event carries enough to update approval / escalation state without a network call.
+    // A change to the conversation's AiState badge (escalated / failed turns, new escalations)
+    // still needs a list refresh because that value lives on the server.
+    private Task OnAgentActivityPushed(Parrot.Application.Agents.AgentActivityEvent activity) => InvokeAsync(async () =>
+    {
+        if (_disposed || !AuthState.IsAuthenticated) return;
+
+        ConversationItem? item = ConversationsState.FindByConversationKey(activity.ConversationKey);
+
+        if (item is null)
+        {
+            // The conversation is not loaded yet — refresh the list if the event changes visible state.
+            if (NeedsListRefresh(activity)) await RefreshAsync();
+            return;
+        }
+
+        ConversationsState.ApplyAgentActivity(item, activity);
+
+        if (NeedsListRefresh(activity))
+        {
+            await RefreshAsync();
+            return;
+        }
+
+        // A completed turn may have produced an AI reply; that reply arrives separately via messagePersisted,
+        // so no extra fetch is needed unless the thread is open and already missed it.
+        StateHasChanged();
+    });
+
+    private static bool NeedsListRefresh(Parrot.Application.Agents.AgentActivityEvent activity) =>
+        activity.Type == Parrot.Application.Agents.AgentActivityTypes.EscalationOpened ||
+        (activity.Type == Parrot.Application.Agents.AgentActivityTypes.TurnCompleted &&
+         activity.Status is Parrot.Application.Agents.AgentActivityTypes.TurnStatus.Escalated
+                         or Parrot.Application.Agents.AgentActivityTypes.TurnStatus.Failed);
 
     private void AuthChanged() => _ = InvokeAsync(async () =>
     {
@@ -681,7 +742,7 @@
     private async Task BackToListAsync()
     {
         await CloseCustomerDetailsAsync();
-        Nav.NavigateTo("/dashboard/conversations");
+        Nav.NavigateTo("/dashboard/inbox");
     }
 
     private async Task SelectConversationAsync(string id)
@@ -690,7 +751,7 @@
         if (item is null) return;
         await CloseCustomerDetailsAsync();
         _selected = item;
-        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(id)}");
+        Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(id)}");
         // If a refresh is in flight, the new selection is read as soon as it is done.
         await ReadSelectedSoonAsync();
     }
@@ -782,7 +843,7 @@
         if (_selected is not { } conversation || _acting) return;
         _acting = true;
         try { await action(conversation); }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or NotSupportedException) { Toasts.ShowError(ex.Message); }
         finally { _acting = false; }
         await RefreshAsync();
     }
@@ -835,7 +896,7 @@
         {
             await CloseCustomerDetailsAsync();
             _selected = null;
-            Nav.NavigateTo("/dashboard/conversations");
+            Nav.NavigateTo("/dashboard/inbox");
         }
     }
 
@@ -878,7 +939,7 @@
     }
 
     private void OpenProfileConversation(CustomerChannel channel) =>
-        Nav.NavigateTo($"/dashboard/conversations/{Uri.EscapeDataString(channel.ConversationId)}");
+        Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(channel.ConversationId)}");
 
     [JSInvokable]
     public async Task CloseCustomerDetailsAsync()
@@ -995,10 +1056,13 @@
         _ => channel
     };
 
+    private static string HeaderEscalationText(AgentEscalationInfo esc) =>
+        esc.Priority is { Length: > 0 } priority ? $"Escalated · {priority}" : "Escalated";
+
     public void Dispose()
     {
         _disposed = true; AuthState.OnChange -= AuthChanged;
-        Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.MediaChanged -= OnMediaChanged; _mediaRefresh?.Cancel(); Realtime.Reconnected -= OnRealtimeReconnected;
+        Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.MediaChanged -= OnMediaChanged; _mediaRefresh?.Cancel(); Realtime.Reconnected -= OnRealtimeReconnected; Realtime.AgentActivityReceived -= OnAgentActivityPushed;
         _lifetime.Cancel(); _lifetime.Dispose();
         if (_customerFocus is not null) _ = _customerFocus.DisposeAsync();
         if (_customerEscape is not null) _ = _customerEscape.DisposeAsync().AsTask().ContinueWith(_ => _self?.Dispose());

@@ -150,6 +150,87 @@
 }
 .learning-dialog-host ::deep .learning-dialog__source .ds-overline { color: var(--colors-text-subtle); }
 
+/* ── AI typing indicator ─────────────────────────────────────────────────── */
+/* Mirrors a message-bubble row's left-aligned layout without being one. */
+.ai-typing-indicator {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
+}
+
+/* The same robot tile the AI message uses: brand-coloured, rounded.
+   Re-declared here because message-bubble__ai-avatar is scoped to its own component. */
+.ai-typing-indicator__avatar {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: var(--spacing-3xl);
+  height: var(--spacing-3xl);
+  color: var(--colors-brand-primary);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-md);
+}
+
+.ai-typing-indicator__dots {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: center;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-accent-brand-subtle);
+  border: var(--ds-hairline) solid var(--colors-accent-brand-muted);
+  border-radius: var(--radius-radius-sm) var(--radius-radius-lg) var(--radius-radius-lg) var(--radius-radius-lg);
+}
+
+.ai-typing-indicator__dots > span {
+  /* no motion token for looping dot-pulse; gap filed */
+  --ds-ai-typing-pulse-duration: 1.4s;
+  --ds-ai-typing-delay-2: 0.2s;
+  --ds-ai-typing-delay-3: 0.4s;
+  display: block;
+  width: var(--spacing-sm);
+  height: var(--spacing-sm);
+  background: var(--colors-brand-primary);
+  border-radius: var(--radius-radius-full);
+  opacity: 0.4;
+  animation: ai-dot-pulse var(--ds-ai-typing-pulse-duration) ease-in-out infinite;
+}
+
+.ai-typing-indicator__dots > span:nth-child(2) { animation-delay: var(--ds-ai-typing-delay-2); }
+.ai-typing-indicator__dots > span:nth-child(3) { animation-delay: var(--ds-ai-typing-delay-3); }
+
+@keyframes ai-dot-pulse {
+  0%, 60%, 100% { opacity: 0.4; transform: scale(1); }
+  30% { opacity: 1; transform: scale(1.25); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-typing-indicator__dots > span { animation: none; opacity: 0.6; }
+}
+
+/* ── Approval request card ───────────────────────────────────────────────── */
+.approval-card {
+  /* accent border is thicker than ds-hairline; no token for this width */
+  --ds-approval-accent-width: 3px;
+  display: flex;
+  gap: var(--spacing-md);
+  align-self: stretch;
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-left: var(--ds-approval-accent-width) solid var(--colors-brand-primary);
+  border-radius: var(--radius-radius-lg);
+}
+.approval-card.is-approved { border-left-color: var(--colors-accent-teal-solid); }
+.approval-card.is-denied { border-left-color: var(--colors-accent-neutral-base); }
+.approval-card__icon { flex: 0 0 auto; padding-top: var(--spacing-2xs); color: var(--colors-brand-primary); }
+.approval-card.is-approved .approval-card__icon { color: var(--colors-accent-teal-text); }
+.approval-card.is-denied .approval-card__icon { color: var(--colors-text-muted); }
+.approval-card__body { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.approval-card__body ::deep strong { color: var(--colors-text-primary); }
+.approval-card__body ::deep p { color: var(--colors-text-secondary); }
+.approval-card__tool { display: inline-block; padding: var(--spacing-2xs) var(--spacing-xs); font-family: var(--typography-family-mono, monospace); color: var(--colors-text-secondary); background: var(--colors-surface-muted); border-radius: var(--radius-radius-sm); }
+.approval-card__actions { display: flex; gap: var(--spacing-sm); flex-wrap: wrap; }
+
 /* Narrow screens: tighter gutters, and a shorter reserve under the last message
    now that the composer is smaller. */
 @media (max-width: 760px) {

@@ -28,7 +28,7 @@ public class OrientationClientTests
         Handler handler = new(status, body);
         HttpClient http = new(handler) { BaseAddress = new Uri("https://orientation.example/") };
         Mock<IServiceTokenFactory> tokens = new();
-        tokens.Setup(t => t.Mint(Owner)).Returns("service-token");
+        tokens.Setup(t => t.MintForAiService(Owner)).Returns("service-token");
         OrientationClient client = new(http, tokens.Object,
             Options.Create(new OmniAiSettings { Enabled = enabled, OrientationUrl = "https://orientation.example" }),
             NullLogger<OrientationClient>.Instance);
@@ -68,7 +68,7 @@ public class OrientationClientTests
         Handler handler = new(HttpStatusCode.TooManyRequests, """{"detail":"Voice session start limit exceeded"}""") { RetryAfterSeconds = 60 };
         HttpClient http = new(handler) { BaseAddress = new Uri("https://orientation.example/") };
         Mock<IServiceTokenFactory> tokens = new();
-        tokens.Setup(t => t.Mint(Owner)).Returns("service-token");
+        tokens.Setup(t => t.MintForAiService(Owner)).Returns("service-token");
         OrientationClient client = new(http, tokens.Object,
             Options.Create(new OmniAiSettings { Enabled = true, OrientationUrl = "https://orientation.example" }), NullLogger<OrientationClient>.Instance);
 

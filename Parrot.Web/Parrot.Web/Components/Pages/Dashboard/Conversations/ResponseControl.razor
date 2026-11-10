@@ -1,11 +1,9 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 
-@* Who answers the customer right now. With an AI agent on the conversation
-   this is React's control bar: the agent is responding and
-   a person can take over, for a while or until they hand it back. Without
-   one, which is every conversation the API sends today, a person always
-   answers, so there is nothing to take over and no agent to return to. *@
-@if (!Conversation.HasAiAgent || !CanAct)
+@* Who answers the customer right now. With an agent connected to the channel
+   the bar shows who is in control and lets the person hand over or take over.
+   Without one, the person always answers with nothing to hand over to. *@
+@if (!Conversation.HasChannelAgent || !CanAct)
 {
     <div class="response-control human-has-control">
         <div class="response-control__row">
@@ -59,7 +57,7 @@ else
                 <Button Size="ButtonSize.Small" Class="response-control__action is-return" Busy="@Busy"
                         disabled="@Busy" @onclick="OnReturn">
                     <IconLeft><Icon Name="IconName.RiRobot3Fill" /></IconLeft>
-                    <ChildContent>Return to @Agent</ChildContent>
+                    <ChildContent>Handover to @Agent</ChildContent>
                 </Button>
             }
         </div>
@@ -111,12 +109,14 @@ else
     private string? _shownId;
     private AiState? _shownState;
     private string? _settle;
-    private string Agent => Conversation.AiAgent?.Name ?? "the AI agent";
+    private string Agent => Conversation.AiAgent?.Name ?? Conversation.ChannelAgent?.Name ?? "the AI agent";
     private string ControlClass => Conversation.AiState == AiState.Active ? "ai-has-control" : "human-has-control";
     private string Title => Conversation.AiState == AiState.Active ? $"{Agent} is responding" : "You control customer replies";
     private string Description => Conversation.AiState == AiState.Active
         ? "Human reply is locked to prevent a duplicate response."
-        : $"{Agent} will not send while you are in control.";
+        : Conversation.HasAiAgent
+            ? $"{Agent} will not send while you are in control."
+            : $"Hand over to let {Agent} respond to this customer.";
 
     protected override void OnParametersSet()
     {

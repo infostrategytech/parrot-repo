@@ -1,7 +1,5 @@
 @page "/dashboard/tasks"
 @page "/dashboard/tasks/{TaskId}"
-@page "/dashboard/task-requests"
-@page "/dashboard/task-requests/{TaskId}"
 @attribute [RequiresAccess(AccessRules.Tasks)]
 @layout DashboardLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
@@ -47,6 +45,16 @@
                 <EmptyState Glyph="IconName.RiClipboardFill"
                             Title="Tasks are on the way"
                             Description="When an agent needs you to act on a conversation, such as an order to confirm or a quote to send, it will show here, with anything your team adds." />
+            </Message>
+        </DataTable>
+    }
+    else if (_tasks is null && _loadError is not null)
+    {
+        <DataTable Label="Tasks">
+            <Message>
+                <EmptyState Glyph="IconName.RiAlertFill" Title="Your tasks couldn't be loaded" Description="Check your connection and try again.">
+                    <Action><Button Variant="ButtonVariant.Secondary" @onclick="RetryAsync">Try again</Button></Action>
+                </EmptyState>
             </Message>
         </DataTable>
     }
@@ -111,7 +119,7 @@
 
         @if (Shown.Count == 0)
         {
-            <DataTable Label="@ViewLabel(_view)">
+            <DataTable Label="@ViewLabel(_view)" Notice="@(_loadError is null ? null : LoadErrorNotice)">
                 <Message>
                 @if (Filtering)
                 {
@@ -129,7 +137,7 @@
         }
         else
         {
-            <DataTable Label="@ViewLabel(_view)">
+            <DataTable Label="@ViewLabel(_view)" Notice="@(_loadError is null ? null : LoadErrorNotice)">
                 <ChildContent>
                     <TaskRow Head Team="TeamForRows" Me="Store.Me" />
                     @foreach (var task in Shown.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
@@ -195,14 +203,12 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // The page's old address still works, and lands here (the same page, so it carries on loading).
-        var path = new Uri(Nav.Uri).AbsolutePath;
-        if (path.StartsWith("/dashboard/task-requests", StringComparison.OrdinalIgnoreCase))
-            Nav.NavigateTo(TaskId is null ? "/dashboard/tasks" : $"/dashboard/tasks/{Uri.EscapeDataString(TaskId)}", replace: true);
         Store.Changed += OnStoreChanged;
         Clock.Changed += OnClockChanged;
         if (!Store.Available) return;
-        _team = await Store.TeamAsync();
+        // Without the team, assigning stays hidden; the tasks still show.
+        try { _team = await Store.TeamAsync(); }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception)) { _team = []; }
         await LoadAsync();
         // The agents' looks, for the tasks they raised.
         try { await Agents.LoadAsync(); }
@@ -224,11 +230,32 @@
         if (Selected is { } task && !InView(_view).Contains(task)) _view = task.IsClosed ? View.Closed : View.All;
     }
 
+    // A list that can't be read says so, with Try again; one that can't be refreshed keeps what's showing.
+    private string? _loadError;
+
     private async Task LoadAsync()
     {
-        _tasks = await Store.ListAsync();
+        try
+        {
+            _tasks = await Store.ListAsync();
+            _loadError = null;
+        }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception))
+        {
+            _loadError = "The list couldn't be refreshed. Check your connection and try again.";
+        }
         _now = DateTime.UtcNow;
     }
+
+    private Task RetryAsync()
+    {
+        _loadError = null;
+        return LoadAsync();
+    }
+
+    private RenderFragment LoadErrorNotice => @<InlineError Message="@_loadError">
+        <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="RetryAsync">Try again</Button></Action>
+    </InlineError>;
 
     private void OnStoreChanged() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
     private void OnClockChanged() => _ = InvokeAsync(StateHasChanged);

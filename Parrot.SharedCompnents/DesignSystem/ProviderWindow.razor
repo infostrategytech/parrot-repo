@@ -1,0 +1,69 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using Parrot.SharedComponents.Services
+@inject AuroraInterop Interop
+@implements IAsyncDisposable
+
+@* A stand-in for a provider's own sign-in window, as Channels has for Meta's (ProviderPopup): for real, the
+   provider opens its own window to sign in and allow access; in the demo this shows what that moment is like.
+   It's deliberately unlike the rest of the product (square chrome, a title bar, a plain body, a neutral
+   button): everything inside is the provider's, everything outside is ours. Escape closes it early. *@
+<div class="provider-window-backdrop">
+    <section class="provider-window" role="dialog" aria-modal="true" aria-labelledby="@_titleId" tabindex="-1" @ref="_window">
+        <header class="provider-window__chrome">
+            @Mark
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span" id="@_titleId">@Title</Typography>
+        </header>
+        <div class="provider-window__body">@ChildContent</div>
+        <footer class="provider-window__footer">
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Busy" @onclick="OnCancel">@CancelLabel</Button>
+            <Button Class="provider-window__cta" Busy="Busy" disabled="@CtaDisabled" @onclick="OnComplete">@Cta</Button>
+        </footer>
+    </section>
+</div>
+
+@code {
+    private readonly string _titleId = "provider-window-" + Guid.NewGuid().ToString("N");
+    private ElementReference _window;
+    private IAsyncDisposable? _trap, _escape;
+    private DotNetObjectReference<ProviderWindow>? _self;
+
+    /// <summary>The provider's mark, in the title bar.</summary>
+    [Parameter] public RenderFragment? Mark { get; set; }
+
+    /// <summary>The title bar, as the provider would write it ("Calendly · Sign in").</summary>
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter, EditorRequired] public string Cta { get; set; } = "";
+
+    /// <summary>Off until the provider's window has what it needs (a file picked in Google's file picker).</summary>
+    [Parameter] public bool CtaDisabled { get; set; }
+
+    /// <summary>"Close early" for a sign-in window; "Cancel" where the provider itself says it (its file picker).</summary>
+    [Parameter] public string CancelLabel { get; set; } = "Close early";
+    [Parameter] public bool Busy { get; set; }
+
+    /// <summary>Closing early is a real outcome, not a cancel: nothing was allowed.</summary>
+    [Parameter] public EventCallback OnCancel { get; set; }
+    [Parameter] public EventCallback OnComplete { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        _self = DotNetObjectReference.Create(this);
+        // A window it replaces may hand focus back to the page as it closes: take it after that.
+        await Task.Delay(60);
+        _trap = await Interop.TrapFocusAsync(_window);
+        _escape = await Interop.BindEscapeAsync(_self, nameof(CloseEarlyAsync));
+        await _window.FocusAsync();
+    }
+
+    [JSInvokable] public Task CloseEarlyAsync() => InvokeAsync(() => OnCancel.InvokeAsync());
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_escape is not null) await _escape.DisposeAsync();
+        if (_trap is not null) await _trap.DisposeAsync();
+        _self?.Dispose();
+    }
+}

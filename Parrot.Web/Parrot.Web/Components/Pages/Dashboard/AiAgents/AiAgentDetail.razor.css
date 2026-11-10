@@ -523,8 +523,9 @@
 
 /* The tabs are the page's sections: left, in line with the name, at the
    page's width, and pinned at the top as the page scrolls so they are never
-   lost on a long tab. The page's own colour behind them, so what scrolls
-   under them doesn't show through. */
+   lost on a long tab. The page's own colour behind them (designer, 2 November
+   2026: no band of its own), so they sit on the page and what scrolls under
+   them doesn't show through. */
 .agent-detail ::deep .agent-detail__tabs.is-sections {
   position: sticky;
   top: 0;
@@ -532,7 +533,7 @@
   width: min(var(--ds-detail-max), 100%);
   margin: var(--spacing-none) auto var(--spacing-2xl);
   padding-top: var(--spacing-sm);
-  background: var(--colors-surface-muted);
+  background: var(--colors-surface-background);
 }
 
 .agent-detail {
@@ -751,8 +752,7 @@
 
 /* Its job (designer, 20 October 2026): the summary to read, its name and the way to change it above. */
 .agent-detail__job-card {
-  /* Missing from the token set: a reading measure for the summary, and how long an addition stays lit. */
-  --ds-detail-job-measure: 760px;
+  /* Missing from the token set: how long an addition stays lit. The summary fills the card (designer, 2 November 2026). */
   --ds-detail-job-glow: 4s;
 }
 .agent-detail__job-head {
@@ -765,8 +765,17 @@
 .agent-detail__job-head ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
 .agent-detail__job-head ::deep small { color: var(--colors-text-muted); }
 .agent-detail__job-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: flex-end; }
-.agent-detail__job-body { padding: var(--spacing-xl); }
-.agent-detail__job-summary ::deep p { max-width: var(--ds-detail-job-measure); margin: var(--spacing-none); color: var(--colors-text-primary); }
+.agent-detail__job-body { display: grid; justify-items: start; gap: var(--spacing-sm); padding: var(--spacing-xl); }
+/* A long job: its first four lines, then Show all. */
+.agent-detail__job-body.is-clamped ::deep .agent-detail__job-summary p {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+}
+.agent-detail__job-body ::deep .agent-detail__job-more { margin-left: calc(-1 * var(--spacing-md)); }
+.agent-detail__job-summary ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
 .agent-detail__job-summary span { border-radius: var(--radius-radius-sm); box-decoration-break: clone; transition: color var(--ds-motion-base) var(--ds-motion-ease); }
 /* Just added: lit, then back to the page. */
 .agent-detail__job-summary span.is-new { animation: agent-job-new var(--ds-detail-job-glow) var(--ds-motion-ease) both; }

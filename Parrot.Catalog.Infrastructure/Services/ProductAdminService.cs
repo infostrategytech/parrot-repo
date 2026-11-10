@@ -260,6 +260,30 @@ public sealed class ProductAdminService : AdminServiceBase, IProductAdminService
         return response;
     }, ct);
 
+    public Task<ProductAdminResponse> ReactivateAsync(Guid id, CancellationToken ct) => WriteAsync(async c =>
+    {
+        Product product = await LoadProductAsync(id, c);
+        if (product.Status != ProductStatus.Retired)
+        {
+            throw new ConflictException("Only retired products can be reactivated.");
+        }
+
+        ProductType type = await LoadTypeAsync(product.ProductTypeId, c);
+        List<ProductVariant> variants = await VariantsAsync(id, c);
+        ProductAdminResponse before = Map.ProductAdmin(product, type, variants);
+        product.Status = ProductStatus.Draft;
+        product.RetiredAt = null;
+        product.UpdatedBy = Tenant.Actor;
+        Stamp(product, created: false);
+        TypeSchema schema = await _registry.GetAsync(product.ProductTypeId, product.TypeVersion, c);
+        await _rebuilder.RebuildAsync(product, schema, c);
+
+        ProductAdminResponse response = Map.ProductAdmin(product, type, variants);
+        Audit(AuditActions.Update, "product", product.Id, before, response);
+        Enqueue(AggregateTypes.Product, product.Id, CatalogEventTypes.ProductUpdated, EventPayload(product));
+        return response;
+    }, ct);
+
     public Task<VariantResponse> CreateVariantAsync(Guid productId, CreateVariantRequest request, CancellationToken ct) => WriteAsync(async c =>
     {
         Product product = await LoadProductAsync(productId, c);

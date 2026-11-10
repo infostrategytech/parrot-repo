@@ -65,5 +65,7 @@ internal sealed class ConversationFlagDocument
     public bool MarkedUnread { get; set; }
     public DateTime? HumanTookOverAt { get; set; }
     public DateTime? HumanHandedBackAt { get; set; }
+    /// <summary>When a timed human takeover expires and the AI resumes; null means until manually handed back.</summary>
+    public DateTime? ControlUntil { get; set; }
     public DateTime UpdatedAt { get; set; }
 }

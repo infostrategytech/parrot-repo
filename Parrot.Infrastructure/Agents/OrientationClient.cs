@@ -37,7 +37,7 @@ public sealed class OrientationClient(
         }
 
         using HttpRequestMessage request = new(HttpMethod.Post, "api/v1/orientation/voice/session");
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.Mint(ownerUserId));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.MintForAiService(ownerUserId));
         // A free ngrok tunnel answers a browser-looking request with its warning page instead.
         request.Headers.Add("ngrok-skip-browser-warning", "1");
 

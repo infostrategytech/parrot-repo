@@ -8,6 +8,8 @@
 @inject ToastService Toasts
 @inject NavigationManager Nav
 @inject Parrot.Web.Features.Dashboard.Channels.State.ChannelsState ChannelState
+@inject Parrot.Web.Features.Dashboard.Channels.Services.ChannelStatusLoader ChannelStatus
+@inject AuthState AuthState
 
 @* Products & Services, Concept E (designer, 25–26 October 2026), kept clean and simple. It's what the agent
    knows about what the business sells and for how much, so it can answer, suggest and take payment; not a
@@ -400,6 +402,13 @@ else
                            OnSelect="() => Import(PriceLists.CanReadPhotos ? ImportSource.Photo : ImportSource.Sheet)">
                 <Leading><span class="products-e__way-mark is-list"><Icon Name="IconName.RiFileList3Fill" Size="IconSize.Sm" /></span></Leading>
             </PopoverOption>
+            @if (HasChannelCatalogue)
+            {
+                <PopoverOption Label="Import from Channel's Catalogue" Description="Sync products from a connected channel"
+                               OnSelect="OpenChannelCatalogue">
+                    <Leading><span class="products-e__way-mark is-channel"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span></Leading>
+                </PopoverOption>
+            }
         </ChildContent>
     </Popover>;
 
@@ -415,6 +424,20 @@ else
     {
         await LoadAsync();
         await FindNewPostsAsync();
+    }
+
+    // Which channels are connected is read here too, not only when the Channels
+    // page ran: the "Import from Channel's Catalogue" option has to know whether
+    // WhatsApp is connected before it can be offered at all.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        if (AuthState.CurrentUser?.Token is { Length: > 0 } token)
+        {
+            try { await ChannelStatus.RefreshAsync(token, CancellationToken.None); }
+            catch (OperationCanceledException) { return; }
+            StateHasChanged();
+        }
     }
 
     // The demo: posts not yet seen, not added and not over 3 months old. For real, the backend finds new posts
@@ -882,6 +905,15 @@ else
     {
         _importOpen = false;
         _linkOpen = true;
+    }
+
+    private bool HasChannelCatalogue =>
+        ChannelState.WhatsAppConnection is { DisabledAt: null };
+
+    private void OpenChannelCatalogue()
+    {
+        _importOpen = false;
+        Nav.NavigateTo("/dashboard/catalog/channels");
     }
 
     // The post behind the link was read: the item's form opens, filled in, beside it.

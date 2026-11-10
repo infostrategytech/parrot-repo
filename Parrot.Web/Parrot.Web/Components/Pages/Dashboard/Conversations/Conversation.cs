@@ -74,14 +74,39 @@ public class ConversationItem
     public bool NeedsAnswer { get; set; }
     public InboxCustomerDto? Customer { get; set; }
 
+    /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
+    public InboxPersonDto? ChannelAgent { get; set; }
+
     /// <summary>An AI agent owns this conversation, so the AI controls apply.</summary>
     public bool HasAiAgent => AiAgent is not null && AiState is not null;
+
+    /// <summary>An agent is connected to this conversation's channel (whether or not it is currently handling it).</summary>
+    public bool HasChannelAgent => ChannelAgent is not null;
 
     /// <summary>Customer replies are held while the AI agent is responding.</summary>
     public bool ReplyLocked => AiState == global::Parrot.Web.Components.Pages.Dashboard.Conversations.AiState.Active;
 
+    /// <summary>An approval the AI agent is waiting on before it can continue. Set from the agentActivity push; cleared when the turn ends.</summary>
+    public PendingApprovalInfo? PendingApproval { get; set; }
+
+    /// <summary>An escalation the AI opened for this conversation. Set from the agentActivity push; cleared when the AI becomes active again.</summary>
+    public AgentEscalationInfo? ActiveEscalation { get; set; }
+
+    /// <summary>
+    /// The AI agent has started a turn and has not yet replied or handed off.
+    /// Set when an inbound message arrives while the AI is active; cleared by turn.completed,
+    /// approval.requested (the approval card takes over), an AI reply, or a reconnect.
+    /// </summary>
+    public bool AiTurnInProgress { get; set; }
+
     public string CustomerInitials => Customer?.Initials ?? Initials.From(CustomerName);
 }
+
+/// <summary>An approval the AI agent asked for before proceeding. Tool and Reason may be absent for older orchestrator versions.</summary>
+public sealed record PendingApprovalInfo(string ApprovalId, string? Tool, string? Reason);
+
+/// <summary>An escalation the AI opened: the conversation needs a human. Priority is low / normal / high / urgent.</summary>
+public sealed record AgentEscalationInfo(string EscalationId, string? Priority, string? Problem);
 
 public class ConvMessage
 {

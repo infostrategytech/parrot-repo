@@ -1,0 +1,43 @@
+/* What it can do with the business's tools: the same white card and row rhythm as the switches above it (rows at
+   least 72px, 20px inside, a hairline between), a tool's mark first and its switch last. */
+.agent-tools {
+  /* Gap in the token set: no row height or control measure for a settings row. */
+  --ds-agent-tools-row: 72px;
+  --ds-agent-tools-control: 240px;
+
+  display: grid;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+.agent-tools ::deep .agent-tools__label { margin: var(--spacing-md) var(--spacing-none) var(--spacing-none); color: var(--colors-text-muted); }
+.agent-tools__card {
+  display: grid;
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  outline: none;
+}
+.agent-tools__item + .agent-tools__item { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.agent-tools__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: var(--spacing-lg);
+  align-items: center;
+  min-height: var(--ds-agent-tools-row);
+  padding: var(--spacing-lg) var(--spacing-xl);
+}
+.agent-tools__row.is-empty { grid-template-columns: minmax(0, 1fr) auto; }
+.agent-tools__words { display: grid; gap: var(--spacing-xs); min-width: 0; overflow-wrap: anywhere; }
+.agent-tools__words ::deep strong { color: var(--colors-text-primary); }
+.agent-tools__words ::deep span { color: var(--colors-text-muted); }
+/* The one choice for a tool that acts, beside its switch. */
+.agent-tools__mode { width: var(--ds-agent-tools-control); }
+.agent-tools ::deep .agent-tools__more { justify-self: end; }
+
+/* Narrow: the choice drops under the tool's name, full width. */
+@media (max-width: 760px) {
+  .agent-tools__row { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .agent-tools__mode { grid-column: 2 / -1; grid-row: 2; width: auto; }
+  .agent-tools__no-mode { display: none; }
+}

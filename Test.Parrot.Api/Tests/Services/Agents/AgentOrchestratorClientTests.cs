@@ -21,7 +21,7 @@ public class AgentOrchestratorClientTests
         FakeHandler handler = new(status, body);
         HttpClient http = new(handler) { BaseAddress = new Uri("http://omni-ai:8000/") };
         Mock<IServiceTokenFactory> tokens = new();
-        tokens.Setup(t => t.Mint(Owner)).Returns("service-token");
+        tokens.Setup(t => t.MintForAiService(Owner)).Returns("service-token");
         AgentOrchestratorClient client = new(
             http, tokens.Object, Options.Create(new OmniAiSettings { Enabled = enabled, BaseUrl = "http://omni-ai:8000" }), NullLogger<AgentOrchestratorClient>.Instance);
         return (client, handler);

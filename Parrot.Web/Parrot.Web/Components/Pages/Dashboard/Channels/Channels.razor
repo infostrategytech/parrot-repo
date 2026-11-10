@@ -99,7 +99,7 @@
 {
     <div class="channels channels--setup">
         <ConnectionSuccess Channel="finished"
-                           OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                           OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/inbox"))"
                            OnConnectAnother="CloseSetup"
                            OnSetUpAgent="SetUpAgent" />
     </div>
@@ -173,7 +173,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     <div class="channels channels--setup">
         <FacebookManualSetup Channel="facebook"
                              OnExit="CloseSetup"
-                             OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                             OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/inbox"))"
                              OnSetUpAgent="SetUpAgent" />
     </div>
 }
@@ -183,7 +183,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
     <div class="channels channels--setup">
         <InstagramManualSetup Channel="instagram"
                               OnExit="CloseSetup"
-                              OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                              OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/inbox"))"
                               OnSetUpAgent="SetUpAgent" />
     </div>
 }
@@ -195,7 +195,7 @@ else if (Active is { } guided && _view == SetupView.Guided && _data is not null)
                            StartAtTest="_tikTokStartAtTest"
                            InitialError="@_tikTokError"
                            OnExit="CloseSetup"
-                           OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                           OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/inbox"))"
                            OnSetUpAgent="SetUpAgent" />
     </div>
 }
@@ -229,7 +229,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
 
             case EmbeddedStage.Connected:
                 <ConnectionSuccess Channel="flow"
-                                   OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/conversations"))"
+                                   OnOpenInbox="@(() => Nav.NavigateTo("/dashboard/inbox"))"
                                    OnConnectAnother="CloseSetup"
                                    OnSetUpAgent="SetUpAgent" />
                 break;
@@ -336,7 +336,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
     private string? _tikTokError;
 
     private EventCallback SetUpAgent => For == "agent"
-        ? EventCallback.Factory.Create(this, () => Nav.NavigateTo("/ai-operations?new=1"))
+        ? EventCallback.Factory.Create(this, () => Nav.NavigateTo("/dashboard/ai-operations?new=1"))
         : default;
 
     /// <summary>The check is running, including the pacing floor above it.</summary>

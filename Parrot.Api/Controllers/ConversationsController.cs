@@ -2,12 +2,15 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Caching.Memory;
 using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
 using Parrot.Api.Utils;
+using Parrot.Application.Agents;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Application.Teams;
 using Parrot.Domain.Exceptions;
 
@@ -22,7 +25,8 @@ namespace Parrot.Api.Controllers;
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
-    IHumanTakeoverStore humanTakeover) : ControllerBase
+    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache,
+    IAppLogger<ConversationsController> logger) : ControllerBase
 {
     // The workspace owns the conversations; what has been read, what is pinned
     // or set aside, and who wrote a note, belong to the person signed in.
@@ -57,15 +61,46 @@ public sealed class ConversationsController(IConversationStore store, IConversat
 
         IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Reader,
             rows.Select(c => (c.ConnectionId, c.Sender)).ToList(), cancellationToken);
+
+        // One call to the AI service returns every live agent mapped to its channel platform.
+        // The result is cached per workspace for 30 s; agents rarely change and the cache stays fresh enough.
+        // If the AI service is unreachable the inbox degrades gracefully: no channel agent shown.
+        IReadOnlyDictionary<string, ConversationAgentRef> agentByChannel;
+        try
+        {
+            string cacheKey = $"channel_agents:{Owner}";
+            if (!cache.TryGetValue(cacheKey, out IReadOnlyDictionary<string, ConversationAgentRef>? cached) || cached is null)
+            {
+                cached = await orchestrator.GetChannelAgentMapAsync(Owner, cancellationToken);
+                cache.Set(cacheKey, cached, TimeSpan.FromSeconds(30));
+            }
+            agentByChannel = cached;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "channel_agents.unavailable OwnerId={OwnerId} — inbox degrades: no channel agent shown", Owner);
+            agentByChannel = new Dictionary<string, ConversationAgentRef>();
+        }
+
+        // One batch query for active human takeovers across the whole page.
+        List<(Guid, string)> keys = [.. rows.Select(c => (c.ConnectionId, c.Sender))];
+        IReadOnlyDictionary<(Guid, string), DateTime?> activeTakeovers =
+            await humanTakeover.GetActiveAsync(Owner, keys, cancellationToken);
+
         return Ok(rows
             .Select(c =>
             {
                 marks.TryGetValue((c.ConnectionId, c.Sender), out ConversationFlags? mark);
+                bool hasActiveTakeover = activeTakeovers.ContainsKey((c.ConnectionId, c.Sender));
+                ConversationAgentRef? channelAgent = agentByChannel.GetValueOrDefault(c.Channel);
                 return c with
                 {
                     UnreadCount = unread.GetValueOrDefault((c.ConnectionId, c.Sender)),
                     Pinned = mark?.Pinned ?? false,
                     MarkedUnread = mark?.MarkedUnread ?? false,
+                    ChannelAgent = channelAgent,
+                    ControlUntil = activeTakeovers.TryGetValue((c.ConnectionId, c.Sender), out DateTime? until) ? until : null,
+                    AiState = hasActiveTakeover ? "handoff" : channelAgent is not null ? "active" : null,
                 };
             })
             .OrderByDescending(c => c.Pinned).ThenByDescending(c => c.UpdatedAt));
@@ -197,15 +232,26 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         return Ok(mediaLinks.Sign(sent));
     }
 
-    // Hands the conversation back to the AI after a human has been handling it.
+    // Human takes over from the AI for a fixed duration or until they hand back.
+    [HttpPost("{connectionId:guid}/human-takeover")]
+    [RequirePermission(WorkspacePermissions.ConversationsReply)]
+    public async Task<IActionResult> SetHumanTakeover(Guid connectionId, [FromQuery] string sender,
+        [FromBody] HumanTakeoverRequest request, CancellationToken cancellationToken)
+    {
+        await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
+        DateTime? controlUntil = request.Minutes is { } m ? DateTime.UtcNow.AddMinutes(m) : null;
+        await humanTakeover.SetAsync(Owner, connectionId, sender, controlUntil, cancellationToken);
+        return Ok(new { ControlUntil = controlUntil });
+    }
+
+    // Hands the conversation to the AI: clears an active human takeover, or is a no-op when the AI
+    // was already handling it. Safe to call on a cold-start conversation that has never had a takeover.
     [HttpDelete("{connectionId:guid}/human-takeover")]
     [RequirePermission(WorkspacePermissions.ConversationsReply)]
     public async Task<IActionResult> ClearHumanTakeover(Guid connectionId, [FromQuery] string sender,
         CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        if (!await humanTakeover.IsActiveAsync(Owner, connectionId, sender, cancellationToken))
-            throw new NotFoundException("No active human takeover found for this conversation.");
         await humanTakeover.ClearAsync(Owner, connectionId, sender, cancellationToken);
         return NoContent();
     }
@@ -229,6 +275,9 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             throw new NotFoundException("Connection not found.");
     }
 }
+
+/// <summary>How long a human wants to take over for. Null minutes means until they hand back manually.</summary>
+public sealed record HumanTakeoverRequest(int? Minutes);
 
 /// <summary>The multipart body of a file reply.</summary>
 public sealed class SendFileForm

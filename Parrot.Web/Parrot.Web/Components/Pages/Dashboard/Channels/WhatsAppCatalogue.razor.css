@@ -1,0 +1,92 @@
+.wac {
+  padding: var(--spacing-4xl) var(--ds-channels-gutter) var(--spacing-5xl);
+}
+
+.wac > * {
+  width: min(var(--ds-wac-max), 100%);
+  margin-inline: auto;
+}
+
+.wac {
+  /* Gaps in the token set: no page-gutter or content-width. */
+  --ds-channels-gutter: clamp(28px, 4vw, 66px);
+  --ds-wac-max: 1280px;
+  --ds-wac-measure: 480px;
+}
+
+.wac__header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--spacing-3xl);
+  margin-bottom: var(--spacing-3xl);
+  flex-wrap: wrap;
+}
+
+.wac__heading {
+  display: grid;
+  gap: var(--spacing-sm);
+}
+
+.wac__lede {
+  color: var(--colors-text-secondary);
+  max-width: var(--ds-wac-measure);
+}
+
+.wac__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+  flex-shrink: 0;
+}
+
+.wac__sync-summary {
+  color: var(--colors-text-secondary);
+}
+
+/* Product table rows — 3 columns: item, price, availability */
+.wac__row {
+  --ds-table-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  /* Gaps in the token set: no avatar-size token yet. */
+  --ds-wac-thumb: 48px;
+}
+
+/* Item column: avatar beside name + type */
+.wac__item { display: flex; gap: var(--spacing-md); align-items: center; min-width: 0; }
+
+.wac__picture { display: grid; flex: none; }
+.wac__picture ::deep .petal-avatar {
+  width: var(--ds-wac-thumb);
+  height: var(--ds-wac-thumb);
+  border-radius: var(--radius-radius-lg);
+}
+
+.wac__words { display: grid; gap: var(--spacing-xs); min-width: 0; overflow: hidden; }
+
+.wac__meta { color: var(--colors-text-muted); }
+
+.wac__price { color: var(--colors-text-primary); }
+.wac__no-price { color: var(--colors-text-subtle); }
+
+.wac__available { position: relative; z-index: 1; }
+
+/* Load more */
+.wac__load-more {
+  margin-top: var(--spacing-3xl);
+  display: flex;
+  justify-content: center;
+  width: min(var(--ds-wac-max), 100%);
+  margin-inline: auto;
+}
+
+/* On tablet and smaller the table row stacks; item takes full width, price and
+   availability sit side by side on the next line. */
+@media (max-width: 1024px) {
+  .wac__row {
+    --ds-table-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "item item" "price available";
+  }
+  .wac__item { grid-area: item; }
+  .wac__price { grid-area: price; padding-left: calc(var(--ds-wac-thumb) + var(--spacing-md)); }
+  .wac__available { grid-area: available; }
+}

@@ -50,7 +50,8 @@ public static class AgentMapping
         AvoidPhrases = [.. settings.AvoidPhrases],
         CanRecommend = settings.CanRecommend,
         CanCheckOrders = settings.CanCheckOrders,
-        CanTakeDetails = settings.CanTakeDetails,
+        // Always on now: there is no switch, and not asking is said in the job (designer, 3 November 2026).
+        CanTakeDetails = true,
         HandOverWhenUpset = settings.HandOverWhenUpset,
         HandOverAfterMisses = settings.HandOverAfterMisses,
         HandOverBigOrders = settings.HandOverBigOrders,

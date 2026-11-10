@@ -95,6 +95,7 @@ builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(Wh
 builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
+builder.Services.AddScoped<IWhatsAppCatalogueSyncService, WhatsAppCatalogueSyncService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
 builder.Services.Configure<TikTokSettings>(builder.Configuration.GetSection(TikTokSettings.SectionName));
 builder.Services.Configure<InstagramSettings>(builder.Configuration.GetSection(InstagramSettings.SectionName));
@@ -436,6 +437,17 @@ builder.Services.AddScoped<IAiOperationsService, AiOperationsService>();
 // The base address is only set when it parses; the client refuses to call
 // out while the orchestrator is off, so a blank URL costs nothing at boot.
 builder.Services.AddScoped<IServiceTokenFactory, ServiceTokenFactory>();
+
+builder.Services.AddOptions<CatalogClientSettings>()
+    .BindConfiguration(CatalogClientSettings.SectionName);
+builder.Services.AddHttpClient<ICatalogImportClient, HttpCatalogImportClient>((sp, client) =>
+{
+    string? rawUrl = sp.GetRequiredService<IOptions<CatalogClientSettings>>().Value.BaseUrl;
+    if (Uri.TryCreate(rawUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+});
+
 builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient>(client =>
 {
     if (Uri.TryCreate(omniAiSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
@@ -551,6 +563,10 @@ builder.Services.AddScoped<ChannelReadReceipts>();
 builder.Services.AddHttpClient<IWhatsAppSender, WhatsAppSender>();
 builder.Services.AddHttpClient<IFacebookSender, FacebookSender>();
 builder.Services.AddHttpClient<IInstagramSender, InstagramSender>();
+if (builder.Configuration.GetValue<bool>("WhatsApp:MockCatalogue"))
+    builder.Services.AddSingleton<IMetaCatalogueClient, MockMetaCatalogueClient>();
+else
+    builder.Services.AddHttpClient<IMetaCatalogueClient, MetaCatalogueClient>();
 
 // Realtime: Redis is only the registry of who is online, never a message store.
 builder.Services.AddRedis(builder.Configuration);

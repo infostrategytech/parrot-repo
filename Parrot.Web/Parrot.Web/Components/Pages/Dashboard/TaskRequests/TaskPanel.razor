@@ -20,7 +20,7 @@
                     <div class="task-panel__prop">
                         <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Status</Typography></dt>
                         <dd>
-                            <TaskStatusMenu State="task.State" LabelStyle="TextStyle.BodySmallMedium" Busy="@_saving.Contains("state")" Open='@(_openMenu == "state")'
+                            <TaskStatusMenu State="task.State" LabelStyle="TextStyle.BodySmallMedium" Busy="@(_saving.Contains("state") || _toolPending)" Open='@(_openMenu == "state")'
                                             OpenChanged="@(open => _openMenu = open ? "state" : null)"
                                             OnState="state => SetStateAsync(task, state)" />
                         </dd>
@@ -98,6 +98,8 @@
                         </div>
                     }
                 </dl>
+
+                <Parrot.Web.Components.Pages.Dashboard.Tools.ToolTaskAction TaskId="@task.Id" OnPendingChanged="pending => _toolPending = pending" />
 
                 <section class="task-panel__section">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">What's needed</Typography>
@@ -260,7 +262,7 @@
                     }
                     else
                     {
-                        <Button Busy="@_saving.Contains("state")" @onclick="() => SetStateAsync(task, TaskState.Done)">
+                        <Button Busy="@_saving.Contains("state")" disabled="@_toolPending" title="@(_toolPending ? "Review the tool action first" : null)" @onclick="() => SetStateAsync(task, TaskState.Done)">
                             <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
                             <ChildContent>Mark done</ChildContent>
                         </Button>
@@ -286,6 +288,7 @@
     [Parameter] public EventCallback OnClose { get; set; }
 
     private string? _openMenu;
+    private bool _toolPending;
 
     // Changes saving now ("state", "assign", "due", "urgent"): their controls wait until it's done.
     private readonly HashSet<string> _saving = [];
@@ -326,6 +329,7 @@
             _allHistory = false;
             _openMenu = null;
             _editing = false;
+            _toolPending = false;
         }
     }
 
@@ -404,7 +408,7 @@
     // The task's conversation, opened where the task was raised when the thread says so (the newest otherwise).
     private static string ConversationUrl(TaskRequest task)
     {
-        var url = $"/dashboard/conversations/{Uri.EscapeDataString(task.Customer!.ConversationId!)}";
+        var url = $"/dashboard/inbox/{Uri.EscapeDataString(task.Customer!.ConversationId!)}";
         return task.RaisedInMessageId is { } line ? $"{url}?message={Uri.EscapeDataString(line)}" : url;
     }
 
