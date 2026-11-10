@@ -45,12 +45,13 @@ public sealed class WhatsAppImportService : AdminServiceBase, IWhatsAppImportSer
         ITenantContext tenant,
         TimeProvider clock,
         CatalogMetrics metrics,
+        ItemEventWriter itemEvents,
         ICatalogAdminService catalogs,
         IProductTypeAdminService productTypes,
         IWriteSchemaRegistry registry,
         DerivedDataRebuilder rebuilder,
         ILogger<WhatsAppImportService> logger)
-        : base(db, tenant, clock, metrics)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
         _catalogs = catalogs;
         _productTypes = productTypes;
