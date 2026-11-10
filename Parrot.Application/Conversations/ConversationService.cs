@@ -644,6 +644,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
         doc.TextBody ?? (doc.Attachments is { Count: > 0 } ? "" : $"[{doc.Type} message]"), doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt)
     {
+        Kind = doc.IsAiReply == true ? "ai" : null,
         Attachments = doc.Attachments is { Count: > 0 } attachments ? [.. attachments.Select(ToMedia)] : null,
         ReplyTo = ToQuote(doc.ReplyTo),
     };
