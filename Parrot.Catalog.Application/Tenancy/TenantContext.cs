@@ -11,6 +11,9 @@ public interface ITenantContext
 
     Guid TenantId { get; }
 
+    /// <summary>The account that owns the workspace, from the token's owner_id claim. Null when the token has none.</summary>
+    string? OwnerId { get; }
+
     string Actor { get; }
 
     string RequestId { get; }
@@ -28,6 +31,8 @@ public sealed class TenantContext : ITenantContext
 
     public Guid TenantId => IsSet ? _tenantId : throw new InvalidOperationException("Tenant context has not been established for this request.");
 
+    public string? OwnerId { get; private set; }
+
     public string Actor { get; private set; } = string.Empty;
 
     public string RequestId { get; private set; } = string.Empty;
@@ -36,7 +41,7 @@ public sealed class TenantContext : ITenantContext
 
     public bool HasScope(string scope) => Scopes.Contains(scope);
 
-    public void Establish(Guid tenantId, string actor, IEnumerable<string> scopes, string requestId)
+    public void Establish(Guid tenantId, string actor, IEnumerable<string> scopes, string requestId, string? ownerId = null)
     {
         if (tenantId == Guid.Empty)
         {
@@ -44,6 +49,7 @@ public sealed class TenantContext : ITenantContext
         }
 
         _tenantId = tenantId;
+        OwnerId = string.IsNullOrWhiteSpace(ownerId) ? null : ownerId.Trim();
         Actor = actor;
         RequestId = requestId;
         Scopes = new HashSet<string>(scopes, StringComparer.Ordinal);

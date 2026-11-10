@@ -11,6 +11,10 @@ public sealed class Tenant : ITenantScoped, ITimestamped, ISoftDeletable
 
     public string Name { get; set; } = string.Empty;
 
+    // The account that owns this workspace (Workspace.OwnerId in Parrot), taken
+    // from the owner_id claim of the tokens that write to it. Null until one has.
+    public string? OwnerId { get; set; }
+
     public TenantStatus Status { get; set; } = TenantStatus.Active;
 
     public DateTime CreatedAt { get; set; }

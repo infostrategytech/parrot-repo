@@ -31,6 +31,15 @@ public sealed class OutboxMessage : ITenantScoped
 
     public Guid TenantId { get; set; }
 
+    // The account that owns the workspace (Workspace.OwnerId in Parrot), which
+    // catalog.items sends as its tenant_id. Null when the catalog has not yet
+    // been told the owner (a token from before the owner_id claim, or old rows).
+    public string? OwnerId { get; set; }
+
+    // Who made the change: the sub of the request's token (a user id for a
+    // person), "tools" for an operator command. Null on rows from before it was recorded.
+    public string? UserId { get; set; }
+
     public string AggregateType { get; set; } = string.Empty;
 
     public Guid AggregateId { get; set; }

@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using Confluent.Kafka;
 using Microsoft.Extensions.Logging;
@@ -11,11 +12,13 @@ public sealed class KafkaEventBusPublisher : IEventBusPublisher, IDisposable
 {
     private readonly IProducer<string, string> _producer;
     private readonly string _topic;
+    private readonly string _itemsTopic;
 
     public KafkaEventBusPublisher(IOptions<CatalogOptions> options)
     {
         CatalogRelayOptions relay = options.Value.Relay;
         _topic = relay.Topic;
+        _itemsTopic = relay.ItemsTopic;
         _producer = new ProducerBuilder<string, string>(new ProducerConfig
         {
             BootstrapServers = relay.BootstrapServers,
@@ -25,20 +28,39 @@ public sealed class KafkaEventBusPublisher : IEventBusPublisher, IDisposable
         }).Build();
     }
 
+    /// <summary>
+    /// Row events go to catalog.events as they always have (tenant_id = workspace). Whole-item
+    /// events go to catalog.items as an <see cref="ItemEventMessage"/> (tenant_id = owner).
+    /// Both are keyed by workspace and aggregate, so one product's events stay ordered.
+    /// </summary>
     public async Task PublishAsync(EventEnvelope envelope, CancellationToken ct)
     {
+        bool item = CatalogEventTypes.IsItemEvent(envelope.Type);
+        string? tenant = item ? envelope.OwnerId : envelope.TenantId.ToString("D");
         Message<string, string> message = new Message<string, string>
         {
             Key = $"{envelope.TenantId:N}:{envelope.AggregateId:N}",
-            Value = JsonSerializer.Serialize(envelope, EventEnvelope.WireOptions),
+            Value = item
+                ? JsonSerializer.Serialize(ItemEventMessage.From(envelope), EventEnvelope.WireOptions)
+                : JsonSerializer.Serialize(envelope, EventEnvelope.WireOptions),
             Headers = new Headers
             {
-                { "event_id", System.Text.Encoding.UTF8.GetBytes(envelope.EventId.ToString("D")) },
-                { "type", System.Text.Encoding.UTF8.GetBytes(envelope.Type) },
-                { "tenant_id", System.Text.Encoding.UTF8.GetBytes(envelope.TenantId.ToString("D")) },
+                { "event_id", Encoding.UTF8.GetBytes(envelope.EventId.ToString("D")) },
+                { "type", Encoding.UTF8.GetBytes(envelope.Type) },
+                { "workspace_id", Encoding.UTF8.GetBytes(envelope.TenantId.ToString("D")) },
             },
         };
-        await _producer.ProduceAsync(_topic, message, ct);
+        if (!string.IsNullOrEmpty(tenant))
+        {
+            message.Headers.Add("tenant_id", Encoding.UTF8.GetBytes(tenant));
+        }
+
+        if (!string.IsNullOrEmpty(envelope.UserId))
+        {
+            message.Headers.Add("user_id", Encoding.UTF8.GetBytes(envelope.UserId));
+        }
+
+        await _producer.ProduceAsync(item ? _itemsTopic : _topic, message, ct);
     }
 
     public void Dispose()

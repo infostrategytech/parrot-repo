@@ -54,6 +54,9 @@ public sealed class CatalogRelayOptions
 
     public string Topic { get; set; } = "catalog.events";
 
+    /// <summary>Where ItemChanged and ItemRemoved go: one whole-item message per product per save.</summary>
+    public string ItemsTopic { get; set; } = "catalog.items";
+
     public string BootstrapServers { get; set; } = "localhost:9092";
 
     public string ConsumerGroupId { get; set; } = "catalog-cache-invalidator";

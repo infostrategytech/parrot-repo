@@ -53,6 +53,11 @@ public class OutboxRelayTests
         Assert.Contains(mine, e => e.Type == CatalogEventTypes.PriceChanged);
         Assert.Contains(mine, e => e.Type == CatalogEventTypes.TypeVersionCreated);
         Assert.All(mine, e => Assert.Equal(1, e.SchemaVersion));
+
+        // Every envelope says who caused it (the seed runs as "seed"), and each seeded
+        // product also gets one whole-item event for catalog.items.
+        Assert.All(mine, e => Assert.Equal("seed", e.UserId));
+        Assert.Contains(mine, e => e.Type == CatalogEventTypes.ItemChanged);
         Assert.All(mine, e => Assert.True(e.Payload.ValueKind == System.Text.Json.JsonValueKind.Object));
 
         await using (RelayDbContext db = new RelayDbContext(options))

@@ -10,9 +10,11 @@ public class Workspace
 {
     /// <summary>
     /// A string, because it stands where a user id used to: every owner column
-    /// and event was keyed by the user. A tenant's first workspace takes the
-    /// tenant's own user id, so the rows written before workspaces existed
-    /// already belong to it.
+    /// and event was keyed by the user. Accounts made before workspaces had ids
+    /// of their own kept their user id as their first workspace's id, so rows
+    /// written before workspaces existed still belong to it. New accounts get a
+    /// first workspace with its own id (WorkspaceService.FirstWorkspaceId), so
+    /// no code may assume a workspace id equals its owner's user id.
     /// </summary>
     public string Id { get; set; } = Guid.NewGuid().ToString();
 

@@ -140,6 +140,18 @@ public sealed class DerivedDataRebuilder
         return rows.OrderByDescending(r => r.Depth).Select(r => r.Name).ToArray();
     }
 
+    /// <summary>
+    /// The item's text for search: the canonical document without offers, prices,
+    /// availability or related products, so a price or stock change leaves its hash, and
+    /// any embedding of it, unchanged. Rendered for drafts too; nothing is stored.
+    /// </summary>
+    public async Task<RenderedDocument> RenderItemTextAsync(Product product, IReadOnlyList<string> categoryPath, CancellationToken ct)
+    {
+        TypeSchema schema = await _registry.GetAsync(product.ProductTypeId, product.TypeVersion, ct);
+        List<ProductVariant> variants = await ActiveVariantsAsync(product.Id, ct);
+        return _renderer.Render(new RenderInput(product, schema, categoryPath, variants, [], [], [], _clock.GetUtcNow().UtcDateTime));
+    }
+
     private async Task RenderDocumentAsync(Product product, TypeSchema schema, List<ProductVariant> variants, CancellationToken ct)
     {
         DateTime now = _clock.GetUtcNow().UtcDateTime;

@@ -68,6 +68,7 @@ public class CatalogDbContext : DbContext
         {
             e.HasKey(t => t.Id);
             e.Property(t => t.Name).HasMaxLength(256);
+            e.Property(t => t.OwnerId).HasMaxLength(256);
             e.ToTable(t => t.HasCheckConstraint("ck_tenants_self", "id = tenant_id"));
         });
 
@@ -291,6 +292,8 @@ public class CatalogDbContext : DbContext
             e.HasKey(o => o.Id);
             e.Property(o => o.AggregateType).HasMaxLength(64);
             e.Property(o => o.EventType).HasMaxLength(64);
+            e.Property(o => o.OwnerId).HasMaxLength(256);
+            e.Property(o => o.UserId).HasMaxLength(256);
             e.Property(o => o.LastError).HasMaxLength(2000);
             e.HasIndex(o => o.CreatedAt).HasFilter("published_at IS NULL");
             e.HasIndex(o => new { o.TenantId, o.CreatedAt });

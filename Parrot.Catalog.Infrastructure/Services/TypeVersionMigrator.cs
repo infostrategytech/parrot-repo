@@ -25,8 +25,8 @@ public sealed class TypeVersionMigrator : AdminServiceBase, ITypeVersionMigrator
     private readonly IWriteSchemaRegistry _registry;
     private readonly DerivedDataRebuilder _rebuilder;
 
-    public TypeVersionMigrator(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, IWriteSchemaRegistry registry, DerivedDataRebuilder rebuilder)
-        : base(db, tenant, clock, metrics)
+    public TypeVersionMigrator(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, IWriteSchemaRegistry registry, DerivedDataRebuilder rebuilder)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
         _registry = registry;
         _rebuilder = rebuilder;

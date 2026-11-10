@@ -794,6 +794,11 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasColumnType("character varying(2000)")
                         .HasColumnName("last_error");
 
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("owner_id");
+
                     b.Property<string>("Payload")
                         .IsRequired()
                         .HasColumnType("jsonb")
@@ -810,6 +815,11 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("user_id");
 
                     b.HasKey("Id")
                         .HasName("pk_outbox");
@@ -1453,6 +1463,11 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)")
                         .HasColumnName("name");
+
+                    b.Property<string>("OwnerId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)")
+                        .HasColumnName("owner_id");
 
                     b.Property<string>("Status")
                         .IsRequired()

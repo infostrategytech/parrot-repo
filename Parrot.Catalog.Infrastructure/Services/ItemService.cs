@@ -65,7 +65,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
         CatalogDbContext db,
         ITenantContext tenant,
         TimeProvider clock,
-        CatalogMetrics metrics,
+        CatalogMetrics metrics, ItemEventWriter itemEvents,
         ICatalogAdminService catalogs,
         IProductTypeAdminService types,
         ICategoryAdminService categories,
@@ -75,7 +75,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
         IMediaAdminService media,
         IItemPhotoStorage photos,
         ILogger<ItemService> log)
-        : base(db, tenant, clock, metrics)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
         _catalogs = catalogs;
         _types = types;

@@ -18,8 +18,8 @@ public sealed class ProductTypeAdminService : AdminServiceBase, IProductTypeAdmi
 {
     private readonly IWriteSchemaRegistry _registry;
 
-    public ProductTypeAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, IWriteSchemaRegistry registry)
-        : base(db, tenant, clock, metrics)
+    public ProductTypeAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, IWriteSchemaRegistry registry)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
         _registry = registry;
     }
