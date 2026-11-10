@@ -48,7 +48,7 @@ public class OutboxRelayTests
         Assert.True(total > 0);
         Assert.Equal(total, publisher.Envelopes.Count);
         Assert.Equal(publisher.Envelopes.Count, publisher.Envelopes.Select(e => e.EventId).Distinct().Count());
-        List<EventEnvelope> mine = publisher.Envelopes.Where(e => e.TenantId == tenant).ToList();
+        List<EventEnvelope> mine = publisher.Envelopes.Where(e => e.WorkspaceId == tenant).ToList();
         Assert.Contains(mine, e => e.Type == CatalogEventTypes.ProductPublished && e.AggregateType == AggregateTypes.Product);
         Assert.Contains(mine, e => e.Type == CatalogEventTypes.PriceChanged);
         Assert.Contains(mine, e => e.Type == CatalogEventTypes.TypeVersionCreated);

@@ -39,30 +39,23 @@ public static class AggregateTypes
 }
 
 /// <summary>
-/// The envelope on <c>catalog.events</c>, and what the relay hands the publisher for both
-/// topics. <c>event_id</c> is the outbox row id; consumers dedupe on it (ADR-005).
-/// On this topic <c>tenant_id</c> is the workspace, as it always has been: the cache
-/// invalidator and Omni-AI's catalog summaries read it that way. <c>workspace_id</c>
-/// says the same under the name every topic will share; <c>user_id</c> is who made the
-/// change. The workspace's owner is carried but sent only on <c>catalog.items</c>
-/// (see <see cref="ItemEventMessage"/>), where <c>tenant_id</c> means the owner.
+/// An event as the relay hands it to the publisher. <see cref="WorkspaceId"/> is the
+/// business the event is about (the catalog's tenant for row-level security);
+/// <see cref="OwnerId"/> is the account that owns it; <see cref="UserId"/> is who made
+/// the change. On the wire it is a <see cref="CatalogEventMessage"/>.
 /// </summary>
 public sealed record EventEnvelope(
-    [property: JsonPropertyName("event_id")] Guid EventId,
-    [property: JsonPropertyName("tenant_id")] Guid TenantId,
-    [property: JsonIgnore] string? OwnerId,
-    [property: JsonPropertyName("user_id")] string? UserId,
-    [property: JsonPropertyName("aggregate_type")] string AggregateType,
-    [property: JsonPropertyName("aggregate_id")] Guid AggregateId,
-    [property: JsonPropertyName("type")] string Type,
-    [property: JsonPropertyName("schema_version")] int SchemaVersion,
-    [property: JsonPropertyName("occurred_at")] DateTime OccurredAt,
-    [property: JsonPropertyName("payload")] JsonElement Payload)
+    Guid EventId,
+    Guid WorkspaceId,
+    string? OwnerId,
+    string? UserId,
+    string AggregateType,
+    Guid AggregateId,
+    string Type,
+    int SchemaVersion,
+    DateTime OccurredAt,
+    JsonElement Payload)
 {
-    /// <summary>The workspace, under the name shared with <c>catalog.items</c> and Parrot's own events.</summary>
-    [JsonPropertyName("workspace_id")]
-    public Guid WorkspaceId => TenantId;
-
     public static readonly JsonSerializerOptions WireOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -71,15 +64,16 @@ public sealed record EventEnvelope(
 }
 
 /// <summary>
-/// The message on <c>catalog.items</c>, named the way Parrot's <c>MessagePersisted</c>
-/// names things: <c>tenant_id</c> is the account that owns the workspace (null until
-/// the catalog has been told it), <c>workspace_id</c> is the business, and
-/// <c>user_id</c> is who made the change.
+/// The message on both catalog topics (<c>catalog.events</c> and <c>catalog.items</c>),
+/// named the way Parrot's <c>MessagePersisted</c> names things: <c>tenant_id</c> is the
+/// account that owns the workspace (null until the catalog has been told it),
+/// <c>workspace_id</c> is the business, and <c>user_id</c> is who made the change.
+/// <c>event_id</c> is the outbox row id; consumers dedupe on it (ADR-005).
 /// </summary>
-public sealed record ItemEventMessage(
+public sealed record CatalogEventMessage(
     [property: JsonPropertyName("event_id")] Guid EventId,
     [property: JsonPropertyName("tenant_id")] string? TenantId,
-    [property: JsonPropertyName("workspace_id")] Guid WorkspaceId,
+    [property: JsonPropertyName("workspace_id")] Guid? WorkspaceId,
     [property: JsonPropertyName("user_id")] string? UserId,
     [property: JsonPropertyName("aggregate_type")] string AggregateType,
     [property: JsonPropertyName("aggregate_id")] Guid AggregateId,
@@ -88,9 +82,28 @@ public sealed record ItemEventMessage(
     [property: JsonPropertyName("occurred_at")] DateTime OccurredAt,
     [property: JsonPropertyName("payload")] JsonElement Payload)
 {
-    public static ItemEventMessage From(EventEnvelope envelope) => new(
-        envelope.EventId, envelope.OwnerId, envelope.TenantId, envelope.UserId, envelope.AggregateType,
+    public static CatalogEventMessage From(EventEnvelope envelope) => new(
+        envelope.EventId, envelope.OwnerId, envelope.WorkspaceId, envelope.UserId, envelope.AggregateType,
         envelope.AggregateId, envelope.Type, envelope.SchemaVersion, envelope.OccurredAt, envelope.Payload);
+
+    /// <summary>
+    /// Back to an envelope, for in-repo consumers. A message published before
+    /// <c>workspace_id</c> existed carried the workspace in <c>tenant_id</c>, so that is
+    /// read when <c>workspace_id</c> is missing. Null when neither names a workspace.
+    /// </summary>
+    public EventEnvelope? ToEnvelope()
+    {
+        Guid? workspace = WorkspaceId is { } w && w != Guid.Empty ? w
+            : Guid.TryParse(TenantId, out Guid legacy) && legacy != Guid.Empty ? legacy
+            : null;
+        if (workspace is null)
+        {
+            return null;
+        }
+
+        string? owner = WorkspaceId is null ? null : TenantId;
+        return new EventEnvelope(EventId, workspace.Value, owner, UserId, AggregateType, AggregateId, Type, SchemaVersion, OccurredAt, Payload);
+    }
 }
 
 /// <summary>Publishes an envelope to the bus. Implemented by Kafka in infrastructure and by a recorder in tests.</summary>

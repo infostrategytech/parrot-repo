@@ -42,7 +42,7 @@ public sealed class CacheInvalidationHandler
             return false;
         }
 
-        _db.ConsumerInbox.Add(new ConsumerInboxEntry { Consumer = ConsumerName, EventId = envelope.EventId, TenantId = envelope.TenantId, ProcessedAt = _clock.GetUtcNow().UtcDateTime });
+        _db.ConsumerInbox.Add(new ConsumerInboxEntry { Consumer = ConsumerName, EventId = envelope.EventId, TenantId = envelope.WorkspaceId, ProcessedAt = _clock.GetUtcNow().UtcDateTime });
         try
         {
             await _db.SaveChangesAsync(ct);
@@ -56,7 +56,7 @@ public sealed class CacheInvalidationHandler
 
         if (CatalogEventTypes.InvalidatesReadCache.Contains(envelope.Type))
         {
-            await _cache.BumpGenerationAsync(envelope.TenantId, ct);
+            await _cache.BumpGenerationAsync(envelope.WorkspaceId, ct);
         }
 
         _metrics.EventConsumed(ConsumerName, envelope.Type);
@@ -111,7 +111,8 @@ public sealed class CacheInvalidationConsumer : BackgroundService
 
                 try
                 {
-                    EventEnvelope? envelope = JsonSerializer.Deserialize<EventEnvelope>(result.Message.Value, EventEnvelope.WireOptions);
+                    // The cache is per workspace: read workspace_id, not tenant_id (the owner).
+                    EventEnvelope? envelope = JsonSerializer.Deserialize<CatalogEventMessage>(result.Message.Value, EventEnvelope.WireOptions)?.ToEnvelope();
                     if (envelope is not null)
                     {
                         using IServiceScope scope = _scopes.CreateScope();

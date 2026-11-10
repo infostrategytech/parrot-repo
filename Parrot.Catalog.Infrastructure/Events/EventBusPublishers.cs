@@ -29,30 +29,26 @@ public sealed class KafkaEventBusPublisher : IEventBusPublisher, IDisposable
     }
 
     /// <summary>
-    /// Row events go to catalog.events as they always have (tenant_id = workspace). Whole-item
-    /// events go to catalog.items as an <see cref="ItemEventMessage"/> (tenant_id = owner).
-    /// Both are keyed by workspace and aggregate, so one product's events stay ordered.
+    /// Row events go to catalog.events and whole-item events to catalog.items, in the same
+    /// shape (<see cref="CatalogEventMessage"/>): tenant_id is the owner, workspace_id the
+    /// business. Both are keyed by workspace and aggregate, so one product's events stay ordered.
     /// </summary>
     public async Task PublishAsync(EventEnvelope envelope, CancellationToken ct)
     {
-        bool item = CatalogEventTypes.IsItemEvent(envelope.Type);
-        string? tenant = item ? envelope.OwnerId : envelope.TenantId.ToString("D");
         Message<string, string> message = new Message<string, string>
         {
-            Key = $"{envelope.TenantId:N}:{envelope.AggregateId:N}",
-            Value = item
-                ? JsonSerializer.Serialize(ItemEventMessage.From(envelope), EventEnvelope.WireOptions)
-                : JsonSerializer.Serialize(envelope, EventEnvelope.WireOptions),
+            Key = $"{envelope.WorkspaceId:N}:{envelope.AggregateId:N}",
+            Value = JsonSerializer.Serialize(CatalogEventMessage.From(envelope), EventEnvelope.WireOptions),
             Headers = new Headers
             {
                 { "event_id", Encoding.UTF8.GetBytes(envelope.EventId.ToString("D")) },
                 { "type", Encoding.UTF8.GetBytes(envelope.Type) },
-                { "workspace_id", Encoding.UTF8.GetBytes(envelope.TenantId.ToString("D")) },
+                { "workspace_id", Encoding.UTF8.GetBytes(envelope.WorkspaceId.ToString("D")) },
             },
         };
-        if (!string.IsNullOrEmpty(tenant))
+        if (!string.IsNullOrEmpty(envelope.OwnerId))
         {
-            message.Headers.Add("tenant_id", Encoding.UTF8.GetBytes(tenant));
+            message.Headers.Add("tenant_id", Encoding.UTF8.GetBytes(envelope.OwnerId));
         }
 
         if (!string.IsNullOrEmpty(envelope.UserId))
@@ -60,7 +56,7 @@ public sealed class KafkaEventBusPublisher : IEventBusPublisher, IDisposable
             message.Headers.Add("user_id", Encoding.UTF8.GetBytes(envelope.UserId));
         }
 
-        await _producer.ProduceAsync(item ? _itemsTopic : _topic, message, ct);
+        await _producer.ProduceAsync(CatalogEventTypes.IsItemEvent(envelope.Type) ? _itemsTopic : _topic, message, ct);
     }
 
     public void Dispose()
@@ -82,7 +78,7 @@ public sealed class NullEventBusPublisher : IEventBusPublisher
 
     public Task PublishAsync(EventEnvelope envelope, CancellationToken ct)
     {
-        _logger.LogInformation("Event dropped by NullEventBusPublisher. Type={Type} EventId={EventId} TenantId={TenantId}", envelope.Type, envelope.EventId, envelope.TenantId);
+        _logger.LogInformation("Event dropped by NullEventBusPublisher. Type={Type} EventId={EventId} WorkspaceId={WorkspaceId}", envelope.Type, envelope.EventId, envelope.WorkspaceId);
         return Task.CompletedTask;
     }
 }
