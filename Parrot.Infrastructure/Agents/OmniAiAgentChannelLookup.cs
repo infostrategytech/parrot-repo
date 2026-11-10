@@ -20,8 +20,10 @@ public sealed class OmniAiAgentChannelLookup(
     public async Task<bool> IsAgentLiveAsync(string workspaceId, string channel, CancellationToken ct)
     {
         string cacheKey = $"channel_agents:{workspaceId}";
+        bool fromCache = true;
         if (!cache.TryGetValue(cacheKey, out IReadOnlyDictionary<string, ConversationAgentRef>? map) || map is null)
         {
+            fromCache = false;
             try
             {
                 map = await orchestrator.GetChannelAgentMapAsync(workspaceId, ct);
@@ -33,6 +35,10 @@ public sealed class OmniAiAgentChannelLookup(
                 return false;
             }
         }
-        return map.ContainsKey(channel);
+        bool found = map.ContainsKey(channel);
+        logger.LogDebug(
+            "channel_agent_lookup.result WorkspaceId={WorkspaceId} Channel={Channel} MapKeys=[{MapKeys}] Found={Found} FromCache={FromCache}",
+            workspaceId, channel, string.Join(", ", map.Keys), found, fromCache);
+        return found;
     }
 }

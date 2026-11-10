@@ -67,7 +67,12 @@ public sealed class AgentOrchestratorClient(
         string ownerUserId, CancellationToken cancellationToken = default)
     {
         if (!settings.Value.Enabled || http.BaseAddress is null)
+        {
+            logger.LogWarning(
+                "channel_agent_map.disabled OwnerUserId={OwnerUserId} Enabled={Enabled} HasBaseUrl={HasBaseUrl} — returning empty map; CommsType will be UserToTenant",
+                ownerUserId, settings.Value.Enabled, http.BaseAddress is not null);
             return new Dictionary<string, ConversationAgentRef>();
+        }
 
         // A workspace has a handful of agents and channels; limit=100 is effectively all.
         AgentListWire agentList = await SendAsync<AgentListWire>(
