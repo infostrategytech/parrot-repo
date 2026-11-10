@@ -47,7 +47,7 @@ public sealed class OutboxRelay
             try
             {
                 using JsonDocument payload = JsonDocument.Parse(row.Payload);
-                EventEnvelope envelope = new EventEnvelope(row.Id, row.TenantId, row.AggregateType, row.AggregateId, row.EventType, row.SchemaVersion, row.CreatedAt, payload.RootElement.Clone());
+                EventEnvelope envelope = new EventEnvelope(row.Id, row.TenantId, row.OwnerId, row.UserId, row.AggregateType, row.AggregateId, row.EventType, row.SchemaVersion, row.CreatedAt, payload.RootElement.Clone());
                 await _publisher.PublishAsync(envelope, ct);
                 row.PublishedAt = now;
                 row.Attempts += 1;
@@ -167,6 +167,8 @@ public class RelayDbContext : DbContext
             e.HasKey(o => o.Id);
             e.Property(o => o.Id).HasColumnName("id");
             e.Property(o => o.TenantId).HasColumnName("tenant_id");
+            e.Property(o => o.OwnerId).HasColumnName("owner_id");
+            e.Property(o => o.UserId).HasColumnName("user_id");
             e.Property(o => o.AggregateType).HasColumnName("aggregate_type");
             e.Property(o => o.AggregateId).HasColumnName("aggregate_id");
             e.Property(o => o.EventType).HasColumnName("event_type");

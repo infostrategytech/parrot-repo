@@ -12,8 +12,8 @@ namespace Parrot.Catalog.Infrastructure.Services;
 
 public sealed class CatalogAdminService : AdminServiceBase, ICatalogAdminService
 {
-    public CatalogAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics)
-        : base(db, tenant, clock, metrics)
+    public CatalogAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
     }
 

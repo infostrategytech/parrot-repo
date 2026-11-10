@@ -24,10 +24,10 @@ internal static class Hosting
     /// A DI scope whose tenant context is established. TenantContext is scoped, so it must
     /// be set on the very scope the command runs in; RLS matches nothing otherwise.
     /// </summary>
-    public static IServiceScope TenantScope(ServiceProvider provider, Guid tenantId, string actor = "tools")
+    public static IServiceScope TenantScope(ServiceProvider provider, Guid tenantId, string actor = "tools", string? ownerId = null)
     {
         IServiceScope scope = provider.CreateScope();
-        scope.ServiceProvider.GetRequiredService<TenantContext>().Establish(tenantId, actor, CatalogScopes.All, $"tools-{Guid.NewGuid():N}");
+        scope.ServiceProvider.GetRequiredService<TenantContext>().Establish(tenantId, actor, CatalogScopes.All, $"tools-{Guid.NewGuid():N}", ownerId);
         return scope;
     }
 

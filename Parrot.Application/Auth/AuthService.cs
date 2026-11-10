@@ -546,6 +546,7 @@ public class AuthService : IAuthService
             new Claim(JwtRegisteredClaimNames.Email, user.Email!),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
             new Claim(WorkspaceClaims.WorkspaceId, workspace.Id),
+            new Claim(WorkspaceClaims.OwnerId, workspace.OwnerId),
             new Claim(WorkspaceClaims.WorkspaceRole, access.Role),
             new Claim(WorkspaceClaims.Permissions, WorkspacePermissions.Abbreviate(access)),
             new Claim(WorkspaceClaims.Channels, WorkspaceChannels.Abbreviate(access)),

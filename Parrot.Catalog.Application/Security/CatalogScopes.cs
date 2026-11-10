@@ -45,6 +45,9 @@ public static class CatalogPolicies
 public static class CatalogClaims
 {
     public const string TenantId = "tenant_id";
+
+    /// <summary>The account that owns the workspace. Optional: service tokens don't carry it.</summary>
+    public const string OwnerId = "owner_id";
     public const string Scope = "scope";
     public const string ScopeAlt = "scp";
 }

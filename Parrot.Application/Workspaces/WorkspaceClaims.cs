@@ -9,6 +9,13 @@ public static class WorkspaceClaims
     /// </summary>
     public const string WorkspaceId = "workspace_id";
 
+    /// <summary>
+    /// The account that owns the active workspace (Workspace.OwnerId): the same
+    /// for every business that owner runs. Services that publish events read it
+    /// as the tenant; the catalog records it against the workspace.
+    /// </summary>
+    public const string OwnerId = "owner_id";
+
     /// <summary>The active workspace's name. Left out while the workspace has none.</summary>
     public const string WorkspaceName = "workspace_name";
 

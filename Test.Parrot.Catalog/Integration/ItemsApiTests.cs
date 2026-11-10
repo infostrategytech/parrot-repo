@@ -421,6 +421,129 @@ public class ItemsApiTests
         return await CatalogApiFixture.ReadAsync<ItemPhoto>(response);
     }
 
+    [PostgresFact]
+    public async Task Each_save_publishes_one_whole_item_event_with_text_and_photos_but_no_prices()
+    {
+        Guid workspace = Guid.NewGuid();
+        using HttpClient owner = _fx.Client(workspace, Owner);
+        ItemCategory clothing = await CatalogApiFixture.ReadAsync<ItemCategory>(
+            await owner.PostAsync("/api/catalog/categories", CatalogApiFixture.Body(new CreateItemCategoryRequest("Clothing"))));
+        ItemPhoto photo = await Upload(owner, "image/jpeg");
+
+        object Form(int amount, bool hidden) => new
+        {
+            name = "Ankara wrap dress",
+            kind = "product",
+            description = "Hand-sewn, fully lined.",
+            category_id = clothing.Id,
+            pricing = new { mode = "single", amount },
+            availability = new { mode = "in_stock" },
+            status = "published",
+            hidden,
+            photos = new[] { photo.Key },
+        };
+
+        ItemResponse item = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Body(Form(18000, hidden: false))));
+
+        // The save wrote several row events, and exactly one item event.
+        Assert.True(await CountAsync(workspace, item.Id, null) > 2);
+        Assert.Equal(1, await CountAsync(workspace, item.Id, "ItemChanged"));
+        JsonElement created = await LatestAsync(workspace, item.Id, "ItemChanged");
+        Assert.True(created.GetProperty("searchable").GetBoolean());
+        // tenant_id on catalog.items is the account that owns the workspace; user_id is who did it.
+        Assert.Equal($"owner-{workspace:N}", await ColumnAsync("owner_id", workspace, item.Id, "ItemChanged"));
+        Assert.Equal($"user-{workspace:N}", await ColumnAsync("user_id", workspace, item.Id, "ItemChanged"));
+        Assert.Equal("published", created.GetProperty("status").GetString());
+        Assert.Equal("Ankara wrap dress", created.GetProperty("name").GetString());
+        Assert.Equal(["Clothing"], created.GetProperty("category").GetProperty("path").EnumerateArray().Select(p => p.GetString()));
+        string text = created.GetProperty("text").GetProperty("rendered").GetString()!;
+        Assert.Contains("Ankara wrap dress", text);
+        Assert.Contains("Clothing", text);
+        Assert.DoesNotContain("18000", text);
+        Assert.Equal($"https://photos.test/{photo.Key}", created.GetProperty("photos")[0].GetProperty("url").GetString());
+
+        // A price change still says the item changed, but its text, and so its hash, stay the same.
+        await owner.PutAsync($"/api/catalog/items/{item.Id}", CatalogApiFixture.Body(Form(21000, hidden: false)));
+        Assert.Equal(2, await CountAsync(workspace, item.Id, "ItemChanged"));
+        JsonElement repriced = await LatestAsync(workspace, item.Id, "ItemChanged");
+        Assert.Equal(
+            created.GetProperty("text").GetProperty("content_hash").GetString(),
+            repriced.GetProperty("text").GetProperty("content_hash").GetString());
+
+        // Hidden: still an item, but not searchable.
+        await owner.PutAsync($"/api/catalog/items/{item.Id}", CatalogApiFixture.Body(Form(21000, hidden: true)));
+        JsonElement hiddenItem = await LatestAsync(workspace, item.Id, "ItemChanged");
+        Assert.True(hiddenItem.GetProperty("hidden").GetBoolean());
+        Assert.False(hiddenItem.GetProperty("searchable").GetBoolean());
+
+        // Deleted: one removal, however many rows went with it.
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/api/catalog/items/{item.Id}")).StatusCode);
+        Assert.Equal(1, await CountAsync(workspace, item.Id, "ItemRemoved"));
+        Assert.Equal("deleted", (await LatestAsync(workspace, item.Id, "ItemRemoved")).GetProperty("reason").GetString());
+        Assert.Equal($"owner-{workspace:N}", await ColumnAsync("owner_id", workspace, item.Id, "ItemRemoved"));
+        Assert.Equal($"user-{workspace:N}", await ColumnAsync("user_id", workspace, item.Id, "ItemRemoved"));
+    }
+
+    [PostgresFact]
+    public async Task The_backfill_publishes_every_live_item_once_and_skips_deleted_ones()
+    {
+        Guid workspace = Guid.NewGuid();
+        using HttpClient owner = _fx.Client(workspace, Owner);
+        ItemResponse live = await Add(owner, "Live item", """{"mode":"in_stock"}""", "published");
+        ItemResponse draft = await Add(owner, "Draft item", """{"mode":"in_stock"}""", "draft");
+        ItemResponse retired = await Add(owner, "Retired item", """{"mode":"in_stock"}""", "published");
+        ItemResponse deleted = await Add(owner, "Deleted item", """{"mode":"in_stock"}""", "published");
+        Assert.Equal(HttpStatusCode.OK, (await owner.PostAsync($"/api/catalog/admin/products/{retired.Id}/retire", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, (await owner.DeleteAsync($"/api/catalog/items/{deleted.Id}")).StatusCode);
+
+        Task<long> Changed(Guid id) => CountAsync(workspace, id, "ItemChanged");
+        long liveBefore = await Changed(live.Id), draftBefore = await Changed(draft.Id), deletedBefore = await Changed(deleted.Id);
+        long retiredBefore = await CountAsync(workspace, retired.Id, "ItemRemoved");
+
+        Assert.Equal(3, await global::Parrot.Catalog.Tools.Commands.PublishItems.PublishAsync(() => _fx.Scope(workspace), batchSize: 2, dryRun: true, CancellationToken.None));
+        Assert.Equal(liveBefore, await Changed(live.Id));
+
+        // Batches of two: three live rows (retired counts, deleted doesn't) across two transactions.
+        Assert.Equal(3, await global::Parrot.Catalog.Tools.Commands.PublishItems.PublishAsync(() => _fx.Scope(workspace), batchSize: 2, dryRun: false, CancellationToken.None));
+        Assert.Equal(liveBefore + 1, await Changed(live.Id));
+        Assert.Equal(draftBefore + 1, await Changed(draft.Id));
+        Assert.False((await LatestAsync(workspace, draft.Id, "ItemChanged")).GetProperty("searchable").GetBoolean());
+        Assert.Equal(retiredBefore + 1, await CountAsync(workspace, retired.Id, "ItemRemoved"));
+        Assert.Equal("retired", (await LatestAsync(workspace, retired.Id, "ItemRemoved")).GetProperty("reason").GetString());
+        Assert.Equal("test", await ColumnAsync("user_id", workspace, retired.Id, "ItemRemoved"));
+
+        // The tool's scope has no owner claim; the owner the API's writes recorded is used.
+        Assert.Equal($"owner-{workspace:N}", await ColumnAsync("owner_id", workspace, retired.Id, "ItemRemoved"));
+        Assert.Equal(deletedBefore, await Changed(deleted.Id));
+
+        // --owner names the owner outright, and is recorded for later events.
+        await global::Parrot.Catalog.Tools.Commands.PublishItems.PublishAsync(() => _fx.Scope(workspace, ownerId: "account-7"), batchSize: 10, dryRun: false, CancellationToken.None);
+        Assert.Equal("account-7", await ColumnAsync("owner_id", workspace, live.Id, "ItemChanged"));
+        await global::Parrot.Catalog.Tools.Commands.PublishItems.PublishAsync(() => _fx.Scope(workspace), batchSize: 10, dryRun: false, CancellationToken.None);
+        Assert.Equal("account-7", await ColumnAsync("owner_id", workspace, live.Id, "ItemChanged"));
+    }
+
+    private async Task<long> CountAsync(Guid workspace, Guid productId, string? type)
+        => await _fx.Database.ScalarAsync<long>(_fx.Database.Relay, workspace,
+            "SELECT count(*) FROM catalog.outbox WHERE (aggregate_id = @id OR payload->>'product_id' = @text) AND (@type::text IS NULL OR event_type = @type)",
+            new Npgsql.NpgsqlParameter("id", productId), new Npgsql.NpgsqlParameter("text", productId.ToString("D")),
+            new Npgsql.NpgsqlParameter("type", NpgsqlTypes.NpgsqlDbType.Text) { Value = (object?)type ?? DBNull.Value });
+
+    /// <summary>An outbox column (owner_id or user_id) of the latest event of that type.</summary>
+    private Task<string> ColumnAsync(string column, Guid workspace, Guid productId, string type)
+        => _fx.Database.ScalarAsync<string>(_fx.Database.Relay, workspace,
+            $"SELECT {column} FROM catalog.outbox WHERE aggregate_id = @id AND event_type = @type ORDER BY created_at DESC LIMIT 1",
+            new Npgsql.NpgsqlParameter("id", productId), new Npgsql.NpgsqlParameter("type", type));
+
+    private async Task<JsonElement> LatestAsync(Guid workspace, Guid productId, string type)
+    {
+        string json = await _fx.Database.ScalarAsync<string>(_fx.Database.Relay, workspace,
+            "SELECT payload::text FROM catalog.outbox WHERE aggregate_id = @id AND event_type = @type ORDER BY created_at DESC LIMIT 1",
+            new Npgsql.NpgsqlParameter("id", productId), new Npgsql.NpgsqlParameter("type", type));
+        using JsonDocument doc = JsonDocument.Parse(json);
+        return doc.RootElement.Clone();
+    }
+
     private static MultipartFormDataContent Image(string contentType)
     {
         ByteArrayContent file = new ByteArrayContent([0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4]);

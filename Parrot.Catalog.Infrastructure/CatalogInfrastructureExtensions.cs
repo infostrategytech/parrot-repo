@@ -47,6 +47,7 @@ public static class CatalogInfrastructureExtensions
         services.AddScoped<IReadSchemaRegistry, ReadSchemaRegistry>();
         services.AddSingleton<ICanonicalDocumentRenderer, CanonicalDocumentRenderer>();
         services.AddScoped<DerivedDataRebuilder>();
+        services.AddScoped<ItemEventWriter>();
 
         services.AddScoped<ICatalogAdminService, CatalogAdminService>();
         services.AddScoped<IProductTypeAdminService, ProductTypeAdminService>();

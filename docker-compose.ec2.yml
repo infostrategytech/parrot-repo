@@ -110,6 +110,7 @@ services:
         create messages.outbound.dlq 3
         create agent.events 6
         create catalog.events 3
+        create catalog.items 3
     restart: "no"
     logging: *logging
     networks: [parrot]
@@ -505,6 +506,7 @@ services:
       Catalog__Relay__Bus: Kafka
       Catalog__Relay__BootstrapServers: kafka:9092
       Catalog__Relay__Topic: catalog.events
+      Catalog__Relay__ItemsTopic: catalog.items
     depends_on:
       # Its tables come from the catalog API's migrations.
       catalog-api:

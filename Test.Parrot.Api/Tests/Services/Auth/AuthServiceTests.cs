@@ -1214,16 +1214,21 @@ public class AuthServiceTests
     // ---------------------------------------------------------------------------
 
     [Fact]
-    public async Task LoginAsync_ForAnAccountWithNoWorkspace_MakesItsFirstUnderTheUsersId()
+    public async Task LoginAsync_ForAnAccountWithNoWorkspace_MakesItsFirstWithItsOwnId()
     {
         ApplicationUser user = SignsIn(CreateUser(emailConfirmed: true));
         List<Claim> claims = CaptureClaims();
 
         AuthResponse response = await _sut.LoginAsync(new LoginRequest { Identifier = user.Email!, Password = "correct" });
 
-        Assert.Equal(user.Id, response.WorkspaceId);
-        Assert.Equal("Test Business", _workspaces.Rows[user.Id].Name);
-        Assert.Contains(claims, c => c.Type == WorkspaceClaims.WorkspaceId && c.Value == user.Id);
+        // The business has an id of its own; the account is named as its owner.
+        string workspaceId = WorkspaceService.FirstWorkspaceId(user.Id);
+        Assert.NotEqual(user.Id, workspaceId);
+        Assert.Equal(workspaceId, response.WorkspaceId);
+        Assert.Equal("Test Business", _workspaces.Rows[workspaceId].Name);
+        Assert.Contains(claims, c => c.Type == WorkspaceClaims.WorkspaceId && c.Value == workspaceId);
+        Assert.Contains(claims, c => c.Type == WorkspaceClaims.OwnerId && c.Value == user.Id);
+        Assert.Contains(claims, c => c.Type == "sub" && c.Value == user.Id);
     }
 
     [Fact]
