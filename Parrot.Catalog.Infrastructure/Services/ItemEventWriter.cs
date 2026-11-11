@@ -63,9 +63,10 @@ public sealed class ItemEventWriter
         DateTime now = _clock.GetUtcNow().UtcDateTime;
         foreach (Product product in products.OrderBy(p => p.Id))
         {
-            (string type, object payload) = await BuildAsync(product, ct);
+            string type = IsRemoved(product) ? CatalogEventTypes.ItemRemoved : CatalogEventTypes.ItemChanged;
             Guid eventId = Guid.NewGuid();
-            await RecordSentAsync(product, eventId, type, now, ct);
+            long version = await RecordSentAsync(product, eventId, type, now, ct);
+            object payload = await BuildAsync(product, version, ct);
             _db.Outbox.Add(new OutboxMessage
             {
                 Id = eventId,
@@ -82,18 +83,21 @@ public sealed class ItemEventWriter
         }
     }
 
-    private async Task<(string Type, object Payload)> BuildAsync(Product product, CancellationToken ct)
+    private static bool IsRemoved(Product product) => product.DeletedAt is not null || product.Status == ProductStatus.Retired;
+
+    /// <param name="version">The message's version from <see cref="RecordSentAsync"/>, not product.Version.</param>
+    private async Task<object> BuildAsync(Product product, long version, CancellationToken ct)
     {
-        if (product.DeletedAt is not null || product.Status == ProductStatus.Retired)
+        if (IsRemoved(product))
         {
-            return (CatalogEventTypes.ItemRemoved, new
+            return new
             {
                 product_id = product.Id,
                 catalog_id = product.CatalogId,
                 sku = product.Sku,
-                version = product.Version,
+                version,
                 reason = product.DeletedAt is not null ? "deleted" : "retired",
-            });
+            };
         }
 
         ProductType type = await _db.ProductTypes.AsNoTracking().FirstAsync(t => t.Id == product.ProductTypeId, ct);
@@ -115,12 +119,12 @@ public sealed class ItemEventWriter
 
         bool searchable = product.Status == ProductStatus.Published && !product.Hidden;
 
-        return (CatalogEventTypes.ItemChanged, new
+        return new
         {
             product_id = product.Id,
             catalog_id = product.CatalogId,
             sku = product.Sku,
-            version = product.Version,
+            version,
             status = EnumNames.ToSnake(product.Status),
             hidden = product.Hidden,
             searchable,
@@ -143,23 +147,36 @@ public sealed class ItemEventWriter
                 sort_order = m.SortOrder,
             }),
             updated_at = product.UpdatedAt,
-        });
+        };
     }
 
     /// <summary>
-    /// Notes the message as the latest one the AI has to catch up with. An upsert, so two
-    /// first saves of the same item at once can't both try to insert; only the "sent"
-    /// columns are touched, so a report the relay is recording at the same time survives.
+    /// Notes the message as the latest one the AI has to catch up with, and returns the
+    /// <c>version</c> to send with it. An upsert, so two first saves of the same item at once
+    /// can't both try to insert; only the "sent" columns are touched, so a report the relay
+    /// is recording at the same time survives.
+    ///
+    /// The AI team orders a product's messages by <c>version</c> and skips one that isn't
+    /// newer than what it holds, so the version goes up on every message: one more than the
+    /// higher of the last version sent and product.Version. That is always above anything
+    /// sent for the product before, including messages sent before this column existed,
+    /// which carried product.Version.
     /// </summary>
-    private Task RecordSentAsync(Product product, Guid eventId, string type, DateTime now, CancellationToken ct)
-        => _db.Database.ExecuteSqlInterpolatedAsync(
+    private async Task<long> RecordSentAsync(Product product, Guid eventId, string type, DateTime now, CancellationToken ct)
+    {
+        long current = product.Version;
+        long first = current + 1;
+        List<long> version = await _db.Database.SqlQuery<long>(
             $"""
-            INSERT INTO catalog.item_ai_status (product_id, tenant_id, sent_event_id, sent_type, sent_at, photos_rejected, photos_failed)
-            VALUES ({product.Id}, {product.TenantId}, {eventId}, {type}, {now}, 0, 0)
+            INSERT INTO catalog.item_ai_status (product_id, tenant_id, sent_event_id, sent_type, sent_at, sent_version, photos_rejected, photos_failed)
+            VALUES ({product.Id}, {product.TenantId}, {eventId}, {type}, {now}, {first}, 0, 0)
             ON CONFLICT (product_id) DO UPDATE
-                SET sent_event_id = EXCLUDED.sent_event_id, sent_type = EXCLUDED.sent_type, sent_at = EXCLUDED.sent_at
-            """,
-            ct);
+                SET sent_event_id = EXCLUDED.sent_event_id, sent_type = EXCLUDED.sent_type, sent_at = EXCLUDED.sent_at,
+                    sent_version = GREATEST(item_ai_status.sent_version, {current}) + 1
+            RETURNING sent_version AS "Value"
+            """).ToListAsync(ct);
+        return version[0];
+    }
 
     /// <summary>
     /// The account that owns the workspace, which catalog.items sends as <c>tenant_id</c>:

@@ -313,6 +313,10 @@ public class CatalogDbContext : DbContext
             e.Property(s => s.SentType).HasMaxLength(64);
             e.Property(s => s.Status).HasMaxLength(64);
             e.Property(s => s.TextStatus).HasMaxLength(64);
+            e.Property(s => s.ReportType).HasMaxLength(64);
+            e.Property(s => s.TextReasonCode).HasMaxLength(64);
+            e.Property(s => s.TextReason).HasMaxLength(1000);
+            e.Property(s => s.PhotosStatus).HasMaxLength(64);
             e.HasOne<Product>().WithOne().HasForeignKey<ItemAiStatus>(s => s.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(s => s.TenantId);
         });

@@ -108,6 +108,27 @@ public sealed class ItemAiStatus : ITenantScoped
     /// <summary>The report's text status (embedded, failed…).</summary>
     public string? TextStatus { get; set; }
 
+    /// <summary>
+    /// The <c>version</c> sent with the latest item message. It goes up on every message,
+    /// because the AI team orders a product's messages by it; product.Version only goes up
+    /// when a published product is snapshotted.
+    /// </summary>
+    public long SentVersion { get; set; }
+
+    /// <summary>ItemIndexed, ItemUnindexed or ItemIndexFailed.</summary>
+    public string? ReportType { get; set; }
+
+    /// <summary>Whether the AI's agents can find this version of the item.</summary>
+    public bool? Searchable { get; set; }
+
+    /// <summary>client_err (the business should fix the item) or server_err (the AI's side); set when the text failed.</summary>
+    public string? TextReasonCode { get; set; }
+
+    public string? TextReason { get; set; }
+
+    /// <summary>completed, failed, skipped, removed…</summary>
+    public string? PhotosStatus { get; set; }
+
     public int PhotosRejected { get; set; }
 
     public int PhotosFailed { get; set; }

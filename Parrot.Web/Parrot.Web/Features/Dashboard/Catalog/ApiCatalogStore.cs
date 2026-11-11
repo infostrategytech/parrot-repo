@@ -118,10 +118,14 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
                 "ready" => AiProgress.Ready,
                 "needs_attention" => AiProgress.NeedsAttention,
                 "failed" => AiProgress.Failed,
-                _ => null,
+                "not_listed" => AiProgress.NotListed,
+                null => null,
+                _ => AiProgress.NeedsAttention,
             },
-            AiIssues = [.. (item.Ai?.Issues ?? []).Select(i => new AiIssue(
-                (item.Photos ?? []).FirstOrDefault(p => p.Key == i.PhotoKey)?.Url, i.Status, i.Reason))],
+            AiPhotos = [.. (item.Ai?.Photos ?? []).Select(p => new AiPhoto(
+                (item.Photos ?? []).FirstOrDefault(own => own.Key == p.PhotoKey)?.Url, p.Status, p.Caption, p.Reason))],
+            AiTextReason = item.Ai?.TextReason,
+            AiReportedAt = item.Ai?.ReportedAt is { } reportedAt ? new DateTimeOffset(DateTime.SpecifyKind(reportedAt, DateTimeKind.Utc)) : null,
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(item.UpdatedAt, DateTimeKind.Utc)),
         };
 
@@ -341,9 +345,9 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         bool Hidden,
         Ai? Ai = null);
 
-    private sealed record Ai(string State, List<AiIssueBody>? Issues);
+    private sealed record Ai(string State, DateTime? ReportedAt, string? TextReason, List<AiPhotoBody>? Photos);
 
-    private sealed record AiIssueBody(string? PhotoKey, string Status, string? Reason);
+    private sealed record AiPhotoBody(string? PhotoKey, string Status, string? Caption, string? Reason);
 
     private sealed record Category(Guid Id, string Name);
 

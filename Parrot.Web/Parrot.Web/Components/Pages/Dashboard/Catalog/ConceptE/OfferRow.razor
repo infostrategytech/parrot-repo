@@ -183,14 +183,16 @@ else
         _ => "Product",
     };
 
-    // Where the AI assistant is with the latest save. Nothing once it's caught up: the
-    // badge is for "not yet" and "look at this", not a mark on every row.
+    // Where the AI assistant is with the latest save. A draft or hidden item shows nothing:
+    // its own label already says customers can't see it, and the AI keeps it out too.
     private (string Label, StatusTone Tone, string Hint)? AiBadge => Item.Ai switch
     {
         AiProgress.Updating => ("AI updating", StatusTone.Info, "Your change is saved. The AI assistant is still learning it."),
-        AiProgress.NeedsAttention => ("Check photos", StatusTone.Warning,
-            string.Join(" ", Item.AiIssues.Where(i => i.Status == "rejected").Select(i => i.Reason).OfType<string>().DefaultIfEmpty("The AI assistant rejected a photo."))),
-        AiProgress.Failed => ("AI retrying", StatusTone.Neutral, "The AI assistant couldn't finish learning this item. It will try again; nothing to do."),
+        AiProgress.Ready => ("AI knows this", StatusTone.Success, "The AI assistant has learned this item and can find it for customers."),
+        AiProgress.NeedsAttention when Item.AiPhotos.Any(p => p.Rejected) => ("Check photos", StatusTone.Warning,
+            string.Join(" ", Item.AiPhotos.Where(p => p.Rejected).Select(p => p.Reason).OfType<string>().DefaultIfEmpty("The AI assistant rejected a photo."))),
+        AiProgress.NeedsAttention => ("Check details", StatusTone.Warning, Item.AiTextReason ?? "The AI assistant couldn't use this item's details."),
+        AiProgress.Failed => ("AI couldn't check", StatusTone.Neutral, "The AI assistant couldn't check part of this item, such as a photo it couldn't download. Open the item to see which."),
         _ => null,
     };
 

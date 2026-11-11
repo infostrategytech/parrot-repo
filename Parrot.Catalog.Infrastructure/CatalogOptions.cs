@@ -62,7 +62,7 @@ public sealed class CatalogRelayOptions
     public string ConsumerGroupId { get; set; } = "catalog-cache-invalidator";
 
     /// <summary>Where the AI team reports how far it got with each item message.</summary>
-    public string IngestionReportTopic { get; set; } = "catalog.ingestion_report";
+    public string IngestionReportTopic { get; set; } = "catalog.ingestion-report";
 
     public string IngestionReportGroupId { get; set; } = "catalog-ai-status";
 

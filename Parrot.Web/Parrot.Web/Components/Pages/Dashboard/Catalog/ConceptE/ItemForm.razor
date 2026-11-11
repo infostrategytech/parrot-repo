@@ -200,6 +200,11 @@ else
             </section>
     }
 
+    @if (!Reviewing && !IsNew && Item?.Ai is not null)
+    {
+        <AiKnowledge Item="Item" />
+    }
+
     <section class="item-form__card" aria-labelledby="item-form-about">
         <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="item-form-about">About it</Typography>
         <Input @ref="_nameField" FloatingLabel="Name" maxlength="80" Value="@_name" ValueChanged="value => { _name = value ?? string.Empty; _error = null; }"

@@ -9,8 +9,10 @@ public static class ItemAiView
 {
     /// <summary>
     /// Null when nothing has been sent for the item yet. Otherwise "updating" until the AI
-    /// reports on the latest save; then a rejected photo needs the business's attention,
-    /// a failure is the AI team's to retry, and anything else is ready.
+    /// reports on the latest save. Then, following the AI team's reason codes: client_err
+    /// (a rejected photo, or text the AI couldn't use) is the business's to fix; server_err
+    /// is the AI's side. A draft, hidden or removed item is "not listed". A status the
+    /// contract doesn't name yet counts as needing attention, as the contract asks.
     /// </summary>
     public static ItemAi? Of(ItemAiStatus? row, IReadOnlyDictionary<Guid, string> photoKeys)
     {
@@ -21,44 +23,53 @@ public static class ItemAiView
 
         if (row.ReportedEventId != row.SentEventId)
         {
-            return new ItemAi(ItemAiState.Updating, row.SentAt, row.ReportedAt, []);
+            return new ItemAi(ItemAiState.Updating, row.SentAt, row.ReportedAt, null, null, null, []);
         }
 
-        List<ItemAiIssue> issues = Issues(row.Photos, photoKeys);
-        bool failed = row.PhotosFailed > 0 || Is(row.Status, "failed") || Is(row.TextStatus, "failed");
-        ItemAiState state = row.PhotosRejected > 0 ? ItemAiState.NeedsAttention
-            : failed ? ItemAiState.Failed
-            : ItemAiState.Ready;
-        return new ItemAi(state, row.SentAt, row.ReportedAt, issues);
+        ItemAiState state = row.Status?.ToLowerInvariant() switch
+        {
+            "removed" or "unlisted" => ItemAiState.NotListed,
+            "failed" => Is(row.TextReasonCode, "client_err") ? ItemAiState.NeedsAttention : ItemAiState.Failed,
+            "indexed" when row.PhotosRejected > 0 => ItemAiState.NeedsAttention,
+            "indexed" when row.PhotosFailed > 0 || Is(row.PhotosStatus, "failed") => ItemAiState.Failed,
+            "indexed" => ItemAiState.Ready,
+            _ => ItemAiState.NeedsAttention,
+        };
+        return new ItemAi(state, row.SentAt, row.ReportedAt, row.Searchable, row.TextStatus, row.TextReason, Photos(row.Photos, photoKeys));
     }
 
-    private static List<ItemAiIssue> Issues(string? photosJson, IReadOnlyDictionary<Guid, string> photoKeys)
+    private static List<ItemAiPhoto> Photos(string? photosJson, IReadOnlyDictionary<Guid, string> photoKeys)
     {
-        List<ItemAiIssue> issues = [];
+        List<ItemAiPhoto> photos = [];
         if (string.IsNullOrEmpty(photosJson))
         {
-            return issues;
+            return photos;
         }
 
         using JsonDocument doc = JsonDocument.Parse(photosJson);
         if (doc.RootElement.ValueKind != JsonValueKind.Array)
         {
-            return issues;
+            return photos;
         }
 
         foreach (JsonElement item in doc.RootElement.EnumerateArray())
         {
-            string? status = Text(item, "status");
-            if (!Is(status, "rejected") && !Is(status, "failed"))
+            if (Text(item, "status") is not { } status)
             {
                 continue;
             }
 
             Guid mediaId = Guid.TryParse(Text(item, "media_id"), out Guid id) ? id : Guid.Empty;
-            issues.Add(new ItemAiIssue(mediaId, photoKeys.GetValueOrDefault(mediaId), status!.ToLowerInvariant(), Text(item, "reason")));
+            photos.Add(new ItemAiPhoto(
+                mediaId,
+                photoKeys.GetValueOrDefault(mediaId),
+                status.ToLowerInvariant(),
+                Text(item, "caption"),
+                Text(item, "reason_code"),
+                Text(item, "reason")));
         }
 
-        return issues;
+        return photos;
     }
 
     private static bool Is(string? value, string expected) => string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
