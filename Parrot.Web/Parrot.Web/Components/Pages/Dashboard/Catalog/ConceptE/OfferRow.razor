@@ -187,8 +187,8 @@ else
     // its own label already says customers can't see it, and the AI keeps it out too.
     private (string Label, StatusTone Tone, string Hint)? AiBadge => Item.Ai switch
     {
-        AiProgress.Updating => ("AI updating", StatusTone.Info, "Your change is saved. The AI assistant is still learning it."),
-        AiProgress.Ready => ("AI knows this", StatusTone.Success, "The AI assistant has learned this item and can find it for customers."),
+        AiProgress.Updating => ("AI syncing", StatusTone.Info, "Your change is saved. The AI assistant is catching up."),
+        AiProgress.Ready => ("AI synced", StatusTone.Success, "The AI assistant has the latest version of this item and can find it for customers."),
         AiProgress.NeedsAttention when Item.AiPhotos.Any(p => p.Rejected) => ("Check photos", StatusTone.Warning,
             string.Join(" ", Item.AiPhotos.Where(p => p.Rejected).Select(p => p.Reason).OfType<string>().DefaultIfEmpty("The AI assistant rejected a photo."))),
         AiProgress.NeedsAttention => ("Check details", StatusTone.Warning, Item.AiTextReason ?? "The AI assistant couldn't use this item's details."),
