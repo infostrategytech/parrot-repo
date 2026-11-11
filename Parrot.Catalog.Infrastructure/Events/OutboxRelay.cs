@@ -157,6 +157,8 @@ public class RelayDbContext : DbContext
 
     public DbSet<ConsumerInboxEntry> ConsumerInbox => Set<ConsumerInboxEntry>();
 
+    public DbSet<ItemAiStatus> ItemAiStatus => Set<ItemAiStatus>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -187,6 +189,24 @@ public class RelayDbContext : DbContext
             e.Property(c => c.EventId).HasColumnName("event_id");
             e.Property(c => c.TenantId).HasColumnName("tenant_id");
             e.Property(c => c.ProcessedAt).HasColumnName("processed_at");
+        });
+        builder.Entity<ItemAiStatus>(e =>
+        {
+            e.ToTable("item_ai_status");
+            e.HasKey(a => a.ProductId);
+            e.Property(a => a.ProductId).HasColumnName("product_id");
+            e.Property(a => a.TenantId).HasColumnName("tenant_id");
+            e.Property(a => a.SentEventId).HasColumnName("sent_event_id");
+            e.Property(a => a.SentType).HasColumnName("sent_type");
+            e.Property(a => a.SentAt).HasColumnName("sent_at");
+            e.Property(a => a.ReportedEventId).HasColumnName("reported_event_id");
+            e.Property(a => a.ReportId).HasColumnName("report_id");
+            e.Property(a => a.ReportedAt).HasColumnName("reported_at");
+            e.Property(a => a.Status).HasColumnName("status");
+            e.Property(a => a.TextStatus).HasColumnName("text_status");
+            e.Property(a => a.PhotosRejected).HasColumnName("photos_rejected");
+            e.Property(a => a.PhotosFailed).HasColumnName("photos_failed");
+            e.Property(a => a.Photos).HasColumnName("photos").HasColumnType("jsonb");
         });
     }
 }

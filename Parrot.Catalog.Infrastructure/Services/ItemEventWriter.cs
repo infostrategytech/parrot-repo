@@ -60,12 +60,15 @@ public sealed class ItemEventWriter
 
         List<Product> products = await _db.Products.AsNoTracking().Where(p => ids.Contains(p.Id)).ToListAsync(ct);
         string? owner = await OwnerAsync(ct);
+        DateTime now = _clock.GetUtcNow().UtcDateTime;
         foreach (Product product in products.OrderBy(p => p.Id))
         {
             (string type, object payload) = await BuildAsync(product, ct);
+            Guid eventId = Guid.NewGuid();
+            await RecordSentAsync(product, eventId, type, now, ct);
             _db.Outbox.Add(new OutboxMessage
             {
-                Id = Guid.NewGuid(),
+                Id = eventId,
                 TenantId = product.TenantId,
                 OwnerId = owner,
                 UserId = UserOf(_tenant),
@@ -74,7 +77,7 @@ public sealed class ItemEventWriter
                 EventType = type,
                 SchemaVersion = 1,
                 Payload = Json.Serialize(payload),
-                CreatedAt = _clock.GetUtcNow().UtcDateTime,
+                CreatedAt = now,
             });
         }
     }
@@ -142,6 +145,21 @@ public sealed class ItemEventWriter
             updated_at = product.UpdatedAt,
         });
     }
+
+    /// <summary>
+    /// Notes the message as the latest one the AI has to catch up with. An upsert, so two
+    /// first saves of the same item at once can't both try to insert; only the "sent"
+    /// columns are touched, so a report the relay is recording at the same time survives.
+    /// </summary>
+    private Task RecordSentAsync(Product product, Guid eventId, string type, DateTime now, CancellationToken ct)
+        => _db.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+            INSERT INTO catalog.item_ai_status (product_id, tenant_id, sent_event_id, sent_type, sent_at, photos_rejected, photos_failed)
+            VALUES ({product.Id}, {product.TenantId}, {eventId}, {type}, {now}, 0, 0)
+            ON CONFLICT (product_id) DO UPDATE
+                SET sent_event_id = EXCLUDED.sent_event_id, sent_type = EXCLUDED.sent_type, sent_at = EXCLUDED.sent_at
+            """,
+            ct);
 
     /// <summary>
     /// The account that owns the workspace, which catalog.items sends as <c>tenant_id</c>:

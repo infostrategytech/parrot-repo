@@ -394,6 +394,7 @@ services:
         condition: service_healthy
     # catalog.events: every row change. catalog.items: one whole-item message per
     # product per save, for indexers (ItemChanged / ItemRemoved).
+    # catalog.ingestion_report: the AI team says how far it got with each item message.
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -401,6 +402,7 @@ services:
         create() { /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 --create --if-not-exists --replication-factor 1 --topic "$$1" --partitions "$$2"; }
         create catalog.events 3
         create catalog.items 3
+        create catalog.ingestion_report 3
     restart: "no"
     networks: [parrot]
 
@@ -468,6 +470,7 @@ services:
       Catalog__Relay__BootstrapServers: kafka:9092
       Catalog__Relay__Topic: catalog.events
       Catalog__Relay__ItemsTopic: catalog.items
+      Catalog__Relay__IngestionReportTopic: catalog.ingestion_report
     depends_on:
       catalog-api:
         condition: service_started

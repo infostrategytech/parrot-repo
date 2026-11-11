@@ -556,6 +556,72 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                     b.ToTable("consumer_inbox", "catalog");
                 });
 
+            modelBuilder.Entity("Parrot.Catalog.Domain.Entities.ItemAiStatus", b =>
+                {
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("Photos")
+                        .HasColumnType("jsonb")
+                        .HasColumnName("photos");
+
+                    b.Property<int>("PhotosFailed")
+                        .HasColumnType("integer")
+                        .HasColumnName("photos_failed");
+
+                    b.Property<int>("PhotosRejected")
+                        .HasColumnType("integer")
+                        .HasColumnName("photos_rejected");
+
+                    b.Property<Guid?>("ReportId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("report_id");
+
+                    b.Property<DateTime?>("ReportedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reported_at");
+
+                    b.Property<Guid?>("ReportedEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("reported_event_id");
+
+                    b.Property<DateTime?>("SentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("sent_at");
+
+                    b.Property<Guid?>("SentEventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("sent_event_id");
+
+                    b.Property<string>("SentType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("sent_type");
+
+                    b.Property<string>("Status")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("TextStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("text_status");
+
+                    b.HasKey("ProductId")
+                        .HasName("pk_item_ai_status");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_item_ai_status_tenant_id");
+
+                    b.ToTable("item_ai_status", "catalog");
+                });
+
             modelBuilder.Entity("Parrot.Catalog.Domain.Entities.MediaAsset", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1570,6 +1636,16 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_category_closure_descendant_id");
+                });
+
+            modelBuilder.Entity("Parrot.Catalog.Domain.Entities.ItemAiStatus", b =>
+                {
+                    b.HasOne("Parrot.Catalog.Domain.Entities.Product", null)
+                        .WithOne()
+                        .HasForeignKey("Parrot.Catalog.Domain.Entities.ItemAiStatus", "ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_item_ai_status_product_id");
                 });
 
             modelBuilder.Entity("Parrot.Catalog.Domain.Entities.MediaAsset", b =>

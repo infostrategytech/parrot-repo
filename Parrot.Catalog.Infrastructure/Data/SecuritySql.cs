@@ -19,6 +19,12 @@ public static class SecuritySql
         "product_relationships", "media", "product_versions", "catalog_documents", "audit_log", "outbox", "consumer_inbox",
     ];
 
+    /// <summary>
+    /// Tables added after the first migration. Each gets the same tenant policy as
+    /// <see cref="Tables"/>, in the migration that creates it (see <see cref="ItemAiStatusUp"/>).
+    /// </summary>
+    public static readonly IReadOnlyList<string> LaterTables = ["item_ai_status"];
+
     public static readonly IReadOnlyList<string> Views =
     [
         "v_catalogs", "v_categories", "v_category_closure", "v_product_types", "v_attribute_definitions",
@@ -113,6 +119,25 @@ public static class SecuritySql
 
         return string.Join("\n", sql);
     }
+
+    /// <summary>
+    /// Security for item_ai_status: tenant isolation like every table; the writer keeps
+    /// the "sent" side as it publishes; the relay records the AI's reports. The reader
+    /// has no access: the status is for the business's own screens, not shoppers.
+    /// </summary>
+    public static string ItemAiStatusUp() => $"""
+        ALTER TABLE catalog.item_ai_status ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE catalog.item_ai_status FORCE ROW LEVEL SECURITY;
+        CREATE POLICY tenant_isolation ON catalog.item_ai_status FOR ALL USING (tenant_id = catalog.current_tenant_id()) WITH CHECK (tenant_id = catalog.current_tenant_id());
+        CREATE POLICY relay_all ON catalog.item_ai_status FOR ALL TO {RelayRole} USING (true) WITH CHECK (true);
+        GRANT SELECT, INSERT, UPDATE, DELETE ON catalog.item_ai_status TO {WriterRole};
+        GRANT SELECT, UPDATE ON catalog.item_ai_status TO {RelayRole};
+        """;
+
+    public static string ItemAiStatusDown() => """
+        DROP POLICY IF EXISTS relay_all ON catalog.item_ai_status;
+        DROP POLICY IF EXISTS tenant_isolation ON catalog.item_ai_status;
+        """;
 
     /// <summary>
     /// Re-creates views over a table that gained columns. A view's <c>SELECT *</c> is expanded

@@ -112,6 +112,16 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
             Duration = item.Duration ?? string.Empty,
             LeadTime = item.LeadTime ?? (item.Availability?.LeadTimeDays is { } days ? $"{days} {(days == 1 ? "day" : "days")}" : string.Empty),
             IsHidden = item.Hidden,
+            Ai = item.Ai?.State switch
+            {
+                "updating" => AiProgress.Updating,
+                "ready" => AiProgress.Ready,
+                "needs_attention" => AiProgress.NeedsAttention,
+                "failed" => AiProgress.Failed,
+                _ => null,
+            },
+            AiIssues = [.. (item.Ai?.Issues ?? []).Select(i => new AiIssue(
+                (item.Photos ?? []).FirstOrDefault(p => p.Key == i.PhotoKey)?.Url, i.Status, i.Reason))],
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(item.UpdatedAt, DateTimeKind.Utc)),
         };
 
@@ -328,7 +338,12 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         string? LeadTime,
         List<Photo>? Photos,
         JsonElement? FormDraft,
-        bool Hidden);
+        bool Hidden,
+        Ai? Ai = null);
+
+    private sealed record Ai(string State, List<AiIssueBody>? Issues);
+
+    private sealed record AiIssueBody(string? PhotoKey, string Status, string? Reason);
 
     private sealed record Category(Guid Id, string Name);
 
