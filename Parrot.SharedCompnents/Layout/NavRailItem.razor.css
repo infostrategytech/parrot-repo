@@ -29,6 +29,7 @@
   --ds-rail-item-height-compact: 36px;
   --ds-rail-motion: 140ms;
   --ds-rail-badge-min: 20px;
+  --ds-rail-focus: 2px;
 }
 
 .nav-item.is-compact { min-height: var(--ds-rail-item-height-compact); }
@@ -36,6 +37,12 @@
 .nav-item:hover:not(:disabled) {
   color: var(--colors-text-secondary);
   background: var(--colors-interaction-hover);
+}
+
+/* The keyboard is always visible where it is. */
+.nav-item:focus-visible {
+  outline: var(--ds-rail-focus) solid var(--colors-interaction-focus);
+  outline-offset: calc(-1 * var(--ds-rail-focus));
 }
 
 /* The current page: a brand-tinted fill a step stronger than the selected
@@ -77,4 +84,10 @@
   border-radius: var(--radius-radius-full);
   font-style: normal;
   font-variant-numeric: tabular-nums;
+}
+/* An alert badge: red, the way one reads everywhere. Notifications uses it only while something that needs you is
+   unread (designer, 5 November 2026). */
+::deep .nav-item__count.is-alert {
+  color: var(--colors-accent-red-on-solid);
+  background: var(--colors-accent-red-solid);
 }

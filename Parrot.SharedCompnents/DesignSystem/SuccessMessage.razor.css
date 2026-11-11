@@ -1,0 +1,22 @@
+/* The sign-in pages' success state (AuthPanelLayout's account-panel__done), as a shared part. */
+.ds-success {
+  display: grid;
+  gap: var(--spacing-sm);
+  justify-items: center;
+  text-align: center;
+}
+.ds-success ::deep p, .ds-success ::deep h1, .ds-success ::deep h2 { margin: var(--spacing-none); }
+.ds-success ::deep .ds-success__message { color: var(--colors-text-muted); }
+
+.ds-success__icon {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  margin-bottom: var(--spacing-sm);
+  color: var(--colors-feedback-success);
+  background: var(--colors-feedback-success-subtle);
+  border-radius: var(--radius-radius-full);
+}
+
+.ds-success__more { display: grid; gap: var(--spacing-sm); justify-items: center; margin-top: var(--spacing-lg); }

@@ -2,9 +2,9 @@
 
 .ds-action-menu {
   /* Gaps in the token set: no z-index scale and no menu-width scale. The
-     width is React's conversation menu. */
+     width is the Figma Menu component's (node 361:2262). */
   --ds-action-menu-layer: 40;
-  --ds-action-menu-width: 214px;
+  --ds-action-menu-width: 260px;
   --ds-action-menu-hairline: 1px;
   /* Not in the token set: an instant change (no duration), for the reveal below. */
   --ds-action-menu-instant: 0s;
@@ -48,14 +48,48 @@
   z-index: calc(var(--ds-action-menu-layer) + 1);
   display: grid;
   width: var(--ds-action-menu-width);
-  padding: var(--spacing-xs);
   background: var(--colors-surface-popover);
   border: var(--ds-action-menu-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-lg);
-  box-shadow: 0 var(--spacing-md) var(--spacing-3xl) var(--colors-surface-shadow);
+  border-radius: var(--radius-radius-xl);
+  /* Clips the full-bleed rows and dividers to the corner radius. */
+  overflow: hidden;
+  /* Two layers, as in the design: a tight contact shadow so the panel sits on
+     the page, and a wider diffuse one so it reads as lifted above it. */
+  box-shadow:
+    0 var(--spacing-2xs) var(--spacing-sm) calc(var(--ds-action-menu-hairline) * -1) var(--colors-surface-shadow-diffuse),
+    0 var(--spacing-xs) var(--spacing-lg) calc(var(--spacing-2xs) * -1) var(--colors-surface-shadow);
   /* Hidden for the moment it takes to know where it fits; shown anyway after a beat. */
   visibility: hidden;
   animation: ds-action-menu-show var(--ds-action-menu-instant) var(--ds-motion-slow) forwards;
 }
 .ds-action-menu__menu[data-placed] { visibility: visible; animation: none; }
 @keyframes ds-action-menu-show { to { visibility: visible; } }
+
+/* Title, dividers and footer — the parts of the Figma Menu (node 361:2262)
+   the menu previously had no way to express. All optional: a plain menu of
+   actions renders exactly as before, with none of these present. */
+
+.ds-action-menu__title {
+  padding: var(--spacing-md) var(--spacing-lg);
+  color: var(--colors-text-secondary);
+}
+
+/* The rows sit in their own band so the title and footer meet the dividers
+   edge to edge, while the rows keep a little air top and bottom. */
+.ds-action-menu__items {
+  display: grid;
+  padding-block: var(--spacing-xs);
+}
+
+/* The group separator is its own component (ActionMenuDivider), so its rule
+   lives with it rather than reaching in from here.
+
+   The title's and footer's dividers run the full width, so they are drawn as
+   a border on the band rather than as a margined rule. */
+.ds-action-menu__title { border-bottom: var(--ds-action-menu-hairline) solid var(--colors-surface-input); }
+.ds-action-menu__footer { border-top: var(--ds-action-menu-hairline) solid var(--colors-surface-input); }
+
+.ds-action-menu__footer {
+  padding: var(--spacing-sm) var(--spacing-lg);
+  color: var(--colors-text-muted);
+}

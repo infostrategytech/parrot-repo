@@ -1,0 +1,34 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Something finished and worked (designer, 8 November 2026): the success screen's look (Password updated, on the
+   sign-in pages) for anywhere, a modal included. A soft green circle with a tick, the outcome as a heading, one muted
+   line on what happens next, then anything the caller adds (an action, a quiet fallback). Centred. *@
+<div class="@(string.IsNullOrWhiteSpace(Class) ? "ds-success" : $"ds-success {Class}")" role="status">
+    <span class="ds-success__icon" aria-hidden="true"><Icon Name="Mark" Size="IconSize.Lg" /></span>
+    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="@TitleAs" Prose>@Title</Typography>
+    @if (!string.IsNullOrWhiteSpace(Message))
+    {
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="ds-success__message">@Message</Typography>
+    }
+    @if (ChildContent is not null)
+    {
+        <div class="ds-success__more">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+
+    /// <summary>The mark in the circle: a tick by default; an envelope where the next step is in the inbox.</summary>
+    [Parameter] public IconName Mark { get; set; } = IconName.RiCheckboxCircleFill;
+
+    /// <summary>The heading's element: "h1" for a page, "p" where something else (a modal's own title) is the heading.</summary>
+    [Parameter] public string TitleAs { get; set; } = "h2";
+
+    [Parameter] public string? Message { get; set; }
+
+    /// <summary>Under the message: an action, or a quiet fallback.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+}

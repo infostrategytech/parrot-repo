@@ -31,6 +31,15 @@ public sealed class AuroraInterop : IAsyncDisposable
     }
 
     /// <summary>
+    /// Holds background interaction and scroll until this content modal closes.
+    /// </summary>
+    public async Task<IAsyncDisposable> HoldModalEnvironmentAsync(ElementReference container)
+    {
+        var module = await _module.Value;
+        return new Handle(await module.InvokeAsync<IJSObjectReference>("holdModalEnvironment", container));
+    }
+
+    /// <summary>
     /// Traps focus and calls <paramref name="escapeMethod"/> on
     /// <paramref name="escapeTarget"/> when Escape is pressed, and for no other key.
     /// </summary>
@@ -131,6 +140,15 @@ public sealed class AuroraInterop : IAsyncDisposable
         await module.InvokeVoidAsync("copyText", value);
     }
 
+    /// <summary>Reports whether copying succeeded, so security codes never get a false Copied confirmation.</summary>
+    public async Task<bool> TryCopyAsync(string value) => await (await _module.Value).InvokeAsync<bool>("copyText", value);
+
+    /// <summary>Local text-file download only. A true result means started, not that the file was saved.</summary>
+    public async Task<bool> SaveTextFileAsync(string value, string fileName) => await (await _module.Value).InvokeAsync<bool>("saveTextFile", value, fileName);
+
+    /// <summary>Only focuses an element inside the calling dialog; never steals focus into another surface.</summary>
+    public async Task<bool> FocusWithinAsync(ElementReference container, string id) => await (await _module.Value).InvokeAsync<bool>("focusWithin", container, id);
+
     /// <summary>Downloads a media URL without navigating away. Returns false when the browser cannot fetch it.</summary>
     public async Task<bool> DownloadAsync(string url, string fileName)
     {
@@ -176,7 +194,6 @@ public sealed class AuroraInterop : IAsyncDisposable
         return new Handle(handle);
     }
 
-    /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
     /// <summary>Inserts text at the field's caret (or over its selection) and returns the field's new text.</summary>
     public async Task<string?> InsertAtCaretAsync(ElementReference element, string text)
     {
@@ -191,6 +208,7 @@ public sealed class AuroraInterop : IAsyncDisposable
         return await module.InvokeAsync<bool>("selectText", element, text);
     }
 
+    /// <summary>Sets a field's text directly, for fields left uncontrolled so renders cannot overwrite typing.</summary>
     public async Task SetValueAsync(ElementReference element, string value, bool focus = false)
     {
         var module = await _module.Value;
@@ -259,10 +277,27 @@ public sealed class AuroraInterop : IAsyncDisposable
     /// can't cut it off (see floatMenu). <paramref name="layer"/> carries the popover attribute;
     /// <paramref name="menu"/> is what gets placed inside it.
     /// </summary>
-    public async Task FloatMenuAsync(ElementReference layer, ElementReference anchor, ElementReference menu, bool alignEnd = false, bool matchWidth = false)
+    public async Task FloatMenuAsync(ElementReference layer, ElementReference anchor, ElementReference menu, bool alignEnd = false, bool matchWidth = false, bool beside = false)
     {
         var module = await _module.Value;
-        await module.InvokeVoidAsync("floatMenu", layer, anchor, menu, alignEnd, matchWidth);
+        await module.InvokeVoidAsync("floatMenu", layer, anchor, menu, alignEnd, matchWidth, beside);
+    }
+
+    /// <summary>Keeps the content modal's native scrollbar inside its end padding, until disposed.</summary>
+    /// <summary>
+    /// Keeps a content modal centred while its content grows or shrinks, easing it to the new height instead of
+    /// jumping. Dispose to let it go.
+    /// </summary>
+    public async Task<IAsyncDisposable> SmoothModalHeightAsync(ElementReference surface)
+    {
+        var module = await _module.Value;
+        return new Handle(await module.InvokeAsync<IJSObjectReference>("smoothModalHeight", surface));
+    }
+
+    public async Task<IAsyncDisposable> BalanceModalGutterAsync(ElementReference body)
+    {
+        var module = await _module.Value;
+        return new Handle(await module.InvokeAsync<IJSObjectReference>("balanceModalGutter", body));
     }
 
     /// <summary>Scrolls an element into view: to the top ("start", the default), or "center".</summary>

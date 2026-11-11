@@ -7,6 +7,9 @@
   --ds-channel-whatsapp: #25d366;
   --ds-channel-instagram: #c63886;
   --ds-channel-facebook: #1877f2;
+  /* The providers' white glyph on their own solid brand fills is artwork,
+     not theme-inverse UI text. It must remain white in both themes. */
+  --ds-channel-brand-foreground: #ffffff;
 
   display: inline-grid;
   flex: none;
@@ -22,6 +25,7 @@
 .ds-channel-icon.is-x ::deep .ds-icon { color: var(--colors-text-primary); }
 /* On a disc already in the brand's colour, the mark takes the disc's ink. */
 .ds-channel-icon.is-plain ::deep .ds-icon { color: inherit; }
+.ds-channel-icon.is-on-brand:not(.is-x):not(.is-tiktok):not(.is-other) ::deep .ds-icon { color: var(--ds-channel-brand-foreground); }
 
 /* X's mark is drawn here, not by Icon, so Icon's scoped sizes do not reach
    it: the same four boxes, on the same tokens. */

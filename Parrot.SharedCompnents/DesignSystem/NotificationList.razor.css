@@ -1,0 +1,71 @@
+.ds-notification-list {
+  /* No token yet for a notification source mark or unread dot. */
+  --ds-notification-mark: 36px;
+  --ds-notification-dot: 8px;
+
+  display: grid;
+  gap: var(--spacing-2xs);
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+}
+.ds-notification-list__section { padding: var(--spacing-lg) var(--spacing-md) var(--spacing-xs); color: var(--colors-text-muted); }
+.ds-notification-list__section:first-child { padding-top: var(--spacing-sm); }
+.ds-notification-list ::deep .ds-notification-list__item {
+  display: grid;
+  grid-template-columns: var(--ds-notification-mark) minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: start;
+  width: 100%;
+  padding: var(--spacing-md);
+  text-align: left;
+  border-radius: var(--radius-radius-lg);
+}
+.ds-notification-list ::deep .ds-notification-list__item:hover { background: var(--colors-interaction-hover); }
+.ds-notification-list.is-outlined { gap: var(--spacing-md); }
+.ds-notification-list.is-outlined ::deep .ds-notification-list__item { padding: var(--spacing-lg); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); }
+.ds-notification-list__mark { grid-column: 1; grid-row: 1; display: grid; place-items: center; width: var(--ds-notification-mark); height: var(--ds-notification-mark); border-radius: var(--radius-radius-full); background: var(--colors-surface-muted); }
+.ds-notification-list__mark.is-pink { color: var(--colors-accent-pink-text); background: var(--colors-accent-pink-subtle); }
+.ds-notification-list__mark.is-blue { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
+.ds-notification-list__mark.is-amber { color: var(--colors-accent-amber-text); }
+.ds-notification-list__mark.is-emerald { color: var(--colors-accent-emerald-text); }
+.ds-notification-list__mark.is-violet { color: var(--colors-accent-violet-text); background: var(--colors-accent-violet-subtle); }
+.ds-notification-list__mark.is-neutral { color: var(--colors-icon-secondary); background: var(--colors-surface-muted); }
+.ds-notification-list__mark.is-brand { color: var(--colors-icon-brand); }
+.ds-notification-list__mark.is-resolved { color: var(--colors-icon-muted); background: var(--colors-surface-muted); }
+.ds-notification-list__mark.is-resolved.is-success { color: var(--colors-feedback-success-text); }
+.ds-notification-list__words { grid-column: 2; display: grid; gap: var(--spacing-xs); min-width: 0; overflow-wrap: anywhere; }
+.ds-notification-list__words ::deep .ds-notification-list__title { color: var(--colors-text-primary); }
+.ds-notification-list__words ::deep .ds-notification-list__detail { color: var(--colors-text-secondary); }
+.ds-notification-list__words ::deep .ds-notification-list__meta { color: var(--colors-text-muted); }
+.ds-notification-list__trailing { grid-column: 2; display: flex; align-items: center; gap: var(--spacing-xs); color: var(--colors-text-muted); }
+.ds-notification-list__trailing ::deep .ds-notification-list__action { color: var(--colors-text-secondary); }
+.ds-notification-list__trailing ::deep .ds-notification-list__arrow { color: var(--colors-icon-muted); }
+/* Unread: a brand dot at the row's top right, level with the headline, where the eye checks first. */
+.ds-notification-list__dot.is-corner { grid-column: 3; grid-row: 1; align-self: start; margin-top: var(--spacing-xs); }
+.ds-notification-list__words ::deep .ds-notification-list__inline-action { color: var(--colors-text-secondary); }
+.ds-notification-list__dot { flex: none; width: var(--ds-notification-dot); height: var(--ds-notification-dot); background: var(--colors-icon-brand); border-radius: var(--radius-radius-full); }
+/* The full page: rows run edge to edge with a table's padding, so the hover and the lines between rows meet the card's
+   sides (designer, 5 November 2026: like the tables). The page's card clips the hover at its corners, so the keyboard
+   ring is drawn inside. Its action uses the width, not an extra line under every row. */
+.ds-notification-list--feed { gap: var(--spacing-none); }
+.ds-notification-list--feed .ds-notification-list__section { padding-inline: var(--spacing-2xl); }
+.ds-notification-list--feed .ds-notification-list__section:first-child { padding-top: var(--spacing-lg); }
+.ds-notification-list--feed ::deep .ds-notification-list__item { padding: var(--spacing-xl) var(--spacing-2xl); border-radius: var(--radius-radius-none); }
+.ds-notification-list--feed ::deep .ds-notification-list__item:focus-visible { outline-offset: calc(-1 * (var(--ds-focus-ring-width) + var(--ds-focus-ring-offset))); }
+/* The right edge: unread on top, level with the headline; the action at the foot, level with the time. */
+.ds-notification-list__side { grid-column: 3; grid-row: 1; align-self: stretch; display: flex; flex-direction: column; align-items: flex-end; gap: var(--spacing-sm); }
+.ds-notification-list__side .ds-notification-list__dot.is-corner { align-self: flex-end; }
+.ds-notification-list__side .ds-notification-list__trailing { margin-top: auto; gap: var(--spacing-sm); }
+.ds-notification-list--feed > li + li ::deep .ds-notification-list__item { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.ds-notification-list--feed > .ds-notification-list__section + li ::deep .ds-notification-list__item { border-top: 0; }
+
+/* A phone: the action goes under the words, and the dot keeps the corner. */
+@media (max-width: 760px) {
+  .ds-notification-list--feed .ds-notification-list__section { padding-inline: var(--spacing-lg); }
+  .ds-notification-list--feed ::deep .ds-notification-list__item { padding: var(--spacing-lg); }
+  .ds-notification-list__side { display: contents; }
+  .ds-notification-list__side .ds-notification-list__dot.is-corner { grid-column: 3; grid-row: 1; align-self: start; }
+  .ds-notification-list__side .ds-notification-list__trailing { grid-column: 2; grid-row: 2; margin-top: var(--spacing-none); }
+}
+

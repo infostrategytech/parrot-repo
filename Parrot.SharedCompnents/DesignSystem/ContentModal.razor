@@ -1,0 +1,156 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IAsyncDisposable
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+
+@* Content, not a confirmation: no assumed confirm/cancel pair. The caller owns its form and actions.
+   Uses the existing focus/escape helpers and shared controls. Only the body scrolls; text never scales down.
+   Approved shared content-modal pattern. See design-system/components/content-modal.md.
+   Existing Dialog consumers are migrated individually after feature review, never automatically. *@
+@if (Open)
+{
+    <div class="content-modal-backdrop" @onmousedown="BackdropAsync">
+        <section class="content-modal content-modal--@Size.ToString().ToLowerInvariant() @(Ambient is not null ? "content-modal--has-ambient" : null)"
+                 role="dialog" aria-modal="true" aria-labelledby="@_titleId" aria-busy="@(Busy ? "true" : null)"
+                 tabindex="-1" @ref="_surface" @onmousedown:stopPropagation="true">
+            @if (Ambient is not null)
+            {
+                @* Behind everything, clipped to the card (as Dialog's AmbientBackground): a colour wash, say. *@
+                <div class="content-modal__ambient" aria-hidden="true">@Ambient</div>
+            }
+            <header class="content-modal__header">
+                <div class="content-modal__heading">
+                    @if (Eyebrow is not null) { <div class="content-modal__eyebrow">@Eyebrow</div> }
+                    @* Hidden when the body says it bigger (a success state): still the modal's name for screen readers. *@
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" Prose id="@_titleId" Class="@(TitleVisuallyHidden ? "sr-only" : null)">@Title</Typography>
+                    @if (!string.IsNullOrWhiteSpace(Subtitle))
+                    {
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@Subtitle</Typography>
+                    }
+                </div>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="content-modal__close"
+                        aria-label="@CloseLabel" title="@CloseLabel" disabled="@Busy" @onclick="RequestCloseAsync">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" Size="IconSize.Md" /></IconLeft>
+                </Button>
+            </header>
+            @if (OnSubmit.HasDelegate)
+            {
+                <form id="@_formId" class="content-modal__body" novalidate @ref="_body" @onsubmit="SubmitAsync" @onsubmit:preventDefault>
+                    @ChildContent
+                </form>
+            }
+            else
+            {
+                <div class="content-modal__body" @ref="_body">@ChildContent</div>
+            }
+            @if (Footer is not null)
+            {
+                <footer class="content-modal__footer">@Footer(_formId)</footer>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private readonly string _titleId = "content-modal-title-" + Guid.NewGuid().ToString("N");
+    private readonly string _formId = "content-modal-form-" + Guid.NewGuid().ToString("N");
+    private ElementReference _surface, _body;
+    private IAsyncDisposable? _focus, _environment, _gutter, _place;
+    private DotNetObjectReference<ContentModal>? _self;
+    private bool _wasOpen, _disposed;
+    private string? _lastFocusId, _lastFocusKey;
+
+    [Parameter, EditorRequired] public bool Open { get; set; }
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Subtitle { get; set; }
+    /// <summary>Keep the title for screen readers only, when the body shows it itself, such as a SuccessMessage.</summary>
+    [Parameter] public bool TitleVisuallyHidden { get; set; }
+    [Parameter] public RenderFragment? Eyebrow { get; set; }
+    /// <summary>Optional. Drawn behind the header, body and footer, clipped to the card: the workspace card's colour wash.</summary>
+    [Parameter] public RenderFragment? Ambient { get; set; }
+    [Parameter] public DialogSize Size { get; set; }
+    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+    /// <summary>Receives the native form id. Associate a shared submit Button using form="context".</summary>
+    [Parameter] public RenderFragment<string>? Footer { get; set; }
+    /// <summary>Omit for previews/chat. Supply for forms; Enter and the footer share one submit path.</summary>
+    [Parameter] public EventCallback OnSubmit { get; set; }
+    /// <summary>The caller can ask to discard changes before changing Open. No implicit data loss.</summary>
+    [Parameter, EditorRequired] public EventCallback OnClose { get; set; }
+    [Parameter] public string CloseLabel { get; set; } = "Close";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool CloseOnEscape { get; set; } = true;
+    /// <summary>Off for content/forms by default. Clicking outside should not discard someone's work.</summary>
+    [Parameter] public bool CloseOnBackdrop { get; set; }
+    [Parameter] public string? InitialFocusId { get; set; }
+    [Parameter] public string? FocusKey { get; set; }
+
+    private Task RequestCloseAsync() => Busy ? Task.CompletedTask : OnClose.InvokeAsync();
+    private Task BackdropAsync() => CloseOnBackdrop ? RequestCloseAsync() : Task.CompletedTask;
+    private Task SubmitAsync() => Busy ? Task.CompletedTask : OnSubmit.InvokeAsync();
+    [JSInvokable] public Task OnEscapeAsync() => CloseOnEscape ? RequestCloseAsync() : Task.CompletedTask;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed) return;
+        if (Open && !_wasOpen)
+        {
+            _wasOpen = true;
+            _self ??= DotNetObjectReference.Create(this);
+            _opening = OpenAsync();
+            await _opening;
+        }
+        else if (!Open && _wasOpen)
+        {
+            _wasOpen = false;
+            await ReleaseAsync();
+        }
+        else if (Open && (_lastFocusId != InitialFocusId || _lastFocusKey != FocusKey)) await FocusAsync();
+    }
+    // Closed (Escape works as soon as the trap is set) or removed while still opening: stop
+    // there. Whatever was already held is released by ReleaseAsync, which waits for this, so
+    // the page behind is never left inert.
+    private Task? _opening;
+    private bool Opening => _wasOpen && !_disposed;
+    private async Task OpenAsync()
+    {
+        try
+        {
+            // Capture the opener before making the background inert or moving focus.
+            _focus = await Interop.TrapFocusAsync(_surface, _self!, nameof(OnEscapeAsync));
+            if (!Opening) return;
+            _environment = await Interop.HoldModalEnvironmentAsync(_surface);
+            if (!Opening) return;
+            await FocusAsync();
+            if (!Opening) return;
+            _gutter = await Interop.BalanceModalGutterAsync(_body);
+            if (!Opening) return;
+            // Centred, and eased to a new height when its content changes, never jumping.
+            _place = await Interop.SmoothModalHeightAsync(_surface);
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+    }
+    private async Task FocusAsync()
+    {
+        _lastFocusId = InitialFocusId; _lastFocusKey = FocusKey;
+        try
+        {
+            if (InitialFocusId is not null && await Interop.FocusWithinAsync(_surface, InitialFocusId)) return;
+            await _surface.FocusAsync();
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+    }
+    private async Task ReleaseAsync()
+    {
+        if (_opening is { IsCompleted: false } opening) await opening;
+        var environment = _environment; var focus = _focus; var gutter = _gutter; var place = _place; _environment = _focus = _gutter = _place = null;
+        try { if (place is not null) await place.DisposeAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+        try { if (gutter is not null) await gutter.DisposeAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+        // Restore interaction first, so the opener is no longer inert when focus returns to it.
+        try { if (environment is not null) await environment.DisposeAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+        try { if (focus is not null) await focus.DisposeAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+    }
+    public async ValueTask DisposeAsync() { _disposed = true; await ReleaseAsync(); _self?.Dispose(); }
+}

@@ -164,3 +164,8 @@
   background: var(--colors-brand-primary);
   border-radius: var(--radius-radius-full);
 }
+
+/* Fill: the set spans its container and the tabs share it equally, for a panel's own views. Width auto, not
+   100%, so a margin around the set (the bell's) still fits. */
+.ds-tabs.is-fill { width: auto; }
+.ds-tabs.is-fill ::deep .ds-tab { flex: 1 1 0; justify-content: center; }

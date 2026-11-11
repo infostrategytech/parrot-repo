@@ -7,7 +7,12 @@
    (Ctrl or Cmd and click, the middle button, the right-click menu) and the
    address shows on hover; a plain click is routed in place. A place with no
    page yet stays a disabled button. *@
-@if (IsPlaceholder)
+@if (OnClick.HasDelegate)
+{
+    @* Opens something in place, such as notifications, rather than going to a page. *@
+    <button type="button" class="@ClassName" aria-label="@Tooltip" aria-current="@(CurrentPage ? "page" : null)" aria-expanded="@((Expanded ?? IsActive) ? "true" : "false")" aria-haspopup="dialog" @onclick="OnClick" @ref="_button">@Content</button>
+}
+else if (IsPlaceholder)
 {
     <button type="button" class="@ClassName" aria-label="@Tooltip" disabled aria-disabled="true">@Content</button>
 }
@@ -31,7 +36,7 @@ else
         {
             <Typography TextStyle="TextStyle.Small10Semibold"
                         As="em"
-                        Class="nav-item__count"
+                        Class="@(AlertBadge ? "nav-item__count is-alert" : "nav-item__count")"
                         aria-label="@($"{Badge} {BadgeMeaning}")">
                 @Badge
             </Typography>
@@ -42,16 +47,32 @@ else
 
     [Parameter] public bool IsActive { get; set; }
 
+    /// <summary>A popup trigger may also represent the page being viewed. Keep that separate from whether its popup is open.</summary>
+    [Parameter] public bool CurrentPage { get; set; }
+    [Parameter] public bool? Expanded { get; set; }
+
     /// <summary>The inbox's unread messages, or the tasks that need you. Null hides it entirely.</summary>
     [Parameter] public int? Badge { get; set; }
 
     /// <summary>What the count is of, read out and shown on hover ("unread messages", "need you").</summary>
     [Parameter] public string BadgeMeaning { get; set; } = "unread messages";
 
+    /// <summary>The count (or, on the compact rail, the dot) in alert red rather than the brand colour. Keep it rare:
+    /// notifications sets it only while something that needs you is unread.</summary>
+    [Parameter] public bool AlertBadge { get; set; }
+
     /// <summary>Compact rows for the footer group.</summary>
     [Parameter] public bool Compact { get; set; }
 
-    private bool IsPlaceholder => Entry.Path is null;
+    /// <summary>A row that opens something in place (notifications). Expanded describes its popup; IsActive controls its visual highlight.</summary>
+    [Parameter] public EventCallback OnClick { get; set; }
+
+    private bool IsPlaceholder => Entry.Path is null && !OnClick.HasDelegate;
+
+    private ElementReference _button;
+
+    /// <summary>Focus back on a row that opened something in place, when that closes.</summary>
+    public ValueTask FocusAsync() => _button.Context is null ? ValueTask.CompletedTask : _button.FocusAsync();
 
     // What a screen reader says: the full name (the rail shows a short one) and what its count is of.
     private string Tooltip => IsPlaceholder

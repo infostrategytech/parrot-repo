@@ -1,0 +1,30 @@
+.ds-avatar-picker {
+  /* Gap in the token set: no size for a small round button laid over an avatar. */
+  --ds-avatar-picker-camera: 32px;
+
+  position: relative;
+  display: inline-flex;
+}
+
+/* The camera sits on the avatar's lower edge: the picture is changed where it's seen. */
+.ds-avatar-picker__camera {
+  position: absolute;
+  right: calc(-1 * var(--spacing-2xs));
+  bottom: calc(-1 * var(--spacing-2xs));
+  display: grid;
+  place-items: center;
+  width: var(--ds-avatar-picker-camera);
+  height: var(--ds-avatar-picker-camera);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
+  cursor: pointer;
+}
+.ds-avatar-picker__camera:hover { background: var(--colors-interaction-hover); }
+.ds-avatar-picker__camera.is-busy { cursor: progress; opacity: 0.6; }
+.ds-avatar-picker__camera:has(input:focus-visible) {
+  outline: var(--ds-focus-ring-width) solid color-mix(in srgb, var(--colors-interaction-focus) var(--ds-focus-ring-strength), transparent);
+  outline-offset: var(--ds-focus-ring-offset);
+}

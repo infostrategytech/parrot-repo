@@ -1,7 +1,21 @@
 /* No type here. Sizes and weights come from the text styles the markup asks
-   for; this file only arranges and colours. */
+   for; this file only arranges and colours. The menu is the app's dropdown
+   (designer, 9 November 2026): FilterPopover's panel, PopoverOption's rows. */
 
-.workspace { position: relative; }
+.workspace {
+  position: relative;
+
+  /* Gaps in the token set: no border-width scale, no z-index scale, and React's menu geometry (as FilterPopover's
+     and PopoverOption's own locals). */
+  --ds-workspace-hairline: 1px;
+  --ds-workspace-layer: 40;
+  --ds-workspace-menu-width: 268px;
+  --ds-workspace-row-min: 48px;
+  --ds-workspace-mark: 30px;
+  --ds-workspace-check: 18px;
+  /* Someone in many businesses: the list scrolls rather than leaving the screen. Tall enough for a dozen. */
+  --ds-workspace-menu-max: min(70vh, 560px);
+}
 
 .workspace__trigger {
   display: grid;
@@ -16,12 +30,6 @@
   border: var(--ds-workspace-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-lg);
   cursor: pointer;
-}
-
-.workspace {
-  /* Gaps in the token set: no border-width scale and no z-index scale. */
-  --ds-workspace-hairline: 1px;
-  --ds-workspace-layer: 40;
 }
 
 .workspace__trigger:hover { background: var(--colors-interaction-hover); }
@@ -53,107 +61,98 @@
   cursor: default;
 }
 
+/* The panel: FilterPopover's. */
 .workspace__menu {
   position: absolute;
   top: calc(100% + var(--spacing-xs));
-  right: 0;
   left: 0;
   z-index: calc(var(--ds-workspace-layer) + 1);
   display: grid;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-xs);
+  min-width: var(--ds-workspace-menu-width);
+  max-height: var(--ds-workspace-menu-max);
+  overflow-y: auto;
+  scrollbar-width: none;
   padding: var(--spacing-sm);
+  color: var(--colors-surface-popover-foreground);
   background: var(--colors-surface-popover);
   border: var(--ds-workspace-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-lg);
-  box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+  border-radius: var(--radius-radius-2xl);
+  box-shadow: 0 var(--spacing-lg) var(--spacing-4xl) var(--colors-surface-shadow), 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
 }
+.workspace__menu::-webkit-scrollbar { display: none; }
+
+.workspace__section { display: grid; gap: var(--spacing-2xs); }
 
 ::deep .workspace__menu-label {
   margin: var(--spacing-none);
   padding: var(--spacing-xs) var(--spacing-sm);
-  color: var(--colors-text-muted);
+  color: var(--colors-text-subtle);
 }
 
-.workspace__option,
-.workspace__add {
-  display: flex;
-  align-items: center;
+/* A workspace: PopoverOption's row. The one you're in is marked by the tick alone, not a fill. */
+.workspace__option {
+  display: grid;
+  grid-template-columns: var(--ds-workspace-mark) minmax(0, 1fr) var(--ds-workspace-check);
   gap: var(--spacing-sm);
+  align-items: center;
+  width: 100%;
+  min-height: var(--ds-workspace-row-min);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-text-secondary);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-lg);
+  cursor: pointer;
+}
+.workspace__option:hover { background: var(--colors-interaction-hover); }
+.workspace__option:focus-visible,
+.workspace__action:focus-visible { outline: var(--ds-workspace-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-workspace-hairline) * -1); }
+
+::deep .workspace__option-name { color: var(--colors-text-secondary); }
+::deep .workspace__detail { color: var(--colors-text-muted); }
+::deep .workspace__check { color: var(--colors-brand-primary); }
+
+/* Where sign-in lands, and adding one: the account menu's rows, under a hairline. */
+/* The business you're in: its settings and people, above the workspaces, set off by a hairline. */
+.workspace__business {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding-bottom: var(--spacing-xs);
+  margin-bottom: var(--spacing-xs);
+  border-bottom: var(--ds-workspace-hairline) solid var(--colors-surface-border);
+}
+
+/* A role with neither Business nor Team gets a slot with no rows (only spacing text): no band. After the rule
+   above, which has the same weight. */
+.workspace__business:not(:has(*)) { display: none; }
+
+.workspace__actions {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding-top: var(--spacing-xs);
+  border-top: var(--ds-workspace-hairline) solid var(--colors-surface-border);
+}
+
+.workspace__action {
+  display: flex;
+  gap: var(--spacing-sm);
+  align-items: center;
   width: 100%;
   padding: var(--spacing-sm);
   color: var(--colors-text-primary);
+  text-align: left;
   background: transparent;
   border: 0;
   border-radius: var(--radius-radius-md);
-  text-align: left;
   cursor: pointer;
 }
+.workspace__action:hover { background: var(--colors-interaction-hover); }
+::deep .workspace__action-label { flex: 1; min-width: 0; }
 
-.workspace__option:hover,
-.workspace__add:hover { background: var(--colors-interaction-hover); }
-
-.workspace__option.is-active { background: var(--colors-interaction-selected); }
-
-.workspace__add { color: var(--colors-text-link); }
-
-/* While the host switches, the other choices wait. */
+/* While the host switches, the other choices wait, without looking switched off. */
 .workspace__option:disabled,
-.workspace__add:disabled { opacity: 0.5; cursor: progress; }
+.workspace__action:disabled { cursor: progress; }
 .workspace__option:disabled:hover,
-.workspace__add:disabled:hover { background: none; }
-
-/* Owner, or the person's role, under each workspace's name. */
-::deep .workspace__tag {
-  justify-self: start;
-  padding: 0 var(--spacing-xs);
-  color: var(--colors-text-muted);
-  border: var(--ds-workspace-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-sm);
-}
-
-::deep .workspace__tag.is-owner {
-  color: var(--colors-brand-primary);
-  background: var(--colors-accent-brand-subtle);
-  border-color: var(--colors-accent-brand-border);
-}
-
-/* Someone in many businesses: the list scrolls rather than leaving the screen. */
-.workspace__menu {
-  /* Gap in the token set: no menu-height scale. Tall enough for a dozen workspaces. */
-  --ds-workspace-menu-max: min(70vh, 560px);
-  max-height: var(--ds-workspace-menu-max);
-  overflow-y: auto;
-}
-
-/* A row: the option, and the pin that makes it the sign-in default. */
-.workspace__row {
-  display: flex;
-  gap: var(--spacing-xs);
-  align-items: center;
-}
-
-.workspace__row > .workspace__option { flex: 1 1 auto; min-width: 0; }
-
-.workspace__pin {
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  padding: var(--spacing-xs);
-  color: var(--colors-text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-radius-sm);
-  cursor: pointer;
-  opacity: 0;
-}
-
-.workspace__row:hover .workspace__pin,
-.workspace__pin:focus-visible,
-.workspace__pin.is-default { opacity: 1; }
-
-.workspace__pin.is-default { color: var(--colors-brand-primary); }
-.workspace__pin:hover { background: var(--colors-interaction-hover); }
-.workspace__pin:focus-visible { outline: var(--ds-workspace-hairline) solid var(--colors-brand-primary); }
-.workspace__pin:disabled { cursor: default; }
-
-::deep .workspace__default { color: var(--colors-brand-primary); }
+.workspace__action:disabled:hover { background: none; }

@@ -110,6 +110,7 @@
 
 .dialog--has-ambient > header,
 .dialog--has-ambient > .dialog__body,
+.dialog--has-ambient > .dialog__form,
 .dialog--has-ambient > footer {
   position: relative;
   z-index: 1;
@@ -169,6 +170,12 @@
    a dialog's reads the same: scanned, under a title that says it all. */
 .dialog__body {
   color: var(--colors-text-muted);
+}
+.dialog__form { min-width: 0; margin: var(--spacing-none); }
+
+@media (max-width: 760px) {
+  .dialog--form > footer { flex-wrap: wrap; }
+  .dialog--form > footer ::deep .ds-button { flex: 1 1 auto; }
 }
 
 .dialog__body p { margin: var(--spacing-none); }

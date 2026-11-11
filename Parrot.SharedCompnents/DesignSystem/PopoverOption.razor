@@ -1,11 +1,16 @@
 @namespace Parrot.SharedComponents.DesignSystem
 
-@* One row inside a FilterPopover. Also duplicated byte for byte in React,
-   alongside FilterPopover itself. *@
+@* One row of a dropdown: a FilterPopover's or a SelectField's. Also duplicated byte for byte in React,
+   alongside FilterPopover itself.
+
+   A label only, never a second line (designer, 7 November 2026): a dropdown is a choice between things you
+   already understand, so a description under each option costs attention every time it opens and makes rows
+   uneven. There is no Description parameter, so no screen can add one back. Where a choice needs explaining,
+   say it once beside the field (its helper text) or in the dialog, not under every option. *@
 
 <button type="button"
         class="@ClassName"
-        role="menuitemradio"
+        role="@(Multiple ? "menuitemcheckbox" : "menuitemradio")"
         aria-checked="@Active.ToString().ToLowerInvariant()"
         @onclick="OnSelect">
     @if (Leading is not null)
@@ -13,10 +18,16 @@
         <span class="popover-option__leading" aria-hidden="true">@Leading</span>
     }
     <span class="popover-option__text">
-        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Label</Typography>
-        @if (!string.IsNullOrWhiteSpace(Description))
+        @if (Badge is not null)
         {
-            <Typography TextStyle="TextStyle.Small10Regular" As="small">@Description</Typography>
+            <span class="popover-option__name">
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Label</Typography>
+                <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="popover-option__badge">@Badge</Typography>
+            </span>
+        }
+        else
+        {
+            <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@Label</Typography>
         }
     </span>
 
@@ -30,11 +41,18 @@
 @code {
     [Parameter, EditorRequired] public string Label { get; set; } = "";
 
-    [Parameter] public string? Description { get; set; }
+    /// <summary>A small label beside the name, for the one choice to suggest ("Recommended"). Optional.</summary>
+    [Parameter] public string? Badge { get; set; }
 
     [Parameter] public RenderFragment? Leading { get; set; }
 
     [Parameter] public bool Active { get; set; }
+
+    /// <summary>
+    /// One of several that can be chosen together (the invite's workspaces): announced as a checkbox, not a radio.
+    /// The menu stays open between picks; the caller decides that by not closing it.
+    /// </summary>
+    [Parameter] public bool Multiple { get; set; }
 
     [Parameter] public EventCallback OnSelect { get; set; }
 

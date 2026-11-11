@@ -91,6 +91,163 @@ export function trapFocus(container, escapeTarget, escapeMethod) {
   };
 }
 
+// Content-modal environment only. Existing Dialogs keep their current behaviour until reviewed.
+// Leases preserve author-supplied inert/overflow and remain safe when content modals are stacked.
+const modalInertLeases = new WeakMap();
+const modalScrollLeases = new WeakMap();
+export function holdModalEnvironment(container) {
+  if (!container?.isConnected) return { release() {} };
+  const inert = new Set();
+  const scrollers = new Set([document.documentElement, document.body]);
+  for (let branch = container; branch?.parentElement; branch = branch.parentElement) {
+    const parent = branch.parentElement;
+    for (const sibling of parent.children) {
+      if (sibling === branch || ['SCRIPT', 'STYLE', 'LINK'].includes(sibling.tagName)) continue;
+      inert.add(sibling);
+    }
+    if (parent === document.body) break;
+    if (/(auto|scroll)/.test(getComputedStyle(parent).overflowY)) scrollers.add(parent);
+  }
+  for (const element of inert) {
+    let lease = modalInertLeases.get(element);
+    if (!lease) {
+      lease = { count: 0, original: element.getAttribute('inert') };
+      modalInertLeases.set(element, lease);
+    }
+    lease.count++;
+    element.setAttribute('inert', '');
+  }
+  for (const element of scrollers) {
+    if (!element) continue;
+    let lease = modalScrollLeases.get(element);
+    if (!lease) {
+      lease = { count: 0, value: element.style.getPropertyValue('overflow'), priority: element.style.getPropertyPriority('overflow') };
+      modalScrollLeases.set(element, lease);
+    }
+    lease.count++;
+    element.style.setProperty('overflow', 'hidden');
+  }
+  let released = false;
+  return {
+    release() {
+      if (released) return;
+      released = true;
+      for (const element of inert) {
+        const lease = modalInertLeases.get(element);
+        if (!lease || --lease.count > 0) continue;
+        if (lease.original === null) element.removeAttribute('inert');
+        else element.setAttribute('inert', lease.original);
+        modalInertLeases.delete(element);
+      }
+      for (const element of scrollers) {
+        const lease = element && modalScrollLeases.get(element);
+        if (!lease || --lease.count > 0) continue;
+        if (lease.value) element.style.setProperty('overflow', lease.value, lease.priority);
+        else element.style.removeProperty('overflow');
+        modalScrollLeases.delete(element);
+      }
+    }
+  };
+}
+
+// Content-modal scrollbar alignment. Keep the reserved native gutter inside the existing end padding,
+// so fields share the header/footer edge both before and after the body needs to scroll.
+// A content modal stays centred and eases to its new height when its content grows or shrinks (designer, 8 November
+// 2026: "grow to accommodate while staying at the center … in a subtle way and not jump"). Each change is caught
+// before it's painted: the window is held at the height it had, then animated to the height it now needs, so top and
+// bottom move out (or in) together. Content that animates itself (a group sliding open) is followed frame by frame.
+export function smoothModalHeight(surface) {
+  if (!surface?.isConnected) return { release() {} };
+  const reduced = typeof matchMedia === "function" ? matchMedia("(prefers-reduced-motion: reduce)") : null;
+  // The height last shown: content that appears all at once has already been laid out by the time it is noticed.
+  let released = false, timer = null, last = surface.offsetHeight;
+  const parts = () => surface.querySelectorAll(":scope > .content-modal__header, :scope > .content-modal__body > *, :scope > .content-modal__footer");
+  function settle() {
+    if (released) return;
+    clearTimeout(timer); timer = null;
+    surface.classList.remove("is-resizing");
+    surface.style.removeProperty("height");
+    last = surface.offsetHeight;
+  }
+  function resize() {
+    if (released) return;
+    if (!surface.isConnected) { release(); return; }
+    // Where it is now (mid-animation included), then the height its content needs, measured before any paint.
+    const current = surface.classList.contains("is-resizing") ? parseFloat(getComputedStyle(surface).height) : last;
+    surface.style.transition = "none";
+    surface.style.height = "auto";
+    const next = surface.offsetHeight;
+    if (!Number.isFinite(current) || Math.abs(next - current) < 1 || reduced?.matches) {
+      surface.style.removeProperty("transition");
+      settle();
+      return;
+    }
+    last = next;
+    surface.style.height = `${current}px`;
+    void surface.offsetHeight;
+    surface.style.removeProperty("transition");
+    surface.classList.add("is-resizing");
+    surface.style.height = `${next}px`;
+    clearTimeout(timer);
+    timer = setTimeout(settle, 600);
+  }
+  const onEnd = (event) => { if (event.target === surface && event.propertyName === "height") settle(); };
+  const sizes = typeof ResizeObserver === "function" ? new ResizeObserver(() => resize()) : null;
+  const watch = () => { sizes?.disconnect(); parts().forEach((part) => sizes?.observe(part)); };
+  // New content (another step, a section added) is watched as it arrives, and resized for at once.
+  const changes = typeof MutationObserver === "function" ? new MutationObserver(() => { watch(); resize(); }) : null;
+  function release() {
+    if (released) return;
+    released = true;
+    clearTimeout(timer);
+    sizes?.disconnect();
+    changes?.disconnect();
+    surface.removeEventListener("transitionend", onEnd);
+    window.removeEventListener("resize", resize);
+    surface.classList.remove("is-resizing");
+    surface.style.removeProperty("height");
+    surface.style.removeProperty("transition");
+  }
+  watch();
+  changes?.observe(surface, { childList: true, subtree: true });
+  surface.addEventListener("transitionend", onEnd);
+  window.addEventListener("resize", resize);
+  return { release };
+}
+
+export function balanceModalGutter(element) {
+  if (!element?.isConnected) return { release() {} };
+  const property = "--ds-content-modal-scrollbar";
+  const original = element.style.getPropertyValue(property);
+  const priority = element.style.getPropertyPriority(property);
+  let released = false, frame = null, last = null;
+  function measure() {
+    frame = null;
+    if (released) return;
+    if (!element.isConnected) { release(); return; }
+    // This region has no border. offsetWidth minus clientWidth is the actual classic/reserved
+    // scrollbar width; overlay scrollbars consume no layout width and correctly report zero.
+    const width = Math.max(0, element.offsetWidth - element.clientWidth);
+    if (width === last) return;
+    last = width;
+    element.style.setProperty(property, `${width}px`);
+  }
+  function schedule() { if (!released && frame === null) frame = requestAnimationFrame(measure); }
+  const observer = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+  function release() {
+    if (released) return;
+    released = true;
+    if (frame !== null) cancelAnimationFrame(frame);
+    observer?.disconnect();
+    window.removeEventListener("resize", schedule);
+    if (original) element.style.setProperty(property, original, priority);
+    else element.style.removeProperty(property);
+  }
+  measure();
+  if (!released) { observer?.observe(element); window.addEventListener("resize", schedule); }
+  return { release };
+}
+
 // ── Media queries ───────────────────────────────────────────────────────────
 // The navigation rail collapses itself below a width. A resize listener would
 // fire on every pixel; a media query fires twice in the life of the app.
@@ -562,7 +719,7 @@ export function placeMenu(menu) {
 // below it, or above when there is more room there; kept on screen; following
 // the trigger when the window resizes or the menu's content changes size.
 // Escape closes the menu, not the dialog under it.
-export function floatMenu(layer, anchor, menu, alignEnd, matchWidth) {
+export function floatMenu(layer, anchor, menu, alignEnd, matchWidth, beside) {
   if (!layer || !anchor || !menu) return;
   // A browser without the top layer still shows the menu, placed the same way.
   if (typeof layer.showPopover !== "function") layer.removeAttribute("popover");
@@ -587,6 +744,23 @@ export function floatMenu(layer, anchor, menu, alignEnd, matchWidth) {
     if (matchWidth) menu.style.minWidth = `${Math.round(a.width)}px`;
     menu.style.maxHeight = "";
     const box = menu.getBoundingClientRect();
+    // Beside the trigger (from the rail): to its right, its top level with the trigger's, or its foot level with
+    // the trigger's when there's more room above (a trigger low in the rail); kept on screen.
+    if (beside) {
+      const room = window.innerHeight - margin * 2;
+      if (box.height > room) menu.style.maxHeight = `${Math.round(room)}px`;
+      const height = Math.min(box.height, room);
+      const up = window.innerHeight - a.top < a.bottom;
+      const top = Math.max(margin, Math.min(up ? a.bottom - height : a.top, window.innerHeight - margin - height));
+      // Clear of the rail itself, not only the item: from the rail's edge when the trigger sits in one.
+      const edge = trigger.closest("aside")?.getBoundingClientRect().right ?? a.right;
+      const left = Math.min(edge + margin, window.innerWidth - margin - box.width);
+      menu.style.top = `${Math.round(top)}px`;
+      menu.style.left = `${Math.round(Math.max(margin, left))}px`;
+      menu.dataset.float = "beside";
+      menu.dataset.placed = "";
+      return;
+    }
     const below = window.innerHeight - a.bottom - gap - margin;
     const above = a.top - gap - margin;
     // Below the trigger when it fits, or when there is more room below than above.
@@ -623,6 +797,12 @@ export function floatMenu(layer, anchor, menu, alignEnd, matchWidth) {
     watch?.disconnect();
   }
   place();
+  // A long list opens at the choice already made ("6pm" among the day's times), not at its top (designer,
+  // 7 November 2026). Only the menu scrolls, never the page.
+  const chosen = menu.querySelector('[aria-checked="true"], [aria-selected="true"]');
+  if (chosen && menu.scrollHeight > menu.clientHeight) {
+    menu.scrollTop = Math.max(0, chosen.offsetTop - (menu.clientHeight - chosen.offsetHeight) / 2);
+  }
   window.addEventListener("resize", later);
   window.addEventListener("scroll", later, true);
   document.addEventListener("keydown", onKey, true);
@@ -704,9 +884,40 @@ export function isPageVisible() {
 export async function copyText(value) {
   try {
     await navigator.clipboard.writeText(value);
+    return true;
   } catch {
     // The value is on screen and selectable; that is the fallback.
+    return false;
   }
+}
+
+// No network/storage: security codes are offered as a file only after an explicit user action.
+export function saveTextFile(value, fileName) {
+  let url;
+  let link;
+  try {
+    url = URL.createObjectURL(new Blob([value], { type: "text/plain;charset=utf-8" }));
+    link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    link?.remove();
+    if (url) setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+}
+
+export function focusWithin(container, id) {
+  const target = document.getElementById(id);
+  if (!target || !container?.contains(target) || target.disabled) return false;
+  target.focus({ preventScroll: true });
+  if (document.activeElement !== target) return false;
+  target.scrollIntoView({ block: "nearest", inline: "nearest" });
+  return true;
 }
 
 export async function downloadFile(url, fileName) {

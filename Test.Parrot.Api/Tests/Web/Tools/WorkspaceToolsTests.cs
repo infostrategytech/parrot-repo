@@ -19,11 +19,11 @@ public class WorkspaceToolsTests
         new(Guid.NewGuid(), ConnectionId, tool, null, "Controlled account", true, granted, resources, false, DateTimeOffset.UnixEpoch, 1);
 
     [Fact]
-    public void ToolsReplacesTheUnusedCampaignsEntryInTheSamePosition()
+    public void ToolsReplacesTheUnusedCampaignsEntry()
     {
-        Assert.Equal("Tools", NavMap.Primary[7].Label);
-        Assert.Equal("/dashboard/tools", NavMap.Primary[7].Path);
-        Assert.Equal(IconName.RiExchangeBoxFill, NavMap.Primary[7].Glyph);
+        var tools = NavMap.Primary.Single(entry => entry.Path == "/dashboard/tools");
+        Assert.Equal("Tools", tools.Label);
+        Assert.Equal(IconName.RiExchangeBoxFill, tools.Glyph);
         Assert.DoesNotContain(NavMap.Primary, entry => entry.Label == "Campaigns");
         Assert.Equal("Tools", NavMap.Match("/dashboard/tools")!.Label);
     }

@@ -1,0 +1,64 @@
+/* A choice as a card: the mark, an optional avatar or icon, the name over one line; picked, the brand tint. */
+.ds-choice-card {
+  /* Missing from the token set: the choice mark's size and its ring, as the question form's. */
+  --ds-choice-card-mark: 18px;
+  --ds-choice-card-ring: 1.5px;
+  --ds-choice-card-dot: 8px;
+
+  display: grid;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  transition: background-color var(--ds-motion-fast) ease, border-color var(--ds-motion-fast) ease;
+}
+.ds-choice-card:hover:not(.is-disabled, .is-picked) { background: var(--colors-interaction-hover); }
+.ds-choice-card.is-picked { background: var(--colors-accent-brand-subtle); border-color: var(--colors-accent-brand-border); }
+
+.ds-choice-card ::deep .ds-choice-card__button {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  width: 100%;
+  padding: var(--spacing-md) var(--spacing-lg);
+  text-align: start;
+  border-radius: inherit;
+}
+.ds-choice-card ::deep .ds-choice-card__button:focus-visible { outline: none; box-shadow: 0 0 0 var(--ds-choice-card-ring) var(--colors-interaction-focus); }
+.ds-choice-card.is-disabled ::deep .ds-choice-card__button { cursor: not-allowed; }
+.ds-choice-card.is-disabled .ds-choice-card__leading,
+.ds-choice-card.is-disabled .ds-choice-card__text ::deep span { opacity: 0.55; }
+
+/* A ring for one, a box for any. */
+.ds-choice-card__mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-choice-card-mark);
+  height: var(--ds-choice-card-mark);
+  color: var(--colors-text-on-primary);
+  box-shadow: inset 0 0 0 var(--ds-choice-card-ring) var(--colors-surface-input);
+}
+.ds-choice-card__mark.is-box { border-radius: var(--radius-radius-sm); }
+.ds-choice-card__mark.is-ring { border-radius: var(--radius-radius-full); }
+.is-picked .ds-choice-card__mark.is-box { background: var(--colors-brand-primary); box-shadow: inset 0 0 0 var(--ds-choice-card-ring) var(--colors-brand-primary); }
+.is-picked .ds-choice-card__mark.is-ring { box-shadow: inset 0 0 0 var(--ds-choice-card-ring) var(--colors-brand-primary); }
+.ds-choice-card__dot { width: var(--ds-choice-card-dot); height: var(--ds-choice-card-dot); background: var(--colors-brand-primary); border-radius: var(--radius-radius-full); }
+
+.ds-choice-card__leading { display: grid; flex: none; }
+.ds-choice-card__text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.ds-choice-card__text ::deep span { color: var(--colors-text-primary); }
+.ds-choice-card__text ::deep small { color: var(--colors-text-muted); }
+
+/* What a chosen card opens, under its words, lined up with them. */
+.ds-choice-card__more {
+  padding: 0 var(--spacing-lg) var(--spacing-lg) calc(var(--spacing-lg) + var(--ds-choice-card-mark) + var(--spacing-md));
+  animation: ds-choice-card-open var(--ds-motion-base) var(--ds-motion-enter);
+}
+@keyframes ds-choice-card-open {
+  from { opacity: 0; transform: translateY(calc(-1 * var(--spacing-xs))); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-choice-card { transition: none; }
+  .ds-choice-card__more { animation: none; }
+}

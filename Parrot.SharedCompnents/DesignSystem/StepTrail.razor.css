@@ -1,0 +1,40 @@
+/* A short flow's steps: numbered marks joined by a short line; upcoming quiet, now filled, done ticked. */
+.ds-step-trail {
+  /* Gaps in the token set: no mark size, joining-line length or border width. */
+  --ds-step-trail-mark: 20px;
+  --ds-step-trail-line: 24px;
+  --ds-step-trail-hairline: 1px;
+
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  color: var(--colors-text-muted);
+  list-style: none;
+}
+
+.ds-step-trail__step { display: inline-flex; gap: var(--spacing-xs); align-items: center; }
+.ds-step-trail__step + .ds-step-trail__step::before {
+  width: var(--ds-step-trail-line);
+  height: var(--ds-step-trail-hairline);
+  margin-inline-end: var(--spacing-2xs);
+  background: var(--colors-surface-border);
+  content: "";
+}
+
+.ds-step-trail__mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--ds-step-trail-mark);
+  height: var(--ds-step-trail-mark);
+  border: var(--ds-step-trail-hairline) solid var(--colors-surface-input);
+  border-radius: var(--radius-radius-full);
+}
+
+.ds-step-trail__step.is-current { color: var(--colors-text-primary); }
+.ds-step-trail__step.is-current .ds-step-trail__mark { color: var(--colors-text-on-primary); background: var(--colors-brand-primary); border-color: var(--colors-brand-primary); }
+.ds-step-trail__step.is-done { color: var(--colors-text-secondary); }
+.ds-step-trail__step.is-done .ds-step-trail__mark { color: var(--colors-icon-brand); background: var(--colors-accent-brand-subtle); border-color: var(--colors-accent-brand-subtle); }

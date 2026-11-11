@@ -1,0 +1,65 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IDisposable
+
+@* A local resend affordance, not a rate limiter. The server remains authoritative. Start/reset the
+   countdown by increasing SentRevision only after a successful send; failed sends do not claim success.
+
+   While it counts down it's a plain muted line, not a greyed-out button (designer, 8 November 2026: calmer); the
+   button appears when it can be used. The line is the button's height, so nothing moves when it turns into one. *@
+@if (Remaining > 0 && !Busy)
+{
+    @* Not a live region: it changes every second, and a screen reader would read every one. *@
+    <p class="@WaitClass">
+        <Typography TextStyle="@(Size == ButtonSize.Large ? TextStyle.BodySmallMedium : TextStyle.Small12Medium)" As="span">@($"Didn't get it? You can send it again in {Remaining}s.")</Typography>
+    </p>
+}
+else
+{
+    <Button Variant="Variant" Size="Size" Class="@Class" FullWidth="FullWidth" Busy="Busy"
+            disabled="@(Disabled || Busy)" @onclick="ResendAsync">
+        @(Busy ? "Sending…" : Label)
+    </Button>
+}
+
+@code {
+    [Parameter] public int SentRevision { get; set; }
+    [Parameter] public int CooldownSeconds { get; set; } = 30;
+    [Parameter] public string Label { get; set; } = "Send the link again";
+    [Parameter] public ButtonVariant Variant { get; set; } = ButtonVariant.Ghost;
+    [Parameter] public ButtonSize Size { get; set; } = ButtonSize.Small;
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public bool FullWidth { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback OnResend { get; set; }
+    private readonly CancellationTokenSource _lifetime = new();
+    private DateTimeOffset _availableAt;
+    private int _seenRevision;
+    private bool _ticking, _disposed;
+    private string WaitClass => string.Join(" ", new[] { "ds-resend-wait", $"ds-resend-wait--{Size.ToString().ToLowerInvariant()}", Class }.Where(part => !string.IsNullOrWhiteSpace(part)));
+    private int Remaining => Math.Max(0, (int)Math.Ceiling((_availableAt - DateTimeOffset.UtcNow).TotalSeconds));
+    protected override void OnParametersSet()
+    {
+        if (SentRevision <= 0 || SentRevision == _seenRevision) return;
+        _seenRevision = SentRevision;
+        _availableAt = DateTimeOffset.UtcNow.AddSeconds(Math.Clamp(CooldownSeconds, 0, 300));
+        if (!_ticking && Remaining > 0) { _ticking = true; _ = TickAsync(); }
+    }
+    private Task ResendAsync() => _disposed || Disabled || Busy || Remaining > 0 ? Task.CompletedTask : OnResend.InvokeAsync();
+    private async Task TickAsync()
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+            while (await timer.WaitForNextTickAsync(_lifetime.Token))
+            {
+                await InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+                if (Remaining == 0) break;
+            }
+        }
+        catch (OperationCanceledException) { }
+        catch (InvalidOperationException) when (_disposed) { }
+        finally { _ticking = false; }
+    }
+    public void Dispose() { _disposed = true; _lifetime.Cancel(); _lifetime.Dispose(); }
+}

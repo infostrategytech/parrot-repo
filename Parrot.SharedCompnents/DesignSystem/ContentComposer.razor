@@ -1,0 +1,33 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+<section class="ds-content-composer" aria-label="@Label" aria-busy="@Busy">
+    <div class="ds-content-composer__heading">
+        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">@Label</Typography>
+        @if (Hint is not null)
+        {
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@Hint</Typography>
+        }
+    </div>
+    <TextArea Value="@Value" ValueChanged="ValueChanged" AriaLabel="@Label" Placeholder="@Placeholder"
+              Rows="6" MaxLength="MaxLength" Disabled="Busy" AutoGrow TextStyle="TextStyle.BodyDefaultMedium" />
+    @if (Attachments is not null)
+    {
+        <div class="ds-content-composer__attachments">@Attachments</div>
+    }
+    @if (Footer is not null)
+    {
+        <footer class="ds-content-composer__footer">@Footer</footer>
+    }
+</section>
+
+@code {
+    [Parameter] public string Label { get; set; } = "What would you like to share?";
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string? Placeholder { get; set; }
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public EventCallback<string?> ValueChanged { get; set; }
+    [Parameter] public int MaxLength { get; set; } = 800;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public RenderFragment? Attachments { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+}

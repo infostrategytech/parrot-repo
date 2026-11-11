@@ -258,6 +258,12 @@ public enum IconName
 
     /// <summary>react-icons/ri/RiReplyFill (added by hand: the generator is not in this repo)</summary>
     RiReplyFill,
+
+    /// <summary>react-icons/ri/RiNotification3Fill (added by hand: the generator is not in this repo)</summary>
+    RiNotification3Fill,
+
+    /// <summary>react-icons/ri/RiCameraFill (added by hand: the generator is not in this repo)</summary>
+    RiCameraFill,
 }
 
 public static class IconNameExtensions
@@ -387,6 +393,8 @@ public static class IconNameExtensions
         "lucide-plus",
         "ri-pushpin2-fill",
         "ri-reply-fill",
+        "ri-notification-3-fill",
+        "ri-camera-fill",
     };
 
     /// <summary>The symbol id inside wwwroot/icons/aurora-icons.svg.</summary>

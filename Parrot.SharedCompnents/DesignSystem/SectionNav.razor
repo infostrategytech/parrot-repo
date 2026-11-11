@@ -1,0 +1,44 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A list of sections (Settings): grouped under quiet titles, each a link with its own address so it can be shared
+   and reloaded. Drawn like the app's own sidebar, rounded items with an icon and the current one brand-tinted, as it
+   takes the sidebar's place while Settings is open (designer, 1 November 2026). *@
+<nav class="ds-section-nav @Class" aria-label="@Label">
+    @foreach (var group in Groups)
+    {
+        <div class="ds-section-nav__group">
+            @if (!string.IsNullOrWhiteSpace(group.Title))
+            {
+                <div class="ds-section-nav__title">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="p">@group.Title</Typography>
+                    @if (!string.IsNullOrWhiteSpace(group.Note))
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p">@group.Note</Typography>
+                    }
+                </div>
+            }
+            <ul>
+                @foreach (var item in group.Items)
+                {
+                    var current = item.Id == Current;
+                    <li>
+                        <a href="@item.Href" class="@(current ? "ds-section-nav__link is-current" : "ds-section-nav__link")" aria-current="@(current ? "page" : null)">
+                            @if (item.Glyph is { } glyph) { <Icon Name="glyph" Size="IconSize.Sm" /> }
+                            <Typography TextStyle="@(current ? TextStyle.BodySmallSemibold : TextStyle.BodySmallMedium)" As="span">@item.Label</Typography>
+                        </a>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
+</nav>
+
+@code {
+    /// <summary>What the list is, for screen readers: "Settings sections".</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<SectionNavGroup> Groups { get; set; } = [];
+
+    /// <summary>The id of the section showing now.</summary>
+    [Parameter] public string? Current { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

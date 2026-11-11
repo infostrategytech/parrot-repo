@@ -24,14 +24,14 @@
    sample figures in demo mode; real mode has no feed yet, so they are
    hidden there (see agents-backend-requests). *@
 
-<PageTitle>AI Operations · yára</PageTitle>
+<PageTitle>Agents · yára</PageTitle>
 
 @* A new agent is created in a full-screen flow of its own (AgentCreate),
    then configured on its page (Concept B, the one kept: designer, 15 October 2026). *@
     <main class="@($"operations-main {(IsEmpty ? "is-empty" : null)}")">
         <header class="operations-header">
             <div class="operations-heading">
-                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">AI Operations</Typography>
+                <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Agents</Typography>
                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Your agents and what they need from you.</Typography>
             </div>
             @if (AiAgentsState.Agents.Count > 0)

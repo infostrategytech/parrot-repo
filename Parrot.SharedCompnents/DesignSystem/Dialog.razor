@@ -19,7 +19,7 @@
         @* stopPropagation, rather than comparing target to currentTarget as
            React did, so a drag that starts inside the card and ends on the
            backdrop cannot dismiss it. *@
-        <div class="dialog dialog--@Type.ToString().ToLowerInvariant() dialog--@Size.ToString().ToLowerInvariant() @(AmbientBackground is not null ? "dialog--has-ambient" : null) @(FitToScreen ? "dialog--fit" : null) @(_closing ? "is-closing" : null)"
+        <div class="dialog dialog--@Type.ToString().ToLowerInvariant() dialog--@Size.ToString().ToLowerInvariant() @(SubmitOnEnter ? "dialog--form" : null) @(AmbientBackground is not null ? "dialog--has-ambient" : null) @(FitToScreen ? "dialog--fit" : null) @(_closing ? "is-closing" : null)"
              role="dialog"
              aria-modal="true"
              aria-labelledby="@_titleId"
@@ -64,25 +64,37 @@
                 </header>
             }
 
-            <div class="dialog__body @TextStyle.BodySmallMedium.ToClassName(prose: true)">
-                @Body
-            </div>
+            @if (SubmitOnEnter)
+            {
+                @* Native form submission handles Enter locally, without sending every key to the server.
+                   The footer submit button is associated by form id, preserving existing dialog geometry. *@
+                <form id="@_formId" class="dialog__form" @onsubmit="SubmitFormAsync" @onsubmit:preventDefault novalidate>
+                    <div class="dialog__body @TextStyle.BodySmallMedium.ToClassName(prose: true)">@Body</div>
+                </form>
+            }
+            else
+            {
+                <div class="dialog__body @TextStyle.BodySmallMedium.ToClassName(prose: true)">@Body</div>
+            }
 
             @if (!HideFooter)
             {
             <footer class="@(ConfirmFullWidth ? "dialog__footer--wide" : null)">
-                @if (OnCancel.HasDelegate)
+                @if (OnCancel.HasDelegate && !HideCancelButton)
                 {
                     <Button Variant="ButtonVariant.Secondary"
+                            id="@CancelButtonId"
                             disabled="@Busy"
                             @onclick="OnCancel">@CancelLabel</Button>
                 }
                 @* While the confirm action is in flight the button is disabled and
                    says what it is doing (BusyLabel, "Creating Workspace…"). *@
                 <Button Variant="@ConfirmVariant"
+                        Type="@(SubmitOnEnter ? ButtonType.Submit : ButtonType.Button)"
+                        form="@(SubmitOnEnter ? _formId : null)"
                         FullWidth="@ConfirmFullWidth"
                         disabled="@(Busy || ConfirmDisabled)"
-                        @onclick="OnConfirm">@(Busy && BusyLabel is not null ? BusyLabel : ConfirmLabelOrDefault)</Button>
+                        @onclick="ConfirmClick">@(Busy && BusyLabel is not null ? BusyLabel : ConfirmLabelOrDefault)</Button>
             </footer>
             }
         </div>
@@ -91,6 +103,7 @@
 
 @code {
     private readonly string _titleId = "dialog-" + Guid.NewGuid().ToString("N");
+    private readonly string _formId = "dialog-form-" + Guid.NewGuid().ToString("N");
 
     /// <summary>Matches --ds-motion-base, the exit animation's length in Dialog.razor.css.</summary>
     private static readonly TimeSpan ExitDuration = TimeSpan.FromMilliseconds(180);
@@ -102,6 +115,7 @@
     private bool _wasOpen;
     private bool _rendered;
     private bool _closing;
+    private string? _focusedKey, _focusedTarget;
 
     /// <summary>Bumped on every open, so an exit timer from a previous close cannot hide a dialog opened since.</summary>
     private int _generation;
@@ -141,6 +155,14 @@
     [Parameter] public string? ConfirmLabel { get; set; }
 
     [Parameter] public string CancelLabel { get; set; } = "Cancel";
+    /// <summary>Hide a redundant footer action while retaining header/Escape dismissal.</summary>
+    [Parameter] public bool HideCancelButton { get; set; }
+    [Parameter] public string? CancelButtonId { get; set; }
+    /// <summary>Opt-in only: Enter submits this dialog's native form. Existing callers are unchanged.</summary>
+    [Parameter] public bool SubmitOnEnter { get; set; }
+    /// <summary>Focus a specific control or static step heading on open and when FocusKey changes.</summary>
+    [Parameter] public string? FocusTargetId { get; set; }
+    [Parameter] public string? FocusKey { get; set; }
 
     /// <summary>Disables both buttons while the confirm action is in flight.</summary>
     [Parameter] public bool Busy { get; set; }
@@ -171,6 +193,8 @@
 
     private ButtonVariant ConfirmVariant =>
         Type == DialogType.Destructive ? ButtonVariant.Destructive : ButtonVariant.Primary;
+    private EventCallback ConfirmClick => SubmitOnEnter ? default : OnConfirm;
+    private Task SubmitFormAsync() => Busy || ConfirmDisabled ? Task.CompletedTask : OnConfirm.InvokeAsync();
 
     protected override void OnParametersSet()
     {
@@ -211,13 +235,29 @@
             // this dialog itself and cannot return focus when it is removed.
             _self ??= DotNetObjectReference.Create(this);
             _trap = await Interop.TrapFocusAsync(_card, _self, nameof(OnEscapeAsync));
-            await _card.FocusAsync();
+            await FocusContentAsync();
+        }
+        else if (Open && (_focusedKey != FocusKey || _focusedTarget != FocusTargetId))
+        {
+            await FocusContentAsync();
         }
         else if (!Open && _wasOpen)
         {
             _wasOpen = false;
             await ReleaseTrapAsync();
         }
+    }
+
+    private async Task FocusContentAsync()
+    {
+        _focusedKey = FocusKey; _focusedTarget = FocusTargetId;
+        try
+        {
+            if (FocusTargetId is not null && await Interop.FocusWithinAsync(_card, FocusTargetId)) return;
+        }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+        try { await _card.FocusAsync(); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
     }
 
     [JSInvokable]
