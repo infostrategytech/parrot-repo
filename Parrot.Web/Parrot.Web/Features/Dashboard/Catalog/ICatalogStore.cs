@@ -227,6 +227,12 @@ public sealed class CatalogEntry
     /// </summary>
     public bool IsHidden { get; set; }
 
+    /// <summary>Where the AI assistant is with the latest save; null when the catalog hasn't tracked it yet.</summary>
+    public AiProgress? Ai { get; set; }
+
+    /// <summary>Photos the AI rejected or couldn't read, with its reason.</summary>
+    public List<AiIssue> AiIssues { get; set; } = [];
+
     /// <summary>Can a customer have it right now?</summary>
     public bool AvailableNow =>
         !CatalogReadiness.IsDraft(this) && !IsHidden && !AvailabilityIsUnconfirmed && IsAvailable && (HasOptions
@@ -256,6 +262,7 @@ public sealed class CatalogEntry
         OtherNames = [.. OtherNames], Answers = [.. Answers.Select(answer => answer.Copy())], ForWho = ForWho,
         Related = [.. Related], Negotiable = Negotiable, LowestPrice = LowestPrice, NeverClaim = [.. NeverClaim], HumanHandoffNote = HumanHandoffNote,
         DeliveryNote = DeliveryNote, ReturnsNote = ReturnsNote, Unanswered = [.. Unanswered], UpdatedAt = UpdatedAt,
+        Ai = Ai, AiIssues = [.. AiIssues],
     };
 }
 
@@ -329,3 +336,22 @@ public sealed class SessionCatalogStore : ICatalogStore
         if (categories is not null) _categories.AddRange(categories);
     }
 }
+
+/// <summary>Where the AI assistant is with an item's latest save.</summary>
+public enum AiProgress
+{
+    /// <summary>Saved; the AI is still learning the change.</summary>
+    Updating,
+
+    /// <summary>The AI has the latest save.</summary>
+    Ready,
+
+    /// <summary>The AI rejected a photo; the owner should look at it.</summary>
+    NeedsAttention,
+
+    /// <summary>The AI couldn't finish; it retries, nothing for the owner to do.</summary>
+    Failed,
+}
+
+/// <summary>A photo the AI rejected or couldn't read. PhotoUrl is null for a photo not among the item's own.</summary>
+public sealed record AiIssue(string? PhotoUrl, string Status, string? Reason);

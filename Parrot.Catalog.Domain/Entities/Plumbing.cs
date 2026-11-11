@@ -70,3 +70,48 @@ public sealed class ConsumerInboxEntry : ITenantScoped
 
     public DateTime ProcessedAt { get; set; }
 }
+
+/// <summary>
+/// Where the AI team's processing of one item stands, so the business can see that a
+/// save reached the catalog but the AI is still catching up. One row per product.
+///
+/// The catalog sets <see cref="SentEventId"/> to the id of each item message it sends;
+/// the AI team's report names the message it processed. The two matching means the AI
+/// has caught up with the latest save. Kept apart from products so the AI's reports
+/// never write to the rows a business edits.
+/// </summary>
+public sealed class ItemAiStatus : ITenantScoped
+{
+    public Guid ProductId { get; set; }
+
+    public Guid TenantId { get; set; }
+
+    /// <summary>The latest item message sent for this product (its event_id).</summary>
+    public Guid? SentEventId { get; set; }
+
+    /// <summary>ItemChanged or ItemRemoved.</summary>
+    public string? SentType { get; set; }
+
+    public DateTime? SentAt { get; set; }
+
+    /// <summary>The item message the AI's latest applied report was about.</summary>
+    public Guid? ReportedEventId { get; set; }
+
+    /// <summary>The report's own event_id.</summary>
+    public Guid? ReportId { get; set; }
+
+    public DateTime? ReportedAt { get; set; }
+
+    /// <summary>The report's overall status, as the AI sent it (indexed, failed, removed…).</summary>
+    public string? Status { get; set; }
+
+    /// <summary>The report's text status (embedded, failed…).</summary>
+    public string? TextStatus { get; set; }
+
+    public int PhotosRejected { get; set; }
+
+    public int PhotosFailed { get; set; }
+
+    /// <summary>The report's per-photo results, kept as sent (JSON array).</summary>
+    public string? Photos { get; set; }
+}

@@ -96,6 +96,7 @@ public static class CatalogInfrastructureExtensions
 
         services.AddScoped<OutboxRelay>();
         services.AddScoped<CacheInvalidationHandler>();
+        services.AddScoped<IngestionReportHandler>();
         AddReadCache(services, options);
         return services;
     }

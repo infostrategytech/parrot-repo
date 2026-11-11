@@ -83,6 +83,8 @@
 .offer-row__meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
 /* The note sits above the name's cover, as the tick box does, so a badge can be read without opening. */
 .offer-row__note { position: relative; display: flex; flex-wrap: wrap; gap: var(--spacing-xs); pointer-events: none; }
+/* The AI badge sits above the cover too, so hovering it shows why (a rejected photo's reason). */
+.offer-row__ai { position: relative; display: inline-flex; }
 
 /* The price and availability panels open above the name's cover, so they can be used on their own. */
 .offer-row__price,

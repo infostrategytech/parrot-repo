@@ -41,6 +41,7 @@ locals {
     { name = "Catalog__Relay__BootstrapServers", value = var.kafka_bootstrap_servers },
     { name = "Catalog__Relay__Topic", value = "catalog.events" },
     { name = "Catalog__Relay__ItemsTopic", value = "catalog.items" },
+    { name = "Catalog__Relay__IngestionReportTopic", value = "catalog.ingestion_report" },
     { name = "JwtSettings__Issuer", value = var.jwt_issuer },
     { name = "JwtSettings__Audience", value = var.jwt_audience },
     { name = "OpenTelemetry__Endpoint", value = var.otlp_endpoint },

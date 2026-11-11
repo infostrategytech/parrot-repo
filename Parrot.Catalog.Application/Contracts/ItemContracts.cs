@@ -25,6 +25,16 @@ public enum PricingMode
     OnRequest,
 }
 
+[Description("Where the AI assistant is with the item's latest save. updating: saved, the AI is still learning it. "
+    + "ready: the AI has it. needs_attention: the AI rejected a photo; see issues. failed: the AI couldn't finish; it will retry.")]
+public enum ItemAiState
+{
+    Updating,
+    Ready,
+    NeedsAttention,
+    Failed,
+}
+
 public enum ItemFilter
 {
     All,
@@ -77,7 +87,13 @@ public sealed record ItemAvailability(AvailabilityMode Mode, bool Available, int
 
 public sealed record ItemCategory(Guid Id, string Name);
 
-[Description("availability is null when none has been recorded.")]
+[Description("A photo the AI rejected or couldn't read. photo_key matches a key in the item's photos when it is one of the item's own (not a variant's).")]
+public sealed record ItemAiIssue(Guid MediaId, string? PhotoKey, string Status, string? Reason);
+
+[Description("The AI assistant's progress on this item. reported_at is null until the AI has reported on any save.")]
+public sealed record ItemAi(ItemAiState State, DateTime? SentAt, DateTime? ReportedAt, IReadOnlyList<ItemAiIssue> Issues);
+
+[Description("availability is null when none has been recorded. ai is null for items saved before the AI tracked them.")]
 public sealed record ItemResponse(
     Guid Id,
     string Name,
@@ -93,7 +109,8 @@ public sealed record ItemResponse(
     string? LeadTime = null,
     IReadOnlyList<ItemPhoto>? Photos = null,
     JsonElement? FormDraft = null,
-    bool Hidden = false);
+    bool Hidden = false,
+    ItemAi? Ai = null);
 
 [Description("Counts for the list's tabs, after the category and search filters.")]
 public sealed record ItemCounts(int All, int Available, int Unavailable, int Draft);

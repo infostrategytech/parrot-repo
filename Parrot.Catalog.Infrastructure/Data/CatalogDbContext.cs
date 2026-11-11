@@ -47,6 +47,8 @@ public class CatalogDbContext : DbContext
 
     public DbSet<CatalogDocument> CatalogDocuments => Set<CatalogDocument>();
 
+    public DbSet<ItemAiStatus> ItemAiStatus => Set<ItemAiStatus>();
+
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
 
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -303,6 +305,16 @@ public class CatalogDbContext : DbContext
         {
             e.HasKey(c => new { c.Consumer, c.EventId });
             e.Property(c => c.Consumer).HasMaxLength(64);
+        });
+
+        builder.Entity<ItemAiStatus>(e =>
+        {
+            e.HasKey(s => s.ProductId);
+            e.Property(s => s.SentType).HasMaxLength(64);
+            e.Property(s => s.Status).HasMaxLength(64);
+            e.Property(s => s.TextStatus).HasMaxLength(64);
+            e.HasOne<Product>().WithOne().HasForeignKey<ItemAiStatus>(s => s.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => s.TenantId);
         });
     }
 }
