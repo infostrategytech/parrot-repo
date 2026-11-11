@@ -44,8 +44,8 @@
 
     private static string Label(AiProgress state) => state switch
     {
-        AiProgress.Updating => "Updating",
-        AiProgress.Ready => "Learned",
+        AiProgress.Updating => "Syncing",
+        AiProgress.Ready => "Synced",
         AiProgress.NeedsAttention => "Needs a look",
         AiProgress.Failed => "Couldn't check all of it",
         _ => "Not in search",
@@ -85,7 +85,7 @@
             : age.TotalHours < 1 ? $"{(int)age.TotalMinutes} min ago"
             : age.TotalDays < 1 ? $"{(int)age.TotalHours} h ago"
             : at.ToLocalTime().ToString("d MMM yyyy");
-        return $" Learned {when}.";
+        return $" Synced {when}.";
     }
 
     private static string PhotoLabel(AiPhoto photo) => photo.Learned ? "Learned" : photo.Rejected ? "Not used" : "Couldn't check";
