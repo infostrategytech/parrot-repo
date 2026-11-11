@@ -10,13 +10,16 @@ using Parrot.Catalog.Domain.Entities;
 namespace Parrot.Catalog.Infrastructure.Events;
 
 /// <summary>
-/// Records the AI team's report on one item message (catalog.ingestion_report) against the
+/// Records the AI team's report on one item message (catalog.ingestion-report) against the
 /// item's row in item_ai_status, so the business can see whether the AI has caught up.
 ///
-/// A report counts only when it is about the latest message sent for that item: its
-/// <c>source_event_id</c> must equal the row's <c>sent_event_id</c>. A late report about an
-/// earlier save is ignored, so a quick run of saves never shows "ready" too soon. A report
-/// with no <c>source_event_id</c> is taken as being about the latest message.
+/// The AI team's contract: each report names the item message it answers in
+/// <c>causation_id</c>. A report counts only when that is the latest message sent for the
+/// item (the row's <c>sent_event_id</c>), so a late report about an earlier save is ignored
+/// and a quick run of saves never shows "ready" too soon. Within one message, the AI may
+/// report more than once (a failure, then a success after a retry), and a report can be
+/// resent; the newest by <c>occurred_at</c> wins. A <c>superseded</c> report means the
+/// message changed nothing, so it is ignored.
 /// </summary>
 public sealed class IngestionReportHandler
 {
@@ -47,7 +50,7 @@ public sealed class IngestionReportHandler
         }
 
         JsonElement payload = root.TryGetProperty("payload", out JsonElement p) && p.ValueKind == JsonValueKind.Object ? p : default;
-        Guid? productId = (payload.ValueKind == JsonValueKind.Object ? GuidOf(payload, "product_id") : null) ?? GuidOf(root, "aggregate_id");
+        Guid? productId = GuidOf(payload, "product_id") ?? GuidOf(root, "aggregate_id");
         Guid? workspaceId = GuidOf(root, "workspace_id");
         if (productId is null || workspaceId is null)
         {
@@ -65,23 +68,30 @@ public sealed class IngestionReportHandler
 
         bool recorded = false;
         ItemAiStatus? row = await _db.ItemAiStatus.FirstOrDefaultAsync(s => s.ProductId == productId, ct);
+        Guid? about = GuidOf(root, "causation_id") ?? GuidOf(root, "source_event_id") ?? GuidOf(payload, "source_event_id");
+        DateTime reportedAt = DateOf(root, "occurred_at") ?? _clock.GetUtcNow().UtcDateTime;
+        string? status = StringOf(payload, "status");
         if (row is null || row.TenantId != workspaceId)
         {
             // Never sent by this catalog, or named under another workspace: nothing to update.
             _logger.LogWarning("Ingestion report for an unknown item. ReportId={ReportId} ProductId={ProductId} WorkspaceId={WorkspaceId}", reportId, productId, workspaceId);
         }
+        else if (about is not null && about != row.SentEventId)
+        {
+            _logger.LogInformation("Ingestion report is about an earlier save; ignored. ReportId={ReportId} ProductId={ProductId}", reportId, productId);
+        }
+        else if (Is(status, "superseded"))
+        {
+            _logger.LogInformation("Ingestion report says the save changed nothing (superseded); ignored. ReportId={ReportId} ProductId={ProductId}", reportId, productId);
+        }
+        else if (row.ReportedEventId == row.SentEventId && row.ReportedAt > reportedAt)
+        {
+            _logger.LogInformation("Ingestion report is older than one already recorded for this save; ignored. ReportId={ReportId} ProductId={ProductId}", reportId, productId);
+        }
         else
         {
-            Guid? about = GuidOf(root, "source_event_id") ?? (payload.ValueKind == JsonValueKind.Object ? GuidOf(payload, "source_event_id") : null);
-            if (about is not null && about != row.SentEventId)
-            {
-                _logger.LogInformation("Ingestion report is about an earlier save; ignored. ReportId={ReportId} ProductId={ProductId}", reportId, productId);
-            }
-            else
-            {
-                Apply(row, about ?? row.SentEventId, reportId, root, payload);
-                recorded = true;
-            }
+            Apply(row, reportId, reportedAt, root, payload);
+            recorded = true;
         }
 
         try
@@ -99,32 +109,39 @@ public sealed class IngestionReportHandler
         return recorded;
     }
 
-    private void Apply(ItemAiStatus row, Guid? about, Guid reportId, JsonElement root, JsonElement payload)
+    private static void Apply(ItemAiStatus row, Guid reportId, DateTime reportedAt, JsonElement root, JsonElement payload)
     {
-        row.ReportedEventId = about;
+        row.ReportedEventId = row.SentEventId;
         row.ReportId = reportId;
-        row.ReportedAt = DateOf(root, "occurred_at") ?? _clock.GetUtcNow().UtcDateTime;
-        row.Status = payload.ValueKind == JsonValueKind.Object ? StringOf(payload, "status") : null;
-        row.TextStatus = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("text", out JsonElement text) && text.ValueKind == JsonValueKind.Object
-            ? StringOf(text, "status")
-            : null;
+        row.ReportedAt = reportedAt;
+        row.ReportType = Clip(StringOf(root, "type"), 64);
+        row.Status = Clip(StringOf(payload, "status"), 64);
+        row.Searchable = payload.ValueKind == JsonValueKind.Object && payload.TryGetProperty("searchable", out JsonElement searchable)
+            && searchable.ValueKind is JsonValueKind.True or JsonValueKind.False
+                ? searchable.GetBoolean()
+                : null;
 
+        JsonElement text = Object(payload, "text");
+        row.TextStatus = Clip(StringOf(text, "status"), 64);
+        row.TextReasonCode = Clip(StringOf(text, "reason_code"), 64);
+        row.TextReason = Clip(StringOf(text, "reason"), 1000);
+
+        JsonElement photos = Object(payload, "photos");
+        row.PhotosStatus = Clip(StringOf(photos, "status"), 64);
         row.Photos = null;
         row.PhotosRejected = 0;
         row.PhotosFailed = 0;
-        if (payload.ValueKind == JsonValueKind.Object
-            && payload.TryGetProperty("photos", out JsonElement photos) && photos.ValueKind == JsonValueKind.Object
-            && photos.TryGetProperty("items", out JsonElement items) && items.ValueKind == JsonValueKind.Array)
+        if (photos.ValueKind == JsonValueKind.Object && photos.TryGetProperty("items", out JsonElement items) && items.ValueKind == JsonValueKind.Array)
         {
             row.Photos = items.GetRawText();
             foreach (JsonElement item in items.EnumerateArray())
             {
-                string? status = item.ValueKind == JsonValueKind.Object ? StringOf(item, "status") : null;
-                if (string.Equals(status, "rejected", StringComparison.OrdinalIgnoreCase))
+                string? photoStatus = StringOf(item, "status");
+                if (Is(photoStatus, "rejected"))
                 {
                     row.PhotosRejected++;
                 }
-                else if (string.Equals(status, "failed", StringComparison.OrdinalIgnoreCase))
+                else if (Is(photoStatus, "failed"))
                 {
                     row.PhotosFailed++;
                 }
@@ -132,14 +149,21 @@ public sealed class IngestionReportHandler
         }
     }
 
+    private static bool Is(string? value, string expected) => string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
+
+    private static string? Clip(string? value, int max) => value is { Length: > 0 } && value.Length > max ? value[..max] : value;
+
+    private static JsonElement Object(JsonElement element, string name)
+        => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.Object ? value : default;
+
     private static string? StringOf(JsonElement element, string name)
-        => element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
 
     private static Guid? GuidOf(JsonElement element, string name)
         => Guid.TryParse(StringOf(element, name), out Guid id) ? id : null;
 
     private static DateTime? DateOf(JsonElement element, string name)
-        => element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String && value.TryGetDateTime(out DateTime at)
+        => element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out JsonElement value) && value.ValueKind == JsonValueKind.String && value.TryGetDateTime(out DateTime at)
             ? at.ToUniversalTime()
             : null;
 }

@@ -111,7 +111,7 @@ services:
         create agent.events 6
         create catalog.events 3
         create catalog.items 3
-        create catalog.ingestion_report 3
+        create catalog.ingestion-report 3
     restart: "no"
     logging: *logging
     networks: [parrot]
@@ -508,7 +508,7 @@ services:
       Catalog__Relay__BootstrapServers: kafka:9092
       Catalog__Relay__Topic: catalog.events
       Catalog__Relay__ItemsTopic: catalog.items
-      Catalog__Relay__IngestionReportTopic: catalog.ingestion_report
+      Catalog__Relay__IngestionReportTopic: catalog.ingestion-report
     depends_on:
       # Its tables come from the catalog API's migrations.
       catalog-api:

@@ -26,13 +26,15 @@ public enum PricingMode
 }
 
 [Description("Where the AI assistant is with the item's latest save. updating: saved, the AI is still learning it. "
-    + "ready: the AI has it. needs_attention: the AI rejected a photo; see issues. failed: the AI couldn't finish; it will retry.")]
+    + "ready: the AI has it and can find it. needs_attention: something the business can fix, such as a rejected photo; see photos and text_reason. "
+    + "failed: the AI couldn't finish on its side. not_listed: a draft, hidden or removed item, which the AI keeps out of search.")]
 public enum ItemAiState
 {
     Updating,
     Ready,
     NeedsAttention,
     Failed,
+    NotListed,
 }
 
 public enum ItemFilter
@@ -87,11 +89,21 @@ public sealed record ItemAvailability(AvailabilityMode Mode, bool Available, int
 
 public sealed record ItemCategory(Guid Id, string Name);
 
-[Description("A photo the AI rejected or couldn't read. photo_key matches a key in the item's photos when it is one of the item's own (not a variant's).")]
-public sealed record ItemAiIssue(Guid MediaId, string? PhotoKey, string Status, string? Reason);
+[Description("What the AI made of one photo. status: embedded (the AI learned it), rejected (it doesn't show the item; reason says why), "
+    + "or failed (it couldn't be checked, e.g. the download failed). caption is what the AI saw in it. "
+    + "photo_key matches a key in the item's photos when it is one of the item's own (not a variant's).")]
+public sealed record ItemAiPhoto(Guid MediaId, string? PhotoKey, string Status, string? Caption, string? ReasonCode, string? Reason);
 
-[Description("The AI assistant's progress on this item. reported_at is null until the AI has reported on any save.")]
-public sealed record ItemAi(ItemAiState State, DateTime? SentAt, DateTime? ReportedAt, IReadOnlyList<ItemAiIssue> Issues);
+[Description("The AI assistant's progress on this item. reported_at is null until the AI has reported on any save. "
+    + "searchable, text_status and photos describe the latest report and are empty while updating.")]
+public sealed record ItemAi(
+    ItemAiState State,
+    DateTime? SentAt,
+    DateTime? ReportedAt,
+    bool? Searchable,
+    string? TextStatus,
+    string? TextReason,
+    IReadOnlyList<ItemAiPhoto> Photos);
 
 [Description("availability is null when none has been recorded. ai is null for items saved before the AI tracked them.")]
 public sealed record ItemResponse(

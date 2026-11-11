@@ -204,6 +204,12 @@ public class RelayDbContext : DbContext
             e.Property(a => a.ReportedAt).HasColumnName("reported_at");
             e.Property(a => a.Status).HasColumnName("status");
             e.Property(a => a.TextStatus).HasColumnName("text_status");
+            e.Property(a => a.SentVersion).HasColumnName("sent_version");
+            e.Property(a => a.ReportType).HasColumnName("report_type");
+            e.Property(a => a.Searchable).HasColumnName("searchable");
+            e.Property(a => a.TextReasonCode).HasColumnName("text_reason_code");
+            e.Property(a => a.TextReason).HasColumnName("text_reason");
+            e.Property(a => a.PhotosStatus).HasColumnName("photos_status");
             e.Property(a => a.PhotosRejected).HasColumnName("photos_rejected");
             e.Property(a => a.PhotosFailed).HasColumnName("photos_failed");
             e.Property(a => a.Photos).HasColumnName("photos").HasColumnType("jsonb");

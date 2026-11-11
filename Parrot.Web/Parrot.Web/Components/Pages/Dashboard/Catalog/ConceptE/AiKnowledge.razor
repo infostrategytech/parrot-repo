@@ -1,0 +1,102 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
+@using Parrot.Web.Features.Dashboard.Catalog
+
+@* What the AI assistant knows about one item, from the AI team's latest report on its
+   latest save: whether it has learned it, and for each photo whether it was learned (with
+   what the AI saw in it), rejected (with why), or couldn't be checked. Shows nothing for
+   an item the catalog hasn't tracked yet. *@
+@if (Item.Ai is { } state)
+{
+    <section class="ai-knowledge" aria-labelledby="ai-knowledge-title">
+        <div class="ai-knowledge__head">
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="ai-knowledge-title">What the AI knows</Typography>
+            <StatusBadge Tone="@Tone(state)">@Label(state)</StatusBadge>
+        </div>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="ai-knowledge__summary">@Summary(state)</Typography>
+
+        @if (Item.AiPhotos.Count > 0)
+        {
+            <ul class="ai-knowledge__photos" aria-label="Photos">
+                @foreach (var photo in Item.AiPhotos)
+                {
+                    <li class="ai-knowledge__photo">
+                        @if (photo.PhotoUrl is { Length: > 0 } url)
+                        {
+                            <img class="ai-knowledge__thumb" src="@url" alt="" />
+                        }
+                        else
+                        {
+                            <span class="ai-knowledge__thumb ai-knowledge__thumb--none" aria-hidden="true"></span>
+                        }
+                        <div class="ai-knowledge__words">
+                            <StatusBadge Tone="@PhotoTone(photo)">@PhotoLabel(photo)</StatusBadge>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="ai-knowledge__detail">@PhotoDetail(photo)</Typography>
+                        </div>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}
+
+@code {
+    [Parameter, EditorRequired] public CatalogEntry Item { get; set; } = default!;
+
+    private static string Label(AiProgress state) => state switch
+    {
+        AiProgress.Updating => "Updating",
+        AiProgress.Ready => "Learned",
+        AiProgress.NeedsAttention => "Needs a look",
+        AiProgress.Failed => "Couldn't check all of it",
+        _ => "Not in search",
+    };
+
+    private static StatusTone Tone(AiProgress state) => state switch
+    {
+        AiProgress.Updating => StatusTone.Info,
+        AiProgress.Ready => StatusTone.Success,
+        AiProgress.NeedsAttention => StatusTone.Warning,
+        _ => StatusTone.Neutral,
+    };
+
+    private string Summary(AiProgress state) => state switch
+    {
+        AiProgress.Updating => "Your latest change is saved. The AI assistant is still learning it.",
+        AiProgress.Ready => $"The AI assistant has learned this item and can find it for customers.{Ago()}",
+        AiProgress.NeedsAttention when Item.AiPhotos.Any(p => p.Rejected) =>
+            "The AI assistant learned this item's details, but didn't use a photo because it doesn't seem to show the item. Replace it with a photo of the item.",
+        AiProgress.NeedsAttention => Item.AiTextReason is { Length: > 0 } reason
+            ? $"The AI assistant couldn't use this item's details: {reason}"
+            : "The AI assistant couldn't use this item's details. Check them and save again.",
+        AiProgress.Failed =>
+            "The AI assistant couldn't check part of this item on its side. It tries again on its own. If a photo keeps failing, upload it again.",
+        _ => "This item is a draft or hidden, so the AI assistant keeps it out of search.",
+    };
+
+    private string Ago()
+    {
+        if (Item.AiReportedAt is not { } at)
+        {
+            return "";
+        }
+
+        TimeSpan age = DateTimeOffset.UtcNow - at;
+        string when = age.TotalMinutes < 1 ? "just now"
+            : age.TotalHours < 1 ? $"{(int)age.TotalMinutes} min ago"
+            : age.TotalDays < 1 ? $"{(int)age.TotalHours} h ago"
+            : at.ToLocalTime().ToString("d MMM yyyy");
+        return $" Learned {when}.";
+    }
+
+    private static string PhotoLabel(AiPhoto photo) => photo.Learned ? "Learned" : photo.Rejected ? "Not used" : "Couldn't check";
+
+    private static StatusTone PhotoTone(AiPhoto photo) => photo.Learned ? StatusTone.Success : photo.Rejected ? StatusTone.Warning : StatusTone.Neutral;
+
+    private static string PhotoDetail(AiPhoto photo) => photo switch
+    {
+        { Learned: true, Caption: { Length: > 0 } caption } => $"The AI sees: {caption}",
+        { Learned: true } => "The AI can find this item by this photo.",
+        { Rejected: true } => photo.Reason ?? "It doesn't seem to show the item.",
+        _ => photo.Reason is { Length: > 0 } reason ? $"{reason}. The AI will try again." : "The AI will try again.",
+    };
+}

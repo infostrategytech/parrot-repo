@@ -230,8 +230,14 @@ public sealed class CatalogEntry
     /// <summary>Where the AI assistant is with the latest save; null when the catalog hasn't tracked it yet.</summary>
     public AiProgress? Ai { get; set; }
 
-    /// <summary>Photos the AI rejected or couldn't read, with its reason.</summary>
-    public List<AiIssue> AiIssues { get; set; } = [];
+    /// <summary>What the AI made of each photo in its latest report: learned, rejected (with its reason) or couldn't check.</summary>
+    public List<AiPhoto> AiPhotos { get; set; } = [];
+
+    /// <summary>Why the AI couldn't use the item's text, when it couldn't.</summary>
+    public string? AiTextReason { get; set; }
+
+    /// <summary>When the AI last reported on this item.</summary>
+    public DateTimeOffset? AiReportedAt { get; set; }
 
     /// <summary>Can a customer have it right now?</summary>
     public bool AvailableNow =>
@@ -262,7 +268,7 @@ public sealed class CatalogEntry
         OtherNames = [.. OtherNames], Answers = [.. Answers.Select(answer => answer.Copy())], ForWho = ForWho,
         Related = [.. Related], Negotiable = Negotiable, LowestPrice = LowestPrice, NeverClaim = [.. NeverClaim], HumanHandoffNote = HumanHandoffNote,
         DeliveryNote = DeliveryNote, ReturnsNote = ReturnsNote, Unanswered = [.. Unanswered], UpdatedAt = UpdatedAt,
-        Ai = Ai, AiIssues = [.. AiIssues],
+        Ai = Ai, AiPhotos = [.. AiPhotos], AiTextReason = AiTextReason, AiReportedAt = AiReportedAt,
     };
 }
 
@@ -346,12 +352,22 @@ public enum AiProgress
     /// <summary>The AI has the latest save.</summary>
     Ready,
 
-    /// <summary>The AI rejected a photo; the owner should look at it.</summary>
+    /// <summary>The AI rejected a photo or the item's text; the owner should look at it.</summary>
     NeedsAttention,
 
-    /// <summary>The AI couldn't finish; it retries, nothing for the owner to do.</summary>
+    /// <summary>The AI couldn't finish on its side, e.g. a photo couldn't be downloaded.</summary>
     Failed,
+
+    /// <summary>A draft or hidden item: the AI keeps it out of search.</summary>
+    NotListed,
 }
 
-/// <summary>A photo the AI rejected or couldn't read. PhotoUrl is null for a photo not among the item's own.</summary>
-public sealed record AiIssue(string? PhotoUrl, string Status, string? Reason);
+/// <summary>
+/// What the AI made of one photo. Status is embedded (learned), rejected or failed (couldn't
+/// check it). Caption is what the AI saw. PhotoUrl is null for a photo not among the item's own.
+/// </summary>
+public sealed record AiPhoto(string? PhotoUrl, string Status, string? Caption, string? Reason)
+{
+    public bool Learned => Status == "embedded";
+    public bool Rejected => Status == "rejected";
+}

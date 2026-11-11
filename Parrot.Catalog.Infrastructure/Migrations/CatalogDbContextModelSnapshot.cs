@@ -574,9 +574,19 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("photos_rejected");
 
+                    b.Property<string>("PhotosStatus")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("photos_status");
+
                     b.Property<Guid?>("ReportId")
                         .HasColumnType("uuid")
                         .HasColumnName("report_id");
+
+                    b.Property<string>("ReportType")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("report_type");
 
                     b.Property<DateTime?>("ReportedAt")
                         .HasColumnType("timestamp with time zone")
@@ -585,6 +595,10 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                     b.Property<Guid?>("ReportedEventId")
                         .HasColumnType("uuid")
                         .HasColumnName("reported_event_id");
+
+                    b.Property<bool?>("Searchable")
+                        .HasColumnType("boolean")
+                        .HasColumnName("searchable");
 
                     b.Property<DateTime?>("SentAt")
                         .HasColumnType("timestamp with time zone")
@@ -599,6 +613,10 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasColumnType("character varying(64)")
                         .HasColumnName("sent_type");
 
+                    b.Property<long>("SentVersion")
+                        .HasColumnType("bigint")
+                        .HasColumnName("sent_version");
+
                     b.Property<string>("Status")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -607,6 +625,16 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                     b.Property<Guid>("TenantId")
                         .HasColumnType("uuid")
                         .HasColumnName("tenant_id");
+
+                    b.Property<string>("TextReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("text_reason");
+
+                    b.Property<string>("TextReasonCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("text_reason_code");
 
                     b.Property<string>("TextStatus")
                         .HasMaxLength(64)

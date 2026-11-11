@@ -45,7 +45,7 @@ data "aws_iam_policy_document" "relay_db" {
     actions   = ["secretsmanager:GetSecretValue"]
     resources = [aws_secretsmanager_secret.redis_auth.arn]
   }
-  # TODO: kafka-cluster:Connect / WriteData / ReadData on the MSK cluster: write catalog.events and catalog.items, read catalog.events and catalog.ingestion_report.
+  # TODO: kafka-cluster:Connect / WriteData / ReadData on the MSK cluster: write catalog.events and catalog.items, read catalog.events and catalog.ingestion-report.
 }
 
 resource "aws_iam_role_policy" "api_db" {
