@@ -1,0 +1,154 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Team
+@inject AuroraInterop Interop
+@using Parrot.Web.Features.Dashboard.Team
+@using Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* One person in the team, or an invite waiting (designer, 5 November 2026: Team's tables match Tasks' and
+   Customers'). As a Customers row: who, with their email under the name; a member's name is the way in, a
+   button stretched over the row that opens their access, and the keyboard reaches it once. Their role (and, for
+   a business with several workspaces, where), the channels they see as Customers shows channels, and when they
+   joined or how long an invite has left. The options menu sits at the row's end. *@
+@if (Head)
+{
+    @* The table's column names, drawn by the row so the two always share their columns. *@
+    <div class="ds-table__row is-head team-row" role="row">
+        <TableHeading>Person</TableHeading>
+        <div class="team-row__facts">
+            <TableHeading>Role</TableHeading>
+            <TableHeading>Channel access</TableHeading>
+            <TableHeading>Joined</TableHeading>
+        </div>
+        <span role="columnheader"><span class="sr-only">Options</span></span>
+    </div>
+}
+else
+{
+    @* A just-sent invite is marked for a moment and brought into view, so a long list doesn't hide it. *@
+    <div class="@(New ? "ds-table__row team-row is-new" : "ds-table__row team-row")" role="row" @ref="_row">
+        <div class="team-row__who" role="cell">
+            <PetalAvatar Seed="@Seed" Initials="@Initials.From(Name)" Size="AvatarSize.Sm" />
+            <span class="team-row__words">
+                @if (Member is { IsOwner: false })
+                {
+                    <RowButton Class="team-row__name" OnClick="OnEdit" aria-label="@($"Edit {Name}'s access")">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@Name</Typography>
+                    </RowButton>
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="team-row__plain">@Name@(Member is { IsOwner: true } ? " (you)" : "")</Typography>
+                }
+                @if (Email is { } email)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="team-row__muted">@email</Typography>
+                }
+            </span>
+        </div>
+
+        @* One line under the person on a tablet or phone; three columns on a desktop. *@
+        <div class="team-row__facts">
+            <div class="team-row__role" role="cell">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@(Member is { IsOwner: true } ? "Owner" : TeamWords.RoleLine(Grants))</Typography>
+                @if (ManyWorkspaces)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="team-row__muted">@(Member is { IsOwner: true } ? "All workspaces" : TeamWords.Where(Grants, Workspaces))</Typography>
+                }
+            </div>
+
+            <div class="team-row__channels" role="cell">
+                @if (Member is not { IsOwner: true } && Grants.Count == 0)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="team-row__muted">No access</Typography>
+                }
+                else if (Member is { IsOwner: true } || ChannelKeys is { Count: 0 })
+                {
+                    <Tooltip Text="Access to current and future channels" Focusable>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">All channels</Typography>
+                    </Tooltip>
+                }
+                else if (ChannelKeys is null)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="team-row__muted">Differs by workspace</Typography>
+                }
+                else
+                {
+                    <ChannelMarks Channels="ChannelKeys" Name="ChannelName" />
+                }
+            </div>
+
+            <div class="team-row__when" role="cell">
+                @if (Invite is { } invite)
+                {
+                    <StatusBadge Tone="StatusTone.Warning" Glyph="IconName.RiMailFill">@TeamWords.Invited(invite.ExpiresAt, Now)</StatusBadge>
+                }
+                else if (Member is { } member)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@TeamWords.Date(member.JoinedAt, Now)</Typography>
+                }
+            </div>
+        </div>
+
+        <div class="team-row__menu" role="cell">
+            @if (Member is { IsOwner: false })
+            {
+                <ActionMenu Label="@($"Options for {Name}")">
+                    <ActionMenuItem Label="Edit access" Glyph="IconName.RiShieldCheckFill" OnClick="OnEdit" />
+                    <ActionMenuItem Label="Remove from team" Glyph="IconName.RiDeleteBin6Fill" OnClick="OnRemove" />
+                </ActionMenu>
+            }
+            else if (Invite is not null)
+            {
+                <ActionMenu Label="@($"Options for the invite to {Email}")">
+                    @if (Invite.Link is { Length: > 0 } && OnCopyLink.HasDelegate)
+                    {
+                        @* To share on WhatsApp when the email goes unseen. *@
+                        <ActionMenuItem Label="Copy invite link" Glyph="IconName.RiLinksFill" OnClick="OnCopyLink" />
+                    }
+                    <ActionMenuItem Label="Resend invite" Glyph="IconName.RiSendPlaneFill" OnClick="OnResend" />
+                    <ActionMenuItem Label="Withdraw invite" Glyph="IconName.RiCloseFill" OnClick="OnWithdraw" />
+                </ActionMenu>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>Draw the table's column names instead of a person.</summary>
+    [Parameter] public bool Head { get; set; }
+
+    [Parameter] public TeamMember? Member { get; set; }
+    [Parameter] public TeamInvite? Invite { get; set; }
+
+    [Parameter] public IReadOnlyList<TeamWorkspace> Workspaces { get; set; } = [];
+    [Parameter] public IReadOnlyList<TeamOption> ChannelOptions { get; set; } = [];
+    [Parameter] public DateTime Now { get; set; }
+
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
+    [Parameter] public EventCallback OnResend { get; set; }
+    [Parameter] public EventCallback OnWithdraw { get; set; }
+    [Parameter] public EventCallback OnCopyLink { get; set; }
+
+    /// <summary>The invite just sent: marked for a moment and scrolled into view.</summary>
+    [Parameter] public bool New { get; set; }
+
+    private ElementReference _row;
+    private bool _shown;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!New || _shown) return;
+        _shown = true;
+        try { await Interop.ScrollIntoViewAsync(_row, "nearest"); }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { }
+    }
+
+    private string Name => Member?.FullName ?? Member?.Email ?? Invite?.FullName ?? "";
+    private string? Email => Member is { FullName: not null } ? Member.Email : Invite?.Email;
+    private string Seed => Member?.UserId ?? Invite?.Email ?? Name;
+    private IReadOnlyList<TeamGrant> Grants => Member?.Grants ?? Invite?.Grants ?? [];
+    private IReadOnlyList<string>? ChannelKeys => TeamWords.Channels(Grants, ChannelOptions);
+    private string ChannelName(string key) => ChannelOptions.FirstOrDefault(option => option.Key == key)?.Label ?? key;
+    // Where they work matters only when the business has more than one workspace.
+    private bool ManyWorkspaces => Workspaces.Count > 1;
+}

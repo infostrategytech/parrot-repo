@@ -15,28 +15,59 @@
    person's, not the business's, and lives on the profile.
 
    Aurora's Original design: the channels flowing into the yára hub, over a
-   slow colour wash. *@
+   slow colour wash.
 
-<Dialog Open="@_open"
+   Creating another (designer, 9 November 2026) is the same card, exactly, in a ContentModal rather than a Dialog:
+   the wash, the channels flowing into the hub, the title and the fields as they were, with the close button in the
+   corner and Create Workspace above Cancel. The welcome stays a Dialog: it can't be closed. *@
+
+@* The ContentModal's own frame gives way to the card: no header band (the close button floats in the corner) and
+   no footer rule; the card's own width and padding. *@
+<div class="workspace-create-host">
+    <ContentModal Open="@(_open && _another)" Title="@Title" TitleVisuallyHidden="true"
+                  Busy="_creating" OnSubmit="CreateWorkspaceAsync" OnClose="Close" InitialFocusId="workspace-business-name"
+                  Ambient="Wash">
+        <ChildContent>@Card</ChildContent>
+        <Footer Context="formId">
+            <Button Type="ButtonType.Submit" form="@formId" FullWidth Busy="_creating" disabled="@(!CanCreateWorkspace && !_creating)">
+                @(_creating ? "Creating Workspace…" : "Create Workspace")
+            </Button>
+            <Button Variant="ButtonVariant.Secondary" FullWidth disabled="@_creating" @onclick="Close">Cancel</Button>
+        </Footer>
+    </ContentModal>
+</div>
+
+<Dialog Open="@(_open && !_another)"
         Title="@Title"
         TitleVisuallyHidden="true"
-        ConfirmLabel="@(_another ? "Create Workspace" : "Get Started")"
+        ConfirmLabel="Create Workspace"
         ConfirmFullWidth="true"
         FitToScreen="true"
-        BusyLabel="@(_another ? "Creating Workspace…" : "Saving…")"
+        BusyLabel="Saving…"
         Busy="@_creating"
         ConfirmDisabled="@(!CanCreateWorkspace)"
-        Dismissible="@_another"
-        OnCancel="@(_another ? EventCallback.Factory.Create(this, Close) : default)"
+        Dismissible="false"
         OnConfirm="CreateWorkspaceAsync">
-    <AmbientBackground>
+    <AmbientBackground>@Wash</AmbientBackground>
+    <Body>@Card</Body>
+</Dialog>
+
+@code {
+    // The slow colour wash behind the card.
+    private RenderFragment Wash => __builder =>
+    {
         <div class="workspace-dialog-gradient @(HasEnteredBusinessName ? "has-business-name" : null)">
             <span class="workspace-dialog-gradient__wash wash-cyan"></span>
             <span class="workspace-dialog-gradient__wash wash-violet"></span>
             <span class="workspace-dialog-gradient__wash wash-pink"></span>
         </div>
-    </AmbientBackground>
-    <Body>
+    };
+
+    private RenderFragment StoreIcon => @<Icon Name="IconName.RiStore2Fill" Size="IconSize.Sm" />;
+
+    // The card itself, the same in the welcome and in Create a workspace.
+    private RenderFragment Card => __builder =>
+    {
         <div class="workspace-dialog @(HasEnteredBusinessName ? "has-business-name" : null)">
             @* One drawing space for lines and marks alike. Each mark is placed at the
                same point its line ends, as a percentage of the stage, so the two
@@ -78,21 +109,25 @@
                 </Typography>
             </div>
 
-            @* A form of one text field, so Enter submits it the way the button
-               does. The dialog's own button sits outside it, in the footer. *@
-            <form class="workspace-name-form" novalidate @onsubmit="CreateWorkspaceAsync" @onsubmit:preventDefault="true">
-                <Input FloatingLabel="Name"
-                       Id="workspace-business-name"
-                       @bind-Value="_businessName"
-                       @bind-Value:after="() => _businessNameError = null"
-                       Error="@(!string.IsNullOrEmpty(_businessNameError))"
-                       HelperText="@_businessNameError"
-                       autocomplete="organization">
-                    <IconLeft>
-                        <Icon Name="IconName.RiStore2Fill" Size="IconSize.Sm" />
-                    </IconLeft>
-                </Input>
-            </form>
+            @if (_another)
+            {
+                @* The ContentModal's body is already the form: Enter submits it. *@
+                <div class="workspace-name-form">
+                    <Input FloatingLabel="Name" Id="workspace-business-name" @bind-Value="_businessName" @bind-Value:after="ClearNameError"
+                           Error="@(!string.IsNullOrEmpty(_businessNameError))" HelperText="@_businessNameError" autocomplete="organization"
+                           IconLeft="StoreIcon" />
+                </div>
+            }
+            else
+            {
+                @* A form of one text field, so Enter submits it the way the button
+                   does. The dialog's own button sits outside it, in the footer. *@
+                <form class="workspace-name-form" novalidate @onsubmit="CreateWorkspaceAsync" @onsubmit:preventDefault="true">
+                    <Input FloatingLabel="Name" Id="workspace-business-name" @bind-Value="_businessName" @bind-Value:after="ClearNameError"
+                           Error="@(!string.IsNullOrEmpty(_businessNameError))" HelperText="@_businessNameError" autocomplete="organization"
+                           IconLeft="StoreIcon" />
+                </form>
+            }
 
             @if (_createError is not null)
             {
@@ -147,10 +182,10 @@
                 }
             </div>
         </div>
-    </Body>
-</Dialog>
+    };
 
-@code {
+    private void ClearNameError() => _businessNameError = null;
+
     private const long MaxLogoBytes = 2 * 1024 * 1024;
     private static readonly HashSet<string> AcceptedLogoTypes = ["image/png", "image/jpeg", "image/webp"];
 
@@ -255,7 +290,8 @@
 
     private async Task CreateWorkspaceAsync()
     {
-        if (_creating) return;
+        // The logo is still being read: wait for it rather than create without it.
+        if (_creating || _reading) return;
 
         var name = _businessName?.Trim();
         if (string.IsNullOrWhiteSpace(name))

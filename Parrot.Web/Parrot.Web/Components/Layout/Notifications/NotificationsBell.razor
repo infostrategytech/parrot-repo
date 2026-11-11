@@ -1,0 +1,94 @@
+@namespace Parrot.Web.Components.Layout.Notifications
+@using Parrot.Web.Features.Notifications
+@inject INotificationFeed Feed
+@inject NavigationManager Nav
+@inject Parrot.Web.Services.UserClock Clock
+@implements IDisposable
+
+<div class="notifications-bell">
+<Popover Title="Notifications" Open="_open" OpenChanged="OpenChangedAsync" Wide Beside Class="notifications">
+    <Anchor><NavRailItem @ref="_bell" Entry="Bell" IsActive="@(_open || IsCurrentPage)" CurrentPage="IsCurrentPage" Expanded="_open" Badge="@(Unseen > 0 ? Unseen : null)" BadgeMeaning="@NotificationViews.BadgeMeaning(Unseen, UnreadNeedingYou)" AlertBadge="@(UnreadNeedingYou > 0)" OnClick="ToggleAsync" /></Anchor>
+    <ChildContent>
+        <div class="notifications__panel" tabindex="-1" aria-label="Notifications" @ref="_panel">
+            <header class="notifications__head">
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Notifications</Typography>
+                <div class="notifications__head-actions">
+                    @if (Unseen > 0) { <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_busy" @onclick="MarkAllAsync">Mark all as read</Button> }
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Notification settings" title="Notification settings" @onclick="OpenSettings"><IconLeft><Icon Name="IconName.RiSettings4Fill" /></IconLeft></Button>
+                </div>
+            </header>
+            @if (!Feed.Available)
+            { <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiNotification3Fill" Title="Notifications are on the way" Description="Agent questions, assigned tasks and important updates will show here." /> }
+            else
+            {
+                <Tabs Variant="TabsVariant.Tray" Label="Which notifications" Fill Class="notifications__tabs">
+                    <Tab Selected="@(!_everything)" Count="@(NeedsYou.Count > 0 ? NeedsYou.Count.ToString() : null)" Title="@NotificationViews.NeedsYouDescription(NeedsYou.Count)" OnClick="() => _everything = false"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Needs you</Typography></Tab>
+                    <Tab Selected="_everything" OnClick="() => _everything = true"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Everything</Typography></Tab>
+                </Tabs>
+                <div class="notifications__scroll">
+                    @if (_error is not null) { <InlineError Message="@_error"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="ReloadAsync">Try again</Button></Action></InlineError> }
+                    @if (_loading && _cards.Count == 0) { <Skeleton Shape="SkeletonShape.Line" /> }
+                    else if (Shown.Count == 0 && _error is null)
+                    { <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiCheckboxCircleFill" Title="@(_everything ? "No notifications yet" : "Nothing needs you")" Description="@(_everything ? "Agent questions, tasks and important outcomes will show here." : "You're all caught up.")" /> }
+                    else
+                    {
+                        <NotificationList Items="@NotificationDisplay.Rows(Shown, _everything, DateTimeOffset.UtcNow, Clock.Zone)" OnSelect="OpenCardAsync" Disabled="_busy" />
+                    }
+                </div>
+                <footer class="notifications__footer">
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" FullWidth @onclick="ViewAll"><IconRight><Icon Name="IconName.RiArrowRightSLine" /></IconRight><ChildContent>View all notifications</ChildContent></Button>
+                </footer>
+            }
+        </div>
+    </ChildContent>
+</Popover>
+</div>
+
+@code {
+    private static readonly NavEntry Bell = NavMap.Notifications;
+    private IReadOnlyList<NotificationCard> _cards = [];
+    private bool _open, _everything, _disposed, _focusIn, _focusBack, _loading = true, _busy;
+    private int _loadVersion;
+    private string? _error;
+    private NavRailItem? _bell; private ElementReference _panel;
+    private bool IsCurrentPage => NavMap.Match(new Uri(Nav.Uri).AbsolutePath) == Bell;
+    private int Unseen => _cards.Count(card => card.Unread);
+    private int UnreadNeedingYou => NotificationViews.UnreadNeedingYou(_cards);
+    private IReadOnlyList<NotificationCard> NeedsYou => _cards.Where(card => card.NeedsYou).ToArray();
+    private IReadOnlyList<NotificationCard> Shown => _everything ? _cards : NeedsYou;
+    private Task OpenCardAsync(string id) => _cards.FirstOrDefault(card => card.Id == id) is { } card ? OpenAsync(card) : Task.CompletedTask;
+    protected override async Task OnInitializedAsync() { Feed.Changed += OnFeedChanged; Nav.LocationChanged += OnLocationChanged; Clock.Changed += OnClockChanged; await ReloadAsync(); }
+    private void OnClockChanged() => _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    private async Task ReloadAsync()
+    {
+        var version = ++_loadVersion; _loading = true; _error = null;
+        try { var items = await Feed.ReadAsync(); if (_disposed || version != _loadVersion) return; _cards = NotificationProjection.Build(items); }
+        catch (HttpRequestException) { if (!_disposed && version == _loadVersion) _error = "Notifications couldn't be loaded. Try again."; }
+        finally { if (version == _loadVersion) _loading = false; }
+    }
+    private void OnFeedChanged() => _ = InvokeAsync(async () => { if (_disposed) return; await ReloadAsync(); StateHasChanged(); });
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs args) => _ = InvokeAsync(() => { if (_disposed) return; _open = false; StateHasChanged(); });
+    private async Task ToggleAsync() { _open = !_open; if (_open) { await ReloadAsync(); _everything = NeedsYou.Count == 0; _focusIn = true; } }
+    private Task OpenChangedAsync(bool open) { if (_open && !open) _focusBack = true; _open = open; return Task.CompletedTask; }
+    // One item opens itself; a group opens the list its items are in (Tasks, Inbox), all of it marked read.
+    private async Task OpenAsync(NotificationCard card)
+    {
+        if (_busy) return;
+        var href = card.Href;
+        if (!NotificationCatalogue.IsInternalDestination(href)) { _error = "This item isn't available to open. Your notification is still here."; return; }
+        _busy = true; _error = null;
+        try { foreach (var item in card.Items.Where(item => item.Unread)) await Feed.MarkReadAsync(item.Id); _open = false; Nav.NavigateTo(href!); }
+        catch (HttpRequestException) { _error = "This notification couldn't be opened. Try again."; }
+        finally { _busy = false; }
+    }
+    private async Task MarkAllAsync() { if (_busy) return; _busy = true; try { await Feed.MarkReadAsync(null); await ReloadAsync(); } catch (HttpRequestException) { _error = "Read status couldn't be saved. Try again."; } finally { _busy = false; } }
+    private void OpenSettings() { _open = false; Nav.NavigateTo("/dashboard/settings/notifications"); }
+    private void ViewAll() { _open = false; Nav.NavigateTo(NotificationViews.Href(_everything ? NotificationView.Everything : NotificationView.NeedsYou)); }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender) await Clock.ReadAsync();
+        if (_focusIn && _open) { _focusIn = false; try { await _panel.FocusAsync(); } catch (JSException) { } catch (InvalidOperationException) { } }
+        if (_focusBack && !_open) { _focusBack = false; try { if (_bell is not null) await _bell.FocusAsync(); } catch (JSException) { } }
+    }
+    public void Dispose() { _disposed = true; _loadVersion++; Feed.Changed -= OnFeedChanged; Nav.LocationChanged -= OnLocationChanged; Clock.Changed -= OnClockChanged; }
+}

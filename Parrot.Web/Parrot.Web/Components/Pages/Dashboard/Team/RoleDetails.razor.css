@@ -1,0 +1,17 @@
+.role-details { display: grid; gap: var(--spacing-xl); }
+.role-details ::deep p, .role-details ::deep h3 { margin: var(--spacing-none); }
+.role-details ::deep h3 { color: var(--colors-text-primary); }
+.role-details ::deep .role-details__muted { color: var(--colors-text-muted); }
+
+.role-details__section { display: grid; gap: var(--spacing-md); }
+.role-details__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--spacing-sm); }
+
+/* The areas in one bordered list, as in the role editor: a row each, its allowed permissions under it. */
+.role-details__groups { border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); overflow: hidden; }
+.role-details__group { display: grid; gap: var(--spacing-sm); padding: var(--spacing-md) var(--spacing-lg); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.role-details__group:first-child { border-top: none; }
+.role-details__group-head { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-sm); min-height: var(--spacing-2xl); color: var(--colors-text-primary); }
+
+.role-details__permissions { display: grid; gap: var(--spacing-sm); padding: var(--spacing-none); margin: var(--spacing-none); list-style: none; }
+.role-details__permissions > li { display: flex; gap: var(--spacing-sm); align-items: flex-start; color: var(--colors-text-secondary); overflow-wrap: anywhere; }
+.role-details__permissions > li ::deep .ds-icon { flex: none; color: var(--colors-feedback-success); }

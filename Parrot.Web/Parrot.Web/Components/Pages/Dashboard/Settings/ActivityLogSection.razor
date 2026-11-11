@@ -1,0 +1,302 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Settings
+@implements IDisposable
+@inject IActivityLog Log
+@inject UserClock Clock
+@inject AuthState AuthState
+@inject AuroraInterop Interop
+@inject ToastService Toasts
+@inject NavigationManager Navigation
+
+@* Settings › Activity log (designer, 9 November 2026): an audit log, who changed what and when, read-only. Made of the
+   app's own parts, as Customers and Tasks are: search and filters on the right above the shared table, a row per
+   event, and its details in a side panel (as Customer details). Day-to-day work (messages, tasks) stays where it
+   happens; this is for setup, access, security and sensitive actions. The API doesn't keep a log yet
+   (activity-backend-requests); the demo records what is done in it. *@
+<div class="activity">
+    @if (!Log.Available)
+    {
+        <DataTable Label="Activity log">
+            <Message>
+                <EmptyState Glyph="IconName.RiFileList3Fill" Title="Your activity log is on its way"
+                            Description="Every change to your team, security and business will show up here, with who made it and when." />
+            </Message>
+        </DataTable>
+    }
+    else if (_page is null && _error is null)
+    {
+        <DataTable Label="Activity log">
+            <Message><LoadingState Glyph="IconName.RiFileList3Fill" Title="Getting the activity log" /></Message>
+        </DataTable>
+    }
+    else if (_page is null)
+    {
+        <DataTable Label="Activity log">
+            <Message>
+                <EmptyState Glyph="IconName.RiAlertFill" Title="The activity log couldn't be loaded" Description="Check your connection and try again.">
+                    <Action><Button Variant="ButtonVariant.Secondary" @onclick="() => LoadAsync()">Try again</Button></Action>
+                </EmptyState>
+            </Message>
+        </DataTable>
+    }
+    else if (_page.Total == 0 && !Filtered)
+    {
+        <DataTable Label="Activity log">
+            <Message>
+                <EmptyState Glyph="IconName.RiFileList3Fill" Title="Nothing has changed yet"
+                            Description="Changes to your team, security and business show up here, with who made them and when." />
+            </Message>
+        </DataTable>
+    }
+    else
+    {
+        @* Search, then who, which part of yára and when, then the download: on the right, where Customers and
+           Tasks keep theirs. *@
+        <section class="activity__controls">
+            <SearchField Value="@_search" ValueChanged="OnSearch" Placeholder="Search activity" AriaLabel="Search activity" Class="activity__search" />
+            <FilterPopover Label="@WhoLabel" Title="Who" Subtitle="Who made the change" AlignEnd
+                           Open='@(_openMenu == "who")' OpenChanged="@(open => _openMenu = open ? "who" : null)">
+                <PopoverOption Label="Anyone" Active="@(_actorId is null)" OnSelect="() => PickAsync(() => _actorId = null)" />
+                @foreach (var actor in Actors)
+                {
+                    var current = actor;
+                    <PopoverOption Label="@(current.Id == Me ? $"{current.Name} (you)" : current.Name)" Active="@(_actorId == current.Id)"
+                                   OnSelect="() => PickAsync(() => _actorId = current.Id)">
+                        <Leading><PetalAvatar Seed="@current.Id" Initials="@(current.Kind == ActorKind.System ? "y" : Initials.From(current.Name))" Size="AvatarSize.Sm" /></Leading>
+                    </PopoverOption>
+                }
+            </FilterPopover>
+            <FilterPopover Label="@(_area is { } area ? ActivityWords.AreaName(area) : "All areas")" Title="Area" Subtitle="Which part of yára" AlignEnd
+                           Open='@(_openMenu == "area")' OpenChanged="@(open => _openMenu = open ? "area" : null)">
+                <PopoverOption Label="All areas" Active="@(_area is null)" OnSelect="() => PickAsync(() => _area = null)" />
+                @foreach (var area in ActivityWords.Areas)
+                {
+                    var current = area;
+                    <PopoverOption Label="@ActivityWords.AreaName(current)" Active="@(_area == current)" OnSelect="() => PickAsync(() => _area = current)">
+                        <Leading><Icon Name="@ActivityWords.AreaIcon(current)" Size="IconSize.Sm" /></Leading>
+                    </PopoverOption>
+                }
+            </FilterPopover>
+            <FilterPopover Label="@DaysLabel(_days)" Title="When" Subtitle="How far back" AlignEnd
+                           Open='@(_openMenu == "when")' OpenChanged="@(open => _openMenu = open ? "when" : null)">
+                @foreach (var days in DayChoices)
+                {
+                    var current = days;
+                    <PopoverOption Label="@DaysLabel(current)" Active="@(_days == current)" OnSelect="() => PickAsync(() => _days = current)" />
+                }
+            </FilterPopover>
+            <Button Variant="ButtonVariant.Secondary" Busy="_exporting" @onclick="DownloadAsync">
+                <IconLeft><Icon Name="IconName.RiDownload2Fill" /></IconLeft>
+                <ChildContent>Download</ChildContent>
+            </Button>
+        </section>
+
+        <DataTable Label="Activity log" Busy="_refreshing" Notice="@(_error is null ? null : LoadError)" Message="@(_page.Total == 0 ? NoMatch : null)">
+            <ChildContent>
+                <ActivityRow Head />
+                @foreach (var item in _page.Items)
+                {
+                    var current = item;
+                    <ActivityRow @key="current.Id" Event="current" Me="@Me" Zone="Clock.Zone"
+                                 Open="@(_open?.Id == current.Id)" OnOpen="() => _open = current" />
+                }
+            </ChildContent>
+            <Footer><Pagination Page="_pageNumber" PageChanged="GoToPageAsync" Total="_page.Total" PageSize="PageSize" AriaLabel="Pages of activity" /></Footer>
+        </DataTable>
+    }
+</div>
+
+@* An event's details, in a side panel over the list (as Customer details): what happened, who, when and where, what
+   changed, and the way to the thing itself. *@
+<SidePanel Open="@(_open is not null)" Title="Activity details" OnClose="() => _open = null" CloseLabel="Close activity details"
+           Compact TitleStyle="TextStyle.BodyDefaultSemibold" Footer="DetailsFooter">
+    <ChildContent>
+        @if (_open is { } e)
+        {
+            <div class="activity-details">
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="p" Prose Class="activity-details__what">@ActivityWords.Sentence(e)</Typography>
+                <dl class="activity-details__facts">
+                    <div>
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Who</Typography></dt>
+                        <dd><ActivityActorMark Actor="e.Actor" Me="@Me" /></dd>
+                    </div>
+                    <div>
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Date and time</Typography></dt>
+                        <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@ActivityTime.Exact(e.OccurredAt, Clock.Zone)</Typography></dd>
+                    </div>
+                    <div>
+                        <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Area</Typography></dt>
+                        <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@ActivityWords.AreaName(ActivityWords.AreaOf(e.Action))</Typography></dd>
+                    </div>
+                    @if (e.Device is { } device)
+                    {
+                        <div>
+                            <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Device</Typography></dt>
+                            <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@device</Typography></dd>
+                        </div>
+                    }
+                    @if (e.Location is { } location)
+                    {
+                        <div>
+                            <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Location</Typography></dt>
+                            <dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@location</Typography></dd>
+                        </div>
+                    }
+                </dl>
+                @if (e.Changes is { Count: > 0 } changes)
+                {
+                    <section class="activity-details__changes" aria-label="What changed">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">What changed</Typography>
+                        <ul>
+                            @foreach (var change in changes)
+                            {
+                                <li>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="activity-details__field">@change.Field</Typography>
+                                    <span class="activity-details__values">
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="activity-details__from">@(change.From ?? "None")</Typography>
+                                        <Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" />
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="activity-details__to">@(change.To ?? "None")</Typography>
+                                    </span>
+                                </li>
+                            }
+                        </ul>
+                    </section>
+                }
+            </div>
+        }
+    </ChildContent>
+</SidePanel>
+
+@code {
+    private const int PageSize = 15;
+    private static readonly int?[] DayChoices = [null, 1, 7, 30];
+
+    private ActivityPage? _page;
+    private ActivityEvent? _open;
+    private int _pageNumber = 1;
+    private string _search = string.Empty;
+    private string? _actorId, _openMenu, _error;
+    private ActivityArea? _area;
+    private int? _days;
+    private bool _refreshing, _exporting;
+    private CancellationTokenSource? _loading;
+
+    private string? Me => AuthState.CurrentUser?.UserId;
+    private bool Filtered => _search.Trim().Length > 0 || _actorId is not null || _area is not null || _days is not null;
+
+    // People first (you at the top), then agents, then yára itself.
+    private IEnumerable<ActivityActor> Actors => (_page?.Actors ?? [])
+        .OrderBy(actor => actor.Kind).ThenBy(actor => actor.Id == Me ? 0 : 1).ThenBy(actor => actor.Name, StringComparer.OrdinalIgnoreCase);
+
+    private string WhoLabel => _actorId is null ? "Anyone"
+        : Actors.FirstOrDefault(actor => actor.Id == _actorId) is { } actor ? (actor.Id == Me ? $"{actor.Name} (you)" : actor.Name) : "Anyone";
+
+    private static string DaysLabel(int? days) => days switch { 1 => "Today", 7 => "Last 7 days", 30 => "Last 30 days", _ => "Any time" };
+
+    private ActivityQuery Query(int offset = 0, int limit = PageSize) =>
+        new(_search.Trim().Length > 0 ? _search.Trim() : null, _actorId, _area, _days, offset, limit);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!Log.Available) return;
+        await Clock.ReadAsync();
+        await LoadAsync();
+    }
+
+    // A newer load cancels an older one, so a late answer never replaces a newer search; the table stays on screen
+    // while it loads (as Customers').
+    private async Task LoadAsync(int delayMs = 0)
+    {
+        _loading?.Cancel();
+        var mine = _loading = new CancellationTokenSource();
+        var token = mine.Token;
+        try
+        {
+            if (delayMs > 0) await Task.Delay(delayMs, token);
+            _refreshing = _page is not null;
+            StateHasChanged();
+            var page = await Log.ListAsync(Query((_pageNumber - 1) * PageSize), token);
+            if (token.IsCancellationRequested) return;
+            _page = page;
+            _error = null;
+        }
+        catch (OperationCanceledException) { return; }
+        catch (Exception exception) when (exception is HttpRequestException or System.Text.Json.JsonException or NotSupportedException)
+        {
+            if (token.IsCancellationRequested) return;
+            _error = "The activity log couldn't be refreshed. Check your connection and try again.";
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested) { _refreshing = false; StateHasChanged(); }
+        }
+    }
+
+    private Task OnSearch(string? value)
+    {
+        _search = value ?? string.Empty;
+        _pageNumber = 1;
+        return LoadAsync(delayMs: 300);
+    }
+
+    private Task PickAsync(Action pick)
+    {
+        pick();
+        _openMenu = null;
+        _pageNumber = 1;
+        return LoadAsync();
+    }
+
+    private Task GoToPageAsync(int page)
+    {
+        _pageNumber = page;
+        return LoadAsync();
+    }
+
+    private Task ClearAsync()
+    {
+        _search = string.Empty; _actorId = null; _area = null; _days = null; _pageNumber = 1;
+        return LoadAsync();
+    }
+
+    // Everything the filters match, not just this page, as a spreadsheet.
+    private async Task DownloadAsync()
+    {
+        if (_exporting) return;
+        _exporting = true;
+        try
+        {
+            var csv = await Log.ExportCsvAsync(Query(0, int.MaxValue));
+            var name = $"yára-activity-log-{DateTime.Now:yyyy-MM-dd}.csv";
+            if (await Interop.SaveTextFileAsync(csv, name)) Toasts.Show("Activity log downloaded");
+            else Toasts.ShowError("The download couldn't start. Try again.");
+        }
+        catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or JSException)
+        {
+            Toasts.ShowError("The activity log couldn't be downloaded. Try again.");
+        }
+        finally { _exporting = false; }
+    }
+
+    // In the table's card: filters that match nothing, and a refresh that failed while the last rows stay.
+    private RenderFragment NoMatch => @<EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiSearch2Fill" Title="No activity matches"
+                                                   Description="Try other words, someone else, another area or a longer time.">
+        <Action><Button Variant="ButtonVariant.Secondary" @onclick="ClearAsync">Clear filters</Button></Action>
+    </EmptyState>;
+
+    private RenderFragment LoadError => @<InlineError Message="@_error">
+        <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => LoadAsync()">Try again</Button></Action>
+    </InlineError>;
+
+    // The way to the thing itself, named for where it goes.
+    private RenderFragment? DetailsFooter => _open?.Link is { } link
+        ? @<div class="activity-details__footer">
+              <Button Variant="ButtonVariant.Secondary" @onclick="() => Navigation.NavigateTo(link)">
+                  <ChildContent>@ActivityTime.LinkLabel(link)</ChildContent>
+                  <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+              </Button>
+          </div>
+        : null;
+
+    public void Dispose() { _loading?.Cancel(); _loading?.Dispose(); }
+}

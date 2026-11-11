@@ -1,109 +1,12 @@
-/* The team list. Same frame as Aurora's Products page: content capped at
-   1440 and centred, a fluid gutter, a grid table with fixed middle columns. */
+/* Settings › Team: the views on the left and the one action on the right, as Tasks' controls row, above the
+   shared table. The rows are TeamRow's and RoleRow's. */
+.team { display: grid; min-width: 0; }
 
-.team {
-  padding: var(--spacing-4xl) var(--ds-team-gutter) var(--spacing-5xl);
-}
-
-.team > * {
-  width: min(var(--ds-team-max), 100%);
-  margin-inline: auto;
-}
-
-.team {
-  /* Gaps in the token set: no page-gutter, content-width or border-width
-     scale. The gutter and cap are Aurora's Products page's. */
-  --ds-team-gutter: clamp(28px, 4vw, 66px);
-  --ds-team-max: 1440px;
-  --ds-team-hairline: 1px;
-  --ds-team-measure: 650px;
-  --ds-team-col-name: 220px;
-  --ds-team-col-role: 200px;
-  --ds-team-col-status: 160px;
-  --ds-team-col-actions: 40px;
-  --ds-team-head-min: 45px;
-  --ds-team-row-min: 64px;
-}
-
-.team__header {
+.team__controls {
   display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: var(--spacing-4xl);
-  margin-bottom: var(--spacing-2xl);
-}
-
-.team__heading { display: grid; gap: var(--spacing-sm); }
-::deep .team__lede { max-width: var(--ds-team-measure); color: var(--colors-text-muted); }
-
-.team__actions {
-  display: flex;
-  flex: 0 0 auto;
-  gap: var(--spacing-sm);
-  align-items: center;
-}
-
-.team__table-wrap {
-  overflow: hidden;
-  background: var(--colors-surface-card);
-  border: var(--ds-team-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-2xl);
-  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
-}
-
-.team__table-head,
-.team-row {
-  display: grid;
-  grid-template-columns:
-    minmax(var(--ds-team-col-name), 1.2fr)
-    minmax(0, 1.2fr)
-    minmax(var(--ds-team-col-role), 1.6fr)
-    var(--ds-team-col-status)
-    var(--ds-team-col-actions);
+  flex-wrap: wrap;
   gap: var(--spacing-md);
   align-items: center;
-  padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.team__table-head {
-  min-height: var(--ds-team-head-min);
-  color: var(--colors-text-muted);
-  background: var(--colors-surface-background);
-  border-bottom: var(--ds-team-hairline) solid var(--colors-surface-border);
-}
-
-.team-row {
-  min-height: var(--ds-team-row-min);
-  background: var(--colors-surface-card);
-}
-
-.team-row + .team-row { border-top: var(--ds-team-hairline) solid var(--colors-surface-border); }
-.team-row:hover { background: var(--colors-interaction-hover); }
-
-.team-row__name { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
-.team-row__name ::deep strong { overflow: hidden; color: var(--colors-text-secondary); white-space: nowrap; text-overflow: ellipsis; }
-::deep .team-row__email { overflow: hidden; color: var(--colors-text-muted); white-space: nowrap; text-overflow: ellipsis; }
-.team-row__role,
-.team-row__status { display: flex; }
-::deep .team-row__access { color: var(--colors-text-secondary); }
-.team-row__actions { display: flex; justify-content: flex-end; }
-
-/* Narrow screens: name and status on top, email and access beneath. */
-@media (max-width: 760px) {
-  .team__table-head { display: none; }
-  .team-row { grid-template-columns: minmax(0, 1fr) auto auto; }
-  ::deep .team-row__email,
-  ::deep .team-row__access { grid-column: 1 / -1; }
-}
-
-/* The Roles section sits under the team table. */
-.team__header--section { margin-top: var(--spacing-4xl); }
-
-.team-row--role {
-  grid-template-columns:
-    minmax(var(--ds-team-col-name), 1.2fr)
-    var(--ds-team-col-status)
-    minmax(0, 2fr)
-    var(--ds-team-col-status)
-    var(--ds-team-col-actions);
+  justify-content: space-between;
+  margin-bottom: var(--spacing-lg);
 }

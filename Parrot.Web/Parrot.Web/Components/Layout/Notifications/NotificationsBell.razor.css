@@ -1,0 +1,34 @@
+/* A steady frame in both views. Only the list scrolls; the title, filters and full-history link stay in reach. */
+.notifications-bell ::deep .ds-popover {
+  /* No notifications-panel width token. */
+  --ds-popover-panel-wide: 400px;
+  display: block;
+  width: 100%;
+}
+.notifications__panel {
+  /* No notifications-panel height token. The viewport cap keeps its footer visible on short screens. */
+  --ds-notifications-height: 640px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  height: min(var(--ds-notifications-height), calc(100dvh - var(--spacing-4xl)));
+  outline: none;
+}
+/* The title, the tabs and the row icons share one left edge: the list's own inset (xs) plus a row's padding (md). */
+.notifications__head { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-sm); padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-none) var(--spacing-lg); }
+.notifications__head ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.notifications__head-actions { display: flex; align-items: center; gap: var(--spacing-2xs); }
+.notifications__head-actions ::deep .ds-button:last-child { color: var(--colors-icon-muted); }
+.notifications__panel ::deep .notifications__tabs { margin: var(--spacing-none) var(--spacing-lg); }
+.notifications__scroll { min-height: 0; padding: var(--spacing-xs); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--colors-accent-neutral-border) transparent; }
+/* The card's last strip, edge to edge, and all of it the link, so the hover fills it (designer, 5 November 2026).
+   The popover's padding (sm) is undone to meet the card's edges; the card's rounded corners clip the hover, and the
+   keyboard ring is drawn inside so it isn't clipped. */
+.notifications__footer { margin: var(--spacing-none) calc(-1 * var(--spacing-sm)) calc(-1 * var(--spacing-sm)); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.notifications__footer ::deep .ds-button { padding-block: var(--spacing-lg); border-radius: var(--radius-radius-none); }
+.notifications__footer ::deep .ds-button:focus-visible { outline-offset: calc(-1 * (var(--ds-focus-ring-width) + var(--ds-focus-ring-offset))); }
+
+@media (max-width: 760px) {
+  .notifications__head { flex-wrap: wrap; padding-left: var(--spacing-sm); }
+}

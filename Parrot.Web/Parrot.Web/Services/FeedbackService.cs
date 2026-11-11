@@ -9,6 +9,9 @@ public enum FeedbackSound
     Incoming,
 }
 
+/// <summary>Applying a sound choice to this session and persisting it are separate browser outcomes.</summary>
+public sealed record FeedbackPreferenceSaveResult(bool Applied, bool Saved, bool Enabled);
+
 // The C# face of js/feedback.js. Sound and haptics are for messages only: a
 // reply sent (Send), a reply that failed (Error), a customer writing in
 // (Incoming). Fire-and-forget: a sound must never hold up or break a flow.
@@ -29,6 +32,10 @@ public sealed class FeedbackService(IJSRuntime js)
     }
 
     public async Task<bool> IsEnabledAsync()
+        => await ReadEnabledAsync() ?? true;
+
+    /// <summary>Null means the browser could not be read; a settings UI must not invent a successful read.</summary>
+    public async Task<bool?> ReadEnabledAsync()
     {
         try
         {
@@ -36,18 +43,24 @@ public sealed class FeedbackService(IJSRuntime js)
         }
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
         {
-            return true;
+            return null;
         }
     }
 
     public async Task SetEnabledAsync(bool enabled)
+        => _ = await TrySetEnabledAsync(enabled);
+
+    /// <summary>Only Saved confirms persistence. A blocked localStorage may still allow muting this session.</summary>
+    public async Task<FeedbackPreferenceSaveResult> TrySetEnabledAsync(bool enabled)
     {
         try
         {
-            await js.InvokeVoidAsync("parrotFeedback.setEnabled", enabled);
+            return await js.InvokeAsync<FeedbackPreferenceSaveResult?>("parrotFeedback.setEnabled", enabled)
+                ?? new(false, false, enabled);
         }
         catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException)
         {
+            return new(false, false, enabled);
         }
     }
 }

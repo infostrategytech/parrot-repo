@@ -220,6 +220,25 @@ builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Tools.IWorkspaceTool
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.Tools.IToolActionRequests, Parrot.Web.Features.Dashboard.Tools.UnavailableToolActionRequests>();
 builder.Services.AddSingleton<Parrot.Web.Features.Settings.IBusinessDetailsStore, Parrot.Web.Features.Settings.UnavailableBusinessDetails>();
 builder.Services.AddScoped<TeamState>();
+// Settings, sign-in and the team. Where the API has nothing yet, these say so rather than pretend
+// (settings-, profile- and team-backend-requests).
+builder.Services.AddScoped<Parrot.Web.Components.Pages.Dashboard.Settings.SettingsReturn>();
+builder.Services.AddScoped<Parrot.Web.Features.Settings.WorkspaceCurrency>();
+builder.Services.AddScoped<Parrot.Web.Features.Auth.ResetPassword.State.PasswordResetHandoff>();
+builder.Services.AddScoped<Parrot.Web.Features.Auth.ResetPassword.State.PasswordResetSignOut>();
+builder.Services.AddScoped<Parrot.Web.Features.Auth.ResetPassword.Services.IPasswordResetPreview, Parrot.Web.Features.Auth.ResetPassword.Services.UnavailablePasswordResetPreview>();
+// The sign-in waiting for its two-factor code, and the browser's "don't ask again on this device".
+builder.Services.AddScoped<Parrot.Web.Features.Auth.TwoFactor.TwoFactorSignInState>();
+builder.Services.AddScoped<Parrot.Web.Features.Auth.TwoFactor.RememberedDeviceStorage>();
+builder.Services.AddSingleton<Parrot.Web.Features.Auth.TwoFactor.ITwoFactorSignIn, Parrot.Web.Features.Auth.TwoFactor.UnavailableTwoFactorSignIn>();
+// Pop-ups and browser notifications while yára is open; Settings asks it for a test.
+builder.Services.AddScoped<Parrot.Web.Features.Notifications.NotificationPopups>();
+builder.Services.AddSingleton<Parrot.Web.Features.Notifications.INotificationFeed, Parrot.Web.Features.Notifications.UnavailableNotificationFeed>();
+builder.Services.AddSingleton<Parrot.Web.Features.Settings.INotificationSettingsStore, Parrot.Web.Features.Settings.UnavailableNotificationSettings>();
+builder.Services.AddSingleton<Parrot.Web.Features.Settings.IActivityLog, Parrot.Web.Features.Settings.UnavailableActivityLog>();
+builder.Services.AddSingleton<Parrot.Web.Features.Settings.IAccountSecurity, Parrot.Web.Features.Settings.UnavailableAccountSecurity>();
+builder.Services.AddSingleton<Parrot.Web.Features.Profile.IEmailChange, Parrot.Web.Features.Profile.UnavailableEmailChange>();
+builder.Services.AddSingleton<Parrot.Web.Features.Profile.IProfilePhoto, Parrot.Web.Features.Profile.UnavailableProfilePhoto>();
 
 WebApplication app = builder.Build();
 

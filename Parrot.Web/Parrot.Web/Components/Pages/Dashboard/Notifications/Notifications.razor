@@ -1,0 +1,119 @@
+@page "/dashboard/notifications"
+@layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Notifications
+@using Parrot.Web.Features.Notifications
+@inject INotificationFeed Feed
+@inject NavigationManager Nav
+@inject Parrot.Web.Services.UserClock Clock
+@implements IDisposable
+
+<PageTitle>Notifications · yára</PageTitle>
+
+<main class="notification-page">
+    <header class="notification-page__header">
+        <div>
+            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Notifications</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="notification-page__lede">@PageDescription</Typography>
+        </div>
+        <div class="notification-page__actions">
+            @if (Feed.Available && _cards.Any(card => card.Unread)) { <Button Variant="ButtonVariant.Secondary" disabled="_busy" @onclick="MarkAllAsync">Mark all as read</Button> }
+            <Button Variant="ButtonVariant.Secondary" @onclick="OpenSettings"><IconLeft><Icon Name="IconName.RiSettings4Fill" /></IconLeft><ChildContent>Notification settings</ChildContent></Button>
+        </div>
+    </header>
+
+    @* The views on the left and the filter on the right, above the list's card: Tasks' and Customers' controls row. *@
+    @if (Feed.Available)
+    {
+        <section class="notification-page__controls">
+                <Tabs Variant="TabsVariant.Tray" Label="Which notifications">
+                    <Tab Selected="@(_view == NotificationView.NeedsYou)" Count="@(NeedsYouCount > 0 ? NeedsYouCount.ToString() : null)" Title="@NotificationViews.NeedsYouDescription(NeedsYouCount)" OnClick="() => ChangeView(NotificationView.NeedsYou)"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Needs you</Typography></Tab>
+                    <Tab Selected="@(_view == NotificationView.Everything)" OnClick="() => ChangeView(NotificationView.Everything)"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Everything</Typography></Tab>
+                </Tabs>
+                <FilterPopover Label="@(_unread ? "Unread" : "All notifications")" Title="Show" AlignEnd Open="_filterOpen" OpenChanged="open => _filterOpen = open">
+                    <PopoverOption Label="All notifications" Active="@(!_unread)" OnSelect="() => ChangeUnread(false)" />
+                    <PopoverOption Label="Unread" Active="_unread" OnSelect="() => ChangeUnread(true)" />
+                </FilterPopover>
+        </section>
+    }
+
+    <section class="notification-page__card" aria-label="Workspace notifications">
+        @if (!Feed.Available)
+        { <EmptyState Glyph="IconName.RiNotification3Fill" Title="Notifications are on the way" Description="Agent questions, assigned tasks and important updates will show here." /> }
+        else
+        {
+            <div class="notification-page__body @(ShowsRows ? "is-rows" : null)" aria-busy="@(_loading ? "true" : "false")">
+                @if (_error is not null) { <InlineError Message="@_error"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="ReloadAsync">Try again</Button></Action></InlineError> }
+                @if (_loading && _cards.Count == 0)
+                { <div class="notification-page__loading" role="status" aria-label="Loading notifications"><Skeleton Shape="SkeletonShape.Line" /><Skeleton Shape="SkeletonShape.Line" /><Skeleton Shape="SkeletonShape.Line" /></div> }
+                else if (Shown.Count == 0 && _error is null)
+                {
+                    <EmptyState Glyph="IconName.RiCheckboxCircleFill" Title="@EmptyTitle" Description="@EmptyDescription">
+                        <Action>@if (_unread) { <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => ChangeUnread(false)">Show read notifications</Button> }</Action>
+                    </EmptyState>
+                }
+                else
+                { <NotificationList Items="@NotificationDisplay.Rows(Shown, _view == NotificationView.Everything, DateTimeOffset.UtcNow, Clock.Zone)" OnSelect="OpenCardAsync" Disabled="_busy" Layout="NotificationListLayout.Feed" /> }
+            </div>
+        }
+    </section>
+</main>
+
+@code {
+    [SupplyParameterFromQuery(Name = "view")] public string? View { get; set; }
+    [SupplyParameterFromQuery(Name = "unread")] public string? Unread { get; set; }
+    private NotificationView _view;
+    private bool _unread, _loading = true, _busy, _disposed, _loadFailed;
+    private int _loadVersion;
+    private string? _error;
+    private IReadOnlyList<NotificationCard> _cards = [];
+    private int NeedsYouCount => _cards.Count(card => card.NeedsYou);
+    // One steady line: the count is already on the Needs you tab, and "caught up" is the empty state's to say.
+    private string PageDescription => _loadFailed ? "Your notifications couldn't be refreshed. Try again." : "What needs your attention, and your workspace updates.";
+    private IReadOnlyList<NotificationCard> Shown => NotificationViews.Filter(_cards, _view, _unread);
+    // The rows meet the card's edges; loading and empty keep the card's inset.
+    private bool ShowsRows => !(_loading && _cards.Count == 0) && Shown.Count > 0;
+    private string EmptyTitle => _unread ? "No unread notifications" : _view == NotificationView.NeedsYou ? "Nothing needs you" : "No notifications yet";
+    private string EmptyDescription => _unread ? "You're up to date in this view. Read items may still need your attention." : _view == NotificationView.NeedsYou ? "You're all caught up. Important updates are in Everything." : "Agent questions, tasks and important outcomes will show here.";
+
+    protected override void OnParametersSet() { _view = NotificationViews.Parse(View); _unread = NotificationViews.ParseUnread(Unread); }
+    protected override async Task OnInitializedAsync() { Feed.Changed += OnFeedChanged; Clock.Changed += OnClockChanged; await ReloadAsync(); }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await Clock.ReadAsync(); }
+    private void OnClockChanged() => _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    private void ChangeView(NotificationView view) => Nav.NavigateTo(NotificationViews.Href(view, _unread));
+    private bool _filterOpen;
+    private void ChangeUnread(bool unread) { _filterOpen = false; Nav.NavigateTo(NotificationViews.Href(_view, unread)); }
+    private void OpenSettings() => Nav.NavigateTo("/dashboard/settings/notifications");
+    private async Task ReloadAsync()
+    {
+        var version = ++_loadVersion; _loading = true; _error = null; _loadFailed = false;
+        try
+        {
+            var items = await Feed.ReadAsync();
+            if (_disposed || version != _loadVersion) return;
+            _cards = NotificationProjection.Build(items);
+        }
+        catch (HttpRequestException) { if (!_disposed && version == _loadVersion) { _loadFailed = true; _error = "Notifications couldn't be loaded. Try again."; } }
+        finally { if (version == _loadVersion) _loading = false; }
+    }
+    private void OnFeedChanged() => _ = InvokeAsync(async () => { if (_disposed) return; await ReloadAsync(); StateHasChanged(); });
+    // One item opens itself; a group opens the list its items are in (Tasks, Inbox), all of it marked read.
+    private async Task OpenCardAsync(string id)
+    {
+        if (_busy || _cards.FirstOrDefault(item => item.Id == id) is not { } card) return;
+        var href = card.Href;
+        if (!NotificationCatalogue.IsInternalDestination(href)) { _error = "This item isn't available to open. Your notification is still here."; return; }
+        _busy = true; _error = null;
+        try { foreach (var item in card.Items.Where(item => item.Unread)) await Feed.MarkReadAsync(item.Id); Nav.NavigateTo(href!); }
+        catch (HttpRequestException) { _error = "This notification couldn't be opened. Try again."; }
+        finally { _busy = false; }
+    }
+    private async Task MarkAllAsync()
+    {
+        if (_busy) return;
+        _busy = true;
+        try { await Feed.MarkReadAsync(null); await ReloadAsync(); }
+        catch (HttpRequestException) { _error = "Read status couldn't be saved. Try again."; }
+        finally { _busy = false; }
+    }
+    public void Dispose() { _disposed = true; _loadVersion++; Feed.Changed -= OnFeedChanged; Clock.Changed -= OnClockChanged; }
+}

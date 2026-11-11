@@ -1,97 +1,43 @@
 @page "/dashboard/settings"
 @page "/dashboard/settings/{Tab}"
-@layout DashboardLayout
+@layout Parrot.Web.Components.Layout.Settings.SettingsLayout
 @namespace Parrot.Web.Components.Pages.Dashboard.Settings
-@using Parrot.Web.Components.Pages.Dashboard.Settings
 
-<PageTitle>Settings · yára</PageTitle>
+<PageTitle>@($"{Current.Label} · Settings · yára")</PageTitle>
 
-@* Settings, one tab at a time. The tab tray is the same raised-pill control
-   Aurora's Products page uses for its status filters. *@
+@* One section at a time in Settings' own space (designer, 1 November 2026). Its name is the page's heading; the
+   sections themselves are designed one by one next. *@
+<header class="settings__head">
+    <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@Current.Label</Typography>
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@Current.Description</Typography>
+</header>
 
-<div class="settings">
-    <header class="settings__header">
-        <div class="settings__heading">
-            <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Settings</Typography>
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="settings__lede">
-                Your account, your workspace and how the product behaves for everyone in it.
-            </Typography>
-        </div>
-    </header>
-
-    <nav class="settings__tabs" role="tablist" aria-label="Settings sections">
-        @foreach (var tab in VisibleTabs)
-        {
-            var id = tab.Id;
-            <button type="button"
-                    role="tab"
-                    aria-selected="@((ActiveTab == id).ToString().ToLowerInvariant())"
-                    class="@(ActiveTab == id ? "settings__tab is-active" : "settings__tab")"
-                    @onclick="() => SetTab(id)">
-                <Icon Name="@tab.Glyph" Size="IconSize.Sm" />
-                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@tab.Label</Typography>
-            </button>
-        }
-    </nav>
-
-    <div class="settings__body">
-        @if (ActiveTab == "profile")
-        {
-            <ProfileTab />
-        }
-        @if (ActiveTab == "workspace")
-        {
-            <WorkspaceTab />
-        }
-        @if (ActiveTab == "automation")
-        {
-            <AutomationTab />
-        }
-        @if (ActiveTab == "security")
-        {
-            <SecurityTab />
-        }
-        @if (ActiveTab == "notification")
-        {
-            <NotificationTab />
-        }
-        @if (ActiveTab == "billing")
-        {
-            <BillingTab />
-        }
-    </div>
+<div class="settings__body">
+    @switch (Current.Id)
+    {
+        case "appearance": <PreferencesSection />
+            break;
+        case "notifications": <NotificationsSection />
+            break;
+        case "security": <SecuritySection />
+            break;
+        case "business": <BusinessSection />
+            break;
+        case "team": <Parrot.Web.Components.Pages.Dashboard.Team.Team />
+            break;
+        case "billing": <BillingTab />
+            break;
+        case "activity": <ActivityLogSection />
+            break;
+        default: <ProfileTab />
+            break;
+    }
 </div>
 
 @code {
     [Parameter] public string? Tab { get; set; }
-
     [Inject] private AuthState AuthState { get; set; } = default!;
 
-    // Rule null: the person's own settings, open to every member. The business's
-    // settings (its name and logo, automation, billing) are the owner's.
-    private sealed record SettingsTab(string Id, string Label, IconName Glyph, string? Rule = null);
-
-    private static readonly SettingsTab[] Tabs =
-    [
-        new("profile", "Profile", IconName.RiUser3Fill),
-        new("workspace", "Workspace", IconName.RiStore2Fill, AccessRules.Business),
-        new("automation", "Automation", IconName.RiFlashlightFill, AccessRules.Business),
-        new("security", "Security", IconName.RiShieldCheckFill),
-        new("notification", "Notification", IconName.RiAlarmWarningFill),
-        new("billing", "Billing & Usage", IconName.RiRefund2Fill, AccessRules.Business)
-    ];
-
-    private IEnumerable<SettingsTab> VisibleTabs =>
-        Tabs.Where(t => t.Rule is null || (AuthState.CurrentUser?.Allows(t.Rule) ?? false));
-
-    string ActiveTab = "profile";
-
-    // A tab the person may not open, even by its address, lands on Profile.
-    protected override void OnParametersSet()
-    {
-        string wanted = string.IsNullOrEmpty(Tab) ? ActiveTab : Tab.ToLower();
-        ActiveTab = VisibleTabs.Any(t => t.Id == wanted) ? wanted : "profile";
-    }
-
-    void SetTab(string tab) => ActiveTab = VisibleTabs.Any(t => t.Id == tab) ? tab : "profile";
+    // A section the person may not open (the business's, for a team member), even by its address, shows Profile.
+    private SettingsSection Current => SettingsSections.For(Tab, rule => AuthState.CurrentUser?.Allows(rule) ?? false);
 }

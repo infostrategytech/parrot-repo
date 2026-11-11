@@ -13,6 +13,34 @@
   --ds-workspace-card-border: var(--ds-hairline);
 }
 
+/* Create a workspace (designer, 9 November 2026): the same card in a ContentModal. The modal's frame gives way to
+   it: the card's own width, no header band (the close button floats in the corner, over the drawing), the card's
+   padding, and the buttons stacked full width under it without a rule, as they were. */
+.workspace-create-host {
+  /* Gap in the token set: the card's own width, as the Dialog it came from (--ds-dialog-width). */
+  --ds-workspace-card-width: 480px;
+}
+.workspace-create-host ::deep .content-modal { --ds-content-modal-width: var(--ds-workspace-card-width); }
+.workspace-create-host ::deep .content-modal__header {
+  position: absolute;
+  top: var(--spacing-none);
+  right: var(--spacing-none);
+  z-index: 2;
+  padding: var(--spacing-lg);
+}
+.workspace-create-host ::deep .content-modal__body { padding-top: var(--spacing-3xl); padding-bottom: var(--spacing-xl); }
+.workspace-create-host ::deep .content-modal__footer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  padding: var(--spacing-none) var(--spacing-3xl) var(--spacing-3xl);
+  background: transparent;
+  border-top: none;
+}
+@media (max-width: 760px) {
+  .workspace-create-host ::deep .content-modal__body { padding-top: var(--spacing-xl); }
+  .workspace-create-host ::deep .content-modal__footer { padding: var(--spacing-none) var(--spacing-xl) var(--spacing-xl); }
+}
+
 /* Business name, then the optional phone number. */
 .workspace-name-form {
   display: grid;

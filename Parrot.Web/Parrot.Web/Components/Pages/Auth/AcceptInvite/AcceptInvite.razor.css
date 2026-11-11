@@ -1,0 +1,16 @@
+/* The invite: whose team it is, big, then who asked; then who it's for. */
+.accept-invite__intro { justify-items: start; }
+.accept-invite__intro ::deep h1 { text-wrap: balance; }
+
+/* Who it's for, as the owner entered them: shown, not asked again. */
+.accept-invite__who {
+  display: grid;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-md) var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+.accept-invite__who ::deep p { margin: var(--spacing-none); }
+.accept-invite__who ::deep p + p { color: var(--colors-text-muted); }
+
+.accept-invite__note ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }

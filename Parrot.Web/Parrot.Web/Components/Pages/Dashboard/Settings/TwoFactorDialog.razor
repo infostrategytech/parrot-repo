@@ -1,0 +1,363 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Settings
+@using Parrot.Web.Components.Pages.Auth
+@implements IDisposable
+@inject IAccountSecurity Security
+@inject AuroraInterop Interop
+@inject ToastService Toasts
+@inject AuthState AuthState
+@inject NavigationManager Navigation
+
+@* Two-factor, in as few words as each step needs (designer, 5 November 2026: "so many text descriptions"). Setting
+   it up: the password and how the codes should come, email by default or an authenticator app; then the code. The
+   first way to turn on gives recovery codes to keep, whichever it is. The other way can be added after (designer,
+   9 November 2026: both on, so one that can't be reached never locks anyone out), and one of two removed. Turning it
+   off, or replacing the recovery codes, asks for the password (and, with an app, a code). *@
+@* A form in steps, so the shared ContentModal (designer, 8 November 2026: forms in ContentModal, decisions in Dialog).
+   Enter submits each step; turning it off keeps a red button. Leaving the recovery codes unsaved is a decision, so
+   it asks in a Dialog of its own, over this one. *@
+<ContentModal Open="true" Title="@Title" Subtitle="@Subtitle" Busy="_busy" OnSubmit="SubmitAsync" OnClose="CloseAsync"
+              InitialFocusId="@_focusId" FocusKey="@_focusRevision.ToString()">
+    <ChildContent>
+        <div class="factor">
+            @if (_phase == Phase.Password)
+            {
+                @if (Action == TwoFactorAction.Enable)
+                {
+                    @* How the codes should come: the app's dropdown with a line on each, as New task's type and Team's role. *@
+                    <SelectField FloatingLabel="Get codes by" Value="@MethodName(_method)" Open="_methodOpen" OpenChanged="open => _methodOpen = open">
+                        <PopoverOption Label="Email" Active="@(_method == TwoFactorMethod.Email)" OnSelect="() => PickMethod(TwoFactorMethod.Email)" />
+                        <PopoverOption Label="Authenticator app" Active="@(_method == TwoFactorMethod.App)" OnSelect="() => PickMethod(TwoFactorMethod.App)" />
+                    </SelectField>
+                }
+                <PasswordInput Id="factor-password" FloatingLabel="Current password" ShowIcon="false" Value="@_password" ValueChanged="value => { _password = value ?? string.Empty; ClearErrors(); }" ErrorText="@_passwordError" HelperTextStyle="TextStyle.Small12Medium" />
+                @if (NeedsAppCode)
+                {
+                    <Input Id="factor-verify-code" FloatingLabel="Code from your app, or a recovery code" Value="@_code" ValueChanged="value => { _code = value ?? string.Empty; ClearErrors(); }"
+                           maxlength="32" autocomplete="one-time-code" Error="@(_codeError is not null)" HelperText="@_codeError" HelperTextStyle="TextStyle.Small12Medium" />
+                }
+            }
+            else if (_phase == Phase.EmailCode && _emailSetup is not null)
+            {
+                <CodeEntry Compact InputId="factor-email-code" Disabled="_restartRequired" JustSent="true"
+                           Verify="VerifyCodeAsync" Resend="ResendAsync" CodeChanged="code => { _code = code; ClearErrors(); }" />
+            }
+            else if (_phase == Phase.Scan && _setup is not null)
+            {
+                @* One centred column (designer, 5 November 2026): the QR code, the way to type the key instead, then the boxes. *@
+                <div class="factor__scan">
+                    <QrCode Value="@_setup.ProvisioningUri" />
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-expanded="@(_manual ? "true" : "false")" aria-controls="factor-manual"
+                            @onclick="() => _manual = !_manual">@(_manual ? "Hide the key" : "Can't scan the code?")</Button>
+                    @if (_manual)
+                    {
+                        <div class="factor__key" id="factor-manual">
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="code">@_setup.Key</Typography>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => CopyAsync(_setup.Key)">Copy key</Button>
+                        </div>
+                    }
+                </div>
+                <CodeEntry Compact InputId="factor-setup-code" Disabled="_restartRequired" Verify="VerifyCodeAsync" CodeChanged="code => { _code = code; ClearErrors(); }" />
+                @if (_restartRequired)
+                {
+                    <div class="factor__actions">
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="_busy" @onclick="RestartAsync">Start again</Button>
+                    </div>
+                }
+            }
+            else if (_phase == Phase.Codes)
+            {
+                <div class="factor__codes" id="factor-code-instructions" tabindex="-1">
+                    @foreach (var code in _codes)
+                    {
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="code">@(code)</Typography>
+                    }
+                </div>
+                <div class="factor__actions">
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => CopyAsync(string.Join(Environment.NewLine, _codes))">
+                        <IconLeft><Icon Name="IconName.RiFileCopyFill" Size="IconSize.Sm" /></IconLeft><ChildContent>Copy codes</ChildContent>
+                    </Button>
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="DownloadCodesAsync">
+                        <IconLeft><Icon Name="IconName.RiDownload2Fill" Size="IconSize.Sm" /></IconLeft><ChildContent>Download codes</ChildContent>
+                    </Button>
+                </div>
+                <Checkbox State="@(_saved ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                          StateChanged="value => { _saved = value == CheckboxState.Checked; _error = null; }" Label="I've saved these codes" />
+            }
+            @if (_error is not null) { <InlineError Message="@_error" /> }
+            @if (_copyStatus is not null) { <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="factor__hint" role="status" aria-live="polite">@_copyStatus</Typography> }
+        </div>
+    </ChildContent>
+    <Footer Context="formId">
+        @if (_phase != Phase.Codes)
+        {
+            <Button Variant="ButtonVariant.Secondary" id="factor-cancel" @onclick="CloseAsync">Cancel</Button>
+        }
+        <Button Type="ButtonType.Submit" form="@formId" Busy="_busy" disabled="_restartRequired"
+                Variant="@(Action is TwoFactorAction.Disable or TwoFactorAction.Remove && _phase == Phase.Password ? ButtonVariant.Destructive : ButtonVariant.Primary)">
+            @(_busy ? BusyLabel : ConfirmLabel)
+        </Button>
+    </Footer>
+</ContentModal>
+<Dialog Open="_confirmLeaveCodes" Type="DialogType.Destructive" Title="Leave without saving your codes?"
+        ConfirmLabel="Leave without saving" CancelLabel="Go back" CancelButtonId="factor-leave-back" FocusTargetId="factor-leave-back"
+        GlyphContent="Warning" OnConfirm="LeaveCodesAsync" OnCancel="StayWithCodes">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>These codes can't be shown again. Two-factor authentication stays on.</Typography></Body>
+</Dialog>
+<NavigationLock ConfirmExternalNavigation="@(_phase == Phase.Codes && !_saved && !_allowNavigation)" OnBeforeInternalNavigation="GuardCodes" />
+
+@code {
+    [Parameter] public TwoFactorAction Action { get; set; }
+    /// <summary>The ways codes come now, for turning it off or replacing recovery codes (an app asks for its code).</summary>
+    [Parameter] public IReadOnlyList<TwoFactorMethod>? Methods { get; set; }
+    /// <summary>For Add and Remove: the way being added or removed.</summary>
+    [Parameter] public TwoFactorMethod? ForMethod { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback<AccountSecurityInfo> OnChanged { get; set; }
+    private enum Phase { Password, EmailCode, Scan, Codes }
+    private Phase _phase;
+    private TwoFactorMethod _method = TwoFactorMethod.Email;
+    private readonly CancellationTokenSource _lifetime = new();
+    private AuthenticatorSetup? _setup;
+    private EmailCodeSetup? _emailSetup;
+    private IReadOnlyList<string> _codes = [];
+    private string _password = "", _code = "";
+    private string? _passwordError, _codeError, _error, _copyStatus, _navigationTarget;
+    private bool _busy, _saved, _restartRequired, _manual, _confirmLeaveCodes, _allowNavigation, _methodOpen;
+    private string _focusId = "factor-password";
+    private int _focusRevision;
+    // The warning mark, only where protection is lowered or codes would be lost.
+    private static readonly RenderFragment Warning = @<Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Md" />;
+    private string Email => AuthState.CurrentUser?.Email is { Length: > 0 } email ? email : "your email address";
+    private static string MethodName(TwoFactorMethod method) => method == TwoFactorMethod.Email ? "Email" : "Authenticator app";
+    private void PickMethod(TwoFactorMethod method) { _method = method; _methodOpen = false; }
+
+    // Turning off or replacing codes with the app on asks for its code (or a recovery code) as well as the password.
+    private bool NeedsAppCode => Action is TwoFactorAction.Disable or TwoFactorAction.ReplaceCodes && Methods?.Contains(TwoFactorMethod.App) == true;
+    private bool Adding => Action == TwoFactorAction.Add;
+    private bool RemovingApp => ForMethod == TwoFactorMethod.App;
+
+    protected override void OnInitialized()
+    {
+        // Adding a way: that way, no choice to make.
+        if (Adding && ForMethod is { } method) _method = method;
+    }
+
+    private string Title => _phase switch
+    {
+        Phase.EmailCode => "Check your email",
+        Phase.Scan => "Scan the code with your app",
+        Phase.Codes => "Save your recovery codes",
+        _ => Action switch
+        {
+            TwoFactorAction.Disable => "Turn off two-factor authentication?",
+            TwoFactorAction.ReplaceCodes => "Get new recovery codes",
+            TwoFactorAction.Add => _method == TwoFactorMethod.App ? "Add an authenticator app" : "Add email codes",
+            TwoFactorAction.Remove => RemovingApp ? "Remove the authenticator app?" : "Remove email codes?",
+            _ => "Set up two-factor authentication",
+        },
+    };
+    // One short line each: what to do now.
+    private string? Subtitle => _phase switch
+    {
+        Phase.EmailCode => $"Enter the 6-digit code we sent to {_emailSetup?.Email ?? Email}.",
+        Phase.Scan => "Then enter the 6-digit code it shows.",
+        Phase.Codes => $"If you can't get a code {CodesComeFrom}, one of these gets you in. Each works once.",
+        _ => Action switch
+        {
+            TwoFactorAction.Disable => "Signing in will only need your password.",
+            TwoFactorAction.ReplaceCodes => "Your old codes will stop working.",
+            TwoFactorAction.Add => "Another way to get your code when you sign in.",
+            TwoFactorAction.Remove => RemovingApp ? $"Your codes will only come by email, to {Email}." : "Your codes will only come from your authenticator app.",
+            _ => null,
+        },
+    };
+    // Why the codes matter, named by the ways that are on: just set up (the first way), or all of them when replacing codes.
+    private string CodesComeFrom
+    {
+        get
+        {
+            var ways = Action == TwoFactorAction.ReplaceCodes && Methods is { Count: > 0 } on ? on : [_method];
+            var email = ways.Contains(TwoFactorMethod.Email);
+            var app = ways.Contains(TwoFactorMethod.App);
+            return email && app ? "by email or from your app" : app ? "from your app" : "by email";
+        }
+    }
+    private string ConfirmLabel => _phase switch
+    {
+        Phase.Codes => "Done",
+        Phase.EmailCode or Phase.Scan => Adding ? "Add" : "Turn on",
+        _ => Action switch { TwoFactorAction.Disable => "Turn off", TwoFactorAction.ReplaceCodes => "Get new codes", TwoFactorAction.Remove => "Remove", _ => "Continue" },
+    };
+    private string BusyLabel => _phase is Phase.EmailCode or Phase.Scan ? "Checking…" : Action switch
+    { TwoFactorAction.Disable => "Turning off…", TwoFactorAction.ReplaceCodes => "Creating…", TwoFactorAction.Remove => "Removing…", _ => "Continuing…" };
+
+    private void ClearErrors() => _passwordError = _codeError = _error = null;
+    private void Focus(string id) { _focusId = id; _focusRevision++; }
+
+    // What's missing, said where it belongs when the button is pressed (the button stays live, as the app's other dialogs).
+    private bool Missing()
+    {
+        if (_phase == Phase.Codes) { if (!_saved) _error = "Tick the box once you've saved your codes."; return !_saved; }
+        if (_phase is Phase.EmailCode or Phase.Scan) { if (!SecurityText.SixDigits(_code)) _error = "Enter the 6-digit code."; return !SecurityText.SixDigits(_code); }
+        var missing = false;
+        if (_password.Length == 0) { _passwordError = "Enter your password."; Focus("factor-password"); missing = true; }
+        if (NeedsAppCode && string.IsNullOrWhiteSpace(_code))
+        { _codeError = "Enter a code from your app, or a recovery code."; if (!missing) Focus("factor-verify-code"); missing = true; }
+        return missing;
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_busy || _restartRequired || _confirmLeaveCodes) return;
+        ClearErrors();
+        if (Missing()) return;
+        if (_phase == Phase.Codes) { await FinishAsync(); return; }
+        if (!Security.Available) return;
+        _busy = true;
+        try
+        {
+            if (_phase == Phase.Password && Action is TwoFactorAction.Enable or TwoFactorAction.Add && _method == TwoFactorMethod.Email)
+            {
+                _emailSetup = await Security.BeginEmailSetupAsync(_password, _lifetime.Token);
+                _password = _code = ""; _phase = Phase.EmailCode; Focus("factor-email-code");
+            }
+            else if (_phase == Phase.Password && Action is TwoFactorAction.Enable or TwoFactorAction.Add)
+            {
+                _setup = await Security.BeginSetupAsync(_password, _lifetime.Token);
+                _password = _code = ""; _phase = Phase.Scan; _copyStatus = null; Focus("factor-setup-code");
+            }
+            else if (_phase is Phase.EmailCode or Phase.Scan)
+            {
+                // The first way on brings recovery codes to save; a second way only adds itself.
+                var result = _phase == Phase.EmailCode
+                    ? await Security.ConfirmEmailSetupAsync(_emailSetup!.Id, _code, _lifetime.Token)
+                    : await Security.ConfirmSetupAsync(_setup!.Id, _code, _lifetime.Token);
+                _password = _code = ""; _setup = null; _emailSetup = null; _manual = false;
+                await OnChanged.InvokeAsync(result.Account);
+                if (result.RecoveryCodes.Count > 0)
+                {
+                    _codes = result.RecoveryCodes; _saved = false; _phase = Phase.Codes; _copyStatus = null; Focus("factor-code-instructions");
+                }
+                else
+                {
+                    Toasts.Show(_method == TwoFactorMethod.App ? "Authenticator app added" : "Email codes added");
+                    await FinishAsync();
+                }
+            }
+            else if (Action == TwoFactorAction.Remove && ForMethod is { } removing)
+            {
+                var account = await Security.RemoveMethodAsync(_password, removing, _lifetime.Token);
+                _password = ""; await OnChanged.InvokeAsync(account);
+                Toasts.Show(removing == TwoFactorMethod.App ? "Authenticator app removed" : "Email codes removed");
+                await OnClose.InvokeAsync();
+            }
+            else if (Action == TwoFactorAction.Disable)
+            {
+                var account = await Security.DisableAsync(_password, _code.Trim(), _lifetime.Token);
+                _password = _code = ""; await OnChanged.InvokeAsync(account);
+                Toasts.Show("Two-factor authentication turned off");
+                await OnClose.InvokeAsync();
+            }
+            else
+            {
+                var result = await Security.ReplaceRecoveryCodesAsync(_password, _code.Trim(), _lifetime.Token);
+                _password = _code = ""; _codes = result.RecoveryCodes; _saved = false; _phase = Phase.Codes;
+                _copyStatus = null; Focus("factor-code-instructions"); await OnChanged.InvokeAsync(result.Account);
+            }
+        }
+        catch (SecurityOperationException ex)
+        {
+            _restartRequired = ex.RestartSetup;
+            if (ex.Field == SecurityField.Password) { _passwordError = ex.Message; Focus("factor-password"); }
+            else if (ex.Field == SecurityField.Code) { _codeError = ex.Message; if (_phase == Phase.Password) Focus("factor-verify-code"); }
+            else _error = ex.Message;
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException)
+        { _error = "We couldn't complete that change. Check your connection and try again."; }
+        finally { _busy = false; }
+    }
+
+    // The boxes check themselves on the sixth digit. They call this directly, not as one of this dialog's own events,
+    // so it redraws itself: busy, then the next step. A wrong code is said in the boxes, not again below.
+    private async Task<CodeEntry.Outcome> VerifyCodeAsync(string code, CancellationToken token)
+    {
+        _code = code;
+        var submit = SubmitAsync();
+        StateHasChanged();
+        await submit;
+        StateHasChanged();
+        if (_codeError is not { } problem) return CodeEntry.Outcome.Ok;
+        _codeError = null;
+        return new CodeEntry.Outcome(problem);
+    }
+
+    private async Task<string?> ResendAsync(CancellationToken token)
+    {
+        if (_emailSetup is not { } setup) return "Start again to get a new code.";
+        try { _emailSetup = await Security.ResendEmailCodeAsync(setup.Id, _lifetime.Token); return null; }
+        catch (SecurityOperationException ex) { _restartRequired = ex.RestartSetup; return ex.Message; }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException) { return "The code couldn't be sent. Try again."; }
+    }
+
+    private async Task CopyAsync(string value)
+    {
+        try { _copyStatus = await Interop.TryCopyAsync(value) ? "Copied" : "Copying wasn't available. Select the text and copy it."; }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException)
+        { _copyStatus = "Copying wasn't available. Select the text and copy it."; }
+    }
+    private async Task DownloadCodesAsync()
+    {
+        if (_phase != Phase.Codes || _codes.Count == 0 || _confirmLeaveCodes) return;
+        var text = "yára recovery codes" + Environment.NewLine + Environment.NewLine + string.Join(Environment.NewLine, _codes)
+            + Environment.NewLine + Environment.NewLine + "Each code works once. Store privately and never share these codes.";
+        try { _copyStatus = await Interop.SaveTextFileAsync(text, "yára-recovery-codes.txt")
+            ? "Download started. Check your downloads, then tick the box."
+            : "The download couldn't start. Copy the codes instead."; }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException)
+        { _copyStatus = "The download couldn't start. Copy the codes instead."; }
+    }
+    private async Task CancelSetupAsync()
+    {
+        var id = _setup?.Id ?? _emailSetup?.Id;
+        if (id is null) return;
+        try { await Security.CancelSetupAsync(id, _lifetime.Token); }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or SecurityOperationException)
+        { /* Unverified setup must expire server-side. Never claim cancellation was acknowledged. */ }
+        _setup = null; _emailSetup = null;
+    }
+    private async Task RestartAsync()
+    {
+        if (_busy) return; _busy = true;
+        try { await CancelSetupAsync(); _password = _code = ""; _phase = Phase.Password; _restartRequired = _manual = false; ClearErrors(); Focus("factor-password"); }
+        finally { _busy = false; }
+    }
+    private async Task CloseAsync()
+    {
+        if (_busy) return;
+        if (_confirmLeaveCodes) return;
+        if (_phase == Phase.Codes && !_saved) { _confirmLeaveCodes = true; return; }
+        _busy = true;
+        try { await CancelSetupAsync(); await FinishAsync(); }
+        finally { _busy = false; }
+    }
+    private async Task FinishAsync()
+    { _password = _code = ""; _codes = []; _allowNavigation = true; await OnClose.InvokeAsync(); }
+    // "Go back": the codes again, where they were.
+    private void StayWithCodes() { _confirmLeaveCodes = false; _navigationTarget = null; Focus("factor-code-instructions"); }
+
+    private async Task LeaveCodesAsync()
+    {
+        var destination = _navigationTarget;
+        _confirmLeaveCodes = false; _navigationTarget = null;
+        await FinishAsync();
+        if (destination is not null) Navigation.NavigateTo(destination);
+    }
+    private void GuardCodes(LocationChangingContext context)
+    {
+        if (_phase != Phase.Codes || _saved || _allowNavigation) return;
+        context.PreventNavigation(); _navigationTarget = context.TargetLocation; _confirmLeaveCodes = true; StateHasChanged();
+    }
+    public void Dispose() { _lifetime.Cancel(); _lifetime.Dispose(); _password = _code = ""; _setup = null; _emailSetup = null; _codes = []; }
+}

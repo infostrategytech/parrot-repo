@@ -1,0 +1,39 @@
+/* A row of the activity log, and its column names (is-head). The table's look is the shared DataTable's (every table
+   alike); the columns are this table's own, spaced as Customers': the wide ones for who and the action, then the area
+   and the date and time, all reading from the left. */
+.activity-row {
+  /* Gap in the token set: no border-width scale. */
+  --ds-activity-hairline: 1px;
+  --ds-table-columns: minmax(0, 1.4fr) minmax(0, 2.4fr) minmax(0, 1.1fr) minmax(0, 1.1fr);
+}
+.activity-row__facts { display: contents; }
+.activity-row__facts > * { min-width: 0; }
+
+.activity-row__who, .activity-row__what { display: flex; align-items: center; min-width: 0; }
+.activity-row__what { color: var(--colors-text-primary); }
+
+/* The action is the row's button, stretched over the whole row: a click anywhere opens the details. */
+.activity-row__what ::deep .activity-row__open {
+  justify-content: start;
+  min-height: auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+  text-align: start;
+  background: transparent;
+}
+.activity-row__what ::deep .activity-row__open::after { position: absolute; inset: 0; content: ""; }
+.activity-row__what ::deep .activity-row__open:focus-visible { outline: none; }
+.activity-row__what ::deep .activity-row__open:focus-visible::after { outline: var(--ds-activity-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-activity-hairline) * -1); }
+
+.activity-row__area, .activity-row__when { display: flex; align-items: center; min-width: 0; color: var(--colors-text-secondary); }
+
+@media (max-width: 1024px) {
+  /* Who and the action across, the area and time on a line under them. */
+  .activity-row { --ds-table-columns: minmax(0, 1fr) minmax(0, 1.6fr); }
+  .activity-row__facts { display: flex; flex-wrap: wrap; gap: var(--spacing-sm) var(--spacing-lg); grid-column: 2; }
+}
+
+@media (max-width: 760px) {
+  .activity-row { --ds-table-columns: minmax(0, 1fr); }
+  .activity-row__facts { grid-column: 1; }
+}

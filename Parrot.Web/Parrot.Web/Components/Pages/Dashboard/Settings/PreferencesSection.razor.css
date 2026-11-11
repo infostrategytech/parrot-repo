@@ -1,0 +1,14 @@
+/* One setting a line, its control on the right, as in Notifications. */
+.preferences__lines { display: grid; }
+.preferences__line { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-xl); padding: var(--spacing-xl) var(--spacing-none); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.preferences__line:first-child { padding-top: var(--spacing-none); border-top: none; }
+.preferences__line:last-child { padding-bottom: var(--spacing-none); }
+.preferences__line > div { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.preferences__line ::deep p { margin: var(--spacing-none); }
+.preferences__line > div > ::deep p:first-child { color: var(--colors-text-primary); }
+.preferences__line > div > ::deep p:not(:first-child) { color: var(--colors-text-muted); }
+::deep .preferences__value { color: var(--colors-text-primary); }
+
+@media (max-width: 760px) {
+  .preferences__line { flex-direction: column; align-items: flex-start; }
+}

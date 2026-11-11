@@ -1,0 +1,36 @@
+/* Confirm It's You: the panel is AuthPanelLayout's and the boxes are CodeEntry's; only the page's own extras are here. */
+
+/* Choose How to Sign In: a quiet rounded card of rows, as Google's list of ways in. */
+.verify-sign-in__methods {
+  display: grid;
+  overflow: hidden;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.verify-sign-in__methods > div + div { border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.verify-sign-in__methods ::deep .verify-sign-in__method {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  width: 100%;
+  padding: var(--spacing-lg);
+  text-align: start;
+  color: var(--colors-text-primary);
+}
+.verify-sign-in__methods ::deep .verify-sign-in__method > .ds-icon { color: var(--colors-icon-secondary); }
+.verify-sign-in__method-words { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.verify-sign-in__method-words ::deep small { color: var(--colors-text-muted); }
+
+/* "Other sign-in methods": one text button in the link colour, as Sign In's "Forgot Password?". */
+.verify-sign-in__switch {
+  justify-self: center;
+  padding: var(--spacing-none);
+  color: var(--colors-text-link);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+.verify-sign-in__switch:hover:not(:disabled) { color: var(--colors-text-link-hover); }
+.verify-sign-in__switch:disabled { cursor: default; }

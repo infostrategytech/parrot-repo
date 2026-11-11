@@ -1,0 +1,467 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.Workspace
+@using Parrot.Web.Features.Profile
+@using Parrot.Web.Features.Settings
+@using Found = Parrot.Web.Features.Settings.BusinessContactSuggestions
+@inject AuthState AuthState
+@inject BusinessKind Kind
+@inject WorkspaceClient Workspaces
+@inject ProfileClient Profile
+@inject IBusinessDetailsStore Details
+@inject WorkspaceCurrency Currency
+@inject ToastService Toasts
+@inject NavigationManager Navigation
+@inject Parrot.Web.Features.Dashboard.Channels.State.ChannelsState Channels
+@inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
+
+@* What customers and agents know about the business, in one place (designer, 1 November 2026): the old Workspace
+   tab and Business setup's details together. The name and logo save to the workspace API; the kind of business is
+   kept for the session as before; the rest needs the backend (settings-backend-requests).
+
+   Shaped like Profile (designer, 7 November 2026): the logo at the top, centred, with a camera to change it and the
+   name under it as you type it; then the fields. The logo is kept as soon as it's picked, as your photo is; every
+   other change waits for the save bar, which appears once something changes and stays at the window's foot. *@
+@if (!Details.Available)
+{
+    <InlineError Tone="InlineErrorTone.Info" Message="Only the name, logo and kind of business are saved for now. The other details need an update to yára before they can be saved." />
+}
+@if (_details is null)
+{
+    <Skeleton Shape="SkeletonShape.Block" />
+}
+else
+{
+    <SettingsCard>
+        <ChildContent>
+            <div class="business__about-card">
+                <div class="business__you">
+                    <AvatarPicker Seed="@(AuthState.CurrentUser?.CurrentWorkspaceId ?? "business")" Initials="@Initials.From(_name)" ImageUrl="@AuthState.CurrentUser?.LogoUrl"
+                                  Class="business__logo" Label="@(HasLogo ? "Change logo" : "Add logo")" Accept="@PhotoRules.Accept" Busy="_logoBusy" OnChange="UploadLogoAsync" />
+                    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="p" Class="@(_name.Trim().Length > 0 ? "business__name" : "business__name is-empty")">@(_name.Trim().Length > 0 ? _name.Trim() : "Your business")</Typography>
+                    @if (HasLogo)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@_logoBusy" @onclick="RemoveLogoAsync">Remove logo</Button>
+                    }
+                    @if (_logoError is not null) { <InlineError Message="@_logoError" /> }
+                    <span class="sr-only" role="status">@_logoStatus</span>
+                </div>
+
+                <div class="business__grid">
+                    <Input FloatingLabel="Business name" Value="@_name" ValueChanged="value => { _name = value ?? string.Empty; Touch(); }" maxlength="80" />
+                    <SelectField FloatingLabel="Kind of business" Value="@(AgentIndustry.Of(_industry)?.Name)" HelperText="@(_guessed ? "We guessed this, so change it if it's wrong." : null)"
+                                 Open="@(_open == "industry")" OpenChanged="@(open => _open = open ? "industry" : null)">
+                        @foreach (var industry in AgentIndustry.All)
+                        {
+                            var current = industry;
+                            <PopoverOption Label="@current.Name" Active="@(_industry == current.Id)"
+                                           OnSelect="() => { _industry = current.Id; _guessed = false; _open = null; Touch(); }" />
+                        }
+                    </SelectField>
+                    @* The label is the placeholder, as Products' description is: there's no floating label for a long field. *@
+                    <div class="business__full">
+                        <TextArea Value="@_details.Description" ValueChanged="value => Edit(_details! with { Description = value ?? string.Empty })" AriaLabel="What you do"
+                                  Placeholder="What you do" Rows="3" AutoGrow MaxLength="400" Disabled="@(!Details.Available)" />
+                    </div>
+                    <div class="business__full">
+                    <SelectField FloatingLabel="Currency" Value="@BusinessChoices.CurrencyName(_details.Currency)" HelperText="Used for new prices and amounts. Existing entries keep their original currency." HelperTextStyle="TextStyle.Small12Medium" Open="@(_open == "currency")" OpenChanged="@(open => _open = open ? "currency" : null)" Disabled="@(!Details.Available)">
+                        @foreach (var (code, name) in BusinessChoices.Currencies)
+                        { var value = code; <PopoverOption Label="@name" Active="@(_details.Currency == value)" OnSelect="() => { _open = null; Edit(_details! with { Currency = value }); }" /> }
+                    </SelectField>
+                    </div>
+                </div>
+            </div>
+        </ChildContent>
+    </SettingsCard>
+
+    <SettingsCard Title="Opening hours" Description="Agents use these to answer &quot;are you open?&quot;, and bookings follow them.">
+        @* Most weeks repeat one day (designer, 7 November 2026): set it once and copy it. Shown only while an open day
+           differs from the first; closed days stay closed. *@
+        <HeaderAction>
+            @if (!_details.TemporarilyClosed && CopySource is { } source)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(!Details.Available)" @onclick="CopyToAllDays">
+                    <IconLeft><Icon Name="IconName.RiFileCopyFill" /></IconLeft>
+                    <ChildContent>Copy @source.Day to all days</ChildContent>
+                </Button>
+            }
+        </HeaderAction>
+        <ChildContent>
+            @* Open or temporarily closed first, as Google Business Profile asks (designer, 7 November 2026): the choice
+               decides what shows. The business's time zone sits with the hours it governs, apart from yours in
+               Appearance, which only changes how times show to you. *@
+            <div class="business__grid business__hours-top">
+                <div class="@(_details.TemporarilyClosed ? "business__full" : null)">
+                <SelectField FloatingLabel="Status" Value="@(_details.TemporarilyClosed ? "Temporarily closed" : "Open")" Open="@(_open == "status")" OpenChanged="@(open => _open = open ? "status" : null)" Disabled="@(!Details.Available)">
+                    <PopoverOption Label="Open" Active="@(!_details.TemporarilyClosed)" OnSelect="() => { _open = null; Edit(_details! with { TemporarilyClosed = false }); }" />
+                    <PopoverOption Label="Temporarily closed" Active="@_details.TemporarilyClosed" OnSelect="() => { _open = null; Edit(_details! with { TemporarilyClosed = true }); }" />
+                </SelectField>
+                </div>
+                @if (!_details.TemporarilyClosed)
+                {
+                    <SelectField FloatingLabel="Hours are in" Value="@BusinessChoices.TimeZoneName(_details.TimeZone)" Open="@(_open == "zone")" OpenChanged="@(open => _open = open ? "zone" : null)" Disabled="@(!Details.Available)">
+                        @foreach (var (id, name) in BusinessChoices.TimeZones)
+                        { var value = id; <PopoverOption Label="@name" Active="@(_details.TimeZone == value)" OnSelect="() => { _open = null; Edit(_details! with { TimeZone = value }); }" /> }
+                    </SelectField>
+                }
+            </div>
+
+            @if (_details.TemporarilyClosed)
+            {
+                <InlineError Tone="InlineErrorTone.Info" Message="Agents tell customers you're closed for now. Your hours are kept for when you reopen." />
+            }
+            else
+            {
+                @* A day a row (designer, 7 November 2026): a checkbox for open or closed, then when it opens and closes,
+                   as the same fields as the rest of the page, filling the card. Each list opens at the time already
+                   chosen. A day can be open 24 hours: the first choice under Opens. Hours after a break were tried and left
+                   out (designer, 7 November 2026: too much for how vendors work); the data keeps room for them. *@
+                <div class="business__hours" role="group" aria-label="Opening hours">
+                    @foreach (var day in _details.Hours)
+                    {
+                        var current = day;
+                        var name = current.Day.ToString();
+                        <div class="business__day" role="group" aria-label="@name">
+                            <Checkbox Class="business__switch" State="@(current.Open ? CheckboxState.Checked : CheckboxState.Unchecked)" StateChanged="state => SetDay(current with { Open = state == CheckboxState.Checked })"
+                                      Label="@name" Disabled="@(!Details.Available)" />
+                            @if (!current.Open)
+                            {
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="business__closed">Closed</Typography>
+                            }
+                            else if (current.AllDay)
+                            {
+                                <div class="business__span">@OpensField($"{name}-opens", "Hours", "Open 24 hours", HoursChoice.AllDay, current.Opens, time => SetDay(current with { AllDay = false, Opens = time }), () => { }, null)</div>
+                            }
+                            else
+                            {
+                                @OpensField($"{name}-opens", "Opens", Clock(current.Opens), HoursChoice.Time, current.Opens, time => SetDay(current with { Opens = time }), () => SetDay(current with { AllDay = true }), null)
+                                @ClosesField($"{name}-closes", current.Closes, time => SetDay(current with { Closes = time }))
+                            }
+                        </div>
+                    }
+                </div>
+
+                @* Dates that don't follow the week (Google's special hours, designer, 7 November 2026): closed for a
+                   holiday by default, or open other hours. *@
+                <div class="business__special">
+                    <div class="business__special-head">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Holidays and special days</Typography>
+                    </div>
+                    @if (_details.SpecialDays is { Count: > 0 } specials)
+                    {
+                        <div class="business__hours" role="group" aria-label="Holidays and special days">
+                            @for (var i = 0; i < specials.Count; i++)
+                            {
+                                var index = i;
+                                var special = specials[index];
+                                var label = DateName(special.Date);
+                                <div class="business__day business__day--special" role="group" aria-label="@label">
+                                    <Popover Title="@($"Date for {label}")" Class="business__date" Open="@(_open == $"special{index}-date")" OpenChanged="@(open => _open = open ? $"special{index}-date" : null)">
+                                        <Anchor>
+                                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-haspopup="dialog" aria-expanded="@(_open == $"special{index}-date" ? "true" : "false")"
+                                                    disabled="@(!Details.Available)" @onclick="@(() => _open = _open == $"special{index}-date" ? null : $"special{index}-date")">
+                                                <IconLeft><Icon Name="IconName.RiCalendarCheckFill" /></IconLeft>
+                                                <ChildContent>@label</ChildContent>
+                                            </Button>
+                                        </Anchor>
+                                        <ChildContent>
+                                            <CalendarPicker Today="Today" Date="special.Date" AllowTime="false" AllowNone="false"
+                                                            DateChanged="date => { if (date is { } picked) { _open = null; SetSpecial(index, special with { Date = picked }); } }" />
+                                        </ChildContent>
+                                    </Popover>
+                                    @if (!special.Open || special.AllDay)
+                                    {
+                                        <div class="business__span">@OpensField($"special{index}-opens", "Hours", special.Open ? "Open 24 hours" : "Closed", special.Open ? HoursChoice.AllDay : HoursChoice.Closed, special.Opens,
+                                            time => SetSpecial(index, special with { Open = true, AllDay = false, Opens = time }), () => SetSpecial(index, special with { Open = true, AllDay = true }), () => SetSpecial(index, special with { Open = false }))</div>
+                                    }
+                                    else
+                                    {
+                                        @OpensField($"special{index}-opens", "Opens", Clock(special.Opens), HoursChoice.Time, special.Opens,
+                                            time => SetSpecial(index, special with { Opens = time }), () => SetSpecial(index, special with { AllDay = true }), () => SetSpecial(index, special with { Open = false }))
+                                        @ClosesField($"special{index}-closes", special.Closes, time => SetSpecial(index, special with { Closes = time }))
+                                    }
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Medium" Class="business__row-action" aria-label="@($"Remove {label}")" title="Remove"
+                                            disabled="@(!Details.Available)" @onclick="() => RemoveSpecial(index)">
+                                        <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                                    </Button>
+                                </div>
+                            }
+                        </div>
+                    }
+                    <div>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(!Details.Available)" @onclick="AddSpecial">
+                            <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                            <ChildContent>Add a day</ChildContent>
+                        </Button>
+                    </div>
+                </div>
+            }
+        </ChildContent>
+    </SettingsCard>
+
+    @* Where vendors sell first (designer, 7 November 2026): WhatsApp, then email, Instagram and TikTok, the rest, and last
+       a phone line only for a business that takes calls on another number. Details
+       already given to yára (connected channels, Knowledge) fill empty fields and say where they came from. *@
+    <SettingsCard Title="Contact and socials" Description="Shared with customers when they ask how to reach you.">
+        <ChildContent>
+            <div class="business__grid">
+                <Input FloatingLabel="WhatsApp number" Type="tel" Numeric="NumericInputKind.Phone" Value="@_details.Contact.WhatsApp" HelperText="@Hint(Found.WhatsApp)" autocomplete="tel"
+                       ValueChanged="value => Contact(Found.WhatsApp, _details!.Contact with { WhatsApp = value ?? string.Empty })" Disabled="@(!Details.Available)" />
+                <Input FloatingLabel="Business email" Type="email" Value="@_details.Contact.Email" Error="@(_emailProblem is not null)" HelperText="@(_emailProblem ?? Hint(Found.Email))" autocomplete="email"
+                       ValueChanged="value => { _emailProblem = null; Contact(Found.Email, _details!.Contact with { Email = value ?? string.Empty }); }" Disabled="@(!Details.Available)" />
+                <Input FloatingLabel="Instagram" PrefixText="@("@")" Value="@_details.Contact.Instagram" HelperText="@Hint(Found.Instagram)"
+                       ValueChanged="value => Contact(Found.Instagram, _details!.Contact with { Instagram = Handle(value) })" Disabled="@(!Details.Available)" />
+                <Input FloatingLabel="TikTok" PrefixText="@("@")" Value="@_details.Contact.TikTok" HelperText="@Hint(Found.TikTok)"
+                       ValueChanged="value => Contact(Found.TikTok, _details!.Contact with { TikTok = Handle(value) })" Disabled="@(!Details.Available)" />
+                <Input FloatingLabel="Facebook page" PrefixText="facebook.com/" Value="@_details.Contact.Facebook" HelperText="@Hint(Found.Facebook)"
+                       ValueChanged="value => Contact(Found.Facebook, _details!.Contact with { Facebook = BusinessContact.FacebookPage(value) })" Disabled="@(!Details.Available)" />
+                <Input FloatingLabel="Website" Type="url" Value="@_details.Contact.Website" HelperText="@Hint(Found.Website)" autocomplete="url"
+                       ValueChanged="value => Contact(Found.Website, _details!.Contact with { Website = value ?? string.Empty })" Disabled="@(!Details.Available)" />
+                <div class="business__full">
+                    <Input FloatingLabel="Other phone number" Type="tel" Numeric="NumericInputKind.Phone" Value="@_details.Contact.Phone" HelperText="@Hint(Found.Phone)" autocomplete="tel"
+                           ValueChanged="value => Contact(Found.Phone, _details!.Contact with { Phone = value ?? string.Empty })" Disabled="@(!Details.Available)" />
+                </div>
+            </div>
+        </ChildContent>
+    </SettingsCard>
+
+    <SettingsCard Title="Delete this business" Description="Removes its chats, tasks, products and agents for everyone on the team. This can't be undone." Danger>
+        <ChildContent>
+            <div class="business__delete">
+                <Button Variant="ButtonVariant.Destructive" Size="ButtonSize.Small" @onclick="() => { _deleting = true; _confirm = string.Empty; _deleteNote = null; }">Delete business</Button>
+                @if (_deleteNote is not null) { <InlineError Tone="InlineErrorTone.Info" Message="@_deleteNote" /> }
+            </div>
+        </ChildContent>
+    </SettingsCard>
+
+    @if (_dirty || _found.Count > 0)
+    {
+        <SaveBar Note="@SaveNote" Error="@_error" Saving="_saving" OnDiscard="Discard" OnSave="SaveAsync" />
+    }
+
+    <Dialog Open="_deleting" Title="@($"Delete {_name}?")" Type="DialogType.Destructive" Dismissible ConfirmLabel="Delete business" CancelLabel="Keep business"
+            ConfirmDisabled="@(_confirm.Trim() != _name.Trim())" OnConfirm="Delete" OnCancel="() => _deleting = false">
+        <Body>
+            <div class="business__confirm">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Its chats, tasks, products and agents are removed for everyone on the team. Customers can no longer reach it through yára.</Typography>
+                <Input FloatingLabel="@($"Type {_name} to confirm")" Value="@_confirm" ValueChanged="value => _confirm = value ?? string.Empty" autocomplete="off" />
+            </div>
+        </Body>
+    </Dialog>
+}
+
+@* As Profile: leaving with unsaved changes asks first. *@
+<NavigationLock ConfirmExternalNavigation="@(_dirty && !_allowNavigation)" OnBeforeInternalNavigation="CheckNavigation" />
+<Dialog Open="_confirmLeave" Title="Leave without saving?" ConfirmLabel="Leave without saving" CancelLabel="Keep editing"
+        OnConfirm="Leave" OnCancel="() => { _confirmLeave = false; _navigationTarget = null; }">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p">Your business profile changes haven't been saved.</Typography></Body>
+</Dialog>
+
+@code {
+    private static readonly TimeOnly[] Times = [.. Enumerable.Range(10, 37).Select(half => new TimeOnly(half / 2, half % 2 * 30))];
+    private BusinessDetails? _details, _savedDetails;
+    private string _name = string.Empty, _savedName = string.Empty, _confirm = string.Empty;
+    private string? _industry, _savedIndustry, _open, _error, _emailProblem, _logoError, _logoStatus, _deleteNote, _navigationTarget;
+    private bool _guessed, _savedGuessed, _saving, _dirty, _logoBusy, _deleting, _confirmLeave, _allowNavigation;
+    // Contact details found in channels or Knowledge, by field, until they're saved, changed or discarded.
+    private Dictionary<string, string> _found = [];
+    private string? Hint(string field) => _found.TryGetValue(field, out var source) ? source + "." : null;
+    private string SaveNote => _dirty ? "You have changes that aren't saved."
+        : $"We filled in {(_found.Count == 1 ? "a contact detail" : $"{_found.Count} contact details")} from your channels and Knowledge. Check, then save.";
+    private bool HasLogo => !string.IsNullOrEmpty(AuthState.CurrentUser?.LogoUrl);
+
+    private static string Clock(TimeOnly time) => (time.Hour % 12 == 0 ? 12 : time.Hour % 12) + (time.Minute == 0 ? "" : $":{time.Minute:00}") + (time.Hour < 12 ? "am" : "pm");
+    private static string Handle(string? value) => (value ?? string.Empty).Trim().TrimStart('@');
+
+    protected override async Task OnInitializedAsync()
+    {
+        _name = _savedName = AuthState.CurrentUser?.BusinessName ?? string.Empty;
+        _industry = _savedIndustry = await Kind.ReadAsync();
+        _guessed = _savedGuessed = Kind.IsGuess;
+        try { _details = await Details.ReadAsync(); }
+        catch (HttpRequestException) { _details = BusinessDetails.Defaults; _error = "The business details couldn't be loaded. Reload to try again."; }
+        _savedDetails = _details;
+        await SuggestContactsAsync();
+    }
+
+    // Only while the details can be saved, and only into empty fields. A Knowledge read that fails just means no suggestions.
+    private async Task SuggestContactsAsync()
+    {
+        if (!Details.Available || _details is null) return;
+        IReadOnlyList<Parrot.Web.Features.Dashboard.Knowledge.KnowledgeFact> facts = [];
+        if (Memory.Available)
+        {
+            try { facts = (await Memory.ListAsync()).Facts; }
+            catch (HttpRequestException) { }
+        }
+        var found = Found.Find(_details.Contact, Channels.Workspace.Channels, facts);
+        if (found.Count == 0) return;
+        _details = _details with { Contact = Found.Apply(_details.Contact, found) };
+        _found = found.ToDictionary(item => item.Field, item => item.Source);
+    }
+
+    private void Touch() { _dirty = true; _error = null; }
+    private void Edit(BusinessDetails next) { _details = next; Touch(); }
+    private void Contact(string field, BusinessContact contact) { _found.Remove(field); Edit(_details! with { Contact = contact }); }
+    // The first open day, while another open day has different hours.
+    // Copying is offered while an open day's hours (breaks and 24 hours included) differ from the first open day's.
+    private static string HoursKey(DayHours day) => day.AllDay ? "all day" : string.Join(",", day.Ranges);
+    private DayHours? CopySource => _details?.Hours.FirstOrDefault(day => day.Open) is { } first
+        && _details.Hours.Any(day => day.Open && HoursKey(day) != HoursKey(first)) ? first : null;
+
+    private void CopyToAllDays()
+    {
+        if (CopySource is not { } source) return;
+        // No toast: the times change in place and the save bar appears.
+        Edit(_details! with { Hours = [.. _details!.Hours.Select(day => day.Open ? day with { Opens = source.Opens, Closes = source.Closes, AllDay = source.AllDay, More = source.More } : day)] });
+    }
+
+    private enum HoursChoice { Time, AllDay, Closed }
+
+    private DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
+    private static string DateName(DateOnly date) => date.ToString("ddd d MMM", System.Globalization.CultureInfo.InvariantCulture);
+
+    // A new special day is a closed holiday on the next date not listed yet; its calendar opens straight away.
+    private void AddSpecial()
+    {
+        var list = _details!.SpecialDays ?? [];
+        var date = Today;
+        while (list.Any(day => day.Date == date)) date = date.AddDays(1);
+        Edit(_details with { SpecialDays = [.. list, new SpecialDay(date, false, new(9, 0), new(18, 0))] });
+        _open = $"special{list.Count}-date";
+    }
+
+    // Kept in date order, so the list reads as a calendar.
+    private void SetSpecial(int index, SpecialDay day) =>
+        Edit(_details! with { SpecialDays = [.. (_details.SpecialDays ?? []).Select((item, i) => i == index ? day : item).OrderBy(item => item.Date)] });
+
+    private void RemoveSpecial(int index) =>
+        Edit(_details! with { SpecialDays = [.. (_details.SpecialDays ?? []).Where((_, i) => i != index)] });
+
+    // The opening field: "Closed" and "Open 24 hours" first where they're offered, then the times.
+    private RenderFragment OpensField(string key, string label, string value, HoursChoice chosen, TimeOnly time,
+        Action<TimeOnly> pick, Action? allDay, Action? closed) => __builder =>
+    {
+        <SelectField FloatingLabel="@label" Value="@value" Open="@(_open == key)" OpenChanged="@(open => _open = open ? key : null)" Disabled="@(!Details.Available)">
+            @if (closed is not null)
+            {
+                <PopoverOption Label="Closed" Active="@(chosen == HoursChoice.Closed)" OnSelect="() => { _open = null; closed(); }" />
+            }
+            @if (allDay is not null)
+            {
+                <PopoverOption Label="Open 24 hours" Active="@(chosen == HoursChoice.AllDay)" OnSelect="() => { _open = null; allDay(); }" />
+            }
+            @foreach (var option in Times)
+            {
+                var each = option;
+                <PopoverOption Label="@Clock(each)" Active="@(chosen == HoursChoice.Time && time == each)" OnSelect="() => { _open = null; pick(each); }" />
+            }
+        </SelectField>
+    };
+
+    private RenderFragment ClosesField(string key, TimeOnly time, Action<TimeOnly> pick) => __builder =>
+    {
+        <SelectField FloatingLabel="Closes" Value="@Clock(time)" Open="@(_open == key)" OpenChanged="@(open => _open = open ? key : null)" Disabled="@(!Details.Available)">
+            @foreach (var option in Times)
+            {
+                var each = option;
+                <PopoverOption Label="@Clock(each)" Active="@(time == each)" OnSelect="() => { _open = null; pick(each); }" />
+            }
+        </SelectField>
+    };
+
+    private void SetDay(DayHours day) => Edit(_details! with { Hours = [.. _details!.Hours.Select(item => item.Day == day.Day ? day : item)] });
+
+    // Back to what was last loaded or saved; the logo is already kept, so it stays.
+    private void Discard()
+    {
+        if (_saving) return;
+        _name = _savedName; _industry = _savedIndustry; _guessed = _savedGuessed; _details = _savedDetails;
+        _dirty = false; _error = null; _emailProblem = null; _open = null; _found = [];
+    }
+
+    private async Task SaveAsync()
+    {
+        var currencyWorkspace = Currency.WorkspaceKey;
+        var name = _name.Trim();
+        _emailProblem = Details.Available ? _details?.Contact.EmailProblem : null;
+        _error = name.Length == 0 ? "Enter the business name."
+            : _emailProblem is not null ? "Check the business email."
+            : Details.Available ? _details?.Problem : null;
+        if (_error is not null || _details is null) return;
+        _saving = true;
+        try
+        {
+            if (_guessed || _industry != _savedIndustry) { Kind.Choose(_industry); _guessed = false; _savedIndustry = _industry; }
+            _savedGuessed = false;
+            if (name != (AuthState.CurrentUser?.BusinessName ?? string.Empty)) _name = (await Workspaces.UpdateCurrentAsync(name, logoUrl: null)).Name ?? name;
+            _savedName = _name;
+            if (Details.Available)
+            {
+                _details = await Details.SaveAsync(_details);
+                Currency.Saved(_details, currencyWorkspace);
+            }
+            _savedDetails = _details;
+            _dirty = false; _found = [];
+            Toasts.Show("Business profile saved.");
+        }
+        catch (ApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.BadRequest) { _error = exception.UserMessage; }
+        catch (HttpRequestException exception) { _error = exception.StatusCode is { } code && (int)code < 500 ? exception.Message : "The business profile couldn't be saved. Try again."; }
+        finally { _saving = false; }
+    }
+
+    // The logo is kept as soon as it's picked or removed, as your photo is in Profile. The file rules show only if
+    // a file breaks them (the same rules as photos).
+    private async Task UploadLogoAsync(InputFileChangeEventArgs args)
+    {
+        if (_logoBusy) return;
+        _logoError = null;
+        var file = args.File;
+        if (PhotoRules.Problem(file.ContentType, file.Size) is { } problem) { _logoError = problem; return; }
+        _logoBusy = true; _logoStatus = "Uploading the logo";
+        try
+        {
+            await using var stream = file.OpenReadStream(PhotoRules.MaxBytes);
+            using var buffer = new MemoryStream();
+            await stream.CopyToAsync(buffer);
+            var url = await Profile.UploadImageAsync(file.Name, file.ContentType, buffer.ToArray());
+            await Workspaces.UpdateCurrentAsync(name: null, logoUrl: url);
+            _logoStatus = "Logo updated";
+            Toasts.Show("Logo updated.");
+        }
+        catch (ApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.BadRequest) { _logoStatus = null; _logoError = exception.UserMessage; }
+        catch (IOException) { _logoStatus = null; _logoError = "That image couldn't be read. Choose it again."; }
+        catch (HttpRequestException) { _logoStatus = null; _logoError = "The logo couldn't be uploaded. Try again."; }
+        finally { _logoBusy = false; }
+    }
+
+    private async Task RemoveLogoAsync()
+    {
+        _logoError = null; _logoBusy = true;
+        try { await Workspaces.UpdateCurrentAsync(name: null, logoUrl: string.Empty); _logoStatus = "Logo removed"; Toasts.Show("Logo removed."); }
+        catch (HttpRequestException) { _logoError = "The logo couldn't be removed. Try again."; }
+        finally { _logoBusy = false; }
+    }
+
+    // No API deletes a business yet, so nothing is deleted or claimed to be.
+    private void Delete()
+    {
+        _deleting = false;
+        _deleteNote = "Deleting a business isn't available yet, so nothing was deleted.";
+    }
+
+    private void CheckNavigation(LocationChangingContext context)
+    {
+        if (_allowNavigation || !_dirty) return;
+        context.PreventNavigation();
+        if (!_saving) { _navigationTarget = context.TargetLocation; _confirmLeave = true; }
+    }
+
+    private void Leave()
+    {
+        if (_saving || _navigationTarget is null) return;
+        _allowNavigation = true; _confirmLeave = false;
+        Navigation.NavigateTo(_navigationTarget);
+    }
+}

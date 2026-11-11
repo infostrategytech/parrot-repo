@@ -1,0 +1,20 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Settings
+
+@* Who did something: their avatar, their name ("(you)" for the person signed in, as Team says it) and a quiet
+   second line (their role, "AI agent", or "Automatic" for yára itself). The same in the table and the details. *@
+<span class="activity-actor">
+    <PetalAvatar Seed="@Actor.Id" Initials="@(Actor.Kind == ActorKind.System ? "y" : Initials.From(Actor.Name))" Size="AvatarSize.Sm" />
+    <span class="activity-actor__words">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="activity-actor__name">@(Actor.Id == Me ? $"{Actor.Name} (you)" : Actor.Name)</Typography>
+        @if (!string.IsNullOrWhiteSpace(Actor.Detail))
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="activity-actor__detail">@Actor.Detail</Typography>
+        }
+    </span>
+</span>
+
+@code {
+    [Parameter, EditorRequired] public ActivityActor Actor { get; set; } = default!;
+    [Parameter] public string? Me { get; set; }
+}
