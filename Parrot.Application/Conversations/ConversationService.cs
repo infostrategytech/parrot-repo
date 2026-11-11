@@ -57,7 +57,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     public async Task<ConversationMessage> SendAgentReplyAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
     {
-        ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct);
+        ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct, isAiReply: true);
 
         if (publisher is not null)
         {
@@ -88,7 +88,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     }
 
     private async Task<ConversationMessage> SendCoreAsync(string owner, Guid connectionId, string recipient,
-        SendReplyRequest request, CancellationToken ct)
+        SendReplyRequest request, CancellationToken ct, bool isAiReply = false)
     {
         // A TikTok customer's id is not a phone number, so the reply is routed before WhatsApp's checks.
         if (tikTok is not null && await tikTok.FindConnectionAsync(owner, connectionId, ct) is { } tikTokConnection)
@@ -108,7 +108,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         {
             if (recipient.Length > 20)
                 throw new ValidationException("Supply a request ID, a numeric recipient and text of 1–4096 characters.");
-            return await SendWhatsAppAsync(owner, whatsApp, recipient, request, ct);
+            return await SendWhatsAppAsync(owner, whatsApp, recipient, request, ct, isAiReply);
         }
 
         FacebookConnection? page = await facebookConnections.GetByOwnerAsync(owner, ct);
@@ -116,7 +116,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         {
             if (request.Text.Length > FacebookMaxText)
                 throw new ValidationException($"Messenger replies can be up to {FacebookMaxText} characters.");
-            return await SendFacebookAsync(owner, page, recipient, request, ct);
+            return await SendFacebookAsync(owner, page, recipient, request, ct, isAiReply);
         }
 
         InstagramConnection? account = await instagramConnections.GetByOwnerAsync(owner, ct);
@@ -124,7 +124,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         {
             if (System.Text.Encoding.UTF8.GetByteCount(request.Text) > InstagramMaxBytes)
                 throw new ValidationException("Instagram replies can be up to 1000 bytes, about 1000 letters or fewer with emoji.");
-            return await SendInstagramAsync(owner, account, recipient, request, ct);
+            return await SendInstagramAsync(owner, account, recipient, request, ct, isAiReply);
         }
 
         throw new NotFoundException("Connection not found.");
@@ -407,7 +407,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     }
 
     private async Task<ConversationMessage> SendWhatsAppAsync(string owner, WhatsAppConnection connection, string recipient,
-        SendReplyRequest request, CancellationToken ct)
+        SendReplyRequest request, CancellationToken ct, bool isAiReply = false)
     {
         if (connection.DisabledAt.HasValue || connection.WebhookVerifiedAt is null)
             throw new ConflictException("This connection is disabled or unverified.");
@@ -433,6 +433,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
             Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
+            IsAiReply = isAiReply ? true : null,
         };
 
         return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
@@ -451,7 +452,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     }
 
     private async Task<ConversationMessage> SendFacebookAsync(string owner, FacebookConnection page, string recipient,
-        SendReplyRequest request, CancellationToken ct)
+        SendReplyRequest request, CancellationToken ct, bool isAiReply = false)
     {
         if (page.DisabledAt.HasValue || page.WebhookVerifiedAt is null)
             throw new ConflictException("This connection is disabled or unverified.");
@@ -476,6 +477,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
             Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? page.PageId,
+            IsAiReply = isAiReply ? true : null,
         };
 
         return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
@@ -494,7 +496,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     }
 
     private async Task<ConversationMessage> SendInstagramAsync(string owner, InstagramConnection account, string recipient,
-        SendReplyRequest request, CancellationToken ct)
+        SendReplyRequest request, CancellationToken ct, bool isAiReply = false)
     {
         if (account.DisabledAt.HasValue || account.WebhookVerifiedAt is null)
             throw new ConflictException("This connection is disabled or unverified.");
@@ -519,6 +521,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
             Outgoing = true, SendStatus = "pending", ReplyTo = quote,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? account.AccountId,
+            IsAiReply = isAiReply ? true : null,
         };
 
         return await ReserveAndSendAsync(owner, doc, request, latest, async timeout =>
@@ -641,6 +644,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
         doc.TextBody ?? (doc.Attachments is { Count: > 0 } ? "" : $"[{doc.Type} message]"), doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt)
     {
+        Kind = doc.IsAiReply == true ? "ai" : null,
         Attachments = doc.Attachments is { Count: > 0 } attachments ? [.. attachments.Select(ToMedia)] : null,
         ReplyTo = ToQuote(doc.ReplyTo),
     };

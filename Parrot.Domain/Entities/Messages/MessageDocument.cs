@@ -88,4 +88,9 @@ public abstract class MessageDocument
     // The message this one replies to, in either direction. Left out when it quotes nothing.
     [BsonIgnoreIfNull]
     public MessageReplyTo? ReplyTo { get; set; }
+
+    // True when the reply was sent by an AI agent, not a human teammate. Left out for all other messages so
+    // older documents (which predate this field) remain readable without change.
+    [BsonIgnoreIfNull]
+    public bool? IsAiReply { get; set; }
 }

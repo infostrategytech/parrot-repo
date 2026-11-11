@@ -38,7 +38,7 @@ public class ConversationsState
             // The server owns AiState. Clear derived state that only makes sense while the AI is active.
             if (item.AiState == AiState.Active) item.ActiveEscalation = null;
             if (item.AiState != AiState.Active) item.PendingApproval = null;
-            item.AiAgent = summary.AiAgent;
+            item.AiAgent = summary.AiAgent ?? summary.ChannelAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
