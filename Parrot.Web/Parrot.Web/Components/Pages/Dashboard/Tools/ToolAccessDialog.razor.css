@@ -23,7 +23,7 @@
   border-radius: var(--radius-radius-xl);
 }
 .tool-access__agents ::deep .tool-access__agent.is-on { background: var(--colors-accent-brand-subtle); }
-.tool-access__agents ::deep .tool-access__face { flex: none; width: var(--ds-tool-access-face); height: var(--ds-tool-access-face); border-radius: var(--radius-radius-full); object-fit: cover; }
+.tool-access__agents ::deep .tool-access__face { display: grid; flex: none; width: var(--ds-tool-access-face); height: var(--ds-tool-access-face); }
 .tool-access__agents ::deep .tool-access__who { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
 .tool-access__agents ::deep .tool-access__who > span:first-child { color: var(--colors-text-primary); }
 .tool-access__agents ::deep .tool-access__who > span:last-child:not(:first-child) { color: var(--colors-text-muted); }

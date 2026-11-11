@@ -63,7 +63,7 @@
                     @foreach (var kind in StepKinds)
                     {
                         var current = kind;
-                        <PopoverOption Label="@current.Label" Description="@current.Subtype" OnSelect="() => OnAddStepOfType.InvokeAsync(current.Type)">
+                        <PopoverOption Label="@current.Label" OnSelect="() => OnAddStepOfType.InvokeAsync(current.Type)">
                             <Leading>
                                 <span class="playbook-canvas__picker-glyph playbook-canvas__picker-glyph--@current.Modifier"><Icon Name="@current.Glyph" Size="IconSize.Sm" /></span>
                             </Leading>

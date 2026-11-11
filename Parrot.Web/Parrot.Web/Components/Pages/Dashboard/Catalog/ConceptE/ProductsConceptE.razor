@@ -1,5 +1,4 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
-@using Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptC
 @using Parrot.Web.Features.Dashboard.Catalog
 @using Parrot.Web.Features.Dashboard.Catalog.ConceptE
 @inject ICatalogStore Store
@@ -156,9 +155,9 @@ else
                     {
                     <ChangePrices Items="Chosen" Apply="ChangePricesAsync" Busy="_bulkBusy" />
                     <FilterPopover Label="Mark as" Title="Mark as" Open="_markOpen" OpenChanged="open => _markOpen = open">
-                        <PopoverOption Label="Available" Description="Customers can buy or book them" OnSelect="() => MarkManyAsync(Mark.Available)" />
-                        <PopoverOption Label="Unavailable" Description="Customers cannot order or book them" OnSelect="() => MarkManyAsync(Mark.SoldOut)" />
-                        <PopoverOption Label="Hidden" Description="Not offered to customers. Kept for later." OnSelect="() => MarkManyAsync(Mark.Hidden)" />
+                        <PopoverOption Label="Available" OnSelect="() => MarkManyAsync(Mark.Available)" />
+                        <PopoverOption Label="Unavailable" OnSelect="() => MarkManyAsync(Mark.SoldOut)" />
+                        <PopoverOption Label="Hidden" OnSelect="() => MarkManyAsync(Mark.Hidden)" />
                     </FilterPopover>
                     }
                     <FilterPopover Label="Move to category" Title="Move to category" Open="_moveOpen" OpenChanged="open => _moveOpen = open">
@@ -192,11 +191,11 @@ else
                 <div class="products-e__find">
                     <SearchField Value="@_search" ValueChanged="Search" Placeholder="Search products or services" AriaLabel="Search products and services" />
                     <FilterPopover Label="@(_category ?? "All categories")" Title="Categories" Subtitle="Narrow the list by category" AlignEnd Open="_categoryOpen" OpenChanged="open => _categoryOpen = open">
-                        <PopoverOption Label="All categories" Description="@Plural(_items.Count)" Active="@(_category is null)" OnSelect="() => PickCategory(null)" />
+                        <PopoverOption Label="All categories" Active="@(_category is null)" OnSelect="() => PickCategory(null)" />
                         @foreach (var category in _categories)
                         {
                             var current = category;
-                            <PopoverOption Label="@current" Description="@Plural(CountIn(current))" Active="@(_category == current)" OnSelect="() => PickCategory(current)" />
+                            <PopoverOption Label="@current" Active="@(_category == current)" OnSelect="() => PickCategory(current)" />
                         }
                         <div class="products-e__category-tools">
                             <Toggle Checked="_byCategory" CheckedChanged="on => { _byCategory = on; _page = 1; }" Size="ToggleSize.Sm" Label="Group the list by category" />
@@ -390,21 +389,21 @@ else
             </Button>
         </Anchor>
         <ChildContent>
-            <PopoverOption Label="Enter Manually" Description="Enter the item details yourself" OnSelect="Compose">
+            <PopoverOption Label="Enter Manually" OnSelect="Compose">
                 <Leading><span class="products-e__way-mark is-one"><Icon Name="IconName.RiPencilFill" Size="IconSize.Sm" /></span></Leading>
             </PopoverOption>
-            <PopoverOption Label="Use a Post Link" Description="Paste a link and review the details" OnSelect="OpenLink">
+            <PopoverOption Label="Use a Post Link" OnSelect="OpenLink">
                 <Leading><span class="products-e__way-mark is-link"><Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" /></span></Leading>
             </PopoverOption>
             @* Price lists are one way in (designer, 27 October 2026): the window's own tabs choose a photo, a file
                or pasted words, so the menu says it once. *@
-            <PopoverOption Label="Import a Price List" Description="@(PriceLists.CanReadPhotos ? "A photo, an Excel or CSV file, or a pasted list" : "An Excel or CSV file, or a pasted list")"
+            <PopoverOption Label="Import a Price List"
                            OnSelect="() => Import(PriceLists.CanReadPhotos ? ImportSource.Photo : ImportSource.Sheet)">
                 <Leading><span class="products-e__way-mark is-list"><Icon Name="IconName.RiFileList3Fill" Size="IconSize.Sm" /></span></Leading>
             </PopoverOption>
             @if (HasChannelCatalogue)
             {
-                <PopoverOption Label="Import from Channel's Catalogue" Description="Sync products from a connected channel"
+                <PopoverOption Label="Import from Channel's Catalogue"
                                OnSelect="OpenChannelCatalogue">
                     <Leading><span class="products-e__way-mark is-channel"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span></Leading>
                 </PopoverOption>
@@ -842,9 +841,15 @@ else
         _mode = Mode.Posts;
     }
 
+    // Preview the page with no social channel connected (?concept=e&channels=none), in the demo. Read from the
+    // address, not [SupplyParameterFromQuery]: that one, on a component that appears while the address changes
+    // (choosing Concept E from D), ends the page ("Collection was modified").
+    private string? ChannelsPreview => System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)["channels"];
+
     private static IReadOnlyList<string> Social => PostChannels.Social;
 
-    // The social channels posts come from: the business's connected channels that allow reading them (catalog-backend-requests).
+    // The social channels posts come from: the connected ones (in the demo, ?channels= can preview others).
+    // Real posts come from the business's connected channels that allow reading them (catalog-backend-requests).
     private IReadOnlyList<string> ConnectedSocial => PostChannels.Connected(ChannelState.Workspace, false, null);
 
     private bool SocialConnected => Discovery.CanReadPosts && ConnectedSocial.Count > 0;
@@ -870,7 +875,7 @@ else
 
     private string? Query(string name) => System.Web.HttpUtility.ParseQueryString(new Uri(Nav.Uri).Query)[name];
 
-    // Connected channels whose access has lapsed: posts can't be read from them.
+    // Connected channels whose access has lapsed (in the demo, ?reconnect=tiktok): posts can't be read from them.
     private IReadOnlyList<string> ReconnectSocial =>
         [.. Social.Where(channel => ChannelState.Workspace.Channels.Any(each => each.Status == Parrot.Web.Features.Dashboard.Channels.Models.ChannelStatus.NeedsAttention && each.Id.ToString().Equals(channel, StringComparison.OrdinalIgnoreCase)))];
 

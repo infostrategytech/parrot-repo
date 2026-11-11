@@ -130,6 +130,7 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         };
 
         Pricing pricing = item.Pricing;
+        entry.CurrencyCode = pricing.Currency;
         string unit = pricing.Per is { Length: > 0 } per ? $"per {per}" : string.Empty;
         switch (pricing.Mode)
         {
@@ -196,6 +197,8 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         {
             pricing = new PricingInput("single", entry.Price, per, null);
         }
+        // This field already exists in the catalog service's ItemPricingInput; omitting it used the catalog default.
+        pricing = pricing with { Currency = Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(entry.CurrencyCode) };
 
         AvailabilityInput? availability = entry.AvailabilityIsUnconfirmed && !live
             ? null
@@ -351,7 +354,7 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
 
     private sealed record Category(Guid Id, string Name);
 
-    private sealed record Pricing(string? Mode, decimal? Amount, string? Per, List<Variant> Variants);
+    private sealed record Pricing(string? Mode, decimal? Amount, string? Per, List<Variant> Variants, string? Currency = null);
 
     private sealed record Variant(Guid Id, string Name, decimal? Amount, bool Available = true);
 
@@ -373,7 +376,7 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         JsonElement? FormDraft,
         bool Hidden);
 
-    private sealed record PricingInput(string Mode, decimal? Amount, string? Per, List<VariantInput>? Variants);
+    private sealed record PricingInput(string Mode, decimal? Amount, string? Per, List<VariantInput>? Variants, string? Currency = null);
 
     private sealed record VariantInput(string Name, decimal? Amount, Guid? Id, bool Available);
 

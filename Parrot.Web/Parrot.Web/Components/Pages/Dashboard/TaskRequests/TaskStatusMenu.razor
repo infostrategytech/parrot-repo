@@ -18,7 +18,10 @@
             @foreach (var state in TaskWords.States)
             {
                 var current = state;
-                <PopoverOption Label="@TaskWords.Label(current)" Description="@TaskWords.Describe(current)"
+                @* No description: New, In progress, Waiting on customer, Done
+                   and Cancelled each say themselves. The kind menu keeps its
+                   descriptions, because a kind says what the work involves. *@
+                <PopoverOption Label="@TaskWords.Label(current)"
                                Active="@(State == current)" OnSelect="() => OnState.InvokeAsync(current)">
                     <Leading><span class="task-status__dot @TaskWords.ToneClass(current)"></span></Leading>
                 </PopoverOption>

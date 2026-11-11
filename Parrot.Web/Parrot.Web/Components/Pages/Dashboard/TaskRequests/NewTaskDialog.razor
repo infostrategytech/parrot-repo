@@ -13,18 +13,13 @@
    The type, the customer and Products & Services open as popovers that float over the form, placed
    wherever there is room (designer, 21 October 2026: a popover never pushes the form, and is never cut
    off); customers and items are found by searching. *@
-<Dialog Open="Open"
+<ContentModal Open="Open"
         Title="@(Editing is null ? "New task" : "Edit task")"
-        Subtitle="@Subtitle"
-        Dismissible
-        Size="DialogSize.Wide"
-        ConfirmLabel="@(Editing is null ? "Add task" : "Save changes")"
-        BusyLabel="Saving"
-        Busy="_saving"
-        OnCancel="CloseAsync"
-        OnConfirm="SaveAsync">
-    <GlyphContent><Icon Name="@(Editing is null ? IconName.RiClipboardFill : IconName.RiPencilFill)" Size="IconSize.Md" /></GlyphContent>
-    <Body>
+        Subtitle="@Subtitle" Size="DialogSize.Wide" Busy="_saving"
+        OnClose="CloseAsync" OnSubmit="SaveAsync" InitialFocusId="@_focusId" FocusKey="@_focusRevision.ToString()">
+    <ChildContent>
+        @if (!CurrencyReady && Currency.Problem is { } currencyProblem) { <InlineError Message="@currencyProblem" /> }
+        <fieldset class="new-task__form-fields">
         <div class="new-task">
             @if (_loadProblem)
             {
@@ -52,7 +47,7 @@
                             @foreach (var kind in TaskWords.Kinds)
                             {
                                 var current = kind;
-                                <PopoverOption Label="@TaskWords.Label(current)" Description="@TaskWords.Describe(current)"
+                                <PopoverOption Label="@TaskWords.Label(current)"
                                                Active="@(_kind == current)" OnSelect="() => PickKind(current)">
                                     <Leading><TaskKindMark Kind="current" Small /></Leading>
                                 </PopoverOption>
@@ -99,9 +94,9 @@
                         @if (_walkIn)
                         {
                             <div class="new-task__pair">
-                                <Input FloatingLabel="Their name" Value="@_walkName" ValueChanged="value => _walkName = value ?? string.Empty" maxlength="80"
+                                <Input Id="new-task-walk-name" FloatingLabel="Their name" Value="@_walkName" ValueChanged="value => _walkName = value ?? string.Empty" maxlength="80"
                                        Error="@(_tried && _walkName.Trim().Length == 0)" HelperText="@(_tried && _walkName.Trim().Length == 0 ? "Add their name." : null)" />
-                                <Input FloatingLabel="Phone (optional)" Numeric="NumericInputKind.Phone" Value="@_walkPhone" ValueChanged="value => _walkPhone = value ?? string.Empty" maxlength="20"
+                                <Input Id="new-task-walk-phone" FloatingLabel="Phone (optional)" Numeric="NumericInputKind.Phone" Value="@_walkPhone" ValueChanged="value => _walkPhone = value ?? string.Empty" maxlength="20"
                                        Error="@(WalkPhoneAdvice is not null)" HelperText="@WalkPhoneAdvice" />
                             </div>
                         }
@@ -126,7 +121,7 @@
                         <div class="new-task__item">
                             <Input FloatingLabel="Item" Value="@current.Name" ValueChanged="value => current.Name = value ?? string.Empty" maxlength="80" />
                             <Input FloatingLabel="Qty" Value="@current.Quantity" ValueChanged="value => current.Quantity = value ?? string.Empty" Numeric="NumericInputKind.Integer" maxlength="4" />
-                            <Input FloatingLabel="Price (optional)" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
+                            <Input Id="@($"{current.UiId}-price")" FloatingLabel="Price (optional)" PrefixText="@AmountSymbol" Disabled="@(!CurrencyReady)" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
                                    Error="@(current.Price.Length > 0 && Money(current.Price) is null)" />
                             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {current.Name}")" @onclick="() => _items.Remove(current)">
                                 <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
@@ -139,7 +134,7 @@
                         var current = row;
                         <div class="new-task__item is-charge">
                             <Input FloatingLabel="Charge, such as Delivery fee" Value="@current.Name" ValueChanged="value => current.Name = value ?? string.Empty" maxlength="60" />
-                            <Input FloatingLabel="Amount" PrefixText="₦" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
+                            <Input Id="@($"{current.UiId}-price")" FloatingLabel="Amount" PrefixText="@AmountSymbol" Disabled="@(!CurrencyReady)" Value="@current.Price" ValueChanged="value => current.Price = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
                                    Error="@(current.Price.Length > 0 && Money(current.Price) is null)" />
                             <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {current.Name}")" @onclick="() => _items.Remove(current)">
                                 <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" /></IconLeft>
@@ -153,7 +148,7 @@
                         </Button>
                         @if (_catalog.Count > 0)
                         {
-                            <Popover Title="Products & Services" Subtitle="Add one with its price" Wide
+                            <Popover Title="Products & Services" Subtitle="@($"Items priced in {_entryCurrency}")" Wide
                                      Open="@(_openMenu == ItemMenu)" OpenChanged="@(open => _openMenu = open ? ItemMenu : null)">
                                 <Anchor>
                                     <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-haspopup="dialog"
@@ -163,9 +158,9 @@
                                     </Button>
                                 </Anchor>
                                 <ChildContent>
-                                    <SearchPick TItem="TaskItem" Plain Items="_catalog" Label="e => e.Name" Detail="e => e.Price is { } price ? TaskWords.Naira(price) : (string?)null"
+                                    <SearchPick TItem="TaskItem" Plain Items="MatchingCatalog" Label="e => e.Name" Detail="e => e.Price is { } price ? CurrencyAmount.Format(price, e.CurrencyCode) : (string?)null"
                                                 Placeholder="Search Products & Services" AriaLabel="Search Products & Services" OnPick="AddFromCatalog"
-                                                EmptyText="Nothing in Products & Services yet." />
+                                                EmptyText="@($"No items priced in {_entryCurrency}. Add one manually.")" />
                                 </ChildContent>
                             </Popover>
                         }
@@ -178,12 +173,12 @@
                     {
                         <div class="new-task__total">
                             <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(_kind == TaskKind.Quote ? "Estimate" : "Total")</Typography>
-                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@TaskWords.Naira(total)</Typography>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@CurrencyAmount.Format(total, _entryCurrency)</Typography>
                         </div>
                     }
                     else
                     {
-                        <Input FloatingLabel="Amount (optional)" PrefixText="₦" Value="@_amount" ValueChanged="value => _amount = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
+                        <Input Id="new-task-amount" FloatingLabel="Amount (optional)" PrefixText="@AmountSymbol" Disabled="@(!CurrencyReady)" Value="@_amount" ValueChanged="value => _amount = value ?? string.Empty" Numeric="NumericInputKind.Decimal" maxlength="12"
                                HelperText="@(_amount.Length > 0 && Money(_amount) is null ? "Use numbers only, such as 17500." : "When there are no prices: the whole amount, if you know it.")"
                                Error="@(_amount.Length > 0 && Money(_amount) is null)" />
                     }
@@ -260,10 +255,24 @@
                 }
             </div>
         </div>
-    </Body>
+        </fieldset>
+    </ChildContent>
+    <Footer Context="formId">
+        <Button Variant="ButtonVariant.Secondary" @onclick="CloseAsync">Cancel</Button>
+        <Button Type="ButtonType.Submit" form="@formId" Busy="_saving" disabled="@(!CurrencyReady)">@(_saving ? "Saving…" : Editing is null ? "Add task" : "Save changes")</Button>
+    </Footer>
+</ContentModal>
+<Dialog Open="_discard" Title="Discard this task's changes?" Type="DialogType.Destructive" ConfirmLabel="Discard changes" CancelLabel="Keep editing"
+        FocusTargetId="task-keep-editing" CancelButtonId="task-keep-editing" OnCancel="KeepEditing" OnConfirm="DiscardAsync">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>The details you've entered won't be saved.</Typography></Body>
 </Dialog>
 
 @code {
+    [CascadingParameter] public WorkspaceCurrencyValue Currency { get; set; } = WorkspaceCurrencyValue.Legacy;
+    private string? _entryCurrency;
+    private bool CurrencyReady => _entryCurrency is not null;
+    private string AmountSymbol => CurrencyReady ? CurrencyAmount.Symbol(_entryCurrency) : "";
+    private IReadOnlyList<TaskItem> MatchingCatalog => [.. _catalog.Where(item => CurrencyAmount.Code(item.CurrencyCode) == _entryCurrency)];
     [Parameter] public bool Open { get; set; }
 
     /// <summary>Opened from a conversation: the task is for this customer.</summary>
@@ -278,6 +287,7 @@
 
     private sealed class ItemRow
     {
+        public string UiId { get; } = "task-item-" + Guid.NewGuid().ToString("N");
         public string Name { get; set; } = string.Empty;
         public string Quantity { get; set; } = "1";
         public string Price { get; set; } = string.Empty;
@@ -285,7 +295,10 @@
         public bool Charge { get; set; }
     }
 
-    private bool _wasOpen;
+    private bool _wasOpen, _discard;
+    private string? _initialDraft;
+    private string _focusId = "new-task-what";
+    private int _focusRevision;
     private string _text = string.Empty;
     private TaskKind _kind = TaskKind.Other;
     private const string KindMenu = "kind", CustomerMenu = "customer", ItemMenu = "item", DueMenu = "due";
@@ -311,7 +324,9 @@
         // Each time it opens, it starts from the task being edited, or empty.
         if (Open && !_wasOpen)
         {
+            _wasOpen = true;
             Reset();
+            _entryCurrency = Editing is { } existing ? CurrencyAmount.Code(existing.CurrencyCode) : Currency.Ready ? Currency.Code : null;
             // What helps fill it in; without it the task can still be added (no one to assign, a customer typed in).
             try { _team = await Store.TeamAsync(); }
             catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException) { _team = []; _loadProblem = true; }
@@ -322,8 +337,10 @@
             try { _catalog = await Store.ItemsAsync(); }
             catch (Exception exception) when (exception is HttpRequestException or NotSupportedException or TaskCanceledException) { _catalog = []; }
             if (Editing is { } task) Fill(task);
+            _initialDraft = DraftStamp();
         }
         _wasOpen = Open;
+        if (Open && _entryCurrency is null && Currency.Ready) _entryCurrency = Currency.Code;
     }
 
     private void Reset()
@@ -332,6 +349,9 @@
         _kind = TaskKind.Other;
         _kindPicked = _showCustomer = _showItems = _showAssign = _walkIn = _urgent = _tried = _saving = _loadProblem = false;
         _openMenu = null;
+        _discard = false;
+        _focusId = "new-task-what";
+        _focusRevision++;
         _customer = null;
         _items = [];
         _dueDay = null;
@@ -457,6 +477,8 @@
 
     private void AddFromCatalog(TaskItem entry)
     {
+        if (CurrencyAmount.Code(entry.CurrencyCode) != _entryCurrency)
+        { Toasts.ShowError($"Choose an item priced in {_entryCurrency}. Different currencies can't share a task total."); return; }
         _openMenu = null;
         var empty = _items.FirstOrDefault(row => !row.Charge && row.Name.Trim().Length == 0);
         var row = empty ?? new ItemRow();
@@ -466,8 +488,12 @@
     }
 
     /// <summary>An amount typed loosely: "17,500", "₦17500" and "17500" are the same.</summary>
-    private static decimal? Money(string text) =>
-        decimal.TryParse(text.Replace(",", "").Replace("₦", "").Trim(), NumberStyles.Number, CultureInfo.InvariantCulture, out var value) && value >= 0 ? value : null;
+    private decimal? Money(string text)
+    {
+        var clean = text.Trim();
+        if (AmountSymbol.Length > 0 && clean.StartsWith(AmountSymbol, StringComparison.Ordinal)) clean = clean[AmountSymbol.Length..].Trim();
+        return NumberText.Decimal(clean);
+    }
 
     // Items first, then charges, each as typed; an empty row is left out.
     private IReadOnlyList<TaskLine> Lines => _items
@@ -491,12 +517,38 @@
         && _items.All(row => row.Price.Length == 0 || Money(row.Price) is not null)
         && (_amount.Length == 0 || Money(_amount) is not null);
 
-    private Task CloseAsync() => OnClose.InvokeAsync();
+    private string DraftStamp() => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        Text = _text.Trim(), Kind = _kind, Customer = ChosenCustomer, Address = _address.Trim(),
+        Items = _items.Where(row => row.Name.Trim().Length > 0 || row.Price.Length > 0 || row.Quantity != "1" || !string.IsNullOrWhiteSpace(row.Note))
+            .Select(row => new { row.Name, row.Quantity, row.Price, row.Note, row.Charge }).ToArray(),
+        Amount = _amount.Trim(), DueDay = _dueDay, DueTime = _dueTime, Assignee = _assignee?.Id, Urgent = _urgent,
+    });
+    private Task CloseAsync()
+    {
+        if (_saving) return Task.CompletedTask;
+        _openMenu = null;
+        if (Open && _initialDraft is not null && _initialDraft != DraftStamp()) { _discard = true; return Task.CompletedTask; }
+        return OnClose.InvokeAsync();
+    }
+    private void KeepEditing() { _discard = false; _focusRevision++; }
+    private Task DiscardAsync() { _discard = false; return OnClose.InvokeAsync(); }
 
     private async Task SaveAsync()
     {
+        if (_saving || !Open) return;
+        if (!CurrencyReady) { Toasts.ShowError(Currency.Problem ?? "Wait for the business currency to load before saving."); return; }
         _tried = true;
-        if (!Valid) return;
+        _openMenu = null;
+        if (!Valid)
+        {
+            _focusId = !HasText ? "new-task-what"
+                : _walkIn && _walkName.Trim().Length == 0 ? "new-task-walk-name"
+                : _walkIn && ContactText.Phone(_walkPhone).Problem is not null ? "new-task-walk-phone"
+                : _items.FirstOrDefault(item => item.Price.Length > 0 && Money(item.Price) is null) is { } invalidRow ? $"{invalidRow.UiId}-price" : "new-task-amount";
+            _focusRevision++;
+            return;
+        }
         var (title, rest) = TaskWords.Split(_text);
         var draft = new TaskDraft(
             _kind, title, rest, ChosenCustomer, _address,
@@ -504,7 +556,7 @@
             _urgent,
             _dueDay is { } day ? TaskWords.DueMoment(day, _dueTime, Clock.Zone) : null,
             _dueDay is not null && _dueTime is not null,
-            _assignee);
+            _assignee, _entryCurrency);
         _saving = true;
         try
         {

@@ -6,7 +6,7 @@
 <span class="task-by @(Compact ? "is-compact" : null)">
     @if (Look is { } look)
     {
-        <img class="task-by__look" src="@look" alt="" />
+        <span class="task-by__look"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span>
     }
     else if (!Compact)
     {
@@ -22,7 +22,7 @@
 @code {
     [Parameter, EditorRequired] public TaskRequest Item { get; set; } = default!;
 
-    /// <summary>The agent's look (an image); null for a person.</summary>
+    /// <summary>The agent's saved look (its character and colour); null for a person.</summary>
     [Parameter] public string? Look { get; set; }
 
     /// <summary>False for the avatar alone, where a sentence says the name.</summary>

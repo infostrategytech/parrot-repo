@@ -139,7 +139,10 @@ public sealed class CatalogEntry
     // ── Price: the live part, read at the moment the agent answers ──────────
     public PriceType PriceType { get; set; } = PriceType.Fixed;
 
-    /// <summary>In naira. Null until set; "on request" has none.</summary>
+    /// <summary>The currency saved with this entry. Null preserves legacy NGN; it never follows a later preference change.</summary>
+    public string? CurrencyCode { get; set; }
+
+    /// <summary>In CurrencyCode (legacy entries: NGN). Null until set; "on request" has none.</summary>
     public decimal? Price { get; set; }
 
     /// <summary>Optional: "per yard", "per person", "per hour".</summary>
@@ -260,7 +263,7 @@ public sealed class CatalogEntry
     {
         Sources = [.. Sources], PriceConfirmedAt = PriceConfirmedAt,
         Id = Id, Kind = Kind, Status = Status, EditorDraft = EditorDraft?.Copy(), Name = Name, Description = Description, Group = Group,
-        Photos = [.. Photos], PriceType = PriceType, Price = Price, PriceUnit = PriceUnit,
+        Photos = [.. Photos], PriceType = PriceType, Price = Price, PriceUnit = PriceUnit, CurrencyCode = CurrencyCode,
         IsAvailable = IsAvailable, AvailabilityIsUnconfirmed = AvailabilityIsUnconfirmed, IsHidden = IsHidden, TracksStock = TracksStock, Stock = Stock, MadeToOrder = MadeToOrder, LeadTime = LeadTime,
         Duration = Duration, Place = Place, Delivery = Delivery,
         Options = [.. Options.Select(option => option.Copy())], Variants = [.. Variants.Select(variant => variant.Copy())],

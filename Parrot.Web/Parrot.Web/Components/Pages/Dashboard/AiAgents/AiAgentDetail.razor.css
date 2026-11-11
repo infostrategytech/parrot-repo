@@ -55,18 +55,8 @@
   --agent-soft: var(--colors-surface-muted);
 }
 
-.agent-detail__avatar {
-  display: grid;
-  place-items: center;
-  overflow: hidden;
-  width: var(--ds-detail-avatar);
-  height: var(--ds-detail-avatar);
-  color: var(--agent-color);
-  background: var(--agent-soft);
-  border-radius: var(--ds-detail-avatar-radius);
-}
-
-.agent-detail__avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+/* Its character floats over its own shadow: no tile behind it. */
+.agent-detail__avatar { display: grid; width: var(--ds-detail-avatar); height: var(--ds-detail-avatar); }
 
 .agent-detail__titles { display: grid; gap: var(--spacing-xs); min-width: 0; }
 /* The job, then the channels' marks, ringed in the page colour they sit on. */
@@ -440,22 +430,6 @@
 /* The setup screen's rhythm: 48px between sections. */
 .agent-detail__settings-form { display: grid; gap: var(--spacing-4xl); min-width: 0; }
 
-.agent-detail__save {
-  position: sticky;
-  bottom: var(--spacing-lg);
-  z-index: 1;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-  align-items: center;
-  padding: var(--spacing-md);
-  background: var(--colors-surface-card);
-  border: var(--ds-detail-hairline) solid var(--colors-surface-border);
-  border-radius: var(--radius-radius-full);
-  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
-}
-.agent-detail__save ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }
-.agent-detail__save ::deep p.is-error { color: var(--colors-feedback-destructive-text); }
 
 @media (max-width: 1180px) {
   .agent-detail__settings { grid-template-columns: minmax(0, 1fr); }
@@ -608,25 +582,6 @@
   justify-content: space-between;
 }
 
-/* Concept B's save bar: the page's last child, so it floats at the window's
-   foot on any tab, above the cards; what is unsaved on the left, the two
-   buttons on the right. */
-.agent-detail__save.is-floating {
-  z-index: var(--ds-detail-tabs-layer);
-  justify-content: space-between;
-  margin-top: var(--spacing-xl);
-  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-2xl);
-  box-shadow: 0 var(--spacing-sm) var(--spacing-3xl) var(--colors-surface-shadow);
-}
-.agent-detail__save.is-floating ::deep p { flex: 1; min-width: 0; }
-.agent-detail__save-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
-
-.agent-detail {
-  /* Missing from the token set: the height of the demo's own tools at the
-     window's foot (concept switch, theme toggle), to float the bar above. */
-  --ds-detail-demo-tools: 64px;
-}
-.agent-detail.is-demo .agent-detail__save.is-floating { bottom: calc(var(--spacing-lg) + var(--ds-detail-demo-tools)); }
 
 /* ── A draft, getting ready (designer, 19 October 2026) ────────────────────
    Its job first, then a test, then on: one row each, a numbered mark that
@@ -692,26 +647,10 @@
 }
 
 /* ── It knows its job: the end of telling it (designer, 19 October 2026) ───
-   Calm: its face, a tick that pops in, then what it will do, a line at a time. */
+   Its face arrives at Done (green tick, the happy turn), then what it will do, a line at a time. */
 .agent-detail__told { display: grid; justify-items: center; gap: var(--spacing-md); text-align: center; }
 .agent-detail__told ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); animation: agent-told-rise var(--ds-motion-slow) var(--ds-motion-enter) both; animation-delay: var(--ds-told-step); }
 .agent-detail__told-face { position: relative; width: var(--ds-told-face); height: var(--ds-told-face); animation: agent-told-face var(--ds-motion-slow) var(--ds-motion-enter) both; }
-.agent-detail__told-face img { display: block; width: 100%; height: 100%; border-radius: var(--radius-radius-full); box-shadow: 0 0 0 var(--spacing-sm) var(--colors-accent-brand-subtle); }
-.agent-detail__told-tick {
-  position: absolute;
-  right: calc(-1 * var(--spacing-2xs));
-  bottom: calc(-1 * var(--spacing-2xs));
-  display: grid;
-  place-items: center;
-  width: var(--ds-told-tick);
-  height: var(--ds-told-tick);
-  color: var(--colors-brand-primary-foreground);
-  background: var(--colors-brand-primary);
-  border: var(--ds-told-ring) solid var(--colors-surface-background);
-  border-radius: var(--radius-radius-full);
-  animation: agent-told-tick var(--ds-motion-slow) var(--ds-motion-enter) both;
-  animation-delay: var(--ds-told-step);
-}
 .agent-detail__told ::deep .agent-detail__told-lede { margin: var(--spacing-sm) var(--spacing-none) var(--spacing-none); color: var(--colors-text-muted); animation: agent-told-rise var(--ds-motion-slow) var(--ds-motion-enter) both; animation-delay: calc(var(--ds-told-step) * 2); }
 .agent-detail__told-list {
   display: grid;
@@ -731,20 +670,16 @@
 .agent-detail__told ::deep .agent-detail__told-note { max-width: var(--ds-detail-job-lede); margin: var(--spacing-none); color: var(--colors-text-muted); }
 .agent-detail__told-actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); justify-content: center; margin-top: var(--spacing-md); }
 .agent-detail__told {
-  /* Missing from the token set: the moment's face and tick, and its pace (a beat between each part, a shorter one between lines). */
-  --ds-told-face: 88px;
-  --ds-told-tick: 32px;
-  --ds-told-ring: 3px;
+  /* Missing from the token set: the moment's face, and its pace (a beat between each part, a shorter one between lines). */
+  --ds-told-face: 120px;
   --ds-told-step: 160ms;
   --ds-told-line: 70ms;
 }
 @keyframes agent-told-face { from { opacity: 0; transform: scale(0.9); } }
-@keyframes agent-told-tick { from { opacity: 0; transform: scale(0.4); } 70% { transform: scale(1.12); } }
 @keyframes agent-told-rise { from { opacity: 0; transform: translateY(var(--spacing-xs)); } }
 @media (prefers-reduced-motion: reduce) {
   .agent-detail__told ::deep h2,
   .agent-detail__told-face,
-  .agent-detail__told-tick,
   .agent-detail__told ::deep .agent-detail__told-lede,
   .agent-detail__told-list li,
   .agent-detail__told ::deep .agent-detail__told-more { animation: none; }

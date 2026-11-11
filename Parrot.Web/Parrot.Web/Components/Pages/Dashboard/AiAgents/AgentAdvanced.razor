@@ -1,6 +1,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
 @using System.Globalization
 @using Parrot.Web.Components.Pages.Dashboard.TeachAi
+@using Parrot.Web.Features.Dashboard.AiAgents
 @inject AuroraInterop Interop
 @inject VoiceInterop Voice
 @implements IAsyncDisposable
@@ -154,7 +155,7 @@
                             <span class="agent-advanced__icon"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
                             <span class="agent-advanced__text">
                                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-hand")">When it hands over</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">To @(string.IsNullOrWhiteSpace(Form.Settings.HandoverTo) ? "you, in the Inbox" : Form.Settings.HandoverTo.Trim()).</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">To @HandoverRouting.Phrase(Form.Settings, Team?.Solo ?? true).</Typography>
                             </span>
                             <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
                         </RowButton>
@@ -163,14 +164,11 @@
                     {
                         <div class="agent-advanced__content" id="@($"{_id}-hand-content")">
                             @* Who it brings in, where the page shows it with these (Concept B). *@
-                            @if (ShowWho)
+                            @if (ShowWho && Team is not null)
                             {
-                                <div class="agent-advanced__field">
-                                    <Input FloatingLabel="Who it brings in"
-                                           Value="@Form.Settings.HandoverTo"
-                                           ValueChanged="v => SetAsync(() => Form.Settings.HandoverTo = v ?? string.Empty)"
-                                           HelperText="A name and a phone number is perfect. Leave it empty to take them yourself, in the Inbox."
-                                           maxlength="120" />
+                                @* Who it brings in, from the team (designer, 10 November 2026). *@
+                                <div class="agent-advanced__field is-who">
+                                    <HandoverPicker Settings="Form.Settings" Channels="Form.Channels" Team="Team" Name="@Form.DisplayName" CanInvite="CanInvite" OnSet="SetAsync" />
                                 </div>
                             }
                             @if (ShowAlways)
@@ -190,7 +188,7 @@
                             {
                                 <div class="agent-advanced__field is-indented">
                                     <Input FloatingLabel="Orders over"
-                                           PrefixText="₦"
+                                           PrefixText="@CurrencyAmount.Symbol(Form.Settings.BigOrderCurrency)"
                                            Numeric="NumericInputKind.Integer"
                                            maxlength="10"
                                            Value="@Form.Settings.BigOrderNaira.ToString(CultureInfo.InvariantCulture)"
@@ -260,7 +258,7 @@
                             <div class="agent-advanced__field">
                                 <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Only for @Form.DisplayName</Typography>
                                 <TextArea Value="@Form.Settings.Notes" ValueChanged="v => SetAsync(() => Form.Settings.Notes = v ?? string.Empty)" AriaLabel="@($"Only for {Form.DisplayName}")"
-                                          Placeholder="Anything only this agent should know, like “Mention free gift wrapping on orders over ₦30,000.”"
+                                          Placeholder="Anything only this agent should know, like “Mention free gift wrapping on qualifying orders.”"
                                           Rows="3" MaxLength="1000" AutoGrow />
                                 @if (Form.Settings.NoteFiles.Count > 0)
                                 {
@@ -365,6 +363,12 @@
 
     /// <summary>Who it hands customers to, as the first line of when it does (Concept B).</summary>
     [Parameter] public bool ShowWho { get; set; }
+
+    /// <summary>The people it can bring in (the page loads them once); null until they're known.</summary>
+    [Parameter] public HandoverTeam? Team { get; set; }
+
+    /// <summary>The owner can invite people from the handover choice when working alone.</summary>
+    [Parameter] public bool CanInvite { get; set; }
 
     /// <summary>The first message and the phrases to avoid under "More options" (Concept B).</summary>
     [Parameter] public bool MoreOptions { get; set; }

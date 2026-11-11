@@ -12,13 +12,13 @@
             <InlineError Tone="InlineErrorTone.Info" Message="This is a test task. It won't contact the provider, take payments or change bookings." />
             <SelectField FloatingLabel="Agent" Value="@Agents.FirstOrDefault(agent => agent.Id == _agent)?.Name" Open="_agentOpen" OpenChanged="open => _agentOpen = open" Disabled="_busy">
                 @foreach (var agent in Eligible)
-                { var current = agent; <PopoverOption Label="@agent.Name" Description="@agent.Job" Active="@(agent.Id == _agent)" OnSelect="() => PickAgent(current.Id)" /> }
+                { var current = agent; <PopoverOption Label="@agent.Name" Active="@(agent.Id == _agent)" OnSelect="() => PickAgent(current.Id)" /> }
             </SelectField>
             @if (SelectedAccess is not null)
             {
                 <SelectField FloatingLabel="Action" Value="@Definition.Actions.FirstOrDefault(action => action.Id == _action)?.Name" Open="_actionOpen" OpenChanged="open => _actionOpen = open" Disabled="_busy">
                     @foreach (var action in Definition.Actions.Where(action => SelectedAccess.Actions.Contains(action.Id)))
-                    { var current = action; <PopoverOption Label="@action.Name" Description="@action.Description" Active="@(action.Id == _action)" OnSelect="() => { _action = current.Id; _actionOpen = false; _key = Guid.NewGuid(); }" /> }
+                    { var current = action; <PopoverOption Label="@action.Name" Active="@(action.Id == _action)" OnSelect="() => { _action = current.Id; _actionOpen = false; _key = Guid.NewGuid(); }" /> }
                 </SelectField>
                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(Definition.Actions.Any(action => action.Id == _action && action.CanAskFirst) && SelectedAccess.Mode == ToolActionMode.AskFirst
                     ? "The task will wait for your approval. You'll be able to approve or decline the action there."

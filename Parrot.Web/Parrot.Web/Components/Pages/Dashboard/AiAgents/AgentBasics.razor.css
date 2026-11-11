@@ -10,12 +10,10 @@
      ring width, or motion value for a choice. The look control matches the
      Input's 58px field. */
   --ds-agent-basics-icon: 40px;
-  --ds-agent-basics-avatar: 56px;
   --ds-agent-basics-look-avatar: 40px;
   --ds-agent-basics-look: 220px;
   --ds-agent-basics-field: 58px;
   --ds-agent-basics-row: 72px;
-  --ds-agent-basics-ring: 2px;
   --ds-agent-basics-motion: 200ms;
 
   display: grid;
@@ -52,12 +50,7 @@
 }
 .agent-basics__identity ::deep .agent-basics__look:hover,
 .agent-basics__identity ::deep .agent-basics__look.is-open { border-color: var(--colors-accent-brand-border); }
-.agent-basics__identity ::deep .agent-basics__look > img {
-  width: var(--ds-agent-basics-look-avatar);
-  height: var(--ds-agent-basics-look-avatar);
-  object-fit: cover;
-  border-radius: var(--radius-radius-full);
-}
+.agent-basics__face { display: grid; width: var(--ds-agent-basics-look-avatar); height: var(--ds-agent-basics-look-avatar); }
 .agent-basics__chevron { display: grid; color: var(--colors-icon-secondary); transition: transform var(--ds-agent-basics-motion) ease; }
 .agent-basics__identity ::deep .is-open .agent-basics__chevron { transform: rotate(180deg); }
 /* The choice of looks opens inside the card, under both. */
@@ -68,23 +61,7 @@
   padding-top: var(--spacing-lg);
   border-top: var(--ds-hairline) solid var(--colors-surface-border);
 }
-.agent-basics__avatars { display: flex; flex-wrap: wrap; gap: var(--spacing-md); }
-.agent-basics__avatars ::deep .agent-basics__avatar {
-  display: grid;
-  place-items: center;
-  width: var(--ds-agent-basics-avatar);
-  height: var(--ds-agent-basics-avatar);
-  padding: var(--spacing-none);
-  overflow: hidden;
-  border-radius: var(--radius-radius-full);
-  box-shadow: 0 0 0 var(--ds-hairline) var(--colors-surface-border);
-  transition: box-shadow var(--ds-agent-basics-motion) ease;
-}
-.agent-basics__avatars ::deep .agent-basics__avatar:hover { box-shadow: 0 0 0 var(--ds-agent-basics-ring) var(--colors-accent-brand-border); }
-.agent-basics__avatars ::deep .agent-basics__avatar.is-chosen {
-  box-shadow: 0 0 0 var(--ds-agent-basics-ring) var(--colors-surface-card), 0 0 0 calc(var(--ds-agent-basics-ring) * 2) var(--colors-brand-primary);
-}
-.agent-basics__avatars ::deep img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.agent-basics__looks-done { display: flex; justify-content: flex-end; }
 
 /* ── Channels and safety: one row each ───────────────────────────────────── */
 
@@ -143,6 +120,5 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-basics__avatars ::deep .agent-basics__avatar,
   .agent-basics__chevron { transition: none; }
 }

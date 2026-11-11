@@ -35,8 +35,9 @@
    in Teach your AI) leaves a question open for the approval. Answers go where they belong: sentences of the
    job description, its settings, the business's knowledge.
 
-   Knowing they're done talking: Done, a pause (a short bar they can stop by
-   talking), or "that's all". Typing: Enter, or Send. Not sure what to say: a
+   Knowing they're done talking: a pause (a short bar they can stop by
+   talking), or "that's all"; no Done button (designer, 10 November 2026).
+   After the last approval the agent wraps up aloud and writes its job. Typing: Enter, or Send. Not sure what to say: a
    ready-made job description for the job, then a check of what it assumed.
 
    Adding to one already written: the same chat, briefly; nothing goes in
@@ -55,7 +56,8 @@
         {
             @* The start: the orb in a stage of its own (room to swell), what to do, and the two ways in. *@
             <div class="job-editor__stage">
-                <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__orb" />
+                @* The agent itself, not an orb (designer, 10 November 2026): its character listens, thinks and speaks. *@
+                <span class="job-editor__orb"><PresenceAvatar @ref="_avatar" Direction="Look.Direction" Tone="Look.Tone" State="AvatarState" Size="PresenceAvatarSize.Fill" Reactive Floating Decorative /></span>
             </div>
             <div class="job-editor__voice-text">
                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p" role="status">@StartTitle</Typography>
@@ -119,7 +121,7 @@
                     @if (_phase == Phase.Thinking)
                     {
                         <li class="job-editor__msg is-agent">
-                            <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                            <span class="job-editor__face"><AgentFace Look="@Mascot" State="PresenceAvatarState.Thinking" Reactive /></span>
                             <div class="job-editor__bubble is-typing" aria-label="@($"{Name} is thinking")"><i></i><i></i><i></i></div>
                         </li>
                     }
@@ -345,7 +347,11 @@
         public string Text { get; init; } = string.Empty;
         public TopicCheck? Check { get; init; }
         public bool Change { get; init; }
+        public IReadOnlyList<AttachedFile> Files { get; init; } = [];
     }
+
+    // A picture or document sent with a typed message: its name, size and a picture's thumbnail.
+    private sealed record AttachedFile(string Name, long Size, string? Preview);
 
     // A topic's check: its questions, what is known to show picked, and, once confirmed, what was given.
     private sealed class TopicCheck
@@ -401,18 +407,42 @@
     private Kept? _resume;
 
     // The topic it will pick up at.
-    private string? ResumeAt => _resume is { } kept ? kept.Sections.Skip(kept.TopicAt).Select(section => section.Title).FirstOrDefault() : null;
+    private string? ResumeAt => _resume is { } kept
+        ? kept.Confirmed.Contains(YourJob.Id) ? kept.Sections.Skip(kept.TopicAt).Select(section => section.Title).FirstOrDefault() : YourJob.Title
+        : null;
 
-    // Each approval kept as it happens (designer, 19 October 2026): leave now, and it picks up at the next topic.
+    // Kept from the first word (designer, 10 November 2026: a conversation started and left says Continue,
+    // not Start), and at each approval: leave now, and it picks up where it was. A topic left halfway starts
+    // again with what was said in it still counting; an approval left open comes up again.
     private void KeepProgress()
     {
-        if (DraftKey is null) return;
-        var next = Math.Min(_topicAt, _sections.Count);
-        var topics = new List<TopicTrailItem> { new("Your job", TopicState.Done) };
+        if (DraftKey is null || !Interviewing || _messages.Count == 0) return;
+        var jobDone = _confirmed.Contains(YourJob.Id);
+        var at = !jobDone ? 0
+            : CurrentSection is { } section && !_confirmed.Contains(section.Id) ? _topicAt - 1
+            : Math.Min(_topicAt, _sections.Count);
+        var topics = new List<TopicTrailItem> { new(YourJob.Title, jobDone ? TopicState.Done : TopicState.Current) };
         topics.AddRange(_sections.Select((section, index) => new TopicTrailItem(section.Title,
-            _confirmed.Contains(section.Id) ? TopicState.Done : index == next ? TopicState.Current : TopicState.Upcoming)));
-        Drafts.Keep(DraftKey, new Kept([.. _messages], _told, _later, new(_answers), [.. _asked], [.. _confirmed], _job, _sections, _topicAt),
-            new JobConversationDrafts.Progress(topics, _sections.Skip(next).Select(section => section.Title).FirstOrDefault()));
+            _confirmed.Contains(section.Id) ? TopicState.Done : jobDone && index == at ? TopicState.Current : TopicState.Upcoming)));
+        var next = jobDone ? _sections.Skip(at).Select(section => section.Title).FirstOrDefault() : YourJob.Title;
+        Drafts.Keep(DraftKey, new Kept(Settled(), _told, _later, new(_answers), [.. _asked], [.. _confirmed], _job, _sections, at),
+            new JobConversationDrafts.Progress(topics, next));
+    }
+
+    // The conversation without an approval still open (or the line that brought it up): it comes up again on return.
+    private List<Message> Settled()
+    {
+        var kept = new List<Message>();
+        foreach (var message in _messages)
+        {
+            if (message.Check is { Done: false })
+            {
+                if (kept.Count > 0 && kept[^1] is { Who: Who.Agent, Check: null }) kept.RemoveAt(kept.Count - 1);
+                continue;
+            }
+            kept.Add(message);
+        }
+        return kept;
     }
 
     // Coming back: the conversation as it was, then the next topic.
@@ -432,9 +462,18 @@
         _job = kept.Job;
         _sections = kept.Sections;
         _topicAt = kept.TopicAt;
+        _speaking = null;
+        // Left while still on their job: what they'd said comes up to approve, or it asks again.
+        if (!_confirmed.Contains(YourJob.Id))
+        {
+            if (_told.Length > 0) { ApproveYourJob("Welcome back. Here's my job, as you told me. Have a look, and approve it below."); return; }
+            // Nothing said yet: its welcome back asks again, in place of the first ask.
+            if (!_messages.Any(message => message.Who == Who.Owner)) _messages.RemoveAll(message => message.Who == Who.Agent);
+            await AgentSaysAsync("Welcome back. Tell me about my job: what should I do, what should I never do, and when should I bring you in?", ListenTurnAsync);
+            return;
+        }
         var next = _sections.Skip(_topicAt).Select(section => section.Title).FirstOrDefault();
         _messages.Add(new Message { Who = Who.Agent, Text = next is null ? "Welcome back." : $"Welcome back. Let's carry on with {LowerFirst(next)}." });
-        _speaking = null;
         await NextTopicAsync();
     }
 
@@ -480,7 +519,9 @@
     private TextArea? _summary, _typeBox;
     private ElementReference _summarySection, _caption, _thread, _card;
 
-    private VoiceOrb? _orb;
+    private PresenceAvatar? _avatar;
+    private Parrot.SharedComponents.DesignSystem.AvatarAppearance Look => AgentLooks.Of(Mascot);
+    private PresenceAvatarState AvatarState => PresenceAvatarWords.FromVoice(OrbState);
     private VoiceAura? _aura;
     private DotNetObjectReference<AgentJobEditor>? _self;
     private IAsyncDisposable? _listen, _mic;
@@ -509,7 +550,7 @@
         + (Docked ? " is-docked" : null);
 
     private IReadOnlyList<ElementReference> LevelTargets =>
-        _orb is null ? [] : _aura is null ? [_orb.Element] : [_orb.Element, _aura.Element];
+        _avatar is null ? [] : _aura is null ? [_avatar.Element] : [_avatar.Element, _aura.Element];
 
     private VoiceState OrbState => _phase switch
     {
@@ -538,7 +579,7 @@
         Phase.Speaking or Phase.Thinking => null,
         _ when !_canTalk => "Talking works in Chrome or Edge.",
         _ when HasSummary => "Tell me what to add or do differently. You'll see the change before it goes in.",
-        _ when ResumeAt is { } next => $"We'd got to {LowerFirst(next)}. Talk or type, and I'll pick up from there.",
+        _ when ResumeAt is not null => "Talk or type, and I'll pick up where we left off.",
         _ => "Tell me what to do, what never to do, and when to call you.",
     };
 
@@ -554,7 +595,7 @@
 
     private string? BarHint => _phase switch
     {
-        Phase.Listening => "Tap Done, or just pause, when you've finished.",
+        Phase.Listening => "Pause when you've finished, and I'll answer.",
         Phase.Finishing => "Keep talking if there's more, or say “that's all”.",
         _ => null,
     };
@@ -591,15 +632,29 @@
                 break;
             case Who.Owner:
                 <li class="job-editor__msg is-owner">
-                    <div class="job-editor__bubble">
-                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@message.Text</Typography>
+                    <div class="job-editor__sent">
+                        @if (message.Files.Count > 0)
+                        {
+                            <ul class="job-editor__files" aria-label="Attached files">
+                                @foreach (var file in message.Files)
+                                {
+                                    <li><FileChip Name="@file.Name" Size="file.Size" Preview="@file.Preview" /></li>
+                                }
+                            </ul>
+                        }
+                        @if (message.Text.Length > 0)
+                        {
+                            <div class="job-editor__bubble">
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@message.Text</Typography>
+                            </div>
+                        }
                     </div>
                 </li>
                 break;
             default:
                 if (message.Text.Length == 0 && message.Check is not { Done: true }) break;
                 <li class="job-editor__msg is-agent">
-                    <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                    <span class="job-editor__face"><AgentFace Look="@Mascot" /></span>
                     <div class="job-editor__reply">
                         @if (message.Text.Length > 0 && message == _speaking && _phase == Phase.Speaking)
                         {
@@ -653,7 +708,7 @@
         if (_phase is Phase.Speaking or Phase.Listening or Phase.Finishing or Phase.Thinking)
         {
             <div class="job-editor__bar">
-                <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__bar-orb" />
+                <span class="job-editor__bar-orb"><PresenceAvatar @ref="_avatar" Direction="Look.Direction" Tone="Look.Tone" State="AvatarState" Size="PresenceAvatarSize.Fill" Reactive Decorative /></span>
                 <div class="job-editor__bar-text">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" role="status">@BarTitle</Typography>
                     @if (BarHint is { } hint)
@@ -673,13 +728,11 @@
                             <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="SkipSpeechAsync">Skip</Button>
                             break;
                         case Phase.Listening:
+                            @* No Done (designer, 10 November 2026: testing showed it read as "end everything"):
+                               a pause ends their turn, as with the live voice; leaving is the view's close. *@
                             <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="TypeInsteadAsync">
                                 <IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft>
                                 <ChildContent>Type instead</ChildContent>
-                            </Button>
-                            <Button Size="ButtonSize.Small" @onclick="DoneAsync">
-                                <IconLeft><Icon Name="IconName.RiStopFill" /></IconLeft>
-                                <ChildContent>Done</ChildContent>
                             </Button>
                             break;
                         case Phase.Finishing:
@@ -703,11 +756,27 @@
             @* The box as in Teach your AI and the Inbox: the answer gets the room; under it, Talk for
                a turn aloud, and (as in WhatsApp) the mic for a voice note while there's nothing to send. *@
             <div class="job-editor__composer">
+                @if (_files.Count > 0)
+                {
+                    <ul class="job-editor__files is-picked" aria-label="Attached files">
+                        @foreach (var file in _files)
+                        {
+                            var current = file;
+                            <li><FileChip Name="@current.Name" Size="current.Size" Preview="@current.Preview" OnRemove="() => _files.Remove(current)" /></li>
+                        }
+                    </ul>
+                }
                 <TextArea @ref="_typeBox" Value="@_typed" ValueChanged="value => _typed = value ?? string.Empty" AriaLabel="@($"Message {Name}")"
                           Class="job-editor__answer" Placeholder="@ComposerHint" Variant="TextAreaVariant.Plain" TextStyle="TextStyle.BodyDefaultMedium"
                           Rows="2" AutoGrow SubmitOnEnter OnKeyDown="TypeKeyAsync" MaxLength="2000" />
                 <footer class="job-editor__composer-foot">
                     <div class="job-editor__composer-tools">
+                        @* A price list, a menu, a returns policy: attached as in Tell us about your business (designer, 10 November 2026). *@
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="Attach pictures or documents" title="Attach pictures or documents"
+                                disabled="@(_files.Count >= MaxFiles)" @onclick="PickFilesAsync">
+                            <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                        </Button>
+                        <InputFile @ref="_picker" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="@AcceptedFiles" OnChange="OnFilesPickedAsync" />
                         @if (!Interviewing)
                         {
                             @* Adding to it: a way out without adding anything. *@
@@ -721,9 +790,9 @@
                             <ChildContent>Talk</ChildContent>
                         </Button>
                     }
-                    @if (_typed.Trim().Length > 0 || !_canRecord)
+                    @if (CanSend || !_canRecord)
                     {
-                        <Button Size="ButtonSize.Small" aria-label="Send" title="Send" disabled="@(_typed.Trim().Length == 0)" @onclick="SendTypedAsync">
+                        <Button Size="ButtonSize.Small" aria-label="Send" title="Send" disabled="@(!CanSend)" @onclick="SendTypedAsync">
                             <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
                         </Button>
                     }
@@ -955,6 +1024,7 @@
         }
         var opening = HasSummary ? "What's changed? Tell me what to add, or what I should do differently." : $"Hi, I'm {Name}. Tell me about my job: what should I do, what should I never do, and when should I bring you in?";
         await AgentSaysAsync(opening, ListenTurnAsync);
+        KeepProgress();
         if (!voice) _focusType = true;
     }
 
@@ -1014,13 +1084,74 @@
         if (args.Key == "Enter" && !args.ShiftKey) await SendTypedAsync();
     }
 
+    private bool CanSend => (_typed.Trim().Length > 0 || _files.Count > 0) && _phase is not (Phase.Thinking or Phase.Speaking);
+
     private async Task SendTypedAsync()
     {
+        if (!CanSend) return;
         var text = _typed.Trim();
-        if (text.Length == 0 || _phase is Phase.Thinking or Phase.Speaking) return;
+        var files = _files.ToList();
         _typed = string.Empty;
+        _files.Clear();
         _voice = false;
-        await OwnerSaidAsync(text);
+        if (text.Length > 0) { await OwnerSaidAsync(text, files); return; }
+        // Files on their own: it says it has them, and the conversation waits where it was.
+        _messages.Add(new Message { Who = Who.Owner, Files = files });
+        _messages.Add(new Message { Who = Who.Agent, Text = files.Count == 1 ? $"Thanks, I'll read {files[0].Name} too." : "Thanks, I'll read those too." });
+        _phase = Phase.Idle;
+        _focusType = true;
+        KeepProgress();
+    }
+
+    // ── Attachments ─────────────────────────────────────────────────────────
+    // Pictures and documents, as in Tell us about your business and Teach your AI. Frontend only for
+    // now: names and picture previews stay in this conversation until the API can take them.
+
+    private const int MaxFiles = 5;
+    private const long MaxFileBytes = 10 * 1024 * 1024;
+    private const long MaxPreviewBytes = 512 * 1024;
+    private const string AcceptedFiles = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt";
+    private readonly List<AttachedFile> _files = [];
+    private InputFile? _picker;
+
+    private async Task PickFilesAsync()
+    {
+        if (_picker?.Element is { } element) await Interop.ClickAsync(element);
+    }
+
+    private async Task OnFilesPickedAsync(InputFileChangeEventArgs args)
+    {
+        _voiceNotice = null;
+        var room = MaxFiles - _files.Count;
+        if (args.FileCount > room) _voiceNotice = $"You can attach up to {MaxFiles} files at a time.";
+        foreach (var file in args.GetMultipleFiles(args.FileCount).Take(Math.Max(0, room)))
+        {
+            if (file.Size > MaxFileBytes)
+            {
+                _voiceNotice = $"{file.Name} is over 10 MB. Try a smaller file.";
+                continue;
+            }
+            var image = file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            _files.Add(new AttachedFile(file.Name, file.Size, image ? await PreviewAsync(file) : null));
+        }
+        _focusType = true;
+    }
+
+    // A small copy of a picture for its thumbnail; none if the browser cannot make one.
+    private static async Task<string?> PreviewAsync(IBrowserFile file)
+    {
+        try
+        {
+            var small = await file.RequestImageFileAsync("image/jpeg", 160, 160);
+            await using var stream = small.OpenReadStream(MaxPreviewBytes);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            return "data:image/jpeg;base64," + Convert.ToBase64String(copy.ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or JSException or InvalidOperationException)
+        {
+            return null;
+        }
     }
 
     // ── Talking ────────────────────────────────────────────────────────────
@@ -1169,9 +1300,9 @@
 
     // ── Their turn, said or typed ──────────────────────────────────────────
 
-    private async Task OwnerSaidAsync(string text)
+    private async Task OwnerSaidAsync(string text, IReadOnlyList<AttachedFile>? files = null)
     {
-        _messages.Add(new Message { Who = Who.Owner, Text = text });
+        _messages.Add(new Message { Who = Who.Owner, Text = text, Files = files ?? [] });
         // Updating it: an answer to what a change left open, more to change, or "that's all".
         if (HasSummary)
         {
@@ -1199,6 +1330,7 @@
             await ThinkAsync();
             _answers[ask.Id] = await Interview.HearAsync(ask, text);
             await ContinueTopicAsync();
+            KeepProgress();
             return;
         }
         // Their own words about the job: read for everything it needs to know, this topic or any other.
@@ -1207,6 +1339,7 @@
             _told = _told.Length == 0 ? Sentence(text) : $"{_told} {Sentence(text)}";
             await ReadJobAsync();
             ApproveYourJob();
+            KeepProgress();
             return;
         }
         // Said while a topic's check waits: read as answers (for any topic), and the check shows them.
@@ -1214,6 +1347,7 @@
         await ReadJobAsync();
         RefreshCheck();
         _phase = CurrentCheck is not null ? Phase.Asking : Phase.Idle;
+        KeepProgress();
     }
 
     private async Task ThinkAsync()
@@ -1283,7 +1417,9 @@
             await FinishInterviewAsync();
             return;
         }
-        _messages.Add(new Message { Who = Who.Topic, Text = section.Title });
+        // Picking up a topic left halfway: its divider is already there.
+        if (_messages.LastOrDefault(message => message.Who == Who.Topic)?.Text != section.Title)
+            _messages.Add(new Message { Who = Who.Topic, Text = section.Title });
         if (Complete(section)) { ApproveTopic(section, ahead: true); return; }
         if (NextGap(section) is { } gap) { await AskAsync(gap); return; }
         ApproveTopic(section, ahead: false);
@@ -1317,7 +1453,7 @@
     private static readonly JobSection YourJob = new("job", "Your job", []);
     private const string YourJobAnswer = "job-told";
 
-    private void ApproveYourJob()
+    private void ApproveYourJob(string? line = null)
     {
         var check = new TopicCheck
         {
@@ -1327,7 +1463,7 @@
             Title = "Your job",
             Subtitle = "Here's my job, as you told me. Change anything that isn't right.",
         };
-        ShowApproval("Here's my job, as you told me. Have a look, and approve it below.", check);
+        ShowApproval(line ?? "Here's my job, as you told me. Have a look, and approve it below.", check);
     }
 
     // A topic's approval: what it gathered (lines to read, with Change), anything still open, docked where the box is.
@@ -1411,6 +1547,21 @@
     private async Task FinishInterviewAsync()
     {
         _topicAt = _sections.Count + 1;
+        // It wraps up, as a person would end the call (aloud while they're talking), then writes.
+        var wrap = new Message { Who = Who.Agent, Text = "That's everything I need. Give me a moment to write my job description." };
+        _messages.Add(wrap);
+        if (_voice && _canSpeak)
+        {
+            _speaking = wrap;
+            Say(wrap.Text, ConcludeAsync);
+            return;
+        }
+        _speaking = null;
+        await ConcludeAsync();
+    }
+
+    private async Task ConcludeAsync()
+    {
         _formBusy = true;
         foreach (var (id, answer) in Understood()) _answers.TryAdd(id, answer);
         var outcome = await Interview.ConcludeAsync(Request());

@@ -2,6 +2,8 @@
 @inject NavigationManager Nav
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
 @inject IBusinessKnowledge Knowledge
+@inject Parrot.Web.Features.Dashboard.Team.TeamClient TeamApi
+@inject AuthState Auth
 
 @* An agent's basics, on its page: its name and look, where it answers, and how it
    stays safe, in plain sentences. A rule's Change opens a small control
@@ -24,7 +26,7 @@
                        aria-expanded="@(_showAvatars ? "true" : "false")"
                        aria-controls="@($"{_id}-avatars")"
                        aria-label="Change look">
-                <img src="@AgentBuilderCopy.MascotImage(Form.Mascot)" alt="" />
+                <span class="agent-basics__face"><AgentFace Look="@Form.Mascot" /></span>
                 <span class="agent-basics__text">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Change look</Typography>
                     @* Not the look's own name: the looks share names with agents, so
@@ -42,21 +44,11 @@
             @if (_showAvatars)
             {
                 <div class="agent-basics__looks" id="@($"{_id}-avatars")">
-                    <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="agent-basics__muted">Choose a look</Typography>
-                    <div class="agent-basics__avatars" role="group" aria-label="Choose a look">
-                        @for (var i = 0; i < AgentBuilderCopy.Mascots.Count; i++)
-                        {
-                            var current = AgentBuilderCopy.Mascots[i];
-                            var chosen = Form.Mascot == current;
-                            var look = $"Look {i + 1} of {AgentBuilderCopy.Mascots.Count}";
-                            <RowButton Class="@($"agent-basics__avatar{(chosen ? " is-chosen" : null)}")"
-                                       OnClick="() => ChooseAvatarAsync(current)"
-                                       aria-pressed="@(chosen ? "true" : "false")"
-                                       aria-label="@look"
-                                       title="@look">
-                                <img src="@AgentBuilderCopy.MascotImage(current)" alt="" />
-                            </RowButton>
-                        }
+                    @* Any of the twelve characters in any bright colour; it stays open so shape
+                       and colour can both be tried (Done closes it). *@
+                    <AgentAvatarChooser Compact Value="@AgentLooks.Of(Form.Mascot)" ValueChanged="ChooseLookAsync" />
+                    <div class="agent-basics__looks-done">
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="ToggleAvatars">Done</Button>
                     </div>
                 </div>
             }
@@ -119,7 +111,7 @@
                         <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong" Prose>Answers only from what you taught it</Typography>
                         <StatusBadge Tone="StatusTone.Neutral" Glyph="IconName.RiLock2Fill">Always on</StatusBadge>
                     </span>
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">If it doesn't know something, it says so and checks with you.</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">@($"If it doesn't know something, it says so and checks with {(Solo ? "you" : "your team")}.")</Typography>
                 </span>
                 @* Back into Teach your AI to add to what every agent knows. *@
                 @if (Knowledge.Available)
@@ -136,17 +128,18 @@
                     </span>
                     <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-basics__muted">@HandoverDetail(Form.Settings)</Typography>
                 </span>
-                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-expanded="@(_changing == Rule.Handover ? "true" : "false")" @onclick="() => Change(Rule.Handover)">
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-expanded="@(_changing == Rule.Handover ? "true" : "false")" @onclick="ChangeHandover">
                     @(_changing == Rule.Handover ? "Done" : "Change")
                 </Button>
-                @if (_changing == Rule.Handover)
+                @if (_team is { Known: true, Solo: false })
+                {
+                    @* With a team, Change opens the choice in its dialog straight away. *@
+                    <HandoverPicker @ref="_picker" Settings="Form.Settings" Channels="Form.Channels" Team="_team" Name="@Form.DisplayName" ShowRow="false" OnSet="SetAsync" />
+                }
+                else if (_changing == Rule.Handover && _team is not null)
                 {
                     <div class="agent-basics__change">
-                        <Input FloatingLabel="Who should it pass customers to?"
-                               Value="@Form.Settings.HandoverTo"
-                               ValueChanged="v => SetAsync(() => Form.Settings.HandoverTo = v ?? string.Empty)"
-                               HelperText="A name and a phone number is perfect. Leave it empty to take them yourself, in the Inbox."
-                               maxlength="120" />
+                        <HandoverPicker Settings="Form.Settings" Channels="Form.Channels" Team="_team" Name="@Form.DisplayName" CanInvite="@(Auth.CurrentUser?.IsOwner == true)" OnSet="SetAsync" />
                     </div>
                 }
             </li>
@@ -209,19 +202,30 @@
     private bool _showAvatars;
     private Rule _changing;
 
-    /// <summary>Who takes over, in a sentence's end: their words, or the owner in the Inbox.</summary>
-    public static string HandoverLabel(AgentSettings settings) =>
-        string.IsNullOrWhiteSpace(settings.HandoverTo) ? "You, in the Inbox" : settings.HandoverTo.Trim();
+    // The people it can bring in: the owner alone, or the team (designer, 10 November 2026).
+    private Parrot.Web.Features.Dashboard.AiAgents.HandoverTeam? _team;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (ShowSafety) _team = await Parrot.Web.Features.Dashboard.AiAgents.HandoverTeam.LoadAsync(TeamApi, Auth);
+    }
 
     /// <summary>
     /// Who takes over, and what happens then: it stops, the team gets the reason
     /// and a summary, and the customer is not left hanging.
     /// </summary>
-    public static string HandoverDetail(AgentSettings settings) =>
-        $"To {HandoverTo(settings)}. It stops replying, sends the reason and a summary of the chat, and waits.";
+    private string HandoverDetail(AgentSettings settings) =>
+        $"To {Parrot.Web.Features.Dashboard.AiAgents.HandoverRouting.Phrase(settings, _team?.Solo ?? true)}. It stops replying, sends the reason and a summary of the chat, and waits.";
 
-    private static string HandoverTo(AgentSettings settings) =>
-        string.IsNullOrWhiteSpace(settings.HandoverTo) ? "you, in the Inbox" : settings.HandoverTo.Trim();
+    private bool Solo => _team?.Solo ?? true;
+
+    private HandoverPicker? _picker;
+
+    private void ChangeHandover()
+    {
+        if (_team is { Known: true, Solo: false } && _picker is not null) { _picker.Open(); return; }
+        Change(Rule.Handover);
+    }
 
     public static string MoneyRule(AgentSettings settings) => (settings.CanOfferDiscounts, settings.CanApproveRefunds) switch
     {
@@ -242,11 +246,7 @@
 
     private void Change(Rule rule) => _changing = _changing == rule ? Rule.None : rule;
 
-    private async Task ChooseAvatarAsync(string mascot)
-    {
-        await SetAsync(() => Form.ChooseAvatar(mascot));
-        _showAvatars = false;
-    }
+    private Task ChooseLookAsync(Parrot.SharedComponents.DesignSystem.AvatarAppearance look) => SetAsync(() => Form.ChooseLook(look));
 
     private Task SetAsync(Action change)
     {

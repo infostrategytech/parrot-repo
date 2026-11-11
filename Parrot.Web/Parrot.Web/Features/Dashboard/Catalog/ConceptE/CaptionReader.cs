@@ -150,7 +150,7 @@ public sealed partial class DemoCaptionReader : ICaptionReader
             // "₦15k - 20k": a range. Shown as a starting price, and its top said in words.
             priceType = Catalog.PriceType.From;
             price = Math.Min(tokens[0].Amount, tokens[1].Amount);
-            notes.Add($"Up to {PriceWords.Naira(Math.Max(tokens[0].Amount, tokens[1].Amount))}, depending on what's chosen.");
+            notes.Add($"Up to {Parrot.SharedComponents.DesignSystem.CurrencyAmount.Format(Math.Max(tokens[0].Amount, tokens[1].Amount), Parrot.SharedComponents.DesignSystem.CurrencyAmount.ExplicitCode(caption))}, depending on what's chosen.");
             unit = tokens[0].Unit.Length > 0 ? tokens[0].Unit : tokens[1].Unit;
             namePrefix = labelled[0].value.Length > 0 ? labelled[0].value : labelled[0].before;
         }
@@ -546,7 +546,7 @@ public sealed partial class DemoCaptionReader : ICaptionReader
 
     private const string ColourWords = "black|white|grey|gray|red|blue|green|pink|purple|brown|beige|cream|gold|silver|nude|navy|wine|yellow|orange|chestnut|burgundy|indigo|rust|ash|champagne|lilac|mint|olive|peach|khaki|maroon|teal|coffee|tan|emerald|ivory|mustard|lemon|sky blue|royal blue|baby pink|off white";
 
-    [GeneratedRegex(@"(?<from>\b(?:from|starts?\s+(?:from|at)|starting\s+(?:from|at)?)\s*)?(?<cur>₦|NGN|(?<![A-Za-z])N(?=\s?\d)|#(?=\s?\d))?\s?(?<num>\d{1,3}(?:,\s?\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?<mult>\s?[kKmM](?![A-Za-z]))?(?<naira>\s?(?:naira|ngn)\b)?", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"(?<from>\b(?:from|starts?\s+(?:from|at)|starting\s+(?:from|at)?)\s*)?(?<cur>₦|\$|£|€|GH₵|NGN|USD|GBP|GHS|EUR|(?<![A-Za-z])N(?=\s?\d)|#(?=\s?\d))?\s?(?<num>\d{1,3}(?:,\s?\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)(?<mult>\s?[kKmM](?![A-Za-z]))?(?<naira>\s?(?:naira|NGN|USD|GBP|GHS|EUR)\b)?", RegexOptions.IgnoreCase)]
     private static partial Regex Amount();
 
     [GeneratedRegex(@"^\s*(?:ml|cl|l\b|ltr|litres?|liters?|inch(?:es)?|""|”|in\b|gb|tb|kg|g\b|grams?|yards?|yds?|hrs?|hours?|days?|weeks?|months?|mins?|minutes?|pcs|pieces?|people|persons?|plates?|packs?|x\s?\d|by\s?\d|%|years?|yrs?|cm|mm|ft|feet|bedrooms?|strips?|looks?|outfits?|images?|pictures?|wraps?|cupcakes?|layers?|tiers?|[–\-]\s*\d{1,3}\b(?![,\d]))", RegexOptions.IgnoreCase)]

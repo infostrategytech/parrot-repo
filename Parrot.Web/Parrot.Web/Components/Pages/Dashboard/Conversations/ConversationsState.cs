@@ -8,6 +8,7 @@ public class ConversationsState
 {
     public List<ConversationItem> Conversations { get; } = new();
     public ConversationItem? GetConversation(string id) => Conversations.FirstOrDefault(x => x.Id == id);
+
     public void Clear() => Conversations.Clear();
 
     public void Apply(IEnumerable<InboxConversationDto> summaries)

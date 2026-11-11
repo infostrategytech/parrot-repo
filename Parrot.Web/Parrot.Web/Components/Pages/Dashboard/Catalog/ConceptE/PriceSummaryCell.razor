@@ -13,7 +13,7 @@
     @if (Reviewing && SimpleReviewPrice)
     {
         <div class="price-summary__review">
-            <Input FloatingLabel="@(Item.PriceType == PriceType.From ? "Starting Price" : "Price")" PrefixText="₦"
+            <Input FloatingLabel="@(Item.PriceType == PriceType.From ? "Starting Price" : "Price")" PrefixText="@CurrencyAmount.Symbol(Item.CurrencyCode)"
                    aria-label="@($"Price for {Item.Name}")" Numeric="NumericInputKind.Decimal" maxlength="16"
                    Value="@_reviewText" ValueChanged="ReviewPriceChangedAsync"
                    Error="@(_reviewError is not null)" HelperText="@(_reviewError ?? _reviewWarning ?? (Item.PriceUnit.Length > 0 ? Item.PriceUnit : null))"
@@ -60,7 +60,7 @@
                     {
                         var current = row;
                         <Input FloatingLabel="@current.Value"
-                               PrefixText="₦"
+                               PrefixText="@CurrencyAmount.Symbol(Item.CurrencyCode)"
                                Numeric="NumericInputKind.Decimal"
                                maxlength="16"
                                Value="@current.Text"
@@ -77,7 +77,7 @@
                 {
                     <Input @ref="_field"
                            FloatingLabel="@(Item.PriceType == PriceType.From ? "Starting price" : "Price")"
-                           PrefixText="₦"
+                           PrefixText="@CurrencyAmount.Symbol(Item.CurrencyCode)"
                            Numeric="NumericInputKind.Decimal"
                            maxlength="16"
                            Value="@_text"
@@ -212,7 +212,7 @@
 
     // The field shows the amount grouped as typed (58,000), so the line under it says nothing more; it speaks only
     // when what is there reads differently (designer, 28 October 2026).
-    private string? Said => Money(_text) is { } amount && !(_text ?? string.Empty).Trim().Equals(amount.ToString("#,0.##", CultureInfo.InvariantCulture)) && !(_text ?? string.Empty).Trim().Equals(Amount(amount)) ? $"That's {PriceWords.Naira(amount)}" : null;
+    private string? Said => Money(_text) is { } amount && !(_text ?? string.Empty).Trim().Equals(amount.ToString("#,0.##", CultureInfo.InvariantCulture)) && !(_text ?? string.Empty).Trim().Equals(Amount(amount)) ? $"That's {CurrencyAmount.Format(amount, Item.CurrencyCode)}" : null;
 
     private void Opened(bool open)
     {
@@ -307,8 +307,8 @@
 
     private static bool Suspicious(decimal before, decimal after) => before > 0 && (after >= before * 10 || after * 10 <= before);
 
-    private static string Warning(decimal after, decimal before, string? choice) =>
-        $"{PriceWords.Naira(after)}{(choice is null ? string.Empty : $" for {choice}")} is {(after > before ? "much higher" : "much lower")} than before ({PriceWords.Naira(before)}). Is that right?";
+    private string Warning(decimal after, decimal before, string? choice) =>
+        $"{CurrencyAmount.Format(after, Item.CurrencyCode)}{(choice is null ? string.Empty : $" for {choice}")} is {(after > before ? "much higher" : "much lower")} than before ({CurrencyAmount.Format(before, Item.CurrencyCode)}). Is that right?";
 
     private static string Amount(decimal amount) => amount.ToString(amount == decimal.Truncate(amount) ? "#,##0" : "#,##0.00", CultureInfo.InvariantCulture);
     private static decimal? Money(string? text) => NumberText.Decimal(text) is { } amount && amount > 0 ? amount : null;

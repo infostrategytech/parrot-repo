@@ -12,16 +12,23 @@ namespace Parrot.Web.Features.Dashboard.AiAgents;
 /// </summary>
 public static class AgentMapping
 {
-    public static AgentInfo ToInfo(AiAgent agent) => new()
+    // Parrot's own agents API keeps the amount in naira only; the AI service is asked for the currency
+    // (OmniAgentMapping), so only this older path refuses another currency rather than save it as naira.
+    public static AgentInfo ToInfo(AiAgent agent)
     {
+        RefuseOtherCurrency(agent.Settings);
+        return new()
+        {
         Name = agent.Name,
         Description = agent.Description,
-        MascotUrl = AgentBuilderCopy.MascotImage(agent.Mascot),
+        // A character look is kept as its own short text; an old mascot as its picture, as before.
+        MascotUrl = AgentLooks.IsLook(agent.Mascot) ? agent.Mascot : AgentBuilderCopy.MascotImage(agent.Mascot),
         SupportsHumanTakeover = agent.HumanTakeover,
         Channels = agent.Channels.Where(c => c.IsEnabled).Select(c => c.Key.ToLowerInvariant()).Distinct().ToList(),
         Settings = ToDto(agent.Settings),
         IsDraft = agent.IsDraft,
-    };
+        };
+    }
 
     public static AiAgent ToAgent(AgentResponse response) => new()
     {
@@ -94,11 +101,17 @@ public static class AgentMapping
         };
     }
 
-    /// <summary>The mascot whose image this is; the image is what the API keeps.</summary>
-    public static string MascotOf(string mascotUrl) =>
+    /// <summary>A character look as saved, or the old mascot whose image this is; the image is what the API kept.</summary>
+    public static string MascotOf(string mascotUrl) => AgentLooks.IsLook(mascotUrl) ? mascotUrl :
         AgentBuilderCopy.Mascots.FirstOrDefault(m => string.Equals(AgentBuilderCopy.MascotImage(m), mascotUrl, StringComparison.OrdinalIgnoreCase))
         ?? AgentBuilderCopy.Mascots.FirstOrDefault(m => string.Equals(m, mascotUrl, StringComparison.OrdinalIgnoreCase))
         ?? AgentBuilderCopy.Mascots[0];
+
+    private static void RefuseOtherCurrency(AgentSettings settings)
+    {
+        if (settings.HandOverBigOrders && Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(settings.BigOrderCurrency) != "NGN")
+            throw new ApiException(System.Net.HttpStatusCode.BadRequest, "Saving this handover currency needs an update to yára. Your change has not been saved.", "CurrencyNotSupported", []);
+    }
 
     private static T Parse<T>(string? name, T fallback) where T : struct, Enum =>
         Enum.TryParse(name, true, out T value) ? value : fallback;

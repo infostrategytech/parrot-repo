@@ -93,7 +93,10 @@
                     @foreach (var kind in TaskWords.Kinds)
                     {
                         var current = kind;
-                        <PopoverOption Label="@TaskWords.Label(current)" Description="@TaskWords.Describe(current)"
+                        @* Filtering, not choosing: the type names are enough here.
+                           NewTaskDialog keeps the descriptions, because picking a
+                           type for a new task is a choice with a consequence. *@
+                        <PopoverOption Label="@TaskWords.Label(current)"
                                        Active="@(_kind == current)" OnSelect="() => PickKind(current)">
                             <Leading><TaskKindMark Kind="current" Small /></Leading>
                         </PopoverOption>
@@ -107,7 +110,7 @@
                         @foreach (var member in _team)
                         {
                             var current = member;
-                            <PopoverOption Label="@current.Name" Description="@(current.Id == Store.Me.Id ? "You" : null)"
+                            <PopoverOption Label="@(current.Id == Store.Me.Id ? $"{current.Name} (you)" : current.Name)"
                                            Active="@(_person?.Id == current.Id)" OnSelect="() => PickPerson(current)">
                                 <Leading><PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /></Leading>
                             </PopoverOption>
@@ -175,6 +178,9 @@
     [Parameter] public string? TaskId { get; set; }
     [SupplyParameterFromQuery(Name = "conversation")] public string[]? ConversationIds { get; set; }
     [SupplyParameterFromQuery(Name = "customer")] public string? CustomerName { get; set; }
+    /// <summary>A link can open a view: "?view=mine" from the bell's "3 tasks have been assigned to you".</summary>
+    [SupplyParameterFromQuery(Name = "view")] public string? ViewName { get; set; }
+    private string? _viewKey;
     private HashSet<string> CustomerScope { get; set; } = [];
     private string ScopeName => string.IsNullOrWhiteSpace(CustomerName) ? "this customer" : CustomerName;
     private string ScopedListUrl => CustomerTaskScope.Url(ScopeName, CustomerScope);
@@ -226,6 +232,13 @@
         CustomerScope = (ConversationIds ?? []).Where(id => !string.IsNullOrWhiteSpace(id)).ToHashSet();
         var key = string.Join("|", CustomerScope.Order());
         if (_scopeKey != key) { _scopeKey = key; _page = 1; }
+        // Only when the link's view changes, so a tab the person picks afterwards stays picked. A view this
+        // workspace doesn't show (Mine without a team) leaves the page on All.
+        if (_viewKey != ViewName)
+        {
+            _viewKey = ViewName;
+            if (Enum.TryParse<View>(ViewName, true, out var linked) && Views.Contains(linked)) { _view = linked; _page = 1; }
+        }
         // A task opened by its link shows in a view that has it.
         if (Selected is { } task && !InView(_view).Contains(task)) _view = task.IsClosed ? View.Closed : View.All;
     }

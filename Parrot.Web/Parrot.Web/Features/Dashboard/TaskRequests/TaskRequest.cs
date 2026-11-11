@@ -32,7 +32,7 @@ public sealed record TaskEvent(DateTime At, string What, string Who, string? Upd
 public sealed record TaskCustomer(string Name, string Channel, string? Contact = null, string? ConversationId = null);
 
 /// <summary>Something the business sells, to add to a task with its price: from Products & Services.</summary>
-public sealed record TaskItem(string Name, decimal? Price);
+public sealed record TaskItem(string Name, decimal? Price, string? CurrencyCode = null);
 
 /// <summary>A person on the team: who a task is assigned to.</summary>
 public sealed record TaskPerson(string Id, string Name);
@@ -62,6 +62,10 @@ public sealed class TaskRequest
     /// <summary>The agent's id, so the task shows the look the business chose for it.</summary>
     public string? RaisedById { get; init; }
     public bool RaisedByAgent { get; init; }
+    /// <summary>Optional agent handover attached to this task; preserves an existing task's original creator/type.</summary>
+    public string? HandoverEventId { get; set; }
+    public string? HandoverAgentId { get; set; }
+    public string? HandoverAgentName { get; set; }
     public required DateTime RaisedAt { get; init; }
 
     /// <summary>
@@ -85,6 +89,8 @@ public sealed class TaskRequest
 
     /// <summary>The total: the lines' prices added up, or an amount typed when there are no prices.</summary>
     public decimal? Total { get; set; }
+    /// <summary>Saved with the amounts. Null means legacy NGN, not the current workspace default.</summary>
+    public string? CurrencyCode { get; set; }
 
     public List<TaskEvent> History { get; init; } = [];
     public DateTime LastActivityAt { get; set; }
@@ -111,4 +117,5 @@ public sealed record TaskDraft(
     bool Urgent = false,
     DateTime? DueAt = null,
     bool DueHasTime = false,
-    TaskPerson? Assignee = null);
+    TaskPerson? Assignee = null,
+    string? CurrencyCode = null);

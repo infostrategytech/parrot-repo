@@ -26,8 +26,23 @@ public sealed class AgentSettings
     /// <summary>Build my own: the job's name, in the owner's words ("Bookings"). Its description is the agent's.</summary>
     public string CustomRole { get; set; } = string.Empty;
 
-    /// <summary>Who it passes a customer to when it cannot help, in the owner's words. Empty: the owner, in the Inbox.</summary>
+    /// <summary>
+    /// Who it passes a customer to, in words: the owner's own (before teams), or the choice below described
+    /// ("Customer service, shared evenly"). The AI reads this. Empty: the owner, or anyone on the team.
+    /// </summary>
     public string HandoverTo { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Who it brings in (HandoverModes): anyone on the team, a role, or people. Empty: not chosen yet, so anyone on the
+    /// team (the default), or an older agent's own words in HandoverTo. Working alone, always the owner.
+    /// </summary>
+    public string HandoverMode { get; set; } = string.Empty;
+
+    /// <summary>With a role: the role whose people share its handovers and tasks evenly.</summary>
+    public string? HandoverRoleId { get; set; }
+
+    /// <summary>With people: who shares its handovers and tasks evenly (user ids).</summary>
+    public List<string> HandoverPeople { get; set; } = [];
 
     public bool CanOfferDiscounts { get; set; }
     public bool CanApproveRefunds { get; set; }
@@ -72,6 +87,8 @@ public sealed class AgentSettings
     public bool HandOverAfterMisses { get; set; } = true;
     public bool HandOverBigOrders { get; set; }
     public int BigOrderNaira { get; set; } = 50000;
+    /// <summary>Currency of the saved threshold; null retains legacy NGN. The old amount property is kept for compatibility.</summary>
+    public string? BigOrderCurrency { get; set; }
 
     // ── What else it knows ──────────────────────────────────────────────────
 
@@ -93,6 +110,7 @@ public sealed class AgentSettings
         copy.NoteFiles = [.. NoteFiles];
         copy.LeftOut = [.. LeftOut];
         copy.AvoidPhrases = [.. AvoidPhrases];
+        copy.HandoverPeople = [.. HandoverPeople];
         copy.Brief = Brief?.Copy();
         return copy;
     }
@@ -118,7 +136,8 @@ public sealed class AgentSettings
         HandOverWhenUpset = true;
         HandOverAfterMisses = true;
         // A person closes large sales.
-        HandOverBigOrders = role == AgentRoleTemplate.Sales;
+        // Only with an amount: a workspace outside naira starts without one, and "orders over 0" would hand over every order.
+        HandOverBigOrders = role == AgentRoleTemplate.Sales && BigOrderNaira > 0;
     }
 }
 
@@ -164,7 +183,7 @@ public sealed class AgentForm
     /// </summary>
     public static AgentForm Suggested(IReadOnlyList<AiAgent> others, IEnumerable<string>? availableChannels = null)
     {
-        var form = new AgentForm { Mascot = FreeMascot(AgentBuilderCopy.Mascots[0], others) };
+        var form = new AgentForm { Mascot = AgentLooks.Free(others.Select(a => a.Mascot)) };
         var available = availableChannels is null
             ? AgentBuilderCopy.Channels.Select(c => c.Key).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : availableChannels.ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -182,13 +201,8 @@ public sealed class AgentForm
     }
 
     public void ChooseAvatar(string mascot) => Mascot = mascot;
-
-    // The preferred avatar unless another agent wears it; then the first free one.
-    private static string FreeMascot(string preferred, IReadOnlyList<AiAgent> others)
-    {
-        bool Taken(string m) => others.Any(a => a.Mascot == m);
-        return !Taken(preferred) ? preferred : AgentBuilderCopy.Mascots.FirstOrDefault(m => !Taken(m)) ?? preferred;
-    }
+    /// <summary>A character and colour from the look picker, saved as its short text.</summary>
+    public void ChooseLook(Parrot.SharedComponents.DesignSystem.AvatarAppearance look) => Mascot = AgentLooks.Save(look);
 
     /// <summary>The names of live agents already answering on a channel.</summary>
     public static List<string> Covering(IReadOnlyList<AiAgent> others, string key) => others

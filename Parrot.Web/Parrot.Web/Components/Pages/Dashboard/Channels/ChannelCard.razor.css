@@ -38,7 +38,6 @@
   flex: 0 0 auto;
   width: var(--ds-channel-mark);
   height: var(--ds-channel-mark);
-  color: var(--colors-text-inverse);
   border-radius: var(--radius-radius-xl);
 }
 

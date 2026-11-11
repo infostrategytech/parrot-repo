@@ -148,7 +148,7 @@
                             {
                                 var agent = Agents.FirstOrDefault(item => item.Id == access.AgentId);
                                 <li>
-                                    @if (agent?.Look is { } look) { <img src="@look" alt="" /> }
+                                    @if (agent?.Look is { } look) { <span class="tool-dialog__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span> }
                                     else { <PetalAvatar Seed="@access.AgentId" Initials="@Initials.From(agent?.Name ?? "?")" Size="AvatarSize.Sm" /> }
                                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(agent?.Name ?? "Unavailable agent")</Typography>
                                 </li>
@@ -322,7 +322,7 @@
         {
             var agent = Agents.FirstOrDefault(item => item.Id == access.AgentId);
             <li>
-                @if (agent?.Look is { } look) { <img src="@look" alt="" /> }
+                @if (agent?.Look is { } look) { <span class="tool-dialog__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span> }
                 else { <PetalAvatar Seed="@access.AgentId" Initials="@Initials.From(agent?.Name ?? "?")" Size="AvatarSize.Sm" /> }
                 <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(agent?.Name ?? "Unavailable agent")</Typography>
             </li>
@@ -397,8 +397,8 @@
             </InlineError>
         }
     </section>;
-    // Hours are kept in one place, Settings (its Business section comes with the Settings work); straight there.
-    private void ChangeHours() => Nav.NavigateTo("/dashboard/settings");
+    // Hours are kept in one place, Settings › Business; straight there, without reopening anything here.
+    private void ChangeHours() => Nav.NavigateTo("/dashboard/settings/business");
     protected override async Task OnParametersSetAsync()
     {
         if (!Open || Tool.Id != "google-calendar" || _hours is not null) return;
@@ -425,9 +425,9 @@
                 @foreach (var agent in Agents)
                 {
                     var current = agent;
-                    <PopoverOption Label="@current.Name" Description="@current.Job" Active="@(current.Id == _agentId)" OnSelect="() => { _agentId = current.Id; _agentOpen = false; }" />
+                    <PopoverOption Label="@current.Name" Active="@(current.Id == _agentId)" OnSelect="() => { _agentId = current.Id; _agentOpen = false; }" />
                 }
-                <PopoverOption Label="Not now" Description="Choose an agent later, from Manage." Active="@(_agentId is null)" OnSelect="() => { _agentId = null; _agentOpen = false; }" />
+                <PopoverOption Label="Not now" Active="@(_agentId is null)" OnSelect="() => { _agentId = null; _agentOpen = false; }" />
             </SelectField>
             <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@GrantLine</Typography>
         }

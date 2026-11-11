@@ -4,11 +4,11 @@
 .customer-row {
   /* Gaps in the token set: no border-width scale, and the columns are this table's own. */
   --ds-customer-hairline: 1px;
-  --ds-customer-when: 160px;
-  --ds-customer-tasks: 120px;
-  --ds-table-columns: minmax(0, 2fr) minmax(0, 1.4fr) var(--ds-customer-when);
+  /* Evenly spaced (designer, 6 November 2026): the customer gets the room names need, and the columns after it
+     share the rest equally. */
+  --ds-table-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr));
 }
-.customer-row.has-tasks { --ds-table-columns: minmax(0, 2fr) minmax(0, 1.4fr) var(--ds-customer-when) var(--ds-customer-tasks); }
+.customer-row.has-tasks { --ds-table-columns: minmax(0, 2fr) repeat(3, minmax(0, 1fr)); }
 .customer-row__facts > * { min-width: 0; }
 .customer-row__facts { display: contents; }
 
@@ -29,10 +29,18 @@
 .customer-row__words ::deep .customer-row__name:focus-visible { outline: none; }
 .customer-row__words ::deep .customer-row__name:focus-visible::after { outline: var(--ds-customer-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-customer-hairline) * -1); }
 
-.customer-row__channels { display: flex; flex-wrap: wrap; gap: var(--spacing-xs) var(--spacing-md); align-items: center; }
-.customer-row__channel { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-secondary); }
-
+/* After the customer, each column's content is centred under its name, so the columns read evenly spaced
+   (designer, 6 November 2026). In the tablet line under the name they start the line. */
+.customer-row__channels,
+.customer-row__when,
+.customer-row__tasks { display: flex; justify-content: center; align-items: center; text-align: center; }
+.customer-row__channels,
 .customer-row__when { color: var(--colors-text-secondary); }
+@media (max-width: 1024px) {
+  .customer-row__channels,
+  .customer-row__when,
+  .customer-row__tasks { justify-content: flex-start; text-align: start; }
+}
 .customer-row__count { display: inline-flex; gap: var(--spacing-xs); align-items: center; color: var(--colors-brand-primary); }
 
 /* A tablet: the customer on top, then their channels, when and what's open, in one line under the name. */

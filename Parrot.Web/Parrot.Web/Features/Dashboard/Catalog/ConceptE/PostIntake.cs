@@ -23,10 +23,12 @@ public sealed class PostDraft
     /// <summary>The post may show more than one item ("Option 1, Option 2").</summary>
     public bool MaybeMany { get; init; }
 
-    public static PostDraft From(SocialPost post, CaptionReading reading, IEnumerable<CatalogEntry> items)
+    public static PostDraft From(SocialPost post, CaptionReading reading, IEnumerable<CatalogEntry> items, string? defaultCurrency = null)
     {
         var item = new CatalogEntry
         {
+            CurrencyCode = Parrot.SharedComponents.DesignSystem.CurrencyAmount.ExplicitCode(post.Caption)
+                ?? Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(defaultCurrency),
             Kind = reading.Kind ?? CatalogKind.Product,
             Name = reading.Name,
             // Keep the owner's caption intact and editable; extraction fills structured fields separately.
@@ -38,10 +40,16 @@ public sealed class PostDraft
             AvailabilityIsUnconfirmed = false,
         };
         reading.ApplyOffer(item);
+        var mixedCurrencies = Parrot.SharedComponents.DesignSystem.CurrencyAmount.ExplicitCodes(post.Caption).Count > 1;
+        if (mixedCurrencies)
+        {
+            item.Price = null; item.Options = []; item.Variants = []; item.PriceType = PriceType.Fixed;
+        }
         if (item.Kind == CatalogKind.Service) item.Duration = reading.LeadTime;
         else { item.LeadTime = reading.LeadTime; item.MadeToOrder = reading.MadeToOrder; }
 
         var checks = new List<string>();
+        if (mixedCurrencies) checks.Add("This post lists different currencies. Enter the price you want to use; we haven't converted it.");
         if (item.Name.Trim().Length == 0) checks.Add("No name in the post. Add one.");
         if (PriceWords.For(item).Missing) checks.Add("No price in the post. Add one.");
         else if (post.DaysAgo >= 14) checks.Add($"Posted {Age(post.DaysAgo)} ago. Is the price still right?");
@@ -49,7 +57,8 @@ public sealed class PostDraft
         if (many) checks.Add("This post may show more than one item. Add the others on their own.");
         checks.AddRange(reading.Checks);
 
-        return new PostDraft { Post = post, Item = item, Checks = checks, Match = Existing(post, items), MaybeMany = many };
+        var sameCurrency = items.Where(existing => Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(existing.CurrencyCode) == item.CurrencyCode);
+        return new PostDraft { Post = post, Item = item, Checks = checks, Match = Existing(post, sameCurrency), MaybeMany = many };
     }
 
     /// <summary>
@@ -58,6 +67,8 @@ public sealed class PostDraft
     /// </summary>
     public static CatalogEntry Onto(CatalogEntry match, CatalogEntry from)
     {
+        if (!PriceWords.For(from).Missing && Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(match.CurrencyCode) != Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(from.CurrencyCode))
+            throw new InvalidOperationException("Prices in different currencies cannot update one another. Add this as a separate item.");
         var entry = match.Copy();
         if (!PriceWords.For(from).Missing)
         {

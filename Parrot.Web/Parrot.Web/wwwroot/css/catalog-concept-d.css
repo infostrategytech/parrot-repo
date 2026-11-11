@@ -1,0 +1,25 @@
+/* This concept's content supports a phone. Remove the dashboard's desktop
+   width floor only while D is present; other concepts and modules keep theirs. */
+html:has(.products-d),
+html:has(.item-page--concept-d),
+body:has(.products-d),
+body:has(.item-page--concept-d),
+.app-shell:has(.products-d),
+.app-shell:has(.item-page--concept-d) { min-width: 0; }
+
+body:has(.products-d),
+body:has(.item-page--concept-d) {
+  /* The existing collapsed navigation rail, also used while it opens as an overlay. */
+  --ds-concept-d-nav: 88px;
+}
+
+@media (max-width: 760px) {
+  .app-shell:has(.products-d) .concept-switch,
+  .app-shell:has(.item-page--concept-d) .concept-switch {
+    left: calc(var(--ds-concept-d-nav) + var(--spacing-sm));
+    right: calc(var(--spacing-5xl) + var(--spacing-2xl));
+    max-width: calc(100vw - var(--ds-concept-d-nav) - var(--spacing-5xl) - var(--spacing-3xl));
+    overflow-x: auto;
+    transform: none;
+  }
+}

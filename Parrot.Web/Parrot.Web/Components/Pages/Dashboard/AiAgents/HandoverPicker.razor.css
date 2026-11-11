@@ -1,0 +1,52 @@
+/* The row: who it brings in, with their faces, and Change on the right, like the switches under it. */
+.handover-picker,
+.handover-picker__choices {
+  /* Missing from the token set: the card-coloured ring that separates overlapping faces. */
+  --ds-handover-face-ring: 2px;
+}
+.handover-picker { display: flex; gap: var(--spacing-xl); align-items: center; justify-content: space-between; }
+.handover-picker__who { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.handover-picker__who ::deep strong { color: var(--colors-text-primary); }
+.handover-picker__summary { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+.handover-picker__summary ::deep > span:last-child { color: var(--colors-text-muted); }
+
+/* Faces overlapping a little, each ringed in the card's colour. */
+.handover-picker__faces { display: flex; flex: none; align-items: center; }
+.handover-picker__faces > ::deep * { border-radius: var(--radius-radius-full); box-shadow: 0 0 0 var(--ds-handover-face-ring) var(--colors-surface-card); }
+.handover-picker__faces > ::deep * + * { margin-left: calc(-1 * var(--spacing-xs)); }
+.handover-picker__more {
+  display: grid;
+  place-items: center;
+  min-width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
+  padding: 0 var(--spacing-xs);
+  margin-left: calc(-1 * var(--spacing-xs));
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 0 0 var(--ds-handover-face-ring) var(--colors-surface-card);
+}
+
+/* The dialog: three choices, the chosen one opening what it needs. */
+.handover-picker__choices { display: grid; gap: var(--spacing-sm); }
+.handover-picker__people { display: grid; gap: var(--spacing-md); }
+.handover-picker__chosen { display: grid; gap: var(--spacing-xs); margin: 0; padding: 0; list-style: none; }
+.handover-picker__chosen li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-xs) var(--spacing-xs) var(--spacing-xs) var(--spacing-sm);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.handover-picker__person { display: grid; min-width: 0; }
+.handover-picker__person ::deep span:first-child { color: var(--colors-text-primary); }
+.handover-picker__person ::deep span:last-child { color: var(--colors-text-muted); }
+.handover-picker__people ::deep .handover-picker__note { margin: var(--spacing-none); color: var(--colors-text-muted); }
+
+@media (max-width: 760px) {
+  .handover-picker { flex-direction: column; align-items: stretch; gap: var(--spacing-md); }
+  .handover-picker > ::deep .ds-button { align-self: flex-start; }
+}
