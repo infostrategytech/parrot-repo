@@ -43,6 +43,9 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt)
 {
+    /// <summary>customer, ai, human, note, system or ai_question. Null when the kind is implicit from Outgoing.</summary>
+    public string? Kind { get; init; }
+
     /// <summary>The files the customer sent with it, or null when it had none.</summary>
     public IReadOnlyList<MessageMedia>? Attachments { get; init; }
 
