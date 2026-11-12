@@ -321,6 +321,96 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("Agents");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.BusinessSource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorizationConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CapturedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("DisplayName")
+                        .HasMaxLength(512)
+                        .HasColumnType("character varying(512)");
+
+                    b.Property<string>("ExternalId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Handle")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("LastMetadataSyncAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("LastMetadataSyncError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("LastMetadataSyncSucceededAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("MetadataSyncLockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("MetadataSyncStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime?>("NextMetadataSyncAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Text")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Url")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorizationConnectionId")
+                        .HasDatabaseName("IX_BusinessSources_Connection");
+
+                    b.HasIndex("WorkspaceId", "IsActive")
+                        .HasDatabaseName("IX_BusinessSources_Workspace_Active");
+
+                    b.HasIndex("WorkspaceId", "Channel", "Kind", "ExternalId")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_BusinessSources_Identity");
+
+                    b.ToTable("BusinessSources");
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.Customer", b =>
                 {
                     b.Property<Guid>("Id")
@@ -620,6 +710,51 @@ namespace Parrot.Infrastructure.Migrations
                         .HasFilter("\"DisabledAt\" IS NULL");
 
                     b.ToTable("InstagramConnections");
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.OutboxEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<DateTime?>("LockedUntil")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<DateTime?>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("PublishedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NextAttemptAt")
+                        .HasDatabaseName("IX_OutboxEvents_Eligible")
+                        .HasFilter("\"PublishedAt\" IS NULL");
+
+                    b.ToTable("OutboxEvents");
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.OwnerRole", b =>
@@ -1129,6 +1264,25 @@ namespace Parrot.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.WorkspaceSourceState", b =>
+                {
+                    b.Property<string>("WorkspaceId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<long>("SnapshotVersion")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.HasKey("WorkspaceId");
+
+                    b.ToTable("WorkspaceSourceStates");
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -1177,6 +1331,15 @@ namespace Parrot.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.BusinessSource", b =>
+                {
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });
 

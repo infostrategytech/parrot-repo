@@ -146,6 +146,7 @@ if (roles.HasFlag(WorkerRoles.Messages)) builder.Services.AddHostedService<Worke
 if (roles.HasFlag(WorkerRoles.Media)) builder.Services.AddHostedService<MediaWorker>();
 if (roles.HasFlag(WorkerRoles.Outbound)) builder.Services.AddHostedService<OutboundWorker>();
 if (roles.HasFlag(WorkerRoles.AiReply)) builder.Services.AddHostedService<AiReplyWorker>();
+if (roles.HasFlag(WorkerRoles.SourcesOutbox)) builder.Services.AddHostedService<SourcesOutboxWorker>();
 if (roles.HasFlag(WorkerRoles.Media | WorkerRoles.Outbound))
 {
     builder.Services.AddSingleton<PendingSweeper>(sp => ActivatorUtilities.CreateInstance<PendingSweeper>(sp));
