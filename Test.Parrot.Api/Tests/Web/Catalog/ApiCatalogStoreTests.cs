@@ -14,6 +14,23 @@ public class ApiCatalogStoreTests
     private const string Variant = "0b3c8c43-6a2d-4c55-9d4c-3d6c1f6a0a01";
     private const string ItemId = "7d1f2c1e-0f9a-4c3b-8d6e-2a5b4c3d2e1f";
 
+    [Theory]
+    [InlineData("USD")]
+    [InlineData("GBP")]
+    [InlineData("GHS")]
+    [InlineData("NGN")]
+    public async Task PricingCurrencyUsesTheExistingCatalogContractOnWriteAndRead(string currency)
+    {
+        var catalog = new FakeCatalog();
+        catalog.Respond("GET api/catalog/categories", "[]");
+        catalog.Respond("POST api/catalog/items", Item($$"""
+            "status":"live","pricing":{"mode":"single","currency":"{{currency}}","amount":25.50,"variants":[]}
+            """));
+        var saved = await Store(catalog).CreateAsync(new CatalogEntry { Name = "Controlled item", Price = 25.50m, CurrencyCode = currency });
+        Assert.Equal(currency, catalog.Bodies["POST api/catalog/items"].GetProperty("pricing").GetProperty("currency").GetString());
+        Assert.Equal(currency, saved.CurrencyCode); Assert.Equal(25.50m, saved.Price);
+    }
+
     [Fact]
     public async Task A_new_item_uploads_its_picked_photo_first_and_saves_the_form()
     {

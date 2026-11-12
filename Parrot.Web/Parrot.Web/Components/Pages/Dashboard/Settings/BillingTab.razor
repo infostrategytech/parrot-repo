@@ -4,7 +4,7 @@
    card divided into cells; the plan cards are its editor kind cards; the
    invoice list is its grid table. *@
 
-<SettingsCard Title="Billing & usage" Description="Manage your plan, usage, and payment history.">
+<SettingsCard Title="Your plan">
     <div class="billing__plan">
         <div class="billing__plan-text">
             <div class="billing__plan-name">
@@ -51,18 +51,8 @@
 <SettingsCard Title="Plans & upgrades" Description="Choose the plan that fits your team.">
     <HeaderAction>
         <div class="billing__cycle">
-            <div class="billing__cycle-tabs" role="tablist" aria-label="Billing cycle">
-                <button type="button" role="tab" aria-selected="@((!_yearly).ToString().ToLowerInvariant())"
-                        class="@(_yearly ? "billing__cycle-tab" : "billing__cycle-tab is-active")"
-                        @onclick="() => _yearly = false">
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Monthly</Typography>
-                </button>
-                <button type="button" role="tab" aria-selected="@(_yearly.ToString().ToLowerInvariant())"
-                        class="@(_yearly ? "billing__cycle-tab is-active" : "billing__cycle-tab")"
-                        @onclick="() => _yearly = true">
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span">Yearly</Typography>
-                </button>
-            </div>
+            @* The shared two-way switch, as Appearance's theme uses (designer, 7 November 2026: components, not raw buttons). *@
+            <SegmentedControl TValue="bool" Label="Billing cycle" Options="Cycles" Value="_yearly" ValueChanged="yearly => _yearly = yearly" />
             <StatusBadge Tone="StatusTone.Success">Save 20%</StatusBadge>
         </div>
     </HeaderAction>
@@ -169,6 +159,7 @@
     ];
 
     bool _yearly = true;
+    private static readonly IReadOnlyList<SegmentedOption<bool>> Cycles = [new(false, "Monthly"), new(true, "Yearly")];
 
     record Invoice(string Id, string Amount, string Date, string Status, string StatusClass);
 

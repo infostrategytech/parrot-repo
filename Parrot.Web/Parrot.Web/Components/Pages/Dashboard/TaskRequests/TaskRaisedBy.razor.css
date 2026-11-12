@@ -14,11 +14,10 @@
   vertical-align: middle;
 }
 .task-by__look {
+  display: inline-grid;
   flex: none;
   width: var(--ds-task-by-look);
   height: var(--ds-task-by-look);
-  object-fit: cover;
-  border-radius: var(--radius-radius-full);
 }
 .task-by.is-compact { gap: var(--spacing-xs); }
 .task-by.is-compact .task-by__look { width: var(--ds-task-by-look-compact); height: var(--ds-task-by-look-compact); }

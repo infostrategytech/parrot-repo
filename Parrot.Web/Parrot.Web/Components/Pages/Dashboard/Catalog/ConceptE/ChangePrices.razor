@@ -29,7 +29,7 @@
                     <Input @ref="_by" FloatingLabel="By"
                            Numeric="NumericInputKind.Decimal"
                            maxlength="10"
-                           PrefixText="@(_unit == "naira" ? "₦" : null)"
+                           PrefixText="@(_unit == "naira" ? CurrencyAmount.Symbol(ChangeCurrency) : null)"
                            Value="@_amount"
                            ValueChanged="value => { _amount = value; _invalid = false; _error = null; }"
                            Error="_invalid"
@@ -78,7 +78,8 @@
     private sealed record Change(string Name, string Was, string Now);
 
     private static readonly IReadOnlyList<SegmentedOption<string>> Directions = [new("up", "Raise"), new("down", "Lower")];
-    private static readonly IReadOnlyList<SegmentedOption<string>> Units = [new("percent", "%"), new("naira", "₦")];
+    private string ChangeCurrency => Priced.Select(item => CurrencyAmount.Code(item.CurrencyCode)).FirstOrDefault() ?? CurrencyAmount.LegacyCode;
+    private IReadOnlyList<SegmentedOption<string>> Units => [new("percent", "%"), new("naira", CurrencyAmount.Symbol(ChangeCurrency))];
 
     private bool _open, _invalid;
     private string _direction = "up", _unit = "percent";
@@ -99,7 +100,9 @@
         get
         {
             if (By is null) return null;
-            try { return Priced.SelectMany(item => PriceWords.Prices(item)).Any(price => Move(price) <= 0)
+            if (_unit == "naira" && Priced.Select(item => CurrencyAmount.Code(item.CurrencyCode)).Distinct().Count() > 1)
+                return "For an amount adjustment, select items in the same currency. A percentage can change different currencies.";
+            try { return Priced.Any(item => PriceWords.Prices(item).Any(price => Move(price, item.CurrencyCode) <= 0))
                 ? "That would reduce a price to zero or below. Use a smaller reduction." : null; }
             catch (OverflowException) { return "That change is too large. Enter a smaller amount."; }
         }
@@ -110,7 +113,8 @@
         get
         {
             var parts = new List<string>();
-            if (_unit == "percent") parts.Add("Rounded to the nearest ₦100.");
+            if (_unit == "percent") parts.Add(Priced.All(item => CurrencyAmount.Code(item.CurrencyCode) == "NGN")
+                ? "Rounded to the nearest ₦100." : "Rounded to 2 decimal places; naira prices keep their ₦100 rounding.");
             var asked = Items.Count(item => item.PriceType == PriceType.OnRequest);
             if (asked > 0) parts.Add($"{Plural(asked)} where customers ask for the price {(asked == 1 ? "stays" : "stay")} as {(asked == 1 ? "it is" : "they are")}.");
             var missing = Items.Count(item => item.PriceType != PriceType.OnRequest && PriceWords.Prices(item).Count == 0);
@@ -141,18 +145,19 @@
     private CatalogEntry Changed(CatalogEntry item)
     {
         var changed = item.Copy();
-        if (changed.Price is { } price) changed.Price = Move(price);
+        if (changed.Price is { } price) changed.Price = Move(price, item.CurrencyCode);
         foreach (var variant in changed.Variants)
-            if (variant.Price is { } own) variant.Price = Move(own);
+            if (variant.Price is { } own) variant.Price = Move(own, item.CurrencyCode);
         return changed;
     }
 
-    private decimal Move(decimal price)
+    private decimal Move(decimal price, string? currency = null)
     {
         var by = By ?? 0;
         var sign = _direction == "up" ? 1 : -1;
+        var step = CurrencyAmount.Code(currency) == "NGN" ? 100m : 0.01m;
         var moved = _unit == "percent"
-            ? Math.Round(price * (1 + sign * by / 100) / 100, MidpointRounding.AwayFromZero) * 100
+            ? Math.Round(price * (1 + sign * by / 100) / step, MidpointRounding.AwayFromZero) * step
             : price + sign * by;
         return moved;
     }

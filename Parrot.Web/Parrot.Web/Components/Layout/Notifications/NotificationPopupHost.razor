@@ -1,0 +1,118 @@
+@namespace Parrot.Web.Components.Layout.Notifications
+@using Parrot.Web.Features.Notifications
+@using Parrot.Web.Features.Settings
+@inject INotificationFeed Feed
+@inject INotificationSettingsStore SettingsStore
+@inject NotificationPopups Popups
+@inject NavigationManager Nav
+@inject Parrot.Web.Services.UserClock Clock
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+@* Pop-ups and browser notifications while yára is open (designer, 5 November 2026). What's already there when
+   you arrive waits in the bell; only what arrives after pops up. In yára: a pop-up in the corner. In another tab
+   with browser notifications allowed: one from the browser instead. Several at once of one type are one, as in
+   the bell. Quiet hours hold both. *@
+<NotificationPopupStack Items="_shown" OnOpen="OpenAsync" OnDismiss="Dismiss" />
+
+@code {
+    private readonly HashSet<string> _known = [];
+    // Where each pop-up opens, and the one item it marks read (none for a group).
+    private readonly Dictionary<string, (string? Href, string? ItemId)> _links = [];
+    private List<NotificationPopupItem> _shown = [];
+    private bool _ready, _disposed;
+    private IJSObjectReference? _alerts;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Feed.Changed += OnFeedChanged;
+        Popups.TestRequested += OnTest;
+        if (!Feed.Available) return;
+        // What's here already is the bell's to show, not a pop-up's.
+        try { NotificationDelivery.Arrived(await Feed.ReadAsync(), _known); } catch (HttpRequestException) { }
+        _ready = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try { _alerts = await JS.InvokeAsync<IJSObjectReference>("import", "./js/browser-alerts.js"); }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { }
+    }
+
+    private void OnFeedChanged() => _ = InvokeAsync(ArrivedAsync);
+
+    private async Task ArrivedAsync()
+    {
+        if (_disposed || !_ready) return;
+        IReadOnlyList<AppNotification> fresh;
+        NotificationSettings settings;
+        try { fresh = NotificationDelivery.Arrived(await Feed.ReadAsync(), _known); settings = await SettingsStore.ReadAsync(); }
+        catch (HttpRequestException) { return; }
+        if (fresh.Count == 0 || NotificationDelivery.Quiet(settings, DateTimeOffset.UtcNow, Clock.Zone)) return;
+
+        var away = await AwayAsync();
+        foreach (var card in NotificationProjection.Build(fresh.Where(item => NotificationDelivery.PopsUp(settings, item) || settings.Push)))
+        {
+            var row = NotificationDisplay.Rows([card], false, DateTimeOffset.UtcNow, Clock.Zone)[0];
+            var href = card.Href;
+            // Away with browser notifications on: the browser says it. Here: a pop-up, if they're on.
+            if (away && settings.Push && await BrowserAsync(card.Title, card.Latest.Place, card.Id, href)) continue;
+            if (!card.Items.Any(item => NotificationDelivery.PopsUp(settings, item))) continue;
+            Show(new(card.Id, row.Title, $"{card.Latest.Place} · Just now", row.Glyph, row.Tone, row.Detail, row.ActionLabel ?? "Open"), href, card.Grouped ? null : card.Latest.Id);
+        }
+        StateHasChanged();
+    }
+
+    private void OnTest(bool popup, bool browser) => _ = InvokeAsync(async () =>
+    {
+        var id = "test:" + Guid.NewGuid().ToString("N");
+        if (browser) await BrowserAsync("This is a test notification from yára.", "Browser notifications are working.", id, null);
+        if (popup) Show(new(id, "This is a test notification.", "Pop-ups are working · Just now", IconName.RiNotification3Fill, NotificationListTone.Brand), null, null);
+        StateHasChanged();
+    });
+
+    private void Show(NotificationPopupItem item, string? href, string? itemId)
+    {
+        _links[item.Id] = (href, itemId);
+        _shown = [item, .. _shown.Where(shown => shown.Id != item.Id)];
+        if (_shown.Count > 3) { foreach (var old in _shown.Skip(3)) _links.Remove(old.Id); _shown = _shown.Take(3).ToList(); }
+    }
+
+    private void Dismiss(string id)
+    {
+        _shown = _shown.Where(item => item.Id != id).ToList();
+        _links.Remove(id);
+    }
+
+    private async Task OpenAsync(string id)
+    {
+        var (href, itemId) = _links.GetValueOrDefault(id);
+        Dismiss(id);
+        if (!NotificationCatalogue.IsInternalDestination(href)) return;
+        if (itemId is not null) { try { await Feed.MarkReadAsync(itemId); } catch (HttpRequestException) { } }
+        Nav.NavigateTo(href!);
+    }
+
+    private async Task<bool> AwayAsync()
+    {
+        if (_alerts is null) return false;
+        try { return await _alerts.InvokeAsync<bool>("away"); }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or TaskCanceledException) { return false; }
+    }
+
+    private async Task<bool> BrowserAsync(string title, string body, string tag, string? href)
+    {
+        if (_alerts is null) return false;
+        try { return await _alerts.InvokeAsync<bool>("show", title, body, tag, href); }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or TaskCanceledException) { return false; }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        Feed.Changed -= OnFeedChanged;
+        Popups.TestRequested -= OnTest;
+        if (_alerts is not null) { try { await _alerts.DisposeAsync(); } catch (JSDisconnectedException) { } }
+    }
+}

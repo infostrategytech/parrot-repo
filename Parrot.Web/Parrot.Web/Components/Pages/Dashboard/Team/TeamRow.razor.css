@@ -1,0 +1,71 @@
+/* A row of the People table, and its column names (is-head). The table's look (padding, the line between rows,
+   the header band, hover) is the shared DataTable's, as Tasks' and Customers' are; the columns and cells are this
+   table's own. */
+.team-row {
+  /* Gaps in the token set: no border-width or column-width scale; the columns are this table's own. */
+  --ds-team-hairline: 1px;
+  --ds-team-joined: 168px;
+  --ds-team-menu: 40px;
+  /* Role wide enough for "Products & Services manager" on one line (8 November 2026). */
+  --ds-table-columns: minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1.1fr) var(--ds-team-joined) var(--ds-team-menu);
+}
+.team-row__facts { display: contents; }
+.team-row__facts > * { min-width: 0; }
+
+.team-row__who { display: flex; gap: var(--spacing-md); align-items: center; min-width: 0; }
+.team-row__words,
+.team-row__role { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.team-row ::deep .team-row__muted { color: var(--colors-text-muted); overflow-wrap: anywhere; }
+.team-row ::deep .team-row__plain { color: var(--colors-text-primary); }
+.team-row__role,
+.team-row__channels,
+.team-row__when { color: var(--colors-text-secondary); }
+
+/* A member's name covers the row, so a click anywhere opens their access (as a Customers row opens details). */
+.team-row__words ::deep .team-row__name {
+  justify-content: start;
+  min-height: auto;
+  padding: var(--spacing-none);
+  color: var(--colors-text-primary);
+  text-align: start;
+  background: transparent;
+}
+.team-row__words ::deep .team-row__name::after { position: absolute; inset: 0; content: ""; }
+.team-row__words ::deep .team-row__name:focus-visible { outline: none; }
+.team-row__words ::deep .team-row__name:focus-visible::after { outline: var(--ds-team-hairline) solid var(--colors-brand-primary); outline-offset: calc(var(--ds-team-hairline) * -1); }
+
+.team-row__channels { display: flex; align-items: center; }
+.team-row__when { display: flex; align-items: center; }
+/* Above the row's stretched button, so the menu still opens. */
+.team-row__menu { position: relative; z-index: 1; display: flex; justify-content: flex-end; }
+
+/* A tablet or phone: who on top, the options at the side, and the role, channels and when in one line under the
+   name, as Customers does. */
+@media (max-width: 1024px) {
+  .team-row { --ds-table-columns: minmax(0, 1fr) var(--ds-team-menu); }
+  .team-row__facts {
+    display: flex;
+    flex-wrap: wrap;
+    grid-column: 1;
+    grid-row: 2;
+    gap: var(--spacing-xs) var(--spacing-lg);
+    align-items: center;
+    padding-left: calc(var(--icon-size-icon-lg) + var(--spacing-md));
+  }
+  .team-row__menu { grid-column: 2; grid-row: 1 / span 2; align-self: start; }
+}
+
+/* A just-sent invite: a brand tint that fades, so the eye finds the new row and the table settles back. */
+.team-row.is-new {
+  /* Gap in the token set: no duration long enough to notice a row, then let it go. */
+  --ds-team-new: 2400ms;
+
+  animation: team-row-new var(--ds-team-new) var(--ds-motion-ease) both;
+}
+@keyframes team-row-new {
+  0%, 35% { background: var(--colors-accent-brand-subtle); }
+  100% { background: transparent; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .team-row.is-new { animation: none; }
+}

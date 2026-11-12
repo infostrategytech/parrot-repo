@@ -1,0 +1,104 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@inject Parrot.SharedComponents.Services.AuroraInterop Interop
+
+@* Presentational example of the existing Talk to me / Type entry. Scripted
+   content and progression come from the caller, never a fake record list. *@
+<section class="agent-conversation-example @(Mode == ConversationExampleMode.Text ? "is-text" : null)" aria-label="Selected avatar conversation preview">
+    @if (Mode == ConversationExampleMode.Intro)
+    {
+        <div class="agent-conversation-example__welcome">
+            <PresenceAvatar Direction="Appearance.Direction" Tone="Appearance.Tone" State="PresenceAvatarState.Idle" Size="PresenceAvatarSize.Large" Paused="Paused" Reactive Floating Name="@Name" />
+            <div class="agent-conversation-example__copy">
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" Prose>@Prompt</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>What to do, what never to do, and when to call you.</Typography>
+            </div>
+            <div class="agent-conversation-example__ways">
+                <Button Size="ButtonSize.Large" @onclick="OnTalk"><IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft><ChildContent>Talk to me</ChildContent></Button>
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="OnType"><IconLeft><Icon Name="IconName.RiKeyboardFill" /></IconLeft><ChildContent>Type</ChildContent></Button>
+            </div>
+        </div>
+    }
+    else if (Mode == ConversationExampleMode.Voice)
+    {
+        <div class="agent-conversation-example__voice">
+            <PresenceAvatar Direction="Appearance.Direction" Tone="Appearance.Tone" State="State" Size="PresenceAvatarSize.Large" Paused="Paused" Reactive Floating Name="@Name" />
+            <div class="agent-conversation-example__copy">
+                <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" role="status" aria-live="polite">@Caption</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@Reply</Typography>
+            </div>
+            <div class="agent-conversation-example__ways">
+                @if (Busy) { <Button Variant="ButtonVariant.Secondary" @onclick="OnStop">Stop preview</Button> }
+                else { <Button @onclick="OnTalk">Replay sample</Button> }
+                <Button Variant="ButtonVariant.Ghost" @onclick="OnType">Type instead</Button>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="agent-conversation-example__text">
+            <div class="agent-conversation-example__thread" role="log" aria-label="Example conversation" @ref="_thread">
+                <div class="agent-conversation-example__message is-agent">
+                    <PresenceAvatar Direction="Appearance.Direction" Tone="Appearance.Tone" Size="PresenceAvatarSize.Small" Paused="Paused" Reactive Floating Decorative />
+                    <div><Typography TextStyle="TextStyle.Small12Semibold" As="span">@Name</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="agent-conversation-example__bubble">@Prompt</Typography></div>
+                </div>
+                @if (OwnerLine is not null)
+                {
+                    <div class="agent-conversation-example__message is-owner"><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="agent-conversation-example__bubble">@OwnerLine</Typography></div>
+                }
+                @if (Busy || Reply is not null)
+                {
+                    <div class="agent-conversation-example__message is-agent">
+                        <PresenceAvatar Direction="Appearance.Direction" Tone="Appearance.Tone" State="State" Size="PresenceAvatarSize.Small" Paused="Paused" Reactive Floating Name="@Name" />
+                        <div><Typography TextStyle="TextStyle.Small12Medium" As="span">Example reply</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="agent-conversation-example__bubble">@(Reply ?? "Thinking…")</Typography></div>
+                    </div>
+                }
+            </div>
+            <div class="agent-conversation-example__composer">
+                <TextArea Id="avatar-example-message" Value="@Draft" ValueChanged="DraftChanged" AriaLabel="Message for the avatar preview" Placeholder="Type something to try the interaction…" Rows="2" MaxLength="500" AutoGrow Variant="TextAreaVariant.Plain" Disabled="Busy" TextStyle="TextStyle.BodySmallMedium" />
+                <div class="agent-conversation-example__composer-actions">
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="Busy" @onclick="OnTalk"><IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft><ChildContent>Talk instead</ChildContent></Button>
+                    <Button Size="ButtonSize.Small" disabled="@(Busy || string.IsNullOrWhiteSpace(Draft))" @onclick="OnSend"><IconRight><Icon Name="IconName.RiSendPlaneFill" /></IconRight><ChildContent>Preview a reply</ChildContent></Button>
+                </div>
+            </div>
+        </div>
+    }
+    @if (Error is not null) { <InlineError Message="@Error" /> }
+    <div class="agent-conversation-example__privacy"><Icon Name="IconName.RiMicOffFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Scripted motion preview. Microphone off; no recording or audio playback.</Typography></div>
+</section>
+
+@code {
+    [Parameter] public AvatarAppearance Appearance { get; set; } = AvatarAppearance.Default;
+    [Parameter] public string Name { get; set; } = "Your agent";
+    [Parameter] public string Prompt { get; set; } = "";
+    [Parameter] public ConversationExampleMode Mode { get; set; }
+    [Parameter] public PresenceAvatarState State { get; set; }
+    [Parameter] public string Caption { get; set; } = "Ready";
+    [Parameter] public string? OwnerLine { get; set; }
+    [Parameter] public string? Reply { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string Draft { get; set; } = "";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool Paused { get; set; }
+    [Parameter] public EventCallback OnTalk { get; set; }
+    [Parameter] public EventCallback OnType { get; set; }
+    [Parameter] public EventCallback OnSend { get; set; }
+    [Parameter] public EventCallback OnStop { get; set; }
+    [Parameter] public EventCallback<string?> DraftChanged { get; set; }
+
+    private ElementReference _thread;
+    private bool _scroll, _lastBusy;
+    private string? _lastOwner, _lastReply;
+    private ConversationExampleMode _lastMode;
+    protected override void OnParametersSet()
+    {
+        if (Mode == ConversationExampleMode.Text && (_lastMode != Mode || OwnerLine != _lastOwner || Reply != _lastReply || Busy != _lastBusy)) _scroll = true;
+        _lastMode = Mode; _lastOwner = OwnerLine; _lastReply = Reply; _lastBusy = Busy;
+    }
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_scroll) return;
+        _scroll = false;
+        try { await Interop.ScrollToBottomAsync(_thread); }
+        catch (Exception ex) when (ex is JSException or InvalidOperationException or OperationCanceledException) { }
+    }
+}

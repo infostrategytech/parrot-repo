@@ -118,7 +118,7 @@ else
     public sealed record VersionDraft(string Name, string? Price, bool SoldOut);
     public sealed record DraftValues(List<string> Photos, string Name, CatalogKind Kind, string Description,
         string Category, string PriceType, string? Price, string Unit, string Availability,
-        string Time, string? Stock, bool Update, bool HasVersions, List<VersionDraft> Versions);
+        string Time, string? Stock, bool Update, bool HasVersions, List<VersionDraft> Versions, string? CurrencyCode = null);
 
     /// <summary>In a side panel (reviewing): no page around it; name and price first, the rest under More details.
     /// The panel's own button saves it (<see cref="SubmitAsync"/>).</summary>
@@ -159,6 +159,7 @@ else
 
     // The form's body, shared by the page and the panel.
     private RenderFragment FormBody => @<text>
+    @if (!CurrencyReady && Currency.Problem is { } currencyProblem) { <InlineError Message="@currencyProblem" /> }
 <div class="item-form__main">
     @if (InPanel && Source is not null)
     {
@@ -240,7 +241,7 @@ else
         @if (Pricing == PriceSingle)
         {
             <div class="item-form__pair">
-                <Input @ref="_priceField" FloatingLabel="@(_priceType == "from" ? "Starting price" : "Price")" PrefixText="₦" Numeric="NumericInputKind.Decimal" maxlength="16"
+                <Input @ref="_priceField" FloatingLabel="@(_priceType == "from" ? "Starting price" : "Price")" PrefixText="@PriceSymbol" Disabled="@(!CurrencyReady)" Numeric="NumericInputKind.Decimal" maxlength="16"
                        Value="@_price" ValueChanged="value => { _price = value; _error = null; }" @onfocusout="() => _price = Grouped(_price)"
                        Error="@(_tried && (PriceInvalid || RequiredPriceMissing))"
                        HelperText="@(_tried && PriceInvalid ? "Enter a positive amount with up to 2 decimal places." : _tried && RequiredPriceMissing ? "Add a price, or choose Price on request." : _priceType == "from" ? "The price starts from this amount." : null)" />
@@ -261,7 +262,7 @@ else
                                Value="@row.Name" ValueChanged="value => SetName(row, value)"
                                Error="@(_tried && RowStarted(row) && (NameOf(row).Length == 0 || Twice(row)))"
                                HelperText="@(_tried && RowStarted(row) && NameOf(row).Length == 0 ? "Give this variant a name." : _tried && Twice(row) ? "This name is already used." : null)" />
-                        <Input @ref="_variantPrices[row.Id]" Class="item-form__amount" FloatingLabel="Price" PrefixText="₦" Numeric="NumericInputKind.Decimal" maxlength="16"
+                        <Input @ref="_variantPrices[row.Id]" Class="item-form__amount" FloatingLabel="Price" PrefixText="@PriceSymbol" Disabled="@(!CurrencyReady)" Numeric="NumericInputKind.Decimal" maxlength="16"
                                Value="@row.Price" ValueChanged="value => { row.Price = value; _error = null; }" @onfocusout="() => row.Price = Grouped(row.Price)"
                                Error="@(_tried && RowStarted(row) && RowPriceWrong(row))"
                                HelperText="@(_tried && RowStarted(row) && RowPriceWrong(row) ? "Enter a positive price, up to 2 decimals." : null)" />
@@ -365,9 +366,9 @@ else
             <span class="item-form__spacer"></span>
             @if (CanSaveDraft)
             {
-                <Button Variant="ButtonVariant.Secondary" Busy="_savingDraft" disabled="@(_saving && !_savingDraft)" @onclick="SaveDraftAsync">Save draft</Button>
+                <Button Variant="ButtonVariant.Secondary" Busy="_savingDraft" disabled="@((_saving && !_savingDraft) || !CurrencyReady)" @onclick="SaveDraftAsync">Save draft</Button>
             }
-            <Button Busy="@(_saving && !_savingDraft)" disabled="_savingDraft" @onclick="SaveAsync">@PrimaryLabel</Button>
+            <Button Busy="@(_saving && !_savingDraft)" disabled="@(_savingDraft || !CurrencyReady)" @onclick="SaveAsync">@PrimaryLabel</Button>
         </div>
     </footer>
     }
@@ -402,6 +403,20 @@ else
     public Task SubmitAsync() => SaveAsync();
 
     private bool IsNew => Item is null || string.IsNullOrEmpty(Item.Id);
+    [CascadingParameter] public WorkspaceCurrencyValue Currency { get; set; } = WorkspaceCurrencyValue.Legacy;
+    private string? _entryCurrency;
+    private bool CurrencyReady => _entryCurrency is not null;
+    private string PriceSymbol => CurrencyReady ? CurrencyAmount.Symbol(_entryCurrency) : "";
+    protected override void OnParametersSet()
+    {
+        // Capture once per editor. A later default change must not relabel an in-progress price.
+        if (_entryCurrency is null && Currency.Ready)
+        {
+            var unchanged = !HasChanges;
+            _entryCurrency = Currency.Code;
+            if (unchanged) _initialDraft = System.Text.Json.JsonSerializer.Serialize(CaptureState());
+        }
+    }
 
     private bool Updating => Match is not null && _update;
 
@@ -516,6 +531,9 @@ else
     protected override void OnInitialized()
     {
         var item = Item ?? new CatalogEntry();
+        if (Item is not null && (!IsNew || Item.CurrencyCode is not null || Item.Price is not null || Item.HasOptions))
+            _entryCurrency = CurrencyAmount.Code(Item.CurrencyCode);
+        else if (Currency.Ready) _entryCurrency = Currency.Code;
         _update = UpdateMatch;
         _photos = [.. item.Photos];
         _name = item.Name;
@@ -552,6 +570,7 @@ else
         }
         if (RestoredDraft is { } restored)
         {
+            _entryCurrency = CurrencyAmount.Code(restored.CurrencyCode);
             _photos = [.. restored.Photos]; _name = restored.Name; _kind = restored.Kind;
             _description = restored.Description; _category = restored.Category;
             _priceType = restored.PriceType; _price = restored.Price; _unit = restored.Unit;
@@ -616,6 +635,7 @@ else
     private async Task SaveAsync()
     {
         if (_saving) return;
+        if (!CurrencyReady) { _error = Currency.Problem ?? "Wait for the business currency to load before saving."; return; }
         _tried = true;
         _error = null;
         if (_name.Trim().Length == 0) { _error = "Give it a name."; if (_nameField is not null) await _nameField.FocusAsync(); return; }
@@ -656,6 +676,7 @@ else
 
     private async Task SaveDraftAsync()
     {
+        if (!CurrencyReady) { _error = Currency.Problem ?? "Wait for the business currency to load before saving."; return; }
         if (_saving || !CanSaveDraft) return;
         _draftTried = true; _tried = false; _error = null;
         if (_name.Trim().Length is 0 or > 80)
@@ -680,7 +701,7 @@ else
 
     public DraftValues CaptureState() => new([.. _photos], _name, _kind, _description, _category,
         _priceType, _price, _unit, _now, _time, _stock, _update, _hasVersions,
-        [.. _versions.Select(row => new VersionDraft(row.Name, row.Price, row.SoldOut))]);
+        [.. _versions.Select(row => new VersionDraft(row.Name, row.Price, row.SoldOut))], _entryCurrency);
 
     public bool HasChanges => _initialDraft != System.Text.Json.JsonSerializer.Serialize(CaptureState());
 
@@ -720,6 +741,7 @@ else
         // Prefilled existing details stay until the owner explicitly changes them in this form.
         var original = Updating ? Match : Item;
         var entry = original?.Copy() ?? new CatalogEntry();
+        entry.CurrencyCode = Updating ? Match!.CurrencyCode : _entryCurrency;
         // Added as new from what was the match's update: a new item, not the match again.
         if (!Updating && Match is not null && entry.Id == Match.Id) entry.Id = string.Empty;
         entry.Name = _name.Trim();

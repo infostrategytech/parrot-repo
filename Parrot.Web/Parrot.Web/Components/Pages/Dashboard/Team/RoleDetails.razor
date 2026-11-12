@@ -1,0 +1,87 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Team
+@using Parrot.Web.Features.Dashboard.Team
+
+<ContentModal Open="true" Title="@TeamWords.RoleName(Role)"
+              Subtitle="@(Role.IsCustom ? "Custom role. Created for your business." : "Built-in role. Duplicate it to make your own.")"
+              Busy="Busy" OnClose="OnClose">
+    <ChildContent>
+        <div class="role-details">
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="role-details__muted">
+                @(Role.Holders == 0 ? "No one uses this role yet." : Role.Holders == 1 ? "1 person uses this role." : $"{Role.Holders} people use this role.")
+            </Typography>
+            @* The same areas as the role editor (designer, 8 November 2026), read-only: each with how many it has, what it
+               allows ticked, and "No access" where it has nothing. *@
+            <section class="role-details__section" aria-labelledby="@_permissionsId">
+                <div class="role-details__head">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3" id="@_permissionsId">Permissions</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="role-details__muted">@($"{Listed} of {Catalog.Permissions.Count}")</Typography>
+                </div>
+                <div class="role-details__groups">
+                    @foreach (var group in TeamWords.PermissionGroups(Catalog.Permissions))
+                    {
+                        var granted = group.Permissions.Where(p => Role.Permissions.Contains(p.Key)).ToList();
+                        <div class="role-details__group" role="group" aria-label="@group.Title">
+                            <div class="role-details__group-head">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@group.Title</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="role-details__muted">@(granted.Count == 0 ? "No access" : $"{granted.Count} of {group.Permissions.Count}")</Typography>
+                            </div>
+                            @if (granted.Count > 0)
+                            {
+                                <ul class="role-details__permissions">
+                                    @foreach (var permission in granted)
+                                    {
+                                        <li>
+                                            <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@permission.Label</Typography>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        </div>
+                    }
+                </div>
+                @if (Unlisted.Count > 0)
+                {
+                    @* Granted, but not in the list yára knows: shown by name, so nothing a role allows is hidden. *@
+                    <div class="role-details__groups">
+                        <div class="role-details__group" role="group" aria-label="Other">
+                            <div class="role-details__group-head">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Other</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="role-details__muted">@Unlisted.Count</Typography>
+                            </div>
+                            <ul class="role-details__permissions">
+                                @foreach (var key in Unlisted)
+                                {
+                                    <li><Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@key</Typography></li>
+                                }
+                            </ul>
+                        </div>
+                    </div>
+                }
+            </section>
+            @if (Error is not null) { <InlineError Message="@Error" /> }
+        </div>
+    </ChildContent>
+    <Footer>
+        <Button Variant="ButtonVariant.Secondary" disabled="Busy" @onclick="OnClose">Close</Button>
+        <Button Variant="@(Role.IsCustom ? ButtonVariant.Secondary : ButtonVariant.Primary)" Busy="Busy" @onclick="OnDuplicate">
+            <IconLeft><Icon Name="IconName.RiFileCopyFill" /></IconLeft>
+            <ChildContent>@(Busy ? "Duplicating…" : "Duplicate role")</ChildContent>
+        </Button>
+        @if (Role.IsCustom) { <Button disabled="Busy" @onclick="OnEdit">Edit role</Button> }
+    </Footer>
+</ContentModal>
+
+@code {
+    [Parameter, EditorRequired] public TeamRole Role { get; set; } = default!;
+    [Parameter, EditorRequired] public TeamCatalog Catalog { get; set; } = default!;
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnDuplicate { get; set; }
+    private readonly string _permissionsId = $"role-permissions-{Guid.NewGuid():N}";
+    private int Listed => Catalog.Permissions.Count(p => Role.Permissions.Contains(p.Key));
+    // Granted keys the catalogue doesn't list (an older or newer API): counted, never hidden without a word.
+    private IReadOnlyList<string> Unlisted => [.. Role.Permissions.Where(key => Catalog.Permissions.All(p => p.Key != key)).Distinct()];
+}

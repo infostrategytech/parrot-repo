@@ -9,7 +9,7 @@
    web app and the mobile app render one shell and each supplies who is signed
    in. The rail is rendered once here, and a page receives nothing. *@
 
-<div class="app-shell @(Shell.Collapsed ? "is-collapsed" : null)">
+<div class="app-shell @(Shell.Collapsed ? "is-collapsed" : null) @(UsePageBackground ? "app-shell--page-background" : null)">
     <NavSidebar BrandName="@BrandName"
                 WorkspaceId="@WorkspaceId"
                 WorkspaceName="@WorkspaceName"
@@ -20,6 +20,7 @@
                 OnWorkspaceAdd="@OnWorkspaceAdd"
                 WorkspaceSwitching="@WorkspaceSwitching"
                 OnWorkspaceSetDefault="@OnWorkspaceSetDefault"
+                BusinessMenu="@BusinessMenu"
                 UserName="@UserName"
                 UserRole="@UserRole"
                 UserInitials="@UserInitials"
@@ -28,7 +29,8 @@
                 InboxUnread="@InboxUnread"
                 IsAllowed="@IsAllowed"
                 TasksNeedYou="@TasksNeedYou"
-                UserMenu="@UserMenu" />
+                UserMenu="@UserMenu"
+                RailNotifications="@RailNotifications" />
 
     @if (!Shell.Collapsed)
     {
@@ -48,11 +50,17 @@
     </main>
 
     <ToastHost />
-    <ThemeToggle />
+    @if (ShowThemeToggle) { <ThemeToggle /> }
 </div>
 
 @code {
     [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    /// <summary>The floating light and dark switch. Off where the theme is a setting (web: Settings, Preferences).</summary>
+    [Parameter] public bool ShowThemeToggle { get; set; } = true;
+
+    /// <summary>Use the semantic page canvas. Opted into by web; the mobile host keeps its existing canvas until reviewed.</summary>
+    [Parameter] public bool UsePageBackground { get; set; }
 
     [Parameter] public string BrandName { get; set; } = "yára";
     [Parameter] public string WorkspaceId { get; set; } = "";
@@ -73,6 +81,11 @@
     [Parameter] public string UserSeed { get; set; } = "";
     [Parameter] public string? UserImageUrl { get; set; }
     [Parameter] public RenderFragment? UserMenu { get; set; }
+    /// <summary>The host's notifications row (the web app's bell), drawn in the rail under Inbox.</summary>
+    [Parameter] public RenderFragment? RailNotifications { get; set; }
+
+    /// <summary>Rows about the business you're in, at the top of the workspace menu. Null shows none.</summary>
+    [Parameter] public RenderFragment? BusinessMenu { get; set; }
     [Parameter] public int? InboxUnread { get; set; }
     [Parameter] public int? TasksNeedYou { get; set; }
 

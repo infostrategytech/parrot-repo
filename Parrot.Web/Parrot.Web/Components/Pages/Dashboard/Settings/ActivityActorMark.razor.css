@@ -1,0 +1,4 @@
+.activity-actor { display: flex; gap: var(--spacing-md); align-items: center; min-width: 0; }
+.activity-actor__words { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.activity-actor__words ::deep .activity-actor__name { color: var(--colors-text-primary); overflow-wrap: anywhere; }
+.activity-actor__words ::deep .activity-actor__detail { color: var(--colors-text-muted); }

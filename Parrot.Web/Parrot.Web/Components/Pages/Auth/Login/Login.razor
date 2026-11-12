@@ -9,6 +9,8 @@
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
+@inject Parrot.Web.Features.Auth.TwoFactor.TwoFactorSignInState TwoFactorSignIn
+@inject Parrot.Web.Features.Auth.TwoFactor.RememberedDeviceStorage RememberedDevices
 @implements IDisposable
 
 <PageTitle>Sign In · yára</PageTitle>
@@ -176,9 +178,17 @@
             {
                 Identifier = email,
                 Password = _password!,
+                // This browser was told not to ask for the code again: the API skips the second step for it.
+                RememberedDevice = await RememberedDevices.ReadAsync(email),
             });
 
-            if (response is not null)
+            if (response?.TwoFactor is { } challenge)
+            {
+                // Two-factor is on: the code comes next (designer, 9 November 2026).
+                TwoFactorSignIn.Start(challenge);
+                Navigation.NavigateTo("/verify-sign-in");
+            }
+            else if (response is not null)
             {
                 AuthState.SetUser(response);
                 await TokenStorage.SaveAsync(response);
@@ -238,10 +248,13 @@
         Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/facebook", forceLoad: true);
     }
 
-    private void ContinueWithGoogle()
+    // Google the same way.
+
+    private async Task ContinueWithGoogle()
     {
         if (Busy) return;
         _googleBusy = true;
+
 
         var apiBaseUrl = (Configuration["ApiSettings:PublicBaseUrl"] ?? Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
         Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);

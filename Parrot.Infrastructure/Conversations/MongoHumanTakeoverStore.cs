@@ -29,6 +29,14 @@ public sealed class MongoHumanTakeoverStore : IHumanTakeoverStore
             Builders<ConversationFlagDocument>.Update.Set(x => x.HumanHandedBackAt, DateTime.UtcNow),
             ct);
 
+    // Marks the human as active without touching ControlUntil, so a timed takeover set by SetAsync is preserved.
+    public Task TouchAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
+        UpsertAsync(owner, connection, sender,
+            Builders<ConversationFlagDocument>.Update
+                .Set(x => x.HumanTookOverAt, DateTime.UtcNow)
+                .Unset(x => x.HumanHandedBackAt),
+            ct);
+
     // Active when a human took over, has not handed back, and the timed window has not expired.
     public async Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct)
     {

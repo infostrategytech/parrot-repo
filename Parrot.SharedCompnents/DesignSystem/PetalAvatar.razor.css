@@ -37,6 +37,17 @@
   height: var(--spacing-4xl);
 }
 
+/* A person on their own page: round and raised, as an agent's look is when it is made. */
+.petal-avatar--xl {
+  /* Gap in the token set: no avatar size above the spacing scale. 88px matches the agent-creation preview. */
+  --ds-avatar-xl: 88px;
+
+  width: var(--ds-avatar-xl);
+  height: var(--ds-avatar-xl);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-xl) var(--colors-surface-shadow-diffuse);
+}
+
 .petal-0 { color: var(--colors-accent-red-text);     background: var(--colors-accent-red-muted); }
 .petal-1 { color: var(--colors-accent-orange-text);  background: var(--colors-accent-orange-muted); }
 .petal-2 { color: var(--colors-accent-amber-text);   background: var(--colors-accent-amber-muted); }

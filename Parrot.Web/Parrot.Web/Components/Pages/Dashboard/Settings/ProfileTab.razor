@@ -2,141 +2,265 @@
 @using Parrot.Web.Features.Profile
 @inject AuthState AuthState
 @inject ProfileClient Profile
+@inject IProfilePhoto Photo
 @inject ToastService Toasts
+@inject NavigationManager Navigation
 
-@* Who is signed in, read from and saved to the account. The image is the same
-   one the workspace switcher shows, and is saved as soon as it is chosen or
-   removed; Save is for the names. No field is required. The email is the
-   sign-in address, so it is shown but cannot be changed here. *@
-
-<SettingsCard Title="Profile information" Description="Update your personal account details.">
+@* The person who's signed in, and nothing of the business (designer, 4 November 2026). You at the top, centred,
+   as an agent is shown when it's made: your photo or initials, with a camera to change it, and your name as you
+   type it. Then your name and number across the card, saved together, and the email you sign in with, changed
+   in place with a code to the new address. Names are optional for the owner; a teammate gives theirs when they
+   join. A photo is kept apart from the business logo, so outside the demo it waits for its own API field. *@
+<SettingsCard>
     <ChildContent>
-        <div class="profile__avatar-row">
-            <PetalAvatar Seed="@(AuthState.CurrentUser?.UserId ?? "user")"
-                         Initials="@AvatarInitials"
-                         ImageUrl="@_logoUrl"
-                         Size="AvatarSize.Lg" />
-            <div class="profile__avatar-actions">
-                @* The file input lies over the button, so the button's look is
-                   kept and the picker opens without any script. *@
-                <span class="profile__upload">
-                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small"
-                            Busy="@_uploading" tabindex="-1" aria-hidden="true">
-                        @(_logoUrl is null ? "Upload image" : "Update image")
-                    </Button>
-                    <InputFile class="profile__upload-input"
-                               accept="image/png,image/jpeg,image/webp"
-                               aria-label="@(_logoUrl is null ? "Upload image" : "Update image")"
-                               disabled="@ImageBusy"
-                               OnChange="UploadImageAsync" />
-                </span>
-                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small"
-                        disabled="@(_logoUrl is null || ImageBusy)"
-                        @onclick="RemoveImageAsync">Remove</Button>
+        <div class="profile">
+            <div class="profile__you">
+                <AvatarPicker Seed="@(AuthState.CurrentUser?.UserId ?? "user")" Initials="@AvatarInitials" ImageUrl="@Photo.Url" Class="profile__photo"
+                              Label="@(Photo.Url is null ? "Add a photo" : "Change photo")" Accept="@PhotoRules.Accept" CanChange="Photo.Available"
+                              Busy="_photoBusy" Disabled="@(!_photoLoaded)" OnChange="PhotoPickedAsync" />
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="p" Class="@(HasName ? "profile__name" : "profile__name is-empty")">@(HasName ? FullName : "Your name")</Typography>
+                @if (Photo.Available && Photo.Url is not null)
+                {
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@(_photoBusy || !_photoLoaded)" @onclick="RemovePhotoAsync">Remove photo</Button>
+                }
+                @if (_photoError is not null)
+                {
+                    @if (!_photoLoaded)
+                    {
+                        <InlineError Message="@_photoError">
+                            <Action>
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_photoBusy" @onclick="LoadPhotoAsync">Retry photo</Button>
+                            </Action>
+                        </InlineError>
+                    }
+                    else
+                    {
+                        <InlineError Message="@_photoError" />
+                    }
+                }
+                <span class="sr-only" role="status">@_photoStatus</span>
             </div>
-            <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose Class="profile__hint">
-                PNG, JPG or WebP up to 2 MB
-            </Typography>
+
+            @if (_loading)
+            {
+                <Skeleton Shape="SkeletonShape.Line" />
+            }
+            else if (!_loaded)
+            {
+                <InlineError Message="@(_loadError ?? "We couldn't load your profile. Try again before making changes.")">
+                    <Action><Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="LoadProfileAsync">Retry</Button></Action>
+                </InlineError>
+            }
+            else
+            {
+                <div class="profile__form">
+                    <div class="profile__pair">
+                        <Input FloatingLabel="First name" Value="@_firstName" ValueChanged="value => _firstName = value" maxlength="80" autocomplete="given-name" />
+                        <Input FloatingLabel="Last name" Value="@_lastName" ValueChanged="value => _lastName = value" maxlength="80" autocomplete="family-name" />
+                    </div>
+
+                    <div class="profile__phone">
+                        <SelectField FloatingLabel="Country" Value="@(_country == PhoneCountries.Unlisted ? "Other" : $"+{_country.Code}")" Open="_countryOpen" OpenChanged="open => _countryOpen = open">
+                            @if (_savedCountry == PhoneCountries.Unlisted)
+                            {
+                                <PopoverOption Label="Keep saved number" Active="@(_country == PhoneCountries.Unlisted)" OnSelect="KeepSavedPhone" />
+                            }
+                            @foreach (var country in PhoneCountries.All)
+                            {
+                                var current = country;
+                                <PopoverOption Label="@current.Name" Badge="@($"+{current.Code}")" Active="@(current == _country)" OnSelect="() => ChooseCountry(current)" />
+                            }
+                        </SelectField>
+                        <Input FloatingLabel="Phone number" Type="tel" Numeric="NumericInputKind.Phone" Value="@_phone" ValueChanged="value => { _phone = value; _phoneProblem = null; }"
+                               maxlength="20" autocomplete="tel-national" Disabled="@(_country == PhoneCountries.Unlisted)" Error="@(_phoneProblem is not null)"
+                               HelperText="@(_phoneProblem ?? (_country == PhoneCountries.Unlisted ? "Your saved number is kept as-is. Choose a country to change it." : null))" />
+                    </div>
+
+                    <EmailChangeRow Email="@(_email ?? "")" OnChanged="EmailChanged" />
+                </div>
+            }
         </div>
-
-        @if (_imageError is not null)
-        {
-            <InlineError Message="@_imageError" />
-        }
-
-        <div class="profile__grid">
-            <Input FloatingLabel="First name" @bind-Value="_firstName" maxlength="80" autocomplete="given-name" />
-            <Input FloatingLabel="Last name" @bind-Value="_lastName" maxlength="80" autocomplete="family-name" />
-            <div class="profile__full">
-                <Input FloatingLabel="Email address" Type="email" @bind-Value="_email" Disabled="true" />
-            </div>
-        </div>
-
-        @if (_saveError is not null)
-        {
-            <InlineError Message="@_saveError" />
-        }
     </ChildContent>
-    <Footer>
-        <Button Busy="@_saving" disabled="@(_saving || _loading)" @onclick="SaveAsync">Save</Button>
-    </Footer>
 </SettingsCard>
 
-@* Where sign-in lands: the last workspace, or one chosen to always open. *@
+<NavigationLock ConfirmExternalNavigation="@(_loaded && Changed && !_allowNavigation)" OnBeforeInternalNavigation="CheckNavigationAsync" />
+<Dialog Open="_confirmLeave" Title="Leave without saving?" ConfirmLabel="Leave without saving" CancelLabel="Keep editing"
+        OnConfirm="Leave" OnCancel="KeepEditing">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p">Your name and phone changes haven't been saved.</Typography></Body>
+</Dialog>
+
+@* Where sign-in lands: the last workspace, or one chosen to always open (the backend team's, 22 October 2026). *@
 <SignInPreference />
 
+@* Name and phone wait for the shared save bar, as Business profile's details do (designer, 7 November 2026): one
+   way to save across Settings. It appears once something changes, as the page's last child; the photo and the
+   email keep saving on their own. *@
+@if (_loaded && Changed)
+{
+    <SaveBar Error="@_saveError" Saving="_saving" OnDiscard="Discard" OnSave="SaveAsync" />
+}
+
 @code {
-    // The same rule as the welcome card's logo.
-    private const long MaxImageBytes = 2 * 1024 * 1024;
-    private static readonly HashSet<string> AcceptedImageTypes = ["image/png", "image/jpeg", "image/webp"];
+    private string? _firstName, _lastName, _phone, _email;
+    private PhoneCountry _country = PhoneCountries.Home;
+    // As last loaded or saved, so Save only lights up for a real change.
+    private string? _savedFirst, _savedLast, _savedPhone;
+    private PhoneCountry _savedCountry = PhoneCountries.Home;
 
-    private string? _firstName;
-    private string? _lastName;
-    private string? _email;
-    private string? _logoUrl;
+    private bool _loading = true, _loaded, _saving, _countryOpen, _photoBusy, _photoLoaded;
+    private bool _confirmLeave, _allowNavigation;
+    private string? _loadError, _saveError, _phoneProblem, _photoError, _photoStatus, _navigationTarget;
 
-    private bool _loading = true;
-    private bool _saving;
-    private bool _uploading;
-    private bool _removing;
-    private string? _saveError;
-    private string? _imageError;
-
-    private bool ImageBusy => _loading || _uploading || _removing;
+    private bool HasName => !string.IsNullOrWhiteSpace(_firstName) || !string.IsNullOrWhiteSpace(_lastName);
+    private string FullName => $"{_firstName?.Trim()} {_lastName?.Trim()}".Trim();
 
     // The person's own initials once there is a name; the email's until then.
-    private string AvatarInitials =>
-        string.IsNullOrWhiteSpace(_firstName) && string.IsNullOrWhiteSpace(_lastName)
-            ? Initials.From(_email)
-            : Initials.From($"{_firstName} {_lastName}".Trim());
+    private string AvatarInitials => HasName ? Initials.From(FullName) : Initials.From(_email);
+
+    private bool Changed =>
+        (_firstName?.Trim() ?? "") != (_savedFirst?.Trim() ?? "")
+        || (_lastName?.Trim() ?? "") != (_savedLast?.Trim() ?? "")
+        || !PhoneCountries.Same(_country, _phone, _savedCountry, _savedPhone);
 
     protected override async Task OnInitializedAsync()
     {
         _email = AuthState.CurrentUser?.Email;
-        _logoUrl = AuthState.CurrentUser?.LogoUrl;
+        // Photo loading is optional and independent: its failure must never hide the person's details.
+        await Task.WhenAll(LoadProfileAsync(), LoadPhotoAsync());
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        _loading = true; _loaded = false; _loadError = null;
         try
         {
             Show(await Profile.GetAsync());
+            _loaded = true;
         }
         catch (Exception)
         {
-            _saveError = "We could not load your profile. Refresh the page to try again.";
+            _loadError = "We couldn't load your profile. Try again before making changes.";
         }
         finally
         {
             _loading = false;
+            StateHasChanged();
         }
+    }
+
+    private async Task LoadPhotoAsync()
+    {
+        if (!Photo.Available) return;
+        if (_photoBusy) return;
+        _photoBusy = true; _photoError = null;
+        try { await Photo.ReadAsync(); _photoLoaded = true; }
+        catch (Exception) { _photoError = "We couldn't load your photo. Try again."; }
+        finally { _photoBusy = false; StateHasChanged(); }
+    }
+
+    private void ChooseCountry(PhoneCountry country)
+    {
+        if (_saving) return;
+        if (_country == PhoneCountries.Unlisted) _phone = string.Empty;
+        _country = country; _countryOpen = false; _phoneProblem = null;
+    }
+
+    // Back to what was last loaded or saved.
+    private void Discard()
+    {
+        if (_saving) return;
+        _firstName = _savedFirst; _lastName = _savedLast; _country = _savedCountry; _phone = _savedPhone;
+        _phoneProblem = null; _saveError = null; _countryOpen = false;
+    }
+
+    private void KeepSavedPhone()
+    {
+        if (_saving) return;
+        _country = _savedCountry; _phone = _savedPhone; _countryOpen = false; _phoneProblem = null;
     }
 
     private void Show(UserProfile profile)
     {
-        _firstName = profile.FirstName;
-        _lastName = profile.LastName;
+        _firstName = _savedFirst = profile.FirstName;
+        _lastName = _savedLast = profile.LastName;
+        (_country, _phone) = PhoneCountries.Split(profile.PhoneNumber);
+        (_savedCountry, _savedPhone) = (_country, _phone);
         _email = profile.Email;
-        _logoUrl = profile.LogoUrl;
+    }
+
+    // A photo is kept as soon as it's picked: nothing to remember to save.
+    private async Task PhotoPickedAsync(InputFileChangeEventArgs args)
+    {
+        if (_photoBusy || !_photoLoaded || !Photo.Available) return;
+        _photoError = null;
+        var file = args.File;
+        if (PhotoRules.Problem(file.ContentType, file.Size) is { } problem) { _photoError = problem; return; }
+        _photoBusy = true; _photoStatus = "Uploading your photo";
+        try
+        {
+            await using var stream = file.OpenReadStream(PhotoRules.MaxBytes);
+            using var memory = new MemoryStream();
+            await stream.CopyToAsync(memory);
+            await Photo.SaveAsync(file.ContentType, memory.ToArray());
+            _photoStatus = "Photo updated";
+            Toasts.Show("Photo updated");
+        }
+        catch (Exception ex) when (ex is IOException or HttpRequestException or ApiException)
+        {
+            _photoStatus = null;
+            _photoError = ex is ApiException api ? api.UserMessage : "Your photo couldn't be uploaded. Try again.";
+        }
+        finally { _photoBusy = false; }
+    }
+
+    private async Task RemovePhotoAsync()
+    {
+        if (_photoBusy || !_photoLoaded || !Photo.Available) return;
+        _photoError = null; _photoBusy = true;
+        try { await Photo.RemoveAsync(); _photoStatus = "Photo removed"; Toasts.Show("Photo removed"); }
+        catch (Exception ex) when (ex is HttpRequestException or ApiException) { _photoError = "Your photo couldn't be removed. Try again."; }
+        finally { _photoBusy = false; }
     }
 
     private async Task SaveAsync()
     {
+        if (!_loaded || _loading || _saving || !Changed) return;
         _saveError = null;
+        var phoneChanged = !PhoneCountries.Same(_country, _phone, _savedCountry, _savedPhone);
+        if (phoneChanged && string.IsNullOrWhiteSpace(_phone))
+        {
+            // The API keeps a number once there is one: it can be changed, not taken off.
+            _phoneProblem = "A number can be changed but not removed yet.";
+            return;
+        }
+        _phoneProblem = phoneChanged ? PhoneCountries.Problem(_country, _phone) : null;
+        if (_phoneProblem is not null) return;
+
         _saving = true;
         try
         {
-            // Empty is sent as empty, not left out, so clearing a name saves.
+            // Only changed fields go: a name intentionally cleared is empty, while unseen/unchanged values stay untouched.
             Show(await Profile.UpdateAsync(new UserProfileUpdate
             {
-                FirstName = _firstName?.Trim() ?? string.Empty,
-                LastName = _lastName?.Trim() ?? string.Empty,
+                FirstName = (_firstName?.Trim() ?? "") != (_savedFirst?.Trim() ?? "") ? _firstName?.Trim() ?? "" : null,
+                LastName = (_lastName?.Trim() ?? "") != (_savedLast?.Trim() ?? "") ? _lastName?.Trim() ?? "" : null,
+                CountryCode = phoneChanged ? _country.Code : null,
+                Number = phoneChanged ? PhoneCountries.National(_country, _phone!) : null,
             }));
             Toasts.Show("Profile saved");
         }
-        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        catch (ApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Conflict)
         {
-            _saveError = ex.UserMessage;
+            _phoneProblem = ex.UserMessage;
+        }
+        catch (ApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.BadRequest)
+        {
+            if (phoneChanged && ex.UserMessage.Contains("phone", StringComparison.OrdinalIgnoreCase)) _phoneProblem = ex.UserMessage;
+            else _saveError = ex.UserMessage;
         }
         catch (Exception)
         {
-            _saveError = "We could not save your profile. Try again.";
+            _saveError = "We couldn't save your profile. Try again.";
         }
         finally
         {
@@ -144,69 +268,26 @@
         }
     }
 
-    private async Task UploadImageAsync(InputFileChangeEventArgs args)
+    private void EmailChanged(string email)
     {
-        _imageError = null;
-        IBrowserFile file = args.File;
-
-        // Checked here so a wrong file fails at once; the server checks again.
-        if (!AcceptedImageTypes.Contains(file.ContentType))
-        {
-            _imageError = "Choose a PNG, JPG or WebP image.";
-            return;
-        }
-
-        if (file.Size > MaxImageBytes)
-        {
-            _imageError = "Choose an image smaller than 2 MB.";
-            return;
-        }
-
-        _uploading = true;
-        try
-        {
-            await using Stream stream = file.OpenReadStream(MaxImageBytes);
-            using MemoryStream buffer = new();
-            await stream.CopyToAsync(buffer);
-
-            string url = await Profile.UploadImageAsync(file.Name, file.ContentType, buffer.ToArray());
-            Show(await Profile.UpdateAsync(new UserProfileUpdate { LogoUrl = url }));
-            Toasts.Show("Image updated");
-        }
-        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
-        {
-            _imageError = ex.UserMessage;
-        }
-        catch (IOException)
-        {
-            _imageError = "We could not read that image. Choose it again.";
-        }
-        catch (Exception)
-        {
-            _imageError = "We could not upload that image. Try again.";
-        }
-        finally
-        {
-            _uploading = false;
-        }
+        _email = email;
+        Toasts.Show("Email changed");
     }
 
-    private async Task RemoveImageAsync()
+    private Task CheckNavigationAsync(LocationChangingContext context)
     {
-        _imageError = null;
-        _removing = true;
-        try
-        {
-            Show(await Profile.UpdateAsync(new UserProfileUpdate { LogoUrl = string.Empty }));
-            Toasts.Show("Image removed");
-        }
-        catch (Exception)
-        {
-            _imageError = "We could not remove the image. Try again.";
-        }
-        finally
-        {
-            _removing = false;
-        }
+        if (_allowNavigation || !_loaded || !Changed) return Task.CompletedTask;
+        context.PreventNavigation();
+        if (!_saving) { _navigationTarget = context.TargetLocation; _confirmLeave = true; StateHasChanged(); }
+        return Task.CompletedTask;
+    }
+
+    private void KeepEditing() { _confirmLeave = false; _navigationTarget = null; }
+
+    private void Leave()
+    {
+        if (_saving || _navigationTarget is null) return;
+        _allowNavigation = true; _confirmLeave = false;
+        Navigation.NavigateTo(_navigationTarget);
     }
 }

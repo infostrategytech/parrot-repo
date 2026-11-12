@@ -1,0 +1,157 @@
+.presence-avatar {
+  /* Illustration geometry and character timing have no Figma scale yet.
+     Solid/foreground semantic pairs provide vibrant fills in both themes. */
+  --ds-presence-small: 32px;
+  --ds-presence-medium: 48px;
+  --ds-presence-large: 184px;
+  --ds-presence-glance: 4800ms;
+  --ds-presence-blink: 9700ms;
+  --ds-presence-work: 2800ms;
+  --ds-presence-wait: 5200ms;
+  --ds-presence-done: 850ms;
+  --ds-presence-listen: 2600ms;
+  --ds-presence-speak: 900ms;
+  --ds-presence-recolour: 320ms;
+  --ds-presence-hover-gap: -4px; /* drawing units: how high a floating avatar rests above its shadow */
+  --ds-presence-fill: var(--colors-accent-violet-solid);
+  /* White eyes stay white with a near-black pupil in both themes: white on a solid colour, and the dark
+     ink the palette puts on its bright solids (both the same in light and dark). */
+  --ds-presence-white: var(--colors-text-on-primary);
+  --ds-presence-pupil: var(--colors-accent-yellow-on-solid);
+
+  /* Each state's still face (the resting pose). The live engine starts from the
+     same numbers in presence-avatar.js, so pausing or reduced motion never loses
+     the expression. Lengths are in the 128-unit drawing. */
+  --ds-pose-gx: 0px;
+  --ds-pose-gy: 0px;
+  --ds-pose-open: 1;
+  --ds-pose-wide: 1;
+  --ds-pose-joy: 0;
+  --ds-pose-sad: 0deg;
+ 
+ 
+  --ds-pose-tilt: 0deg;
+
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: var(--ds-presence-medium);
+  height: var(--ds-presence-medium);
+  vertical-align: middle;
+  isolation: isolate;
+}
+.presence-avatar[data-state="thinking"] { /* Pose in drawing units: no Figma token for illustration geometry. */ --ds-pose-gx: 9.5px; --ds-pose-gy: -9px; --ds-pose-open: 0.9; --ds-pose-tilt: 6deg; }
+.presence-avatar[data-state="working"] { /* Pose in drawing units: no Figma token for illustration geometry. */ --ds-pose-gy: 8px; --ds-pose-open: 0.6; }
+.presence-avatar[data-state="waiting"] { /* Pose in drawing units: no Figma token for illustration geometry. */ --ds-pose-gx: -1px; --ds-pose-gy: 1px; --ds-pose-open: 1.06; --ds-pose-wide: 1.04; --ds-pose-tilt: 6deg; }
+.presence-avatar[data-state="blocked"] { /* Pose in drawing units: no Figma token for illustration geometry. */ --ds-pose-gx: -7.5px; --ds-pose-gy: 7.5px; --ds-pose-open: 0.75; --ds-pose-sad: 12deg; --ds-pose-tilt: -5deg; }
+.presence-avatar[data-state="done"] { /* Pose in drawing units: no Figma token for illustration geometry. */ --ds-pose-joy: 1; }
+.presence-avatar[data-state="listening"] { /* Pose in drawing units: no Figma token for illustration geometry. */ --ds-pose-gy: -1px; --ds-pose-open: 1.14; --ds-pose-wide: 1.08; --ds-pose-tilt: -4deg; }
+.presence-avatar[data-state="speaking"] { /* Pose in drawing units: no Figma token for illustration geometry. */ --ds-pose-wide: 1.03; }
+
+.presence-avatar--small { width: var(--ds-presence-small); height: var(--ds-presence-small); }
+.presence-avatar--large { width: var(--ds-presence-large); height: var(--ds-presence-large); }
+.presence-avatar--fill { width: 100%; height: 100%; }
+
+/* Bright, vivid colours for self-expression; the eyes are the same white and pupil on every one. */
+.presence-avatar--coral { --ds-presence-fill: var(--colors-brand-secondary); }
+.presence-avatar--red { --ds-presence-fill: var(--colors-accent-red-solid); }
+.presence-avatar--orange { --ds-presence-fill: var(--colors-accent-orange-solid); }
+.presence-avatar--amber { --ds-presence-fill: var(--colors-accent-amber-solid); }
+.presence-avatar--yellow { --ds-presence-fill: var(--colors-accent-yellow-solid); }
+.presence-avatar--lime { --ds-presence-fill: var(--colors-accent-lime-solid); }
+.presence-avatar--green { --ds-presence-fill: var(--colors-accent-green-solid); }
+.presence-avatar--teal { --ds-presence-fill: var(--colors-accent-teal-solid); }
+.presence-avatar--sky { --ds-presence-fill: var(--colors-accent-sky-solid); }
+.presence-avatar--blue { --ds-presence-fill: var(--colors-accent-blue-solid); }
+.presence-avatar--indigo { --ds-presence-fill: var(--colors-accent-indigo-solid); }
+.presence-avatar--violet { --ds-presence-fill: var(--colors-accent-violet-solid); }
+.presence-avatar--fuchsia { --ds-presence-fill: var(--colors-accent-fuchsia-solid); }
+.presence-avatar--pink { --ds-presence-fill: var(--colors-accent-pink-solid); }
+
+.presence-avatar svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.presence-avatar__body { fill: var(--ds-presence-fill); transition: fill var(--ds-presence-recolour) ease; }
+.presence-avatar__attention { transform-box: view-box; transform-origin: center; transform: scale(calc(1 + clamp(0, var(--level, 0), 1) * 0.06)); transition: transform var(--ds-motion-base) var(--ds-motion-ease); }
+
+/* The resting pose, drawn from the state's numbers above. */
+.presence-avatar__character { transform-box: view-box; transform-origin: 50% 85%; transform: rotate(var(--ds-pose-tilt)); }
+.presence-avatar__turn { transform-box: view-box; }
+/* Floating: it hovers a little above its shadow (the live script makes it rise and fall). */
+.presence-avatar--floating .presence-avatar__character { transform: translateY(var(--ds-presence-hover-gap)) rotate(var(--ds-pose-tilt)); }
+.presence-avatar__shadow { transform-box: fill-box; transform-origin: center; }
+.presence-avatar__shadow ellipse { fill: var(--colors-surface-shadow); }
+/* Speaking rings and the press-and-hold sparkles: hidden until the live script plays them. */
+.presence-avatar__echo { fill: var(--ds-presence-fill); opacity: 0; transform-box: fill-box; transform-origin: center; }
+.presence-avatar__sparkle { fill: var(--ds-presence-fill); transform-box: fill-box; transform-origin: center; transform: scale(0); }
+/* Press and hold is the avatar's own gesture: no text selection or callout menu on a long press. */
+.presence-avatar.is-reactive { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; touch-action: manipulation; }
+/* The eyes: the white holds the expression (squints, droops, smiles) and the pupil looks around inside it,
+   so the face itself travels only a little. The live script uses the same shares. */
+.presence-avatar__gaze { transform: translate(calc(var(--ds-pose-gx) * 0.45), calc(var(--ds-pose-gy) * 0.45)); }
+.presence-avatar__eye { transform-box: fill-box; transform-origin: center; animation: presence-blink var(--ds-presence-blink) linear infinite; }
+.presence-avatar__eyeball { transform-box: fill-box; transform-origin: center; transform: rotate(calc(var(--ds-pose-sad) * -1)) scale(var(--ds-pose-wide), calc(var(--ds-pose-open) * (1 - 0.22 * var(--ds-pose-joy)))); }
+.presence-avatar__eye--right .presence-avatar__eyeball { transform: rotate(var(--ds-pose-sad)) scale(var(--ds-pose-wide), calc(var(--ds-pose-open) * (1 - 0.22 * var(--ds-pose-joy)))); }
+.presence-avatar__white { fill: var(--ds-presence-white); }
+.presence-avatar__pupil {
+  fill: var(--ds-presence-pupil);
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: translate(calc(var(--ds-pose-gx) * 0.42), calc(var(--ds-pose-gy) * 0.42)) scale(calc(1 - 0.5 * var(--ds-pose-joy)));
+  opacity: calc(1 - var(--ds-pose-joy));
+}
+.presence-avatar__happy {
+  fill: none;
+  stroke: var(--ds-presence-pupil);
+  stroke-width: 4.5;
+  stroke-linecap: round;
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  opacity: var(--ds-pose-joy);
+}
+
+.presence-avatar__badge circle { fill: var(--colors-accent-brand-solid); stroke: var(--colors-surface-card); stroke-width: 2; }
+.presence-avatar__badge path { fill: none; stroke: var(--colors-accent-brand-on-solid); stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+.presence-avatar[data-state="blocked"] .presence-avatar__badge circle { fill: var(--colors-accent-amber-solid); }
+.presence-avatar[data-state="blocked"] .presence-avatar__badge path { stroke: var(--colors-accent-amber-on-solid); }
+/* Done is a success: green, from the feedback tokens, for the badge and the happy turn's glow and sparkles. */
+.presence-avatar[data-state="done"] .presence-avatar__badge circle { fill: var(--colors-feedback-success); }
+.presence-avatar[data-state="done"] .presence-avatar__badge path { stroke: var(--colors-feedback-success-foreground); }
+.presence-avatar[data-state="done"] :is(.presence-avatar__echo, .presence-avatar__sparkle) { fill: var(--colors-feedback-success); }
+.presence-avatar[data-state="done"] .presence-avatar__badge { animation: presence-acknowledge var(--ds-presence-done) var(--ds-motion-enter) 1 both; transform-origin: 80% 80%; }
+.presence-avatar[data-state="done"] .presence-avatar__eye { animation: none; }
+
+/* Without the live engine (an animated, non-reactive avatar): gentle loops on top of the pose. */
+.presence-avatar[data-state="thinking"] .presence-avatar__face { animation: presence-think var(--ds-presence-glance) ease-in-out infinite; }
+.presence-avatar[data-state="working"] .presence-avatar__face { animation: presence-focus var(--ds-presence-work) ease-in-out infinite; }
+.presence-avatar[data-state="working"] .presence-avatar__character { animation: presence-work var(--ds-presence-work) ease-in-out infinite; }
+.presence-avatar[data-state="listening"] .presence-avatar__character { animation: presence-listen var(--ds-presence-listen) ease-in-out infinite; }
+.presence-avatar[data-state="speaking"] .presence-avatar__character { animation: presence-speak var(--ds-presence-speak) ease-in-out infinite; }
+.presence-avatar[data-state="waiting"] .presence-avatar__character { animation: presence-wait var(--ds-presence-wait) ease-in-out infinite; }
+.presence-avatar[data-state="done"] .presence-avatar__character { animation: presence-done var(--ds-presence-done) var(--ds-motion-enter) 1 both; }
+
+/* At conversation scale, eyes and status remain useful without a bouncing
+   roster. Small eye glances still communicate thought and focus. */
+.presence-avatar.presence-avatar--small .presence-avatar__character { animation: none; }
+
+/* Alive: presence-avatar.js writes every transform each frame, so no CSS loop or transition may fight it. */
+.presence-avatar[data-live] :is(.presence-avatar__character, .presence-avatar__turn, .presence-avatar__shadow, .presence-avatar__echo, .presence-avatar__sparkle, .presence-avatar__gaze,.presence-avatar__face, .presence-avatar__eye, .presence-avatar__eyeball, .presence-avatar__pupil, .presence-avatar__happy) { animation: none !important; transition: none !important; }
+
+/* A newly selected paused state shows its final badge, never an invisible
+   first animation frame. Expressions are still readable. */
+.presence-avatar.is-paused *, .presence-avatar.is-paused { animation: none !important; transition: none !important; }
+.presence-avatar.is-paused .presence-avatar__attention { transform: none !important; }
+
+/* Blinks at uneven gaps, with the odd double blink, so it never feels like a metronome. */
+@keyframes presence-blink { 0%, 21%, 24%, 57%, 60%, 63.5%, 66%, 100% { transform: scaleY(1); } 22.5%, 58.5%, 64.8% { transform: scaleY(0.1); } }
+@keyframes presence-think { 0%, 100% { transform: translate(0, 0); } 25%, 65% { transform: translate(2%, -1%); } }
+@keyframes presence-focus { 0%, 100% { transform: translate(-1.5%, 0); } 50% { transform: translate(1.5%, 0); } }
+@keyframes presence-work { 0%, 100% { transform: rotate(-1deg); } 50% { transform: rotate(1deg); } }
+@keyframes presence-wait { 0%, 60%, 100% { transform: rotate(6deg); } 20%, 40% { transform: rotate(9deg); } }
+@keyframes presence-done { 0%, 100% { transform: translateY(0); } 40% { transform: translateY(3%); } 70% { transform: translateY(-1%); } }
+@keyframes presence-acknowledge { 0% { transform: scale(0.7); opacity: 0; } 60%, 100% { transform: scale(1); opacity: 1; } }
+@keyframes presence-listen { 0%, 100% { transform: translateY(0) rotate(-4deg); } 50% { transform: translateY(-2%) rotate(-5deg); } }
+@keyframes presence-speak { 0%, 100% { transform: scale(1, 1) translateY(0); } 30% { transform: scale(1.035, 0.98) translateY(1%); } 65% { transform: scale(0.99, 1.025) translateY(-1%); } }
+
+/* No JavaScript or SMIL motion bypasses the device preference. */
+@media (prefers-reduced-motion: reduce) {
+  .presence-avatar *, .presence-avatar { animation: none !important; transition: none !important; }
+  .presence-avatar .presence-avatar__attention { transform: none !important; }
+}

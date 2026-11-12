@@ -25,5 +25,48 @@
       "color": "--colors-brand-primary-foreground"
     },
     "why": "the foreground token is the one Figma contrast-checked against the brand fill; text/primary happens to pass in light mode and fails in dark"
+  },
+  {
+    "file": "DesignSystem/Button.razor.css",
+    "selector": ".ds-button--destructive",
+    "require": {
+      "background": "--colors-feedback-destructive",
+      "color": "--colors-feedback-destructive-foreground"
+    },
+    "why": "use the dedicated destructive foreground, not text-inverse; contrast of the Figma-owned pair is reviewed separately"
+  },
+  {
+    "file": "DesignSystem/Button.razor.css",
+    "selector": ".ds-button--destructive.is-busy:disabled",
+    "require": {
+      "background": "--colors-feedback-destructive",
+      "color": "--colors-feedback-destructive-foreground"
+    },
+    "why": "busy destructive actions retain the same semantic pair as the enabled button"
+  },
+  {
+    "file": "Layout/AppShell.razor.css",
+    "selector": ".app-shell--page-background",
+    "require": {
+      "background": "--colors-surface-background"
+    },
+    "why": "the web page canvas must use the page-background role, not a secondary-section fill"
+  },
+  {
+    "file": "../Parrot.Web/Parrot.Web/Components/Pages/Dashboard/Dashboard/DashboardHome.razor.css",
+    "selector": ".workspace-action--ai.is-locked .workspace-action__icon",
+    "require": {
+      "color": "--colors-icon-disabled",
+      "background": "--colors-surface-card"
+    },
+    "why": "the glyph retains its disabled role while a neutral card surface separates its tile from the muted row in both themes"
+  },
+  {
+    "file": "../Parrot.Web/Parrot.Web/Components/Pages/Dashboard/Dashboard/DashboardHome.razor.css",
+    "selector": ".workspace-action--ai.is-locked",
+    "require": {
+      "background": "--colors-surface-muted"
+    },
+    "why": "the locked AI row keeps the approved softer section fill, rather than applying a control's disabled fill to the whole card"
   }
 ]

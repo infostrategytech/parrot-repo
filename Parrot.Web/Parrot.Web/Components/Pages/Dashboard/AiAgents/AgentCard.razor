@@ -17,9 +17,9 @@
          @onclick="OnOpen"
          @onkeydown="OnKeyDown">
     <header>
-        <span class="agent-card__avatar">
-            <img src="@AgentBuilderCopy.MascotImage(Agent.Mascot)" alt="" />
-        </span>
+        @* Its character, floating and following you; the badge beside it says On, Off or Draft,
+           so the face shows no activity the backend doesn't report. *@
+        <span class="agent-card__avatar"><AgentFace Look="@Agent.Mascot" Reactive Floating /></span>
         <div class="agent-card__who">
             <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3">@Agent.Name</Typography>
             <Typography TextStyle="TextStyle.Small12Medium" As="span">@AgentRole.NameOf(Agent.Settings)</Typography>
@@ -34,7 +34,10 @@
                 }
                 @if (!HasReplied)
                 {
-                    <ActionMenuItem Label="Delete" Glyph="IconName.RiDeleteBin6Fill" Disabled="@Busy" OnClick="OnDelete" />
+                    @* Set apart and in red: deleting an agent is the one action
+                       here that cannot be undone. *@
+                    <ActionMenuDivider />
+                    <ActionMenuItem Label="Delete" Glyph="IconName.RiDeleteBin6Fill" Destructive="true" Disabled="@Busy" OnClick="OnDelete" />
                 }
             </ActionMenu>
         </span>
@@ -44,8 +47,8 @@
         @if (Agent.IsDraft && !Told)
         {
             @* Created first, told its job next (designer, 19 October 2026). *@
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(Drafts.ProgressOf(Agent.Id) is { Next: { } next }
-                ? $"Getting to know its job. You got as far as {LowerFirst(next)}."
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(Drafts.ProgressOf(Agent.Id) is not null
+                ? "Getting to know its job. It picks up where you left off."
                 : $"A draft. Tell {Agent.Name} its job before it answers anyone.")</Typography>
         }
         else if (Agent.IsDraft)

@@ -1,0 +1,39 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+<span class="channel-glyph channel-glyph--@Channel.ToLowerInvariant() @(Tile ? "is-tile" : null) @(Compact ? "is-compact" : null)"
+      title="@(ShowTitle ? ChannelLabel : null)"
+      aria-label="@ChannelLabel">
+    <Icon Name="Glyph" Size="IconSize.Sm" />
+</span>
+
+@code {
+    /// <summary>whatsapp, instagram, facebook or tiktok; anything else draws a neutral chat mark.</summary>
+    [Parameter] public string Channel { get; set; } = "whatsapp";
+    [Parameter] public bool Tile { get; set; }
+    /// <summary>The small mark that sits inline with text, as in the conversation header.</summary>
+    [Parameter] public bool Compact { get; set; }
+    /// <summary>The name to show on hover when a screen calls the channel something else (Customers' "Messenger").</summary>
+    [Parameter] public string? Label { get; set; }
+    /// <summary>Off inside Tooltip, so a second browser-default label does not overlap it.</summary>
+    [Parameter] public bool ShowTitle { get; set; } = true;
+
+    private string ChannelLabel => Label ?? Channel.ToLowerInvariant() switch
+    {
+        "whatsapp" => "WhatsApp",
+        "instagram" => "Instagram",
+        "facebook" => "Facebook",
+        "tiktok" => "TikTok",
+        "email" => "Email",
+        "phone" => "Phone",
+        _ => "Web"
+    };
+
+    private IconName Glyph => Channel.ToLowerInvariant() switch
+    {
+        "whatsapp" => IconName.RiWhatsappFill,
+        "instagram" => IconName.RiInstagramFill,
+        "facebook" => IconName.RiFacebookCircleFill,
+        "tiktok" => IconName.RiTiktokFill,
+        _ => IconName.RiChat3Fill
+    };
+}

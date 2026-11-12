@@ -1,0 +1,59 @@
+/* A row per group in a bordered list; open, its choices sit under it, lined up with the group's name. */
+.ds-checklist-group {
+  /* Gap in the token set: a checkbox's width plus its gap to the label, so choices line up under the group's name. */
+  --ds-checklist-indent: 28px;
+
+  display: grid;
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.ds-checklist-group:first-child { border-top: none; }
+
+/* The box, then the rest of the row as one button that opens the group. The hover covers the whole row, box included
+   (designer, 8 November 2026): the box still selects, the rest opens. */
+.ds-checklist-group__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  min-height: var(--spacing-4xl);
+  padding-inline-start: var(--spacing-lg);
+}
+.ds-checklist-group__head:hover { background: var(--colors-interaction-hover); }
+.ds-checklist-group__head ::deep .ds-checklist-group__toggle:hover { background: transparent; }
+.ds-checklist-group__head ::deep .ds-checklist-group__toggle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  align-self: stretch;
+  padding: var(--spacing-none) var(--spacing-lg) var(--spacing-none) var(--spacing-sm);
+  color: var(--colors-text-primary);
+  text-align: start;
+}
+.ds-checklist-group__head ::deep .ds-checklist-group__count { color: var(--colors-text-muted); white-space: nowrap; }
+.ds-checklist-group__head ::deep .ds-checklist-group__arrow { color: var(--colors-icon-secondary); transition: transform var(--ds-motion-fast) var(--ds-motion-ease); }
+.ds-checklist-group.is-open .ds-checklist-group__head ::deep .ds-checklist-group__arrow { transform: rotate(180deg); }
+
+/* Slides open and shut: the row's height eases between none and the list's own (no fixed height to guess). */
+.ds-checklist-group__panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows var(--ds-motion-base) var(--ds-motion-ease);
+}
+.ds-checklist-group.is-open .ds-checklist-group__panel { grid-template-rows: 1fr; }
+
+.ds-checklist-group__list {
+  display: grid;
+  gap: var(--spacing-sm);
+  min-height: 0;
+  overflow: hidden;
+  padding: var(--spacing-none) var(--spacing-lg) var(--spacing-none) calc(var(--spacing-lg) + var(--ds-checklist-indent));
+  opacity: 0;
+  transition: opacity var(--ds-motion-base) var(--ds-motion-ease), padding-bottom var(--ds-motion-base) var(--ds-motion-ease);
+}
+.ds-checklist-group.is-open .ds-checklist-group__list { padding-bottom: var(--spacing-lg); opacity: 1; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-checklist-group__head ::deep .ds-checklist-group__arrow,
+  .ds-checklist-group__panel,
+  .ds-checklist-group__list { transition: none; }
+}

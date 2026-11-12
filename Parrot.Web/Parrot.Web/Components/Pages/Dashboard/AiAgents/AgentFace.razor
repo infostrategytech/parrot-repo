@@ -1,0 +1,28 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.SharedComponents.DesignSystem
+
+@* An agent's face wherever it appears: its saved look (or an old mascot's
+   match) drawn as the shared PresenceAvatar. Decorative by default, because
+   the agent's name is always next to it. *@
+<PresenceAvatar Direction="_look.Direction" Tone="_look.Tone" State="State" Size="Size" Reactive="Reactive" Floating="Floating"
+                Paused="Paused" Replay="Replay" Celebrate="Celebrate" CueDelay="CueDelay" Decorative="@(Name is null)" Name="@Name" />
+
+@code {
+    /// <summary>The agent's saved look: "look:pip:violet", or an old mascot name such as "Nova".</summary>
+    [Parameter] public string? Look { get; set; }
+    [Parameter] public PresenceAvatarState State { get; set; }
+    /// <summary>Fills the box it's in by default, so each screen keeps its own face size.</summary>
+    [Parameter] public PresenceAvatarSize Size { get; set; } = PresenceAvatarSize.Fill;
+    [Parameter] public bool Reactive { get; set; }
+    [Parameter] public bool Floating { get; set; }
+    [Parameter] public bool Paused { get; set; }
+    [Parameter] public int Replay { get; set; }
+    /// <summary>Shown already Done: plays the happy turn as it appears.</summary>
+    [Parameter] public bool Celebrate { get; set; }
+    [Parameter] public int CueDelay { get; set; }
+    /// <summary>Only when no label beside it names the agent.</summary>
+    [Parameter] public string? Name { get; set; }
+
+    private AvatarAppearance _look = AvatarAppearance.Default;
+    protected override void OnParametersSet() => _look = AgentLooks.Of(Look);
+}

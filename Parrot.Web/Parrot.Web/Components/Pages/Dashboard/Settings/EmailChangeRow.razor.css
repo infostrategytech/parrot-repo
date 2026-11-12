@@ -1,0 +1,46 @@
+/* The sign-in address in a quiet panel, with Change; a change waiting for its code is said under it. */
+.email-row {
+  display: grid;
+  gap: var(--spacing-md);
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+.email-row ::deep p { margin: var(--spacing-none); }
+.email-row__shown { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-lg); }
+.email-row__words { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.email-row ::deep .email-row__label, .email-row ::deep .email-row__hint { color: var(--colors-text-muted); }
+.email-row ::deep .email-row__value { color: var(--colors-text-primary); overflow-wrap: anywhere; }
+
+.email-row__pending {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding-top: var(--spacing-md);
+  color: var(--colors-accent-amber-text);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.email-row__pending ::deep p { color: var(--colors-text-secondary); overflow-wrap: anywhere; }
+.email-row__pending ::deep strong { color: var(--colors-text-primary); }
+.email-row__pending-actions { display: flex; gap: var(--spacing-sm); }
+
+/* The window: the two fields, or the code, with room around them (designer: "it's too tight"). */
+.email-change { display: grid; gap: var(--spacing-lg); }
+.email-change__password { min-width: 0; margin: var(--spacing-none); padding: var(--spacing-none); border: 0; }
+.email-change ::deep .email-row__hint { margin: var(--spacing-none); color: var(--colors-text-muted); }
+/* Six boxes at the size they have on the sign-in pages, not stretched across the window. */
+.email-change__code {
+  /* Gap in the token set: no width for a code entry. As wide as on the sign-in screens. */
+  --ds-email-code: 416px;
+
+  display: grid;
+  gap: var(--spacing-lg);
+  justify-self: center;
+  width: min(var(--ds-email-code), 100%);
+}
+
+@media (max-width: 760px) {
+  .email-row__pending { grid-template-columns: auto minmax(0, 1fr); }
+  .email-row__pending-actions { grid-column: 1 / -1; justify-content: flex-end; }
+}

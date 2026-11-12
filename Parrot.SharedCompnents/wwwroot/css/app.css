@@ -69,9 +69,10 @@ body {
    which lays itself out for tablets (one pane at a time below 1024px). Nor
    any page while "Tell us about your business" is open: on a tablet or a
    phone the floor shrank the page, and the dialog with it, to a third of
-   its size; it lays itself out at the screen's width. */
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .business-intro-host .dialog-backdrop),
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .business-intro-host .dialog-backdrop) body {
+   its size; it lays itself out at the screen's width. Nor Settings, its own
+   space, which shows its list or one section on a phone. */
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .settings-shell, .business-intro-host .dialog-backdrop),
+html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .settings-shell, .business-intro-host .dialog-backdrop) body {
   min-width: 0;
 }
 
@@ -87,6 +88,12 @@ html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, 
 body {
   overflow-x: auto;
   overflow-y: hidden;
+}
+
+/* The app shell scrolls inside its own column, so the page doesn't. Settings is its own space without that
+   column: there the page itself scrolls, its list staying put beside it. */
+html:has(.settings-shell) body {
+  overflow-y: auto;
 }
 
 /* The browser puts a 1em margin on every heading and paragraph. Those are not
@@ -368,3 +375,16 @@ a:hover { color: var(--colors-text-link-hover); }
 :root[data-theme="aurora-dark"] .workspace-preview-glow {
   opacity: 0.58;
 }
+
+/* Notifications in a popover, dark mode: the popover is the same grey as the muted circle behind each icon and
+   as the hover, so both vanished. There the circles take their family's tint (a step darker for plain ones)
+   and hover goes a step lighter. */
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__mark { background: var(--colors-accent-neutral-subtle); }
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__mark.is-amber { background: var(--colors-accent-amber-subtle); }
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__mark.is-emerald { background: var(--colors-accent-emerald-subtle); }
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__mark.is-brand { background: var(--colors-accent-brand-subtle); }
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__mark.is-pink { background: var(--colors-accent-pink-subtle); }
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__mark.is-blue { background: var(--colors-accent-blue-subtle); }
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__mark.is-violet { background: var(--colors-accent-violet-subtle); }
+:root[data-theme="aurora-dark"] .ds-popover__panel .ds-notification-list__item:hover { background: var(--colors-interaction-pressed); }
+:root[data-theme="aurora-dark"] .ds-notification-popup__mark.is-neutral { background: var(--colors-accent-neutral-subtle); }

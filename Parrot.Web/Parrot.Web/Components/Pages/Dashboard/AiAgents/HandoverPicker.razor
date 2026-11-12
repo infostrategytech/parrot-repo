@@ -1,0 +1,239 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.AiAgents
+@using Parrot.Web.Features.Dashboard.AiAgents
+@inject NavigationManager Nav
+
+@* Who the agent brings in (designer, 10 and 11 November 2026). On the page, a row like the switches under it: who
+   it is, with their faces, and Change. The choice opens in a dialog with room for it: anyone on the team (the
+   default), a role whose people share it evenly (say Customer service), or chosen people who share it evenly.
+   Choosing people works for a big team: the ones chosen are listed with Remove, and anyone else is a search away
+   (a short team shows in full; a long one says how many more to type for). Handovers and the tasks the agent
+   raises for a person follow the same choice. Only people who can reply on one of the agent's channels are
+   offered, and the dialog says who isn't and why. Working alone, there is nothing to choose: it's the owner,
+   with a way to invite the team. *@
+@if (ShowRow)
+{
+    <div class="handover-picker">
+        <span class="handover-picker__who">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Who it brings in</Typography>
+            <span class="handover-picker__summary">
+                @if (Faces.Count > 0)
+                {
+                    <span class="handover-picker__faces" aria-hidden="true">
+                        @foreach (var person in Faces.Take(3))
+                        {
+                            <PetalAvatar Seed="@person.Id" Initials="@Parrot.SharedComponents.DesignSystem.Initials.From(person.Name)" Size="AvatarSize.Sm" />
+                        }
+                        @if (Faces.Count > 3)
+                        {
+                            <span class="handover-picker__more"><Typography TextStyle="TextStyle.Small10Semibold" As="span">@($"+{Faces.Count - 3}")</Typography></span>
+                        }
+                    </span>
+                }
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose>@Summary</Typography>
+            </span>
+        </span>
+        @if (!Team.Known)
+        {
+            @* Someone other than the owner: the team isn't theirs to read, so the owner's choice shows as its words. *@
+        }
+        else if (!Team.Solo)
+        {
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ds-no-shrink" @onclick="Open">Change</Button>
+        }
+        else if (CanInvite)
+        {
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="ds-no-shrink" @onclick='() => Nav.NavigateTo("/dashboard/settings/team")'>
+                <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
+                <ChildContent>Invite your team</ChildContent>
+            </Button>
+        }
+    </div>
+}
+
+<ContentModal Open="_open" Title="@($"Who should {Name} bring in?")"
+              Subtitle="The customers it can't help, and the tasks it raises for a person, go to them."
+              OnClose="Close" OnSubmit="SaveAsync">
+    <ChildContent>
+        <div class="handover-picker__choices" role="radiogroup" aria-label="Who it brings in">
+            <ChoiceCard Label="Anyone on the team" Description="Whoever is free takes it in the Inbox. Tasks wait for anyone to pick up."
+                        Picked="@(_mode == HandoverModes.Team)" OnSelect="() => _mode = HandoverModes.Team" />
+            <ChoiceCard Label="A role" Description="Shared evenly between everyone with that role."
+                        Picked="@(_mode == HandoverModes.Role)" OnSelect="ChooseRole" Disabled="@(Roles.Count == 0)">
+                <SelectField FloatingLabel="Role" Value="@(Roles.FirstOrDefault(r => r.Id == _roleId)?.Name)" Open="_roleOpen" OpenChanged="open => _roleOpen = open"
+                             HelperText="@RoleHelp">
+                    @foreach (var role in Roles)
+                    {
+                        var current = role;
+                        <PopoverOption Label="@current.Name" Active="@(_roleId == current.Id)" OnSelect="() => { _roleId = current.Id; _roleOpen = false; }" />
+                    }
+                </SelectField>
+            </ChoiceCard>
+            <ChoiceCard Label="Specific people" Description="Shared evenly between the people you choose."
+                        Picked="@(_mode == HandoverModes.People)" OnSelect="() => _mode = HandoverModes.People">
+                <div class="handover-picker__people">
+                    @if (Chosen.Count > 0)
+                    {
+                        <ul class="handover-picker__chosen" aria-label="Chosen">
+                            @foreach (var person in Chosen)
+                            {
+                                var current = person;
+                                <li>
+                                    <PetalAvatar Seed="@current.Id" Initials="@Parrot.SharedComponents.DesignSystem.Initials.From(current.Name)" Size="AvatarSize.Sm" />
+                                    <span class="handover-picker__person">
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@Shown(current)</Typography>
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@Detail(current)</Typography>
+                                    </span>
+                                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" aria-label="@($"Remove {Shown(current)}")" title="Remove"
+                                            @onclick="() => _people.Remove(current.Id)">
+                                        <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                                    </Button>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    @if (Available.Count > 0)
+                    {
+                        <SearchPick TItem="HandoverPerson" Items="Available" Label="Shown" Detail="Detail" SearchText="SearchText" Max="5"
+                                    Placeholder="@(Chosen.Count == 0 ? "Search your team" : "Add someone else")" AriaLabel="Search your team" AutoFocus="false"
+                                    OnPick="person => _people.Add(person.Id)">
+                            <Leading Context="person">
+                                <PetalAvatar Seed="@person.Id" Initials="@Parrot.SharedComponents.DesignSystem.Initials.From(person.Name)" Size="AvatarSize.Sm" />
+                            </Leading>
+                        </SearchPick>
+                    }
+                    @if (NotOffered is { } note)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="handover-picker__note">@note</Typography>
+                    }
+                </div>
+            </ChoiceCard>
+        </div>
+    </ChildContent>
+    <Footer Context="formId">
+        <Button Type="ButtonType.Submit" form="@formId" disabled="@(!CanSave)">Save</Button>
+        <Button Variant="ButtonVariant.Secondary" @onclick="Close">Cancel</Button>
+    </Footer>
+</ContentModal>
+
+@code {
+    [Parameter, EditorRequired] public AgentSettings Settings { get; set; } = default!;
+
+    /// <summary>The agent's channels: only people who reply on one of them are offered.</summary>
+    [Parameter] public IReadOnlyCollection<string> Channels { get; set; } = [];
+
+    [Parameter, EditorRequired] public HandoverTeam Team { get; set; } = default!;
+
+    /// <summary>The agent's name, for the dialog's question.</summary>
+    [Parameter] public string Name { get; set; } = "your agent";
+
+    /// <summary>The owner can invite people when working alone; a teammate editing the agent can't.</summary>
+    [Parameter] public bool CanInvite { get; set; }
+
+    /// <summary>Off where the page has its own Change (setup's rule list): only the dialog, opened with Open().</summary>
+    [Parameter] public bool ShowRow { get; set; } = true;
+
+    /// <summary>A change, applied by the page (which keeps it until Save).</summary>
+    [Parameter] public EventCallback<Action> OnSet { get; set; }
+
+    // The dialog's own copy of the choice: nothing changes until Save.
+    private bool _open, _roleOpen;
+    private string _mode = HandoverModes.Team;
+    private string? _roleId;
+    private List<string> _people = [];
+
+    private IReadOnlyList<HandoverPerson> Eligible => Team.Eligible(Channels);
+    private IReadOnlyList<HandoverRole> Roles => Team.Roles(Channels);
+    private IReadOnlyList<HandoverPerson> Chosen => [.. _people.Select(id => Eligible.FirstOrDefault(p => p.Id == id)).OfType<HandoverPerson>()];
+    private IReadOnlyList<HandoverPerson> Available => [.. Eligible.Where(p => !_people.Contains(p.Id))];
+
+    private static string Shown(HandoverPerson person) => person.IsOwner ? "You" : person.Name;
+
+    // Their role and where they reply: "Customer service · WhatsApp, Instagram".
+    private static string Detail(HandoverPerson person)
+    {
+        var where = person.Channels.Count == 0 ? "All channels"
+            : string.Join(", ", person.Channels.Select(key => Parrot.Application.Teams.WorkspaceChannels.All.FirstOrDefault(c => c.Key == key)?.Label ?? key));
+        return person.IsOwner ? $"Owner · {where}" : $"{person.RoleName ?? "Team member"} · {where}";
+    }
+
+    private static string SearchText(HandoverPerson person) => $"{person.Name} {person.RoleName}";
+
+    private string? RoleHelp => Roles.FirstOrDefault(r => r.Id == _roleId) is { } role
+        ? Eligible.Count(p => p.RoleId == role.Id) is var n && n == 1 ? "1 person has this role." : $"{n} people have this role."
+        : null;
+
+    // Who isn't offered, and why, so nobody wonders where they went.
+    private string? NotOffered
+    {
+        get
+        {
+            var missing = Team.People.Where(p => !Eligible.Contains(p)).Select(Shown).ToList();
+            return missing.Count switch
+            {
+                0 => null,
+                1 => $"{missing[0]} can't reply on this agent's channels, so isn't offered.",
+                _ => $"{missing.Count} people can't reply on this agent's channels, so aren't offered.",
+            };
+        }
+    }
+
+    private bool CanSave => _mode switch
+    {
+        HandoverModes.Role => Roles.Any(r => r.Id == _roleId),
+        HandoverModes.People => Chosen.Count > 0,
+        _ => true,
+    };
+
+    // The row: who it is, in words and faces.
+    private string Summary =>
+        Team.Solo ? "You, in the Inbox"
+        : Settings.HandoverMode is HandoverModes.Role or HandoverModes.People && Settings.HandoverTo.Trim().Length > 0 ? Capitalised(Settings.HandoverTo.Trim())
+        // Not chosen yet: an older agent's own words, else the default.
+        : Settings.HandoverMode.Length == 0 && Settings.HandoverTo.Trim().Length > 0 ? Settings.HandoverTo.Trim()
+        : "Anyone on your team";
+
+    private IReadOnlyList<HandoverPerson> Faces => Team.Solo ? Team.People.Take(1).ToList() : Settings.HandoverMode switch
+    {
+        HandoverModes.Role => [.. Eligible.Where(p => !p.IsOwner && p.RoleId == Settings.HandoverRoleId)],
+        HandoverModes.People => [.. Eligible.Where(p => Settings.HandoverPeople.Contains(p.Id))],
+        _ => Eligible,
+    };
+
+    private static string Capitalised(string text) => text.Length == 0 ? text : char.ToUpperInvariant(text[0]) + text[1..];
+
+    /// <summary>Opens the choice (from the row's Change, or a page's own).</summary>
+    public void Open()
+    {
+        _mode = Settings.HandoverMode is HandoverModes.Role or HandoverModes.People ? Settings.HandoverMode : HandoverModes.Team;
+        _roleId = Settings.HandoverRoleId;
+        _people = [.. Settings.HandoverPeople];
+        _roleOpen = false;
+        _open = true;
+        StateHasChanged();
+    }
+
+    private void ChooseRole()
+    {
+        _mode = HandoverModes.Role;
+        // One role to choose from: chosen for them.
+        if (_roleId is null && Roles.Count == 1) _roleId = Roles[0].Id;
+    }
+
+    private void Close() => _open = false;
+
+    private async Task SaveAsync()
+    {
+        if (!CanSave) return;
+        // Only the people shown as chosen: someone who lost access here isn't named to the AI any more.
+        var (mode, roleId, people) = (_mode, _roleId, Chosen.Select(p => p.Id).ToList());
+        _open = false;
+        await OnSet.InvokeAsync(() =>
+        {
+            Settings.HandoverMode = mode;
+            Settings.HandoverRoleId = mode == HandoverModes.Role ? roleId : Settings.HandoverRoleId;
+            Settings.HandoverPeople = mode == HandoverModes.People ? people : Settings.HandoverPeople;
+            // The words the AI reads, so they never disagree with the choice.
+            Settings.HandoverTo = HandoverRouting.Describe(mode, Team, roleId, people);
+        });
+    }
+}

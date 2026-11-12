@@ -101,4 +101,4 @@
 }
 .workspace-tools__faces li { display: grid; border: var(--ds-hairline) solid var(--colors-surface-card); border-radius: var(--radius-radius-full); }
 .workspace-tools__faces li + li { margin-left: var(--ds-tools-face-overlap); }
-.workspace-tools__faces img { width: var(--ds-tools-face); height: var(--ds-tools-face); border-radius: var(--radius-radius-full); object-fit: cover; }
+.workspace-tools__faces .workspace-tools__face { display: grid; width: var(--ds-tools-face); height: var(--ds-tools-face); }

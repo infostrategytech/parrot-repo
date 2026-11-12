@@ -9,7 +9,7 @@ namespace Parrot.Web.Features.Dashboard.Catalog;
 
 /// <summary>One item read from a price list, to check before it is added.</summary>
 /// <param name="NeedsCheck">Read with little confidence (a photo can be misread): the review asks the owner to look.</param>
-public sealed record PriceListLine(string Name, decimal? Price, bool From, CatalogKind Kind, bool NeedsCheck = false);
+public sealed record PriceListLine(string Name, decimal? Price, bool From, CatalogKind Kind, bool NeedsCheck = false, string? CurrencyCode = null);
 
 /// <summary>
 /// Reading a photo of a price list (printed, handwritten, a menu or a
@@ -44,7 +44,7 @@ public static class PriceListParser
     public const int MaxLines = 500;
 
     // "Name - 45,000", "Name: ₦45,000", "Name 12k", "Name from 25000".
-    private static readonly Regex Line = new(@"^(?<name>.+?)[\s\-–—:,|=]*(?<from>from\s+)?₦?\s*(?<amount>\d[\d,]*(?:\.\d+)?)\s*(?<k>k)?\s*(?:naira|ngn)?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex Line = new(@"^(?<name>.+?)[\s\-–—:,|=]*(?<from>from\s+)?(?:₦|\$|£|€|GH₵|NGN|USD|GBP|GHS|EUR)?\s*(?<amount>\d[\d,]*(?:\.\d+)?)\s*(?<k>k)?\s*(?:naira|NGN|USD|GBP|GHS|EUR)?\s*$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     // Words that usually mean a service, or food, so the kind starts right.
     private static readonly Regex ServiceWords = new(@"\b(?:class|lesson|session|service|repair|fixing|braid\w*|hair|makeup|tailor\w*|sewing|consult\w*|training|booking|test|scan|check-?up)\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -67,7 +67,8 @@ public static class PriceListParser
             decimal? price = null;
             if (match.Success && NumberText.Decimal(match.Groups["amount"].Value) is { } amount)
                 price = match.Groups["k"].Success ? amount * 1000 : amount;
-            lines.Add(new PriceListLine(Trim(name), price is > 0 ? price : null, match.Success && match.Groups["from"].Success, GuessKind(name)));
+            var mixed = CurrencyAmount.ExplicitCodes(line).Count > 1;
+            lines.Add(new PriceListLine(Trim(name), !mixed && price is > 0 ? price : null, match.Success && match.Groups["from"].Success, GuessKind(name), NeedsCheck: mixed, CurrencyCode: CurrencyAmount.ExplicitCode(line)));
             if (lines.Count >= MaxLines) break;
         }
         return lines;
@@ -104,7 +105,7 @@ public static class PriceListParser
     {
         // Import may recognise explicit currency/shorthand, but must never strip arbitrary letters or a
         // negative sign. Manual fields use NumberText directly and do not accept k/m shortcuts.
-        var match = Regex.Match(value.Trim(), @"\A(?:₦|NGN\s*|N(?=\s*[0-9]))?\s*(?<number>[0-9.,]+)\s*(?<scale>[km])?\s*(?:naira|ngn)?\z", RegexOptions.IgnoreCase);
+        var match = Regex.Match(value.Trim(), @"\A(?:₦|\$|£|€|GH₵|(?:NGN|USD|GBP|GHS|EUR)\s*|N(?=\s*[0-9]))?\s*(?<number>[0-9.,]+)\s*(?<scale>[km])?\s*(?:naira|NGN|USD|GBP|GHS|EUR)?\z", RegexOptions.IgnoreCase);
         if (!match.Success || NumberText.Decimal(match.Groups["number"].Value) is not { } amount || amount <= 0) return null;
         return match.Groups["scale"].Value.ToLowerInvariant() switch { "k" => amount * 1000, "m" => amount * 1000000, _ => amount };
     }
@@ -232,10 +233,11 @@ public sealed class PriceSheet
     public int PriceColumn { get; }
 
     public List<PriceListLine> Lines(int nameColumn, int priceColumn) => Rows
-        .Select(row => (name: PriceListParser.Trim(Cell(row, nameColumn)), price: priceColumn >= 0 ? PriceListParser.Money(Cell(row, priceColumn)) : null))
+        .Select(row => (name: PriceListParser.Trim(Cell(row, nameColumn)), price: priceColumn >= 0 ? PriceListParser.Money(Cell(row, priceColumn)) : null,
+            currency: priceColumn >= 0 ? CurrencyAmount.ExplicitCode(Cell(row, priceColumn)) ?? CurrencyAmount.ExplicitCode(Cell(Columns, priceColumn)) : null))
         .Where(line => line.name.Length > 0)
         .Take(PriceListParser.MaxLines)
-        .Select(line => new PriceListLine(line.name, line.price, false, PriceListParser.GuessKind(line.name)))
+        .Select(line => new PriceListLine(line.name, line.price, false, PriceListParser.GuessKind(line.name), CurrencyCode: line.currency))
         .ToList();
 
     internal static PriceSheet From(List<List<string>> grid)

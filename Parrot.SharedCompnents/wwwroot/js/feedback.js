@@ -99,8 +99,14 @@
 
   function setEnabled(on) {
     enabled = !!on;
-    try { localStorage.setItem(STORAGE_KEY, enabled ? "on" : "off"); } catch { /* private mode */ }
+    let saved = false;
+    try {
+      const value = enabled ? "on" : "off";
+      localStorage.setItem(STORAGE_KEY, value);
+      saved = localStorage.getItem(STORAGE_KEY) === value;
+    } catch { /* The session still honours the choice, but it wasn't saved. */ }
     if (enabled) play("incoming"); // a preview of what they have switched on
+    return { applied: true, saved, enabled };
   }
 
   window.parrotFeedback = { play, setEnabled, isEnabled: () => enabled };

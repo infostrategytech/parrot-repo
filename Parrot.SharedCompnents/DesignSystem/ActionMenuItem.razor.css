@@ -1,25 +1,49 @@
+/* One row of an ActionMenu, matching the Figma Menu's List Item (node
+   361:2262): 12px padding all round, 12px between icon and label.
+
+   Height comes from the padding rather than a fixed value, so a wrapped
+   label grows the row instead of being clipped. The old 36px came from the
+   React conversation menu and was tighter than the design. */
+
 .ds-action-menu-item {
   display: flex;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-md);
   align-items: center;
   width: 100%;
-  min-height: var(--ds-action-menu-item-height);
-  padding: 0 var(--spacing-sm);
-  color: var(--colors-text-secondary);
+  padding: var(--spacing-md);
+  color: var(--colors-text-primary);
   text-align: left;
   background: transparent;
   border: 0;
-  border-radius: var(--radius-radius-md);
   cursor: pointer;
+  /* Full-bleed, as in the design: the hover band runs to the panel's edges,
+     which clips it to the corner radius. No radius of its own. */
 
-  /* Gap in the token set: no menu-row height. React's conversation menu. */
-  --ds-action-menu-item-height: 36px;
+  /* Gap in the token set: no focus-ring width. */
   --ds-action-menu-focus: 2px;
 }
 
+/* Reserved space where a sibling row has an icon and this one does not, so
+   every label in the menu starts at the same place. */
+.ds-action-menu-item__icon-space {
+  flex-shrink: 0;
+  width: var(--icon-size-icon-sm);
+  height: var(--icon-size-icon-sm);
+}
+
+/* Quieter than the label, as in the design — the word is what you read, the
+   icon is what you aim at. */
+.ds-action-menu-item ::deep .ds-action-menu-item__icon {
+  flex-shrink: 0;
+  color: var(--colors-icon-muted);
+}
+
 .ds-action-menu-item:hover:not(:disabled) {
-  color: var(--colors-text-primary);
   background: var(--colors-interaction-hover);
+}
+
+.ds-action-menu-item:hover:not(:disabled) ::deep .ds-action-menu-item__icon {
+  color: var(--colors-icon-primary);
 }
 
 .ds-action-menu-item:focus-visible {
@@ -30,4 +54,41 @@
 .ds-action-menu-item:disabled {
   color: var(--colors-interaction-disabled-foreground);
   cursor: not-allowed;
+}
+
+.ds-action-menu-item:disabled ::deep .ds-action-menu-item__icon {
+  color: var(--colors-interaction-disabled-foreground);
+}
+
+/* Dense rows for a menu hanging off a small control in a dense row — a table
+   row's "more" button, a card's overflow. Same type, less air. */
+.ds-action-menu-item--dense {
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+/* Destructive — Delete and its like. Red carries the warning, so the icon
+   matches the label rather than staying muted: a grey bin beside red words
+   reads as a mistake. Hover deepens into the subtle red surface instead of
+   the neutral one, so the row never loses its meaning on the way to a click. */
+.ds-action-menu-item--destructive {
+  color: var(--colors-text-destructive);
+}
+
+.ds-action-menu-item--destructive ::deep .ds-action-menu-item__icon {
+  color: var(--colors-icon-destructive);
+}
+
+.ds-action-menu-item--destructive:hover:not(:disabled) {
+  background: var(--colors-feedback-destructive-subtle);
+}
+
+.ds-action-menu-item--destructive:hover:not(:disabled) ::deep .ds-action-menu-item__icon {
+  color: var(--colors-icon-destructive);
+}
+
+/* Disabled wins over destructive: an action you cannot take right now should
+   not still be shouting. */
+.ds-action-menu-item--destructive:disabled {
+  color: var(--colors-interaction-disabled-foreground);
 }

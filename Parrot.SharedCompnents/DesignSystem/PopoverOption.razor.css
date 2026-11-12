@@ -37,13 +37,7 @@
   min-width: 0;
 }
 
-.popover-option__text ::deep small { color: var(--colors-text-muted); }
-
-/* The tick inherits the row's colour, so a selected row keeps it legible
-   against the selected fill without a second rule. */
-.popover-option.is-active .popover-option__text ::deep small { color: inherit; }
-
-/* React's menu rows: a mark, a bold name over its description, and a tick.
+/* React's menu rows: a mark, a bold name (no description, 7 November 2026), and a tick.
    The chosen row is marked by the tick alone, not a fill. */
 .popover-option {
   display: grid;
@@ -58,8 +52,6 @@
 .popover-option.is-active:hover { background: var(--colors-interaction-hover); }
 .popover-option__leading { width: var(--ds-option-leading); height: var(--ds-option-leading); }
 .popover-option__text ::deep strong { color: var(--colors-text-secondary); }
-.popover-option__text ::deep small,
-.popover-option.is-active .popover-option__text ::deep small { overflow: hidden; color: var(--colors-text-subtle); white-space: nowrap; text-overflow: ellipsis; }
 ::deep .popover-option__check { color: var(--colors-brand-primary); }
 
 .popover-option {
@@ -68,4 +60,13 @@
   --ds-option-mark: 30px;
   --ds-option-leading: 24px;
   --ds-option-check: 18px;
+}
+
+/* A name with a small label beside it ("Recommended"): the one choice to suggest. */
+.popover-option__name { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; min-width: 0; }
+.popover-option__text ::deep .popover-option__badge {
+  padding: var(--spacing-none) var(--spacing-xs);
+  color: var(--colors-icon-brand);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-full);
 }

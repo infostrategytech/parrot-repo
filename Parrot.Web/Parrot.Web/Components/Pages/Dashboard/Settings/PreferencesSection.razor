@@ -1,0 +1,60 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@inject IJSRuntime JS
+@inject Parrot.Web.Services.UserClock Clock
+
+@* How yára looks for this person, on this device. The theme moved here from the switch that floated over every
+   page (designer, 1 November 2026); "Match my device" follows the device's own light or dark setting. *@
+<SettingsCard>
+    <ChildContent><div class="preferences__lines">
+        <div class="preferences__line">
+            <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Theme</Typography></div>
+            @if (_theme is not null)
+            {
+                <SegmentedControl TValue="string" Label="Theme" Options="Themes" Value="_theme" ValueChanged="ChooseAsync" />
+            }
+        </div>
+        <div class="preferences__line">
+            @* Yours, for how times show to you. The business's hours have their own, in Business profile (designer, 7 November 2026). *@
+            <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Your time zone</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Times in yára show in this device's time zone.</Typography></div>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="preferences__value">@ZoneName</Typography>
+        </div>
+    </div></ChildContent>
+</SettingsCard>
+
+@code {
+    private static readonly IReadOnlyList<SegmentedOption<string>> Themes =
+        [new("aurora-light", "Light"), new("aurora-dark", "Dark"), new("system", "Match my device")];
+    private string? _theme;
+
+    // "Lagos (UTC+1)": the place from the zone's IANA name, and its offset now.
+    private string ZoneName
+    {
+        get
+        {
+            var zone = Clock.Zone;
+            var iana = zone.HasIanaId ? zone.Id : TimeZoneInfo.TryConvertWindowsIdToIanaId(zone.Id, out var converted) ? converted : zone.Id;
+            var offset = zone.GetUtcOffset(DateTime.UtcNow);
+            var sign = offset < TimeSpan.Zero ? "−" : "+";
+            var hours = offset.Minutes == 0 ? $"{Math.Abs(offset.Hours)}" : $"{Math.Abs(offset.Hours)}:{Math.Abs(offset.Minutes):00}";
+            return $"{iana.Split('/')[^1].Replace('_', ' ')} (UTC{(offset == TimeSpan.Zero ? "" : sign + hours)})";
+        }
+    }
+
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Clock.ReadAsync();
+        try { _theme = await JS.InvokeAsync<string>("yaraTheme.get"); }
+        catch (JSException) { _theme = "aurora-light"; }
+        if (Themes.All(option => option.Value != _theme)) _theme = "aurora-light";
+        StateHasChanged();
+    }
+
+    private async Task ChooseAsync(string theme)
+    {
+        _theme = theme;
+        await JS.InvokeVoidAsync("yaraTheme.set", theme);
+    }
+}

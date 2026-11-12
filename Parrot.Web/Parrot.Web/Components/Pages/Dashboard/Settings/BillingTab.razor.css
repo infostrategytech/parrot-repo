@@ -87,34 +87,6 @@
 
 .billing__cycle { display: flex; gap: var(--spacing-sm); align-items: center; }
 
-.billing__cycle-tabs {
-  display: flex;
-  gap: var(--spacing-2xs);
-  padding: var(--spacing-xs);
-  background: var(--colors-accent-neutral-border);
-  border-radius: var(--radius-radius-full);
-}
-
-.billing__cycle-tab {
-  display: inline-flex;
-  align-items: center;
-  min-height: var(--spacing-3xl);
-  padding: var(--spacing-none) var(--spacing-md);
-  color: var(--colors-text-muted);
-  background: transparent;
-  border: 0;
-  border-radius: var(--radius-radius-full);
-  cursor: pointer;
-}
-
-.billing__cycle-tab:hover { background: var(--colors-interaction-hover); }
-
-.billing__cycle-tab.is-active {
-  color: var(--colors-text-primary);
-  background: var(--colors-surface-card);
-  box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow);
-}
-
 .billing__plans {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

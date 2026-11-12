@@ -56,7 +56,8 @@
 
   document.addEventListener("click", (event) => {
     const item = event.target.closest?.(".nav-item");
-    if (!item || item.disabled || item.classList.contains("is-active")) return;
+    // An item that opens something in place (the notifications bell) isn't a page change: nothing to wait for.
+    if (!item || item.disabled || item.classList.contains("is-active") || item.hasAttribute("aria-haspopup")) return;
     if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey) return;
 
     clear();
@@ -66,11 +67,14 @@
     dotsTimer = setTimeout(showDots, DOTS_AFTER_MS);
     giveUpTimer = setTimeout(clear, GIVE_UP_MS);
 
-    // The new screen has arrived when the main column's children change.
+    // The new screen has arrived when the main column's children change, or when the column itself goes (Settings
+    // has a layout of its own, so going there replaces the whole shell).
     const main = document.querySelector(".app-main");
     if (main) {
-      observer = new MutationObserver(clear);
-      observer.observe(main, { childList: true });
+      observer = new MutationObserver((records) => {
+        if (!main.isConnected || records.some((record) => record.target === main)) clear();
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
     }
   }, true);
 

@@ -23,7 +23,8 @@
         {
             @* The start: the orb, what to do, and the two ways in. *@
             <div class="job-editor__stage">
-                <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__orb" />
+                @* The agent itself, not an orb (designer, 10 November 2026): its character listens, thinks and speaks. *@
+                <span class="job-editor__orb"><PresenceAvatar @ref="_avatar" Direction="Look.Direction" Tone="Look.Tone" State="AvatarState" Size="PresenceAvatarSize.Fill" Reactive Floating Decorative /></span>
             </div>
             <div class="job-editor__voice-text">
                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p" role="status">@StartTitle</Typography>
@@ -53,7 +54,7 @@
                     @if (Waiting)
                     {
                         <li class="job-editor__msg is-agent">
-                            <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                            <span class="job-editor__face"><AgentFace Look="@Mascot" State="PresenceAvatarState.Thinking" Reactive /></span>
                             <div class="job-editor__bubble is-typing" aria-label="@($"{Name} is thinking")"><i></i><i></i><i></i></div>
                         </li>
                     }
@@ -137,7 +138,9 @@
     private bool _opening;
     private bool _confirmingDone;
 
-    private VoiceOrb? _orb;
+    private PresenceAvatar? _avatar;
+    private Parrot.SharedComponents.DesignSystem.AvatarAppearance Look => AgentLooks.Of(Mascot);
+    private PresenceAvatarState AvatarState => PresenceAvatarWords.FromVoice(OrbState);
     private VoiceAura? _aura;
     private TextArea? _typeBox;
     private ElementReference _thread;
@@ -160,13 +163,15 @@
 
     private bool Docked => Asking is not null && !InCall;
 
+    // A conversation fills the card as the demo's does (designer, 11 November 2026): the short card is for a
+    // quick addition, never for telling it its job.
     private string CardClass =>
         $"job-editor__voice is-{(_phase is Phase.Connecting ? "thinking" : _phase.ToString().ToLowerInvariant())}"
-        + (InConversation ? " is-talking is-short" : null)
+        + (InConversation ? " is-talking" : null)
         + (Docked ? " is-docked" : null);
 
     private IReadOnlyList<ElementReference> LevelTargets =>
-        _orb is null ? [] : _aura is null ? [_orb.Element] : [_orb.Element, _aura.Element];
+        _avatar is null ? [] : _aura is null ? [_avatar.Element] : [_avatar.Element, _aura.Element];
 
     private VoiceState OrbState => _phase switch
     {
@@ -228,7 +233,7 @@
             return;
         }
         <li class="job-editor__msg is-agent">
-            <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+            <span class="job-editor__face"><AgentFace Look="@Mascot" /></span>
             <div class="job-editor__reply">
                 @if (message.Text.Length > 0)
                 {
@@ -266,7 +271,7 @@
         if (InCall)
         {
             <div class="job-editor__bar">
-                <VoiceOrb @ref="_orb" State="OrbState" Round Class="job-editor__bar-orb" />
+                <span class="job-editor__bar-orb"><PresenceAvatar @ref="_avatar" Direction="Look.Direction" Tone="Look.Tone" State="AvatarState" Size="PresenceAvatarSize.Fill" Reactive Decorative /></span>
                 <div class="job-editor__bar-text">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" role="status">@BarTitle</Typography>
                     @if (_phase == Phase.Listening && !Waiting && !_opening)
@@ -427,10 +432,18 @@
         catch (ApiException ex)
         {
             CallOver(ex.UserMessage);
+            BackToStartIfEmpty();
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or InvalidOperationException or JSException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
-            CallOver("We couldn't start the voice chat. Check your connection and try again.");
+            CallOver("We couldn't reach yára to start the voice chat. Check your connection and try again, or type instead.");
+            BackToStartIfEmpty();
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or JSException)
+        {
+            // The browser side: the microphone refused or busy, or the voice service's player didn't load.
+            CallOver("The voice chat couldn't start in this browser. Check the microphone is allowed for this site, or type instead.");
+            BackToStartIfEmpty();
         }
         finally
         {
@@ -473,6 +486,7 @@
     {
         if (!InCall) return;
         CallOver("The voice chat ended. Press Talk to carry on, or type.");
+        BackToStartIfEmpty();
         StateHasChanged();
     });
 
@@ -498,6 +512,12 @@
         _confirmingDone = false;
         if (notice is not null) _notice = notice;
         _focusBox = true;
+    }
+
+    // A call that never started leaves nothing said: back to the start (the agent, Talk and Type), not an empty chat.
+    private void BackToStartIfEmpty()
+    {
+        if (_messages.Count == 0 && _forms.Count == 0) _started = false;
     }
 
     private async Task EndCallAsync()

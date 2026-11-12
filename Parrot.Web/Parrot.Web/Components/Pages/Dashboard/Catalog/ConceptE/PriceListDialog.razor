@@ -99,7 +99,7 @@
                         {
                             <li class="price-list__preview-row">
                                 <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="price-list__preview-name">@line.Name</Typography>
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(line.Price is { } price ? PriceWords.Naira(price) : "No price")</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(line.Price is { } price ? CurrencyAmount.Format(price, line.CurrencyCode ?? Currency.Code) : "No price")</Typography>
                             </li>
                         }
                     </ul>
@@ -118,6 +118,7 @@
 </Dialog>
 
 @code {
+    [CascadingParameter] public WorkspaceCurrencyValue Currency { get; set; } = WorkspaceCurrencyValue.Legacy;
     [Parameter, EditorRequired] public bool Open { get; set; }
 
     /// <summary>The tab it opens on.</summary>
@@ -205,8 +206,11 @@
         await DoneAsync(lines, new ReviewSource(ImportSource.Paste, []));
     }
 
-    private Task DoneAsync(IReadOnlyList<PriceListLine> lines, ReviewSource source) =>
-        OnRead.InvokeAsync(([.. lines.Select((line, index) => ReviewDraft.FromLine(line, index, Items))], source));
+    private Task DoneAsync(IReadOnlyList<PriceListLine> lines, ReviewSource source)
+    {
+        if (!Currency.Ready) { _error = Currency.Problem ?? "Wait for the business currency to load."; return Task.CompletedTask; }
+        return OnRead.InvokeAsync(([.. lines.Select((line, index) => ReviewDraft.FromLine(line with { CurrencyCode = line.CurrencyCode ?? Currency.Code }, index, Items))], source));
+    }
 
     private async Task ReadPhotoAsync(InputFileChangeEventArgs e)
     {

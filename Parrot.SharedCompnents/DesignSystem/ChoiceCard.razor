@@ -1,0 +1,59 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One choice in a list of them, as a card (designer, 11 November 2026, for who an agent brings in): a ring for one
+   of several, a box for any of several, the choice's name and one line under it, and optionally something before
+   the words (a person's avatar). A chosen card can open what it needs below (a role to pick), outside the button so
+   that can be used too. Looks like the question form's choices, larger: for a dialog's few big decisions.
+   A disabled card says why in its line. *@
+<div class="@ClassName">
+    <RowButton Class="ds-choice-card__button" Disabled="Disabled" OnClick="OnSelect"
+               role="@(Multiple ? "checkbox" : "radio")" aria-checked="@(Picked ? "true" : "false")">
+        <span class="@($"ds-choice-card__mark {(Multiple ? "is-box" : "is-ring")}")" aria-hidden="true">
+            @if (Picked)
+            {
+                @if (Multiple) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> } else { <span class="ds-choice-card__dot"></span> }
+            }
+        </span>
+        @if (Leading is not null)
+        {
+            <span class="ds-choice-card__leading" aria-hidden="true">@Leading</span>
+        }
+        <span class="ds-choice-card__text">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@Label</Typography>
+            @if (Description is { Length: > 0 })
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@Description</Typography>
+            }
+        </span>
+    </RowButton>
+    @if (Picked && ChildContent is not null)
+    {
+        <div class="ds-choice-card__more">@ChildContent</div>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    /// <summary>One line under the name: what it means, or why it can't be chosen.</summary>
+    [Parameter] public string? Description { get; set; }
+
+    [Parameter] public bool Picked { get; set; }
+
+    /// <summary>Any of several (a box) rather than one of several (a ring).</summary>
+    [Parameter] public bool Multiple { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>Before the words: a person's avatar, an icon.</summary>
+    [Parameter] public RenderFragment? Leading { get; set; }
+
+    /// <summary>What the choice opens once chosen, under it (a role to pick).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    [Parameter] public EventCallback OnSelect { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    private string ClassName => string.Join(' ', new[] { "ds-choice-card", Picked ? "is-picked" : null, Disabled ? "is-disabled" : null, Class }.Where(c => c is not null));
+}

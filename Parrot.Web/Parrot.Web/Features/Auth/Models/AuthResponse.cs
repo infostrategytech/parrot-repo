@@ -37,6 +37,12 @@ public class AuthResponse
 
     public bool Can(string permission) => IsOwner || Permissions.Contains(permission);
 
+    /// <summary>
+    /// Set instead of a session (no token) when the account has two-factor authentication on: the sign-in waits for
+    /// its code (Features/Auth/TwoFactor). The API doesn't send this yet.
+    /// </summary>
+    public Parrot.Web.Features.Auth.TwoFactor.TwoFactorChallenge? TwoFactor { get; set; }
+
     /// <summary>Whether this session passes an access rule (Parrot.SharedComponents.Layout.AccessRules).</summary>
     public bool Allows(string rule) => Parrot.SharedComponents.Layout.AccessRules.Allows(rule, IsOwner, Can);
 }

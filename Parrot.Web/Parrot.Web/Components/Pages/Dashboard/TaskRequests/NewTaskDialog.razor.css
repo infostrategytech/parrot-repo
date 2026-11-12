@@ -1,3 +1,4 @@
+.new-task__form-fields { min-width: 0; margin: var(--spacing-none); padding: var(--spacing-none); border: 0; }
 /* Adding or editing a task: the sentence first, what's been added under it, the add-ons last. */
 .new-task {
   /* Gaps in the token set: no border-width or item-column sizes. */

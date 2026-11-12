@@ -1,0 +1,116 @@
+.agent-avatar-chooser {
+  /* Picker cells, selection rings and colour dots have no Figma size tokens. */
+  --ds-avatar-tile-height: 100px;
+  --ds-avatar-tile-ring: 2px;
+  --ds-avatar-choice-touch: 44px;
+  --ds-avatar-dot: 30px;
+  display: grid;
+  gap: var(--spacing-2xl);
+}
+.agent-avatar-chooser__grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--spacing-md); }
+.agent-avatar-chooser__grid ::deep .agent-avatar-tile {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  min-height: var(--ds-avatar-tile-height);
+  padding: var(--spacing-md) var(--spacing-sm);
+  color: var(--colors-text-secondary);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  transition: background var(--ds-motion-fast) ease, border-color var(--ds-motion-fast) ease;
+}
+.agent-avatar-chooser__grid ::deep .agent-avatar-tile:hover:not(:disabled) { background: var(--colors-interaction-hover); border-color: var(--colors-accent-brand-border); }
+.agent-avatar-chooser__grid ::deep .agent-avatar-tile.is-selected { color: var(--colors-text-primary); background: var(--colors-accent-brand-subtle); border-color: var(--colors-brand-primary); box-shadow: inset 0 0 0 var(--ds-hairline) var(--colors-brand-primary); }
+.agent-avatar-chooser__grid ::deep .agent-avatar-tile:focus-visible { outline: var(--ds-avatar-tile-ring) solid var(--colors-surface-ring); outline-offset: var(--spacing-2xs); }
+.agent-avatar-chooser__grid ::deep .agent-avatar-tile:disabled { opacity: 0.5; cursor: not-allowed; }
+.agent-avatar-tile__image { display: flex; align-items: center; justify-content: center; }
+.agent-avatar-tile__check { position: absolute; top: var(--spacing-sm); right: var(--spacing-sm); color: var(--colors-icon-brand); }
+.agent-avatar-chooser__colours { display: grid; gap: var(--spacing-md); }
+.agent-avatar-chooser__colour-label { display: grid; gap: var(--spacing-xs); }
+.agent-avatar-chooser__colour-label ::deep h3, .agent-avatar-chooser__colour-label ::deep p { margin: 0; }
+.agent-avatar-chooser__colour-label ::deep p { color: var(--colors-text-muted); }
+
+/* Fourteen bright colours as round swatches, two even rows; the chosen one gets a ring in its own colour and a tick. */
+.agent-avatar-chooser__swatches { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); max-width: calc(7 * var(--ds-avatar-choice-touch) + 6 * var(--spacing-xs)); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch {
+  --swatch: var(--colors-accent-violet-solid);
+  --swatch-ink: var(--colors-accent-violet-on-solid);
+  display: grid;
+  place-items: center;
+  width: var(--ds-avatar-choice-touch);
+  height: var(--ds-avatar-choice-touch);
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-full);
+}
+.agent-avatar-chooser__swatches ::deep .avatar-swatch__dot {
+  display: grid;
+  place-items: center;
+  width: var(--ds-avatar-dot);
+  height: var(--ds-avatar-dot);
+  color: var(--swatch-ink);
+  background: var(--swatch);
+  border-radius: var(--radius-radius-full);
+  transition: transform var(--ds-motion-fast) var(--ds-motion-ease), box-shadow var(--ds-motion-fast) ease;
+}
+.agent-avatar-chooser__swatches ::deep .avatar-swatch:hover:not(:disabled) .avatar-swatch__dot { transform: scale(1.1); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch:active:not(:disabled) .avatar-swatch__dot { transform: scale(0.94); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch.is-selected .avatar-swatch__dot { box-shadow: 0 0 0 var(--ds-avatar-tile-ring) var(--colors-surface-card), 0 0 0 calc(var(--ds-avatar-tile-ring) * 2) var(--swatch); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch:focus-visible { outline: var(--ds-avatar-tile-ring) solid var(--colors-surface-ring); outline-offset: 0; }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch:disabled { opacity: 0.5; cursor: not-allowed; }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--coral { --swatch: var(--colors-brand-secondary); --swatch-ink: var(--colors-brand-secondary-foreground); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--red { --swatch: var(--colors-accent-red-solid); --swatch-ink: var(--colors-accent-red-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--orange { --swatch: var(--colors-accent-orange-solid); --swatch-ink: var(--colors-accent-orange-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--amber { --swatch: var(--colors-accent-amber-solid); --swatch-ink: var(--colors-accent-amber-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--yellow { --swatch: var(--colors-accent-yellow-solid); --swatch-ink: var(--colors-accent-yellow-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--lime { --swatch: var(--colors-accent-lime-solid); --swatch-ink: var(--colors-accent-lime-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--green { --swatch: var(--colors-accent-green-solid); --swatch-ink: var(--colors-accent-green-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--teal { --swatch: var(--colors-accent-teal-solid); --swatch-ink: var(--colors-accent-teal-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--sky { --swatch: var(--colors-accent-sky-solid); --swatch-ink: var(--colors-accent-sky-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--blue { --swatch: var(--colors-accent-blue-solid); --swatch-ink: var(--colors-accent-blue-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--indigo { --swatch: var(--colors-accent-indigo-solid); --swatch-ink: var(--colors-accent-indigo-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--violet { --swatch: var(--colors-accent-violet-solid); --swatch-ink: var(--colors-accent-violet-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--fuchsia { --swatch: var(--colors-accent-fuchsia-solid); --swatch-ink: var(--colors-accent-fuchsia-on-solid); }
+.agent-avatar-chooser__swatches ::deep .avatar-swatch--pink { --swatch: var(--colors-accent-pink-solid); --swatch-ink: var(--colors-accent-pink-on-solid); }
+
+/* Compact: under a big preview. Characters in two even rows of six that shrink to fit a phone
+   (never below a 44px touch), colours in two rows of seven, all centred. */
+.agent-avatar-chooser.is-compact {
+  /* Picker cells have no Figma size tokens. */
+  --ds-avatar-shape: 52px;
+  --ds-avatar-shape-face: 34px;
+  justify-items: center;
+  gap: var(--spacing-lg);
+}
+.agent-avatar-chooser__shapes { display: grid; grid-template-columns: repeat(6, minmax(var(--ds-avatar-choice-touch), var(--ds-avatar-shape))); gap: var(--spacing-xs); justify-content: center; max-width: 100%; }
+.agent-avatar-chooser__shapes ::deep .avatar-shape {
+  display: grid;
+  place-items: center;
+  aspect-ratio: 1;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-radius-xl);
+  transition: background var(--ds-motion-fast) ease, box-shadow var(--ds-motion-fast) ease;
+}
+.agent-avatar-chooser__shapes ::deep .avatar-shape:hover:not(:disabled) { background: var(--colors-interaction-hover); }
+.agent-avatar-chooser__shapes ::deep .avatar-shape.is-selected { background: var(--colors-accent-brand-subtle); box-shadow: inset 0 0 0 var(--ds-avatar-tile-ring) var(--colors-brand-primary); }
+.agent-avatar-chooser__shapes ::deep .avatar-shape:focus-visible { outline: var(--ds-avatar-tile-ring) solid var(--colors-surface-ring); outline-offset: var(--spacing-2xs); }
+.agent-avatar-chooser__shapes ::deep .avatar-shape:disabled { opacity: 0.5; cursor: not-allowed; }
+.avatar-shape__face { display: grid; width: var(--ds-avatar-shape-face); height: var(--ds-avatar-shape-face); }
+.agent-avatar-chooser.is-compact .agent-avatar-chooser__swatches { justify-content: center; }
+
+@media (max-width: 760px) {
+  .agent-avatar-chooser__grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-sm); }
+  .agent-avatar-chooser__swatches { gap: 0; max-width: calc(7 * var(--ds-avatar-choice-touch)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-avatar-chooser__grid ::deep .agent-avatar-tile,
+  .agent-avatar-chooser__shapes ::deep .avatar-shape { transition: none; }
+  .agent-avatar-chooser__swatches ::deep .avatar-swatch__dot { transition: none; transform: none !important; }
+}

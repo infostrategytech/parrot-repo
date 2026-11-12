@@ -2,12 +2,22 @@
 
 @* One settings card: a title and a line about it, the fields, and a footer
    with the one action. Shaped like Aurora's editor sections and its channel
-   cards, so every tab is made of the same thing. *@
+   cards, so every tab is made of the same thing. A card with nothing under its
+   title (two-factor while it's off) is just its header, with the card's padding
+   all round. *@
 
 <section class="@(Danger ? "settings-card settings-card--danger" : "settings-card")">
-    <header class="settings-card__header">
+    @if (!string.IsNullOrWhiteSpace(Title) || HeaderAction is not null)
+    {
+    <header class="@(ChildContent is null && Footer is null ? "settings-card__header is-alone" : "settings-card__header")">
         <div class="settings-card__titles">
-            <Typography TextStyle="TextStyle.BodyDefaultBold" As="h2" Prose>@Title</Typography>
+            @if (!string.IsNullOrWhiteSpace(Title))
+            {
+                <div class="settings-card__title">
+                    <Typography TextStyle="TextStyle.BodyLargeSemibold" As="h2" Prose>@Title</Typography>
+                    @TitleBadge
+                </div>
+            }
             @if (!string.IsNullOrWhiteSpace(Description))
             {
                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="settings-card__description">
@@ -20,23 +30,33 @@
             <div class="settings-card__header-action">@HeaderAction</div>
         }
     </header>
+    }
 
-    <div class="settings-card__body">
-        @ChildContent
-    </div>
+    @if (ChildContent is not null)
+    {
+        <div class="settings-card__body">
+            @ChildContent
+        </div>
+    }
 
     @if (Footer is not null)
     {
-        <footer class="settings-card__footer">@Footer</footer>
+        <footer class="@(FooterUnderForm ? "settings-card__footer settings-card__footer--form" : "settings-card__footer")">@Footer</footer>
     }
 </section>
 
 @code {
-    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    /// <summary>Left out where it would only repeat the section's own name.</summary>
+    [Parameter] public string? Title { get; set; }
+    /// <summary>Beside the title: a status such as two-factor's On or Off.</summary>
+    [Parameter] public RenderFragment? TitleBadge { get; set; }
     [Parameter] public string? Description { get; set; }
     [Parameter] public RenderFragment? HeaderAction { get; set; }
-    [Parameter, EditorRequired] public RenderFragment? ChildContent { get; set; }
+    /// <summary>The card's fields or rows. Null leaves the card as its header alone.</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public RenderFragment? Footer { get; set; }
+    /// <summary>The action sits under a narrow form, where the eye ends, rather than at the card's far edge.</summary>
+    [Parameter] public bool FooterUnderForm { get; set; }
     /// <summary>Colours the edge for irreversible actions.</summary>
     [Parameter] public bool Danger { get; set; }
 }

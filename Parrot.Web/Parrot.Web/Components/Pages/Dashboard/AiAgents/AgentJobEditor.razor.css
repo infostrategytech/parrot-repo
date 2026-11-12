@@ -12,8 +12,8 @@
      the text's measure, the motion of a just-written job description, the
      conversation's height in the window, the avatar beside the agent's words,
      how wide a message runs, the bar's orb, and the typing dots. */
-  --ds-job-editor-orb: 96px;
-  --ds-job-editor-stage: 136px;
+  --ds-job-editor-orb: 112px;
+  --ds-job-editor-stage: 148px;
   --ds-job-editor-orb-small: 56px;
   --ds-job-editor-stage-small: 72px;
   --ds-job-editor-voice: 412px;
@@ -100,7 +100,7 @@
   width: var(--ds-job-editor-stage);
   height: var(--ds-job-editor-stage);
 }
-.job-editor__voice ::deep .ds-voice-orb.job-editor__orb { --ds-voice-orb-size: var(--ds-job-editor-orb); }
+.job-editor__orb { display: grid; width: var(--ds-job-editor-orb); height: var(--ds-job-editor-orb); }
 .job-editor__voice-text { display: grid; gap: var(--spacing-xs); justify-items: center; max-width: var(--ds-job-editor-measure); }
 .job-editor__voice-text ::deep p { margin: var(--spacing-none); }
 .job-editor__voice-text ::deep p:first-child { color: var(--colors-text-primary); }
@@ -134,9 +134,13 @@
 .job-editor__log {
   flex: 1;
   min-height: 0;
-  padding: var(--spacing-xl);
+  padding: var(--spacing-2xl) var(--spacing-xl) var(--spacing-xl);
   overflow-y: auto;
   overscroll-behavior: contain;
+  /* Older messages dissolve into the card's top edge as they scroll up, under the speaking glow, instead of being cut
+     off at it (designer, 10 November 2026). The fade fits the top padding, so nothing fades until the chat scrolls. */
+  -webkit-mask-image: linear-gradient(to bottom, transparent, var(--colors-surface-card) var(--spacing-2xl));
+  mask-image: linear-gradient(to bottom, transparent, var(--colors-surface-card) var(--spacing-2xl));
 }
 /* The chat and its approval scroll with no bar showing (designer, 19 October 2026): the
    conversation is the focus. The wheel, a trackpad and the keyboard still scroll them. */
@@ -170,9 +174,14 @@
 /* The messages, in the test chat's colours: the agent in the soft brand tint
    on the left, beside its face; the owner in solid brand on the right. */
 .job-editor__msg { display: flex; gap: var(--spacing-sm); align-items: flex-start; min-width: 0; animation: job-editor-in var(--ds-motion-base) var(--ds-motion-enter) both; }
-.job-editor__msg > img { flex: none; width: var(--ds-job-editor-face); height: var(--ds-job-editor-face); object-fit: cover; border-radius: var(--radius-radius-full); }
+.job-editor__msg > .job-editor__face { display: grid; flex: none; width: var(--ds-job-editor-face); height: var(--ds-job-editor-face); }
 .job-editor__msg.is-owner { justify-content: flex-end; }
 .job-editor__reply { display: grid; flex: 1; gap: var(--spacing-sm); justify-items: start; min-width: 0; }
+/* What they sent: files above their words, both at the right. */
+.job-editor__sent { display: grid; gap: var(--spacing-xs); justify-items: end; min-width: 0; max-width: var(--ds-job-editor-bubble); }
+.job-editor__files { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); justify-content: flex-end; margin: 0; padding: 0; list-style: none; }
+/* Picked, waiting in the box: at its start, above the words. */
+.job-editor__files.is-picked { justify-content: flex-start; padding: var(--spacing-xs) var(--spacing-xs) 0; }
 
 .job-editor__bubble {
   max-width: var(--ds-job-editor-bubble);
@@ -295,7 +304,7 @@
 }
 
 .job-editor__bar { display: flex; flex-wrap: wrap; gap: var(--spacing-sm) var(--spacing-md); align-items: center; }
-.job-editor__bar ::deep .ds-voice-orb.job-editor__bar-orb { --ds-voice-orb-size: var(--ds-job-editor-bar-orb); flex: none; }
+.job-editor__bar-orb { display: grid; flex: none; width: var(--ds-job-editor-bar-orb); height: var(--ds-job-editor-bar-orb); }
 .job-editor__bar-text { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
 .job-editor__bar-text ::deep p { margin: var(--spacing-none); color: var(--colors-text-primary); }
 .job-editor__bar-text ::deep p.job-editor__muted { color: var(--colors-text-muted); }

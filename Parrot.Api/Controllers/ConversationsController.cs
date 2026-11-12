@@ -241,6 +241,17 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
         DateTime? controlUntil = request.Minutes is { } m ? DateTime.UtcNow.AddMinutes(m) : null;
         await humanTakeover.SetAsync(Owner, connectionId, sender, controlUntil, cancellationToken);
+        try
+        {
+            string eventText = controlUntil is { } until
+                ? $"A team member took over for {request.Minutes} minute{(request.Minutes == 1 ? "" : "s")}."
+                : "A team member took over the conversation.";
+            await store.WriteSystemEventAsync(Owner, connectionId, sender, eventText, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "system_event_write_failed ConnectionId={ConnectionId} Sender={Sender} Event=takeover", connectionId, sender);
+        }
         return Ok(new { ControlUntil = controlUntil });
     }
 
@@ -253,6 +264,14 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
         await humanTakeover.ClearAsync(Owner, connectionId, sender, cancellationToken);
+        try
+        {
+            await store.WriteSystemEventAsync(Owner, connectionId, sender, "The AI agent resumed the conversation.", cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "system_event_write_failed ConnectionId={ConnectionId} Sender={Sender} Event=return", connectionId, sender);
+        }
         return NoContent();
     }
 

@@ -1,47 +1,24 @@
-/* The avatar and its actions on one line; the fields in Aurora's two-column
-   editor grid beneath. */
+/* You at the top, centred, as an agent is shown when it's made; your details across the card under it. */
+.profile {
+  /* Gap in the token set: no field-width scale. Wide enough for "+234" and its chevron. */
+  --ds-profile-country: 132px;
 
-.profile__avatar-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-md);
-  align-items: center;
-}
-
-.profile__avatar-actions { display: flex; gap: var(--spacing-sm); }
-::deep .profile__hint { color: var(--colors-text-subtle); }
-
-.profile__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-lg);
-  align-items: start;
+  gap: var(--spacing-3xl);
+  padding-block: var(--spacing-sm);
 }
 
-.profile__full { grid-column: 1 / -1; }
+.profile__you { display: grid; gap: var(--spacing-sm); justify-items: center; text-align: center; min-width: 0; }
+.profile__you ::deep p { margin: var(--spacing-none); overflow-wrap: anywhere; }
+.profile__you ::deep .profile__name { color: var(--colors-text-primary); }
+.profile__you ::deep .profile__name.is-empty { color: var(--colors-text-muted); }
 
-/* The file input covers the Upload button exactly and is see-through, so a
-   click anywhere on the button opens the picker. Its focus ring is drawn on
-   the button, where it can be seen. */
-.profile__upload {
-  position: relative;
-  display: inline-flex;
-  border-radius: var(--radius-radius-full);
-}
+/* The photo is changed where it's seen: the shared AvatarPicker. */
+.profile__you ::deep .profile__photo { margin-bottom: var(--spacing-xs); }
 
-::deep .profile__upload-input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
-
-::deep .profile__upload-input:disabled { cursor: default; }
-
-.profile__upload:has(.profile__upload-input:focus-visible) {
-  outline: var(--ds-focus-ring-width) solid
-    color-mix(in srgb, var(--colors-interaction-focus) var(--ds-focus-ring-strength), transparent);
-  outline-offset: var(--ds-focus-ring-offset);
+.profile__form { display: grid; gap: var(--spacing-lg); min-width: 0; }
+.profile__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-lg); align-items: start; }
+.profile__phone { display: grid; grid-template-columns: var(--ds-profile-country) minmax(0, 1fr); gap: var(--spacing-sm); align-items: start; }
+@media (max-width: 760px) {
+  .profile__pair { grid-template-columns: minmax(0, 1fr); }
 }

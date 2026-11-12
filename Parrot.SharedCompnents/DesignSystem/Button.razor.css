@@ -157,7 +157,7 @@
 
 .ds-button--destructive {
   background: var(--colors-feedback-destructive);
-  color: var(--colors-text-inverse);
+  color: var(--colors-feedback-destructive-foreground);
 }
 
 /* Aurora has no destructive-hover colour; Figma darkens the red with a flat
@@ -199,7 +199,7 @@
 .ds-button--primary.is-busy:disabled { background: var(--colors-brand-primary); color: var(--colors-brand-primary-foreground); }
 .ds-button--secondary.is-busy:disabled { background: var(--colors-surface-card); box-shadow: inset 0 0 0 var(--ds-button-border-width) var(--colors-surface-border); color: var(--colors-text-primary); }
 .ds-button--ghost.is-busy:disabled { background: transparent; color: var(--colors-text-primary); }
-.ds-button--destructive.is-busy:disabled { background: var(--colors-feedback-destructive); color: var(--colors-text-inverse); }
+.ds-button--destructive.is-busy:disabled { background: var(--colors-feedback-destructive); color: var(--colors-feedback-destructive-foreground); }
 
 .ds-button__busy { --ds-button-busy: 22px; }
 .ds-button--small .ds-button__busy,

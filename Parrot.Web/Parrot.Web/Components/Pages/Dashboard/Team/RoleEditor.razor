@@ -1,104 +1,131 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Team
 @using Parrot.Web.Features.Dashboard.Team
 
-@* One of the owner's own roles: a name and its permissions. Built-in roles
-   never open here; they are duplicated into a role of the owner's own first.
-   Saving changes what everyone holding the role may do, on their next action. *@
-
-<Dialog Open="true"
-        Title="@(Role is null ? "Create a role" : $"Edit {Role.Name}")"
-        ConfirmLabel="@(Role is null ? "Create role" : "Save role")"
-        BusyLabel="Saving…"
-        Busy="@_saving"
-        ConfirmDisabled="@(!CanSave)"
-        OnConfirm="SaveAsync"
-        OnCancel="OnCancel">
-    <GlyphContent><Icon Name="IconName.RiShieldCheckFill" Size="IconSize.Md" /></GlyphContent>
-    <Body>
-        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="invite__lede">
-            @(Role is { Holders: > 0 }
-                ? $"{Role.Holders} {(Role.Holders == 1 ? "person holds" : "people hold")} this role. Changes apply on their next action."
-                : "Only your team sees your roles. The name can match a built-in role; yours are always marked Custom.")
-        </Typography>
-
-        <div class="invite__form">
-            <Input FloatingLabel="Role name" Id="role-name" @bind-Value="_name" maxlength="64" required />
-        </div>
-
-        <section class="invite__permissions" aria-label="Permissions">
-            <Typography TextStyle="TextStyle.Small12Semibold" As="h3">Permissions</Typography>
-            <div class="invite__permission-list">
-                @foreach (TeamOption permission in Catalog.Permissions)
-                {
-                    <Checkbox State="@(_permissions.Contains(permission.Key) ? CheckboxState.Checked : CheckboxState.Unchecked)"
-                              StateChanged="@(state => Toggle(permission.Key, state))"
-                              Label="@permission.Label" />
-                }
-            </div>
-        </section>
-
-        @if (_error is not null)
+@* Roles use the same form shell as invitations. Built-ins are never mutable, even if passed here directly. *@
+<ContentModal Open="true" Title="@(ReadOnly ? TeamWords.RoleName(Role!) : Role is null ? "Create a role" : $"Edit {Role.Name}")"
+              Subtitle="@Subtitle" Busy="_saving" OnClose="RequestCloseAsync" OnSubmit="SaveAsync"
+              InitialFocusId="@(ReadOnly ? null : _focusId)" FocusKey="@_focusRevision.ToString()">
+    <ChildContent>
+        <fieldset class="role-editor" disabled="@ReadOnly">
+            @if (!ReadOnly)
+            {
+                <Input FloatingLabel="Role name" Id="role-name" Value="@_name" ValueChanged="value => _name = value"
+                       maxlength="64" required Error="@(NameProblem is not null)" HelperText="@NameProblem" />
+            }
+            <section class="role-editor__permissions" id="role-editor-permissions" role="group" aria-labelledby="role-editor-permissions-title" tabindex="-1">
+                <div class="role-editor__permissions-head">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3" id="role-editor-permissions-title">Permissions</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="role-editor__total">@($"{ListedCount} of {Catalog.Permissions.Count}")</Typography>
+                </div>
+                @* By the part of yára each opens (designer, 8 November 2026): a whole area in one tick, or open it to choose
+                   one by one. Closed to start, so the list reads as five lines; open where a role has only some. *@
+                <div class="role-editor__groups">
+                    @foreach (var group in TeamWords.PermissionGroups(Catalog.Permissions))
+                    {
+                        var current = group;
+                        <ChecklistGroup Title="@current.Title" Options="@([.. current.Permissions.Select(p => new ChecklistGroup.Option(p.Key, p.Label))])"
+                                        Selected="_permissions" OnChange="change => Set(change.Keys, change.On)" Disabled="ReadOnly"
+                                        Open="@(ReadOnly || _openGroups.Contains(current.Title))" OpenChanged="open => ToggleGroup(current.Title, open)" />
+                    }
+                </div>
+                @if (PermissionProblem is not null) { <InlineError Message="@PermissionProblem" /> }
+            </section>
+            @if (UnlistedPermissions.Any())
+            {
+                <InlineError Tone="InlineErrorTone.Info" Message="Some existing permissions aren't listed. They will be kept unchanged." />
+            }
+            @if (_error is not null) { <InlineError Message="@_error" /> }
+        </fieldset>
+    </ChildContent>
+    <Footer Context="formId">
+        <Button Variant="ButtonVariant.Secondary" @onclick="RequestCloseAsync">@(ReadOnly ? "Close" : "Cancel")</Button>
+        @if (!ReadOnly)
         {
-            <InlineError Message="@_error" />
+            <Button Type="ButtonType.Submit" form="@formId" Busy="_saving">@(_saving ? "Saving…" : Role is null ? "Create role" : "Save role")</Button>
         }
-    </Body>
+    </Footer>
+</ContentModal>
+<Dialog Open="_discard" Title="Discard these changes?" Type="DialogType.Destructive" ConfirmLabel="Discard changes" CancelLabel="Keep editing"
+        FocusTargetId="role-keep-editing" CancelButtonId="role-keep-editing" OnCancel="KeepEditing" OnConfirm="DiscardAsync">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Your changes to this role won't be saved.</Typography></Body>
 </Dialog>
 
 @code {
     [Parameter, EditorRequired] public TeamCatalog Catalog { get; set; } = default!;
-
-    /// <summary>One of the owner's own roles to change; null to create one.</summary>
     [Parameter] public TeamRole? Role { get; set; }
-
+    [Parameter] public bool CopyCreated { get; set; }
     [Parameter] public EventCallback OnCancel { get; set; }
-
     [Parameter] public EventCallback OnSaved { get; set; }
-
     [Inject] private TeamClient Team { get; set; } = default!;
 
     private readonly HashSet<string> _permissions = [];
-    private string? _name;
-    private bool _saving;
-    private string? _error;
-
-    private bool CanSave => !_saving && !string.IsNullOrWhiteSpace(_name) && _permissions.Count > 0;
+    private string? _name, _error;
+    private string _initialDraft = "", _focusId = "role-name";
+    private int _focusRevision;
+    private bool _saving, _tried, _discard;
+    private bool ReadOnly => Role is { IsCustom: false };
+    private string? NameProblem => !_tried ? null : string.IsNullOrWhiteSpace(_name) ? "Enter a role name." : _name.Trim().Length > 64 ? "Use 64 characters or fewer." : null;
+    private string? PermissionProblem => _tried && _permissions.Count == 0 ? "Select at least one permission." : null;
+    private IEnumerable<string> UnlistedPermissions => _permissions.Where(key => Catalog.Permissions.All(p => p.Key != key));
+    private string Subtitle => ReadOnly ? "Built-in roles can't be edited. Duplicate this role to make your own."
+        : CopyCreated ? "Your copy has been created. Rename it and review its permissions."
+        : Role is { Holders: > 0 } ? $"Changes affect {Role.Holders} {(Role.Holders == 1 ? "person" : "people")} using this role on their next action."
+        : "Choose what someone with this role can do.";
 
     protected override void OnInitialized()
     {
         _name = Role?.Name;
         if (Role is not null) _permissions.UnionWith(Role.Permissions);
+        foreach (var group in TeamWords.PermissionGroups(Catalog.Permissions))
+        {
+            var on = group.Permissions.Count(p => _permissions.Contains(p.Key));
+            if (on > 0 && on < group.Permissions.Count) _openGroups.Add(group.Title);
+        }
+        _initialDraft = DraftStamp();
     }
+    private string DraftStamp() => System.Text.Json.JsonSerializer.Serialize(new { Name = (_name ?? "").Trim(), Permissions = _permissions.Order(StringComparer.Ordinal).ToArray() });
+    // Which areas are open; an existing role opens the ones it has only some of, so its exceptions show.
+    private readonly HashSet<string> _openGroups = [];
+    private int ListedCount => Catalog.Permissions.Count(p => _permissions.Contains(p.Key));
 
-    private void Toggle(string key, CheckboxState state)
+    private void Set(IReadOnlyList<string> keys, bool on)
     {
-        if (state == CheckboxState.Checked) _permissions.Add(key);
-        else _permissions.Remove(key);
+        if (_saving || ReadOnly) return;
+        foreach (var key in keys) { if (on) _permissions.Add(key); else _permissions.Remove(key); }
     }
 
+    // One permission on or off.
+    private void Toggle(string key, CheckboxState state) => Set([key], state == CheckboxState.Checked);
+
+    private void ToggleGroup(string title, bool open) { if (open) _openGroups.Add(title); else _openGroups.Remove(title); }
+    private async Task RequestCloseAsync()
+    {
+        if (_saving) return;
+        if (!ReadOnly && _initialDraft != DraftStamp()) { _discard = true; return; }
+        await OnCancel.InvokeAsync();
+    }
+    private void KeepEditing() => _discard = false;
+    private Task DiscardAsync() { _discard = false; return _saving ? Task.CompletedTask : OnCancel.InvokeAsync(); }
     private async Task SaveAsync()
     {
-        if (!CanSave) return;
+        if (_saving || ReadOnly) return;
+        _tried = true; _error = null;
+        if (NameProblem is not null || PermissionProblem is not null)
+        {
+            _focusId = NameProblem is not null ? "role-name" : "role-editor-permissions"; _focusRevision++;
+            return;
+        }
         _saving = true;
-        _error = null;
         try
         {
-            // In the catalog's order, so the role reads the same wherever it is shown.
-            List<string> permissions = Catalog.Permissions.Select(p => p.Key).Where(_permissions.Contains).ToList();
+            // Preserve existing keys missing from a partial/older catalog; never silently strip access.
+            List<string> permissions = [.. Catalog.Permissions.Where(p => _permissions.Contains(p.Key)).Select(p => p.Key), .. UnlistedPermissions];
             if (Role is null) await Team.CreateRoleAsync(_name!.Trim(), permissions);
             else await Team.UpdateRoleAsync(Role.Id, _name!.Trim(), permissions);
             await OnSaved.InvokeAsync();
         }
-        catch (ApiException ex)
-        {
-            _error = ex.UserMessage;
-        }
-        catch (Exception)
-        {
-            _error = "We could not save the role. Try again.";
-        }
-        finally
-        {
-            _saving = false;
-        }
+        catch (ApiException ex) { _error = ex.UserMessage; }
+        catch (Exception) { _error = "We couldn't save the role. Try again."; }
+        finally { _saving = false; }
     }
 }

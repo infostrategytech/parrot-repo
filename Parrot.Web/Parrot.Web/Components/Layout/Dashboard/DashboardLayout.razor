@@ -8,6 +8,8 @@
 @inject Parrot.Web.Features.Dashboard.Team.PendingInvite PendingInvite
 @inject Parrot.Web.Features.Dashboard.Workspace.WorkspacePrompt WorkspacePrompt
 @inject Parrot.SharedComponents.Services.ToastService Toasts
+@inject Parrot.Web.Components.Pages.Dashboard.Settings.SettingsReturn SettingsReturn
+@inject Parrot.Web.Features.Profile.IProfilePhoto Photo
 @implements IDisposable
 
 @* Aurora's shell, fed by Parrot's session. The rail, the workspace switcher
@@ -18,6 +20,7 @@
 <ActivityBar />
 
 <AppShell BrandName="yára"
+          UsePageBackground
           WorkspaceId="@(AuthState.CurrentUser?.CurrentWorkspaceId ?? "")"
           WorkspaceName="@(AuthState.CurrentUser?.BusinessName ?? "")"
           WorkspaceLogoUrl="@AuthState.CurrentUser?.LogoUrl"
@@ -30,15 +33,35 @@
           UserName="@(AuthState.CurrentUser?.Email ?? "")"
           UserInitials="@Initials.From(AuthState.CurrentUser?.Email)"
           UserSeed="@UserSeed"
+          UserImageUrl="@Photo.Url"
           InboxUnread="@Unread.Total"
-          TasksNeedYou="@_tasksNeedYou">
-    <UserMenu>
-        <UserMenuItem Label="Settings" Glyph="IconName.RiSettings4Fill" Href="/dashboard/settings" />
-        @if (AuthState.CurrentUser?.Allows(AccessRules.Team) ?? false)
+          TasksNeedYou="@_tasksNeedYou"
+          ShowThemeToggle="false">
+    <RailNotifications><Parrot.Web.Components.Layout.Notifications.NotificationsBell /></RailNotifications>
+    <BusinessMenu>
+        @* The business's own settings and people, under its name (designer, 11 November 2026). Each opens the one
+           Settings page at its section; a teammate sees only what their role reaches. *@
+        @if (CanBusiness)
         {
-            <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/team" />
+            <UserMenuItem Label="Business settings" Glyph="IconName.RiStore2Fill" Href="/dashboard/settings/business" />
         }
-        <UserMenuItem Label="Business setup" Glyph="IconName.RiStore2Fill" Href="/dashboard/business-setup" />
+        @if (CanTeam)
+        {
+            <UserMenuItem Label="Team" Glyph="IconName.RiTeamFill" Href="/dashboard/settings/team" />
+            <UserMenuItem Label="Invite people" Glyph="IconName.RiUserAddFill" Href="/dashboard/settings/team?invite=1" />
+        }
+        @if (CanBusiness)
+        {
+            <UserMenuItem Label="Plan & billing" Glyph="IconName.RiBankCardFill" Href="/dashboard/settings/billing" />
+        }
+    </BusinessMenu>
+    <UserMenu>
+        @* Who you are, and signing out (designer, 1 November 2026). The business's settings and people are under its
+           name at the top (11 November 2026); Settings here opens the same page at your own sections. *@
+        <UserMenuItem Label="Your profile" Glyph="IconName.RiUser3Fill" Href="/dashboard/settings/profile" />
+        <UserMenuItem Label="Settings" Glyph="NavMap.Settings.Glyph" Href="@NavMap.Settings.Path" />
+        @* Help moved here from the rail, to make room for notifications (designer, 3 November 2026). Not built yet. *@
+        <UserMenuItem Label="Help Centre" Glyph="IconName.RiQuestionFill" Disabled />
         <UserMenuItem Label="@(_loggingOut ? "Signing out…" : "Sign out")"
                       Glyph="IconName.RiUserSharedFill"
                       Danger
@@ -56,8 +79,13 @@
     </ChildContent>
 </AppShell>
 
+@* New notifications pop up here, or come from the browser when yára is in another tab. *@
+<Parrot.Web.Components.Layout.Notifications.NotificationPopupHost />
+
 @* Naming a new account's workspace, and making another from the switcher. *@
 <Parrot.Web.Components.Pages.Dashboard.Dashboard.WorkspaceWelcome />
+@* Joined from an invite: the business welcomes them once. *@
+<Parrot.Web.Components.Pages.Dashboard.Dashboard.TeamWelcome />
 
 @* Before an agent: a channel for it to answer on, then, the first time, a
    few lines about the business. Teach your AI is "Teach more" from an agent. *@
@@ -86,7 +114,17 @@
         AuthState.OnChange += AuthChanged;
         Unread.Changed += UnreadChanged;
         Tasks.Changed += TasksChanged;
+        // Where Settings' "Back to app" returns: the last page here before it opened.
+        SettingsReturn.Remember(Nav.Uri);
+        Nav.LocationChanged += Moved;
+        // Your own photo on the account, kept current when Profile changes it.
+        Photo.Changed += PhotoChanged;
+        _ = Photo.ReadAsync().ContinueWith(_ => InvokeAsync(StateHasChanged), TaskScheduler.Default);
     }
+
+    private void PhotoChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void Moved(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) => SettingsReturn.Remember(args.Location);
 
     // The rail's inbox badge is the number of unread customer messages. It is kept here, not by
     // the inbox page, so it is right on every dashboard page and moves on live pushes.
@@ -123,6 +161,10 @@
             Toasts.ShowError("We could not change where you sign in. Try again.");
         }
     }
+
+    // The business menu's rows, by the same rules as the Settings sections they open.
+    private bool CanBusiness => AuthState.CurrentUser?.Allows(AccessRules.Business) ?? false;
+    private bool CanTeam => AuthState.CurrentUser?.Allows(AccessRules.Team) ?? false;
 
     // The owner opens everything; a member, what their role allows. The API
     // enforces the same rules; this keeps the rail to what can be used.
@@ -166,7 +208,11 @@
             }
             _workspaces = listed
                 .Where(w => !string.IsNullOrWhiteSpace(w.Name))
-                .Select(w => new WorkspaceOption(w.Id, w.Name!, w.LogoUrl, w.Role, w.Role == "Owner" ? null : w.TeamName ?? "Other businesses", w.IsDefault))
+                // Your own carry no tag (designer, 9 November 2026: "Owner" on every row said nothing); another
+                // business's carry your role there, in the Team page's plain words.
+                .Select(w => w.Role == "Owner"
+                    ? new WorkspaceOption(w.Id, w.Name!, w.LogoUrl, null, null, w.IsDefault)
+                    : new WorkspaceOption(w.Id, w.Name!, w.LogoUrl, Parrot.Web.Features.Dashboard.Team.TeamWords.RoleNameFromApi(w.Role), w.TeamName ?? w.Name!, w.IsDefault))
                 .ToList();
             StateHasChanged();
         }
@@ -256,5 +302,7 @@
         AuthState.OnChange -= AuthChanged;
         Unread.Changed -= UnreadChanged;
         Tasks.Changed -= TasksChanged;
+        Nav.LocationChanged -= Moved;
+        Photo.Changed -= PhotoChanged;
     }
 }

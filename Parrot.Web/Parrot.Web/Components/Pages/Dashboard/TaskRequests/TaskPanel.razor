@@ -133,7 +133,7 @@
                                                 }
                                             </span>
                                             <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="task-panel__qty">× @line.Quantity</Typography>
-                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__amount">@(line.Price is { } price ? TaskWords.Naira(price * line.Quantity) : "")</Typography>
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__amount">@(line.Price is { } price ? CurrencyAmount.Format(price * line.Quantity, task.CurrencyCode) : "")</Typography>
                                         </li>
                                     }
                                 </ul>
@@ -145,7 +145,7 @@
                                     {
                                         <li>
                                             <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@charge.Name</Typography>
-                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__amount">@(charge.Price is { } price ? TaskWords.Naira(price) : "")</Typography>
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__amount">@(charge.Price is { } price ? CurrencyAmount.Format(price, task.CurrencyCode) : "")</Typography>
                                         </li>
                                     }
                                 </ul>
@@ -154,7 +154,7 @@
                             {
                                 <div class="task-panel__total">
                                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@(task.Kind == TaskKind.Quote ? "Estimate" : "Total")</Typography>
-                                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">@TaskWords.Naira(total)</Typography>
+                                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">@CurrencyAmount.Format(total, task.CurrencyCode)</Typography>
                                 </div>
                             }
                         </div>

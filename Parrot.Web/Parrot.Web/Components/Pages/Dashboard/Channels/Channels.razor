@@ -412,7 +412,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
     protected override void OnInitialized()
     {
         AuthState.OnChange += AuthChanged;
-        _data = ChannelsState.Workspace;
+        _data = Listed(ChannelsState.Workspace);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -520,7 +520,11 @@ else if (Active is { } flow && _view == SetupView.Flow)
         }
     }
 
-    private void Refresh() => _data = ChannelsState.Workspace;
+    private void Refresh() => _data = Listed(ChannelsState.Workspace);
+
+    // The channels the capabilities list (all of them, outside the demo).
+    private ChannelWorkspace Listed(ChannelWorkspace workspace) =>
+        workspace with { Channels = [.. workspace.Channels.Where(channel => Capabilities.IsListed(channel.Id))] };
 
     /// <summary>
     /// Aurora writes progress to the server after every step. Parrot has no
@@ -819,6 +823,7 @@ else if (Active is { } flow && _view == SetupView.Flow)
         Persist();
         Toasts.Show("Webhook verified.");
     }
+
 
     /// <summary>What Meta calls back: only WhatsApp has a manual setup, so only its connection.</summary>
     private ChannelWebhook? WebhookFor(BusinessChannel channel) =>

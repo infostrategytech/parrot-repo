@@ -1,0 +1,11 @@
+@page "/dashboard/team"
+@attribute [RequiresAccess(AccessRules.Team)]
+@layout DashboardLayout
+@namespace Parrot.Web.Components.Pages.Dashboard.Team
+@inject NavigationManager Nav
+
+@* Team lives in Settings (designer, 1 November 2026); its old page address still leads there. *@
+
+@code {
+    protected override void OnInitialized() => Nav.NavigateTo("/dashboard/settings/team", replace: true);
+}

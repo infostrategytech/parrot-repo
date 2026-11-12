@@ -9,6 +9,7 @@
 @inject AuthState AuthState
 @inject IBusinessKnowledge Knowledge
 @inject NavigationManager Nav
+@inject WorkspaceCurrency Currency
 
 @* Creating an agent, Concept B (designer, 13 October 2026), after the
    business has taught its AI: a page of its own with no navigation, asking
@@ -19,7 +20,7 @@
    of business is the business's profile now, not an agent's. The agent never
    suggests its own name. *@
 
-<PageTitle>Create an agent · AI Operations · yára</PageTitle>
+<PageTitle>Create an agent · Agents · yára</PageTitle>
 
 <NavigationLock OnBeforeInternalNavigation="OnNavigating" ConfirmExternalNavigation="@(HasProgress && !_done)" />
 
@@ -93,22 +94,38 @@
                     </div>
                     <div class="agent-create__card agent-create__identity">
                         @* How customers will see it: the look, its name under it as it is typed. *@
-                        <div class="agent-create__preview" aria-hidden="true">
-                            <img src="@AgentBuilderCopy.MascotImage(_form.Mascot)" alt="" />
-                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong" Class="@(_form.HasName ? null : "is-empty")">@(_form.HasName ? _form.Name.Trim() : "Your agent")</Typography>
-                            <Typography TextStyle="TextStyle.Small12Medium" As="span">@($"{JobName} · {Business}")</Typography>
-                        </div>
-                        <div class="agent-create__looks" role="group" aria-label="Its look">
-                            @foreach (var mascot in AgentBuilderCopy.Mascots)
+                        @* Naming is the step's task; a look is already chosen, so the choice of looks waits behind
+                           Change look and opens here in the card, under the preview that changes as they pick
+                           (designer, 10 November 2026). The face itself opens it too: people tap faces. *@
+                        <div class="agent-create__preview">
+                            @* Alive and floating, as it will be in its conversations; no tile, so its own shape shows. *@
+                            <RowButton Class="agent-create__face" OnClick="ToggleLooks" aria-label="Change look"
+                                       aria-expanded="@(_looksOpen ? "true" : "false")" aria-controls="agent-create-looks">
+                                <AgentFace Look="@_form.Mascot" Reactive Floating />
+                            </RowButton>
+                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="strong" aria-hidden="true" Class="@(_form.HasName ? null : "is-empty")">@(_form.HasName ? _form.Name.Trim() : "Your agent")</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" aria-hidden="true">@($"{JobName} · {Business}")</Typography>
+                            @if (_looksOpen)
                             {
-                                var current = mascot;
-                                var chosen = _form.Mascot == current;
-                                <RowButton Class="@($"agent-create__look{(chosen ? " is-chosen" : null)}")" OnClick="() => _form.ChooseAvatar(current)"
-                                           aria-pressed="@(chosen ? "true" : "false")" aria-label="@($"Look {AgentBuilderCopy.Mascots.ToList().IndexOf(current) + 1}")">
-                                    <img src="@AgentBuilderCopy.MascotImage(current)" alt="" />
-                                </RowButton>
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="agent-create__change-look" @onclick="ToggleLooks"
+                                        aria-expanded="true" aria-controls="agent-create-looks">Done</Button>
+                            }
+                            else
+                            {
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="agent-create__change-look" @onclick="ToggleLooks"
+                                        aria-expanded="false" aria-controls="agent-create-looks">
+                                    <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
+                                    <ChildContent>Change look</ChildContent>
+                                </Button>
                             }
                         </div>
+                        @if (_looksOpen)
+                        {
+                            @* Any of the twelve characters, in any bright colour: a look of its own. *@
+                            <div class="agent-create__looks" id="agent-create-looks">
+                                <AgentAvatarChooser Compact Value="@AgentLooks.Of(_form.Mascot)" ValueChanged="look => _form.ChooseLook(look)" />
+                            </div>
+                        }
                         <Input Id="agent-create-name" FloatingLabel="Name" Value="@_form.Name" ValueChanged="value => _form.Name = value ?? string.Empty"
                                HelperText="@NameHelp" Error="@(_tried && !_form.HasName)" maxlength="40" />
                     </div>
@@ -162,6 +179,9 @@
     private string _customJob = string.Empty;
     private AgentForm _form = new();
     private bool _tried, _creating, _done, _confirmingLeave;
+    // The choice of looks, open inside the identity card (a look is already chosen, so it starts closed).
+    private bool _looksOpen;
+    private void ToggleLooks() => _looksOpen = !_looksOpen;
     private string? _error, _leaveTo;
     private Input? _customBox;
     private bool _focusCustom, _focusQuestion;
@@ -189,6 +209,12 @@
 
     protected override async Task OnInitializedAsync()
     {
+        await Currency.EnsureAsync();
+        if (Currency.Current.Ready)
+        {
+            _form.Settings.BigOrderCurrency = Currency.Current.Code;
+            if (Currency.Current.Code != "NGN") _form.Settings.BigOrderNaira = 0;
+        }
         // Without a way to write the job description there is nothing to set up here.
         if (!Briefing.Available)
         {

@@ -1,237 +1,424 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Team
 @using Parrot.Web.Features.Dashboard.Team
+@using Parrot.Web.Features.Dashboard.Channels.Models
+@using Parrot.Web.Features.Dashboard.Channels.Services
+@using Parrot.Web.Features.Dashboard.Channels.State
+@inject TeamClient Team
+@inject ChannelsState ChannelState
+@inject ChannelStatusLoader StatusLoader
+@inject AuthState AuthState
+@inject AuroraInterop Interop
+@inject NavigationManager Navigation
 
-@* An invitation, or a member's access, in Aurora's Dialog. A person can be
-   given access to one workspace, several, or all of them; in each, a role and
-   the channels they see. The role decides the permissions: built-in roles are
-   fixed, and anything different is a role of the owner's own, made under
-   Roles. A workspace's own access is used there instead of "All workspaces",
-   so access can be narrowed in one place. *@
+@* Inviting someone, or changing what they can do (designer, 5 November 2026: one choice decides). Who, then what
+   they'll help with, picked from a short list of roles in plain words; then, with more than one workspace, which
+   workspaces (designer, 9 November 2026: starting on the one you're in); every channel unless the owner limits it,
+   which waits behind "Limit access". The API's grants (a role and channels per workspace) are built from those
+   choices: one for all workspaces, or one per chosen workspace, the same role and channels in each.
 
-<Dialog Open="true"
-        Title="@(Member is null ? "Invite team member" : $"Access for {MemberName}")"
-        ConfirmLabel="@(Member is null ? "Send invitation" : "Save access")"
-        BusyLabel="@(Member is null ? "Sending…" : "Saving…")"
-        Busy="@_saving"
-        ConfirmDisabled="@(!CanSave)"
-        OnConfirm="SaveAsync"
-        OnCancel="OnCancel">
-    <GlyphContent><Icon Name="IconName.RiUserAddFill" Size="IconSize.Md" /></GlyphContent>
-    <Body>
-        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="invite__lede">
-            @(Member is null
-                ? "They will get an email with a link to join. Choose where they work and what they can see."
-                : "Changes apply on their next action in the workspace.")
-        </Typography>
+   Audit fixes (designer, 8 November 2026): the most common role is chosen to start, so what it does shows at once;
+   an email already on the team is caught as it's typed, with Resend right there; channels the team already uses can be limited even before Channels has loaded; and once sent, the invite's
+   link can be copied to share on WhatsApp, where vendors' teams actually talk. *@
 
-        @if (Member is null)
+<ContentModal Open="true" Title="@Title" Subtitle="@Subtitle" TitleVisuallyHidden="@(_sent is not null)"
+        Busy="_saving" OnSubmit="SubmitAsync" OnClose="RequestCloseAsync"
+        InitialFocusId="@_focusId" FocusKey="@_focusRevision.ToString()">
+    <ChildContent>
+        @if (_sent is { } sent)
         {
-            <div class="invite__form">
-                <Input FloatingLabel="Full name" Id="invite-full-name" @bind-Value="_fullName" maxlength="80" required />
-                <Input FloatingLabel="Email address" Id="invite-email" Type="email" @bind-Value="_email" required />
-            </div>
+            @* Sent, in the success screen's look (designer, 8 November 2026: as Password updated on the sign-in pages): the
+               tick, the outcome, what happens next. Sharing the link stays the quiet fallback under it. *@
+            <SuccessMessage Title="Invite sent" TitleAs="p" Message="@($"We emailed {sent.Email}. The link works for 7 days.")">
+                @if (sent.Link is { Length: > 0 })
+                {
+                    <div class="invite__share">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>If they don't see the email, share the link with them.</Typography>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => CopyLinkAsync(sent)">
+                            <IconLeft><Icon Name="@(_copied ? IconName.RiCheckFill : IconName.RiLinksFill)" /></IconLeft>
+                            <ChildContent>@(_copied ? "Link copied" : "Copy invite link")</ChildContent>
+                        </Button>
+                        <span class="sr-only" role="status">@(_copied ? "Invite link copied" : null)</span>
+                        @if (_error is not null) { <InlineError Message="@_error" /> }
+                    </div>
+                }
+            </SuccessMessage>
         }
-
-        @foreach (GrantDraft grant in _grants)
+        else
         {
-            <section class="invite__permissions" aria-label="@WorkspaceLabel(grant.WorkspaceId)">
-                <div class="invite__grant-head">
-                    <SelectField FloatingLabel="Workspace"
-                                 Value="@WorkspaceLabel(grant.WorkspaceId)"
-                                 Open="grant.WorkspaceOpen"
-                                 OpenChanged="@(open => grant.WorkspaceOpen = open)">
-                        @foreach ((string? id, string label) in WorkspaceChoices(grant))
+        <fieldset class="invite__form-fields">
+        <div class="invite">
+            @if (Member is null)
+            {
+                <div class="invite__fields">
+                    <Input FloatingLabel="Full name" Id="invite-full-name" Value="@_fullName" ValueChanged="value => _fullName = value ?? string.Empty"
+                           maxlength="80" autocomplete="off" Error="@(NameProblem is not null)" HelperText="@NameProblem" />
+                    <div class="invite__email">
+                        <Input FloatingLabel="Email address" Id="invite-email" Type="email" Value="@_email" ValueChanged="value => _email = value ?? string.Empty"
+                               maxlength="256" autocomplete="off" Error="@(EmailProblem is not null)" HelperText="@EmailProblem" />
+                        @if (AlreadyInvited is { } waiting)
                         {
-                            <PopoverOption Label="@label"
-                                           Active="@(grant.WorkspaceId == id)"
-                                           OnSelect="() => { grant.WorkspaceId = id; grant.WorkspaceOpen = false; }" />
+                            @* Caught before sending: the one useful next step, right under the field. *@
+                            <div>
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => OnResend.InvokeAsync(waiting)">
+                                    <IconLeft><Icon Name="IconName.RiSendPlaneFill" /></IconLeft>
+                                    <ChildContent>Resend their invite</ChildContent>
+                                </Button>
+                            </div>
                         }
-                    </SelectField>
-                    @if (_grants.Count > 1)
-                    {
-                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _grants.Remove(grant)">Remove</Button>
-                    }
+                    </div>
                 </div>
+            }
 
-                <SelectField FloatingLabel="Role"
-                             Value="@(RoleFor(grant) is { } chosen ? RoleLabel(chosen) : null)"
-                             Open="grant.RoleOpen"
-                             OpenChanged="@(open => grant.RoleOpen = open)">
-                    @foreach (TeamRole role in Catalog.Roles)
+            @* Dropdowns stay label-only. Explain the selected role once in the field helper. *@
+            <div class="invite__role">
+                <div id="invite-access-role" role="group" aria-label="Role" tabindex="-1">
+                <SelectField FloatingLabel="Role" Value="@(ChosenRole is { } chosen ? TeamWords.RoleName(chosen) : null)"
+                             Open="_roleOpen" OpenChanged="open => _roleOpen = open"
+                             Error="@(RoleProblem is not null)" HelperText="@(RoleProblem ?? (ChosenRole is { } picked ? Does(picked) : null))">
+                    @foreach (TeamRole role in TeamWords.Ordered(Catalog.Roles))
                     {
-                        <PopoverOption Label="@RoleLabel(role)"
-                                       Active="@(grant.RoleId == role.Id)"
-                                       OnSelect="() => { grant.RoleId = role.Id; grant.RoleOpen = false; }" />
+                        var current = role;
+                        <PopoverOption Label="@TeamWords.RoleName(current)" Badge="@(current.IsCustom ? "Custom" : null)"
+                                       Active="@(_roleId == current.Id)" OnSelect="() => { _roleId = current.Id; _roleOpen = false; }" />
                     }
                 </SelectField>
-
-                <Typography TextStyle="TextStyle.Small12Semibold" As="h3">Permissions</Typography>
-                @if (RoleFor(grant) is not { } picked)
-                {
-                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="invite__placeholder">
-                        Select a role to see what it allows.
-                    </Typography>
-                }
-                else
-                {
-                    <ul class="invite__role-permissions">
-                        @foreach (TeamOption permission in Catalog.Permissions.Where(p => picked.Permissions.Contains(p.Key)))
-                        {
-                            <li>@permission.Label</li>
-                        }
-                    </ul>
-                    <Typography TextStyle="TextStyle.Small12Regular" As="p" Prose Class="invite__placeholder">
-                        @(picked.IsCustom
-                            ? "Your own role: change it under Roles, and everyone holding it gets the change."
-                            : "Built-in roles cannot be changed. To adjust one, duplicate it under Roles.")
-                    </Typography>
-                }
-
-                <Typography TextStyle="TextStyle.Small12Semibold" As="h3">Channels</Typography>
-                <div class="invite__permission-list">
-                    <Checkbox State="@(grant.AllChannels ? CheckboxState.Checked : CheckboxState.Unchecked)"
-                              StateChanged="@(state => grant.AllChannels = state == CheckboxState.Checked)"
-                              Label="All channels"
-                              Description="Includes channels connected later." />
-                    @if (!grant.AllChannels)
-                    {
-                        @foreach (TeamOption channel in Catalog.Channels)
-                        {
-                            <Checkbox State="@(grant.Channels.Contains(channel.Key) ? CheckboxState.Checked : CheckboxState.Unchecked)"
-                                      StateChanged="@(state => Toggle(grant.Channels, channel.Key, state))"
-                                      Label="@channel.Label" />
-                        }
-                    }
                 </div>
-            </section>
-        }
-
-        @if (WorkspaceChoices(null).Any())
-        {
-            <div class="invite__add">
-                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="AddGrant">
-                    <IconLeft><Icon Name="IconName.RiAddFill" Size="IconSize.Sm" /></IconLeft>
-                    <ChildContent>Add access to another workspace</ChildContent>
-                </Button>
             </div>
-        }
 
-        @if (_error is not null)
-        {
-            <InlineError Message="@_error" />
+            @* Where they work (designer, 9 November 2026): with more than one workspace, chosen here rather than hidden
+               behind Limit access, starting on the one you're in (nobody gets more than the owner chose). They see
+               only these when they sign in. Several can be picked; the menu stays open between picks. *@
+            @if (Workspaces.Count > 1)
+            {
+                <div id="invite-workspaces" role="group" aria-label="Workspaces" tabindex="-1">
+                    <SelectField FloatingLabel="Workspaces" Value="@WorkspacesValue"
+                                 Open="_workspacesOpen" OpenChanged="open => _workspacesOpen = open"
+                                 Error="@(WorkspaceProblem is not null)" HelperText="@(WorkspaceProblem ?? WorkspacesHelp)">
+                        <PopoverOption Label="All workspaces" Multiple Active="_allWorkspaces" OnSelect="ChooseAllWorkspaces">
+                            <Leading><Icon Name="IconName.RiBuilding2Fill" Size="IconSize.Sm" /></Leading>
+                        </PopoverOption>
+                        @foreach (TeamWorkspace workspace in Workspaces)
+                        {
+                            var current = workspace;
+                            <PopoverOption Label="@(current.Name ?? "Unnamed workspace")" Multiple
+                                           Active="@(!_allWorkspaces && _workspaceIds.Contains(current.Id))" OnSelect="() => ToggleWorkspace(current.Id)">
+                                <Leading><PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" ImageUrl="@current.LogoUrl" Size="AvatarSize.Sm" /></Leading>
+                            </PopoverOption>
+                        }
+                    </SelectField>
+                </div>
+            }
+
+            @* Every channel unless limited; the app's "+" for an optional part, as New task's. Only when there's a
+               channel in use to limit. *@
+            @if (CanLimit && !_limiting)
+            {
+                <div class="invite__adds">
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => _limiting = true">
+                        <IconLeft><Icon Name="IconName.RiAddFill" /></IconLeft>
+                        <ChildContent>Limit access</ChildContent>
+                    </Button>
+                </div>
+            }
+
+                @if (_limiting && CanLimit)
+                {
+                    <div class="invite__limits" id="invite-access-limits" role="group" aria-label="Limit access" tabindex="-1">
+                        @if (ChannelChoices.Count > 0)
+                        {
+                        <div class="invite__group" role="group" aria-label="Channels">
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="invite__group-title">Channels</Typography>
+                            <Checkbox State="@(_allChannels ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                                      StateChanged="@(state => _allChannels = state == CheckboxState.Checked)"
+                                      Label="All channels" Description="Including ones you connect later." />
+                            @if (!_allChannels)
+                            {
+                                @foreach (TeamOption channel in ChannelChoices)
+                                {
+                                    var current = channel;
+                                    <Checkbox State="@(_channels.Contains(current.Key) ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                                              StateChanged="@(state => Toggle(_channels, current.Key, state))"
+                                              Label="@current.Label" />
+                                }
+                            }
+                        </div>
+                        }
+                        @if (LimitProblem is not null) { <InlineError Message="@LimitProblem" /> }
+                    </div>
+                }
+
+            @if (_mixed)
+            {
+                <InlineError Tone="InlineErrorTone.Info" Message="@($"Right now {MemberName} has different access in different workspaces. Saving gives the same access in each workspace you choose.")" />
+            }
+            @if (_error is not null) { <InlineError Message="@_error" /> }
+        </div>
+        </fieldset>
         }
-    </Body>
+    </ChildContent>
+    <Footer Context="formId">
+        @if (_sent is not null)
+        {
+            <Button Variant="ButtonVariant.Secondary" @onclick="InviteAnother">Invite someone else</Button>
+            <Button @onclick="DoneAsync">Done</Button>
+        }
+        else
+        {
+            <Button Variant="ButtonVariant.Secondary" @onclick="RequestCloseAsync">Cancel</Button>
+            <Button Type="ButtonType.Submit" form="@formId" Busy="_saving">
+                @(_saving ? Member is null ? "Sending…" : "Saving…" : Member is null ? "Send invite" : "Save access")
+            </Button>
+        }
+    </Footer>
+</ContentModal>
+<Dialog Open="_discard" Title="Discard these changes?" Type="DialogType.Destructive" ConfirmLabel="Discard changes" CancelLabel="Keep editing"
+        FocusTargetId="invite-keep-editing" CancelButtonId="invite-keep-editing" OnCancel="KeepEditing" OnConfirm="DiscardAsync">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>The invitation or access changes you've entered won't be saved.</Typography></Body>
 </Dialog>
 
 @code {
-    private const string AllWorkspaces = "All workspaces";
-
     [Parameter, EditorRequired] public TeamCatalog Catalog { get; set; } = default!;
     [Parameter, EditorRequired] public IReadOnlyList<TeamWorkspace> Workspaces { get; set; } = [];
 
     /// <summary>A member whose access is being changed; null to invite someone new.</summary>
     [Parameter] public TeamMember? Member { get; set; }
 
+    /// <summary>The team as it is, so an email already on it is caught as it's typed.</summary>
+    [Parameter] public IReadOnlyList<TeamMember> Members { get; set; } = [];
+    [Parameter] public IReadOnlyList<TeamInvite> Invites { get; set; } = [];
+
     [Parameter] public EventCallback OnCancel { get; set; }
 
-    /// <summary>Raised once the invite was sent or the access saved.</summary>
-    [Parameter] public EventCallback OnSaved { get; set; }
+    /// <summary>Raised when the form closes after sending or saving.</summary>
+    [Parameter] public EventCallback<InviteSaved> OnSaved { get; set; }
 
-    [Inject] private TeamClient Team { get; set; } = default!;
+    /// <summary>Resend an invite already waiting for the email typed: the page resends it and closes the form.</summary>
+    [Parameter] public EventCallback<TeamInvite> OnResend { get; set; }
 
-    private sealed class GrantDraft
-    {
-        public string? WorkspaceId { get; set; }
-        public string RoleId { get; set; } = "";
-        public bool AllChannels { get; set; } = true;
-        public List<string> Channels { get; } = [];
-        public bool WorkspaceOpen { get; set; }
-        public bool RoleOpen { get; set; }
-    }
-
-    private readonly List<GrantDraft> _grants = [];
-    private string _fullName = "";
-    private string _email = "";
-    private bool _saving;
-    private string? _error;
+    private string _fullName = "", _email = "";
+    private string? _roleId, _error;
+    private bool _allWorkspaces, _allChannels = true, _limiting, _mixed, _tried, _saving, _roleOpen, _workspacesOpen, _copied;
+    private readonly HashSet<string> _workspaceIds = new(StringComparer.Ordinal), _channels = new(StringComparer.Ordinal);
+    private TeamInvite? _sent;
+    private Guid? _lastSent;
 
     private string MemberName => Member?.FullName ?? Member?.Email ?? "";
+    private string? _initialDraft;
+    private bool _discard;
+    private string _focusId = "invite-full-name";
+    private int _focusRevision;
 
-    private bool CanSave =>
-        !_saving
-        && (Member is not null || (!string.IsNullOrWhiteSpace(_fullName) && !string.IsNullOrWhiteSpace(_email)))
-        && _grants.Count > 0
-        && _grants.All(g => RoleFor(g) is not null && (g.AllChannels || g.Channels.Count > 0));
+    private string Title => _sent is not null ? "Invite sent" : Member is null ? "Invite team member" : $"Edit {MemberName}'s access";
+
+    // One line under the title: what happens next, or whose access it is and when changes apply.
+    private string? Subtitle => _sent is not null ? null
+        : Member is null ? "We'll email them a link to join. It works for 7 days."
+        : Member.FullName is not null ? $"{Member.Email}. Changes apply the next time they use yára."
+        : "Changes apply the next time they use yára.";
+
+    protected override void OnParametersSet()
+    {
+        if (_initialDraft is not null) return;
+        _initialDraft = DraftStamp();
+        _focusId = Member is null ? "invite-full-name" : "invite-access-role";
+    }
+
+    private string DraftStamp() => System.Text.Json.JsonSerializer.Serialize(new
+    {
+        Name = _fullName.Trim(), Email = _email.Trim(), Role = _roleId,
+        AllWorkspaces = _allWorkspaces, AllChannels = _allChannels,
+        Workspaces = _allWorkspaces ? Array.Empty<string>() : _workspaceIds.OrderBy(id => id, StringComparer.Ordinal).ToArray(),
+        Channels = _allChannels ? Array.Empty<string>() : _channels.OrderBy(id => id, StringComparer.Ordinal).ToArray(),
+    });
+
+    private Task RequestCloseAsync()
+    {
+        if (_saving) return Task.CompletedTask;
+        if (_sent is not null) return DoneAsync();
+        _roleOpen = _workspacesOpen = false;
+        if (_initialDraft != DraftStamp()) { _discard = true; return Task.CompletedTask; }
+        return _lastSent is { } id ? OnSaved.InvokeAsync(new InviteSaved(id, true)) : OnCancel.InvokeAsync();
+    }
+
+    private void KeepEditing() { _discard = false; _focusRevision++; }
+    private Task DiscardAsync() { _discard = false; return _lastSent is { } id ? OnSaved.InvokeAsync(new InviteSaved(id, true)) : OnCancel.InvokeAsync(); }
 
     protected override void OnInitialized()
     {
-        if (Member is null)
+        if (Member is not { Grants.Count: > 0 } member)
         {
-            // Most invites are for one workspace, so the first is chosen to start with.
-            _grants.Add(new GrantDraft { WorkspaceId = Workspaces.Count == 1 ? null : Workspaces.FirstOrDefault()?.Id });
+            // The most common role to start (the first of the ordered list): its description shows at once.
+            if (Member is null) _roleId = DefaultRole;
+            // The workspace you're in to start (designer, 9 November 2026): more is a choice, never the default.
+            if (CurrentWorkspace is { } here) _workspaceIds.Add(here);
+            else _allWorkspaces = true;
             return;
         }
+        // The form gives one role and one set of channels; it starts from what they have now.
+        var first = member.Grants[0];
+        _roleId = first.RoleId;
+        _allWorkspaces = member.Grants.Any(grant => grant.WorkspaceId is null);
+        if (!_allWorkspaces) _workspaceIds.UnionWith(member.Grants.Select(grant => grant.WorkspaceId!));
+        _allChannels = first.Channels.Count == 0;
+        _channels.UnionWith(first.Channels);
+        _mixed = member.Grants.Any(grant => grant.RoleId != first.RoleId || !grant.Channels.ToHashSet().SetEquals(first.Channels));
+        // Already limited: show the limits rather than hide them behind the button.
+        _limiting = !_allChannels;
+    }
 
-        foreach (TeamGrant grant in Member.Grants)
+    private string? DefaultRole => TeamWords.Ordered(Catalog.Roles).FirstOrDefault(role => !role.IsCustom)?.Id;
+
+    // The workspace the owner is in, when it's one of theirs; otherwise the first of them.
+    private string? CurrentWorkspace =>
+        Workspaces.FirstOrDefault(w => w.Id == AuthState.CurrentUser?.CurrentWorkspaceId)?.Id ?? Workspaces.FirstOrDefault()?.Id;
+
+    // "Adire Lagos", "Adire Lagos and Adire Abuja", "3 workspaces", or "All workspaces"; empty when none is chosen.
+    private string? WorkspacesValue
+    {
+        get
         {
-            GrantDraft draft = new() { WorkspaceId = grant.WorkspaceId, RoleId = grant.RoleId, AllChannels = grant.Channels.Count == 0 };
-            draft.Channels.AddRange(grant.Channels);
-            _grants.Add(draft);
+            if (_allWorkspaces) return "All workspaces";
+            var names = Workspaces.Where(w => _workspaceIds.Contains(w.Id)).Select(w => w.Name ?? "Unnamed workspace").ToList();
+            return names.Count switch { 0 => null, 1 => names[0], 2 => $"{names[0]} and {names[1]}", _ => $"{names.Count} workspaces" };
         }
     }
 
-    private string WorkspaceLabel(string? id) =>
-        id is null ? AllWorkspaces : Workspaces.FirstOrDefault(w => w.Id == id)?.Name ?? "Unnamed workspace";
+    // What the choice means once they sign in, said once, under the field.
+    private string WorkspacesHelp => _allWorkspaces ? "Including workspaces you add later." : "They'll only see these when they sign in.";
 
-    // A workspace, or "all", can be chosen once across the form.
-    private IEnumerable<(string? Id, string Label)> WorkspaceChoices(GrantDraft? editing)
+    private string? WorkspaceProblem => _tried && !_allWorkspaces && Workspaces.Count > 1 && _workspaceIds.Count == 0 ? "Choose at least one workspace." : null;
+
+    private void ChooseAllWorkspaces() => _allWorkspaces = true;
+
+    // From All to just this one; otherwise this one in or out.
+    private void ToggleWorkspace(string id)
     {
-        HashSet<string?> taken = _grants.Where(g => g != editing).Select(g => g.WorkspaceId).ToHashSet();
-        if (!taken.Contains(null)) yield return (null, AllWorkspaces);
-        foreach (TeamWorkspace workspace in Workspaces.Where(w => !taken.Contains(w.Id)))
+        if (_allWorkspaces)
         {
-            yield return (workspace.Id, workspace.Name ?? "Unnamed workspace");
+            _allWorkspaces = false;
+            _workspaceIds.Clear();
+            _workspaceIds.Add(id);
         }
+        else if (!_workspaceIds.Remove(id)) _workspaceIds.Add(id);
     }
 
-    private TeamRole? RoleFor(GrantDraft grant) => Catalog.Roles.FirstOrDefault(r => r.Id == grant.RoleId);
-
-    // A custom role can share a built-in's name, so it always says it is custom.
-    private static string RoleLabel(TeamRole role) => role.IsCustom ? $"{role.Name} · Custom" : role.Name;
-
-    private static void Toggle(List<string> keys, string key, CheckboxState state)
+    // Which channels are connected is read here, as the Products page does, not only when Channels has run.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        keys.Remove(key);
-        if (state == CheckboxState.Checked) keys.Add(key);
+        if (!firstRender || AuthState.CurrentUser?.Token is not { Length: > 0 } token) return;
+        try { await StatusLoader.RefreshAsync(token, CancellationToken.None); }
+        catch (Exception) { return; }
+        StateHasChanged();
     }
 
-    private void AddGrant()
+    private TeamRole? ChosenRole => Catalog.Roles.FirstOrDefault(role => role.Id == _roleId);
+
+    // What a role opens: a built-in's line, or the areas an owner's own works in (not a list of permissions).
+    private string Does(TeamRole role) => TeamWords.RoleAreas(role, Catalog.Permissions);
+
+    // The channels the business has connected, or that someone on the team already works in (a channel someone has
+    // access to is one the business uses), plus any this person has, so nothing is dropped unseen.
+    private IReadOnlyList<TeamOption> ChannelChoices =>
+    [
+        .. Catalog.Channels.Where(option => _channels.Contains(option.Key)
+            || TeamChannels.Contains(option.Key)
+            || ChannelState.Workspace.Channels.Any(channel => channel.Status != ChannelStatus.NotConnected && KeyOf(channel.Id) == option.Key)),
+    ];
+
+    private HashSet<string> TeamChannels =>
+    [
+        .. Members.SelectMany(member => member.Grants).Concat(Invites.SelectMany(invite => invite.Grants)).SelectMany(grant => grant.Channels),
+    ];
+
+    private bool CanLimit => ChannelChoices.Count > 0;
+
+    private static string? KeyOf(ChannelId channel) => channel switch
     {
-        (string? id, _) = WorkspaceChoices(null).First();
-        _grants.Add(new GrantDraft { WorkspaceId = id });
+        ChannelId.Whatsapp => "whatsapp",
+        ChannelId.Instagram => "instagram",
+        ChannelId.Facebook => "facebook",
+        ChannelId.TikTok => "tiktok",
+        _ => null,
+    };
+
+    private string? NameProblem => _tried && string.IsNullOrWhiteSpace(_fullName) ? "Enter their full name." : null;
+
+    // Someone already on the team, or already invited, by the email typed: known at once, not after sending.
+    private TeamMember? AlreadyMember => Member is null && LooksLikeEmail(_email)
+        ? Members.FirstOrDefault(member => string.Equals(member.Email, _email.Trim(), StringComparison.OrdinalIgnoreCase)) : null;
+
+    private TeamInvite? AlreadyInvited => Member is null && LooksLikeEmail(_email)
+        ? Invites.FirstOrDefault(invite => string.Equals(invite.Email, _email.Trim(), StringComparison.OrdinalIgnoreCase)) : null;
+
+    private string? EmailProblem =>
+        AlreadyMember is { } member ? (member.IsOwner ? "That's your own email." : $"{member.FullName ?? member.Email} is already in your team. Change their access from the table instead.")
+        : AlreadyInvited is { } invite ? $"{invite.FullName} is already invited."
+        : !_tried ? null
+        : string.IsNullOrWhiteSpace(_email) ? "Enter their email address."
+        : !LooksLikeEmail(_email) ? "Enter a valid email address, like name@example.com."
+        : null;
+
+    private string? RoleProblem => _tried && ChosenRole is null ? "Choose a role." : null;
+
+    private string? LimitProblem => !_tried ? null
+        : !_allChannels && _channels.Count == 0 && ChannelChoices.Count > 0 ? "Choose at least one channel, or keep All channels."
+        : null;
+
+    private static bool LooksLikeEmail(string value)
+    {
+        var text = value.Trim();
+        var at = text.IndexOf('@');
+        return at > 0 && at == text.LastIndexOf('@') && text.IndexOf('.', at) > at + 1 && !text.EndsWith('.') && !text.Contains(' ');
     }
+
+    private static void Toggle(HashSet<string> keys, string key, CheckboxState state)
+    {
+        if (state == CheckboxState.Checked) keys.Add(key); else keys.Remove(key);
+    }
+
+    // Enter in the sent state means Done; otherwise it sends or saves.
+    private Task SubmitAsync() => _sent is not null ? DoneAsync() : SaveAsync();
 
     private async Task SaveAsync()
     {
-        if (!CanSave) return;
+        if (_saving) return;
+        _tried = true;
+        if (LimitProblem is not null) _limiting = true;
+        _roleOpen = _workspacesOpen = false;
+        if ((Member is null && (NameProblem ?? EmailProblem) is not null) || RoleProblem is not null || WorkspaceProblem is not null || LimitProblem is not null)
+        {
+            _focusId = Member is null && NameProblem is not null ? "invite-full-name"
+                : Member is null && EmailProblem is not null ? "invite-email"
+                : RoleProblem is not null ? "invite-access-role"
+                : WorkspaceProblem is not null ? "invite-workspaces" : "invite-access-limits";
+            _focusRevision++;
+            return;
+        }
+
         _saving = true;
         _error = null;
         try
         {
-            List<GrantRequest> grants = _grants
-                .Select(g => new GrantRequest(g.WorkspaceId, g.RoleId, g.AllChannels ? [] : [.. g.Channels]))
-                .ToList();
+            IReadOnlyList<string> channels = _allChannels ? [] : [.. _channels];
+            // All workspaces is one grant for every workspace, now and later; otherwise one per chosen workspace. With a
+            // single workspace there's nothing to choose: they get the one there is.
+            List<GrantRequest> grants = _allWorkspaces || Workspaces.Count == 0
+                ? [new GrantRequest(null, _roleId!, channels)]
+                : Workspaces.Count == 1 ? [new GrantRequest(Workspaces[0].Id, _roleId!, channels)]
+                : [.. Workspaces.Where(w => _workspaceIds.Contains(w.Id)).Select(w => new GrantRequest(w.Id, _roleId!, channels))];
 
-            if (Member is null)
-            {
-                await Team.InviteAsync(_fullName.Trim(), _email.Trim(), grants);
-            }
-            else
+            if (Member is not null)
             {
                 await Team.UpdateMemberAsync(Member.UserId, grants);
+                await OnSaved.InvokeAsync(new InviteSaved(null, false));
+                return;
             }
 
-            await OnSaved.InvokeAsync();
+            var invite = await Team.InviteAsync(_fullName.Trim(), _email.Trim(), grants);
+            _lastSent = invite.Id;
+            // With a link to share, show it; without one (the API doesn't return it yet), close as before.
+            if (invite.Link is { Length: > 0 }) { _sent = invite; _copied = false; _error = null; }
+            else await OnSaved.InvokeAsync(new InviteSaved(invite.Id, false));
         }
         catch (ApiException ex)
         {
@@ -239,11 +426,33 @@
         }
         catch (Exception)
         {
-            _error = Member is null ? "We could not send the invite. Try again." : "We could not save their access. Try again.";
+            _error = Member is null ? "We couldn't send the invite. Try again." : "We couldn't save their access. Try again.";
         }
         finally
         {
             _saving = false;
         }
+    }
+
+    private string LinkFor(TeamInvite invite) => Navigation.ToAbsoluteUri(invite.Link!).ToString();
+
+    private async Task CopyLinkAsync(TeamInvite invite)
+    {
+        _copied = await Interop.TryCopyAsync(LinkFor(invite));
+        if (!_copied) _error = "The link couldn't be copied. Try again.";
+    }
+
+    private Task DoneAsync() => OnSaved.InvokeAsync(new InviteSaved(_lastSent, true));
+
+    // A fresh form for the next person, with the same role and limits: teams are often invited in a batch.
+    private void InviteAnother()
+    {
+        _sent = null;
+        _fullName = _email = "";
+        _tried = _copied = false;
+        _error = null;
+        _initialDraft = DraftStamp();
+        _focusId = "invite-full-name";
+        _focusRevision++;
     }
 }

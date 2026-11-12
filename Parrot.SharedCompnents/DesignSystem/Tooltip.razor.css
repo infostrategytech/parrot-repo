@@ -1,0 +1,32 @@
+/* A short explanation, using the existing popover surface in both themes.
+   The trigger sits above a table row's stretched click area, not above menus. */
+.ds-tooltip {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  min-width: 0;
+  vertical-align: middle;
+}
+.ds-tooltip__trigger { display: inline-flex; align-items: center; border-radius: var(--radius-radius-sm); }
+.ds-tooltip__bubble {
+  /* Gaps in the token set: no tooltip readable-width or border-width scale. */
+  --ds-tooltip-max: 280px;
+  --ds-tooltip-hairline: 1px;
+  --ds-tooltip-gap: var(--spacing-sm);
+
+  position: fixed;
+  inset: auto;
+  width: max-content;
+  max-width: min(var(--ds-tooltip-max), calc(100vw - var(--spacing-lg)));
+  margin: var(--spacing-none);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  color: var(--colors-surface-popover-foreground);
+  background: var(--colors-surface-popover);
+  border: var(--ds-tooltip-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-md);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-md) var(--colors-surface-shadow-diffuse);
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.ds-tooltip__bubble[hidden] { display: none; }

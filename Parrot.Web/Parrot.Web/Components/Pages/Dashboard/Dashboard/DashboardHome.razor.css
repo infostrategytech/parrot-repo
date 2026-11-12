@@ -178,7 +178,7 @@
 .workspace-channel-flow__inbox {
   width: var(--ds-workspace-flow-destination);
   height: var(--ds-workspace-flow-destination);
-  color: var(--colors-brand-primary);
+  color: var(--colors-icon-brand);
   background: var(--colors-accent-brand-subtle);
 }
 
@@ -215,14 +215,15 @@
   place-items: center;
   width: var(--spacing-4xl);
   height: var(--spacing-4xl);
-  color: var(--colors-brand-primary);
+  color: var(--colors-icon-brand);
   background: var(--colors-accent-brand-subtle);
   border-radius: var(--radius-radius-xl);
 }
 
 .workspace-action--ai.is-locked .workspace-action__icon {
-  color: var(--colors-icon-muted);
-  background: var(--colors-surface-input);
+  color: var(--colors-icon-disabled);
+  /* A neutral inset surface remains distinct from the muted row in both themes. */
+  background: var(--colors-surface-card);
 }
 
 .workspace-action__title-row {
@@ -241,6 +242,8 @@
   background: var(--colors-surface-card);
   border-radius: var(--radius-radius-full);
 }
+
+.workspace-action__lock > ::deep .ds-icon { color: var(--colors-icon-muted); }
 
 .workspace-onboarding__hint {
   display: flex;
@@ -308,12 +311,8 @@
   padding-inline: var(--spacing-xl);
 }
 
-.workspace-agent img {
-  width: var(--ds-workspace-agent);
-  height: var(--ds-workspace-agent);
-  border-radius: var(--radius-radius-full);
-  box-shadow: 0 var(--spacing-xs) var(--spacing-lg) var(--colors-surface-shadow-diffuse);
-}
+/* Its character floats over its own shadow. */
+.workspace-agent__face { display: grid; width: var(--ds-workspace-agent); height: var(--ds-workspace-agent); }
 
 /* Accelerate: its mark on its own warm tile, its name in its colour. */
 .workspace-action__icon.is-partner { background: var(--colors-accent-orange-subtle); }
@@ -361,20 +360,19 @@
   place-items: center;
   width: var(--spacing-4xl);
   height: var(--spacing-4xl);
-  color: var(--colors-brand-primary);
+  color: var(--colors-icon-brand);
   background: var(--colors-accent-brand-subtle);
   border-radius: var(--radius-radius-xl);
 }
 
-/* Integrations: there, but its page is still to come. */
+/* Reserved for a shortcut whose destination is not available yet. */
 .workspace-shortcuts ::deep .workspace-shortcut.is-soon { cursor: default; }
 .workspace-shortcuts ::deep .workspace-shortcut.is-soon:hover { border-color: var(--colors-surface-border); }
 
 /* Each kind of card in the colour it has across the product: the icon in
    the accent's text colour on its subtle tile. Knowledge blue (Teach your
    AI, the agent page), conversations pink and the AI emerald (AI Operations'
-   figures), channels cyan (the channel card's light), integrations indigo
-   (new, and used for nothing else). */
+   figures), channels cyan (the channel card's light), tools indigo. */
 .workspace-onboarding .is-tone-blue { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
 .workspace-onboarding .is-tone-pink { color: var(--colors-accent-pink-text); background: var(--colors-accent-pink-subtle); }
 .workspace-onboarding .is-tone-cyan { color: var(--colors-accent-cyan-text); background: var(--colors-accent-cyan-subtle); }

@@ -62,11 +62,10 @@
   border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
 }
 .test-chat__avatar {
+  display: grid;
   flex: none;
   width: var(--ds-test-chat-bar-avatar);
   height: var(--ds-test-chat-bar-avatar);
-  object-fit: cover;
-  border-radius: var(--radius-radius-full);
 }
 .test-chat__heading { display: grid; flex: 1; gap: var(--spacing-2xs); min-width: 0; }
 .test-chat__heading ::deep h2 { margin: var(--spacing-none); color: var(--colors-text-primary); }
@@ -88,7 +87,7 @@
   background: var(--colors-surface-background);
 }
 .test-chat__msg { display: flex; gap: var(--spacing-sm); align-items: flex-start; max-width: var(--ds-test-chat-bubble); animation: test-chat-rise var(--ds-test-chat-motion) var(--ds-motion-enter); }
-.test-chat__msg > img { flex: none; width: var(--ds-test-chat-avatar); height: var(--ds-test-chat-avatar); object-fit: cover; border-radius: var(--radius-radius-full); }
+.test-chat__msg > .test-chat__face { display: grid; flex: none; width: var(--ds-test-chat-avatar); height: var(--ds-test-chat-avatar); }
 .test-chat__msg.is-agent { align-self: flex-start; }
 .test-chat__msg.is-customer { align-self: flex-end; }
 .test-chat__reply { display: grid; gap: var(--spacing-sm); justify-items: start; min-width: 0; }

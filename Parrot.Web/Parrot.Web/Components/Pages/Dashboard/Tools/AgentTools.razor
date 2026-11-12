@@ -58,8 +58,8 @@ else if (Store.Available && !SummaryOnly)
                                 <div class="agent-tools__mode">
                                     <SelectField FloatingLabel="@ask.Label" Value="@(access.Mode == ToolActionMode.Automatic ? ask.Straight : "Ask me first")"
                                                  Open="@(_modeOpen == current.Id)" OpenChanged="open => _modeOpen = open ? current.Id : null" Disabled="@(_busy || !snapshot.CanManage)">
-                                        <PopoverOption Label="Ask me first" Description="@ask.AskDetail" Active="@(access.Mode == ToolActionMode.AskFirst)" OnSelect="() => SetModeAsync(current, ToolActionMode.AskFirst)" />
-                                        <PopoverOption Label="@ask.Straight" Description="@ask.StraightDetail" Active="@(access.Mode == ToolActionMode.Automatic)" OnSelect="() => SetModeAsync(current, ToolActionMode.Automatic)" />
+                                        <PopoverOption Label="Ask me first" Active="@(access.Mode == ToolActionMode.AskFirst)" OnSelect="() => SetModeAsync(current, ToolActionMode.AskFirst)" />
+                                        <PopoverOption Label="@ask.Straight" Active="@(access.Mode == ToolActionMode.Automatic)" OnSelect="() => SetModeAsync(current, ToolActionMode.Automatic)" />
                                     </SelectField>
                                 </div>
                             }

@@ -67,7 +67,7 @@
                                         {
                                             var agent = _agents.FirstOrDefault(item => item.Id == grant.AgentId);
                                             <li title="@(agent?.Name ?? "Unavailable agent")">
-                                                @if (agent?.Look is { } look) { <img src="@look" alt="" /> }
+                                                @if (agent?.Look is { } look) { <span class="workspace-tools__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span> }
                                                 else { <PetalAvatar Seed="@grant.AgentId" Initials="@Initials.From(agent?.Name ?? "?")" Size="AvatarSize.Sm" /> }
                                             </li>
                                         }
@@ -210,7 +210,7 @@
             {
                 _snapshot = snapshot;
                 _agents = AgentsState.Agents.Select(agent => new ToolAgentOption(agent.Id, agent.Name, AgentUseCase.NameOf(agent.Settings), agent.Settings.UseCase,
-                    AgentBuilderCopy.MascotImage(agent.Mascot ?? AgentBuilderCopy.Mascots[agent.Name.Sum(c => c) % AgentBuilderCopy.Mascots.Count]))).ToArray();
+                    agent.Mascot ?? AgentBuilderCopy.Mascots[agent.Name.Sum(c => c) % AgentBuilderCopy.Mascots.Count])).ToArray();
                 if (_connection is { } current) _connection = snapshot.Connections.FirstOrDefault(connection => connection.Id == current.Id);
                 if (AgentsState.LoadFailed) _error = "Your connections loaded, but agents couldn't be loaded. Try again before changing access.";
             }

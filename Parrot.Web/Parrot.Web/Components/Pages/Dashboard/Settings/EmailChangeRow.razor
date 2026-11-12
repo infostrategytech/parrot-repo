@@ -1,0 +1,229 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Components.Pages.Auth
+@using Parrot.Web.Features.Profile
+@inject IEmailChange EmailChange
+
+@* The email you sign in with, changed as big sites do it (designer, 4 November 2026). Change opens a small window:
+   the new address and your current password (it's you), then the code sent to the new address (it's yours).
+   Until the code is in, your old address keeps working and the row says what's waiting, to finish or cancel.
+   Afterwards the old address is told, so a change that wasn't you can be reported. *@
+<div class="email-row">
+    <div class="email-row__shown">
+        <div class="email-row__words">
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="email-row__label">Email address</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="email-row__value">@Email</Typography>
+            @if (!EmailChange.Available)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="email-row__hint">Changing it is coming soon.</Typography>
+            }
+        </div>
+        @if (EmailChange.Available && _pendingLoaded && _pending is null)
+        {
+            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Disabled || Busy)" @onclick="Open">Change</Button>
+        }
+    </div>
+    @if (EmailChange.Available && _loadingPending)
+    {
+        <Skeleton Shape="SkeletonShape.Line" />
+    }
+    @if (_rowError is not null)
+    {
+        @if (!_pendingLoaded)
+        {
+            <InlineError Message="@_rowError">
+                <Action>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@Disabled" @onclick="LoadPendingAsync">Retry</Button>
+                </Action>
+            </InlineError>
+        }
+        else
+        {
+            <InlineError Message="@_rowError" />
+        }
+    }
+    @if (_pending is not null)
+    {
+        @* A change waiting for its code: said where the email is, so it can be finished or dropped later. *@
+        <div class="email-row__pending">
+            <Icon Name="IconName.RiTimeFill" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p">Waiting for you to confirm <strong>@_pending</strong>.</Typography>
+            <div class="email-row__pending-actions">
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_cancelling" disabled="@(Disabled || Busy)" @onclick="CancelAsync">Cancel change</Button>
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(Disabled || Busy)" @onclick="EnterCode">Enter code</Button>
+            </div>
+        </div>
+    }
+</div>
+
+@* A form in steps, so the shared ContentModal (designer, 8 November 2026: forms in ContentModal, decisions in Dialog).
+   Both steps are native forms with their action in the footer, as two-factor's are: Send code, then Confirm (the
+   boxes also check themselves on the sixth digit). *@
+<ContentModal Open="_open" Title="@(_step == Step.Details ? "Change your email" : "Check your new inbox")" Subtitle="@Subtitle"
+              Busy="Busy" OnClose="Close" OnSubmit="@(_step == Step.Details ? EventCallback.Factory.Create(this, StartAsync) : EventCallback.Factory.Create(this, SubmitCodeAsync))"
+              InitialFocusId="@(_step == Step.Details ? "change-email-new" : "change-email-code")" FocusKey="@_step.ToString()"
+              Footer="@(_step == Step.Details ? DetailsFooter : CodeFooter)">
+    <ChildContent>
+        <div class="email-change">
+            @if (_step == Step.Details)
+            {
+                <Input FloatingLabel="New email address" Id="change-email-new" Type="email" Value="@_newEmail" ValueChanged="value => { _newEmail = value; _emailError = null; }"
+                       autocomplete="email" maxlength="200" Error="@(_emailError is not null)" HelperText="@_emailError" />
+                @* The existing password component owns its input and visibility control. A fieldset disables both
+                   while sending, without changing the shared sign-in flow or its input behaviour. *@
+                <fieldset class="email-change__password">
+                    <PasswordInput FloatingLabel="Current password" Id="change-email-password" ShowIcon="false" Value="@_password" ValueChanged="value => { _password = value; _passwordError = null; }"
+                                   ErrorText="@_passwordError" />
+                </fieldset>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="email-row__hint">Your current email keeps working until you confirm the new one.</Typography>
+            }
+            else
+            {
+                <div class="email-change__code">
+                <CodeEntry Compact Verify="ConfirmAsync" Resend="ResendAsync" InputId="change-email-code" JustSent="_justSent"
+                           CodeChanged="code => { _code = code; _codeError = null; }" OnChangeDestination="ChangeDestination" />
+                @if (_codeError is not null) { <InlineError Message="@_codeError" /> }
+                </div>
+            }
+        </div>
+    </ChildContent>
+</ContentModal>
+
+@code {
+    private enum Step { Details, Code }
+
+    [Parameter, EditorRequired] public string Email { get; set; } = "";
+    [Parameter] public bool Disabled { get; set; }
+    /// <summary>The new address, once it's confirmed.</summary>
+    [Parameter] public EventCallback<string> OnChanged { get; set; }
+
+    private Step _step;
+    private bool _open, _sending, _cancelling, _justSent, _verifying, _resending, _loadingPending, _pendingLoaded;
+    private string? _pending, _newEmail, _password, _emailError, _passwordError, _rowError, _codeError;
+    private string _code = "";
+    private bool Busy => _sending || _cancelling || _verifying || _resending;
+
+    private string Subtitle => _step == Step.Details
+        ? "We'll send a code to your new address to check it's yours."
+        : $"Enter the 6-digit code we sent to {_pending}.";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (EmailChange.Available) await LoadPendingAsync();
+    }
+
+    private async Task LoadPendingAsync()
+    {
+        if (_loadingPending || !EmailChange.Available) return;
+        _loadingPending = true; _rowError = null;
+        try { _pending = await EmailChange.PendingAsync(); _pendingLoaded = true; }
+        catch (Exception ex) when (Recoverable(ex)) { _rowError = "We couldn't check for an email change. Try again before starting a new one."; }
+        finally { _loadingPending = false; }
+    }
+
+    private void Open()
+    {
+        if (Disabled || Busy || !_pendingLoaded) return;
+        _step = Step.Details; _newEmail = null; _password = null; _emailError = _passwordError = _rowError = null; _open = true;
+    }
+
+    // Back to a waiting change: the code was sent earlier, so a new one can be asked for straight away.
+    private void EnterCode()
+    {
+        if (Disabled || Busy || _pending is null) return;
+        _rowError = null; _step = Step.Code; _justSent = false; _open = true;
+    }
+
+    private void Close() { if (Busy) return; _open = false; _password = null; }
+
+    private void ChangeDestination()
+    {
+        if (Busy) return;
+        _step = Step.Details; _newEmail = _pending; _password = null; _emailError = _passwordError = null;
+    }
+
+    // Cancel, then Send code (the form's submit, so Enter does the same).
+    private RenderFragment<string> DetailsFooter => formId => __builder =>
+    {
+        <Button Variant="ButtonVariant.Secondary" disabled="@Busy" @onclick="Close">Cancel</Button>
+        <Button Type="ButtonType.Submit" form="@formId" Busy="_sending">@(_sending ? "Sending…" : "Send code")</Button>
+    };
+
+    private RenderFragment<string> CodeFooter => formId => __builder =>
+    {
+        <Button Variant="ButtonVariant.Secondary" disabled="@Busy" @onclick="Close">Cancel</Button>
+        <Button Type="ButtonType.Submit" form="@formId" Busy="_verifying">@(_verifying ? "Checking…" : "Confirm")</Button>
+    };
+
+    // The footer's Confirm: the code typed so far, or what's missing.
+    private async Task SubmitCodeAsync()
+    {
+        if (Busy) return;
+        if (_code.Length != 6 || !_code.All(char.IsDigit)) { _codeError = "Enter the 6-digit code."; return; }
+        var outcome = await ConfirmAsync(_code, CancellationToken.None);
+        if (outcome.Error is not null) _codeError = outcome.Error;
+    }
+
+    private async Task StartAsync()
+    {
+        if (Disabled || Busy || !_pendingLoaded) return;
+        // Both are needed: say which is missing, on the field, rather than a button that does nothing.
+        if (string.IsNullOrWhiteSpace(_newEmail)) { _emailError = "Enter your new email address."; return; }
+        if (string.IsNullOrEmpty(_password)) { _passwordError = "Enter your current password."; return; }
+        _sending = true; _emailError = _passwordError = null;
+        try
+        {
+            var problem = await EmailChange.StartAsync(_newEmail ?? string.Empty, _password ?? string.Empty);
+            if (problem is { Password: true }) _passwordError = problem.Message;
+            else if (problem is not null) _emailError = problem.Message;
+            else
+            {
+                _pending = _newEmail!.Trim();
+                _password = null;
+                _justSent = true;
+                _step = Step.Code;
+            }
+        }
+        catch (Exception ex) when (Recoverable(ex)) { _emailError = Problem(ex, "We couldn't send the code. Check your connection and try again."); }
+        finally { _sending = false; }
+    }
+
+    private async Task<string?> ResendAsync(CancellationToken ct)
+    {
+        _resending = true;
+        await InvokeAsync(StateHasChanged);
+        try { return await EmailChange.ResendAsync(ct); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (Recoverable(ex)) { return Problem(ex, "We couldn't send a new code. Check your connection and try again."); }
+        finally { _resending = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private async Task<CodeEntry.Outcome> ConfirmAsync(string code, CancellationToken ct)
+    {
+        if (_pending is null) return new("There's no email change waiting. Close this window and try again.", Locked: true);
+        _verifying = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var check = await EmailChange.ConfirmAsync(code, ct);
+            if (check.Error is not null) return new(check.Error, check.Locked);
+            var changed = _pending;
+            await InvokeAsync(async () => { _open = false; _pending = null; await OnChanged.InvokeAsync(changed); StateHasChanged(); });
+            return CodeEntry.Outcome.Ok;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (Recoverable(ex)) { return new(Problem(ex, "We couldn't confirm your email. Check your connection and try again.")); }
+        finally { _verifying = false; await InvokeAsync(StateHasChanged); }
+    }
+
+    private async Task CancelAsync()
+    {
+        if (Disabled || Busy || _pending is null) return;
+        _cancelling = true; _rowError = null;
+        try { await EmailChange.CancelAsync(); _pending = null; }
+        catch (Exception ex) when (Recoverable(ex)) { _rowError = Problem(ex, "We couldn't cancel this change. Your current email hasn't changed. Try again."); }
+        finally { _cancelling = false; }
+    }
+
+    private static bool Recoverable(Exception ex) => ex is HttpRequestException or OperationCanceledException or System.Text.Json.JsonException;
+    private static string Problem(Exception ex, string fallback) => ex is ApiException api ? api.UserMessage : fallback;
+}

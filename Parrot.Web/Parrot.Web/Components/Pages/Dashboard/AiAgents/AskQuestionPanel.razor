@@ -17,7 +17,6 @@
     {
         var current = option;
         <PopoverOption Label="@current.Label"
-                       Description="@current.Description"
                        Active="@(Step.ResponseType == current.Id)"
                        OnSelect="async () => { Step.ResponseType = current.Id; _open = null; await OnChanged.InvokeAsync(); }" />
     }
@@ -89,7 +88,7 @@
                      Value="@Step.Currency"
                      Open='@(_open == "currency")'
                      OpenChanged='@(open => _open = open ? "currency" : null)'>
-            @foreach (var code in new[] { "USD", "EUR", "GBP", "NGN" })
+            @foreach (var code in new[] { "USD", "EUR", "GBP", "NGN", "GHS" })
             {
                 var current = code;
                 <PopoverOption Label="@current" Active="@(Step.Currency == current)" OnSelect="() => { Step.Currency = current; _open = null; }" />
@@ -146,7 +145,6 @@
                             {
                                 var target = s;
                                 <PopoverOption Label="@(string.IsNullOrWhiteSpace(target.QuestionText) ? PlaybookCanvas.Kind(target.Type).Label : target.QuestionText)"
-                                               Description="@PlaybookCanvas.Kind(target.Type).Subtype"
                                                Active="@(option.TargetStep == target.Id)"
                                                OnSelect="() => { option.TargetStep = target.Id; _open = null; }" />
                             }
@@ -163,6 +161,12 @@
 }
 
 @code {
+    [CascadingParameter] public WorkspaceCurrencyValue Currency { get; set; } = WorkspaceCurrencyValue.Legacy;
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrWhiteSpace(Step.Currency) && Currency.Ready)
+            Step.Currency = Step.MinAmount > 0 ? CurrencyAmount.LegacyCode : Currency.Code;
+    }
     [Parameter] public PlaybookStep Step { get; set; } = default!;
     [Parameter] public Playbook Playbook { get; set; } = default!;
     [Parameter] public string SelectedStepId { get; set; } = string.Empty;

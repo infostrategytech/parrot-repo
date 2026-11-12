@@ -161,14 +161,22 @@ public static class BookingFormat
     /// <summary>The open days, with days that share the same hours run together; null when no day is open.</summary>
     public static string? OpeningHours(IEnumerable<DayHours> hours)
     {
-        var open = Week.Select(day => hours.FirstOrDefault(item => item.Day == day && item.Open && item.Closes > item.Opens)).ToArray();
+        // A day's hours in words: "9am–6pm", "9am–1pm, 2pm–6pm" after a break, or "open 24 hours"; null when closed
+        // or its times don't make sense.
+        static string? Describe(DayHours? day) =>
+            day is not { Open: true } ? null
+            : day.AllDay ? "open 24 hours"
+            : day.TimesProblem("") is not null ? null
+            : string.Join(", ", day.Ranges.Select(range => $"{Time(range.Opens)}–{Time(range.Closes)}"));
+
+        var open = Week.Select(day => Describe(hours.FirstOrDefault(item => item.Day == day))).ToArray();
         var parts = new List<string>();
         for (var i = 0; i < 7; i++)
         {
             if (open[i] is not { } first) continue;
             var end = i;
-            while (end + 1 < 7 && open[end + 1] is { } next && next.Opens == first.Opens && next.Closes == first.Closes) end++;
-            parts.Add($"{Days(Week.Skip(i).Take(end - i + 1))}, {Time(first.Opens)}–{Time(first.Closes)}");
+            while (end + 1 < 7 && open[end + 1] == first) end++;
+            parts.Add($"{Days(Week.Skip(i).Take(end - i + 1))}, {first}");
             i = end;
         }
         return parts.Count == 0 ? null : string.Join(" · ", parts);

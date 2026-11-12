@@ -1,0 +1,54 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Settings
+
+@* One event in the activity log (designer, 9 November 2026), a row of the shared table as Customers' and Team's are:
+   who did it, the action, the page it belongs to, and the date and time. The action is the way in: a button
+   stretched over the whole row, so a click anywhere opens its details. *@
+@if (Head)
+{
+    @* The column names, drawn by the row so the two always share their columns. *@
+    <div class="ds-table__row is-head activity-row" role="row">
+        <TableHeading>Who</TableHeading>
+        <TableHeading>Action</TableHeading>
+        <div class="activity-row__facts">
+            <TableHeading>Area</TableHeading>
+            <TableHeading>Date and time</TableHeading>
+        </div>
+    </div>
+}
+else if (Event is { } e)
+{
+    var sentence = ActivityWords.Sentence(e);
+    <div class="@(Open ? "ds-table__row activity-row is-open" : "ds-table__row activity-row")" role="row">
+        <div class="activity-row__who" role="cell">
+            <ActivityActorMark Actor="e.Actor" Me="@Me" />
+        </div>
+        <div class="activity-row__what" role="cell">
+            <RowButton Class="activity-row__open" OnClick="OnOpen" aria-label="@($"Open details: {sentence}")">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@sentence</Typography>
+            </RowButton>
+        </div>
+        @* One line under the event on a tablet; columns on a desktop. *@
+        <div class="activity-row__facts">
+            <div class="activity-row__area" role="cell">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@ActivityWords.AreaName(ActivityWords.AreaOf(e.Action))</Typography>
+            </div>
+            <div class="activity-row__when" role="cell">
+                @* The date and time, in full: a record is read for exactly when (designer, 9 November 2026). *@
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="time" datetime="@e.OccurredAt.ToString("o")">@ActivityTime.Exact(e.OccurredAt, Zone)</Typography>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Head { get; set; }
+    [Parameter] public ActivityEvent? Event { get; set; }
+
+    /// <summary>The signed-in person, so their own rows say "(you)" as Team's do.</summary>
+    [Parameter] public string? Me { get; set; }
+
+    [Parameter] public TimeZoneInfo Zone { get; set; } = TimeZoneInfo.Utc;
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback OnOpen { get; set; }
+}

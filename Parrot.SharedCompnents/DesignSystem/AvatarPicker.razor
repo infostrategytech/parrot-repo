@@ -1,0 +1,43 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using Microsoft.AspNetCore.Components.Forms
+
+@* A picture changed where it's seen (designer, 7 November 2026): the avatar, with a camera on its lower edge
+   that opens the file picker. One way to change a picture everywhere: your photo in Profile, the logo in
+   Business profile. The screen checks and saves the file; the rules show only if a file breaks them. *@
+<div class="@(string.IsNullOrWhiteSpace(Class) ? "ds-avatar-picker" : $"ds-avatar-picker {Class}")">
+    <PetalAvatar Seed="@Seed" Initials="@Initials" ImageUrl="@ImageUrl" Size="Size" />
+    @if (CanChange)
+    {
+        @* Genuine exception: a label holding the file input, so a click anywhere on the camera opens the picker
+           with no script, and the keyboard reaches the real input inside it. *@
+        <label class="@(Busy ? "ds-avatar-picker__camera is-busy" : "ds-avatar-picker__camera")" title="@Label">
+            <Icon Name="IconName.RiCameraFill" Size="IconSize.Sm" />
+            <InputFile OnChange="OnChange" accept="@Accept" disabled="@(Busy || Disabled)" class="sr-only" aria-label="@Label" />
+        </label>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Seed { get; set; } = "";
+    [Parameter, EditorRequired] public string Initials { get; set; } = "";
+    [Parameter] public string? ImageUrl { get; set; }
+    [Parameter] public AvatarSize Size { get; set; } = AvatarSize.Xl;
+
+    /// <summary>What the camera does, read aloud and on hover: "Add a photo", "Change logo".</summary>
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+
+    /// <summary>The file types the picker offers, as the input's accept list.</summary>
+    [Parameter] public string Accept { get; set; } = "image/png,image/jpeg,image/webp";
+
+    /// <summary>Off where the picture can't be changed: the avatar shows with no camera.</summary>
+    [Parameter] public bool CanChange { get; set; } = true;
+
+    /// <summary>Uploading: the camera dims and waits.</summary>
+    [Parameter] public bool Busy { get; set; }
+
+    [Parameter] public bool Disabled { get; set; }
+
+    [Parameter] public string? Class { get; set; }
+
+    [Parameter] public EventCallback<InputFileChangeEventArgs> OnChange { get; set; }
+}

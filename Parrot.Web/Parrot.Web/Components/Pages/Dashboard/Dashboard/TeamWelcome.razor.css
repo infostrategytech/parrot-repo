@@ -1,0 +1,155 @@
+/* Joined from an invite: a celebration card. A colourful wash and a burst of confetti behind, the team
+   gathering in an arc, then the words and what they can do, a line at a time. Calm under reduced motion: the colours and
+   confetti stay, still. */
+
+.team-welcome__party,
+.team-welcome {
+  /* No Figma scale for illustration sizes or celebration timing. */
+  --ds-team-welcome-face: 84px;
+  --ds-team-welcome-face-lg: 120px;
+  --ds-team-welcome-face-sm: 60px;
+  --ds-team-welcome-glow: 260px;
+  --ds-team-welcome-bit-w: 8px;
+  --ds-team-welcome-bit-h: 14px;
+  --ds-team-welcome-fall: 2600ms;
+  --ds-team-welcome-pop: 700ms;
+  --ds-team-welcome-drift: 9s;
+  --ds-team-welcome-line: 420ms;
+  --ds-team-welcome-blur: 48px;
+  --ds-team-welcome-sway-x: 24px;
+  --ds-team-welcome-sway-y: 18px;
+  --ds-team-welcome-stagger: 12ms;
+  --ds-team-welcome-px: 1px;
+  --ds-team-welcome-drop: 520px;
+  --ds-team-welcome-twinkle: 1600ms;
+  --ds-team-welcome-beat: 250ms;
+  --ds-team-welcome-step: 120ms;
+}
+
+/* ── Behind the card ───────────────────────────────────────────────────── */
+
+.team-welcome__party { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+
+/* Soft colour, drifting slowly, strongest at the top. */
+.team-welcome__glow {
+  position: absolute;
+  width: var(--ds-team-welcome-glow);
+  height: var(--ds-team-welcome-glow);
+  border-radius: var(--radius-radius-full);
+  filter: blur(var(--ds-team-welcome-blur));
+  opacity: 0.55;
+  animation: team-welcome-drift var(--ds-team-welcome-drift) ease-in-out infinite alternate;
+}
+.team-welcome__glow.is-pink { top: -30%; left: -15%; background: var(--colors-accent-pink-muted); }
+.team-welcome__glow.is-amber { top: -35%; right: -10%; background: var(--colors-accent-amber-muted); animation-delay: calc(var(--ds-team-welcome-drift) / -3); }
+.team-welcome__glow.is-cyan { top: 10%; left: 30%; background: var(--colors-accent-cyan-muted); animation-delay: calc(var(--ds-team-welcome-drift) / -1.5); opacity: 0.4; }
+.team-welcome__glow.is-violet { bottom: -40%; right: -20%; background: var(--colors-accent-violet-muted); animation-delay: calc(var(--ds-team-welcome-drift) / -6); opacity: 0.35; }
+
+@keyframes team-welcome-drift {
+  to { transform: translate(var(--ds-team-welcome-sway-x), var(--ds-team-welcome-sway-y)) scale(1.12); }
+}
+
+/* Confetti: each piece placed and timed from its index, falling once and fading out near the foot. */
+.team-welcome__bit {
+  position: absolute;
+  top: -6%;
+  left: calc(mod(var(--i) * 37, 100) * 1%);
+  width: var(--ds-team-welcome-bit-w);
+  height: var(--ds-team-welcome-bit-h);
+  border-radius: var(--radius-radius-xs);
+  opacity: 0;
+  transform: rotate(calc(var(--i) * 47deg));
+  animation: team-welcome-fall var(--ds-team-welcome-fall) cubic-bezier(.2, .6, .35, 1) both;
+  animation-delay: calc(mod(var(--i) * 53, 45) * var(--ds-team-welcome-stagger));
+}
+.team-welcome__bit:nth-child(6n + 1) { background: var(--colors-accent-pink-solid); }
+.team-welcome__bit:nth-child(6n + 2) { background: var(--colors-accent-amber-solid); }
+.team-welcome__bit:nth-child(6n + 3) { background: var(--colors-accent-cyan-solid); border-radius: var(--radius-radius-full); }
+.team-welcome__bit:nth-child(6n + 4) { background: var(--colors-accent-violet-solid); }
+.team-welcome__bit:nth-child(6n + 5) { background: var(--colors-accent-emerald-solid); border-radius: var(--radius-radius-full); }
+.team-welcome__bit:nth-child(6n) { background: var(--colors-accent-yellow-solid); }
+.team-welcome__bit:nth-child(3n) { width: var(--ds-team-welcome-bit-h); height: var(--ds-team-welcome-bit-w); }
+
+@keyframes team-welcome-fall {
+  0% { opacity: 0; transform: translate(0, 0) rotate(calc(var(--i) * 47deg)); }
+  8% { opacity: 1; }
+  80% { opacity: 1; }
+  100% {
+    opacity: 0;
+    transform: translate(calc((mod(var(--i) * 29, 60) - 30) * var(--ds-team-welcome-px)), var(--ds-team-welcome-drop)) rotate(calc(var(--i) * 47deg + 540deg));
+  }
+}
+
+/* ── The card ──────────────────────────────────────────────────────────── */
+
+.team-welcome { position: relative; display: grid; gap: var(--spacing-xl); justify-items: center; padding-top: var(--spacing-md); text-align: center; }
+
+/* The team (designer, 10 November 2026): yára's characters floating over their own shadows on the card's wash, no
+   panel or circles of their own, filling the top of the card in a gentle arc: small at the ends, lower, and the
+   middle one biggest. Each pops in after the one before, then lives (blinks, looks at the pointer, floats). */
+.team-welcome__crowd {
+  display: flex;
+  gap: var(--spacing-xs);
+  align-items: flex-end;
+  justify-content: center;
+  width: 100%;
+  padding-top: var(--spacing-lg);
+}
+.team-welcome__face {
+  display: grid;
+  flex: none;
+  width: var(--ds-team-welcome-face);
+  height: var(--ds-team-welcome-face);
+  animation: team-welcome-pop var(--ds-team-welcome-pop) cubic-bezier(.34, 1.56, .64, 1) both;
+}
+.team-welcome__face.is-middle { width: var(--ds-team-welcome-face-lg); height: var(--ds-team-welcome-face-lg); margin-bottom: var(--spacing-md); }
+.team-welcome__face.is-end { width: var(--ds-team-welcome-face-sm); height: var(--ds-team-welcome-face-sm); }
+.team-welcome__face:nth-child(3) { animation-delay: var(--ds-team-welcome-beat); }
+.team-welcome__face:nth-child(2),
+.team-welcome__face:nth-child(4) { animation-delay: calc(var(--ds-team-welcome-beat) + var(--ds-team-welcome-step)); }
+.team-welcome__face:nth-child(1),
+.team-welcome__face:nth-child(5) { animation-delay: calc(var(--ds-team-welcome-beat) + var(--ds-team-welcome-step) * 2); }
+@keyframes team-welcome-pop {
+  from { opacity: 0; transform: translateY(var(--spacing-lg)) scale(0.3); }
+}
+/* The words, then each thing they can do, arriving in turn. */
+.team-welcome__words { display: grid; gap: var(--spacing-sm); animation: team-welcome-in var(--ds-team-welcome-line) var(--ds-motion-enter) var(--ds-team-welcome-beat) both; }
+.team-welcome__words ::deep p { margin: var(--spacing-none); }
+.team-welcome__words ::deep p:first-child { color: var(--colors-text-primary); }
+.team-welcome__words ::deep p + p { color: var(--colors-text-muted); }
+
+.team-welcome__can { display: grid; gap: var(--spacing-sm); width: 100%; margin: 0; padding: 0; list-style: none; }
+.team-welcome__ability {
+  display: flex;
+  gap: var(--spacing-md);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  text-align: start;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  animation: team-welcome-in var(--ds-team-welcome-line) var(--ds-motion-enter) both;
+}
+.team-welcome__ability:nth-child(1) { animation-delay: calc(var(--ds-team-welcome-beat) * 2); }
+.team-welcome__ability:nth-child(2) { animation-delay: calc(var(--ds-team-welcome-beat) * 2 + var(--ds-team-welcome-step)); }
+.team-welcome__ability:nth-child(3) { animation-delay: calc(var(--ds-team-welcome-beat) * 2 + var(--ds-team-welcome-step) * 2); }
+.team-welcome__ability ::deep span:last-child { color: var(--colors-text-primary); }
+.team-welcome__ability-icon { display: grid; flex: none; place-items: center; width: var(--spacing-3xl); height: var(--spacing-3xl); border-radius: var(--radius-radius-lg); }
+.is-cyan .team-welcome__ability-icon { color: var(--colors-accent-cyan-text); background: var(--colors-accent-cyan-subtle); }
+.is-violet .team-welcome__ability-icon { color: var(--colors-accent-violet-text); background: var(--colors-accent-violet-subtle); }
+.is-amber .team-welcome__ability-icon { color: var(--colors-accent-amber-text); background: var(--colors-accent-amber-subtle); }
+.is-pink .team-welcome__ability-icon { color: var(--colors-accent-pink-text); background: var(--colors-accent-pink-subtle); }
+.is-emerald .team-welcome__ability-icon { color: var(--colors-accent-emerald-text); background: var(--colors-accent-emerald-subtle); }
+
+@keyframes team-welcome-in {
+  from { opacity: 0; transform: translateY(var(--spacing-sm)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .team-welcome__glow,
+  .team-welcome__face,
+  .team-welcome__words,
+  .team-welcome__ability { animation: none; }
+  /* Confetti scattered and still. */
+  .team-welcome__bit { animation: none; opacity: 0.8; top: calc(mod(var(--i) * 61, 90) * 1%); }
+}

@@ -1,0 +1,91 @@
+.content-modal-backdrop {
+  /* Gaps in Figma tokens: modal width tiers, overlay layer and backdrop blur. Existing Dialog sits above this. */
+  --ds-content-modal-width: 560px;
+  --ds-content-modal-wide: 720px;
+  --ds-content-modal-large: 960px;
+  --ds-content-modal-layer: 115;
+  --ds-content-modal-blur: 6px;
+  position: fixed;
+  inset: 0;
+  z-index: var(--ds-content-modal-layer);
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-3xl);
+  isolation: isolate;
+}
+.content-modal-backdrop::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--colors-surface-overlay);
+  backdrop-filter: blur(var(--ds-content-modal-blur));
+  animation: content-modal-fade var(--ds-motion-base) ease;
+}
+.content-modal {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(var(--ds-content-modal-width), 100%);
+  max-height: calc(100dvh - 2 * var(--spacing-3xl));
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-elevated);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  box-shadow: 0 var(--spacing-xl) var(--spacing-4xl) var(--colors-surface-shadow-diffuse);
+  outline: none;
+  animation: content-modal-enter var(--ds-motion-base) var(--ds-motion-enter);
+}
+.content-modal--wide { --ds-content-modal-width: var(--ds-content-modal-wide); }
+.content-modal--large { --ds-content-modal-width: var(--ds-content-modal-large); }
+.content-modal__header { display: flex; align-items: flex-start; gap: var(--spacing-xl); padding: var(--spacing-3xl) var(--spacing-3xl) var(--spacing-2xl); }
+/* Title and description share one compact rhythm for every ContentModal consumer. */
+.content-modal__heading { display: grid; gap: var(--spacing-xs); min-width: 0; flex: 1; }
+.content-modal__heading ::deep h2, .content-modal__heading ::deep p { margin: var(--spacing-none); }
+.content-modal__heading ::deep p { color: var(--colors-text-secondary); }
+.content-modal__eyebrow { color: var(--colors-text-subtle); }
+.content-modal__header ::deep .content-modal__close { flex: 0 0 auto; color: var(--colors-icon-secondary); }
+.content-modal__body {
+  --ds-content-modal-body-inset: var(--spacing-3xl);
+  /* Runtime native-scrollbar measurement, not a design token. A stable gutter must not add another inset. */
+  --ds-content-modal-scrollbar: var(--spacing-none);
+  min-width: 0;
+  min-height: 0;
+  margin: var(--spacing-none);
+  padding: var(--spacing-xs) var(--ds-content-modal-body-inset) var(--ds-content-modal-body-inset);
+  padding-inline-end: max(var(--spacing-none), calc(var(--ds-content-modal-body-inset) - var(--ds-content-modal-scrollbar)));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.content-modal__footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--spacing-md); padding: var(--spacing-xl) var(--spacing-3xl); border-top: var(--ds-hairline) solid var(--colors-surface-border); background: var(--colors-surface-elevated); }
+@media (max-height: 800px), (max-width: 760px) {
+  .content-modal-backdrop { padding: var(--spacing-lg); }
+  .content-modal { max-height: calc(100dvh - 2 * var(--spacing-lg)); }
+}
+@media (max-width: 760px) {
+  .content-modal__header { padding: var(--spacing-xl); gap: var(--spacing-sm); }
+  .content-modal__body { --ds-content-modal-body-inset: var(--spacing-xl); }
+  .content-modal__footer { padding: var(--spacing-lg) var(--spacing-xl); }
+}
+/* An ambient layer (as Dialog's): behind everything, clipped to the rounded card; the rest sits above it. */
+.content-modal--has-ambient { position: relative; isolation: isolate; }
+.content-modal__ambient { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+.content-modal--has-ambient > .content-modal__header,
+.content-modal--has-ambient > .content-modal__body,
+.content-modal--has-ambient > .content-modal__footer { position: relative; z-index: 1; }
+
+@keyframes content-modal-fade { from { opacity: 0; } }
+@keyframes content-modal-enter { from { opacity: 0; transform: translateY(var(--spacing-sm)); } }
+/* Stays centred and eases to a new height when its content changes (designer, 8 November 2026: grow to fit, staying
+   centred, subtly, never jumping). The script holds the old height and animates to the new one; while it does, the
+   body doesn't flash a scrollbar. */
+.content-modal.is-resizing { transition: height var(--ds-motion-base) var(--ds-motion-ease); }
+.content-modal.is-resizing > .content-modal__body { overflow: hidden; }
+
+@media (prefers-reduced-motion: reduce) {
+  .content-modal, .content-modal-backdrop::before { animation: none; }
+  .content-modal.is-resizing { transition: none; }
+}

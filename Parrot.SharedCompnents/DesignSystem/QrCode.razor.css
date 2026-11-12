@@ -1,0 +1,8 @@
+.qr-code {
+  /* Gap in the token set: a scannable QR width, including its encoded quiet zone. */
+  --ds-qr-size: 176px;
+  width: var(--ds-qr-size);
+  max-width: 100%;
+}
+.qr-code img { display: block; width: 100%; height: auto; border-radius: var(--radius-radius-md); }
+.qr-code ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }

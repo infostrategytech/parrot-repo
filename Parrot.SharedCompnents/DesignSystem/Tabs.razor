@@ -2,7 +2,7 @@
 
 @* A set of tabs: one choice of several, shown together. Each <Tab> inside
    is a button with the tab role; the set names what it chooses between. *@
-<div class="ds-tabs ds-tabs--@Variant.ToString().ToLowerInvariant() @Class" role="tablist" aria-label="@Label">
+<div class="ds-tabs ds-tabs--@Variant.ToString().ToLowerInvariant() @(Fill ? "is-fill" : null) @Class" role="tablist" aria-label="@Label">
     @ChildContent
 </div>
 
@@ -10,6 +10,8 @@
     /// <summary>What the tabs choose between, for screen readers: "Inbox scope", "Message type".</summary>
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter] public TabsVariant Variant { get; set; } = TabsVariant.Segmented;
+    /// <summary>The tabs share the container's full width, each the same size (the bell's Needs you / Everything).</summary>
+    [Parameter] public bool Fill { get; set; }
     [Parameter] public string? Class { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }

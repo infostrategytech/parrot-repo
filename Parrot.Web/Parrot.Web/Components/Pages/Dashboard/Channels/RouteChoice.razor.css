@@ -62,7 +62,6 @@
   place-items: center;
   width: var(--ds-route-mark);
   height: var(--ds-route-mark);
-  color: var(--colors-text-inverse);
   border-radius: var(--ds-route-mark-radius);
 }
 

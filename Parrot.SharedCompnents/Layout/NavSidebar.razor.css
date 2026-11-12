@@ -14,7 +14,7 @@
   flex-direction: column;
   width: var(--ds-rail-expanded-width);
   min-height: 0;
-  padding: var(--spacing-2xl) var(--spacing-md) var(--spacing-md);
+  padding: var(--spacing-lg) var(--spacing-md) var(--spacing-md);
   color: var(--colors-text-secondary);
   background: var(--colors-sidebar-background);
   border-right: var(--ds-rail-hairline) solid var(--colors-surface-border);
@@ -41,10 +41,16 @@
   /* The room the icon sits in on the compact rail, with space for the dot at its corner. */
   --ds-rail-pill-width: 52px;
   --ds-rail-pill-height: 20px;
-  /* Room to breathe: a taller row, space between rows, and the label set a
-     little apart from its icon. The list scrolls, so this never cuts anything. */
-  --ds-rail-compact-item: 52px;
-  --ds-rail-compact-row-gap: 6px;
+  /* Room to breathe on a tall screen: a taller row, space between rows, and the label set a little apart from its
+     icon. On a shorter laptop (designer, 11 November 2026) the rows draw a little closer, never below a comfortable
+     44px; past that the list scrolls, with a fade at its foot that says there is more. The same at 900px and taller. */
+  --ds-rail-compact-item: clamp(44px, calc(7vh - 11px), 52px);
+  --ds-rail-compact-pad: clamp(2px, calc(1.5vh - 9.5px), 4px);
+  /* A page tile's room above and below its icon and label: 8px from 900px tall, less on a shorter screen. */
+  --ds-rail-tile-pad: clamp(4px, calc(2.2vh - 11.8px), 8px);
+  --ds-rail-compact-row-gap: clamp(2px, calc(0.45vh - 1px), 4px);
+  --ds-rail-divider-gap: clamp(4px, 0.9vh, 8px);
+  --ds-rail-more-fade: 28px;
   --ds-rail-menu-width: 224px;
 }
 
@@ -112,18 +118,38 @@
   place-items: center;
 }
 
-/* Every place is in one list — the pages, then Knowledge, Help and Settings —
-   and the list scrolls when the window is short; only the account stays at
-   the foot. Items keep their full size at every height. */
+/* Every place is in one list, with no line through it (designer, 5 November
+   2026), and the list scrolls when the window is short; only the account
+   stays at the foot. Items keep their full size at every height. */
 .sidebar__nav {
   flex: 1 1 auto;
   min-height: 0;
-  margin-top: var(--spacing-2xl);
+  margin-top: var(--spacing-md);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: none;
   -ms-overflow-style: none;
+}
+
+/* More below (designer, 11 November 2026): when the list scrolls (its scrollbar is hidden), its foot fades until
+   you reach the end. A list that fits has no scroll, so no fade. */
+@property --ds-rail-fade {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0;
+}
+@supports (animation-timeline: scroll()) {
+  .sidebar__nav {
+    -webkit-mask-image: linear-gradient(to bottom, var(--colors-surface-card) calc(100% - var(--ds-rail-fade)), transparent);
+    mask-image: linear-gradient(to bottom, var(--colors-surface-card) calc(100% - var(--ds-rail-fade)), transparent);
+    animation: sidebar-more linear both;
+    animation-timeline: scroll(self);
+  }
+  @keyframes sidebar-more {
+    from, 92% { --ds-rail-fade: var(--ds-rail-more-fade); }
+    to { --ds-rail-fade: calc(var(--ds-rail-more-fade) * 0); }
+  }
 }
 
 .sidebar__nav::-webkit-scrollbar {
@@ -145,26 +171,31 @@
   content: "";
   background: linear-gradient(transparent, var(--colors-sidebar-background));
 }
-.sidebar__nav { padding-bottom: var(--spacing-xl); }
+.sidebar__nav { padding-bottom: var(--spacing-sm); }
 
 /* Compact rows sit a little apart, so the labels never crowd the next icon. */
 .sidebar.is-collapsed ::deep .nav-item { margin-block: var(--ds-rail-compact-row-gap); }
-
-/* Between the pages and Knowledge, Help and Settings. */
-.sidebar__divider {
-  height: var(--ds-rail-hairline);
-  margin: var(--spacing-md) var(--spacing-sm);
-  background: var(--colors-surface-border);
-}
 
 ::deep .sidebar__group-label {
   margin: var(--spacing-none) var(--spacing-sm) var(--spacing-sm);
   color: var(--colors-text-subtle);
 }
 
+/* Between the rail's groups (designer, 11 November 2026): a short hairline with room around it, inset so it reads
+   as a pause in the list rather than a wall. */
+.sidebar__divider {
+  display: block;
+  height: var(--ds-rail-hairline);
+  margin: var(--ds-rail-divider-gap) var(--spacing-md);
+  background: var(--colors-surface-border);
+}
+
+/* The foot: notifications, then you. */
 .sidebar__footer {
+  display: grid;
   flex: 0 0 auto;
-  padding-top: var(--spacing-sm);
+  gap: var(--spacing-2xs);
+  padding-top: var(--spacing-xs);
   border-top: var(--ds-rail-hairline) solid var(--colors-surface-border);
 }
 
@@ -201,9 +232,9 @@
 .sidebar.is-collapsed ::deep .user-card {
   flex-direction: column;
   justify-content: center;
-  gap: var(--spacing-xs);
+  gap: min(var(--spacing-xs), var(--ds-rail-compact-pad));
   min-height: var(--ds-rail-compact-item);
-  padding: var(--spacing-xs) var(--spacing-2xs);
+  padding: min(var(--spacing-xs), var(--ds-rail-compact-pad)) var(--spacing-2xs);
 }
 
 .sidebar.is-collapsed ::deep .workspace__trigger {
@@ -224,7 +255,7 @@
 /* Room inside the tile, and the label close to its icon (designer, 21 October 2026). */
 .sidebar.is-collapsed ::deep .nav-item {
   gap: var(--spacing-2xs);
-  padding: var(--spacing-md) var(--spacing-xs);
+  padding: var(--ds-rail-tile-pad) var(--spacing-xs);
   border-radius: var(--radius-radius-xl);
 }
 .sidebar.is-collapsed ::deep .nav-item:hover:not(:disabled) { color: var(--colors-text-secondary); background: var(--colors-interaction-pressed); }
@@ -289,4 +320,3 @@
      element keeps the accessible name it carries. */
   text-indent: -100%;
 }
-

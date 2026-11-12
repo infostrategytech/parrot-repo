@@ -85,7 +85,7 @@
                     <ChildContent>
                         @foreach (var option in ChannelOptions)
                         {
-                            <PopoverOption Label="@option.Label" Description="@option.Description" Active="@(_filters.Channel == option.Value)"
+                            <PopoverOption Label="@option.Label" Active="@(_filters.Channel == option.Value)"
                                            OnSelect="() => SetChannel(option.Value)">
                                 <Leading>@ChannelMark(option.Value)</Leading>
                             </PopoverOption>
@@ -101,7 +101,7 @@
                         <ChildContent>
                             @foreach (var option in StatusOptions)
                             {
-                                <PopoverOption Label="@option.Label" Description="@option.Description" Active="@(_filters.Status == option.Value)"
+                                <PopoverOption Label="@option.Label" Active="@(_filters.Status == option.Value)"
                                                OnSelect="() => SetStatus(option.Value)">
                                     <Leading>@StatusMark(option.Value)</Leading>
                                 </PopoverOption>
@@ -116,13 +116,15 @@
                                    Open="@(_openFilter == "agent")" OpenChanged="@(open => SetOpenFilter("agent", open))">
                         <Leading>@AgentMark(_filters.AgentId)</Leading>
                         <ChildContent>
-                            <PopoverOption Label="All AI agents" Description="Every specialist" Active="@(_filters.AgentId is null)"
+                            <PopoverOption Label="All AI agents" Active="@(_filters.AgentId is null)"
                                            OnSelect="() => SetAgent(null)">
                                 <Leading>@AgentMark(null)</Leading>
                             </PopoverOption>
                             @foreach (var agent in Agents)
                             {
-                                <PopoverOption Label="@agent.Name" Description="@AgentRole(agent.Id)" Active="@(_filters.AgentId == agent.Id)"
+                                @* No role line: "All AI agents" above carries none, and a
+                                   filter picks by name. The roles belong on the agents page. *@
+                                <PopoverOption Label="@agent.Name" Active="@(_filters.AgentId == agent.Id)"
                                                OnSelect="() => SetAgent(agent.Id)">
                                     <Leading>@AgentMark(agent.Id)</Leading>
                                 </PopoverOption>
@@ -137,7 +139,7 @@
                     <ChildContent>
                         @foreach (var option in SortOptions)
                         {
-                            <PopoverOption Label="@option.Label" Description="@option.Description" Active="@(_filters.Sort == option.Value)"
+                            <PopoverOption Label="@option.Label" Active="@(_filters.Sort == option.Value)"
                                            OnSelect="() => SetSort(option.Value)">
                                 <Leading>@SortMark(option.Value)</Leading>
                             </PopoverOption>
@@ -300,7 +302,7 @@
                     <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
                         @if (_selected.HasChannelAgent && _selected.AiState != AiState.Active)
                         {
-                            <ActionMenuItem Label="@($"Handover to {_selected.AiAgent?.Name ?? _selected.ChannelAgent!.Name}")" Glyph="IconName.RiRobot3Fill"
+                            <ActionMenuItem Label="@ResponseControl.ReturnWords(_selected, _selected.AiAgent?.Name ?? _selected.ChannelAgent!.Name)" Glyph="IconName.RiRobot3Fill"
                                             OnClick="() => ActAsync(conversation => Client.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender, _lifetime.Token))" />
                         }
                         @if (Features.Available && _selected.HasAiAgent)
@@ -404,10 +406,12 @@
     private static readonly (InboxScope Value, string Label)[] ScopeOptions =
         [(InboxScope.All, "All"), (InboxScope.Mine, "Mine"), (InboxScope.Unassigned, "Unassigned")];
 
-    private static readonly (ConversationStatus? Value, string Label, string Description)[] StatusOptions =
-        [(null, "Any status", "Open and pending conversations"),
-         (ConversationStatus.Open, "Open", "Active conversations"),
-         (ConversationStatus.Pending, "Pending", "Waiting for an action")];
+    // Filters are labels only: FilterPopover draws no second line (7 November 2026). "Pending" is the weak
+    // one — it does not say whose move it is — but that is a label to settle, not a line to explain it away.
+    private static readonly (ConversationStatus? Value, string Label)[] StatusOptions =
+        [(null, "Any status"),
+         (ConversationStatus.Open, "Open"),
+         (ConversationStatus.Pending, "Pending")];
 
     private IReadOnlyList<ConversationItem> Loaded => ConversationsState.Conversations;
 
@@ -419,25 +423,24 @@
     private bool HasPriority => Loaded.Any(c => c.Priority is not null);
 
     /// <summary>WhatsApp always; the other social channels once a conversation arrives on one.</summary>
-    private IEnumerable<(string? Value, string Label, string Description)> ChannelOptions
+    private IEnumerable<(string? Value, string Label)> ChannelOptions
     {
         get
         {
             var channels = Loaded.Select(c => c.Channel).ToHashSet();
             var social = new[] { "whatsapp", "instagram", "facebook", "tiktok" }.Where(c => c == "whatsapp" || channels.Contains(c)).ToList();
-            var names = social.Select(ChannelName).ToList();
-            yield return (null, "All social", social.Count > 1 ? $"{string.Join(", ", names[..^1])} & {names[^1]}" : "Every connected inbox");
-            foreach (var channel in social) yield return (channel, ChannelName(channel), $"{ChannelName(channel)} conversations");
+            yield return (null, "All social");
+            foreach (var channel in social) yield return (channel, ChannelName(channel));
         }
     }
 
-    private IEnumerable<(ConversationSort Value, string Label, string Description)> SortOptions
+    private IEnumerable<(ConversationSort Value, string Label)> SortOptions
     {
         get
         {
-            yield return (ConversationSort.Newest, "Newest first", "Most recent activity");
-            yield return (ConversationSort.Oldest, "Oldest first", "Longest waiting first");
-            if (HasPriority) yield return (ConversationSort.Priority, "Priority first", "Urgent conversations first");
+            yield return (ConversationSort.Newest, "Newest first");
+            yield return (ConversationSort.Oldest, "Oldest first");
+            if (HasPriority) yield return (ConversationSort.Priority, "Priority first");
         }
     }
 

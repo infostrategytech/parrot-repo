@@ -117,6 +117,8 @@
 .agent-advanced__row ::deep .ds-segmented { width: var(--ds-agent-advanced-control); }
 .agent-advanced__field { display: grid; gap: var(--spacing-md); padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl); }
 .agent-advanced__field.is-indented { padding-top: var(--spacing-none); border-top: 0; }
+/* Who it brings in: a row like the switches under it. */
+.agent-advanced__field.is-who { padding: var(--spacing-lg) var(--spacing-xl); }
 
 /* The notes' files, one per row, and the tools to add a file or a voice note. */
 .agent-advanced__files { display: grid; gap: var(--spacing-xs); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }

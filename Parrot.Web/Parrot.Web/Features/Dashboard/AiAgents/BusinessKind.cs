@@ -1,7 +1,7 @@
 namespace Parrot.Web.Features.Dashboard.AiAgents;
 
 /// <summary>
-/// The kind of business, kept once for the business (designer, 20 October 2026): chosen in Settings, Workspace,
+/// The kind of business, kept once for the business (designer, 20 October 2026): chosen in Settings, Business profile,
 /// where it starts as the AI's guess from what the business has told it, for the owner to confirm or change.
 /// Every agent reads it from here: what it's careful about, the questions to test it with, how its job
 /// description is written. Kept for the session until the backend stores it (agents-backend-requests 18).

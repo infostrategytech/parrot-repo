@@ -10,9 +10,9 @@ namespace Test.Parrot.Api.Tests.Web;
 // through to a team member whose role does not reach it.
 public class PageAccessTests
 {
-    // Open to every member on purpose: the overview and their own settings (the
-    // business's tabs inside Settings are hidden from members separately).
-    private static readonly HashSet<string> OpenToEveryMember = ["/dashboard", "/dashboard/settings", "/dashboard/settings/{Tab}"];
+    // Open to every member on purpose: the overview, their own settings (the business's sections inside
+    // Settings are hidden from members separately) and their notifications, which are each person's own.
+    private static readonly HashSet<string> OpenToEveryMember = ["/dashboard", "/dashboard/settings", "/dashboard/settings/{Tab}", "/dashboard/notifications"];
 
     private static IEnumerable<(Type Page, string Route)> DashboardPages() =>
         typeof(RequiresAccessAttribute).Assembly.GetTypes()

@@ -144,7 +144,7 @@
   border: var(--ds-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-full);
 }
-.tool-dialog__people img { width: var(--ds-tool-person-face); height: var(--ds-tool-person-face); border-radius: var(--radius-radius-full); object-fit: cover; }
+.tool-dialog__people .tool-dialog__face { display: grid; width: var(--ds-tool-person-face); height: var(--ds-tool-person-face); }
 .tool-dialog__found li > ::deep span:first-child { color: var(--colors-text-primary); }
 .tool-dialog__found li > ::deep span:last-child { color: var(--colors-text-muted); white-space: nowrap; }
 

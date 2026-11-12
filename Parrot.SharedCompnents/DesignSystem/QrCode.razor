@@ -1,0 +1,29 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@using QRCoder
+
+<div class="qr-code">
+    @if (_source is not null)
+    {
+        @* QR's machine-readable black/white pixels and quiet zone are encoded locally, not themed or sent to
+           an external image service. They are functional data, not brand colours. *@
+        <img src="@_source" alt="@Label" />
+    }
+    else
+    {
+        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Use the setup key below instead.</Typography>
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Value { get; set; } = "";
+    [Parameter] public string Label { get; set; } = "Scan this code with your authenticator app";
+    private string? _value, _source;
+    protected override void OnParametersSet()
+    {
+        if (_value == Value) return;
+        _value = Value; _source = null;
+        if (string.IsNullOrEmpty(Value)) return;
+        try { _source = "data:image/png;base64," + Convert.ToBase64String(PngByteQRCodeHelper.GetQRCode(Value, QRCodeGenerator.ECCLevel.Q, 6)); }
+        catch (Exception) { /* The setup key remains available when a payload cannot be rendered. */ }
+    }
+}

@@ -1,4 +1,5 @@
 using System.Globalization;
+using Parrot.SharedComponents.DesignSystem;
 using System.Text.RegularExpressions;
 
 namespace Parrot.Web.Features.Dashboard.Catalog.ConceptE;
@@ -32,9 +33,9 @@ public static partial class PriceWords
         var low = prices.Min();
         var high = prices.Max();
         // Variants show their own prices, so a starting price says nothing more: their range or their one price.
-        var main = item.PriceType == PriceType.From && !item.HasOptions ? $"From {Naira(low)}"
-            : low == high ? Naira(low)
-            : $"{Naira(low)} – {Naira(high)}";
+        var main = item.PriceType == PriceType.From && !item.HasOptions ? $"From {CurrencyAmount.Format(low, item.CurrencyCode)}"
+            : low == high ? CurrencyAmount.Format(low, item.CurrencyCode)
+            : $"{CurrencyAmount.Format(low, item.CurrencyCode)} – {CurrencyAmount.Format(high, item.CurrencyCode)}";
 
         var parts = new List<string>();
         if (item.PriceUnit.Trim().Length > 0) parts.Add(item.PriceUnit.Trim());
@@ -55,12 +56,12 @@ public static partial class PriceWords
         var low = prices.Min();
         var high = prices.Max();
         var unit = item.PriceUnit.Trim().Length > 0 ? $" {item.PriceUnit.Trim()}" : string.Empty;
-        if (item.PriceType == PriceType.From && !item.HasOptions) return $"It starts from {Naira(low)}{unit}.";
+        if (item.PriceType == PriceType.From && !item.HasOptions) return $"It starts from {CurrencyAmount.Format(low, item.CurrencyCode)}{unit}.";
         if (low == high)
-            return item.HasOptions && Sizing(item.Options[0]) ? $"It's {Naira(low)}{unit}, the same for every {Singular(item.Options[0]).ToLowerInvariant()}." : $"It's {Naira(low)}{unit}.";
+            return item.HasOptions && Sizing(item.Options[0]) ? $"It's {CurrencyAmount.Format(low, item.CurrencyCode)}{unit}, the same for every {Singular(item.Options[0]).ToLowerInvariant()}." : $"It's {CurrencyAmount.Format(low, item.CurrencyCode)}{unit}.";
         return PriceOption(item) is { } option && !IsVariantList(option)
-            ? $"It's {Naira(low)} to {Naira(high)}{unit}, by {Singular(option).ToLowerInvariant()}:"
-            : $"It's {Naira(low)} to {Naira(high)}{unit}:";
+            ? $"It's {CurrencyAmount.Format(low, item.CurrencyCode)} to {CurrencyAmount.Format(high, item.CurrencyCode)}{unit}, by {Singular(option).ToLowerInvariant()}:"
+            : $"It's {CurrencyAmount.Format(low, item.CurrencyCode)} to {CurrencyAmount.Format(high, item.CurrencyCode)}{unit}:";
     }
 
     /// <summary>The price of each value of the option that sets the price ("8 inches", ₦110,000), in order.</summary>
@@ -152,10 +153,7 @@ public static partial class PriceWords
     }
 
     /// <summary>Naira as the business writes it: whole naira without decimals, kobo only when there is some.</summary>
-    public static string Naira(decimal amount) =>
-        "₦" + (amount == decimal.Truncate(amount)
-            ? amount.ToString("#,##0", CultureInfo.InvariantCulture)
-            : amount.ToString("#,##0.00", CultureInfo.InvariantCulture));
+    public static string Naira(decimal amount) => CurrencyAmount.Format(amount, CurrencyAmount.LegacyCode);
 
     /// <summary>The effective prices of an item: one, or one per combination.</summary>
     public static List<decimal> Prices(CatalogEntry item) => item.HasOptions

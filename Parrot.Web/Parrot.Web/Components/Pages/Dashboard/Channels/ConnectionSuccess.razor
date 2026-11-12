@@ -10,13 +10,13 @@
    own mark, now with a tick, and a heading the same size. Focus moves here,
    so a screen reader hears the result.
 
-   Opened from the dashboard (?from=dashboard): straight back to
+   Opened from the dashboard (?from=dashboard, Concept B): straight back to
    it with a toast instead, so the owner sees what is next on their list. *@
 
 <section class="connected channel-@Channel.Id.ToString().ToLowerInvariant()"
          tabindex="-1" aria-labelledby="connected-title" @ref="_root">
     <span class="connected__mark">
-        <ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" Plain />
+        <ChannelIcon Channel="@Channel.Id.ToString()" Size="IconSize.Lg" OnBrand />
         <span class="connected__badge"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" /></span>
     </span>
 
