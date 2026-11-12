@@ -99,6 +99,7 @@ builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepo
 builder.Services.AddScoped<IBusinessSourceRepository, BusinessSourceRepository>();
 builder.Services.AddScoped<ISnapshotPublisher, SnapshotPublisher>();
 builder.Services.AddScoped<IConnectionSourceSyncService, ConnectionSourceSyncService>();
+builder.Services.AddScoped<IBusinessSourceCredentialsService, BusinessSourceCredentialsService>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.AddScoped<IWhatsAppCatalogueSyncService, WhatsAppCatalogueSyncService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));
