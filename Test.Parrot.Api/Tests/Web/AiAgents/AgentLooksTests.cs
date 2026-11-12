@@ -15,8 +15,10 @@ public sealed class AgentLooksTests
             foreach (var tone in PresenceAvatarTones.Palette)
             {
                 var saved = AgentLooks.Save(new AvatarAppearance(style.Direction, tone));
-                Assert.StartsWith("look:", saved);
+                Assert.StartsWith("look-", saved);
                 Assert.True(saved.Length < 40);
+                // The AI service's rule for a look key: letters, digits, '-' and '_' only.
+                Assert.Matches("^[A-Za-z0-9_-]+$", saved);
                 Assert.Equal(new AvatarAppearance(style.Direction, tone), AgentLooks.Of(saved));
             }
     }
@@ -69,6 +71,10 @@ public sealed class AgentLooksTests
         var form = AgentForm.Suggested([]);
         Assert.True(AgentLooks.IsLook(form.Mascot));
         form.ChooseLook(new AvatarAppearance(PresenceAvatarDirection.Ripple, PresenceAvatarTone.Orange));
-        Assert.Equal("look:ripple:orange", form.Mascot);
+        Assert.Equal("look-ripple-orange", form.Mascot);
     }
+
+    [Fact]
+    public void ALookSavedTheOldWayStillReads() =>
+        Assert.Equal(new AvatarAppearance(PresenceAvatarDirection.Fig, PresenceAvatarTone.Teal), AgentLooks.Of("look:fig:teal"));
 }
