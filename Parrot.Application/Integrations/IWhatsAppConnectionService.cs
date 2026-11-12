@@ -12,5 +12,6 @@ public interface IWhatsAppConnectionService
     Task<WhatsAppConnectionResponse> GetByIdAsync(string workspaceId, Guid id);
     Task<WhatsAppConnectionSetupResponse> GetSetupAsync(string workspaceId, Guid id);
     Task DisableAsync(string workspaceId, Guid id);
+    Task RequestKnowledgeRefreshAsync(string workspaceId, Guid id, CancellationToken ct = default);
     Task<bool> VerifyWebhookAsync(string identifier, string mode, string verifyToken);
 }

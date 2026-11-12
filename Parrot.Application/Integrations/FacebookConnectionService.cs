@@ -106,6 +106,10 @@ public sealed class FacebookConnectionService(
         FacebookConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("There is no Facebook connection to disconnect.");
         await repository.DisableAsync(connection.Id, workspaceId, DateTime.UtcNow, cancellationToken);
+
+        // Best-effort: deactivate sources so the AI snapshot no longer lists this connection.
+        try { await sourceSyncService.DeactivateConnectionSourcesAsync(workspaceId, connection.Id, cancellationToken); }
+        catch (Exception ex) { logger.LogWarning(ex, "facebook.sources.deactivate_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}", workspaceId, connection.Id); }
     }
 
     // Manual setup: the customer's own Meta app signs this connection's webhooks with it. Allowed

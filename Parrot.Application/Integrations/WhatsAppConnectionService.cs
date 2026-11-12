@@ -110,6 +110,16 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
     {
         await GetOwnedAsync(workspaceId, id);
         await _repository.DisableAsync(id, workspaceId, DateTime.UtcNow);
+
+        // Best-effort: deactivate sources so the AI snapshot no longer lists this connection.
+        try { await _sourceSyncService.DeactivateConnectionSourcesAsync(workspaceId, id); }
+        catch (Exception ex) { _logger.LogWarning(ex, "whatsapp.sources.deactivate_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}", workspaceId, id); }
+    }
+
+    public async Task RequestKnowledgeRefreshAsync(string workspaceId, Guid id, CancellationToken ct = default)
+    {
+        await GetOwnedAsync(workspaceId, id);
+        await _sourceSyncService.RequestMetadataRefreshAsync(workspaceId, id, ct);
     }
 
     public async Task ConfigureAccountAsync(string workspaceId, Guid id, WhatsAppAccountRequest request)

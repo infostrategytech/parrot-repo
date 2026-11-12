@@ -4,6 +4,7 @@ using Parrot.Application.BusinessSources;
 using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
+using Parrot.Domain.Exceptions;
 using Parrot.Infrastructure.Data;
 
 namespace Parrot.Infrastructure.BusinessSources;
@@ -165,5 +166,47 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
             await tx.RollbackAsync(ct);
             throw;
         }
+    }
+
+    public async Task DeactivateConnectionSourcesAsync(string workspaceId, Guid connectionId, CancellationToken ct = default)
+    {
+        await using IDbContextTransaction tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await _sources.DeactivateByConnectionAsync(connectionId, DateTime.UtcNow, ct);
+            await _db.SaveChangesAsync(ct);
+            await _publisher.PublishAsync(workspaceId, ct);
+            await tx.CommitAsync(ct);
+
+            _logger.LogInformation("connection.sources.deactivated WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}",
+                workspaceId, connectionId);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task RequestMetadataRefreshAsync(string workspaceId, Guid connectionId, CancellationToken ct = default)
+    {
+        BusinessSource? source = await _db.BusinessSources
+            .Where(s => s.WorkspaceId == workspaceId
+                     && s.AuthorizationConnectionId == connectionId
+                     && s.Kind == BusinessSourceKind.Profile
+                     && s.IsActive)
+            .FirstOrDefaultAsync(ct);
+
+        if (source is null)
+            throw new NotFoundException("No knowledge source found for this connection.");
+
+        source.MetadataSyncStatus = MetadataSyncStatus.Pending;
+        source.MetadataSyncAttemptCount = 0;
+        source.NextMetadataSyncAttemptAt = null;
+        source.UpdatedAt = DateTime.UtcNow;
+        await _db.SaveChangesAsync(ct);
+
+        _logger.LogInformation("knowledge.refresh.requested WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} SourceId={SourceId}",
+            workspaceId, connectionId, source.Id);
     }
 }

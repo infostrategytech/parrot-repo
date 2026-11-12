@@ -139,6 +139,10 @@ public sealed class InstagramConnectionService(
         InstagramConnection connection = await repository.GetByOwnerAsync(workspaceId, cancellationToken)
             ?? throw new NotFoundException("There is no Instagram connection to disconnect.");
         await repository.DisableAsync(connection.Id, workspaceId, DateTime.UtcNow, cancellationToken);
+
+        // Best-effort: deactivate sources so the AI snapshot no longer lists this connection.
+        try { await sourceSyncService.DeactivateConnectionSourcesAsync(workspaceId, connection.Id, cancellationToken); }
+        catch (Exception ex) { logger.LogWarning(ex, "instagram.sources.deactivate_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}", workspaceId, connection.Id); }
     }
 
     private static string NewCredential() =>
