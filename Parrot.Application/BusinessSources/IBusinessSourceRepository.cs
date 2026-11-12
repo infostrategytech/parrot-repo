@@ -24,10 +24,10 @@ public interface IBusinessSourceRepository
     Task<IReadOnlyList<BusinessSource>> GetByConnectionAsync(Guid connectionId, CancellationToken ct = default);
 
     /// <summary>
-    /// Marks all active sources for <paramref name="connectionId"/> as inactive and
-    /// updates their UpdatedAt. Does NOT call SaveChanges.
+    /// Marks all active sources for <paramref name="connectionId"/> (scoped to <paramref name="workspaceId"/>)
+    /// as inactive and updates their UpdatedAt. Does NOT call SaveChanges.
     /// </summary>
-    Task DeactivateByConnectionAsync(Guid connectionId, DateTime now, CancellationToken ct = default);
+    Task DeactivateByConnectionAsync(string workspaceId, Guid connectionId, DateTime now, CancellationToken ct = default);
 
     /// <summary>
     /// Claims up to <paramref name="batchSize"/> sources eligible for metadata sync

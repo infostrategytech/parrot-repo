@@ -141,7 +141,7 @@ public sealed class BusinessSourceRepositoryPostgresTests : IAsyncLifetime
 
         await using (ApplicationDbContext db2 = new(_options!))
         {
-            await new BusinessSourceRepository(db2).DeactivateByConnectionAsync(connectionId, DateTime.UtcNow);
+            await new BusinessSourceRepository(db2).DeactivateByConnectionAsync("ws-1", connectionId, DateTime.UtcNow);
             await db2.SaveChangesAsync();
         }
 

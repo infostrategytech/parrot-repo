@@ -173,7 +173,7 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
         await using IDbContextTransaction tx = await _db.Database.BeginTransactionAsync(ct);
         try
         {
-            await _sources.DeactivateByConnectionAsync(connectionId, DateTime.UtcNow, ct);
+            await _sources.DeactivateByConnectionAsync(workspaceId, connectionId, DateTime.UtcNow, ct);
             await _db.SaveChangesAsync(ct);
             await _publisher.PublishAsync(workspaceId, ct);
             await tx.CommitAsync(ct);

@@ -56,10 +56,10 @@ public class BusinessSourceRepository : IBusinessSourceRepository
             .Where(s => s.AuthorizationConnectionId == connectionId)
             .ToListAsync(ct);
 
-    public async Task DeactivateByConnectionAsync(Guid connectionId, DateTime now, CancellationToken ct = default)
+    public async Task DeactivateByConnectionAsync(string workspaceId, Guid connectionId, DateTime now, CancellationToken ct = default)
     {
         IReadOnlyList<BusinessSource> active = await _db.BusinessSources
-            .Where(s => s.AuthorizationConnectionId == connectionId && s.IsActive)
+            .Where(s => s.WorkspaceId == workspaceId && s.AuthorizationConnectionId == connectionId && s.IsActive)
             .ToListAsync(ct);
 
         foreach (BusinessSource source in active)
