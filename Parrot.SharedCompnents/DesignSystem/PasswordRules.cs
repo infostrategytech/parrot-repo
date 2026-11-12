@@ -1,5 +1,7 @@
 namespace Parrot.Web.Features.Auth.Models;
 
+// Kept in its existing namespace for compatibility; shared PasswordInput must not depend on the Web assembly.
+
 /// <summary>
 /// What a new password has to meet. Defined once, because Sign Up and
 /// password reset must agree. The API only enforces the length (8 to 128);

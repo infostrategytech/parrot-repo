@@ -1,0 +1,81 @@
+@namespace Parrot.SharedComponents.DesignSystem
+@implements IDisposable
+
+@* New notifications while you're in the app (designer, 5 November 2026): a short card in the top right corner,
+   the same mark and words as the bell's row, with Open and a close. Each goes after a few seconds, but waits while
+   the pointer or keyboard is on the stack, so it can be read and acted on. Newest on top, at most three. It only
+   shows what it's given: the host decides what pops up. *@
+@if (Items.Count > 0)
+{
+    <section class="ds-notification-popups" aria-label="New notifications" data-held="@(_paused ? "true" : null)"
+             @onmouseover="Pause" @onmouseout="Resume" @onfocusin="Pause" @onfocusout="Resume">
+        @foreach (var item in Items.Take(3))
+        {
+            var current = item;
+            <div class="ds-notification-popup" role="status" @key="item.Id">
+                <span class="ds-notification-popup__mark is-@item.Tone.ToString().ToLowerInvariant()" aria-hidden="true"><Icon Name="item.Glyph" Size="IconSize.Sm" /></span>
+                <div class="ds-notification-popup__words">
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" Prose Class="ds-notification-popup__title">@item.Title</Typography>
+                    @if (!string.IsNullOrWhiteSpace(item.Detail)) { <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Class="ds-notification-popup__detail">@item.Detail</Typography> }
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="ds-notification-popup__meta">@item.Meta</Typography>
+                    @if (!string.IsNullOrWhiteSpace(item.ActionLabel))
+                    {
+                        <div class="ds-notification-popup__actions">
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => OnOpen.InvokeAsync(current.Id)">@item.ActionLabel</Button>
+                        </div>
+                    }
+                </div>
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="ds-notification-popup__close" aria-label="Dismiss" title="Dismiss" @onclick="() => OnDismiss.InvokeAsync(current.Id)">
+                    <IconLeft><Icon Name="IconName.RiCloseFill" /></IconLeft>
+                </Button>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    /// <summary>How long a pop-up stays when nobody is on it.</summary>
+    public static readonly TimeSpan Stay = TimeSpan.FromSeconds(6);
+
+    [Parameter, EditorRequired] public IReadOnlyList<NotificationPopupItem> Items { get; set; } = [];
+    [Parameter] public EventCallback<string> OnOpen { get; set; }
+    [Parameter] public EventCallback<string> OnDismiss { get; set; }
+
+    private readonly Dictionary<string, CancellationTokenSource> _timers = [];
+    private bool _paused;
+
+    protected override void OnParametersSet()
+    {
+        // A timer for each new one; gone ones lose theirs.
+        foreach (var gone in _timers.Keys.Except(Items.Select(item => item.Id)).ToArray()) Stop(gone);
+        // The last one closed under the pointer: the stack went with it, so no mouseout ever came. Nothing is held now.
+        if (Items.Count == 0) _paused = false;
+        if (!_paused) foreach (var item in Items.Where(item => !_timers.ContainsKey(item.Id))) Start(item.Id);
+    }
+
+    private void Start(string id)
+    {
+        var cts = new CancellationTokenSource();
+        _timers[id] = cts;
+        _ = ExpireAsync(id, cts.Token);
+    }
+
+    private async Task ExpireAsync(string id, CancellationToken token)
+    {
+        try { await Task.Delay(Stay, token); }
+        catch (TaskCanceledException) { return; }
+        await InvokeAsync(() => OnDismiss.InvokeAsync(id));
+    }
+
+    private void Stop(string id)
+    {
+        if (_timers.Remove(id, out var cts)) { cts.Cancel(); cts.Dispose(); }
+    }
+
+    // Reading or tabbing through them holds them; leaving gives each its full time again.
+    // Moving between cards fires out-then-over; the over cancels the restart, so the stack only goes once the pointer has left.
+    private void Pause() { _paused = true; foreach (var id in _timers.Keys.ToArray()) Stop(id); }
+    private void Resume() { _paused = false; foreach (var item in Items) if (!_timers.ContainsKey(item.Id)) Start(item.Id); }
+
+    public void Dispose() { foreach (var id in _timers.Keys.ToArray()) Stop(id); }
+}

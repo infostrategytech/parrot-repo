@@ -1,0 +1,69 @@
+/* Top right, over the page and under dialogs; newest first. */
+.ds-notification-popups {
+  /* Gaps in the token set: no width for a pop-up, no layer between the page and a dialog, no motion scale. */
+  --ds-notification-popup-width: 360px;
+  --ds-notification-popup-layer: 110;
+  --ds-notification-popup-mark: 36px;
+  --ds-notification-popup-enter: 180ms;
+
+  position: fixed;
+  top: var(--spacing-xl);
+  right: var(--spacing-xl);
+  z-index: var(--ds-notification-popup-layer);
+  display: grid;
+  gap: var(--spacing-sm);
+  width: min(var(--ds-notification-popup-width), calc(100vw - 2 * var(--spacing-lg)));
+}
+
+.ds-notification-popup {
+  display: grid;
+  grid-template-columns: var(--ds-notification-popup-mark) minmax(0, 1fr) auto;
+  gap: var(--spacing-md);
+  align-items: start;
+  padding: var(--spacing-lg) var(--spacing-sm) var(--spacing-lg) var(--spacing-lg);
+  background: var(--colors-surface-popover);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
+  animation: ds-notification-popup-in var(--ds-notification-popup-enter) ease-out;
+}
+
+.ds-notification-popup__mark {
+  display: grid;
+  place-items: center;
+  width: var(--ds-notification-popup-mark);
+  height: var(--ds-notification-popup-mark);
+  color: var(--colors-icon-secondary);
+  background: var(--colors-accent-neutral-muted);
+  border-radius: var(--radius-radius-full);
+}
+.ds-notification-popup__mark.is-amber { color: var(--colors-accent-amber-text); background: var(--colors-accent-amber-subtle); }
+.ds-notification-popup__mark.is-emerald { color: var(--colors-accent-emerald-text); background: var(--colors-accent-emerald-subtle); }
+.ds-notification-popup__mark.is-brand { color: var(--colors-icon-brand); background: var(--colors-accent-brand-subtle); }
+.ds-notification-popup__mark.is-pink { color: var(--colors-accent-pink-text); background: var(--colors-accent-pink-subtle); }
+.ds-notification-popup__mark.is-blue { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
+.ds-notification-popup__mark.is-violet { color: var(--colors-accent-violet-text); background: var(--colors-accent-violet-subtle); }
+.ds-notification-popup__mark.is-success { color: var(--colors-feedback-success-text); background: var(--colors-accent-emerald-subtle); }
+
+.ds-notification-popup__words { display: grid; gap: var(--spacing-xs); min-width: 0; overflow-wrap: anywhere; }
+.ds-notification-popup__words ::deep p { margin: var(--spacing-none); }
+.ds-notification-popup__words ::deep .ds-notification-popup__title { color: var(--colors-text-primary); }
+/* One line of the specifics: enough to know which, without turning a pop-up into the task. */
+.ds-notification-popup__words ::deep .ds-notification-popup__detail { overflow: hidden; color: var(--colors-text-secondary); white-space: nowrap; text-overflow: ellipsis; }
+.ds-notification-popup__words ::deep .ds-notification-popup__meta { color: var(--colors-text-muted); }
+.ds-notification-popup__actions { display: flex; gap: var(--spacing-sm); padding-top: var(--spacing-sm); }
+.ds-notification-popup ::deep .ds-notification-popup__close { color: var(--colors-icon-muted); }
+
+@keyframes ds-notification-popup-in {
+  from { opacity: 0; transform: translateY(calc(-1 * var(--spacing-sm))); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-notification-popup { animation: none; }
+}
+
+/* A phone: across the top, inside the side gutters. */
+@media (max-width: 760px) {
+  .ds-notification-popups { top: var(--spacing-md); right: var(--spacing-lg); left: var(--spacing-lg); width: auto; }
+}

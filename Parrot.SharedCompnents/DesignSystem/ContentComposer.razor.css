@@ -1,0 +1,27 @@
+.ds-content-composer {
+  display: grid;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  min-width: 0;
+}
+.ds-content-composer__heading { display: grid; gap: var(--spacing-xs); }
+.ds-content-composer__heading ::deep h2,
+.ds-content-composer__heading ::deep p { margin: var(--spacing-none); }
+.ds-content-composer__heading ::deep p { color: var(--colors-text-muted); }
+.ds-content-composer ::deep .ds-text-area { width: 100%; }
+.ds-content-composer__attachments { min-width: 0; }
+.ds-content-composer__footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  padding-top: var(--spacing-lg);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+@media (max-width: 760px) {
+  .ds-content-composer { padding: var(--spacing-lg); gap: var(--spacing-lg); }
+}

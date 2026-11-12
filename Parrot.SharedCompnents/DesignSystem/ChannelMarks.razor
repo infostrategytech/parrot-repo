@@ -1,0 +1,35 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Compact, non-overlapping channel marks for record tables. Reused by Team and Customers.
+   Each informational mark has shared hover/focus help; the list also has a readable text equivalent. *@
+@if (Channels.Count > 0)
+{
+    <span class="channel-marks">
+        <span class="channel-marks__row">
+            @foreach (var channel in Shown)
+            {
+                <Tooltip Text="@Name(channel)" Focusable>
+                    <span aria-hidden="true"><ChannelGlyph Channel="@channel" Label="@Name(channel)" Compact ShowTitle="false" /></span>
+                </Tooltip>
+            }
+            @if (Hidden.Count > 0)
+            {
+                <Tooltip Text="@string.Join(", ", Hidden.Select(Name))" Focusable>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="channel-marks__more" aria-hidden="true">+@Hidden.Count</Typography>
+                </Tooltip>
+            }
+        </span>
+        <span class="sr-only">@string.Join(", ", Channels.Select(Name))</span>
+    </span>
+}
+
+@code {
+    [Parameter] public IReadOnlyList<string> Channels { get; set; } = [];
+    /// <summary>The screen's channel name (Customers calls facebook "Messenger").</summary>
+    [Parameter] public Func<string, string> Name { get; set; } = ChannelStack.NameOf;
+    [Parameter] public int Max { get; set; } = 4;
+
+    private int Limit => Math.Max(1, Max);
+    private IEnumerable<string> Shown => Channels.Count <= Limit ? Channels : Channels.Take(Limit - 1);
+    private IReadOnlyList<string> Hidden => Channels.Count <= Limit ? [] : [.. Channels.Skip(Limit - 1)];
+}

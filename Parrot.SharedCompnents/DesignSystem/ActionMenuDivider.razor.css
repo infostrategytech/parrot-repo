@@ -1,0 +1,10 @@
+/* Runs the full width of the menu, as in the design: the rows are full-bleed,
+   so a rule that stopped short of the edges would look like a mistake. */
+.ds-action-menu-divider {
+  /* Gap in the token set: no hairline/border-width scale. */
+  --ds-action-menu-divider-hairline: 1px;
+
+  height: var(--ds-action-menu-divider-hairline);
+  margin-block: var(--spacing-xs);
+  background: var(--colors-surface-input);
+}

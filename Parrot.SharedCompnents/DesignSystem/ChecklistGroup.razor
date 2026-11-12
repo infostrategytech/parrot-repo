@@ -1,0 +1,60 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A named group of choices that can be taken whole or one by one (designer, 8 November 2026, for a role's
+   permissions). One row: the group's checkbox (all, some or none; ticking it takes them all), how many of them are on,
+   and an arrow to open the group and choose one by one. Closed to start, so a long list reads as a few lines.
+   Only the box selects (designer, 8 November 2026): the rest of the row (name, count, arrow) opens and closes it.
+   Stack several in a ChecklistGroups-style list; each draws its own divider. *@
+<div class="@(Open ? "ds-checklist-group is-open" : "ds-checklist-group")" role="group" aria-label="@Title">
+    <div class="ds-checklist-group__head">
+        <Checkbox State="@GroupState" StateChanged="ToggleAllAsync" AriaLabel="@($"All of {Title}")" Disabled="Disabled" />
+        <RowButton Class="ds-checklist-group__toggle" aria-expanded="@(Open ? "true" : "false")" aria-controls="@_listId"
+                   OnClick="() => OpenChanged.InvokeAsync(!Open)">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="ds-checklist-group__title">@Title</Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="ds-checklist-group__count">@($"{OnCount} of {Options.Count}")</Typography>
+            <Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" Class="ds-checklist-group__arrow" />
+        </RowButton>
+    </div>
+    @* Always there, and slid open or shut (designer, 8 November 2026: nothing snaps or jumps). Shut, it can't be
+       reached by keyboard or read out. *@
+    <div class="ds-checklist-group__panel" inert="@(!Open)" aria-hidden="@(Open ? null : "true")">
+        <div class="ds-checklist-group__list" id="@_listId">
+            @foreach (var option in Options)
+            {
+                var current = option;
+                <Checkbox State="@(Selected.Contains(current.Key) ? CheckboxState.Checked : CheckboxState.Unchecked)"
+                          StateChanged="state => ToggleAsync(current.Key, state == CheckboxState.Checked)" Label="@current.Label" Disabled="Disabled" />
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>One choice in the group.</summary>
+    public sealed record Option(string Key, string Label);
+
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public IReadOnlyList<Option> Options { get; set; } = [];
+
+    /// <summary>The keys that are on, across every group: the caller owns it.</summary>
+    [Parameter, EditorRequired] public IReadOnlySet<string> Selected { get; set; } = new HashSet<string>();
+
+    /// <summary>Turn keys on or off: one when a choice is ticked, all of the group's when its checkbox is.</summary>
+    [Parameter] public EventCallback<(IReadOnlyList<string> Keys, bool On)> OnChange { get; set; }
+
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public EventCallback<bool> OpenChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private readonly string _listId = "checklist-" + Guid.NewGuid().ToString("N");
+    private int OnCount => Options.Count(option => Selected.Contains(option.Key));
+
+    private CheckboxState GroupState => OnCount == 0 ? CheckboxState.Unchecked
+        : OnCount == Options.Count ? CheckboxState.Checked : CheckboxState.Indeterminate;
+
+    // From some or none, the group's checkbox takes them all; from all, it clears them.
+    private Task ToggleAllAsync(CheckboxState _) =>
+        OnChange.InvokeAsync(([.. Options.Select(option => option.Key)], OnCount < Options.Count));
+
+    private Task ToggleAsync(string key, bool on) => OnChange.InvokeAsync(([key], on));
+}

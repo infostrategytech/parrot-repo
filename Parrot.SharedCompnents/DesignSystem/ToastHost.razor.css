@@ -28,7 +28,8 @@
 
 .toast-host {
   /* Gaps in the token set: no z-index scale and no component width scale.
-     The layer sits below the dialog's, which is the only thing that should
-     ever cover a toast. */
-  --ds-toast-layer: 110;
+     The layer sits above ContentModal's (115), so a form's failed save can
+     be read, and below the dialog's (120), which is the only thing that
+     should ever cover a toast. */
+  --ds-toast-layer: 117;
 }

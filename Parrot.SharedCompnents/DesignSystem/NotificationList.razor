@@ -1,0 +1,57 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The same notification rows in a compact panel or a full page. This component never reads or resolves an item. *@
+<ul class="ds-notification-list ds-notification-list--@Layout.ToString().ToLowerInvariant() @(Outlined ? "is-outlined" : null) @Class" aria-label="@Label">
+    @{ string? section = null; }
+    @foreach (var item in Items)
+    {
+        var current = item;
+        @if (item.Section is { } heading && heading != section)
+        {
+            section = heading;
+            <li class="ds-notification-list__section" role="presentation"><Typography TextStyle="TextStyle.Small12Semibold" As="span">@heading</Typography></li>
+        }
+        <li @key="item.Id">
+            <RowButton Class="@RowClass(item)" Disabled="Disabled" OnClick="() => OnSelect.InvokeAsync(current.Id)">
+                <span class="ds-notification-list__mark is-@item.Tone.ToString().ToLowerInvariant() @(item.Resolved ? "is-resolved" : null)" aria-hidden="true"><Icon Name="item.Glyph" Size="IconSize.Sm" /></span>
+                <span class="ds-notification-list__words">
+                    <Typography TextStyle="@(item.Unread ? TextStyle.BodySmallSemibold : TextStyle.BodySmallMedium)" As="span" Prose Class="ds-notification-list__title">@item.Title</Typography>
+                    @if (!string.IsNullOrWhiteSpace(item.Detail)) { <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose Class="ds-notification-list__detail">@item.Detail</Typography> }
+                    @* In the narrow panel the action rides on the time line, so a row is three lines, not four. *@
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="ds-notification-list__meta">@item.Meta@if (Layout == NotificationListLayout.Compact && !string.IsNullOrWhiteSpace(item.ActionLabel)) {<span class="ds-notification-list__inline-action"> · @item.ActionLabel</span>}</Typography>
+                </span>
+                @* Unread sits in the corner in both layouts. Beside the action it read as a status ("● Open task"). *@
+                @if (Layout == NotificationListLayout.Compact)
+                {
+                    @if (item.Unread) { <span class="ds-notification-list__dot is-corner" aria-label="Unread"></span> }
+                }
+                else
+                {
+                    @* The page's right edge: unread on top, level with the headline; the action at the foot, level with the time
+                       (designer, 5 November 2026). *@
+                    <span class="ds-notification-list__side">
+                        @if (item.Unread) { <span class="ds-notification-list__dot is-corner" aria-label="Unread"></span> }
+                        @if (!string.IsNullOrWhiteSpace(item.ActionLabel))
+                        {
+                            <span class="ds-notification-list__trailing">
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="ds-notification-list__action">@item.ActionLabel</Typography>
+                                <Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" Class="ds-notification-list__arrow" />
+                            </span>
+                        }
+                    </span>
+                }
+            </RowButton>
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<NotificationListItem> Items { get; set; } = [];
+    [Parameter] public EventCallback<string> OnSelect { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public bool Outlined { get; set; }
+    [Parameter] public NotificationListLayout Layout { get; set; } = NotificationListLayout.Compact;
+    [Parameter] public string Label { get; set; } = "Notifications";
+    [Parameter] public string? Class { get; set; }
+    private static string RowClass(NotificationListItem item) => "ds-notification-list__item" + (item.Unread ? " is-unread" : "") + (item.Resolved ? " is-resolved" : "");
+}

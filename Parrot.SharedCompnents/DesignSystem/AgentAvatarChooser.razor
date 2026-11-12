@@ -1,0 +1,100 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* Controlled appearance picker: visual assets only, no agent data or save call.
+   It's for self-expression (designer, 9 November 2026): every shape, any bright
+   colour, and the characters are alive. They follow the pointer, perk up on
+   hover and hop when chosen. Once someone picks a colour, every shape shows it
+   and switching shape keeps it. *@
+@if (Compact)
+{
+    @* Under a big preview (designer, 10 November 2026: the tile grid was too much for setup and
+       small screens): the characters alone in two even rows of six, then the colours in two rows
+       of seven. The preview above carries the name, so no labels or headings repeat it. *@
+    <div class="agent-avatar-chooser is-compact">
+        <div class="agent-avatar-chooser__shapes" role="group" aria-label="Choose a character">
+            @for (var i = 0; i < AvatarStyles.All.Count; i++)
+            {
+                var style = AvatarStyles.All[i];
+                var selected = Value.Direction == style.Direction;
+                <RowButton Class="@($"avatar-shape{(selected ? " is-selected" : null)}")" Disabled="Disabled"
+                           OnClick="() => ChooseAsync(style.Direction)" aria-label="@style.Name" aria-pressed="@(selected ? "true" : "false")" title="@style.Name">
+                    <span class="avatar-shape__face">
+                        <PresenceAvatar Direction="style.Direction" Tone="@ToneFor(style, selected)" Size="PresenceAvatarSize.Fill" Reactive Decorative
+                                        Replay="@(selected ? _picks : 0)" CueDelay="@(i * 28)" />
+                    </span>
+                </RowButton>
+            }
+        </div>
+        @Swatches
+    </div>
+    return;
+}
+<div class="agent-avatar-chooser">
+    <div class="agent-avatar-chooser__grid" role="group" aria-label="Choose a character">
+        @for (var i = 0; i < AvatarStyles.All.Count; i++)
+        {
+            var style = AvatarStyles.All[i];
+            var selected = Value.Direction == style.Direction;
+            <RowButton Class="@($"agent-avatar-tile{(selected ? " is-selected" : null)}")" Disabled="Disabled"
+                       OnClick="() => ChooseAsync(style.Direction)" aria-label="@($"{style.Name} avatar")" aria-pressed="@(selected ? "true" : "false")">
+                <span class="agent-avatar-tile__image">
+                    <PresenceAvatar Direction="style.Direction" Tone="@ToneFor(style, selected)" Size="PresenceAvatarSize.Medium" Reactive Decorative
+                                    Replay="@(selected ? _picks : 0)" CueDelay="@(i * 28)" />
+                </span>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">@style.Name</Typography>
+                @if (selected)
+                { <span class="agent-avatar-tile__check" aria-hidden="true"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" /></span> }
+            </RowButton>
+        }
+    </div>
+    <div class="agent-avatar-chooser__colours">
+        <div class="agent-avatar-chooser__colour-label">
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Make it yours</Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Any shape, any colour.</Typography>
+        </div>
+        @Swatches
+    </div>
+</div>
+
+@code {
+    [Parameter] public AvatarAppearance Value { get; set; } = AvatarAppearance.Default;
+    [Parameter] public EventCallback<AvatarAppearance> ValueChanged { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    /// <summary>Characters and colours only, in even centred rows: for under a large preview (agent setup, its settings).</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    private RenderFragment Swatches => __builder =>
+    {
+        <div class="agent-avatar-chooser__swatches" role="group" aria-label="Character colour">
+            @foreach (var tone in PresenceAvatarTones.Palette)
+            {
+                var on = Value.Tone == tone;
+                <RowButton Class="@($"avatar-swatch avatar-swatch--{tone.ToString().ToLowerInvariant()}{(on ? " is-selected" : null)}")" Disabled="Disabled"
+                           OnClick="() => ColourAsync(tone)" aria-label="@tone.ToString()" aria-pressed="@(on ? "true" : "false")" title="@tone.ToString()">
+                    <span class="avatar-swatch__dot">
+                        @if (on) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> }
+                    </span>
+                </RowButton>
+            }
+        </div>
+    };
+
+    // Until someone picks a colour, each shape wears its own; after that, theirs goes everywhere.
+    private bool _colourChosen;
+    private int _picks;
+    private PresenceAvatarTone ToneFor(AvatarStyle style, bool selected) => selected || _colourChosen ? Value.Tone : style.SuggestedTone;
+
+    private Task ChooseAsync(PresenceAvatarDirection direction)
+    {
+        if (Disabled || direction == Value.Direction) return Task.CompletedTask;
+        _picks++;
+        return ValueChanged.InvokeAsync(_colourChosen ? Value with { Direction = direction } : AvatarAppearance.Suggested(direction));
+    }
+
+    private Task ColourAsync(PresenceAvatarTone tone)
+    {
+        if (Disabled || tone == Value.Tone) return Task.CompletedTask;
+        _colourChosen = true;
+        return ValueChanged.InvokeAsync(Value with { Tone = tone });
+    }
+}

@@ -5,7 +5,7 @@
    reads at a glance, without reading. These are other companies' brand marks:
    the one place the design system uses colours that are not ours. Decorative
    unless Label is set; the words beside it usually say the channel. *@
-<span class="ds-channel-icon is-@Key @(Plain ? "is-plain" : null) @Class" title="@Label">
+<span class="ds-channel-icon is-@Key @(Plain || OnBrand ? "is-plain" : null) @(OnBrand ? "is-on-brand" : null) @Class" title="@Label">
     @if (Key == "x")
     {
         @* The sprite is generated from the React app, which never drew X, so
@@ -38,6 +38,13 @@
     /// a mark sitting on a disc already in the brand's colour.
     /// </summary>
     [Parameter] public bool Plain { get; set; }
+
+    /// <summary>
+    /// On a solid provider-coloured disc, WhatsApp, Instagram and Facebook
+    /// use their fixed white glyph. Monochrome marks still inherit the host's
+    /// ink; Plain without OnBrand preserves tinted and neutral placements.
+    /// </summary>
+    [Parameter] public bool OnBrand { get; set; }
 
     private string Key => Channel.ToLowerInvariant() switch
     {

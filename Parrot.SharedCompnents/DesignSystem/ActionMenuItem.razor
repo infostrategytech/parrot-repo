@@ -1,10 +1,24 @@
 @namespace Parrot.SharedComponents.DesignSystem
 
-@* One row of an ActionMenu. *@
-<button type="button" class="ds-action-menu-item" role="menuitem" disabled="@Disabled" @onclick="OnClick">
+@* One row of an ActionMenu. Follows the Figma Menu's List Item at node
+   361:2262, with one departure: the icon is 16px, not the design's 20px.
+   Figma draws the slot with a light placeholder glyph; our icon set is solid
+   fills, and at 20px they out-shout the words they label. 16px is where a
+   filled glyph sits beside 14px text without competing with it.
+
+   One line only, deliberately, as every dropdown option is (PopoverOption).
+   An action that needs explaining wants a confirmation dialog, not a
+   subtitle. *@
+<button type="button" class="@ClassName" role="menuitem" disabled="@Disabled" @onclick="OnClick">
     @if (Glyph is { } glyph)
     {
-        <Icon Name="glyph" Size="IconSize.Sm" />
+        <Icon Name="glyph" Size="IconSize.Sm" Class="ds-action-menu-item__icon" />
+    }
+    else if (Context?.ReservesIconColumn == true)
+    {
+        @* Holds the column open so this label lines up with the ones that do
+           have an icon. *@
+        <span class="ds-action-menu-item__icon-space" aria-hidden="true"></span>
     }
     <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@Label</Typography>
 </button>
@@ -13,5 +27,34 @@
     [Parameter, EditorRequired] public string Label { get; set; } = "";
     [Parameter] public IconName? Glyph { get; set; }
     [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>
+    /// For an action that removes something or cannot be undone — Delete.
+    /// Colours the row red so it reads differently from the safe actions
+    /// above it. Pair it with an ActionMenuDivider so it also sits apart.
+    /// </summary>
+    [Parameter] public bool Destructive { get; set; }
+
     [Parameter] public EventCallback OnClick { get; set; }
+
+    /// <summary>Set by the ActionMenu, so every row in one menu matches.</summary>
+    [CascadingParameter(Name = "ActionMenuDense")] private bool Dense { get; set; }
+
+    [CascadingParameter] private ActionMenuContext? Context { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (Glyph is not null) Context?.DeclareIcon();
+    }
+
+    private string ClassName
+    {
+        get
+        {
+            var name = "ds-action-menu-item";
+            if (Dense) name += " ds-action-menu-item--dense";
+            if (Destructive) name += " ds-action-menu-item--destructive";
+            return name;
+        }
+    }
 }

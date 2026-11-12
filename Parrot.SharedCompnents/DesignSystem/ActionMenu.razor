@@ -38,8 +38,29 @@
             @* The click-away layer: a full-screen transparent button, the documented
                exception to building from components. *@
             <button type="button" class="ds-action-menu__dismiss" tabindex="-1" aria-hidden="true" data-float-dismiss @onclick="Close"></button>
-            <div class="ds-action-menu__menu" role="menu" aria-label="@Label" @onclick="Close" @ref="_menu">
-                @ChildContent
+            <div class="ds-action-menu__menu" role="menu" aria-label="@Label"
+                 aria-describedby="@(!string.IsNullOrWhiteSpace(FooterText) ? _footerId : null)" @onclick="Close" @ref="_menu">
+                @if (!string.IsNullOrWhiteSpace(Title))
+                {
+                    @* Presentation only: aria-label already names the menu, so a
+                       heading here would have screen readers say it twice. *@
+                    <div class="ds-action-menu__title" aria-hidden="true">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@Title</Typography>
+                    </div>
+                }
+                <div class="ds-action-menu__items">
+                    <CascadingValue Value="Dense" Name="ActionMenuDense" IsFixed="true">
+                        <CascadingValue Value="_context" IsFixed="true">
+                            @ChildContent
+                        </CascadingValue>
+                    </CascadingValue>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(FooterText))
+                {
+                    <div class="ds-action-menu__footer" id="@_footerId">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span">@FooterText</Typography>
+                    </div>
+                }
             </div>
         </div>
     }
@@ -53,10 +74,36 @@
 
     /// <summary>A visible label on the trigger, beside the glyph. Null for an icon-only button.</summary>
     [Parameter] public string? Text { get; set; }
+
+    /// <summary>
+    /// A heading above the actions, for a menu whose subject is not obvious from
+    /// where it was opened. Optional; most menus do not need one.
+    /// </summary>
+    [Parameter] public string? Title { get; set; }
+
+    /// <summary>A quiet note under the actions ("5 items"). Optional.</summary>
+    [Parameter] public string? FooterText { get; set; }
+
+    /// <summary>
+    /// Tighter rows, for a menu opened from a small control in a dense row —
+    /// a table row's "more" button, a card's overflow. Same type and icons,
+    /// less air. Figma's Compact drops the icons instead; icons are what make
+    /// a short action list quick to scan, so this keeps them.
+    /// </summary>
+    [Parameter] public bool Dense { get; set; }
+
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
     private bool _open, _placing;
+    private readonly string _footerId = $"action-menu-footer-{Guid.NewGuid():N}";
     private ElementReference _root, _layer, _menu;
+
+    // Items declare their icons as they initialise, which happens after this
+    // menu has drawn — so drawing again is how the reserved column appears.
+    private readonly ActionMenuContext _context = new();
+
+    protected override void OnInitialized() =>
+        _context.Changed += () => InvokeAsync(StateHasChanged);
 
     private void Toggle()
     {

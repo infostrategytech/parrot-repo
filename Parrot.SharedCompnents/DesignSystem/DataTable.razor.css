@@ -61,6 +61,8 @@
 }
 /* A column whose content sits at its end (actions): its name too. */
 .ds-table__grid ::deep .ds-table__heading.is-end { justify-self: end; text-align: end; }
+/* A column whose content is centred (a short set of marks): its name too. */
+.ds-table__grid ::deep .ds-table__heading.is-center { justify-self: center; text-align: center; }
 
 /* The footer band: how many are showing, and the pages when there's more than one; or a review's progress. */
 .ds-table__footer {

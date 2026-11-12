@@ -25,6 +25,10 @@
   background: var(--colors-surface-muted);
 }
 
+/* The web host's approved page canvas. Keep the legacy default for hosts
+   that have not been previewed, rather than changing mobile implicitly. */
+.app-shell--page-background { background: var(--colors-surface-background); }
+
 .app-shell {
   /* Gaps in the token set: no layout-width scale and no motion scale. Both
      widths come from the Figma frames. */

@@ -1,0 +1,32 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* The bar that appears once something on a page changes, and stays at the window's foot however long the page
+   (designer, 15 October 2026 for an agent; 7 November 2026 for Business profile): what's unsaved on the left,
+   Discard then Save on the right. A save that fails keeps every change and says so here, where the person is
+   looking. Show it only while there are changes, as the page's last child, so it floats over everything above. *@
+<footer class="@ClassName">
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="@(Error is null ? null : "is-error")" aria-live="polite">@(Error ?? Note)</Typography>
+    <div class="ds-save-bar__actions">
+        @* Not greyed while saving (designer, 8 November 2026: fields and buttons flashing grey reads as something going
+           wrong); the page ignores Discard until the save is done. *@
+        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" @onclick="OnDiscard">Discard</Button>
+        <Button Size="ButtonSize.Large" Busy="Saving" disabled="@(Saving || SaveDisabled)" @onclick="OnSave">@SaveLabel</Button>
+    </div>
+</footer>
+
+@code {
+    /// <summary>What's unsaved, or what's still needed before saving.</summary>
+    [Parameter] public string Note { get; set; } = "You have changes that aren't saved.";
+
+    /// <summary>Why the last save failed. Shown in place of the note.</summary>
+    [Parameter] public string? Error { get; set; }
+
+    [Parameter] public bool Saving { get; set; }
+    [Parameter] public bool SaveDisabled { get; set; }
+    [Parameter] public string SaveLabel { get; set; } = "Save changes";
+    [Parameter] public EventCallback OnDiscard { get; set; }
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public string? Class { get; set; }
+
+    private string ClassName => string.IsNullOrWhiteSpace(Class) ? "ds-save-bar" : $"ds-save-bar {Class}";
+}

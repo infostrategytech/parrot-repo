@@ -31,8 +31,12 @@
     [Parameter] public string? ImageUrl { get; set; }
 
     // Initials are the smallest readable type in the product, so they take the
-    // smallest semibold style rather than a size set by hand.
-    private TextStyle InitialsStyle => Size == AvatarSize.Lg
-        ? TextStyle.Small12Semibold
-        : TextStyle.Small10Semibold;
+    // smallest semibold style rather than a size set by hand; on a person's own
+    // page they're a heading.
+    private TextStyle InitialsStyle => Size switch
+    {
+        AvatarSize.Xl => TextStyle.HeadingH3Semibold,
+        AvatarSize.Lg => TextStyle.Small12Semibold,
+        _ => TextStyle.Small10Semibold,
+    };
 }

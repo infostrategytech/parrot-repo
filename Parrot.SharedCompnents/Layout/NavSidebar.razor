@@ -52,7 +52,7 @@
     {
         <WorkspaceSwitcher Id="@WorkspaceId" Name="@WorkspaceName" Plan="@WorkspacePlan" LogoUrl="@WorkspaceLogoUrl"
                            Workspaces="@Workspaces" OnSwitch="@OnWorkspaceSwitch" OnAdd="@OnWorkspaceAdd"
-                           Switching="@WorkspaceSwitching" OnSetDefault="@OnWorkspaceSetDefault" />
+                           Switching="@WorkspaceSwitching" OnSetDefault="@OnWorkspaceSetDefault" BusinessMenu="@BusinessMenu" />
     }
 
     <nav class="sidebar__nav" aria-label="Primary navigation">
@@ -60,24 +60,24 @@
             Workspace
         </Typography>
 
+        @{ var shown = 0; }
         @foreach (var entry in NavMap.Primary.Where(Allowed))
         {
+            @* A quiet line between the groups (designer, 11 November 2026), never at the very top. *@
+            @if (shown++ > 0 && NavMap.StartsGroup(entry))
+            {
+                <span class="sidebar__divider" role="separator" aria-hidden="true"></span>
+            }
             <NavRailItem Entry="entry"
                          IsActive="@(Current?.Label == entry.Label)"
                          Badge="@(entry.Label switch { "Inbox" => InboxUnread, "Tasks" => TasksNeedYou, _ => null })"
                          BadgeMeaning="@(entry.Label == "Tasks" ? "need you" : "unread messages")" />
         }
-
-        @* Knowledge, Help and Settings follow the pages in the same list and
-           scroll with them; only the account stays at the foot. *@
-        <div class="sidebar__divider" role="presentation"></div>
-        @foreach (var entry in NavMap.Footer.Where(Allowed))
-        {
-            <NavRailItem Entry="entry" IsActive="@(Current?.Label == entry.Label)" Compact />
-        }
     </nav>
 
     <div class="sidebar__footer">
+        @* Notifications at the foot, beside you (designer, 11 November 2026), where people look for a bell. *@
+        @RailNotifications
         @if (!string.IsNullOrWhiteSpace(UserName))
         {
             <UserCard Name="@UserName" Role="@UserRole" Initials="@UserInitials" Seed="@UserSeed" ImageUrl="@UserImageUrl">
@@ -127,6 +127,12 @@
 
     /// <summary>Rows for the account card's menu. Null means the card has no menu.</summary>
     [Parameter] public RenderFragment? UserMenu { get; set; }
+
+    /// <summary>The host's notifications row (a popover trigger), drawn at the foot above the account card. Null shows nothing.</summary>
+    [Parameter] public RenderFragment? RailNotifications { get; set; }
+
+    /// <summary>Rows about the business you're in, at the top of the workspace menu. Null shows none.</summary>
+    [Parameter] public RenderFragment? BusinessMenu { get; set; }
 
     /// <summary>
     /// The inbox count. Null means no badge — which is also what "there is no

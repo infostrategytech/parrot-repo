@@ -1,0 +1,29 @@
+.ds-save-bar {
+  position: sticky;
+  bottom: var(--spacing-lg);
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-md);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: var(--spacing-xl);
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  box-shadow: 0 var(--spacing-sm) var(--spacing-3xl) var(--colors-surface-shadow);
+}
+/* The words take the room left beside the buttons, but never less than a readable line: when there isn't one,
+   they wrap above the buttons rather than stacking a word a line. */
+.ds-save-bar ::deep p { flex: 1 1 calc(var(--spacing-4xl) * 5); min-width: 0; margin: var(--spacing-none); color: var(--colors-text-muted); }
+.ds-save-bar ::deep p.is-error { color: var(--colors-feedback-destructive-text); }
+.ds-save-bar__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+
+/* A phone: the words over the buttons, which share the width. The bar is no longer a pill. */
+@media (max-width: 760px) {
+  .ds-save-bar { padding: var(--spacing-md); border-radius: var(--radius-radius-xl); }
+  .ds-save-bar ::deep p { flex-basis: 100%; }
+  .ds-save-bar__actions { flex: 1; }
+  .ds-save-bar__actions ::deep .ds-button { flex: 1; }
+}

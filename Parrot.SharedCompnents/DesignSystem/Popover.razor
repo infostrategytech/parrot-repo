@@ -58,6 +58,9 @@
     /// <summary>Room for a search and its matches, rather than a short list.</summary>
     [Parameter] public bool Wide { get; set; }
 
+    /// <summary>Beside the trigger rather than under it: for a trigger in the rail, so the panel opens next to it.</summary>
+    [Parameter] public bool Beside { get; set; }
+
     [Parameter] public string? Class { get; set; }
 
     [Parameter, EditorRequired] public bool Open { get; set; }
@@ -74,7 +77,7 @@
         if (_floating) return;
         _floating = true;
         // The page can be left between the render and this call; nothing to place then.
-        try { await Interop.FloatMenuAsync(_layer, _anchor, _panel, AlignEnd); }
+        try { await Interop.FloatMenuAsync(_layer, _anchor, _panel, AlignEnd, beside: Beside); }
         catch (JSException) { }
         catch (JSDisconnectedException) { }
         catch (InvalidOperationException) { }

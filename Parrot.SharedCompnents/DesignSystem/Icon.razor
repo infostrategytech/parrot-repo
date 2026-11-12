@@ -35,9 +35,21 @@ else
 
     [Parameter] public string? Class { get; set; }
 
-    // The sprite is not fingerprinted, so a browser that cached an older one never sees icons added since.
-    // The build id changes with every build, which makes each release fetch the sprite again.
-    private static readonly string SpriteVersion = typeof(Icon).Assembly.ManifestModule.ModuleVersionId.ToString("N")[..8];
+    // The sprite is not fingerprinted, so a browser that cached an older one never sees icons added since. The
+    // build id didn't help: builds are deterministic, so it stayed the same across releases and a browser kept a
+    // sprite without the camera (7 November 2026). The version is now the sprite's own content, embedded at build:
+    // it changes exactly when an icon does. The build id stays as a fallback.
+    private static readonly string SpriteVersion = SpriteHash() ?? typeof(Icon).Assembly.ManifestModule.ModuleVersionId.ToString("N")[..8];
+
+    private static string? SpriteHash()
+    {
+        try
+        {
+            using var sprite = typeof(Icon).Assembly.GetManifestResourceStream("aurora-icons.svg");
+            return sprite is null ? null : Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(sprite))[..8].ToLowerInvariant();
+        }
+        catch (Exception exception) when (exception is PlatformNotSupportedException or IOException) { return null; }
+    }
 
     private string Href => "_content/Parrot.SharedComponents/icons/aurora-icons.svg?v=" + SpriteVersion + "#" + Name.ToSymbolId();
 

@@ -1,0 +1,4 @@
+/* One line, whatever the number of channels: the marks side by side. */
+.channel-marks { display: inline-flex; min-width: 0; }
+.channel-marks__row { display: inline-flex; flex-wrap: nowrap; gap: var(--spacing-xs); align-items: center; }
+.channel-marks__row ::deep .channel-marks__more { padding-inline-start: var(--spacing-2xs); color: var(--colors-text-muted); white-space: nowrap; }

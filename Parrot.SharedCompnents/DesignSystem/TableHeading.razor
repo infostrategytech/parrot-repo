@@ -13,10 +13,13 @@
     /// <summary>At the column's end, as its content is (an action).</summary>
     [Parameter] public bool End { get; set; }
 
+    /// <summary>Centred over its column, as its content is (a short set of marks, such as channels).</summary>
+    [Parameter] public bool Center { get; set; }
+
     /// <summary>Inside a cell that is the column header already.</summary>
     [Parameter] public bool InCell { get; set; }
 
     [Parameter] public string? Class { get; set; }
 
-    private string ClassName => "ds-table__heading" + (End ? " is-end" : null) + (string.IsNullOrWhiteSpace(Class) ? null : " " + Class);
+    private string ClassName => "ds-table__heading" + (End ? " is-end" : null) + (Center ? " is-center" : null) + (string.IsNullOrWhiteSpace(Class) ? null : " " + Class);
 }

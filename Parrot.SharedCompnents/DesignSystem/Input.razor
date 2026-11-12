@@ -90,7 +90,7 @@
 
     @if (!string.IsNullOrWhiteSpace(ShownHelper))
     {
-        <p class="field__helper @TextStyle.Small12Regular.ToClassName()" id="@HelperId">
+        <p class="field__helper @HelperTextStyle.ToClassName()" id="@HelperId">
             @if (HelperIconLeft is not null)
             {
                 @HelperIconLeft
@@ -149,6 +149,8 @@
     [Parameter] public RenderFragment? LabelIconRight { get; set; }
 
     [Parameter] public string? HelperText { get; set; }
+    /// <summary>Existing consumers keep their style; new Settings UI uses the Medium baseline.</summary>
+    [Parameter] public TextStyle HelperTextStyle { get; set; } = TextStyle.Small12Regular;
 
     [Parameter] public RenderFragment? HelperIconLeft { get; set; }
     [Parameter] public RenderFragment? HelperIconRight { get; set; }

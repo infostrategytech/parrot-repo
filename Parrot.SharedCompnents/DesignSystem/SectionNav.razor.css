@@ -1,0 +1,37 @@
+.ds-section-nav {
+  /* Gaps in the token set: no control-height scale (the app sidebar's item height) and no motion scale. */
+  --ds-section-nav-item: 40px;
+  --ds-section-nav-motion: 140ms;
+
+  display: grid;
+  gap: var(--spacing-xl);
+  align-content: start;
+}
+
+.ds-section-nav__group { display: grid; gap: var(--spacing-2xs); }
+.ds-section-nav__title { display: grid; gap: var(--spacing-2xs); padding: var(--spacing-none) var(--spacing-md) var(--spacing-xs); color: var(--colors-text-muted); }
+.ds-section-nav__title ::deep p { margin: var(--spacing-none); }
+.ds-section-nav ul { display: grid; gap: var(--spacing-2xs); margin: var(--spacing-none); padding: var(--spacing-none); list-style: none; }
+
+/* As the app sidebar's items: a rounded row, grey on hover, the current one brand-tinted with a brand icon. */
+.ds-section-nav__link {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  min-height: var(--ds-section-nav-item);
+  padding: var(--spacing-none) var(--spacing-md);
+  color: var(--colors-text-secondary);
+  text-decoration: none;
+  border-radius: var(--radius-radius-full);
+  transition: background var(--ds-section-nav-motion) ease, color var(--ds-section-nav-motion) ease;
+}
+.ds-section-nav__link ::deep .ds-icon { flex: none; color: var(--colors-text-muted); }
+.ds-section-nav__link:hover { color: var(--colors-text-primary); background: var(--colors-interaction-hover); }
+.ds-section-nav__link:focus-visible { outline: var(--ds-hairline) solid var(--colors-interaction-focus); outline-offset: var(--spacing-2xs); }
+.ds-section-nav__link.is-current,
+.ds-section-nav__link.is-current:hover { color: var(--colors-interaction-selected-foreground); background: var(--colors-accent-brand-muted); }
+.ds-section-nav__link.is-current ::deep .ds-icon { color: var(--colors-icon-brand); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ds-section-nav__link { transition: none; }
+}

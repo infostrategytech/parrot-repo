@@ -1,0 +1,18 @@
+/* The countdown line: muted words, centred, exactly a button's height so it can turn into one without moving
+   anything. */
+.ds-resend-wait {
+  /* Gap in the token set: no control-height scale. Button's own heights (Button.razor.css), so the swap is still. */
+  --ds-resend-height-sm: 32px;
+  --ds-resend-height-md: 42px;
+  --ds-resend-height-lg: 53px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ds-resend-height-md);
+  margin: var(--spacing-none);
+  color: var(--colors-text-muted);
+  text-align: center;
+}
+.ds-resend-wait--small { min-height: var(--ds-resend-height-sm); }
+.ds-resend-wait--large { min-height: var(--ds-resend-height-lg); }
