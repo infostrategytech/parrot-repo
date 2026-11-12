@@ -871,8 +871,11 @@ public class ConversationServiceTests
             return Task.CompletedTask;
         }
 
+        public List<(string Owner, Guid Connection, string Sender)> TouchCalls { get; } = new();
+
         public Task TouchAsync(string owner, Guid connection, string sender, CancellationToken ct)
         {
+            TouchCalls.Add((owner, connection, sender));
             _active.Add((owner, connection, sender));
             return Task.CompletedTask;
         }
@@ -942,8 +945,8 @@ public class ConversationServiceTests
         await CreateWithTakeover(takeover).SendAsync(Owner, _connection.Id, Recipient,
             new SendReplyRequest(Guid.NewGuid(), "Hello"), default);
 
-        Assert.Single(takeover.SetCalls);
-        (string owner, Guid connection, string sender) = takeover.SetCalls[0];
+        Assert.Single(takeover.TouchCalls);
+        (string owner, Guid connection, string sender) = takeover.TouchCalls[0];
         Assert.Equal(Owner, owner);
         Assert.Equal(_connection.Id, connection);
         Assert.Equal(Recipient, sender);
@@ -965,6 +968,7 @@ public class ConversationServiceTests
             service.SendAsync(Owner, _connection.Id, Recipient, new SendReplyRequest(Guid.NewGuid(), "Hi"), default));
 
         Assert.Empty(takeover.SetCalls);
+        Assert.Empty(takeover.TouchCalls);
     }
 
     [Fact]
@@ -996,5 +1000,6 @@ public class ConversationServiceTests
             new SendReplyRequest(Guid.NewGuid(), "Here's the answer"), default);
 
         Assert.Empty(takeover.SetCalls);
+        Assert.Empty(takeover.TouchCalls);
     }
 }
