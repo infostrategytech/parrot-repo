@@ -67,16 +67,22 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
 
         state.SnapshotVersion += 1;
 
+        string payload = BuildPayload(state.SnapshotVersion, workspaceId, workspaceName!, sources, connectionWabaIds);
+
+        _logger.LogInformation(
+            "business_knowledge.snapshot_payload WorkspaceId={WorkspaceId} SnapshotVersion={SnapshotVersion} SourceCount={SourceCount} Payload={Payload}",
+            workspaceId, state.SnapshotVersion, sources.Count, payload);
+
         OutboxEvent outbox = new OutboxEvent
         {
             WorkspaceId = workspaceId,
-            Payload = BuildPayload(state.SnapshotVersion, workspaceId, workspaceName!, sources, connectionWabaIds),
+            Payload = payload,
         };
 
         _db.OutboxEvents.Add(outbox);
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("SnapshotVersion={SnapshotVersion} WorkspaceId={WorkspaceId} Sources={SourceCount} OutboxEventId={OutboxEventId}",
+        _logger.LogInformation("business_knowledge.snapshot_queued SnapshotVersion={SnapshotVersion} WorkspaceId={WorkspaceId} Sources={SourceCount} OutboxEventId={OutboxEventId}",
             state.SnapshotVersion, workspaceId, sources.Count, outbox.Id);
     }
 
