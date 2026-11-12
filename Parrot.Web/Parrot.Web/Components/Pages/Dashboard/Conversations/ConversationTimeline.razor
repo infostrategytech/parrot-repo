@@ -78,7 +78,7 @@
                     <ConversationMessageItem @key="message.Id" @ref="_items[message.Id]" Message="message"
                                              CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
                                              CustomerInitials="@Conversation.CustomerInitials"
-                                             AuthorName="@AuthorName" AuthorSeed="@AuthorSeed"
+                                             AuthorName="@(message.Kind == MessageKind.Ai && Conversation.AiAgent?.Name is { } agentLabel ? agentLabel : AuthorName)" AuthorSeed="@AuthorSeed"
                                              CanTeach="@Features.Available"
                                              OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection" OnAnswer="OpenAnswer"
@@ -390,7 +390,7 @@
             while (_clockFor == until && !_lifetime.IsCancellationRequested)
             {
                 await InvokeAsync(StateHasChanged);
-                if (DateTime.UtcNow >= until.ToUniversalTime())
+                if (DateTime.UtcNow >= DateTime.SpecifyKind(until, DateTimeKind.Utc))
                 {
                     // The timed window is over: clear the takeover server-side so the AI picks up the next message,
                     // then refresh the conversation so the control bar switches back immediately.
@@ -413,7 +413,7 @@
         get
         {
             if (Conversation.ControlUntil is not { } until) return null;
-            var remaining = until.ToUniversalTime() - DateTime.UtcNow;
+            var remaining = DateTime.SpecifyKind(until, DateTimeKind.Utc) - DateTime.UtcNow;
             if (remaining <= TimeSpan.Zero) return "00:00";
             return remaining.TotalHours >= 1
                 ? $"{(int)remaining.TotalHours}:{remaining.Minutes:00}:{remaining.Seconds:00}"
