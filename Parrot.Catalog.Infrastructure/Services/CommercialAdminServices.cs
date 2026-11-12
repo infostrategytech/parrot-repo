@@ -15,8 +15,8 @@ namespace Parrot.Catalog.Infrastructure.Services;
 /// <summary>Resolves "product or variant" targets and keeps the parent product's document fresh.</summary>
 public abstract class CommercialServiceBase : AdminServiceBase
 {
-    protected CommercialServiceBase(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, DerivedDataRebuilder rebuilder)
-        : base(db, tenant, clock, metrics)
+    protected CommercialServiceBase(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, DerivedDataRebuilder rebuilder)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
         Rebuilder = rebuilder;
     }
@@ -48,8 +48,8 @@ public abstract class CommercialServiceBase : AdminServiceBase
 
 public sealed class OfferAdminService : CommercialServiceBase, IOfferAdminService
 {
-    public OfferAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, DerivedDataRebuilder rebuilder)
-        : base(db, tenant, clock, metrics, rebuilder)
+    public OfferAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, DerivedDataRebuilder rebuilder)
+        : base(db, tenant, clock, metrics, itemEvents, rebuilder)
     {
     }
 
@@ -236,8 +236,8 @@ public sealed class OfferAdminService : CommercialServiceBase, IOfferAdminServic
 
 public sealed class AvailabilityAdminService : CommercialServiceBase, IAvailabilityAdminService
 {
-    public AvailabilityAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, DerivedDataRebuilder rebuilder)
-        : base(db, tenant, clock, metrics, rebuilder)
+    public AvailabilityAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, DerivedDataRebuilder rebuilder)
+        : base(db, tenant, clock, metrics, itemEvents, rebuilder)
     {
     }
 
@@ -327,8 +327,8 @@ public sealed class AvailabilityAdminService : CommercialServiceBase, IAvailabil
 
 public sealed class RelationshipAdminService : CommercialServiceBase, IRelationshipAdminService
 {
-    public RelationshipAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, DerivedDataRebuilder rebuilder)
-        : base(db, tenant, clock, metrics, rebuilder)
+    public RelationshipAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, DerivedDataRebuilder rebuilder)
+        : base(db, tenant, clock, metrics, itemEvents, rebuilder)
     {
     }
 
@@ -395,8 +395,8 @@ public sealed class MediaAdminService : CommercialServiceBase, IMediaAdminServic
 {
     private static readonly System.Text.RegularExpressions.Regex MimePattern = new("^[a-z]+/[a-z0-9.+-]+$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
-    public MediaAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, DerivedDataRebuilder rebuilder)
-        : base(db, tenant, clock, metrics, rebuilder)
+    public MediaAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, DerivedDataRebuilder rebuilder)
+        : base(db, tenant, clock, metrics, itemEvents, rebuilder)
     {
     }
 

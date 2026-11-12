@@ -25,7 +25,8 @@ public sealed class TenantContextMiddleware
         if (context.User.Identity?.IsAuthenticated == true && CatalogAuthentication.TenantIdOf(context.User) is { } tenantId)
         {
             string actor = context.User.FindFirstValue("sub") ?? context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "unknown";
-            tenant.Establish(tenantId, actor, CatalogAuthentication.ScopesOf(context.User), requestId);
+            string? owner = context.User.FindFirstValue(Parrot.Catalog.Application.Security.CatalogClaims.OwnerId);
+            tenant.Establish(tenantId, actor, CatalogAuthentication.ScopesOf(context.User), requestId, owner is { Length: <= 256 } ? owner : null);
             using (_logger.BeginScope(new Dictionary<string, object?> { ["TenantId"] = tenantId, ["Actor"] = actor }))
             {
                 await _next(context);

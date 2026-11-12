@@ -28,6 +28,7 @@ try
         "purge-tenant" => await PurgeTenant.RunAsync(configuration, parsed),
         "sweep-outbox" => await SweepOutbox.RunAsync(configuration, parsed),
         "reindex" => await Reindex.RunAsync(configuration, parsed),
+        "publish-items" => await PublishItems.RunAsync(configuration, parsed),
         _ => Unknown(command),
     };
     return exit;

@@ -16,15 +16,19 @@ namespace Parrot.Catalog.Infrastructure.Services;
 /// </summary>
 public abstract class AdminServiceBase
 {
-    protected AdminServiceBase(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics)
+    protected AdminServiceBase(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents)
     {
         Db = db;
+        ItemEvents = itemEvents;
         Tenant = tenant;
         Clock = clock;
         Metrics = metrics;
     }
 
     protected CatalogDbContext Db { get; }
+
+    /// <summary>Shared by every service in the request, so nested writes add to one set.</summary>
+    protected ItemEventWriter ItemEvents { get; }
 
     protected ITenantContext Tenant { get; }
 
@@ -46,10 +50,16 @@ public abstract class AdminServiceBase
         }
 
         await using IDbContextTransaction tx = await Db.Database.BeginTransactionAsync(ct);
+        ItemEvents.Reset();
         try
         {
             await EnsureTenantAsync(ct);
             T result = await work(ct);
+            await SaveAsync(ct);
+
+            // One whole-item event per product touched, read after every row is saved,
+            // so it describes the item as committed (hidden flag and photos included).
+            await ItemEvents.WriteAsync(ct);
             await SaveAsync(ct);
             await tx.CommitAsync(ct);
             return result;
@@ -57,6 +67,10 @@ public abstract class AdminServiceBase
         catch (PostgresException ex)
         {
             throw PgErrors.Translate(ex, Metrics);
+        }
+        finally
+        {
+            ItemEvents.Reset();
         }
     }
 
@@ -67,13 +81,24 @@ public abstract class AdminServiceBase
             return null;
         }, ct);
 
+    /// <summary>
+    /// Makes the workspace's tenant row on its first write, and records the account
+    /// that owns it whenever the token says, so events can name the owner even when
+    /// a later write comes from a token without the claim (a service or a tool).
+    /// </summary>
     protected async Task EnsureTenantAsync(CancellationToken ct)
     {
-        bool exists = await Db.Tenants.AnyAsync(t => t.Id == TenantId, ct);
-        if (!exists)
+        Tenant? row = await Db.Tenants.FirstOrDefaultAsync(t => t.Id == TenantId, ct);
+        if (row is null)
         {
             DateTime now = Now;
-            Db.Tenants.Add(new Tenant { Id = TenantId, TenantId = TenantId, Name = $"tenant-{TenantId:N}", CreatedAt = now, UpdatedAt = now });
+            Db.Tenants.Add(new Tenant { Id = TenantId, TenantId = TenantId, Name = $"tenant-{TenantId:N}", OwnerId = Tenant.OwnerId, CreatedAt = now, UpdatedAt = now });
+            await SaveAsync(ct);
+        }
+        else if (Tenant.OwnerId is { } owner && row.OwnerId != owner)
+        {
+            row.OwnerId = owner;
+            row.UpdatedAt = Now;
             await SaveAsync(ct);
         }
     }
@@ -96,15 +121,23 @@ public abstract class AdminServiceBase
 
     protected void Enqueue(string aggregateType, Guid aggregateId, string eventType, object payload)
     {
+        string json = Json.Serialize(payload);
+        if (ItemEventWriter.ProductOf(aggregateType, aggregateId, json) is { } productId)
+        {
+            ItemEvents.Touch(productId);
+        }
+
         Db.Outbox.Add(new OutboxMessage
         {
             Id = Guid.NewGuid(),
             TenantId = TenantId,
+            OwnerId = Tenant.OwnerId,
+            UserId = ItemEventWriter.UserOf(Tenant),
             AggregateType = aggregateType,
             AggregateId = aggregateId,
             EventType = eventType,
             SchemaVersion = 1,
-            Payload = Json.Serialize(payload),
+            Payload = json,
             CreatedAt = Now,
         });
     }

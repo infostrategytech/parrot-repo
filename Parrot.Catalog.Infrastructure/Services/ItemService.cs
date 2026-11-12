@@ -65,7 +65,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
         CatalogDbContext db,
         ITenantContext tenant,
         TimeProvider clock,
-        CatalogMetrics metrics,
+        CatalogMetrics metrics, ItemEventWriter itemEvents,
         ICatalogAdminService catalogs,
         IProductTypeAdminService types,
         ICategoryAdminService categories,
@@ -75,7 +75,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
         IMediaAdminService media,
         IItemPhotoStorage photos,
         ILogger<ItemService> log)
-        : base(db, tenant, clock, metrics)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
         _catalogs = catalogs;
         _types = types;
@@ -815,6 +815,8 @@ public sealed class ItemService : AdminServiceBase, IItemService
         List<MediaAsset> photos = await Db.Media.AsNoTracking()
             .Where(m => ids.Contains(m.ProductId) && m.VariantId == null && m.Kind == MediaKind.Image && m.DeletedAt == null)
             .ToListAsync(ct);
+        Dictionary<Guid, ItemAiStatus> aiStatus = await Db.ItemAiStatus.AsNoTracking().Where(a => ids.Contains(a.ProductId)).ToDictionaryAsync(a => a.ProductId, ct);
+        Dictionary<Guid, string> photoKeys = photos.ToDictionary(m => m.Id, m => m.S3Key);
 
         return products.Select(p =>
         {
@@ -865,7 +867,7 @@ public sealed class ItemService : AdminServiceBase, IItemService
             JsonElement? formDraft = p.FormDraft is { } draft ? JsonDocument.Parse(draft).RootElement.Clone() : null;
 
             return new ItemResponse(p.Id, p.Name, KindOf(typeKeys[p.ProductTypeId]), category, p.Description, p.Status, pricing, shapedAvailability, p.CreatedAt, p.UpdatedAt,
-                p.Duration, p.LeadTime, ownPhotos, formDraft, p.Hidden);
+                p.Duration, p.LeadTime, ownPhotos, formDraft, p.Hidden, ItemAiView.Of(aiStatus.GetValueOrDefault(p.Id), photoKeys));
         }).ToList();
     }
 }

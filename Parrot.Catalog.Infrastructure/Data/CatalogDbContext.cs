@@ -47,6 +47,8 @@ public class CatalogDbContext : DbContext
 
     public DbSet<CatalogDocument> CatalogDocuments => Set<CatalogDocument>();
 
+    public DbSet<ItemAiStatus> ItemAiStatus => Set<ItemAiStatus>();
+
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
 
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -68,6 +70,7 @@ public class CatalogDbContext : DbContext
         {
             e.HasKey(t => t.Id);
             e.Property(t => t.Name).HasMaxLength(256);
+            e.Property(t => t.OwnerId).HasMaxLength(256);
             e.ToTable(t => t.HasCheckConstraint("ck_tenants_self", "id = tenant_id"));
         });
 
@@ -291,6 +294,8 @@ public class CatalogDbContext : DbContext
             e.HasKey(o => o.Id);
             e.Property(o => o.AggregateType).HasMaxLength(64);
             e.Property(o => o.EventType).HasMaxLength(64);
+            e.Property(o => o.OwnerId).HasMaxLength(256);
+            e.Property(o => o.UserId).HasMaxLength(256);
             e.Property(o => o.LastError).HasMaxLength(2000);
             e.HasIndex(o => o.CreatedAt).HasFilter("published_at IS NULL");
             e.HasIndex(o => new { o.TenantId, o.CreatedAt });
@@ -300,6 +305,20 @@ public class CatalogDbContext : DbContext
         {
             e.HasKey(c => new { c.Consumer, c.EventId });
             e.Property(c => c.Consumer).HasMaxLength(64);
+        });
+
+        builder.Entity<ItemAiStatus>(e =>
+        {
+            e.HasKey(s => s.ProductId);
+            e.Property(s => s.SentType).HasMaxLength(64);
+            e.Property(s => s.Status).HasMaxLength(64);
+            e.Property(s => s.TextStatus).HasMaxLength(64);
+            e.Property(s => s.ReportType).HasMaxLength(64);
+            e.Property(s => s.TextReasonCode).HasMaxLength(64);
+            e.Property(s => s.TextReason).HasMaxLength(1000);
+            e.Property(s => s.PhotosStatus).HasMaxLength(64);
+            e.HasOne<Product>().WithOne().HasForeignKey<ItemAiStatus>(s => s.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(s => s.TenantId);
         });
     }
 }

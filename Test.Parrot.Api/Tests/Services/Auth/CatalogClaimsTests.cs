@@ -40,6 +40,7 @@ public class CatalogClaimsTests
         Assert.NotNull(captured);
         Assert.Contains(captured!, c => c.Type == "tenant_id" && c.Value == workspace.Id);
         Assert.Contains(captured!, c => c.Type == "workspace_id" && c.Value == workspace.Id);
+        Assert.Contains(captured!, c => c.Type == "owner_id" && c.Value == user.Id);
         Assert.Contains(captured!, c => c.Type == "workspace_name" && c.Value == "Acme");
         Assert.Contains(captured!, c => c.Type == "sub" && c.Value == user.Id);
         Assert.Equal(workspace.Id, response.WorkspaceId);

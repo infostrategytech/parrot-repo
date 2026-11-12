@@ -95,6 +95,43 @@ public class ApiCatalogStoreTests
     }
 
     [Fact]
+    public async Task What_the_ai_made_of_each_photo_comes_through_for_the_item_page()
+    {
+        FakeCatalog catalog = new();
+        catalog.Respond("GET api/catalog/items?page=1&page_size=100", $$"""
+            {"items":[{{Item("""
+                "status":"published","hidden":false,
+                "photos":[{"key":"tenants/t/items/a.png","url":"http://photos/a.png"},{"key":"tenants/t/items/b.png","url":"http://photos/b.png"}],
+                "pricing":{"mode":"single","currency":"NGN","amount":5000,"variants":[]},
+                "ai":{"state":"needs_attention","sent_at":"2026-11-11T09:00:00Z","reported_at":"2026-11-11T09:00:42Z","searchable":true,
+                      "text_status":"embedded","text_reason":null,
+                      "photos":[
+                        {"media_id":"7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d","photo_key":"tenants/t/items/a.png","status":"embedded","caption":"A blue scarf.","reason_code":null,"reason":null},
+                        {"media_id":"9c0d1e2f-3a4b-4c5d-8e6f-7a8b9c0d1e2f","photo_key":"tenants/t/items/b.png","status":"rejected","caption":"A cartoon chicken.","reason_code":"client_err","reason":"The photo shows a cartoon chicken."}]}
+                """)}}],"total":1,"page":1,"page_size":100}
+            """);
+        ApiCatalogStore store = Store(catalog);
+
+        CatalogEntry item = Assert.Single(await store.ListAsync());
+
+        Assert.Equal(AiProgress.NeedsAttention, item.Ai);
+        Assert.NotNull(item.AiReportedAt);
+        Assert.Collection(item.AiPhotos,
+            learned =>
+            {
+                Assert.True(learned.Learned);
+                Assert.Equal("http://photos/a.png", learned.PhotoUrl);
+                Assert.Equal("A blue scarf.", learned.Caption);
+            },
+            rejected =>
+            {
+                Assert.True(rejected.Rejected);
+                Assert.Equal("http://photos/b.png", rejected.PhotoUrl);
+                Assert.Equal("The photo shows a cartoon chicken.", rejected.Reason);
+            });
+    }
+
+    [Fact]
     public async Task The_services_reason_comes_through_when_it_refuses_a_save()
     {
         FakeCatalog catalog = new();

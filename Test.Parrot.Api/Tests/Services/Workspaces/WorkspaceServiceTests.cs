@@ -129,12 +129,26 @@ public class WorkspaceServiceTests
 
         Workspace workspace = (await _sut.ResolveForSignInAsync(user)).Workspace;
 
-        // The user's own id, so whatever the account wrote before still belongs to it.
-        Assert.Equal(Tenant, workspace.Id);
+        // An id of its own, so the owner and the business are never the same id.
+        Assert.NotEqual(Tenant, workspace.Id);
+        Assert.Equal(WorkspaceService.FirstWorkspaceId(Tenant), workspace.Id);
         Assert.Equal(Tenant, workspace.OwnerId);
         Assert.Equal("Oma's Kitchen", workspace.Name);
         Assert.Equal("https://cdn.example.com/logo.png", workspace.LogoUrl);
-        Assert.Same(workspace, _repository.Rows[Tenant]);
+        Assert.Same(workspace, _repository.Rows[workspace.Id]);
+    }
+
+    // Two sign-ins racing to make the first workspace must agree on its id, so
+    // the repository's unique key keeps one row; and the id is a well-formed GUID.
+    [Fact]
+    public void FirstWorkspaceId_IsStablePerUserAndDistinctAcrossUsers()
+    {
+        string a = WorkspaceService.FirstWorkspaceId("user-a");
+
+        Assert.Equal(a, WorkspaceService.FirstWorkspaceId("user-a"));
+        Assert.NotEqual(a, WorkspaceService.FirstWorkspaceId("user-b"));
+        Assert.True(Guid.TryParse(a, out Guid parsed));
+        Assert.Equal(5, parsed.Version);
     }
 
     [Fact]

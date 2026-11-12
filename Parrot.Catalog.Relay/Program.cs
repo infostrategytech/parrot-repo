@@ -22,6 +22,7 @@ CatalogOptions options = builder.Configuration.GetSection(CatalogOptions.Section
 if (!string.Equals(options.Relay.Bus, "Null", StringComparison.OrdinalIgnoreCase))
 {
     builder.Services.AddHostedService<CacheInvalidationConsumer>();
+    builder.Services.AddHostedService<IngestionReportConsumer>();
 }
 
 IHost host = builder.Build();

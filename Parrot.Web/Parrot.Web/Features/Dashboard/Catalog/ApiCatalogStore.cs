@@ -112,6 +112,20 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
             Duration = item.Duration ?? string.Empty,
             LeadTime = item.LeadTime ?? (item.Availability?.LeadTimeDays is { } days ? $"{days} {(days == 1 ? "day" : "days")}" : string.Empty),
             IsHidden = item.Hidden,
+            Ai = item.Ai?.State switch
+            {
+                "updating" => AiProgress.Updating,
+                "ready" => AiProgress.Ready,
+                "needs_attention" => AiProgress.NeedsAttention,
+                "failed" => AiProgress.Failed,
+                "not_listed" => AiProgress.NotListed,
+                null => null,
+                _ => AiProgress.NeedsAttention,
+            },
+            AiPhotos = [.. (item.Ai?.Photos ?? []).Select(p => new AiPhoto(
+                (item.Photos ?? []).FirstOrDefault(own => own.Key == p.PhotoKey)?.Url, p.Status, p.Caption, p.Reason))],
+            AiTextReason = item.Ai?.TextReason,
+            AiReportedAt = item.Ai?.ReportedAt is { } reportedAt ? new DateTimeOffset(DateTime.SpecifyKind(reportedAt, DateTimeKind.Utc)) : null,
             UpdatedAt = new DateTimeOffset(DateTime.SpecifyKind(item.UpdatedAt, DateTimeKind.Utc)),
         };
 
@@ -328,7 +342,12 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         string? LeadTime,
         List<Photo>? Photos,
         JsonElement? FormDraft,
-        bool Hidden);
+        bool Hidden,
+        Ai? Ai = null);
+
+    private sealed record Ai(string State, DateTime? ReportedAt, string? TextReason, List<AiPhotoBody>? Photos);
+
+    private sealed record AiPhotoBody(string? PhotoKey, string Status, string? Caption, string? Reason);
 
     private sealed record Category(Guid Id, string Name);
 

@@ -98,6 +98,7 @@ public sealed class CatalogApiFixture : IAsyncLifetime
         if (tenantId is { } t)
         {
             claims.Add(new Claim(CatalogClaims.TenantId, t.ToString("D")));
+            claims.Add(new Claim(CatalogClaims.OwnerId, $"owner-{t:N}"));
         }
 
         if (scopes.Length > 0)
@@ -116,10 +117,10 @@ public sealed class CatalogApiFixture : IAsyncLifetime
     }
 
     /// <summary>A DI scope whose tenant context is already established, for calling services directly.</summary>
-    public IServiceScope Scope(Guid tenantId, string actor = "test")
+    public IServiceScope Scope(Guid tenantId, string actor = "test", string? ownerId = null)
     {
         IServiceScope scope = Factory.Services.CreateScope();
-        scope.ServiceProvider.GetRequiredService<TenantContext>().Establish(tenantId, actor, CatalogScopes.All, Guid.NewGuid().ToString("N"));
+        scope.ServiceProvider.GetRequiredService<TenantContext>().Establish(tenantId, actor, CatalogScopes.All, Guid.NewGuid().ToString("N"), ownerId);
         return scope;
     }
 

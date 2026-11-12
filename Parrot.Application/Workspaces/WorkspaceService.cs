@@ -171,13 +171,14 @@ public class WorkspaceService : IWorkspaceService
             }
         }
 
-        // The first workspace takes the user's own id: everything the account
-        // wrote before workspaces existed is keyed by it, so nothing has to move.
-        // The migration made one for every account it found; this covers the
-        // accounts made since.
+        // The first workspace has an id of its own, so the account (the owner)
+        // and the business are never the same id. It is derived from the user id
+        // rather than random so two sign-ins racing to make it pick the same id
+        // and only one row is saved. Accounts from before this keep the first
+        // workspace they already have, whose id is their user id.
         Workspace first = new()
         {
-            Id = user.Id,
+            Id = FirstWorkspaceId(user.Id),
             OwnerId = user.Id,
             Name = user.BusinessName,
             LogoUrl = user.LogoUrl,
@@ -194,10 +195,32 @@ public class WorkspaceService : IWorkspaceService
         }
 
         // Another sign-in made it a moment ago.
-        Workspace made = await _repository.GetByIdAsync(user.Id)
-            ?? throw new InvalidOperationException($"Workspace {user.Id} was reported as existing but could not be read.");
+        Workspace made = await _repository.GetByIdAsync(first.Id)
+            ?? throw new InvalidOperationException($"Workspace {first.Id} was reported as existing but could not be read.");
         return WorkspaceAccess.ForOwner(made);
     }
+
+    /// <summary>
+    /// The id of a user's first workspace: a name-based UUID (version 5) of the
+    /// user id, so it is the same on every call yet never equal to the user id.
+    /// </summary>
+    public static string FirstWorkspaceId(string userId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(userId);
+        byte[] name = System.Text.Encoding.UTF8.GetBytes(userId);
+        byte[] input = new byte[FirstWorkspaceNamespace.Length + name.Length];
+        FirstWorkspaceNamespace.CopyTo(input, 0);
+        name.CopyTo(input, FirstWorkspaceNamespace.Length);
+
+        byte[] hash = System.Security.Cryptography.SHA1.HashData(input);
+        byte[] bytes = hash[..16];
+        bytes[6] = (byte)((bytes[6] & 0x0F) | 0x50);
+        bytes[8] = (byte)((bytes[8] & 0x3F) | 0x80);
+        return new Guid(bytes, bigEndian: true).ToString();
+    }
+
+    // Fixed for good: changing it would give existing users a second first workspace.
+    private static readonly byte[] FirstWorkspaceNamespace = new Guid("6f1b8a52-3c4e-4d0b-9a77-2f5d1c9e8b40").ToByteArray(bigEndian: true);
 
     internal static WorkspaceResponse ToResponse(Workspace workspace, string? currentWorkspaceId, string role = WorkspaceRoles.Owner) =>
         new(workspace.Id, workspace.Name, workspace.LogoUrl, workspace.Id == currentWorkspaceId, workspace.CreatedAt, role, workspace.OwnerId);

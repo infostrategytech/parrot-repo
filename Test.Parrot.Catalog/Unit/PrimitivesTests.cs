@@ -148,6 +148,17 @@ public class SecuritySqlTests
         }
 
         Assert.DoesNotContain("GRANT SELECT ON catalog.products TO catalog_reader", up);
-        Assert.Equal(ModelConventions.Relations.Count, SecuritySql.Tables.Count);
+        Assert.Equal(ModelConventions.Relations.Count, SecuritySql.Tables.Count + SecuritySql.LaterTables.Count);
+    }
+
+    [Fact]
+    public void The_ai_status_table_is_tenant_isolated_and_writable_by_the_relay_only_to_update()
+    {
+        string up = SecuritySql.ItemAiStatusUp();
+
+        Assert.Contains("ALTER TABLE catalog.item_ai_status FORCE ROW LEVEL SECURITY;", up);
+        Assert.Contains("CREATE POLICY tenant_isolation ON catalog.item_ai_status FOR ALL USING (tenant_id = catalog.current_tenant_id()) WITH CHECK (tenant_id = catalog.current_tenant_id());", up);
+        Assert.Contains("GRANT SELECT, UPDATE ON catalog.item_ai_status TO catalog_outbox_relay;", up);
+        Assert.DoesNotContain("catalog_reader", up);
     }
 }

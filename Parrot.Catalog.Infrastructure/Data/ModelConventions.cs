@@ -39,13 +39,14 @@ internal static class ModelConventions
         [typeof(AuditLogEntry)] = "audit_log",
         [typeof(OutboxMessage)] = "outbox",
         [typeof(ConsumerInboxEntry)] = "consumer_inbox",
+        [typeof(ItemAiStatus)] = "item_ai_status",
     };
 
     private static readonly HashSet<string> JsonColumns = new HashSet<string>(StringComparer.Ordinal)
     {
         nameof(Product.Attributes), nameof(AttributeDefinition.EnumOptions), nameof(AttributeDefinition.Validation),
         nameof(Offer.Eligibility), nameof(ProductRelationship.Metadata), nameof(ProductVersion.Snapshot),
-        nameof(OutboxMessage.Payload), nameof(AuditLogEntry.Before), nameof(AuditLogEntry.After),
+        nameof(OutboxMessage.Payload), nameof(AuditLogEntry.Before), nameof(AuditLogEntry.After), nameof(ItemAiStatus.Photos),
     };
 
     /// <summary>Applies names, converters, jsonb and check constraints. <paramref name="asViews"/> maps to v_* views instead of tables.</summary>

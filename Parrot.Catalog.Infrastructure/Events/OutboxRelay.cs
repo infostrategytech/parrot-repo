@@ -47,7 +47,7 @@ public sealed class OutboxRelay
             try
             {
                 using JsonDocument payload = JsonDocument.Parse(row.Payload);
-                EventEnvelope envelope = new EventEnvelope(row.Id, row.TenantId, row.AggregateType, row.AggregateId, row.EventType, row.SchemaVersion, row.CreatedAt, payload.RootElement.Clone());
+                EventEnvelope envelope = new EventEnvelope(row.Id, row.TenantId, row.OwnerId, row.UserId, row.AggregateType, row.AggregateId, row.EventType, row.SchemaVersion, row.CreatedAt, payload.RootElement.Clone());
                 await _publisher.PublishAsync(envelope, ct);
                 row.PublishedAt = now;
                 row.Attempts += 1;
@@ -157,6 +157,8 @@ public class RelayDbContext : DbContext
 
     public DbSet<ConsumerInboxEntry> ConsumerInbox => Set<ConsumerInboxEntry>();
 
+    public DbSet<ItemAiStatus> ItemAiStatus => Set<ItemAiStatus>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
@@ -167,6 +169,8 @@ public class RelayDbContext : DbContext
             e.HasKey(o => o.Id);
             e.Property(o => o.Id).HasColumnName("id");
             e.Property(o => o.TenantId).HasColumnName("tenant_id");
+            e.Property(o => o.OwnerId).HasColumnName("owner_id");
+            e.Property(o => o.UserId).HasColumnName("user_id");
             e.Property(o => o.AggregateType).HasColumnName("aggregate_type");
             e.Property(o => o.AggregateId).HasColumnName("aggregate_id");
             e.Property(o => o.EventType).HasColumnName("event_type");
@@ -185,6 +189,30 @@ public class RelayDbContext : DbContext
             e.Property(c => c.EventId).HasColumnName("event_id");
             e.Property(c => c.TenantId).HasColumnName("tenant_id");
             e.Property(c => c.ProcessedAt).HasColumnName("processed_at");
+        });
+        builder.Entity<ItemAiStatus>(e =>
+        {
+            e.ToTable("item_ai_status");
+            e.HasKey(a => a.ProductId);
+            e.Property(a => a.ProductId).HasColumnName("product_id");
+            e.Property(a => a.TenantId).HasColumnName("tenant_id");
+            e.Property(a => a.SentEventId).HasColumnName("sent_event_id");
+            e.Property(a => a.SentType).HasColumnName("sent_type");
+            e.Property(a => a.SentAt).HasColumnName("sent_at");
+            e.Property(a => a.ReportedEventId).HasColumnName("reported_event_id");
+            e.Property(a => a.ReportId).HasColumnName("report_id");
+            e.Property(a => a.ReportedAt).HasColumnName("reported_at");
+            e.Property(a => a.Status).HasColumnName("status");
+            e.Property(a => a.TextStatus).HasColumnName("text_status");
+            e.Property(a => a.SentVersion).HasColumnName("sent_version");
+            e.Property(a => a.ReportType).HasColumnName("report_type");
+            e.Property(a => a.Searchable).HasColumnName("searchable");
+            e.Property(a => a.TextReasonCode).HasColumnName("text_reason_code");
+            e.Property(a => a.TextReason).HasColumnName("text_reason");
+            e.Property(a => a.PhotosStatus).HasColumnName("photos_status");
+            e.Property(a => a.PhotosRejected).HasColumnName("photos_rejected");
+            e.Property(a => a.PhotosFailed).HasColumnName("photos_failed");
+            e.Property(a => a.Photos).HasColumnName("photos").HasColumnType("jsonb");
         });
     }
 }

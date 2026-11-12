@@ -15,8 +15,8 @@ public sealed class CategoryAdminService : AdminServiceBase, ICategoryAdminServi
 {
     private readonly DerivedDataRebuilder _rebuilder;
 
-    public CategoryAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, DerivedDataRebuilder rebuilder)
-        : base(db, tenant, clock, metrics)
+    public CategoryAdminService(CatalogDbContext db, ITenantContext tenant, TimeProvider clock, CatalogMetrics metrics, ItemEventWriter itemEvents, DerivedDataRebuilder rebuilder)
+        : base(db, tenant, clock, metrics, itemEvents)
     {
         _rebuilder = rebuilder;
     }
@@ -93,6 +93,21 @@ public sealed class CategoryAdminService : AdminServiceBase, ICategoryAdminServi
         await SaveAsync(c);
         CategoryResponse response = Map.Category(category, await _rebuilder.CategoryPathAsync(category.Id, c));
         Audit(AuditActions.Update, "category", category.Id, before, response);
+
+        // An item's text carries its category path, so a rename or move changes every
+        // item at or below this category; each gets a fresh whole-item event.
+        if (!before.Path.SequenceEqual(response.Path, StringComparer.Ordinal))
+        {
+            List<Guid> affected = await Db.CategoryClosure.AsNoTracking()
+                .Where(x => x.AncestorId == category.Id)
+                .Join(Db.Products.AsNoTracking().Where(p => p.DeletedAt == null), x => x.DescendantId, p => p.CategoryId, (x, p) => p.Id)
+                .ToListAsync(c);
+            foreach (Guid productId in affected)
+            {
+                ItemEvents.Touch(productId);
+            }
+        }
+
         return response;
     }, ct);
 
