@@ -24,6 +24,8 @@ public sealed class WhatsAppProfileClient : IWhatsAppProfileClient
 
     public async Task<WhatsAppProfileData?> GetProfileAsync(string phoneNumberId, string accessToken, CancellationToken ct)
     {
+        _logger.LogDebug("whatsapp.profile.fetch_start PhoneNumberId={PhoneNumberId} ApiVersion={ApiVersion}",
+            phoneNumberId, _apiVersion);
         try
         {
             PhoneNumberResponse? phone = await _http.GetFromJsonAsync<PhoneNumberResponse>(
@@ -36,7 +38,7 @@ public sealed class WhatsAppProfileClient : IWhatsAppProfileClient
 
             BusinessProfileEntry? profile = profileResponse?.Data?.FirstOrDefault();
 
-            return new WhatsAppProfileData(
+            WhatsAppProfileData result = new WhatsAppProfileData(
                 VerifiedName: phone?.VerifiedName,
                 DisplayPhoneNumber: phone?.DisplayPhoneNumber,
                 About: profile?.About,
@@ -46,10 +48,16 @@ public sealed class WhatsAppProfileClient : IWhatsAppProfileClient
                 Vertical: profile?.Vertical,
                 ProfilePictureUrl: profile?.ProfilePictureUrl,
                 Websites: profile?.Websites ?? []);
+
+            _logger.LogInformation(
+                "whatsapp.profile.fetch_ok PhoneNumberId={PhoneNumberId} VerifiedName={VerifiedName} DisplayPhone={DisplayPhone}",
+                phoneNumberId, result.VerifiedName, result.DisplayPhoneNumber);
+            return result;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogWarning(ex, "whatsapp.profile.fetch_failed PhoneNumberId={PhoneNumberId}", phoneNumberId);
+            _logger.LogWarning(ex, "whatsapp.profile.fetch_failed PhoneNumberId={PhoneNumberId} ApiVersion={ApiVersion}",
+                phoneNumberId, _apiVersion);
             return null;
         }
     }

@@ -62,12 +62,15 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         if (string.IsNullOrWhiteSpace(workspaceName))
             throw new InvalidOperationException($"Cannot publish business-knowledge snapshot: workspace {workspaceId} has no name set.");
 
+        // Load provider-specific data needed for the snapshot (WABA IDs for WhatsApp sources).
+        Dictionary<Guid, string?> connectionWabaIds = await LoadWabaIdsAsync(sources, ct);
+
         state.SnapshotVersion += 1;
 
         OutboxEvent outbox = new OutboxEvent
         {
             WorkspaceId = workspaceId,
-            Payload = BuildPayload(state.SnapshotVersion, workspaceId, workspaceName!, sources),
+            Payload = BuildPayload(state.SnapshotVersion, workspaceId, workspaceName!, sources, connectionWabaIds),
         };
 
         _db.OutboxEvents.Add(outbox);
@@ -77,7 +80,30 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             state.SnapshotVersion, workspaceId, sources.Count, outbox.Id);
     }
 
-    private static string BuildPayload(long snapshotVersion, string workspaceId, string workspaceName, IReadOnlyList<BusinessSource> sources)
+    private async Task<Dictionary<Guid, string?>> LoadWabaIdsAsync(IReadOnlyList<BusinessSource> sources, CancellationToken ct)
+    {
+        List<Guid> whatsAppConnectionIds = sources
+            .Where(s => s.Channel == Channel.WhatsApp)
+            .Select(s => s.AuthorizationConnectionId)
+            .Distinct()
+            .ToList();
+
+        if (whatsAppConnectionIds.Count == 0)
+            return new Dictionary<Guid, string?>();
+
+        // Load only the WABA ID — no access tokens, no sensitive fields.
+        return await _db.WhatsAppConnections
+            .AsNoTracking()
+            .Where(c => whatsAppConnectionIds.Contains(c.Id))
+            .ToDictionaryAsync(c => c.Id, c => c.WhatsAppBusinessAccountId, ct);
+    }
+
+    private static string BuildPayload(
+        long snapshotVersion,
+        string workspaceId,
+        string workspaceName,
+        IReadOnlyList<BusinessSource> sources,
+        IReadOnlyDictionary<Guid, string?> connectionWabaIds)
     {
         BusinessSourcesUpdatedMessage message = new BusinessSourcesUpdatedMessage
         {
@@ -86,7 +112,7 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             SnapshotVersion = snapshotVersion,
             OccurredAt = DateTimeOffset.UtcNow,
             Data = new BusinessData { Name = workspaceName },
-            Sources = sources.Select(ToEntry).ToList(),
+            Sources = sources.Select(s => ToEntry(s, connectionWabaIds)).ToList(),
         };
 
         // Use MessageJson.Options so the payload is consistent with what KafkaMessageBus
@@ -95,7 +121,7 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         return JsonSerializer.Serialize(message, MessageJson.Options);
     }
 
-    private static SourceEntry ToEntry(BusinessSource source)
+    private static SourceEntry ToEntry(BusinessSource source, IReadOnlyDictionary<Guid, string?> connectionWabaIds)
     {
         string channelKey = source.Channel switch
         {
@@ -116,6 +142,14 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             ? $"{channelKey}_catalog:{source.ExternalId}"
             : $"{channelKey}:{source.ExternalId}";
 
+        JsonElement? providerData = source.Channel switch
+        {
+            Channel.WhatsApp => BuildWhatsAppProviderData(source, connectionWabaIds),
+            Channel.Instagram => BuildInstagramProviderData(source),
+            Channel.Facebook => BuildFacebookProviderData(source),
+            _ => null,
+        };
+
         return new SourceEntry
         {
             SourceId = sourceId,
@@ -128,6 +162,25 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             Url = source.Url,
             Text = source.Text,
             CapturedAt = source.CapturedAt.HasValue ? new DateTimeOffset(source.CapturedAt.Value, TimeSpan.Zero) : null,
+            ProviderData = providerData,
         };
     }
+
+    private static JsonElement BuildWhatsAppProviderData(
+        BusinessSource source, IReadOnlyDictionary<Guid, string?> connectionWabaIds)
+    {
+        connectionWabaIds.TryGetValue(source.AuthorizationConnectionId, out string? wabaId);
+
+        Dictionary<string, string?> data = source.Kind == BusinessSourceKind.Catalog
+            ? new Dictionary<string, string?> { ["waba_id"] = wabaId, ["catalog_id"] = source.ExternalId }
+            : new Dictionary<string, string?> { ["waba_id"] = wabaId, ["phone_number_id"] = source.ExternalId };
+
+        return JsonSerializer.SerializeToElement(data);
+    }
+
+    private static JsonElement BuildInstagramProviderData(BusinessSource source) =>
+        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["account_id"] = source.ExternalId });
+
+    private static JsonElement BuildFacebookProviderData(BusinessSource source) =>
+        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["page_id"] = source.ExternalId });
 }

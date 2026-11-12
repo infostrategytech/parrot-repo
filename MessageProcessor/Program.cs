@@ -148,6 +148,12 @@ builder.Services.AddScoped<ISnapshotPublisher, SnapshotPublisher>();
 builder.Services.AddSingleton<IWhatsAppProfileClient, WhatsAppProfileClient>();
 builder.Services.AddHttpClient(WhatsAppProfileClient.HttpClientName, client =>
     client.BaseAddress = new Uri("https://graph.facebook.com/")).RemoveAllLoggers();
+builder.Services.AddSingleton<IInstagramProfileClient, InstagramProfileClient>();
+builder.Services.AddHttpClient(InstagramProfileClient.HttpClientName, client =>
+    client.BaseAddress = new Uri("https://graph.facebook.com/")).RemoveAllLoggers();
+builder.Services.AddSingleton<IFacebookPageClient, FacebookPageClient>();
+builder.Services.AddHttpClient(FacebookPageClient.HttpClientName, client =>
+    client.BaseAddress = new Uri("https://graph.facebook.com/")).RemoveAllLoggers();
 
 // One program, four jobs: Worker:Roles says which this process does, so each can be deployed and scaled by itself.
 WorkerRoles roles = WorkerRoleSettings.Parse(builder.Configuration[WorkerRoleSettings.Key]);

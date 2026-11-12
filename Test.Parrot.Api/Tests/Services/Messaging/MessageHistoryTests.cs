@@ -11,6 +11,7 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
+using Parrot.Application.Teams;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
@@ -242,6 +243,8 @@ public class MessageHistoryTests : IAsyncLifetime
                 HttpContext = new DefaultHttpContext
                 {
                     User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(ClaimTypes.NameIdentifier, userId)], "test")),
+                    // As WorkspaceAccessFilter leaves it: the owner, who reaches every channel.
+                    Items = { [typeof(WorkspaceAccess)] = WorkspaceAccess.ForOwner(new Workspace { Id = userId ?? "none", OwnerId = userId ?? "none" }) },
                 },
             },
         };

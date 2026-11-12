@@ -41,8 +41,20 @@ public sealed class SourcesOutboxWorker : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("SourcesOutboxWorker started. Topic={Topic} BatchSize={BatchSize} PollIntervalMs={PollIntervalMs}",
-            _kafka.BusinessKnowledgeSources, BatchSize, (int)PollInterval.TotalMilliseconds);
+        bool kafkaConfigured = !string.IsNullOrWhiteSpace(_kafka.BootstrapServers)
+            && _kafka.BootstrapServers != "localhost:9092";
+
+        _logger.LogInformation(
+            "SourcesOutboxWorker started. Topic={Topic} BatchSize={BatchSize} PollIntervalMs={PollIntervalMs} KafkaBootstrap={KafkaBootstrap} KafkaConfigured={KafkaConfigured}",
+            _kafka.BusinessKnowledgeSources, BatchSize, (int)PollInterval.TotalMilliseconds,
+            _kafka.BootstrapServers, kafkaConfigured);
+
+        if (!kafkaConfigured)
+            _logger.LogWarning(
+                "SourcesOutboxWorker: Kafka:BootstrapServers is '{BootstrapServers}' — this is the default or empty. " +
+                "Outbox events will not reach Omni AI until a production Kafka bootstrap address is configured. " +
+                "Events accumulate in the OutboxEvents table and will be flushed once the setting is correct.",
+                _kafka.BootstrapServers);
 
         while (!stoppingToken.IsCancellationRequested)
         {

@@ -28,4 +28,7 @@ public interface IIntegrationsService
     Task<WhatsAppConnectionInfo> GetWhatsAppStatusAsync(Guid id, string token, CancellationToken cancellationToken = default);
     Task<CatalogueSyncResult> SyncCatalogueAsync(Guid connectionId, string token, CancellationToken cancellationToken = default);
     Task<CatalogueItemsResponse> GetCatalogueProductsAsync(Guid connectionId, int page, int pageSize, string token, string? cursor = null, CancellationToken cancellationToken = default);
+
+    /// <summary>Queues a metadata refresh for the given WhatsApp connection's AI knowledge source.</summary>
+    Task RefreshKnowledgeAsync(Guid connectionId, string token, CancellationToken cancellationToken = default);
 }

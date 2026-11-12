@@ -153,6 +153,9 @@ public class IntegrationsService : IIntegrationsService
             ?? throw new HttpRequestException("The server returned an empty response.");
     }
 
+    public Task RefreshKnowledgeAsync(Guid connectionId, string token, CancellationToken cancellationToken = default) =>
+        SendCommandAsync(HttpMethod.Post, $"api/whatsapp/connections/{connectionId}/refresh-knowledge", token, null, cancellationToken);
+
     public async Task<string?> GetWebhookUrlAsync(string platform, string token, CancellationToken cancellationToken = default)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"api/integrations/business-webhook/{platform}");
