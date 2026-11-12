@@ -64,6 +64,7 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
         {
             if (catalogId is not null)
             {
+                // Catalog content is managed by the catalogue sync service, not the metadata worker.
                 BusinessSource source = new BusinessSource
                 {
                     WorkspaceId = workspaceId,
@@ -72,7 +73,7 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
                     Kind = BusinessSourceKind.Catalog,
                     ExternalId = catalogId,
                     IsActive = true,
-                    MetadataSyncStatus = MetadataSyncStatus.Pending,
+                    MetadataSyncStatus = MetadataSyncStatus.Unavailable,
                 };
                 await _sources.UpsertAsync(source, ct);
                 await _db.SaveChangesAsync(ct);

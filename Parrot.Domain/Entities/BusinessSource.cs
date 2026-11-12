@@ -69,6 +69,9 @@ public class BusinessSource
     /// </summary>
     public DateTime? MetadataSyncLockedUntil { get; set; }
 
+    /// <summary>Incremented on each completed sync attempt (success or failure) for backoff.</summary>
+    public int MetadataSyncAttemptCount { get; set; }
+
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
     public bool IsActive { get; set; } = true;

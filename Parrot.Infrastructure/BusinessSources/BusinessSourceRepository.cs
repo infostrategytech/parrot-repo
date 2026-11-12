@@ -31,14 +31,16 @@ public class BusinessSourceRepository : IBusinessSourceRepository
         }
 
         // Reactivate the existing source and refresh mutable fields.
+        // Respect the candidate's MetadataSyncStatus so callers can mark sources Unavailable on reactivation.
         existing.AuthorizationConnectionId = candidate.AuthorizationConnectionId;
         existing.DisplayName = candidate.DisplayName;
         existing.Handle = candidate.Handle;
         existing.Url = candidate.Url;
         existing.IsActive = true;
-        existing.MetadataSyncStatus = MetadataSyncStatus.Pending;
+        existing.MetadataSyncStatus = candidate.MetadataSyncStatus;
         existing.NextMetadataSyncAttemptAt = null;
         existing.MetadataSyncLockedUntil = null;
+        existing.MetadataSyncAttemptCount = 0;
         existing.UpdatedAt = candidate.UpdatedAt;
         return existing;
     }
@@ -67,30 +69,43 @@ public class BusinessSourceRepository : IBusinessSourceRepository
         }
     }
 
-    public async Task<IReadOnlyList<BusinessSource>> ClaimBatchForMetadataAsync(int batchSize, TimeSpan leaseDuration, CancellationToken ct = default)
+    public async Task<IReadOnlyList<BusinessSource>> ClaimBatchForMetadataAsync(
+        int batchSize,
+        TimeSpan leaseDuration,
+        Channel? channel = null,
+        BusinessSourceKind? kind = null,
+        CancellationToken ct = default)
     {
+        // Channel and Kind values come from C# enums — safe to interpolate as integers.
+        // batchSize is the only user-controlled value and goes in as a named parameter.
+        // Channel, Kind, and status values come from C# enums; batchSize is a constant.
+        // All are safe to embed directly in the SQL string.
+        string channelClause = channel.HasValue ? $"""AND "Channel" = {(int)channel.Value}""" : "";
+        string kindClause = kind.HasValue ? $"""AND "Kind" = {(int)kind.Value}""" : "";
+
         // FOR UPDATE SKIP LOCKED so concurrent workers don't process the same source.
         // The caller must hold an open transaction; the lease is committed before
         // the transaction is released so the lock has effect.
-        List<BusinessSource> batch = await _db.BusinessSources
-            .FromSqlInterpolated($"""
-                SELECT * FROM "BusinessSources"
-                WHERE "IsActive" = true
-                  AND "MetadataSyncStatus" IN ({(int)MetadataSyncStatus.Pending}, {(int)MetadataSyncStatus.RetryScheduled})
-                  AND ("NextMetadataSyncAttemptAt" IS NULL OR "NextMetadataSyncAttemptAt" <= NOW())
-                  AND ("MetadataSyncLockedUntil" IS NULL OR "MetadataSyncLockedUntil" < NOW())
-                ORDER BY "CreatedAt"
-                LIMIT {batchSize}
-                FOR UPDATE SKIP LOCKED
-                """)
-            .ToListAsync(ct);
+        string sql = $"""
+            SELECT * FROM "BusinessSources"
+            WHERE "IsActive" = true
+              AND "MetadataSyncStatus" IN ({(int)MetadataSyncStatus.Pending}, {(int)MetadataSyncStatus.RetryScheduled})
+              AND ("NextMetadataSyncAttemptAt" IS NULL OR "NextMetadataSyncAttemptAt" <= NOW())
+              AND ("MetadataSyncLockedUntil" IS NULL OR "MetadataSyncLockedUntil" < NOW())
+              {channelClause}
+              {kindClause}
+            ORDER BY "CreatedAt"
+            LIMIT {batchSize}
+            FOR UPDATE SKIP LOCKED
+            """;
+
+        List<BusinessSource> batch = await _db.BusinessSources.FromSqlRaw(sql).ToListAsync(ct);
 
         DateTime lockedUntil = DateTime.UtcNow.Add(leaseDuration);
         foreach (BusinessSource source in batch)
         {
             source.MetadataSyncStatus = MetadataSyncStatus.Processing;
             source.MetadataSyncLockedUntil = lockedUntil;
-            source.LastMetadataSyncAttemptAt = DateTime.UtcNow;
         }
 
         return batch;

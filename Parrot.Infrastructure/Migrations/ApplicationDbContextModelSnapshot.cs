@@ -370,6 +370,9 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<DateTime?>("LastMetadataSyncSucceededAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("MetadataSyncAttemptCount")
+                        .HasColumnType("integer");
+
                     b.Property<DateTime?>("MetadataSyncLockedUntil")
                         .HasColumnType("timestamp with time zone");
 

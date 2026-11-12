@@ -33,8 +33,15 @@ public interface IBusinessSourceRepository
     /// Claims up to <paramref name="batchSize"/> sources eligible for metadata sync
     /// (Pending or RetryScheduled with NextMetadataSyncAttemptAt in the past) using
     /// FOR UPDATE SKIP LOCKED. Sets MetadataSyncStatus=Processing and MetadataSyncLockedUntil.
+    /// Pass <paramref name="channel"/> and <paramref name="kind"/> to restrict the claim to one
+    /// source type; omit both to claim any eligible source.
     /// The caller must start a transaction before calling this, then call SaveChanges
     /// to persist the lease before releasing the transaction.
     /// </summary>
-    Task<IReadOnlyList<BusinessSource>> ClaimBatchForMetadataAsync(int batchSize, TimeSpan leaseDuration, CancellationToken ct = default);
+    Task<IReadOnlyList<BusinessSource>> ClaimBatchForMetadataAsync(
+        int batchSize,
+        TimeSpan leaseDuration,
+        Channel? channel = null,
+        BusinessSourceKind? kind = null,
+        CancellationToken ct = default);
 }
