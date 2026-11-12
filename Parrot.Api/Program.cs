@@ -45,7 +45,9 @@ using Parrot.Api.OpenApi;
 using Parrot.Api.Realtime;
 using Parrot.Api.Security;
 using Parrot.Api.Utils;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.Workspaces;
+using Parrot.Infrastructure.BusinessSources;
 using Parrot.Infrastructure.Workspaces;
 
 WebApplicationBuilder builder = WebApplication.CreateBuilder(args);
@@ -94,6 +96,9 @@ bool storageConfigured = !string.IsNullOrWhiteSpace(storageSettings.Bucket) &&
 builder.Services.Configure<WhatsAppSettings>(builder.Configuration.GetSection(WhatsAppSettings.SectionName));
 builder.Services.AddWhatsAppCredentialProtection(builder.Configuration, builder.Environment.IsDevelopment());
 builder.Services.AddScoped<IWhatsAppConnectionRepository, WhatsAppConnectionRepository>();
+builder.Services.AddScoped<IBusinessSourceRepository, BusinessSourceRepository>();
+builder.Services.AddScoped<ISnapshotPublisher, SnapshotPublisher>();
+builder.Services.AddScoped<IConnectionSourceSyncService, ConnectionSourceSyncService>();
 builder.Services.AddScoped<IWhatsAppConnectionService, WhatsAppConnectionService>();
 builder.Services.AddScoped<IWhatsAppCatalogueSyncService, WhatsAppCatalogueSyncService>();
 builder.Services.Configure<FacebookSettings>(builder.Configuration.GetSection(FacebookSettings.SectionName));

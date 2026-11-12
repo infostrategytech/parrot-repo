@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Moq;
 using Parrot.Application.Contracts.WhatsAppCatalogue;
 using Parrot.Application.DTOs.Integrations;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.Integrations;
 using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
@@ -20,6 +21,7 @@ public class WhatsAppCatalogueSyncServiceTests
 
     private WhatsAppCatalogueSyncService CreateService() =>
         new(_connectionRepo.Object, _catalogClient, _metaClient, _protector,
+            Mock.Of<IConnectionSourceSyncService>(),
             Mock.Of<IAppLogger<WhatsAppCatalogueSyncService>>());
 
     // ── Connection guard tests ───────────────────────────────────────────────
