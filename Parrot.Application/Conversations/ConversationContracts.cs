@@ -186,6 +186,13 @@ public interface IConversationStore
     Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct);
 
     /// <summary>
+    /// Writes a system event (e.g. human took over, AI resumed) into the conversation thread.
+    /// Looks up the latest message to discover channel context; a no-op when no messages exist yet.
+    /// </summary>
+    Task WriteSystemEventAsync(string owner, Guid connection, string sender, string text, CancellationToken ct) =>
+        Task.CompletedTask;
+
+    /// <summary>
     /// Marks a reply failed only while it is still pending: false when the send worker has already taken it, in
     /// which case its outcome is the worker's to record and must not be overwritten.
     /// </summary>

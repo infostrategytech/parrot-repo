@@ -205,6 +205,12 @@ public class InboundMessageProcessorTests
             return Task.CompletedTask;
         }
 
+        public Task TouchAsync(string owner, Guid connection, string sender, CancellationToken ct)
+        {
+            _active.Add((owner, connection, sender));
+            return Task.CompletedTask;
+        }
+
         public Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct) =>
             Task.FromResult(_active.Contains((owner, connection, sender)));
 

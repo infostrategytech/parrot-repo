@@ -15,6 +15,13 @@ public interface IHumanTakeoverStore
     /// <summary>Clears the takeover flag, handing the conversation back to the AI.</summary>
     Task ClearAsync(string owner, Guid connection, string sender, CancellationToken ct);
 
+    /// <summary>
+    /// Marks a human as active without changing the existing <c>ControlUntil</c> time limit.
+    /// Used when a human sends a reply outside of an explicit timed takeover, so a timer
+    /// set by <see cref="SetAsync"/> is preserved rather than overwritten with null.
+    /// </summary>
+    Task TouchAsync(string owner, Guid connection, string sender, CancellationToken ct);
+
     /// <summary>True when a human has taken over and the takeover has not expired or been handed back.</summary>
     Task<bool> IsActiveAsync(string owner, Guid connection, string sender, CancellationToken ct);
 

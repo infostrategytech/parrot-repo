@@ -47,8 +47,11 @@ public sealed class MongoConversationStore : IConversationStore
 
     private async Task<IReadOnlyList<ConversationSummary>> SummariesAsync(FilterDefinition<MessageDocument> match, int skip, int take, CancellationToken ct)
     {
+        // System events are stored in the same collection but must not influence the preview text,
+        // the contact name, or LastCustomerMessageAt — only real channel messages do.
+        FilterDefinition<MessageDocument> withoutSystemEvents = match & Builders<MessageDocument>.Filter.Ne(x => x.Type, "system");
         List<BsonDocument> rows = await _messages.Aggregate()
-            .Match(match)
+            .Match(withoutSystemEvents)
             .SortByDescending(x => x.Id)
             .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
             {
@@ -142,6 +145,23 @@ public sealed class MongoConversationStore : IConversationStore
     public async Task<bool> FailPendingAsync(string id, CancellationToken ct) =>
         (await _messages.UpdateOneAsync(x => x.MessageId == id && x.SendStatus == "pending",
             Builders<MessageDocument>.Update.Set(x => x.SendStatus, "failed"), cancellationToken: ct)).ModifiedCount > 0;
+
+    public async Task WriteSystemEventAsync(string owner, Guid connection, string sender, string text, CancellationToken ct)
+    {
+        // Borrow context from the most recent message so the event sits in the same channel.
+        MessageDocument? context = await _messages
+            .Find(x => x.OwnerUserId == owner && x.ConnectionId == connection && x.From == sender)
+            .SortByDescending(x => x.Id)
+            .FirstOrDefaultAsync(ct);
+        if (context is null) return;
+
+        SystemEventDocument doc = SystemEventDocument.Create(
+            owner, connection, sender,
+            context.Platform, context.ExternalAccountId, context.ChannelId, context.ChannelDisplayName,
+            text);
+        try { await _messages.InsertOneAsync(doc, cancellationToken: ct); }
+        catch (MongoWriteException ex) when (ex.WriteError.Category == ServerErrorCategory.DuplicateKey) { }
+    }
 
     public async Task CompleteAsync(string id, string status, string? providerId, CancellationToken ct) =>
         await _messages.UpdateOneAsync(x => x.MessageId == id,

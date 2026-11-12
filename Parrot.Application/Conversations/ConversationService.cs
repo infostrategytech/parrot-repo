@@ -40,12 +40,13 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct);
 
         // Best-effort: a human sent this reply, so mark the conversation as under human control.
+        // TouchAsync preserves any existing ControlUntil so a timed takeover is not overwritten.
         if (humanTakeover is not null)
         {
-            try { await humanTakeover.SetAsync(owner, connectionId, recipient, null, ct); }
+            try { await humanTakeover.TouchAsync(owner, connectionId, recipient, ct); }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                logger?.LogWarning(ex, "human_takeover_set_failed ConnectionId={ConnectionId} Sender={Sender}; continuing",
+                logger?.LogWarning(ex, "human_takeover_touch_failed ConnectionId={ConnectionId} Sender={Sender}; continuing",
                     connectionId, recipient);
             }
         }
@@ -641,13 +642,19 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     }
 
     public static string RequestKey(string owner, Guid request) => $"outgoing:{owner}:{request:D}";
-    public static ConversationMessage ToMessage(MessageDocument doc) => new(doc.MessageId,
-        doc.TextBody ?? (doc.Attachments is { Count: > 0 } ? "" : $"[{doc.Type} message]"), doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt)
+    public static ConversationMessage ToMessage(MessageDocument doc)
     {
-        Kind = doc.IsAiReply == true ? "ai" : null,
-        Attachments = doc.Attachments is { Count: > 0 } attachments ? [.. attachments.Select(ToMedia)] : null,
-        ReplyTo = ToQuote(doc.ReplyTo),
-    };
+        if (doc.Type == "system")
+            return new ConversationMessage(doc.MessageId, doc.TextBody ?? "", doc.Outgoing, "received", doc.ReceivedAt) { Kind = "system" };
+
+        return new ConversationMessage(doc.MessageId,
+            doc.TextBody ?? (doc.Attachments is { Count: > 0 } ? "" : $"[{doc.Type} message]"), doc.Outgoing, DisplayStatus(doc), doc.ReceivedAt)
+        {
+            Kind = doc.IsAiReply == true ? "ai" : null,
+            Attachments = doc.Attachments is { Count: > 0 } attachments ? [.. attachments.Select(ToMedia)] : null,
+            ReplyTo = ToQuote(doc.ReplyTo),
+        };
+    }
 
     public static MessageQuote? ToQuote(MessageReplyTo? reply) =>
         reply is null ? null : new MessageQuote(reply.MessageId, reply.Outgoing, reply.Text, reply.Type);
