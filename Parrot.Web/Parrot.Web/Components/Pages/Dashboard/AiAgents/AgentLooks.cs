@@ -43,6 +43,9 @@ public static class AgentLooks
         return value is not null && Pictures.TryGetValue(value, out var picture) ? picture : AvatarAppearance.Default;
     }
 
+    /// <summary>As sent to the AI service: a look in today's form, however it was saved; anything else as it is.</summary>
+    public static string Key(string mascot) => IsLook(mascot) ? Save(Of(mascot)) : mascot;
+
     public static string Save(AvatarAppearance look) => $"{Prefix}{look.StyleId}-{look.Tone.ToString().ToLowerInvariant()}";
 
     /// <summary>A new agent's look: the first character, in its own colour, that no other agent wears.</summary>

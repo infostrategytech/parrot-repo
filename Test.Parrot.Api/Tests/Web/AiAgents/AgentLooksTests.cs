@@ -75,6 +75,13 @@ public sealed class AgentLooksTests
     }
 
     [Fact]
-    public void ALookSavedTheOldWayStillReads() =>
+    public void ALookSavedTheOldWayStillReadsAndIsSentInTheNewForm()
+    {
         Assert.Equal(new AvatarAppearance(PresenceAvatarDirection.Fig, PresenceAvatarTone.Teal), AgentLooks.Of("look:fig:teal"));
+        var agent = new AiAgent { Name = "Ada", Description = "", Mascot = "look:fig:teal" };
+        Assert.Equal("look-fig-teal", OmniAgentMapping.ToUpdate(agent).Avatar);
+        Assert.Equal("look-fig-teal", OmniAgentMapping.ToCreate(agent, []).Avatar);
+        agent.Mascot = "Nova";
+        Assert.Equal("Nova", OmniAgentMapping.ToUpdate(agent).Avatar);
+    }
 }
