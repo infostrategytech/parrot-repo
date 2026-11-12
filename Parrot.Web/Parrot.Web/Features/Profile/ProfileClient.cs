@@ -71,6 +71,18 @@ public sealed class ProfileClient(HttpClient http, AuthState authState, TokenSto
         return (await ReadAsync<ImageUploadResponse>(response)).Url;
     }
 
+    /// <summary>
+    /// POST /api/auth/change-password: the current password has to match, and the new one is 8 to 128
+    /// characters. A wrong current password or a weak new one comes back as an <see cref="ApiException"/>.
+    /// </summary>
+    public async Task ChangePasswordAsync(string currentPassword, string newPassword, string confirmNewPassword)
+    {
+        using HttpRequestMessage request = Authorized(HttpMethod.Post, "api/auth/change-password");
+        request.Content = JsonContent.Create(new { currentPassword, newPassword, confirmNewPassword });
+        using HttpResponseMessage response = await http.SendAsync(request);
+        await response.EnsureApiSuccessAsync();
+    }
+
     private HttpRequestMessage Authorized(HttpMethod method, string path)
     {
         string token = authState.CurrentUser?.Token

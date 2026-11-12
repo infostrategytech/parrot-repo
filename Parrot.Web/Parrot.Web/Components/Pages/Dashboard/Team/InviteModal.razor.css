@@ -1,51 +1,24 @@
-/* The invitation form inside the dialog, one field per row, with the
-   permissions in a muted well beneath — the same well Aurora's ProductEditor
-   uses for its publish toggle. */
+.invite__form-fields { min-width: 0; margin: var(--spacing-none); padding: var(--spacing-none); border: 0; }
+/* Who, their role, and any limits: the fields one per row, as New task's are, the limits in a muted well. */
+.invite { display: grid; gap: var(--spacing-lg); }
 
-::deep .invite__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
+.invite__fields { display: grid; gap: var(--spacing-lg); }
+/* An email already on the team: its Resend sits right under the message. */
+.invite__email { display: grid; gap: var(--spacing-sm); }
 
-.invite__form {
+/* The optional parts' "+" buttons, in a row, as New task's. */
+.invite__adds { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+
+.invite__limits {
   display: grid;
   gap: var(--spacing-lg);
-  margin-top: var(--spacing-lg);
-}
-
-.invite__permissions {
-  display: grid;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-xl);
   padding: var(--spacing-lg);
   background: var(--colors-surface-muted);
   border-radius: var(--radius-radius-lg);
 }
+.invite__group { display: grid; gap: var(--spacing-sm); }
+.invite__group ::deep .invite__group-title { color: var(--colors-text-secondary); }
 
-.invite__permissions ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
-::deep .invite__placeholder { margin: var(--spacing-none); color: var(--colors-text-muted); }
-
-.invite__permission-list {
-  display: grid;
-  gap: var(--spacing-sm);
-}
-
-/* One well per workspace the person is given access to. */
-.invite__grant-head {
-  display: flex;
-  gap: var(--spacing-sm);
-  align-items: center;
-}
-
-.invite__grant-head > ::deep :first-child { flex: 1 1 auto; min-width: 0; }
-
-.invite__add {
-  display: flex;
-  margin-top: var(--spacing-lg);
-}
-
-/* The chosen role's permissions: read here, changed under Roles. */
-.invite__role-permissions {
-  display: grid;
-  gap: var(--spacing-xs);
-  margin: var(--spacing-none);
-  padding-left: var(--spacing-lg);
-  color: var(--colors-text-secondary);
-}
+/* Sent: the shared SuccessMessage; under it, the quiet way to share the link by hand. */
+.invite__share { display: grid; gap: var(--spacing-sm); justify-items: center; padding-bottom: var(--spacing-sm); }
+.invite__share ::deep p { margin: var(--spacing-none); color: var(--colors-text-muted); }

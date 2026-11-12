@@ -1,0 +1,304 @@
+@page "/verify-sign-in"
+@layout AuthPanelLayout
+@using Parrot.Web.Components.Pages.Auth
+@using Parrot.Web.Features.Auth.TwoFactor
+@using Parrot.Web.Features.Settings
+@using Parrot.Web.Services
+@inject TwoFactorSignInState SignIn
+@inject ITwoFactorSignIn TwoFactor
+@inject RememberedDeviceStorage Devices
+@inject AuthState AuthState
+@inject TokenStorageService TokenStorage
+@inject NavigationManager Navigation
+
+<PageTitle>Confirm It's You · yára</PageTitle>
+
+@* The second step of signing in, for an account with two-factor authentication on (designer, 9 November 2026), after
+   the password or after Google and Facebook. As Verify Your Account is: the panel, the six boxes checked on the sixth
+   digit. The authenticator app first when it's on, else an emailed code; then the other ways that are on, as links
+   ("Email me a code instead", "Use a recovery code instead"), so one that can't be reached never locks anyone out.
+   This browser is remembered for 30 days once it's through, silently: nothing to tick. *@
+
+@if (_challenge is null)
+{
+    @* Arrived without signing in first, or refreshed, which forgets the sign-in waiting here. Sign In is where it starts. *@
+}
+else if (_codesLeft is { } left)
+{
+    @* Signed in with a recovery code: how many are left, and where to get more, before going on. *@
+    <div class="account-panel__done" role="status">
+        <span class="account-panel__done-icon" aria-hidden="true">
+            <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Lg" />
+        </span>
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">You're Signed In</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            @(left == 0
+                ? "That was your last recovery code. Get new ones in Sign-in & security, so you always have a way in."
+                : $"You used a recovery code, so {(left == 1 ? "1 is" : $"{left} are")} left. You can get new ones in Sign-in & security.")
+        </Typography>
+        <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="ContinueToDashboard">Continue</Button>
+    </div>
+    <a class="account-panel__back @TextStyle.BodySmallMedium.ToClassName()" href="/dashboard/settings/security">Get new recovery codes</a>
+}
+else if (_mode == Mode.Choose)
+{
+    @* Every way that's on, as Google's "Choose how you want to sign in": a row each, with what it needs. *@
+    <div class="account-panel__intro">
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Choose How to Sign In</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Pick another way to confirm it's you.</Typography>
+    </div>
+
+    <div class="verify-sign-in__methods" role="list">
+        @foreach (var way in Choices)
+        {
+            var current = way;
+            <div role="listitem">
+                <RowButton Class="verify-sign-in__method" Disabled="_switching" OnClick="() => SwitchAsync(current.Mode)">
+                    <Icon Name="@current.Icon" Size="IconSize.Md" />
+                    <span class="verify-sign-in__method-words">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@(_switching && current.Mode == Mode.Email ? "Sending a code…" : current.Title)</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small">@current.Detail</Typography>
+                    </span>
+                    <Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" />
+                </RowButton>
+            </div>
+        }
+    </div>
+    @if (_switchError is not null) { <InlineError Message="@_switchError" /> }
+
+    <a class="account-panel__back @TextStyle.BodySmallMedium.ToClassName()" href="/login" @onclick="SignIn.Clear">Back to Sign In</a>
+}
+else if (_mode == Mode.Recovery)
+{
+    <div class="account-panel__intro">
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Use a Recovery Code</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            Enter one of the recovery codes you saved when you turned on two-factor authentication. Each code works once.
+        </Typography>
+    </div>
+
+    <form class="account-panel__form" novalidate @onsubmit="RecoverAsync" @onsubmit:preventDefault="true">
+        @* One code, one line, as Sign In's fields; what a code looks like said once under it. *@
+        <Parrot.SharedComponents.DesignSystem.Input FloatingLabel="Recovery Code"
+               Id="recovery-code"
+               Value="@_recoveryCode"
+               ValueChanged="value => { _recoveryCode = value; _recoveryError = null; }"
+               Error="@(_recoveryError is not null)"
+               HelperText="@(_recoveryError ?? $"12 letters and numbers, like {RecoveryCodeText.Example}.")"
+               autocomplete="off"
+               spellcheck="false">
+            <IconLeft>
+                <Icon Name="IconName.RiLock2Fill" Size="IconSize.Sm" />
+            </IconLeft>
+        </Parrot.SharedComponents.DesignSystem.Input>
+
+        <Button Type="ButtonType.Submit" Size="ButtonSize.Large" Class="account-panel__primary" disabled="@(_checking || _ended)">
+            @(_checking ? "Checking Code…" : "Verify")
+        </Button>
+    </form>
+
+    @OtherWays
+    <a class="account-panel__back @TextStyle.BodySmallMedium.ToClassName()" href="/login" @onclick="SignIn.Clear">Back to Sign In</a>
+}
+else
+{
+    <div class="account-panel__intro">
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Confirm It's You</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            @if (_mode == Mode.Email)
+            {
+                <text>We sent a 6-digit code to <strong>@AuthFormState.Mask(_challenge.Email)</strong>. Enter it below to finish signing in.</text>
+            }
+            else
+            {
+                <text>Enter the 6-digit code from your authenticator app to finish signing in.</text>
+            }
+        </Typography>
+    </div>
+
+    @* Keyed by the way in use, so switching starts the boxes (and the resend wait) afresh. *@
+    <CodeEntry @key="_mode"
+               Verify="VerifyAsync"
+               Resend="Resender"
+               SubmitLabel="Verify"
+               InputId="sign-in-code"
+               JustSent="true"
+               />
+
+    @OtherWays
+    <a class="account-panel__back @TextStyle.BodySmallMedium.ToClassName()" href="/login" @onclick="SignIn.Clear">Back to Sign In</a>
+}
+
+@code {
+    private enum Mode { App, Email, Recovery, Choose }
+
+    private TwoFactorChallenge? _challenge;
+    private Mode _mode;
+    private bool _checking, _ended, _switching;
+    private string? _recoveryCode, _recoveryError, _switchError;
+    private int? _codesLeft;
+
+    protected override void OnInitialized()
+    {
+        _challenge = SignIn.Pending;
+        if (_challenge is null) { Navigation.NavigateTo("/login", replace: true); return; }
+        _mode = _challenge.Method == TwoFactorMethod.Email ? Mode.Email : Mode.App;
+    }
+
+    // An emailed code can be sent again; an authenticator app makes its own, so there's no resend.
+    private Func<CancellationToken, Task<string?>>? Resender => _mode == Mode.Email ? ResendAsync : null;
+
+    private sealed record Choice(Mode Mode, IconName Icon, string Title, string Detail);
+
+    // Every way that's on, for the choice screen (designer, 9 November 2026: as Google does it).
+    private IReadOnlyList<Choice> Choices
+    {
+        get
+        {
+            var choices = new List<Choice>();
+            if (_challenge is null) return choices;
+            if (_challenge.Ways.Contains(TwoFactorMethod.App))
+                choices.Add(new(Mode.App, IconName.RiSmartphoneFill, "Use your authenticator app", "Get a code from the app on your phone."));
+            if (_challenge.Ways.Contains(TwoFactorMethod.Email))
+                choices.Add(new(Mode.Email, IconName.RiMailFill, "Get a code by email", $"We'll send it to {AuthFormState.Mask(_challenge.Email)}."));
+            if (_challenge.CanUseRecoveryCode)
+                choices.Add(new(Mode.Recovery, IconName.RiLock2Fill, "Use a recovery code", "One of the codes you saved when you set this up."));
+            return choices;
+        }
+    }
+
+    // One quiet link under the button, only when there's another way to choose (never stuck when one can't be reached).
+    private RenderFragment OtherWays => __builder =>
+    {
+        if (_challenge is null || _ended || Choices.Count < 2) return;
+        <button type="button" class="verify-sign-in__switch @TextStyle.BodySmallSemibold.ToClassName()" disabled="@_checking" @onclick="ChooseAnother">
+            Other sign-in methods
+        </button>
+    };
+
+    private void ChooseAnother() { _switchError = null; _mode = Mode.Choose; }
+
+    private async Task SwitchAsync(Mode mode)
+    {
+        if (_switching) return;
+        _switchError = null;
+        _recoveryError = null;
+        if (mode == Mode.Email)
+        {
+            // An email has to be sent before there's a code to type.
+            _switching = true;
+            try { await TwoFactor.SendEmailCodeAsync(_challenge!.Id); }
+            catch (TwoFactorSignInException ex) { _switchError = ex.Message; _ended = ex.Problem is TwoFactorProblem.SignInExpired or TwoFactorProblem.TooManyAttempts; return; }
+            catch { _switchError = "The code couldn't be sent. Try again."; return; }
+            finally { _switching = false; }
+        }
+        _mode = mode;
+    }
+
+    private async Task<CodeEntry.Outcome> VerifyAsync(string code, CancellationToken token)
+    {
+        try
+        {
+            await SignedInAsync(await TwoFactor.VerifyAsync(_challenge!.Id, code, token));
+            return CodeEntry.Outcome.Ok;
+        }
+        catch (TwoFactorSignInException ex)
+        {
+            // Nothing typed here can work once the tries or the time run out: Back to Sign In is the way on. An
+            // emailed code that ran out is fixed by a new one.
+            _ended = ex.Problem is TwoFactorProblem.TooManyAttempts or TwoFactorProblem.SignInExpired;
+            if (_ended) StateHasChanged();
+            return new CodeEntry.Outcome(ex.Message, Locked: ex.Problem != TwoFactorProblem.WrongCode);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            return new CodeEntry.Outcome("We could not reach yára. Check your internet connection and try again.");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch
+        {
+            return new CodeEntry.Outcome("Something went wrong on our side. Try again in a moment.");
+        }
+    }
+
+    private async Task<string?> ResendAsync(CancellationToken token)
+    {
+        try
+        {
+            await TwoFactor.SendEmailCodeAsync(_challenge!.Id, token);
+            return null;
+        }
+        catch (TwoFactorSignInException ex)
+        {
+            _ended = true;
+            StateHasChanged();
+            return ex.Message;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.TooManyRequests)
+        {
+            return "Too many codes requested. Wait a few minutes, then try again.";
+        }
+        catch (OperationCanceledException) { throw; }
+        catch
+        {
+            return "Something went wrong on our side. Try again in a moment.";
+        }
+    }
+
+    private async Task RecoverAsync()
+    {
+        if (_checking || _ended) return;
+        // Pasted as copied: spaces, line breaks, dashes and case don't matter; a whole list says so.
+        var (code, problem) = RecoveryCodeText.Read(_recoveryCode);
+        if (code is null)
+        {
+            _recoveryError = problem;
+            return;
+        }
+
+        _checking = true;
+        _recoveryError = null;
+        try
+        {
+            await SignedInAsync(await TwoFactor.RecoverAsync(_challenge!.Id, code));
+        }
+        catch (TwoFactorSignInException ex)
+        {
+            _recoveryError = ex.Message;
+            _ended = ex.Problem is TwoFactorProblem.TooManyAttempts or TwoFactorProblem.SignInExpired;
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            _recoveryError = "We could not reach yára. Check your internet connection and try again.";
+        }
+        catch
+        {
+            _recoveryError = "Something went wrong on our side. Try again in a moment.";
+        }
+        finally
+        {
+            _checking = false;
+        }
+    }
+
+    // The session is saved as a plain sign-in saves it, and this browser is remembered (the API's token). After a
+    // recovery code, the count left shows before going on; otherwise straight to the dashboard.
+    private async Task SignedInAsync(TwoFactorSignInResult result)
+    {
+        AuthState.SetUser(result.Session);
+        await TokenStorage.SaveAsync(result.Session);
+        if (result.RememberedDevice is { } device) await Devices.SaveAsync(_challenge!.Email, device);
+        SignIn.Clear();
+
+        if (result.RecoveryCodesLeft is { } left)
+        {
+            _codesLeft = left;
+            // Called from inside CodeEntry as a plain delegate on the code path; ask for the redraw.
+            StateHasChanged();
+            return;
+        }
+        Navigation.NavigateTo("/dashboard");
+    }
+
+    private void ContinueToDashboard() => Navigation.NavigateTo("/dashboard", replace: true);
+}

@@ -1,0 +1,51 @@
+@inherits LayoutComponentBase
+@namespace Parrot.Web.Components.Layout.Settings
+@using Parrot.Web.Components.Pages.Dashboard.Settings
+@inject NavigationManager Nav
+@inject SettingsReturn Return
+@inject AuthState AuthState
+@implements IDisposable
+
+@* Settings as its own space (designer, 1 November 2026, after ChatGPT's): the app's sidebar gives way to the list
+   of sections, with "Back to app" returning to the page you came from. On a phone it's list first: a section opens
+   on its own, with a way back to the list. *@
+<ActivityBar />
+
+<div class="@($"settings-shell {(CurrentId is null ? "is-list" : "is-section")}{(UsesWideColumn ? " settings-shell--wide" : "")}")">
+    <aside class="settings-shell__side">
+        <a class="settings-shell__back" href="@Return.Url">
+            <Icon Name="IconName.RiArrowLeftLine" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">Back to app</Typography>
+        </a>
+        <Typography TextStyle="TextStyle.HeadingH4Semibold" As="p" Class="settings-shell__title">Settings</Typography>
+        <SectionNav Label="Settings sections" Groups="SettingsSections.GroupsFor(Allows)" Current="@SettingsSections.For(CurrentId, Allows).Id" />
+    </aside>
+
+    <main class="settings-shell__main">
+        <a class="settings-shell__to-list" href="@SettingsSections.Root">
+            <Icon Name="IconName.RiArrowLeftLine" Size="IconSize.Sm" />
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">Settings</Typography>
+        </a>
+        <div class="settings-shell__column">@Body</div>
+    </main>
+</div>
+
+<ToastHost />
+<Parrot.Web.Components.Layout.Notifications.NotificationPopupHost />
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private string? CurrentId => SettingsSections.IdIn(Nav.Uri);
+    private bool Allows(string rule) => AuthState.CurrentUser?.Allows(rule) ?? false;
+    // Team and Activity log are records pages like Tasks and Customers; other Settings retain their form-friendly measure.
+    private bool UsesWideColumn => SettingsSections.For(CurrentId, Allows).Id is "team" or "activity";
+
+    protected override void OnInitialized() => Nav.LocationChanged += Moved;
+    private void Moved(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs args) => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => Nav.LocationChanged -= Moved;
+}

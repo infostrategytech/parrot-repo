@@ -9,14 +9,23 @@
 
     <script>
       // Set the theme before first paint so the app never flashes the wrong
-      // colours on the way in. ThemeToggle owns the value from then on.
-      try {
-        var saved = localStorage.getItem("aurora-theme-preview");
-        var theme = saved === null ? "aurora-light" : saved;
-        if (theme) document.documentElement.dataset.theme = theme;
-      } catch (error) {
-        document.documentElement.dataset.theme = "aurora-light";
-      }
+      // colours on the way in. Settings, Preferences (and the sign-in pages'
+      // ThemeToggle) change it from then on. "system" follows the device, also
+      // while yára is open (designer, 1 November 2026).
+      (function () {
+        var key = "aurora-theme-preview", pick = "aurora-light";
+        var dark = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+        var apply = function () {
+          document.documentElement.dataset.theme = pick === "system" ? (dark && dark.matches ? "aurora-dark" : "aurora-light") : pick;
+        };
+        try { var saved = localStorage.getItem(key); if (saved) pick = saved; } catch (error) { }
+        apply();
+        if (dark && dark.addEventListener) dark.addEventListener("change", function () { if (pick === "system") apply(); });
+        window.yaraTheme = {
+          get: function () { return pick; },
+          set: function (value) { pick = value; try { localStorage.setItem(key, value); } catch (error) { } apply(); }
+        };
+      })();
     </script>
 
     @* The two faces the first paint needs, requested alongside the CSS rather

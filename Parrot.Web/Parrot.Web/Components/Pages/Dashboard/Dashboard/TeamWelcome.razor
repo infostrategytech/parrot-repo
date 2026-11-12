@@ -1,0 +1,148 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Dashboard
+@using Parrot.SharedComponents.Layout
+@inject AuthState AuthState
+@inject NavigationManager Nav
+@implements IDisposable
+
+@* Joined from an invite (designer, 10 November 2026): a celebration, not a notice. Confetti and a colourful wash
+   over the card, a badge that pops in with sparkles, "You're in!", what they're there as, and what they can do,
+   each line arriving in turn. The button opens the first place their role reaches (Inbox, else Tasks, Products,
+   Customers, Knowledge, Insights), or the overview when it reaches none of them. Once only: it comes with the
+   join (?joined=1), so a refresh doesn't bring it back. The owner's own welcome (WorkspaceWelcome) never shows here. *@
+<Dialog Open="_open"
+        Title="@($"Welcome to {Business ?? "the team"}")"
+        TitleVisuallyHidden="true"
+        ConfirmLabel="@Destination.Label"
+        CancelLabel="Look Around"
+        HideCancelButton="@(Destination.Path == Overview)"
+        ConfirmFullWidth="true"
+        FitToScreen="true"
+        OnConfirm="Start"
+        OnCancel="Close">
+    <AmbientBackground>
+        <div class="team-welcome__party">
+            <span class="team-welcome__glow is-pink"></span>
+            <span class="team-welcome__glow is-amber"></span>
+            <span class="team-welcome__glow is-cyan"></span>
+            <span class="team-welcome__glow is-violet"></span>
+            @for (var i = 0; i < Confetti; i++)
+            {
+                <i class="team-welcome__bit" style="--i: @i"></i>
+            }
+        </div>
+    </AmbientBackground>
+    <Body>
+        <div class="team-welcome">
+            @* The team gathering to meet them (designer, 10 November 2026): yára's characters, floating over their own
+               shadows on the card's wash (one background only), in a gentle arc, the middle one biggest; each pops in,
+               then lives. *@
+            <div class="team-welcome__crowd" aria-hidden="true">
+                @foreach (var (look, place) in Crowd)
+                {
+                    <span class="@($"team-welcome__face is-{place}")">
+                        <PresenceAvatar Direction="look.Direction" Tone="look.Tone" Size="PresenceAvatarSize.Fill" Reactive Floating Decorative />
+                    </span>
+                }
+            </div>
+            <div class="team-welcome__words">
+                <Typography TextStyle="TextStyle.HeadingH2Bold" As="p">You're in!</Typography>
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
+                    @($"Welcome to {(Business is { } business ? $"the {business} team" : "the team")}.{(Role is { } role ? $" You're here as {role}." : null)}")
+                </Typography>
+            </div>
+            @if (Abilities.Count > 0)
+            {
+                <ul class="team-welcome__can" aria-label="What you can do">
+                    @foreach (var (icon, text, tone) in Abilities)
+                    {
+                        <li class="@($"team-welcome__ability is-{tone}")">
+                            <span class="team-welcome__ability-icon"><Icon Name="icon" Size="IconSize.Sm" /></span>
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@text</Typography>
+                        </li>
+                    }
+                </ul>
+            }
+        </div>
+    </Body>
+</Dialog>
+
+@code {
+    private const int Confetti = 36;
+
+    // Five of the characters, bright and different, in an arc: small at the ends, the middle one biggest.
+    private static readonly IReadOnlyList<(AvatarAppearance Look, string Place)> Crowd =
+    [
+        (new(PresenceAvatarDirection.Dot, PresenceAvatarTone.Teal), "end"),
+        (new(PresenceAvatarDirection.Bloom, PresenceAvatarTone.Pink), "side"),
+        (new(PresenceAvatarDirection.Pip, PresenceAvatarTone.Violet), "middle"),
+        (new(PresenceAvatarDirection.Luma, PresenceAvatarTone.Amber), "side"),
+        (new(PresenceAvatarDirection.Zig, PresenceAvatarTone.Sky), "end"),
+    ];
+    private const string Overview = "/dashboard";
+
+    private bool _open;
+
+    private string? Business => AuthState.CurrentUser?.BusinessName is { Length: > 0 } name ? name : null;
+
+    private string? Role => AuthState.CurrentUser?.Role is { Length: > 0 } api && api != "Owner"
+        ? Parrot.Web.Features.Dashboard.Team.TeamWords.RoleNameFromApi(api) : null;
+
+    private bool Can(string permission) => AuthState.CurrentUser?.Permissions.Contains(permission) ?? false;
+    private bool Allows(string rule) => AuthState.CurrentUser?.Allows(rule) ?? false;
+
+    // The first place their role reaches, in the order of the menu.
+    private (string Path, string Label) Destination =>
+        Allows(AccessRules.Inbox) ? ("/dashboard/inbox", "Open Inbox")
+        : Allows(AccessRules.Tasks) ? ("/dashboard/tasks", "Open Tasks")
+        : Allows(AccessRules.Catalog) ? ("/dashboard/products", "Open Products")
+        : Allows(AccessRules.Customers) ? ("/dashboard/customers", "Open Customers")
+        : Allows(AccessRules.Knowledge) ? ("/dashboard/knowledge", "Open Knowledge")
+        : Allows(AccessRules.Insights) ? ("/dashboard/insights", "Open Insights")
+        : (Overview, "Get Started");
+
+    // What they can do, in plain words, three at most, each in its own colour.
+    private IReadOnlyList<(IconName Icon, string Text, string Tone)> Abilities
+    {
+        get
+        {
+            List<(IconName, string, string)> can = [];
+            if (Can("conversations.reply")) can.Add((IconName.RiInbox2Fill, "Reply to customers", "cyan"));
+            if (Can("conversations.take-over")) can.Add((IconName.RiUserReceived2Fill, "Take over chats from the AI", "violet"));
+            if (AuthState.CurrentUser?.Permissions.Any(p => p.StartsWith("catalog.items", StringComparison.Ordinal) || p == "catalog.availability") == true)
+                can.Add((IconName.RiShoppingBag3Fill, "Keep products up to date", "amber"));
+            // There are no tasks.* permissions: Tasks opens to whoever its access rule lets in.
+            if (Allows(AccessRules.Tasks)) can.Add((IconName.RiTaskFill, "Handle tasks", "pink"));
+            if (Allows(AccessRules.Knowledge)) can.Add((IconName.RiBookOpenFill, "Teach the AI about the business", "emerald"));
+            return [.. can.Take(3)];
+        }
+    }
+
+    protected override void OnInitialized()
+    {
+        AuthState.OnChange += Check;
+        Check();
+    }
+
+    private void Check()
+    {
+        var joined = new Uri(Nav.Uri).Query.TrimStart('?').Split('&').Contains("joined=1");
+        var open = joined && AuthState.IsAuthenticated && AuthState.CurrentUser is { IsOwner: false };
+        if (open == _open) return;
+        _open = open;
+        _ = InvokeAsync(StateHasChanged);
+    }
+
+    private void Start()
+    {
+        _open = false;
+        Nav.NavigateTo(Destination.Path, replace: true);
+    }
+
+    private void Close()
+    {
+        _open = false;
+        Nav.NavigateTo(Overview, replace: true);
+    }
+
+    public void Dispose() => AuthState.OnChange -= Check;
+}

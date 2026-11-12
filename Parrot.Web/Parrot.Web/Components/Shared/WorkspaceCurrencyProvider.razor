@@ -1,0 +1,22 @@
+@using Parrot.Web.Features.Settings
+@inject WorkspaceCurrency Currency
+@inject AuthState Auth
+@implements IDisposable
+
+@* Immutable context makes the saved default available to new forms, not a global replacement for saved money. *@
+<CascadingValue Value="Currency.Current">
+    @ChildContent
+</CascadingValue>
+
+@code {
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    private bool _disposed;
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.OnChange += AuthChanged; Currency.Changed += Changed;
+        await Currency.EnsureAsync();
+    }
+    private void AuthChanged() => _ = InvokeAsync(async () => { if (!_disposed) await Currency.EnsureAsync(); });
+    private void Changed() => _ = InvokeAsync(() => { if (!_disposed) StateHasChanged(); });
+    public void Dispose() { _disposed = true; Auth.OnChange -= AuthChanged; Currency.Changed -= Changed; }
+}

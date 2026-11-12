@@ -15,7 +15,11 @@
    as they were typed on slow connections. Text is pushed to the field only
    when the page clears it; anything but digits is dropped in the browser,
    on what the field shows then, so digits typed meanwhile stay. Digits typed
-   before the page was live are taken over too (early-input.js). *@
+   before the page was live are taken over too (early-input.js).
+
+   Compact (two-factor setup, 5 November 2026): the boxes inside a dialog
+   that has its own button, their lines in the dialog's small text. Resend
+   only for an emailed code; an authenticator app makes its own. *@
 
 @if (_resent && string.IsNullOrEmpty(_error))
 {
@@ -57,14 +61,21 @@
     }
 </div>
 
+@if (!Compact)
+{
 <Button Size="ButtonSize.Large"
         Class="account-panel__primary"
         disabled="@(_code.Length != 6 || _verifying || _resending || _locked)"
         @onclick="VerifyAsync">
-    @(_verifying ? "Checking Code…" : SubmitLabel)
+    @(_verifying ? "Checking code…" : SubmitLabel)
 </Button>
+}
 
-<div class="code-entry__actions @TextStyle.BodySmallMedium.ToClassName()">
+@* The resend line only when there is a resend (an emailed code) or another address to use; an authenticator app
+   makes its own codes, so signing in with one shows neither. *@
+@if (Resend is not null || OnChangeDestination.HasDelegate)
+{
+<div class="code-entry__actions @((Compact ? TextStyle.Small12Medium : TextStyle.BodySmallMedium).ToClassName())">
     <div class="code-entry__resend">
         @if (_resending)
         {
@@ -72,21 +83,22 @@
         }
         else if (_secondsRemaining > 0)
         {
-            <span>Didn't Receive a Code? Resend in @_secondsRemaining s</span>
+            <span>Didn't get a code? Resend in @_secondsRemaining s</span>
         }
         else
         {
-            <span>@(_locked ? "Need a new code?" : "Didn't Receive a Code?")</span>
-            <button type="button" disabled="@_verifying" @onclick="ResendAsync">Resend Code</button>
+            <span>@(_locked ? "Need a new code?" : "Didn't get a code?")</span>
+            <button type="button" disabled="@_verifying" @onclick="ResendAsync">Resend code</button>
         }
     </div>
     @if (OnChangeDestination.HasDelegate)
     {
         <button class="code-entry__change" type="button" disabled="@(_verifying || _resending)" @onclick="OnChangeDestination">
-            Change Email Address
+            Change email address
         </button>
     }
 </div>
+}
 
 @code {
     /// <summary>What a code check came back with. Null error means it worked.</summary>
@@ -114,13 +126,22 @@
     // Something other than digits was typed or pasted: tidy the field after the next render.
     private bool _tidy;
 
-    private bool InputDisabled => _verifying || _locked;
+    private bool InputDisabled => _verifying || _locked || Disabled;
 
     /// <summary>Checks the code. On success the page moves on; this component only reports failures.</summary>
     [Parameter, EditorRequired] public Func<string, CancellationToken, Task<Outcome>> Verify { get; set; } = default!;
 
-    /// <summary>Sends a new code. Returns what went wrong, or null.</summary>
-    [Parameter, EditorRequired] public Func<CancellationToken, Task<string?>> Resend { get; set; } = default!;
+    /// <summary>Sends a new code. Returns what went wrong, or null. Not used when Compact.</summary>
+    [Parameter] public Func<CancellationToken, Task<string?>>? Resend { get; set; }
+
+    /// <summary>The boxes alone: no button of its own and no resend (a dialog with its own button, an authenticator app).</summary>
+    [Parameter] public bool Compact { get; set; }
+
+    /// <summary>Nothing can be typed (a setup that has to start again).</summary>
+    [Parameter] public bool Disabled { get; set; }
+
+    /// <summary>The digits so far, for a page whose own button checks them.</summary>
+    [Parameter] public EventCallback<string> CodeChanged { get; set; }
 
     [Parameter] public EventCallback OnChangeDestination { get; set; }
 
@@ -197,6 +218,7 @@
         // Only when something other than digits was typed or pasted does the field need tidying.
         if (typed != _code) _tidy = true;
         _error = null;
+        await CodeChanged.InvokeAsync(_code);
 
         if (_code.Length == 6) await VerifyAsync();
     }
@@ -217,6 +239,7 @@
             _error = outcome.Error;
             _code = "";
             _push = "";
+            await CodeChanged.InvokeAsync(_code);
             if (outcome.Locked)
             {
                 // Nothing typed here can work now, so offer the one thing that
@@ -237,7 +260,7 @@
 
     private async Task ResendAsync()
     {
-        if (_resending || _verifying) return;
+        if (_resending || _verifying || Resend is null) return;
 
         _resending = true;
         _error = null;

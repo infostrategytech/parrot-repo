@@ -1,0 +1,66 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Team
+@using Parrot.Web.Features.Dashboard.Team
+
+@* One shared-table row: the role, its origin, how many permissions, how many people, and actions (designer,
+   8 November 2026: no summary under the name, as Shopify, HubSpot and Zendesk list roles). Every role opens for
+   inspection. *@
+@if (Head)
+{
+    <div class="ds-table__row is-head role-row" role="row">
+        <TableHeading>Role</TableHeading>
+        <div class="role-row__facts">
+            <TableHeading Center>Type</TableHeading>
+            <TableHeading Center>Permissions</TableHeading>
+            <TableHeading Center>People</TableHeading>
+        </div>
+        <span role="columnheader"><span class="sr-only">Options</span></span>
+    </div>
+}
+else if (Role is { } role)
+{
+    <div class="ds-table__row role-row" role="row">
+        <div class="role-row__words" role="cell">
+            <RowButton Class="role-row__name" OnClick="OnOpen" aria-label="@($"View {TeamWords.RoleName(role)} permissions")">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@TeamWords.RoleName(role)</Typography>
+            </RowButton>
+        </div>
+        <div class="role-row__facts">
+            <div class="role-row__type" role="cell">
+                <StatusBadge Tone="StatusTone.Neutral">@(role.IsCustom ? "Custom" : "Built-in")</StatusBadge>
+            </div>
+            <div class="role-row__count" role="cell">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@TeamWords.PermissionCount(Permissions)</Typography>
+            </div>
+            <div class="role-row__people" role="cell">
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="@(role.Holders == 0 ? "role-row__muted" : null)">@(role.Holders == 0 ? "No one" : role.Holders == 1 ? "1 person" : $"{role.Holders} people")</Typography>
+            </div>
+        </div>
+        <div class="role-row__menu" role="cell">
+            <ActionMenu Label="@($"Options for {TeamWords.RoleName(role)}")" FooterText="@DeleteReason">
+                <ActionMenuItem Label="View permissions" Glyph="IconName.RiEyeFill" OnClick="OnOpen" />
+                <ActionMenuItem Label="Duplicate role" Glyph="IconName.RiFileCopyFill" OnClick="OnDuplicate" />
+                @if (role.IsCustom)
+                {
+                    <ActionMenuItem Label="Edit role" Glyph="IconName.RiEditFill" OnClick="OnEdit" />
+                    <ActionMenuItem Label="Delete role" Glyph="IconName.RiDeleteBin6Fill" Disabled="@(role.Holders > 0 || HasPendingInvites)"
+                                    Destructive OnClick="OnDelete" />
+                }
+            </ActionMenu>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Head { get; set; }
+    [Parameter] public TeamRole? Role { get; set; }
+    [Parameter] public bool HasPendingInvites { get; set; }
+    /// <summary>How many of the listed permissions the role has.</summary>
+    [Parameter] public int Permissions { get; set; }
+    [Parameter] public EventCallback OnOpen { get; set; }
+    [Parameter] public EventCallback OnEdit { get; set; }
+    [Parameter] public EventCallback OnDuplicate { get; set; }
+    [Parameter] public EventCallback OnDelete { get; set; }
+    private string? DeleteReason => Role is { Holders: > 0 }
+        ? HasPendingInvites ? "Reassign people and withdraw pending invites using this role first." : "Reassign people using this role before deleting it."
+        : HasPendingInvites ? "Withdraw pending invites using this role before deleting it." : null;
+}

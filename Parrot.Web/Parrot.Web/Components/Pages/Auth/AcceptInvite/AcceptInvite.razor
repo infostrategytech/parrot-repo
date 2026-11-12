@@ -8,14 +8,17 @@
 @inject TokenStorageService TokenStorage
 @implements IDisposable
 
-<PageTitle>Join a Team · yára</PageTitle>
+<PageTitle>@(_preview is null ? "Join a Team · yára" : $"Join {_preview.TeamName} · yára")</PageTitle>
 
-@* Where an invite email's link lands. It says whose team it is before anyone
-   signs in. One login works everywhere, so:
-   - no account for the invited address: set a name and password here, and the
-     account is made, joined and signed in at once (the link proves the address);
-   - an account already: sign in (the link is remembered meanwhile, and the
-     dashboard brings them back) and join with one click. *@
+@* Where an invite email's link lands (designer, 10 November 2026). It says whose team it is and who invited
+   them, before anyone signs in. The owner already entered their name
+   and email, so neither is asked again, and there is no Google or Facebook here: the login is made for the
+   invited address. One login works everywhere, so:
+   - no account for the invited address: a code to that email first (VerifyEmail), then a password, and they are
+     joined and signed in at once;
+   - an account already: sign in (the link is remembered meanwhile, and the dashboard brings them back) and join
+     with one click.
+   Then the workspace welcomes them (TeamWelcome). Headings follow the other sign-in screens' Title Case. *@
 
 @if (_preview is null && _error is null)
 {
@@ -29,51 +32,77 @@ else if (_preview is null)
     </div>
     <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="@(() => Navigation.NavigateTo("/login"))">Go to Sign In</Button>
 }
-else
+else if (_step == Step.Code)
 {
     <div class="account-panel__intro">
-        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Join @_preview.TeamName</Typography>
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Check Your Email</Typography>
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-            @_preview.InvitedBy invited <strong>@_preview.Email</strong> to work in @string.Join(", ", _preview.Workspaces).
+            We sent a 6-digit code to <strong>@_preview.Email</strong>. Enter it to confirm it's you.
         </Typography>
-        @if (_preview.Status == "pending")
+    </div>
+    <CodeEntry Verify="VerifyCodeAsync" Resend="ResendCodeAsync" SubmitLabel="Verify Email" InputId="invite-code" />
+}
+else if (_step == Step.Password)
+{
+    <div class="account-panel__intro">
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Create Your Password</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            For <strong>@_preview.Email</strong>. You'll use it to sign in to yára, for @_preview.TeamName and any other team you join.
+        </Typography>
+    </div>
+    <form class="account-panel__form" novalidate @onsubmit="SignUpAsync" @onsubmit:preventDefault="true">
+        <PasswordInput FloatingLabel="Create Password" Id="invite-password" IsNew @bind-Value="_password" />
+        <PasswordInput FloatingLabel="Confirm Password" Id="invite-confirm-password" ShowStrength="false" @bind-Value="_confirm"
+                       ErrorText="@(_confirm is { Length: > 0 } && _confirm != _password ? "The passwords do not match." : null)" />
+        @if (_error is not null)
         {
-            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@DaysLeft(_preview.ExpiresAt)</Typography>
+            <InlineError Message="@_error" />
         }
+        <Button Size="ButtonSize.Large" Type="ButtonType.Submit" Class="account-panel__primary" Busy="@_accepting"
+                disabled="@(!CanSignUp)">Create Password and Join</Button>
+    </form>
+}
+else
+{
+    @* The invitation is the thing (designer, 10 November 2026): a big heading, who asked, nothing else. *@
+    <div class="account-panel__intro accept-invite__intro">
+        <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">Join @_preview.TeamName</Typography>
+        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>@($"{_preview.InvitedBy} invited you to join their team.")</Typography>
     </div>
 
-    @if (_preview.Status != "pending" && !(_preview.Status == "accepted" && AuthState.IsAuthenticated))
+    @if (_preview.Status == "accepted" && AuthState.IsAuthenticated
+         && string.Equals(AuthState.CurrentUser?.Email, _preview.Email, StringComparison.OrdinalIgnoreCase))
+    {
+        @* Opened again after joining: they're in already. *@
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>You've joined already.</Typography>
+        <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="@(() => Navigation.NavigateTo("/dashboard"))">Open @_preview.TeamName</Button>
+    }
+    else if (_preview.Status != "pending")
     {
         <InlineError Message="@StatusMessage(_preview.Status)" />
     }
     else if (!AuthState.IsAuthenticated && !_preview.HasAccount)
     {
-        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-            Set up your yára login for @_preview.Email. You will use it for this team and any other you join.
-        </Typography>
-        <form class="account-panel__form" novalidate @onsubmit="SignUpAsync" @onsubmit:preventDefault="true">
-            @* The address is the invite's: shown, not editable. Opening the link proved it, so the login starts verified. *@
-            <Input FloatingLabel="Email address" Id="invite-email" Type="email" Value="@_preview.Email" readonly autocomplete="username" />
-            <Input FloatingLabel="First name" Id="invite-first-name" @bind-Value="_firstName" autocomplete="given-name" />
-            <Input FloatingLabel="Last name" Id="invite-last-name" @bind-Value="_lastName" autocomplete="family-name" />
-            <PasswordInput FloatingLabel="Create Password" Id="invite-password" IsNew @bind-Value="_password" />
-            <PasswordInput FloatingLabel="Confirm Password" Id="invite-confirm-password" ShowStrength="false" @bind-Value="_confirm"
-                           ErrorText="@(_confirm is { Length: > 0 } && _confirm != _password ? "The passwords do not match." : null)" />
-            @if (_error is not null)
-            {
-                <InlineError Message="@_error" />
-            }
-            <Button Size="ButtonSize.Large" Type="ButtonType.Submit" Class="account-panel__primary" Busy="@_accepting"
-                    disabled="@(!CanSignUp)">Create Login and Join</Button>
-        </form>
-        <Button Size="ButtonSize.Large" Variant="ButtonVariant.Ghost" Class="account-panel__primary" @onclick="@(() => GoAsync("/login"))">
-            Sign in with Google or Facebook instead
+        @* Who it's for, as the owner entered them: not asked again. *@
+        <div class="accept-invite__who">
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p">@_preview.FullName</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p">@_preview.Email</Typography>
+        </div>
+        @if (_error is not null)
+        {
+            <InlineError Message="@_error" />
+        }
+        <Button Size="ButtonSize.Large" Class="account-panel__primary" Busy="@_sending" @onclick="ContinueAsync">
+            @(_preview.VerifyEmail ? "Verify Email" : "Continue")
         </Button>
+        <div class="accept-invite__note">
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@($"{DaysLeft(_preview.ExpiresAt)} Not you? Ask {_preview.InvitedBy} for a new invite.")</Typography>
+        </div>
     }
     else if (!AuthState.IsAuthenticated)
     {
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-            You already have a yára login for @_preview.Email. Sign in to join the team.
+            You already have a yára login for <strong>@_preview.Email</strong>. Sign in to join.
         </Typography>
         <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="@(() => GoAsync("/login"))">Sign In</Button>
     }
@@ -83,13 +112,17 @@ else
         {
             <InlineError Message="@_error" />
         }
-        <Button Size="ButtonSize.Large" Class="account-panel__primary" Busy="@_accepting" @onclick="AcceptAsync">Join the Team</Button>
-        @if (!string.Equals(AuthState.CurrentUser?.Email, _preview.Email, StringComparison.OrdinalIgnoreCase))
+        @if (string.Equals(AuthState.CurrentUser?.Email, _preview.Email, StringComparison.OrdinalIgnoreCase))
         {
+            <Button Size="ButtonSize.Large" Class="account-panel__primary" Busy="@_accepting" @onclick="AcceptAsync">Join @_preview.TeamName</Button>
+        }
+        else
+        {
+            @* Only the invited login can join, so this one isn't offered a Join that can't work. *@
             <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>
                 You are signed in as @AuthState.CurrentUser?.Email. Only @_preview.Email can accept this invite.
             </Typography>
-            <Button Size="ButtonSize.Large" Variant="ButtonVariant.Secondary" Class="account-panel__primary" @onclick="SignOutAsync">Sign In With Another Account</Button>
+            <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="SignOutAsync">Sign In With Another Account</Button>
         }
     }
 }
@@ -100,16 +133,19 @@ else
     // Back from signing in after choosing Accept in the email.
     [SupplyParameterFromQuery] public bool Resume { get; set; }
 
+    private enum Step { Invite, Code, Password }
+
     private InvitePreview? _preview;
+    private Step _step;
     private string? _error;
-    private bool _accepting;
-    private string? _firstName;
-    private string? _lastName;
+    private bool _accepting, _sending;
+    private string? _code;
     private string? _password;
     private string? _confirm;
 
-    private bool CanSignUp => !_accepting && !string.IsNullOrWhiteSpace(_firstName)
-        && !string.IsNullOrEmpty(_password) && _password == _confirm;
+    // The same three rules and limit as sign-up, password reset and change password.
+    private bool CanSignUp => !_accepting && _password is { Length: > 0 and <= 128 } password
+        && Parrot.Web.Features.Auth.Models.PasswordRules.MeetsAll(password) && _password == _confirm;
 
     // The session is restored from the browser after the first render, so the
     // page redraws once Routes has loaded it.
@@ -124,17 +160,12 @@ else
         {
             _preview = await TeamApi.PreviewAsync(Token);
 
-            // The name the owner typed, split once, as a starting point.
-            string[] name = _preview.FullName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-            _firstName = name.ElementAtOrDefault(0);
-            _lastName = name.ElementAtOrDefault(1);
-
             // They already said yes in the email: join now, if this is the invited login.
             if (Resume && _preview.Status == "pending" && AuthState.IsAuthenticated
                 && string.Equals(AuthState.CurrentUser?.Email, _preview.Email, StringComparison.OrdinalIgnoreCase))
             {
+                // On success the page reloads into the team; on failure the error is drawn below.
                 await AcceptAsync();
-                return;
             }
         }
         catch (ApiException ex)
@@ -164,8 +195,65 @@ else
         _ => "This invite cannot be used.",
     };
 
-    // Kept in the browser, so the person comes back here after signing in or
-    // up, however long that takes (a verification email, Google or Facebook).
+    // The email is proved first (designer, 10 November 2026), then the password; without that step from the API,
+    // straight to the password.
+    private async Task ContinueAsync()
+    {
+        _error = null;
+        if (!_preview!.VerifyEmail) { _step = Step.Password; return; }
+        _sending = true;
+        try
+        {
+            await TeamApi.SendCodeAsync(Token);
+            _step = Step.Code;
+        }
+        catch (ApiException ex) { _error = ex.UserMessage; }
+        catch (Exception) { _error = "We could not send the code. Check your connection and try again."; }
+        finally { _sending = false; }
+    }
+
+    private async Task<CodeEntry.Outcome> VerifyCodeAsync(string code, CancellationToken token)
+    {
+        try
+        {
+            await TeamApi.VerifyCodeAsync(Token, code);
+            _code = code;
+            _step = Step.Password;
+            StateHasChanged();
+            return CodeEntry.Outcome.Ok;
+        }
+        catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.BadRequest)
+        {
+            // Only an expired code locks the boxes, as on Verify Your Account.
+            var expired = ex.ErrorCode?.Contains("expired", StringComparison.OrdinalIgnoreCase) ?? false;
+            return new CodeEntry.Outcome(ex.UserMessage, Locked: expired);
+        }
+        catch (ApiException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.TooManyRequests)
+        {
+            return new CodeEntry.Outcome(ex.UserMessage, Locked: true);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode is null)
+        {
+            return new CodeEntry.Outcome("We could not reach yára. Check your internet connection and try again.");
+        }
+        catch
+        {
+            return new CodeEntry.Outcome("Something went wrong on our side. Try again in a moment.");
+        }
+    }
+
+    private async Task<string?> ResendCodeAsync(CancellationToken token)
+    {
+        try
+        {
+            await TeamApi.SendCodeAsync(Token);
+            return null;
+        }
+        catch (ApiException ex) { return ex.UserMessage; }
+        catch { return "Something went wrong on our side. Try again in a moment."; }
+    }
+
+    // Kept in the browser, so the person comes back here after signing in, however long that takes.
     private async Task GoAsync(string path)
     {
         await Pending.RememberAsync(Token);
@@ -179,8 +267,8 @@ else
         try
         {
             await TeamApi.AcceptAsync(Token);
-            // A fresh circuit in the team's workspace, as switching does.
-            Navigation.NavigateTo("/dashboard", forceLoad: true, replace: true);
+            // A fresh circuit in the team's workspace, as switching does; the workspace welcomes them.
+            Navigation.NavigateTo("/dashboard?joined=1", forceLoad: true, replace: true);
         }
         catch (ApiException ex)
         {
@@ -203,8 +291,10 @@ else
         _error = null;
         try
         {
-            await TeamApi.SignUpAsync(Token, _firstName!.Trim(), _lastName?.Trim(), _password!);
-            Navigation.NavigateTo("/dashboard", forceLoad: true, replace: true);
+            // The name the owner entered, as their login's name.
+            string[] name = _preview!.FullName.Split(' ', 2, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            await TeamApi.SignUpAsync(Token, name.ElementAtOrDefault(0) ?? _preview.FullName, name.ElementAtOrDefault(1), _password!, _code);
+            Navigation.NavigateTo("/dashboard?joined=1", forceLoad: true, replace: true);
         }
         catch (ApiException ex)
         {

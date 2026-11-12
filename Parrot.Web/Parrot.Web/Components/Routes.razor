@@ -1,8 +1,10 @@
 @inject NavigationManager Nav
 @inject AuthState AuthState
 @inject TokenStorageService TokenStorage
+@inject PasswordResetSignOut ResetSignOut
 @implements IDisposable
 
+<WorkspaceCurrencyProvider>
 <Router AppAssembly="typeof(Program).Assembly" AdditionalAssemblies="new[] { typeof(Client._Imports).Assembly }" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
         @if (IsPublicPath() || (_ready && !_endingSession && AuthState.IsAuthenticated))
@@ -18,12 +20,15 @@
         }
     </Found>
 </Router>
+</WorkspaceCurrencyProvider>
 
 @code {
     private static readonly HashSet<string> PublicPaths =
     [
-        "/", "/login", "/register", "/forgot-password", "/reset-password",
+        "/", "/login", "/register", "/forgot-password", "/reset-password", PasswordResetSignOut.CompletePath,
         "/verify-email", "/sso-callback", "/error", "/not-found",
+        // The two-factor code, between the password (or Google) and the session.
+        "/verify-sign-in",
         // Sign Up links to these before anyone has an account.
         "/terms", "/privacy",
     ];
@@ -101,6 +106,14 @@
     private async Task EnforceSessionAsync()
     {
         if (!_ready || _disposed || _endingSession) return;
+        if (!AuthState.IsAuthenticated && ResetSignOut.ConfirmationPending)
+        {
+            if (new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').Equals(PasswordResetSignOut.CompletePath, StringComparison.OrdinalIgnoreCase))
+                ResetSignOut.ReachedConfirmation();
+            else
+                Nav.NavigateTo(PasswordResetSignOut.CompletePath, replace: true);
+            return;
+        }
         if (AuthState.CurrentUser is not null && !AuthState.IsAuthenticated)
         {
             await EndSessionAsync();
@@ -131,17 +144,32 @@
     private async Task EndSessionAsync()
     {
         if (_endingSession || _disposed) return;
+        // An expired sign-in must not throw away the email reset link. These recovery routes are already
+        // public and still require server-verified reset credentials; every protected route keeps its guard.
+        var keepRecovery = PasswordResetHandoff.IsRecoveryPath(new Uri(Nav.Uri).AbsolutePath);
         _endingSession = true;
         AuthState.ClearUser();
         StateHasChanged();
         try
         {
             await TokenStorage.ClearAsync();
+            if (keepRecovery)
+            {
+                _endingSession = false;
+                StateHasChanged();
+                return;
+            }
             // Reset the circuit's user-specific state as well as navigating to sign-in.
             Nav.NavigateTo("/login?sessionExpired=true", forceLoad: true, replace: true);
         }
         catch (JSException)
         {
+            if (keepRecovery)
+            {
+                _endingSession = false;
+                StateHasChanged();
+                return;
+            }
             // A disconnected browser cannot be navigated. Keep the circuit signed out;
             // restoration will reject the expired token when the browser reconnects/reloads.
             Nav.NavigateTo("/login?sessionExpired=true", replace: true);

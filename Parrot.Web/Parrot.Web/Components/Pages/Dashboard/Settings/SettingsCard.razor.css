@@ -7,7 +7,6 @@
   background: var(--colors-surface-card);
   border: var(--ds-card-hairline) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-2xl);
-  box-shadow: 0 var(--spacing-sm) var(--spacing-2xl) var(--colors-surface-shadow-diffuse);
 }
 
 .settings-card {
@@ -17,23 +16,30 @@
 
 .settings-card--danger { border-color: var(--colors-feedback-destructive-border); }
 
+/* The titles keep a readable width; when a header action can't fit beside them (a phone), it wraps under them
+   instead of squeezing the title to a word a line (7 November 2026). */
 .settings-card__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--spacing-lg);
-  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-none);
+  padding: var(--spacing-2xl) var(--spacing-2xl) var(--spacing-none);
 }
 
-.settings-card__titles { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.settings-card__header.is-alone { padding-bottom: var(--spacing-2xl); }
+
+.settings-card__titles { display: grid; flex: 1 1 calc(var(--spacing-4xl) * 5); gap: var(--spacing-xs); min-width: 0; }
+.settings-card__title { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); align-items: center; }
+.settings-card__title ::deep h2 { margin: var(--spacing-none); }
 .settings-card__titles ::deep h2 { color: var(--colors-text-primary); }
 ::deep .settings-card__description { color: var(--colors-text-muted); }
 .settings-card__header-action { flex: 0 0 auto; }
 
 .settings-card__body {
   display: grid;
-  gap: var(--spacing-lg);
-  padding: var(--spacing-xl);
+  gap: var(--spacing-xl);
+  padding: var(--spacing-2xl);
 }
 
 .settings-card__footer {
@@ -41,7 +47,7 @@
   gap: var(--spacing-sm);
   align-items: center;
   justify-content: flex-end;
-  padding: var(--spacing-md) var(--spacing-xl);
-  background: var(--colors-surface-muted);
-  border-top: var(--ds-card-hairline) solid var(--colors-surface-border);
+  padding: var(--spacing-none) var(--spacing-2xl) var(--spacing-2xl);
 }
+
+.settings-card__footer--form { justify-content: flex-start; }

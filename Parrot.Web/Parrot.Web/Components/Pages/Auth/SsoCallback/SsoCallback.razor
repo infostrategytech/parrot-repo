@@ -4,6 +4,7 @@
 @inject AuthState AuthState
 @inject TokenStorageService TokenStorage
 @inject NavigationManager Navigation
+@inject Parrot.Web.Features.Auth.TwoFactor.TwoFactorSignInState TwoFactorSignIn
 
 <PageTitle>Signing You In · yára</PageTitle>
 
@@ -58,8 +59,24 @@ else
     [SupplyParameterFromQuery]
     private string? permissions { get; set; }
 
+    // Two-factor is on (designer, 9 November 2026: Google and Facebook ask for the code too): the API sends the
+    // sign-in waiting for its code instead of a session (settings-backend-requests). The API doesn't do this yet.
+    [SupplyParameterFromQuery]
+    private string? twoFactor { get; set; }
+
+    // The way asked for first, "app" or "email", and every way that's on ("app,email").
+    [SupplyParameterFromQuery]
+    private string? method { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? methods { get; set; }
+
+    [SupplyParameterFromQuery]
+    private bool recovery { get; set; }
+
     private string? _error;
     private AuthResponse? _session;
+    private Parrot.Web.Features.Auth.TwoFactor.TwoFactorChallenge? _challenge;
 
     private void GoToSignIn() => Navigation.NavigateTo("/login");
 
@@ -67,6 +84,18 @@ else
     // is not reachable yet, so it must not store anything.
     protected override void OnInitialized()
     {
+        if (!string.IsNullOrEmpty(twoFactor) && !string.IsNullOrEmpty(email))
+        {
+            static Parrot.Web.Features.Settings.TwoFactorMethod Way(string? value) =>
+                string.Equals(value?.Trim(), "email", StringComparison.OrdinalIgnoreCase)
+                    ? Parrot.Web.Features.Settings.TwoFactorMethod.Email
+                    : Parrot.Web.Features.Settings.TwoFactorMethod.App;
+            var first = Way(method);
+            var ways = (methods ?? method ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries).Select(Way).Distinct().ToList();
+            _challenge = new(twoFactor, first, email, DateTime.UtcNow.AddMinutes(10), recovery, ways.Count > 0 ? ways : [first]);
+            return;
+        }
+
         if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(email))
         {
             _error = "Google did not send back what we needed. Try again, or sign in with your email and password.";
@@ -100,6 +129,13 @@ else
     // live. Doing it in OnInitializedAsync crashed the page on prerender.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && _challenge is not null)
+        {
+            // The code next, in this live session (held in memory, so it waits until the page is live too).
+            TwoFactorSignIn.Start(_challenge);
+            Navigation.NavigateTo("/verify-sign-in", replace: true);
+            return;
+        }
         if (!firstRender || _session is null) return;
 
         AuthState.SetUser(_session);

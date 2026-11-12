@@ -1,0 +1,24 @@
+/* Two-factor, spaced as the app's other dialogs (Team's invite, New task): fields one under another. */
+.factor {
+  /* Gap in the token set: no field-width scale. The code boxes keep the size they have on sign-up's code screen. */
+  --ds-factor-code-width: 360px;
+
+  display: grid;
+  gap: var(--spacing-lg);
+}
+.factor ::deep p { margin: var(--spacing-none); }
+/* The boxes, centred, at the size they have on sign-up's code screen; their lines centre under them, as there. */
+.factor ::deep .code-entry { width: 100%; max-width: var(--ds-factor-code-width); justify-self: center; }
+
+.factor__scan { display: grid; justify-items: center; gap: var(--spacing-sm); }
+.factor__key { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--spacing-sm) var(--spacing-md); align-items: center; padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md); border-radius: var(--radius-radius-md); background: var(--colors-surface-muted); }
+.factor__key ::deep code { color: var(--colors-text-primary); overflow-wrap: anywhere; user-select: all; }
+
+.factor__actions { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+.factor__codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-md) var(--spacing-lg); padding: var(--spacing-lg); background: var(--colors-surface-muted); border-radius: var(--radius-radius-lg); }
+.factor__codes ::deep code { color: var(--colors-text-primary); user-select: all; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.factor ::deep .factor__hint { color: var(--colors-text-muted); }
+
+@media (max-width: 760px) {
+  .factor__codes { grid-template-columns: minmax(0, 1fr); padding: var(--spacing-md); }
+}

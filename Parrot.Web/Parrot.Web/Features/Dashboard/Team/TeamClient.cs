@@ -19,7 +19,13 @@ public sealed record GrantRequest(string? WorkspaceId, string RoleId, IReadOnlyL
 
 public sealed record TeamMember(string UserId, string? FullName, string Email, bool IsOwner, IReadOnlyList<TeamGrant> Grants, DateTime JoinedAt);
 
-public sealed record TeamInvite(Guid Id, string FullName, string Email, IReadOnlyList<TeamGrant> Grants, DateTime InvitedAt, DateTime ExpiresAt);
+/// <param name="Link">The invite's join link, to share by hand (on WhatsApp, say) when the email goes unseen. The API
+/// doesn't return it yet (team-backend-requests); null hides "Copy invite link".</param>
+public sealed record TeamInvite(Guid Id, string FullName, string Email, IReadOnlyList<TeamGrant> Grants, DateTime InvitedAt, DateTime ExpiresAt, string? Link = null);
+
+/// <summary>What the invite form reports when it closes after saving: the invite it sent last, if any, and whether
+/// it already showed that it was sent (so the page doesn't say it again).</summary>
+public sealed record InviteSaved(Guid? InviteId, bool Shown);
 
 public sealed record TeamWorkspace(string Id, string? Name, string? LogoUrl);
 
@@ -33,9 +39,14 @@ public sealed record TeamRole(string Id, string Name, bool IsCustom, IReadOnlyLi
 /// <summary>The roles, permissions and channels the invite form offers, as the API lists them.</summary>
 public sealed record TeamCatalog(IReadOnlyList<TeamRole> Roles, IReadOnlyList<TeamOption> Permissions, IReadOnlyList<TeamOption> Channels);
 
-/// <summary>What an invite link is for, readable before signing in. HasAccount says whether to sign in or set a password.</summary>
+/// <summary>
+/// What an invite link is for, readable before signing in. HasAccount says whether to sign in or set a password.
+/// Role (what they'll be) and VerifyEmail (a code to their email before they set a password; designer, 10 November
+/// 2026) are asked of the API (team-backend-requests); without them the page leaves the role out and goes straight
+/// to the password, as before.
+/// </summary>
 public sealed record InvitePreview(string TeamName, string? TeamLogoUrl, string InvitedBy, string Email, IReadOnlyList<string> Workspaces,
-    DateTime ExpiresAt, string Status, bool HasAccount, string FullName);
+    DateTime ExpiresAt, string Status, bool HasAccount, string FullName, string? Role = null, bool VerifyEmail = false);
 
 /// <summary>
 /// The owner's team through the API, and accepting an invite. Failures throw
@@ -84,13 +95,27 @@ public sealed class TeamClient(HttpClient http, AuthState authState, TokenStorag
     /// For an invited address with no account: makes the one login it will use
     /// everywhere, joins the team and starts the session there.
     /// </summary>
-    public async Task SignUpAsync(string token, string firstName, string? lastName, string password)
+    public async Task SignUpAsync(string token, string firstName, string? lastName, string password, string? code = null)
     {
         using HttpResponseMessage response = await http.PostAsJsonAsync(
-            $"api/invites/{Uri.EscapeDataString(token)}/sign-up", new { firstName, lastName, password });
+            $"api/invites/{Uri.EscapeDataString(token)}/sign-up", new { firstName, lastName, password, code });
         AuthResponse session = await ReadAsync<AuthResponse>(response);
         await tokenStorage.SaveAsync(session);
         authState.SetUser(session);
+    }
+
+    /// <summary>Emails a 6-digit code to the invited address (VerifyEmail invites), before a password is set.</summary>
+    public async Task SendCodeAsync(string token)
+    {
+        using HttpResponseMessage response = await http.PostAsync($"api/invites/{Uri.EscapeDataString(token)}/code", null);
+        await response.EnsureApiSuccessAsync();
+    }
+
+    /// <summary>Checks the emailed code; sign-up sends it again with the password.</summary>
+    public async Task VerifyCodeAsync(string token, string code)
+    {
+        using HttpResponseMessage response = await http.PostAsJsonAsync($"api/invites/{Uri.EscapeDataString(token)}/verify", new { code });
+        await response.EnsureApiSuccessAsync();
     }
 
     /// <summary>Joins the team and moves the session into it: a new token, saved before it is used.</summary>

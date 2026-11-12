@@ -1,0 +1,251 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Settings
+@implements IDisposable
+@inject IAccountSecurity Security
+@inject UserClock Clock
+@inject ToastService Toasts
+@inject AuthState AuthState
+@inject Parrot.Web.Features.Auth.ResetPassword.State.PasswordResetHandoff PasswordResetHandoff
+
+@* Current account controls only; history belongs in Activity log. Built as Notifications is (designer, 5 November
+   2026: consistency): cards of lines, each a semibold title with a small muted line under it and its one control on
+   the right, a line between them. No "preview" wording on screen, in the demo either. *@
+<div class="security">
+<SettingsCard>
+    <div class="security__lines">
+        <div class="security__line">
+            <div class="security__words">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Password</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@PasswordDescription</Typography>
+            </div>
+            @if (_account?.HasPassword is not false)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="OpenPassword">Change password</Button>
+            }
+        </div>
+
+        @* Two-factor and its parts, one line (designer, 9 November 2026: the ways belong to two-factor, not beside it).
+           With it on, a quiet card under it holds each way of getting codes (both can be on, so one that can't be
+           reached never locks anyone out) and the recovery codes that come with either. Add what's off; Remove what's on
+           while the other is on too (the last one goes with Turn off, above). *@
+        <div class="security__line security__line--group">
+            <div class="security__row">
+                <div class="security__words">
+                    <div class="security__heading">
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Two-factor authentication</Typography>
+                        @if (_account is not null && !_loading)
+                        {
+                            <StatusBadge Tone="@(_account.TwoFactorEnabled ? StatusTone.Success : StatusTone.Neutral)">@(_account.TwoFactorEnabled ? "On" : "Off")</StatusBadge>
+                        }
+                    </div>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@TwoFactorDescription</Typography>
+                </div>
+                @if (_loading) { <Skeleton Shape="SkeletonShape.Line" /> }
+                else if (_account is not null)
+                {
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(_account.HasPassword is not true)" @onclick="OpenTwoFactor">@(_account.TwoFactorEnabled ? "Turn off" : "Set up")</Button>
+                }
+            </div>
+
+            @if (_account is { TwoFactorEnabled: true } account)
+            {
+                <div class="security__ways" role="group" aria-label="Ways to get your code">
+                    @foreach (var method in new[] { TwoFactorMethod.App, TwoFactorMethod.Email })
+                    {
+                        var current = method;
+                        var on = account.Has(current);
+                        <div class="security__way">
+                            <Icon Name="@(current == TwoFactorMethod.App ? IconName.RiSmartphoneFill : IconName.RiMailFill)" Size="IconSize.Md" />
+                            <div class="security__words">
+                                <div class="security__heading">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">@(current == TwoFactorMethod.Email ? "Email codes" : "Authenticator app")</Typography>
+                                    @if (on) { <StatusBadge Tone="StatusTone.Success">On</StatusBadge> }
+                                </div>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@MethodLine(current, on)</Typography>
+                            </div>
+                            @if (!on)
+                            {
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(_loading || account.HasPassword is not true)" @onclick="() => OpenWay(TwoFactorAction.Add, current)">Add</Button>
+                            }
+                            else if (account.Methods?.Count > 1)
+                            {
+                                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(_loading || account.HasPassword is not true)" @onclick="() => OpenWay(TwoFactorAction.Remove, current)">Remove</Button>
+                            }
+                        </div>
+                    }
+                    <div class="security__way">
+                        <Icon Name="IconName.RiLock2Fill" Size="IconSize.Md" />
+                        <div class="security__words">
+                            <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Recovery codes</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@account.RecoveryCodesRemaining unused. Use one if you can't get a code any other way.</Typography>
+                        </div>
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@(_loading || account.HasPassword is not true)" @onclick="() => OpenFactor(TwoFactorAction.ReplaceCodes)">Get new codes</Button>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+    @if (_loadError is not null)
+    {
+        <InlineError Message="@_loadError">
+            <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_loading" @onclick="LoadAsync">Retry</Button></Action>
+        </InlineError>
+    }
+</SettingsCard>
+
+<SettingsCard>
+    <div class="security__lines">
+        <div class="security__line">
+            <div class="security__words">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Where you're signed in</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Sign out any device you don't recognise.</Typography>
+            </div>
+            @if (_account?.Sessions.Any(session => !session.Current) == true)
+            {
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="_loading" @onclick="() => AskToRevoke(null)">Sign out everywhere else</Button>
+            }
+        </div>
+        @if (_loading) { <Skeleton Shape="SkeletonShape.Line" /> }
+        else if (!Security.Available)
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="security__hint">Your active sessions aren't available yet.</Typography>
+        }
+        else if (_account is not null)
+        {
+            @foreach (var session in VisibleSessions)
+            {
+                var current = session;
+                <div class="security__line security__line--device" @key="session.Id">
+                    @* A small computer or phone mark, no tile (designer, 5 November 2026); the words already name the device. *@
+                    <div class="security__device">
+                        <Icon Name="@(session.Mobile ? IconName.RiSmartphoneFill : IconName.RiComputerFill)" Size="IconSize.Md" />
+                        <div class="security__words">
+                            <div class="security__heading">
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">@session.Browser on @session.Device</Typography>
+                                @if (session.Current) { <StatusBadge Tone="StatusTone.Brand">This device</StatusBadge> }
+                            </div>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose title="@LastActive(session.LastActiveAt)">@SessionLine(session)</Typography>
+                        </div>
+                    </div>
+                    @if (!session.Current)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="() => AskToRevoke(current)">Sign out</Button>
+                    }
+                </div>
+            }
+            @if (_account.Sessions.Count == 0)
+            {
+                <InlineError Message="We couldn't confirm your active sessions.">
+                    <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action>
+                </InlineError>
+            }
+            @if (_account.Sessions.Count > 5)
+            {
+                <div class="security__more">
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _showAllSessions = !_showAllSessions">@(_showAllSessions ? "Show fewer" : $"Show all {_account.Sessions.Count} sessions")</Button>
+                </div>
+            }
+        }
+    </div>
+</SettingsCard>
+
+<ChangePasswordDialog Open="_passwordOpen" RecoveryLink="_recoveryLink" OnClose="ClosePassword" />
+@if (_factorAction is { } action)
+{
+    <TwoFactorDialog Action="action" Methods="@(_account?.Methods)" ForMethod="_factorMethod" OnClose="() => _factorAction = null" OnChanged="SecurityChanged" />
+}
+<Dialog Open="_revokeOpen" Title="@(_revokeTarget is null ? "Sign out everywhere else?" : "Sign out this device?")"
+        ConfirmLabel="Sign out" BusyLabel="Signing out…" Busy="_revoking" Dismissible OnConfirm="RevokeAsync" OnCancel="CloseRevoke">
+    <Body>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            @(_revokeTarget is null ? "You'll stay signed in here." : $"{_revokeTarget.Browser} on {_revokeTarget.Device} will need to sign in again.")
+        </Typography>
+        @if (_revokeError is not null) { <InlineError Message="@_revokeError" /> }
+    </Body>
+</Dialog>
+</div>
+
+@code {
+    private AccountSecurityInfo? _account;
+    private Parrot.Web.Features.Auth.ResetPassword.State.PasswordResetLink? _recoveryLink;
+    private bool _loading, _passwordOpen, _revokeOpen, _revoking, _showAllSessions;
+    private IEnumerable<AccountSession> VisibleSessions => (_account?.Sessions ?? []).OrderByDescending(session => session.Current)
+        .ThenByDescending(session => session.LastActiveAt).Take(_showAllSessions ? int.MaxValue : 5);
+    private string? _loadError, _revokeError;
+    private AccountSession? _revokeTarget;
+    private TwoFactorAction? _factorAction;
+    private string Email => AuthState.CurrentUser?.Email is { Length: > 0 } email ? email : "your email address";
+    // What the password is for, and with which address (the dialog gives the advice).
+    private string PasswordDescription => _account?.HasPassword is false
+        ? $"You sign in with {string.Join(" or ", _account.SignInProviders)}. Manage your password there."
+        : $"You use it with {Email} to sign in.";
+    // Off: what it does. On: when it asks (the ways are the lines under it). A browser that's been through is remembered
+    // for 30 days, so "a new device".
+    private string TwoFactorDescription => !Security.Available ? "Two-factor authentication isn't available yet."
+        : _account is { HasPassword: false } ? "Not available yet for accounts that sign in with Google or Facebook."
+        : _account is { TwoFactorEnabled: true } ? "We ask for a code when you sign in on a new device."
+        : "Ask for a code as well as your password when you sign in.";
+    // A way that's on: where its codes come from. Off: why add it.
+    private string MethodLine(TwoFactorMethod method, bool on) => method == TwoFactorMethod.Email
+        ? (on ? $"Sent to {Email}." : "A way in if you can't get to your authenticator app.")
+        : (on ? "Codes from the app on your phone." : "A way in if you can't get to your email.");
+    private string SessionLine(AccountSession session) =>
+        $"Last active {SecurityText.SessionWhen(session.LastActiveAt, DateTimeOffset.UtcNow, Clock.Zone)}"
+        + (string.IsNullOrWhiteSpace(session.ApproximateLocation) ? "" : $" · Around {session.ApproximateLocation}");
+    protected override async Task OnInitializedAsync()
+    {
+        Clock.Changed += ClockChanged;
+        _recoveryLink = PasswordResetHandoff.Take(AuthState.CurrentUser?.UserId);
+        _passwordOpen = _recoveryLink is not null;
+        await LoadAsync();
+    }
+    private void OpenPassword() { _recoveryLink = null; _passwordOpen = true; }
+    private void ClosePassword() { _passwordOpen = false; _recoveryLink = null; }
+    protected override async Task OnAfterRenderAsync(bool firstRender) { if (firstRender) await Clock.ReadAsync(); }
+    private void ClockChanged() => _ = InvokeAsync(StateHasChanged);
+    private string LastActive(DateTimeOffset time) => Clock.ToLocal(time.UtcDateTime).ToString("d MMM yyyy, h:mm tt", System.Globalization.CultureInfo.InvariantCulture);
+    private async Task LoadAsync()
+    {
+        if (!Security.Available || _loading) return;
+        _loading = true; _loadError = null;
+        try { _account = await Security.ReadAsync(); }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or SecurityOperationException)
+        { _account = null; _loadError = "We couldn't load two-factor authentication and sessions. Try again before making changes."; }
+        finally { _loading = false; }
+    }
+    private TwoFactorMethod? _factorMethod;
+    private void OpenTwoFactor() => OpenFactor(_account?.TwoFactorEnabled == true ? TwoFactorAction.Disable : TwoFactorAction.Enable);
+    private void OpenFactor(TwoFactorAction action) => OpenWay(action, null);
+    // Adding or removing one way of getting codes.
+    private void OpenWay(TwoFactorAction action, TwoFactorMethod? method)
+    {
+        if (_account?.HasPassword != true || _loading) return;
+        _factorMethod = method;
+        _factorAction = action;
+    }
+    private void SecurityChanged(AccountSecurityInfo account) => _account = account;
+    private void AskToRevoke(AccountSession? session)
+    {
+        if (_account is null || _loading || session?.Current == true) return;
+        _revokeTarget = session; _revokeError = null; _revokeOpen = true;
+    }
+    private void CloseRevoke() { if (!_revoking) { _revokeOpen = false; _revokeTarget = null; _revokeError = null; } }
+    private async Task RevokeAsync()
+    {
+        if (_revoking || !_revokeOpen || _account is null) return;
+        _revoking = true; _revokeError = null;
+        var everywhere = _revokeTarget is null;
+        try
+        {
+            if (_revokeTarget is null) await Security.RevokeOtherSessionsAsync();
+            else await Security.RevokeSessionAsync(_revokeTarget.Id);
+            _account = _account with { Sessions = _account.Sessions.Where(session => _revokeTarget is null ? session.Current : session.Id != _revokeTarget.Id).ToArray() };
+            _revokeOpen = false;
+            Toasts.Show(everywhere ? "Signed out everywhere else" : "Signed out of that device");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or SecurityOperationException)
+        { _revokeError = ex is SecurityOperationException problem ? problem.Message : "We couldn't sign out that device. Check your connection and try again."; }
+        finally { _revoking = false; }
+    }
+    public void Dispose() => Clock.Changed -= ClockChanged;
+}

@@ -1,0 +1,54 @@
+/* Settings › Activity log: the controls row above the shared table, as Customers' and Tasks'. The rows are
+   ActivityRow's; the details are a SidePanel's. */
+.activity {
+  /* Gap in the token set: no search-width scale. The same width as Customers' and Tasks' search. */
+  --ds-activity-search: 320px;
+
+  display: grid;
+  min-width: 0;
+}
+
+/* Search, the three filters, then the download: on the right, where Customers and Tasks keep theirs. */
+.activity__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: var(--spacing-lg);
+}
+.activity__controls ::deep .activity__search { width: var(--ds-activity-search); }
+
+/* The details: what happened, the facts in a list, then what changed. */
+.activity-details { display: grid; gap: var(--spacing-2xl); }
+.activity-details ::deep p, .activity-details ::deep h3 { margin: var(--spacing-none); }
+.activity-details ::deep .activity-details__what { color: var(--colors-text-primary); }
+
+.activity-details__facts { display: grid; gap: var(--spacing-lg); margin: var(--spacing-none); }
+.activity-details__facts > div { display: grid; gap: var(--spacing-xs); }
+.activity-details__facts dt { color: var(--colors-text-muted); }
+.activity-details__facts dd { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+.activity-details__changes { display: grid; gap: var(--spacing-md); }
+.activity-details__changes ::deep h3 { color: var(--colors-text-primary); }
+.activity-details__changes ul {
+  display: grid;
+  margin: var(--spacing-none);
+  padding: var(--spacing-none);
+  list-style: none;
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+}
+.activity-details__changes li { display: grid; gap: var(--spacing-xs); padding: var(--spacing-md) var(--spacing-lg); border-top: var(--ds-hairline) solid var(--colors-surface-border); }
+.activity-details__changes li:first-child { border-top: none; }
+.activity-details__changes ::deep .activity-details__field { color: var(--colors-text-muted); }
+.activity-details__values { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; color: var(--colors-icon-secondary); }
+.activity-details__values ::deep .activity-details__from { color: var(--colors-text-muted); text-decoration: line-through; }
+.activity-details__values ::deep .activity-details__to { color: var(--colors-text-primary); }
+
+.activity-details__footer { display: flex; justify-content: flex-end; width: 100%; }
+
+@media (max-width: 1024px) {
+  .activity__controls { justify-content: flex-start; }
+  .activity__controls ::deep .activity__search { flex: 1 1 100%; width: auto; }
+}

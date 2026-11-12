@@ -1,0 +1,267 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Settings
+@inject INotificationSettingsStore Store
+@inject Parrot.Web.Services.FeedbackService Feedback
+@inject AuroraInterop Interop
+@inject IJSRuntime JS
+@inject AuthState AuthState
+@inject Parrot.Web.Features.Notifications.NotificationPopups Popups
+@implements IAsyncDisposable
+
+@* Five choices, not a notification-policy builder. Legacy preferences remain in the service contract,
+   but assignment/access belong to the server and essential security delivery is a separate policy. *@
+@if (!Store.Available)
+{
+    <InlineError Tone="InlineErrorTone.Info" Message="Your choices can't be saved yet. Message sounds still work on this device." />
+}
+
+@if (_settings is null)
+{
+    <Skeleton Shape="SkeletonShape.Line" />
+}
+else
+{
+    var settings = _settings;
+    @* No card heading: the page's title already says what this is (designer, 5 November 2026: concise, no over-explaining). *@
+    <SettingsCard>
+        <ChildContent><div class="alerts__lines">
+            <div class="alerts__line">
+                <div>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">In-app pop-ups</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>A short alert for questions, approvals and tasks that need you.</Typography>
+                </div>
+                <div class="alerts__controls">
+                    @if (settings.Popups != PopupLevel.Off)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="TryPopup">Try it</Button>
+                    }
+                    <Toggle Checked="@(settings.Popups != PopupLevel.Off)" CheckedChanged="PopupsAsync" Disabled="DeliveryDisabled" AriaLabel="In-app pop-ups" />
+                </div>
+            </div>
+            <div class="alerts__line">
+                <div>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Message sounds</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Play a sound for new messages while yára is open.</Typography>
+                    @if (_soundError is not null)
+                    {
+                        <InlineError Message="@_soundError"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_soundSaving" @onclick="RetrySoundAsync">Try again</Button></Action></InlineError>
+                    }
+                </div>
+                <Toggle Checked="@(_soundsEnabled == true)" CheckedChanged="SoundsAsync" Disabled="@(_soundsEnabled is null || _soundSaving)" AriaLabel="Message sounds" />
+            </div>
+            <div class="alerts__line">
+                <div>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Browser notifications</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@NotificationDeliveryChoices.BrowserDescription(_permission)</Typography>
+                </div>
+                <div class="alerts__controls">
+                    @if (_permission == "denied")
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="CheckPermissionAsync">Check again</Button>
+                    }
+                    else if (BrowserOn(settings))
+                    {
+                        @* The browser makes a test itself, so this works on the live app too. *@
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="TryBrowser">Try it</Button>
+                    }
+                    @* The browser asks in the click itself (browser-alerts.js armAsk): asked any later, it may not ask at all. *@
+                    <div @ref="_browserToggle" class="alerts__toggle">
+                        <Toggle Checked="@BrowserOn(settings)" CheckedChanged="BrowserAsync" Disabled="@BrowserLocked" AriaLabel="Browser notifications" />
+                    </div>
+                </div>
+            </div>
+            <div class="alerts__line">
+                <div>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Email notifications</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@EmailDescription</Typography>
+                </div>
+                <div class="alerts__choice">
+                    <SelectField FloatingLabel="Email delivery" Value="@NotificationDeliveryChoices.EmailLabel(settings.Email)" Disabled="DeliveryDisabled" Open="@(_open == "email")" OpenChanged="@(open => SetOpen("email", open))">
+                        <PopoverOption Label="As they happen" Active="@(settings.Email == EmailDelivery.AsTheyHappen)" OnSelect="() => EmailAsync(EmailDelivery.AsTheyHappen)" />
+                        <PopoverOption Label="Daily summary" Active="@(settings.Email == EmailDelivery.Daily)" OnSelect="() => EmailAsync(EmailDelivery.Daily)" />
+                        <PopoverOption Label="Off" Active="@(settings.Email == EmailDelivery.Off)" OnSelect="() => EmailAsync(EmailDelivery.Off)" />
+                    </SelectField>
+                </div>
+            </div>
+        </div></ChildContent>
+    </SettingsCard>
+
+    @* No card title: the row says it, once. *@
+    <SettingsCard>
+        <ChildContent>
+            <div class="alerts__line alerts__quiet-toggle">
+                <div>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Quiet hours</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Pause notifications at set times. They still show in the bell.</Typography>
+                </div>
+                <Toggle Checked="settings.QuietHours" CheckedChanged="QuietHoursAsync" Disabled="@(DeliveryDisabled || (!settings.QuietHours && EffectiveZone is null))" AriaLabel="Quiet hours" aria-controls="@(settings.QuietHours ? "notification-quiet-schedule" : null)" />
+            </div>
+            @if (settings.QuietHours)
+            {
+                <div class="alerts__schedule" id="notification-quiet-schedule">
+                    <div class="alerts__time-fields">
+                        <SelectField FloatingLabel="From" Value="@NotificationDeliveryChoices.TimeLabel(settings.QuietFrom)" Disabled="@(DeliveryDisabled || EffectiveZone is null)" Open="@(_open == "from")" OpenChanged="@(open => SetOpen("from", open))">
+                            @foreach (var time in NotificationDeliveryChoices.Times)
+                            { var value = time; <PopoverOption Label="@NotificationDeliveryChoices.TimeLabel(value)" Active="@(settings.QuietFrom == value)" OnSelect="() => QuietTimeAsync(value, settings.QuietTo)" /> }
+                        </SelectField>
+                        <SelectField FloatingLabel="Until" Value="@NotificationDeliveryChoices.TimeLabel(settings.QuietTo)" Disabled="@(DeliveryDisabled || EffectiveZone is null)" Open="@(_open == "until")" OpenChanged="@(open => SetOpen("until", open))">
+                            @foreach (var time in NotificationDeliveryChoices.Times)
+                            { var value = time; <PopoverOption Label="@NotificationDeliveryChoices.TimeLabel(value)" Active="@(settings.QuietTo == value)" OnSelect="() => QuietTimeAsync(settings.QuietFrom, value)" /> }
+                        </SelectField>
+                    </div>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="alerts__zone">@ZoneDescription</Typography>
+                </div>
+            }
+            else if (EffectiveZone is null)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="alerts__zone">@(_deviceReady ? "Your time zone couldn't be detected. Reload to try again." : "Checking your time zone…")</Typography>
+            }
+        </ChildContent>
+    </SettingsCard>
+}
+
+<Typography TextStyle="TextStyle.Small12Medium" As="p" role="status" aria-live="polite" Class="alerts__status">@_status</Typography>
+@if (_error is not null)
+{
+    <InlineError Message="@_error"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_saving" @onclick="RecoverAsync">@(_loadFailed ? "Reload settings" : _retry is not null ? "Try again" : "Dismiss")</Button></Action></InlineError>
+}
+
+@code {
+    private NotificationSettings? _settings, _retry;
+    private bool _saving, _soundSaving, _asking, _loadFailed, _deviceReady, _disposed;
+    private bool? _soundsEnabled, _soundRetry;
+    private string? _status, _error, _open, _permission, _deviceZone, _soundError;
+    private IJSObjectReference? _alerts;
+    private ElementReference _browserToggle;
+
+    // Browser notifications are the browser's permission plus your choice. Where choices can't be saved yet (the live
+    // app), the permission alone decides, so asking for it and trying one still work there.
+    private bool BrowserOn(NotificationSettings settings) => Store.Available ? NotificationDeliveryChoices.BrowserEnabled(settings.Push, _permission) : _permission == "granted";
+    private bool BrowserLocked => _asking || (Store.Available ? DeliveryDisabled || !NotificationDeliveryChoices.BrowserCanChange(_permission) : _permission != "default");
+    private bool DeliveryDisabled => !Store.Available || _saving || _loadFailed;
+    private string? EffectiveZone => _settings?.QuietTimeZone is { Length: > 0 } saved ? NotificationDeliveryChoices.IanaZone(saved) : _deviceZone;
+    private string ZoneDescription => EffectiveZone is { } zone ? $"Time zone: {NotificationDeliveryChoices.ZoneLabel(zone, DateTimeOffset.UtcNow)}. Overnight schedules continue into the next day." : "Your time zone couldn't be detected. Reload to try again.";
+    private string EmailDescription => AuthState.CurrentUser?.Email is { Length: > 0 } email ? $"Choose how to receive updates at {email}." : "Choose how to receive updates by email.";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+    private async Task LoadAsync()
+    {
+        _error = null; _retry = null; _status = null;
+        try { _settings = await Store.ReadAsync(); _loadFailed = false; }
+        catch (HttpRequestException) { _settings ??= NotificationSettings.Defaults; _loadFailed = true; _error = "Your settings couldn't be loaded. Reload before making changes."; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        await ArmBrowserAsync();
+        if (!firstRender) return;
+        await LoadSoundsAsync();
+        try { _deviceZone = NotificationDeliveryChoices.IanaZone(await Interop.TimeZoneAsync()); }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { }
+        try { _alerts = await JS.InvokeAsync<IJSObjectReference>("import", "./js/browser-alerts.js"); _permission = await _alerts.InvokeAsync<string>("permission"); }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or InvalidOperationException or TaskCanceledException) { _permission = "unsupported"; }
+        _deviceReady = true;
+        await ArmBrowserAsync();
+        if (!_disposed) StateHasChanged();
+    }
+
+    // The switch is drawn once the settings have loaded; it's armed for the browser's ask as soon as it's there.
+    private bool _armed;
+    private async Task ArmBrowserAsync()
+    {
+        if (_armed || _alerts is null || string.IsNullOrEmpty(_browserToggle.Id)) return;
+        try { await _alerts.InvokeVoidAsync("armAsk", _browserToggle); _armed = true; }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or TaskCanceledException) { }
+    }
+
+    private void SetOpen(string key, bool open) { if (!DeliveryDisabled) _open = open ? key : null; }
+    private Task PopupsAsync(bool on) => _settings is null ? Task.CompletedTask : SaveAsync(NotificationDeliveryChoices.WithPopups(_settings, on));
+    private Task EmailAsync(EmailDelivery delivery) { _open = null; return _settings is null ? Task.CompletedTask : SaveAsync(_settings with { Email = delivery }); }
+    private Task QuietHoursAsync(bool on) => _settings is null ? Task.CompletedTask : SaveAsync(_settings with { QuietHours = on });
+    private Task QuietTimeAsync(TimeOnly from, TimeOnly until) { _open = null; return _settings is null ? Task.CompletedTask : SaveAsync(_settings with { QuietFrom = from, QuietTo = until }); }
+
+    private async Task SoundsAsync(bool on)
+    {
+        if (_soundSaving) return;
+        _soundSaving = true;
+        try
+        {
+            var result = await Feedback.TrySetEnabledAsync(on);
+            if (_disposed) return;
+            _status = null; _soundRetry = on;
+            if (result.Applied) _soundsEnabled = result.Enabled;
+            if (result.Applied && result.Saved && result.Enabled == on)
+            {
+                _status = "Preferences saved."; _soundError = null; _soundRetry = null;
+            }
+            else _soundError = result.Applied ? "Changed for this session only. Your browser couldn't save the preference." : "Your sound preference couldn't be changed. Try again.";
+        }
+        finally { _soundSaving = false; }
+    }
+    private async Task LoadSoundsAsync()
+    {
+        if (_soundSaving) return;
+        _soundSaving = true;
+        try
+        {
+            var enabled = await Feedback.ReadEnabledAsync();
+            if (_disposed) return;
+            _soundsEnabled = enabled; _soundRetry = null;
+            _soundError = enabled is null ? "Your sound preference couldn't be checked. Try again." : null;
+        }
+        finally { _soundSaving = false; }
+    }
+    private Task RetrySoundAsync() => _soundRetry is { } desired ? SoundsAsync(desired) : LoadSoundsAsync();
+
+    private async Task BrowserAsync(bool on)
+    {
+        if (_asking || _settings is null || _alerts is null || (Store.Available && DeliveryDisabled)) return;
+        _asking = true;
+        try
+        {
+            if (on)
+            {
+                // Asked in the click by the browser; this collects its answer, or asks now if the click didn't.
+                _permission = await _alerts.InvokeAsync<string>("pending", _browserToggle);
+                if (_permission == "default") _permission = await _alerts.InvokeAsync<string>("ask");
+                if (_permission != "granted") { _status = _permission == "denied" ? "This browser blocked notifications. The steps to allow them are above." : "Browser notifications are still off."; return; }
+            }
+            if (Store.Available) await SaveAsync(_settings with { Push = on });
+        }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or TaskCanceledException) { _status = "Browser permission couldn't be checked. Try again."; }
+        finally { _asking = false; }
+    }
+
+    // A short confirmed save: disable delivery controls in flight, keep the last saved values on failure,
+    // and never persist default values over settings that failed to load. Hidden legacy fields round-trip intact.
+    private async Task SaveAsync(NotificationSettings next)
+    {
+        if (DeliveryDisabled || _disposed) return;
+        if (next.QuietHours) next = next with { QuietTimeZone = EffectiveZone };
+        if (NotificationDeliveryChoices.Problem(next) is { } problem) { _error = problem; _retry = null; return; }
+        _saving = true; _error = null; _status = "Saving…"; _retry = next;
+        try { var saved = await Store.SaveAsync(next); if (!_disposed) { _settings = saved; _status = "Preferences saved."; _retry = null; } }
+        catch (HttpRequestException exception)
+        {
+            _status = null;
+            if (exception.StatusCode == System.Net.HttpStatusCode.Conflict) { _loadFailed = true; _retry = null; _error = "These settings changed elsewhere. Reload before making changes."; }
+            else _error = "Your change couldn't be saved. Your previous settings are still in place.";
+        }
+        finally { _saving = false; }
+    }
+    private async Task CheckPermissionAsync()
+    {
+        if (_alerts is null) return;
+        try { _permission = await _alerts.InvokeAsync<string>("permission"); }
+        catch (Exception exception) when (exception is JSException or JSDisconnectedException or TaskCanceledException) { return; }
+        _status = _permission == "denied" ? "Still blocked in this browser." : "Notifications are allowed now. Turn them on above.";
+    }
+
+    // "Try it": made here, in the browser, so both work on the live app as well as the demo.
+    private void TryPopup() { Popups.Test(popup: true, browser: false); _status = null; }
+    private void TryBrowser() { Popups.Test(popup: false, browser: true); _status = "A test was sent to your browser. It shows outside this page, usually in a corner of your screen."; }
+
+    private Task RecoverAsync() => _loadFailed ? LoadAsync() : _retry is { } retry ? SaveAsync(retry) : ClearErrorAsync();
+    private Task ClearErrorAsync() { _error = null; return Task.CompletedTask; }
+    public async ValueTask DisposeAsync() { _disposed = true; if (_alerts is not null) { try { await _alerts.DisposeAsync(); } catch (JSDisconnectedException) { } } }
+}

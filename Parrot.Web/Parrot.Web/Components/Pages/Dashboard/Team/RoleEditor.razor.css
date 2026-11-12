@@ -1,25 +1,8 @@
-/* The role editor: the invite dialog's form and well, for a name and its permissions. */
-
-::deep .invite__lede { margin: var(--spacing-none); color: var(--colors-text-muted); }
-
-.invite__form {
-  display: grid;
-  gap: var(--spacing-lg);
-  margin-top: var(--spacing-lg);
-}
-
-.invite__permissions {
-  display: grid;
-  gap: var(--spacing-md);
-  margin-top: var(--spacing-xl);
-  padding: var(--spacing-lg);
-  background: var(--colors-surface-muted);
-  border-radius: var(--radius-radius-lg);
-}
-
-.invite__permissions ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
-
-.invite__permission-list {
-  display: grid;
-  gap: var(--spacing-sm);
-}
+/* A focused role form, using ContentModal's fixed header/actions and scrollable body. */
+.role-editor { display: grid; gap: var(--spacing-xl); min-width: 0; padding: var(--spacing-none); margin: var(--spacing-none); border: 0; }
+.role-editor__permissions { display: grid; gap: var(--spacing-md); outline: none; }
+.role-editor__permissions ::deep h3 { margin: var(--spacing-none); color: var(--colors-text-primary); }
+.role-editor__permissions-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--spacing-sm); }
+.role-editor__permissions-head ::deep .role-editor__total { color: var(--colors-text-muted); }
+/* The areas in one bordered list, a row each. */
+.role-editor__groups { border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); overflow: hidden; }
