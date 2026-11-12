@@ -88,8 +88,8 @@
                 @if (HiddenCount > 0)
                 {
                     <FilterPopover Label="@(_showAll ? "All Posts" : "Recent Posts")" Title="Show Posts" AlignEnd Open="_scopeOpen" OpenChanged="open => _scopeOpen = open">
-                        <PopoverOption Label="Recent Posts" Description="Last 3 months, not already added" Active="@(!_showAll)" OnSelect="() => SetScope(false)" />
-                        <PopoverOption Label="All Posts" Description="@HiddenDescription" Active="_showAll" OnSelect="() => SetScope(true)" />
+                        <PopoverOption Label="Recent Posts" Active="@(!_showAll)" OnSelect="() => SetScope(false)" />
+                        <PopoverOption Label="All Posts" Active="_showAll" OnSelect="() => SetScope(true)" />
                     </FilterPopover>
                 }
             </div>
@@ -231,6 +231,7 @@
 </Dialog>
 
 @code {
+    [CascadingParameter] public WorkspaceCurrencyValue Currency { get; set; } = WorkspaceCurrencyValue.Legacy;
     /// <summary>The connected social channels: only their posts show.</summary>
     [Parameter] public IReadOnlyList<string> Channels { get; set; } = PostChannels.Social;
 
@@ -341,16 +342,6 @@
     private int OlderCount => _posts.Count(post => !(Brought.Contains(post.Id) || MatchOf(post) is not null) && post.DaysAgo > PostDraft.OldAfterDays);
     private int HiddenCount => AddedCount + OlderCount;
 
-    private string HiddenDescription
-    {
-        get
-        {
-            var parts = new List<string>();
-            if (AddedCount > 0) parts.Add($"{AddedCount} already added");
-            if (OlderCount > 0) parts.Add(OlderCount == 1 ? "1 older post" : $"{OlderCount} older posts");
-            return "Includes " + string.Join(" and ", parts);
-        }
-    }
 
     private void SetScope(bool all)
     {
@@ -446,7 +437,8 @@
                 throw new HttpRequestException("Demo: couldn't read this post.");
             }
             var reading = await _reader.ReadAsync(post.Caption, token);
-            _read[post.Id] = ReviewDraft.FromPost(PostDraft.From(post, reading, Items));
+            if (!Currency.Ready) throw new InvalidOperationException("Wait for the business currency to load.");
+            _read[post.Id] = ReviewDraft.FromPost(PostDraft.From(post, reading, Items, Currency.Code));
             _status[post.Id] = Status.Ready;
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)

@@ -37,7 +37,6 @@
   width: var(--ds-test-mark);
   height: var(--ds-test-mark);
   margin-bottom: var(--spacing-md);
-  color: var(--colors-text-inverse);
   border-radius: var(--ds-test-mark-radius);
 }
 

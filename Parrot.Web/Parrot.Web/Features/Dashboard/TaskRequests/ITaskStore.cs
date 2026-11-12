@@ -1,8 +1,8 @@
 namespace Parrot.Web.Features.Dashboard.TaskRequests;
 
 /// <summary>
-/// Where tasks are kept: agents raise them, people add and work them. The screens only talk to this;
-/// the tasks themselves are kept by the API (ApiTaskStore).
+/// Where tasks are kept: agents raise them, people add and work them. The screens only talk to this, so the
+/// demo's tasks and the API's (ApiTaskStore) sit behind the same calls.
 /// </summary>
 public interface ITaskStore
 {

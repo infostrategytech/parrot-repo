@@ -57,7 +57,7 @@ else
                 <Button Size="ButtonSize.Small" Class="response-control__action is-return" Busy="@Busy"
                         disabled="@Busy" @onclick="OnReturn">
                     <IconLeft><Icon Name="IconName.RiRobot3Fill" /></IconLeft>
-                    <ChildContent>Handover to @Agent</ChildContent>
+                    <ChildContent>@ReturnLabel</ChildContent>
                 </Button>
             }
         </div>
@@ -116,7 +116,14 @@ else
         ? "Human reply is locked to prevent a duplicate response."
         : Conversation.HasAiAgent
             ? $"{Agent} will not send while you are in control."
-            : $"Hand over to let {Agent} respond to this customer.";
+            : $"{Agent} isn't replying to this customer.";
+
+    // Our words, not "Handover": in yára a handover is the agent bringing a
+    // person in. Giving the conversation back is a return; an agent that never
+    // had it is let in to reply.
+    private string ReturnLabel => ReturnWords(Conversation, Agent);
+    internal static string ReturnWords(ConversationItem conversation, string agent) =>
+        conversation.HasAiAgent ? $"Return to {agent}" : $"Let {agent} reply";
 
     protected override void OnParametersSet()
     {

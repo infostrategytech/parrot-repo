@@ -22,6 +22,7 @@
 @inject BusinessKind Kind
 @inject AgentReadiness Readiness
 @inject VoiceInterop Voice
+@inject Parrot.Web.Features.Dashboard.Team.TeamClient TeamApi
 @implements IDisposable
 
 @* One agent: who it is and whether it is on, then its day (what it did,
@@ -93,9 +94,7 @@ else
             </Button>
 
             <div class="agent-detail__identity">
-                <span class="agent-detail__avatar agent-tone-slate">
-                    <img src="@AgentBuilderCopy.MascotImage(agent.Mascot)" alt="" />
-                </span>
+                <span class="agent-detail__avatar"><AgentFace Look="@agent.Mascot" Reactive Floating /></span>
                 <div class="agent-detail__titles">
                     <div class="agent-detail__name-row">
                         <Typography TextStyle="TextStyle.HeadingH1Bold" As="h1">@agent.Name</Typography>
@@ -154,7 +153,8 @@ else
             </section>
         }
 
-        @* Concept B: the page's sections, words only, at reading size. *@
+        @* Concept B: the page's sections, words only, at reading size. Every setting saves itself, quietly
+           (designer, 11 November 2026: no Save changes, and no status in a corner); only a failed save says so. *@
         <Tabs Label="Agent sections" Variant="TabsVariant.Underline" Class="agent-detail__tabs is-sections">
             @foreach (var tab in CurrentTabs)
             {
@@ -186,7 +186,7 @@ else
                                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@($"Tell {agent.Name} its job")</Typography>
                                 <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>
                                     @(told ? "Done. Its job description is saved."
-                                        : progress is { Next: { } next } ? $"You got as far as {LowerFirst(next)}. It picks up from there."
+                                        : progress is not null ? "You've started. It picks up where you left off."
                                         : "What it does, what it never does, and when it brings you in, one topic at a time.")
                                 </Typography>
                             </div>
@@ -435,7 +435,7 @@ else
                             <section class="agent-detail__card agent-detail__job-empty">
                                 <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiChatSmile3Fill"
                                             Title="@($"{agent.Name} doesn't know its job yet")"
-                                            Description="@(kept is { Next: { } next } ? $"You got as far as {LowerFirst(next)}. It picks up from there." : $"Tell {agent.Name} what to do, what never to do, and when to bring you in. A few minutes, one topic at a time.")">
+                                            Description="@(kept is not null ? "You've started. It picks up where you left off." : $"Tell {agent.Name} what to do, what never to do, and when to bring you in. A few minutes, one topic at a time.")">
                                     <Action>
                                         <Button @onclick="OpenTelling">@(kept is null ? $"Tell {agent.Name} its job" : "Continue")</Button>
                                     </Action>
@@ -521,22 +521,24 @@ else
                     case "handover":
                         <section class="agent-detail__group" aria-labelledby="agent-handover-title">
                             <div class="agent-detail__group-head">
-                                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-handover-title">When it brings you in</Typography>
+                                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-handover-title">@(Solo ? "When it brings you in" : "When it brings in your team")</Typography>
                                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>It stops replying and passes the customer on, with the reason and a summary of the chat. It always does when a customer asks for a person.</Typography>
                             </div>
-                            <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Handoff" ShowAlways="false" ShowWho />
+                            <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Handoff" ShowAlways="false" ShowWho
+                                           Team="_handoverTeam" CanInvite="@(AuthState.CurrentUser?.IsOwner == true)" />
                         </section>
                         <section class="agent-detail__group" aria-labelledby="agent-limits-title">
                             <div class="agent-detail__group-head">
                                 <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-limits-title">Its limits</Typography>
-                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>It only answers from what your business has told it. If it doesn't know something, it says so and checks with you.</Typography>
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@($"It only answers from what your business has told it. If it doesn't know something, it says so and checks with {(Solo ? "you" : "your team")}.")</Typography>
                             </div>
+                            @* Asking first goes to whoever it brings in (above), so who decides is set in one place. *@
                             <div class="agent-detail__card agent-detail__limits">
                                 <div class="agent-detail__limit">
-                                    <Toggle Stretch Checked="@_form.Settings.CanOfferDiscounts" CheckedChanged="v => _form.Settings.CanOfferDiscounts = v" Label="Can offer discounts" Description="Otherwise it asks you first." />
+                                    <Toggle Stretch Checked="@_form.Settings.CanOfferDiscounts" CheckedChanged="v => _form.Settings.CanOfferDiscounts = v" Label="Can offer discounts" Description="@($"Otherwise it asks {AsksWho} first.")" />
                                 </div>
                                 <div class="agent-detail__limit">
-                                    <Toggle Stretch Checked="@_form.Settings.CanApproveRefunds" CheckedChanged="v => _form.Settings.CanApproveRefunds = v" Label="Can approve refunds" Description="Otherwise it passes refunds to a person." />
+                                    <Toggle Stretch Checked="@_form.Settings.CanApproveRefunds" CheckedChanged="v => _form.Settings.CanApproveRefunds = v" Label="Can approve refunds" Description="@($"Otherwise it passes refunds to {AsksWho}.")" />
                                 </div>
                             </div>
                         </section>
@@ -546,12 +548,6 @@ else
             </div>
         }
 
-        @* Concept B: one save bar for the page, at its end, so it stays at the
-           window's foot however long the tab (designer, 15 October). *@
-        @if (Dirty && (IsConfigTab(_activeTab) || _activeTab == "overview"))
-        {
-            @SaveBar(agent)
-        }
     </main>
 }
 
@@ -571,9 +567,10 @@ else
                 @* The end (designer, 19 October 2026): it knows its job. What it will do, in its job
                    description's own sentences (still what they're approving), and the way on. *@
                 <section class="agent-detail__told" aria-labelledby="agent-told-title">
+                    @* Given its job: it arrives at Done, a success (designer, 10 November 2026), with its
+                       green tick and the happy turn once its face is in. *@
                     <div class="agent-detail__told-face" aria-hidden="true">
-                        <img src="@AgentBuilderCopy.MascotImage(telling.Mascot)" alt="" />
-                        <span class="agent-detail__told-tick"><Icon Name="IconName.RiCheckFill" Size="IconSize.Md" /></span>
+                        <AgentFace Look="@telling.Mascot" State="PresenceAvatarState.Done" Reactive Floating Celebrate CueDelay="320" />
                     </div>
                     <Typography TextStyle="TextStyle.HeadingH2Bold" As="h2" id="agent-told-title">@KnowsTitle(telling)</Typography>
                     <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="agent-detail__told-lede">@($"Here's what you told {telling.Name}:")</Typography>
@@ -614,7 +611,7 @@ else
                             @foreach (var useCase in AgentUseCase.All.Where(item => item.Id != AgentUseCase.Custom || _form.Settings.UseCase == AgentUseCase.Custom))
                             {
                                 var current = useCase;
-                                <PopoverOption Label="@current.Name" Description="@current.Does" Active="@(_form.Settings.UseCase == current.Id)" OnSelect="() => StartNewJob(current)" />
+                                <PopoverOption Label="@current.Name" Active="@(_form.Settings.UseCase == current.Id)" OnSelect="() => StartNewJob(current)" />
                             }
                         </FilterPopover>
                     </div>
@@ -663,8 +660,8 @@ else
 }
 
 
-@* Leaving with unsaved changes asks first (tabs keep them): the rail, Back, or closing the tab. *@
-<NavigationLock OnBeforeInternalNavigation="OnNavigating" ConfirmExternalNavigation="@(Dirty && !_leaving)" />
+@* Leaving saves a change still waiting first; only one that can't be saved (no name, no connection) asks. *@
+<NavigationLock OnBeforeInternalNavigation="OnNavigatingAsync" ConfirmExternalNavigation="@(Dirty && !_leaving)" />
 
 <Dialog Open="_confirmingLeave"
         Type="DialogType.Destructive"
@@ -675,7 +672,21 @@ else
         OnConfirm="Leave">
     <GlyphContent><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Md" /></GlyphContent>
     <Body>
-        <p>Your changes to @(_form?.DisplayName ?? "this agent") aren't saved. To keep them, stay and select Save changes.</p>
+        <p>@(_autosave == Autosave.Blocked ? $"{BlockedNote} Your last change to {_form?.DisplayName ?? "this agent"} isn't saved yet." : $"Your last change to {_form?.DisplayName ?? "this agent"} couldn't be saved. Stay to try again.")</p>
+    </Body>
+</Dialog>
+
+@* A live agent with no channel left would stop answering everyone: the one change that asks first. *@
+<Dialog Open="_confirmingNoChannel"
+        Type="DialogType.Destructive"
+        Title="@($"Stop {(_form?.DisplayName ?? "it")} answering everywhere?")"
+        ConfirmLabel="Stop answering"
+        CancelLabel="Keep a channel"
+        OnCancel="KeepChannels"
+        OnConfirm="ConfirmNoChannelAsync">
+    <GlyphContent><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Md" /></GlyphContent>
+    <Body>
+        <p>With no channel, it won't answer any customer until you choose one again.</p>
     </Body>
 </Dialog>
 
@@ -798,6 +809,7 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        ScheduleAutosave();
         if (firstRender)
         {
             try { _canSpeak = (await Voice.CapabilitiesAsync()).Speak; StateHasChanged(); }
@@ -866,7 +878,19 @@ else
         _channels = await Gate.ConnectedAsync();
         try { _firstName = (await Profile.GetAsync()).FirstName?.Trim(); }
         catch (HttpRequestException) { }
+        _handoverTeam = await HandoverTeam.LoadAsync(TeamApi, AuthState);
     }
+
+    // The people it can bring in (designer, 10 November 2026): the owner alone, or the team.
+    private HandoverTeam? _handoverTeam;
+    private bool Solo => _handoverTeam?.Solo ?? true;
+
+    // Who it asks before a discount or refund: whoever it brings in.
+    private string AsksWho => _form is null ? "you" : Solo ? "you" : HandoverRouting.Phrase(_form.Settings, false) switch
+    {
+        "anyone on your team" => "your team",
+        var who => who.Replace(", shared evenly", ""),
+    };
 
     // "Hi Ada" when the profile has a first name, "Hi" when it doesn't.
     private string? _firstName;
@@ -937,7 +961,7 @@ else
         _jobView = JobView.Tell;
         _focusLine = null;
         _activeTab = "job";
-        if (_saveError is not null) { Toasts.ShowError("We couldn't save that change. Try again from Save changes."); return; }
+        if (_saveError is not null) { Toasts.ShowError("We couldn't save that change. Check your connection and try again."); return; }
         _lastUpdate = update;
         _freshLines = update.Added;
         Toasts.Show(new ToastMessage($"Updated {agent.Name}'s job.", ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(UndoUpdateAsync)));
@@ -1018,8 +1042,8 @@ else
         if (Told(agent) && Dirty) await SaveAsync(agent);
         _telling = false;
         _toldNow = false;
-        if (!Told(agent) && Drafts.ProgressOf(agent.Id) is { Next: { } next })
-            Toasts.Show($"Saved. We'll pick up at {LowerFirst(next)}.");
+        if (!Told(agent) && Drafts.ProgressOf(agent.Id) is not null)
+            Toasts.Show("Saved. It picks up where you left off.");
     }
 
     // Its first job description, written and approved: kept at once, no Save changes for it; then the
@@ -1242,6 +1266,7 @@ else
 
     public void Dispose()
     {
+        _autosaveTimer?.Cancel();
         TeachAi.Changed -= KnowledgeChanged;
         Intro.Changed -= IntroChanged;
         AiAgentsState.Changed -= OnAgentsChanged;
@@ -1258,11 +1283,6 @@ else
 
     private IReadOnlyList<AiAgent> OthersThan(AiAgent agent) => AiAgentsState.Agents.Where(a => a.Id != agent.Id).ToList();
 
-    private string SaveNote(AiAgent agent) =>
-        _form is { HasRoleName: false } ? "Name its job."
-        : _form is { HasName: false } ? "Give it a name."
-        : _form is { Channels.Count: 0 } && agent.IsActive && !agent.IsDraft ? "With no channel chosen, it won't answer anyone."
-        : "You have changes that aren't saved.";
 
     private void Reset(AiAgent agent)
     {
@@ -1274,25 +1294,36 @@ else
         _tried = false;
     }
 
+    // The save in flight, so leaving and turning it on can wait for it rather than race it.
+    private Task? _saveTask;
+    private async Task SettleAsync() { if (_saveTask is { IsCompleted: false } running) await running; }
+
+    private Task SaveAsync(AiAgent agent, string? said = null, bool quiet = false) => _saveTask = SaveCoreAsync(agent, said, quiet);
+
     // The changes go onto a copy; the agent shown changes only once saved.
-    private async Task SaveAsync(AiAgent agent, string? said = null, bool quiet = false)
+    private async Task SaveCoreAsync(AiAgent agent, string? said, bool quiet)
     {
         _tried = true;
         if (_form is null || !_form.HasName || !_form.HasRoleName || _saving) return;
         var changed = AiAgentsState.Copy(agent);
         _form.ApplyTo(changed);
+        // What is being saved, as it is now: anything changed while it saves is saved next.
+        var saving = _form.Snapshot();
         _saving = true;
         _saveError = null;
         try
         {
             await AiAgentsState.SaveAsync(changed);
-            _saved = _form.Snapshot();
+            _saved = saving;
             _tried = false;
             if (!quiet) Toasts.Show(said ?? $"Saved. {changed.Name} works this way from now on.");
         }
         catch (Exception exception) when (AiAgentsState.IsFailure(exception))
         {
-            _saveError = "We couldn't save your changes. Check your connection and try again.";
+            // The API's own reason when it gave one (another agent already answers there, a currency it can't keep);
+            // the connection only when it didn't.
+            _saveError = exception is ApiException { UserMessage: { Length: > 0 } reason } ? reason
+                : "We couldn't save your changes. Check your connection and try again.";
         }
         finally
         {
@@ -1303,12 +1334,19 @@ else
     private bool _confirmingLeave, _leaving;
     private string? _leaveTo;
 
-    // Tabs keep the changes; leaving the page would drop them, so it asks.
-    private void OnNavigating(LocationChangingContext context)
+    // Leaving: a change still waiting is saved first; only one that can't be saved asks.
+    private async Task OnNavigatingAsync(LocationChangingContext context)
     {
         if (!Dirty || _leaving) return;
+        // A save already on its way finishes first, then whatever is left is saved.
+        await SettleAsync();
+        if (AiAgentsState.GetAgent(AgentId) is { } agent && CanAutosave) await AutosaveNowAsync(agent);
+        await SettleAsync();
+        if (!Dirty) return;
         context.PreventNavigation();
         _leaveTo = context.TargetLocation;
+        // Asking about the channels already: that answer decides, and one question is enough.
+        if (_confirmingNoChannel) return;
         _confirmingLeave = true;
     }
 
@@ -1319,10 +1357,103 @@ else
         if (_leaveTo is { } to) Nav.NavigateTo(to);
     }
 
-    private void Discard(AiAgent agent)
+    // ── Every setting saves itself (designer, 11 November 2026) ──────────────
+    // A change is saved a moment after it's made (typing waits for a pause), quietly: no Save changes, and no status
+    // in a corner. A failed save keeps the change and says so in a message with Try again; an agent with no name
+    // shows that at its name and isn't saved until it has one. Changes made close together go in one save, one
+    // after another, never two at once. The one change that asks first: a live agent left with no channel.
+
+    private enum Autosave { Idle, Saving, Failed, Blocked }
+    private Autosave _autosave;
+    private const int AutosaveDelayMs = 800;
+    private CancellationTokenSource? _autosaveTimer;
+    private string? _scheduled, _failed;
+    private bool _confirmingNoChannel, _noChannelAgreed;
+
+    private bool CanAutosave => _form is { HasName: true, HasRoleName: true };
+
+    private string BlockedNote => _form is { HasRoleName: false } ? "It needs its job named before it can be saved." : "It needs a name before it can be saved.";
+
+    // After every render: a change not saved yet is saved a moment later (each further change restarts the wait).
+    private void ScheduleAutosave()
     {
-        _saveError = null;
-        Reset(agent);
+        if (_form is null || _telling || _leaving || _confirmingNoChannel || AiAgentsState.GetAgent(AgentId) is not { } agent) return;
+        var snapshot = _form.Snapshot();
+        if (snapshot == _saved)
+        {
+            _scheduled = null;
+            if (_autosave == Autosave.Blocked) _autosave = Autosave.Idle;
+            return;
+        }
+        if (!CanAutosave)
+        {
+            // Shown at the name (and the job's name), as a missing answer is.
+            if (!_tried) { _tried = true; StateHasChanged(); }
+            _autosave = Autosave.Blocked;
+            return;
+        }
+        if (_autosave == Autosave.Blocked) _autosave = Autosave.Idle;
+        // A failed save waits for Try again, or for the next change, rather than retrying on its own.
+        if (snapshot == _scheduled || _saving || (_autosave == Autosave.Failed && snapshot == _failed)) return;
+        _scheduled = snapshot;
+        _autosaveTimer?.Cancel();
+        _autosaveTimer = new CancellationTokenSource();
+        _ = SaveSoonAsync(agent, _autosaveTimer.Token);
+    }
+
+    private async Task SaveSoonAsync(AiAgent agent, CancellationToken token)
+    {
+        try { await Task.Delay(AutosaveDelayMs, token); }
+        catch (TaskCanceledException) { return; }
+        await InvokeAsync(() => AutosaveNowAsync(agent));
+    }
+
+    private async Task AutosaveNowAsync(AiAgent agent)
+    {
+        _autosaveTimer?.Cancel();
+        // Turning it on or off: saved once that's done (the next render schedules it), never alongside it.
+        if (_switching) { _scheduled = null; return; }
+        if (_form is null || _saving || !CanAutosave || _form.Snapshot() == _saved) return;
+        // A live agent about to answer nowhere: asked first.
+        if (agent.IsActive && !agent.IsDraft && _form.Channels.Count == 0 && agent.Channels.Any(c => c.IsEnabled) && !_noChannelAgreed)
+        {
+            _confirmingNoChannel = true;
+            StateHasChanged();
+            return;
+        }
+        _noChannelAgreed = false;
+        var attempt = _form.Snapshot();
+        _autosave = Autosave.Saving;
+        await SaveAsync(agent, quiet: true);
+        _scheduled = null;
+        if (_saveError is null) _autosave = Autosave.Idle;
+        else
+        {
+            _autosave = Autosave.Failed;
+            _failed = attempt;
+            Toasts.Show(new ToastMessage($"We couldn't save that change to {agent.Name}.", $"{_saveError} Your change is still here.", ToastStatus.Error,
+                "Try again", () => _ = InvokeAsync(() => AutosaveNowAsync(agent))));
+        }
+        StateHasChanged();
+    }
+
+    private async Task ConfirmNoChannelAsync()
+    {
+        _confirmingNoChannel = false;
+        _noChannelAgreed = true;
+        if (AiAgentsState.GetAgent(AgentId) is { } agent) await AutosaveNowAsync(agent);
+        // They were leaving when it asked: saved, so on they go.
+        if (_leaveTo is { } to && !Dirty) { _leaving = true; Nav.NavigateTo(to); }
+    }
+
+    // Kept a channel: the ones it answers on now come back.
+    private void KeepChannels()
+    {
+        _confirmingNoChannel = false;
+        _scheduled = null;
+        _leaveTo = null;
+        if (_form is null || AiAgentsState.GetAgent(AgentId) is not { } agent) return;
+        foreach (var channel in agent.Channels.Where(c => c.IsEnabled)) _form.Channels.Add(channel.Key);
     }
 
     private async Task SetLiveAsync(AiAgent agent, bool on)
@@ -1331,6 +1462,9 @@ else
         _switching = true;
         try
         {
+            // A settings save on its way puts its copy of the agent back when it lands; let it land first.
+            await SettleAsync();
+            agent = AiAgentsState.GetAgent(agent.Id) ?? agent;
             await AiAgentsState.SetLiveAsync(agent, on);
             Toasts.Show(on ? $"{agent.Name} is on." : $"{agent.Name} is off. It won't answer customers until you turn it on.");
         }
@@ -1424,18 +1558,6 @@ else
     // A line of "How it's set up" that opens the tab where it is set (Concept B).
     // One save bar for every tab with settings. A save that fails keeps every
     // change, and says so in the bar, where the person is looking.
-    private RenderFragment SaveBar(AiAgent agent) => __builder =>
-    {
-        @* What is unsaved on the left; Discard, then Save, on the right. *@
-        <footer class="agent-detail__save is-floating">
-            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="@(_saveError is null ? null : "is-error")" aria-live="polite">@(_saveError ?? SaveNote(agent))</Typography>
-            <div class="agent-detail__save-actions">
-                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" disabled="@_saving" @onclick="() => Discard(agent)">Discard</Button>
-                <Button Size="ButtonSize.Large" Busy="_saving" disabled="@(_form is null || !_form.HasName || !_form.HasRoleName)" @onclick="() => SaveAsync(agent)">Save changes</Button>
-            </div>
-        </footer>
-    };
-
     // "Shared with all your agents.", then what this job still needs, if anything.
     private string KnowsLine(AgentForm form) =>
         Memory.Available && JobGaps(form) is { Count: > 0 } gaps

@@ -239,6 +239,8 @@ builder.Services.AddSingleton<Parrot.Web.Features.Settings.IActivityLog, Parrot.
 builder.Services.AddSingleton<Parrot.Web.Features.Settings.IAccountSecurity, Parrot.Web.Features.Settings.UnavailableAccountSecurity>();
 builder.Services.AddSingleton<Parrot.Web.Features.Profile.IEmailChange, Parrot.Web.Features.Profile.UnavailableEmailChange>();
 builder.Services.AddSingleton<Parrot.Web.Features.Profile.IProfilePhoto, Parrot.Web.Features.Profile.UnavailableProfilePhoto>();
+// A person brought in by an agent: the API creates and assigns that task (tasks- and agents-backend-requests).
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.TaskRequests.ICustomerHandoverTasks, Parrot.Web.Features.Dashboard.TaskRequests.UnavailableCustomerHandoverTasks>();
 
 WebApplication app = builder.Build();
 

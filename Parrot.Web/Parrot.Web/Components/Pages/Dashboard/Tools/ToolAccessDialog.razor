@@ -37,7 +37,7 @@
                             @* The whole row is the choice: face, then name with its job under it, then the tick. *@
                             <RowButton Class="@(on ? "tool-access__agent is-on" : "tool-access__agent")" Disabled="_busy" role="checkbox" aria-checked="@(on ? "true" : "false")"
                                        OnClick="() => Choose(current.Id, !on)">
-                                @if (current.Look is { } look) { <img class="tool-access__face" src="@look" alt="" /> }
+                                @if (current.Look is { } look) { <span class="tool-access__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span> }
                                 else { <PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /> }
                                 <span class="tool-access__who">
                                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@current.Name</Typography>
@@ -52,8 +52,8 @@
                 {
                     <SelectField FloatingLabel="@ask.Label" Value="@(_mode == ToolActionMode.Automatic ? ask.Straight : "Ask me first")"
                                  Open="_modeOpen" OpenChanged="value => _modeOpen = value" Disabled="_busy">
-                        <PopoverOption Label="Ask me first" Description="@ask.AskDetail" Active="@(_mode == ToolActionMode.AskFirst)" OnSelect="() => SetMode(ToolActionMode.AskFirst)" />
-                        <PopoverOption Label="@ask.Straight" Description="@ask.StraightDetail" Active="@(_mode == ToolActionMode.Automatic)" OnSelect="() => SetMode(ToolActionMode.Automatic)" />
+                        <PopoverOption Label="Ask me first" Active="@(_mode == ToolActionMode.AskFirst)" OnSelect="() => SetMode(ToolActionMode.AskFirst)" />
+                        <PopoverOption Label="@ask.Straight" Active="@(_mode == ToolActionMode.Automatic)" OnSelect="() => SetMode(ToolActionMode.Automatic)" />
                     </SelectField>
                 }
             }

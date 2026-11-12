@@ -1,4 +1,4 @@
-@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptC
+@namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
 @using System.Globalization
 @using Parrot.Web.Features.Dashboard.Catalog
 
@@ -26,19 +26,16 @@
                 </div>
             }
             <PopoverOption Label="@ItemGuide.AvailabilityName(ItemAvailability.Available, Item.Kind)"
-                           Description="@(Item.Kind == CatalogKind.Service ? "Customers can book it" : "Customers can buy it")"
                            Active="@(State == ItemAvailability.Available)"
                            OnSelect="() => ChooseAsync(ItemAvailability.Available)">
                 <Leading><span class="availability-cell__option-dot is-available"></span></Leading>
             </PopoverOption>
             <PopoverOption Label="@ItemGuide.AvailabilityName(ItemAvailability.SoldOut, Item.Kind)"
-                           Description="@(Item.Kind == CatalogKind.Service ? "Shown, but not booking for now" : "Shown as sold out for now")"
                            Active="@(State == ItemAvailability.SoldOut)"
                            OnSelect="() => ChooseAsync(ItemAvailability.SoldOut)">
                 <Leading><span class="availability-cell__option-dot is-out"></span></Leading>
             </PopoverOption>
             <PopoverOption Label="Hidden"
-                           Description="Not offered, kept for later"
                            Active="@(State == ItemAvailability.Hidden)"
                            OnSelect="() => ChooseAsync(ItemAvailability.Hidden)">
                 <Leading><span class="availability-cell__option-dot is-hidden"></span></Leading>

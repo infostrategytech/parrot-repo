@@ -67,11 +67,12 @@ public sealed class ReviewDraft
             Kind = line.Kind,
             Name = line.Name.Trim(),
             Price = line.Price,
+            CurrencyCode = line.CurrencyCode,
             PriceType = line.From ? PriceType.From : PriceType.Fixed,
             IsAvailable = true,
             Status = line.Price is null ? CatalogStatus.Draft : CatalogStatus.Live,
         };
-        var match = MatchOf(line.Name, items);
+        var match = MatchOf(line.Name, items.Where(existing => Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(existing.CurrencyCode) == Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(item.CurrencyCode)).ToList());
         var checks = line.NeedsCheck ? new List<string> { "This line was hard to read. Check the name and price." } : [];
         if (match is null) return new ReviewDraft { Key = $"line-{index}", Item = item, Checks = checks, HardToRead = line.NeedsCheck, NoNewPrice = line.Price is null };
 

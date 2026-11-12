@@ -39,7 +39,8 @@
         @if (IsMember)
         {
             <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
-                You're working here as @AuthState.CurrentUser!.Role. Here's what your role covers.
+                @* The role in the Team page's words, as the switcher names it (designer, 9 November 2026). *@
+                You're working here as @Parrot.Web.Features.Dashboard.Team.TeamWords.RoleNameFromApi(AuthState.CurrentUser!.Role). Here's what your role covers.
             </Typography>
         }
         else if (Lede is { } lede)
@@ -309,7 +310,7 @@
                 </div>
             </div>
             <div class="workspace-agent" aria-hidden="true">
-                <img src="@AgentBuilderCopy.MascotImage(Lead?.Mascot ?? "Nova")" alt="" />
+                <span class="workspace-agent__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@(Lead?.Mascot)" Reactive Floating /></span>
                 <StatusBadge Tone="StatusTone.Neutral">@(draft ? "Draft" : "Off")</StatusBadge>
             </div>
         </article>
@@ -407,9 +408,9 @@
                     </Typography>
                 </div>
                 <div class="workspace-action__buttons">
-                    <Button Variant="ButtonVariant.Secondary" aria-label="Set up Accelerate (opens accelerate.ng)" @onclick="SetUpAccelerateAsync">
+                    <Button Variant="ButtonVariant.Secondary" aria-label="Set up Accelerate" @onclick="SetUpAccelerateAsync">
                         <ChildContent>Set It Up</ChildContent>
-                        <IconRight><Icon Name="IconName.RiExternalLinkLine" /></IconRight>
+                        <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
                     </Button>
                 </div>
             </article>
@@ -442,6 +443,7 @@
         ["Tasks"] = "What needs doing for customers.",
         ["Channels"] = "Where customers reach the business.",
         ["Agents"] = "Your AI agents and what they need.",
+        ["Tools"] = "Connect the apps your team and agents use.",
         ["Insights"] = "How conversations are going.",
         ["Knowledge"] = "What the AI knows about the business.",
     };
@@ -478,13 +480,13 @@
 
     private sealed record Shortcut(IconName Glyph, string Title, string Line, string? Href, string Tone);
 
-    // Integrations has no page yet (it is coming for the MVP): there, and marked Soon.
+    // Tools connects workspace apps separately from messaging Channels.
     private static readonly Shortcut[] ShortcutList =
     [
         new(IconName.RiInbox2Fill, "Inbox", "Your customer conversations.", "/dashboard/inbox", "pink"),
         new(IconName.RiRobot3Fill, "AI Agents", "Your agents and their jobs.", "/dashboard/ai-operations", "emerald"),
         new(IconName.RiBookOpenFill, "Business Knowledge", "What your AI knows.", "/dashboard/knowledge", "blue"),
-        new(IconName.RiExchangeBoxFill, "Integrations", "Connect the tools you use.", null, "indigo"),
+        new(IconName.RiExchangeBoxFill, "Tools", "Connect the apps you use.", "/dashboard/tools", "indigo"),
     ];
 
     private RenderFragment Shortcuts => __builder =>
@@ -527,9 +529,12 @@
         return Task.CompletedTask;
     });
 
-    // Accelerate's own sign-up, in a new tab: linking the account here needs the backend.
-    private async Task SetUpAccelerateAsync() =>
-        await JS.InvokeVoidAsync("open", "https://accelerate.ng/auth/signup", "_blank", "noopener");
+    // One place to manage tool connections; real mode explains the pending integration.
+    private Task SetUpAccelerateAsync()
+    {
+        Nav.NavigateTo("/dashboard/tools");
+        return Task.CompletedTask;
+    }
 
     // The welcome card names the business through AuthState; that is the
     // moment this page becomes live and plays its entrance.

@@ -23,6 +23,13 @@ public interface IChannelCapabilities
     /// messages still come in.
     /// </summary>
     bool CanDisconnect(ChannelId channel);
+
+    /// <summary>
+    /// Whether the channel is on the page at all. Every channel is, unless a
+    /// set of capabilities leaves one out (the demo leaves out a channel whose
+    /// setup is still to be designed).
+    /// </summary>
+    bool IsListed(ChannelId channel) => true;
 }
 
 /// <summary>

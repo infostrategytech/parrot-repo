@@ -12,11 +12,11 @@
     @* The table's column names, drawn by the row so the two always share their columns. *@
     <div class="ds-table__row is-head customer-row @(ShowTasks ? "has-tasks" : null)" role="row">
         <TableHeading>Customer</TableHeading>
-        <TableHeading>Channels</TableHeading>
-        <TableHeading>Last message</TableHeading>
+        <TableHeading Center>Channels</TableHeading>
+        <TableHeading Center>Last message</TableHeading>
         @if (ShowTasks)
         {
-            <TableHeading>Open tasks</TableHeading>
+            <TableHeading Center>Open tasks</TableHeading>
         }
     </div>
 }
@@ -39,13 +39,8 @@ else if (Item is { } customer)
         @* One line under the name on a tablet; columns on a desktop. *@
         <div class="customer-row__facts">
             <div class="customer-row__channels" role="cell">
-                @foreach (var platform in Platforms(customer, Added))
-                {
-                    <span class="customer-row__channel" title="@ChannelLinks.PlatformName(platform)">
-                        <ChannelGlyph Channel="@platform" Compact />
-                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@ChannelName(platform)</Typography>
-                    </span>
-                }
+                @* Marks only, side by side; a merged customer shows every channel they write from (designer, 6 November 2026). *@
+                <ChannelMarks Channels="@([.. Platforms(customer, Added)])" Name="ChannelName" />
                 @if (customer.Identities.Count == 0 && Added is { ChannelPlatform: null or "" })
                 {
                     <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="customer-row__muted">No channel yet</Typography>

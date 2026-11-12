@@ -140,8 +140,8 @@ public static partial class TaskWords
         var list = agents.ToList();
         var agent = list.FirstOrDefault(a => task.RaisedById is not null && a.Id == task.RaisedById)
             ?? list.FirstOrDefault(a => string.Equals(a.Name, task.RaisedBy, StringComparison.OrdinalIgnoreCase));
-        var mascot = agent?.Mascot ?? AgentBuilderCopy.Mascots[task.RaisedBy.Sum(c => c) % AgentBuilderCopy.Mascots.Count];
-        return AgentBuilderCopy.MascotImage(mascot);
+        // Its saved look (a character and colour); drawn by AgentFace.
+        return agent?.Mascot ?? AgentBuilderCopy.Mascots[task.RaisedBy.Sum(c => c) % AgentBuilderCopy.Mascots.Count];
     }
 
     /// <summary>

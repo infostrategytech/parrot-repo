@@ -5,6 +5,9 @@
 @inject AuthState AuthState
 @inject ToastService Toasts
 @inject NavigationManager Nav
+@inject Parrot.SharedComponents.Services.VoiceInterop Voice
+@inject AuroraInterop Interop
+@implements IAsyncDisposable
 
 @* What the business's AI knows (designer, 20 October 2026; was Concept B): three jobs, in order. What needs a
    decision; telling it something, which goes into the section it belongs to; and what it knows, one summary
@@ -81,17 +84,36 @@
                 </div>
             }
 
-            <TextArea @ref="_box"
-                      Value="@_draft"
-                      ValueChanged="value => _draft = value"
-                      Placeholder="@(_forQuestion is not null ? "Write the answer in your own words" : "For example: We deliver across Lagos in 1 to 2 days.")"
-                      AriaLabel="Tell your AI something"
-                      Rows="2"
-                      MaxLength="1200"
-                      AutoGrow
-                      SubmitOnEnter
-                      OnKeyDown="AddKeyAsync"
-                      Disabled="_adding" />
+            @if (_files.Count > 0)
+            {
+                <ul class="knowledge__files" aria-label="Attached files">
+                    @foreach (var file in _files)
+                    {
+                        var current = file;
+                        <li><FileChip Name="@current.Name" Size="current.Size" Preview="@current.Preview" OnRemove="() => _files.Remove(current)" /></li>
+                    }
+                </ul>
+            }
+
+            @* A voice note (designer, 10 November 2026): its words come into the box, to check before saving. *@
+            @if (_recordingStarting || _recording is not null)
+            {
+                <VoiceNoteRecording @ref="_recorder" Seconds="_recordSeconds" Recording="_recording" OnDelete="CancelNoteAsync" OnSend="NoteDoneAsync" />
+            }
+            else
+            {
+                <TextArea @ref="_box"
+                          Value="@_draft"
+                          ValueChanged="value => _draft = value"
+                          Placeholder="@(_forQuestion is not null ? "Write the answer in your own words" : "For example: We deliver across Lagos in 1 to 2 days.")"
+                          AriaLabel="Tell your AI something"
+                          Rows="2"
+                          MaxLength="1200"
+                          AutoGrow
+                          SubmitOnEnter
+                          OnKeyDown="AddKeyAsync"
+                          Disabled="_adding" />
+            }
 
             <div class="knowledge__composer-actions">
                 <div class="knowledge__add-options">
@@ -102,9 +124,24 @@
                             <ChildContent>Add from a link</ChildContent>
                         </Button>
                     }
-                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="knowledge__hint">Press Enter to save</Typography>
+                    @if (Knowledge.CanReadFiles)
+                    {
+                        @* A price list, a menu, a returns policy: read like a link, and checked before it's used. *@
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@(_adding || _files.Count >= MaxFiles)" @onclick="PickFilesAsync">
+                            <IconLeft><Icon Name="IconName.RiAttachment2" /></IconLeft>
+                            <ChildContent>Attach a file</ChildContent>
+                        </Button>
+                        <InputFile @ref="_picker" class="sr-only" tabindex="-1" aria-hidden="true" multiple accept="@AcceptedFiles" OnChange="OnFilesPickedAsync" />
+                    }
+                    @if (_canRecord)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="@(_adding || Recording)" @onclick="StartNote">
+                            <IconLeft><Icon Name="IconName.RiMicFill" /></IconLeft>
+                            <ChildContent>Voice note</ChildContent>
+                        </Button>
+                    }
                 </div>
-                <Button Busy="_adding" disabled="@(string.IsNullOrWhiteSpace(_draft) || _adding)" @onclick="AddAsync">Save</Button>
+                <Button Busy="_adding" disabled="@(!CanSave)" @onclick="AddAsync">Save</Button>
             </div>
 
             @if (_justSaved is { Count: > 0 } saved)
@@ -264,11 +301,147 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            try { _canRecord = (await Voice.CapabilitiesAsync()).Record; StateHasChanged(); }
+            catch (JSException) { }
+        }
+        if (_recordingStarting && _recording is null && _recorder is not null)
+        {
+            try
+            {
+                _recording = await Voice.RecordNoteAsync(_recorder.Element);
+                StartClock();
+            }
+            catch (JSException)
+            {
+                Toasts.ShowError("Your microphone is blocked. You can allow it from the icon at the left of the address bar.");
+            }
+            finally
+            {
+                _recordingStarting = false;
+                StateHasChanged();
+            }
+        }
         if (_focusBox && _box is not null)
         {
             _focusBox = false;
-            await _box.FocusAsync();
+            try { await _box.FocusAsync(); } catch (JSException) { }
         }
+    }
+
+    // ── Files and voice notes (designer, 10 November 2026) ─────────────────
+
+    private sealed record PickedFile(string Name, long Size, string? Preview);
+
+    private const int MaxFiles = 5;
+    private const long MaxFileBytes = 10 * 1024 * 1024;
+    private const long MaxPreviewBytes = 512 * 1024;
+    private const string AcceptedFiles = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.csv,.txt";
+    private readonly List<PickedFile> _files = [];
+    private InputFile? _picker;
+    private VoiceNoteRecording? _recorder;
+    private VoiceRecording? _recording;
+    private bool _recordingStarting, _canRecord;
+    private int _recordSeconds;
+    private CancellationTokenSource? _recordClock;
+
+    private bool Recording => _recordingStarting || _recording is not null;
+
+    private bool CanSave => (!string.IsNullOrWhiteSpace(_draft) || _files.Count > 0) && !_adding && !Recording;
+
+    private async Task PickFilesAsync()
+    {
+        if (_picker?.Element is { } element) await Interop.ClickAsync(element);
+    }
+
+    private async Task OnFilesPickedAsync(InputFileChangeEventArgs args)
+    {
+        var room = MaxFiles - _files.Count;
+        if (args.FileCount > room) Toasts.ShowError($"You can attach up to {MaxFiles} files at a time.");
+        foreach (var file in args.GetMultipleFiles(args.FileCount).Take(Math.Max(0, room)))
+        {
+            if (file.Size > MaxFileBytes) { Toasts.ShowError($"{file.Name} is over 10 MB. Try a smaller file."); continue; }
+            var image = file.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase);
+            _files.Add(new PickedFile(file.Name, file.Size, image ? await PreviewAsync(file) : null));
+        }
+    }
+
+    // A small copy of a picture for its thumbnail; none if the browser cannot make one.
+    private static async Task<string?> PreviewAsync(IBrowserFile file)
+    {
+        try
+        {
+            var small = await file.RequestImageFileAsync("image/jpeg", 160, 160);
+            await using var stream = small.OpenReadStream(MaxPreviewBytes);
+            using var copy = new MemoryStream();
+            await stream.CopyToAsync(copy);
+            return "data:image/jpeg;base64," + Convert.ToBase64String(copy.ToArray());
+        }
+        catch (Exception ex) when (ex is IOException or JSException or InvalidOperationException)
+        {
+            return null;
+        }
+    }
+
+    private void StartNote()
+    {
+        _recordSeconds = 0;
+        _recordingStarting = true;
+    }
+
+    private void StartClock()
+    {
+        _recordClock?.Cancel();
+        _recordClock = new CancellationTokenSource();
+        _ = TickAsync(_recordClock.Token);
+    }
+
+    private async Task TickAsync(CancellationToken token)
+    {
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                await Task.Delay(1000, token);
+                _recordSeconds++;
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (TaskCanceledException) { }
+    }
+
+    private async Task CancelNoteAsync()
+    {
+        _recordClock?.Cancel();
+        _recordingStarting = false;
+        var recording = _recording;
+        _recording = null;
+        if (recording is not null) await recording.CancelAsync();
+        _focusBox = true;
+    }
+
+    // The note's words go into the box, to check before saving.
+    private async Task NoteDoneAsync()
+    {
+        _recordClock?.Cancel();
+        var recording = _recording;
+        _recording = null;
+        if (recording is null) return;
+        // The recorder failing in the browser is a note we couldn't hear, never a broken page.
+        VoiceNote note;
+        try { note = await recording.StopAsync(); }
+        catch (JSException) { note = new VoiceNote("", 0); }
+        var words = note.Transcript.Trim();
+        if (words.Length == 0) Toasts.ShowError("We couldn't make out the words in that note. Try again, or type it.");
+        else _draft = string.IsNullOrWhiteSpace(_draft) ? words : $"{_draft.Trim()} {words}";
+        _focusBox = true;
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        _recordClock?.Cancel();
+        if (_recording is not null) { try { await _recording.CancelAsync(); } catch (JSDisconnectedException) { } }
     }
 
     private async Task LoadAsync() => _snapshot = await Knowledge.ListAsync();
@@ -342,17 +515,33 @@
     }
 
     // Told something: it goes into the section it belongs to, and that section lights for a moment.
+    // Files are read like a link: what they hold waits in the review for a yes.
     private async Task AddAsync()
     {
         var text = _draft?.Trim();
-        if (string.IsNullOrEmpty(text) || _adding) return;
+        if (!CanSave) return;
         _adding = true;
         try
         {
-            _justSaved = [.. await Knowledge.AddAsync(text)];
-            _freshLabels = [.. _justSaved.Select(fact => fact.Label)];
-            _draft = null;
-            _forQuestion = null;
+            if (!string.IsNullOrEmpty(text))
+            {
+                _justSaved = [.. await Knowledge.AddAsync(text)];
+                _freshLabels = [.. _justSaved.Select(fact => fact.Label)];
+                _draft = null;
+                _forQuestion = null;
+            }
+            if (_files.Count > 0)
+            {
+                var found = await Knowledge.ReadFilesAsync([.. _files.Select(file => file.Name)]);
+                var where = _files.Count == 1 ? "your file" : "your files";
+                _files.Clear();
+                if (found.Count > 0)
+                {
+                    Toasts.Show(found.Count == 1 ? $"Found 1 detail in {where} to check" : $"Found {found.Count} details in {where} to check");
+                    _reviewOpen = true;
+                }
+                else Toasts.Show("These files are already added");
+            }
             await LoadAsync();
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)

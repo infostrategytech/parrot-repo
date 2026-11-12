@@ -21,7 +21,7 @@
     <div class="test-chat">
         <section class="test-chat__panel" role="dialog" aria-modal="true" aria-labelledby="test-chat-title" tabindex="-1" @ref="_root">
             <header class="test-chat__bar">
-                <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" class="test-chat__avatar" />
+                <span class="test-chat__avatar"><AgentFace Look="@Mascot" Reactive /></span>
                 <div class="test-chat__heading">
                     <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="test-chat-title">Test as a customer</Typography>
                     <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>Chat with @Name the way a customer would. No customer sees this.</Typography>
@@ -42,7 +42,7 @@
 
             <ol class="test-chat__thread" aria-label="Test conversation" aria-live="polite" @ref="_thread">
                 <li class="test-chat__msg is-agent">
-                    <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                    <span class="test-chat__face"><AgentFace Look="@Mascot" /></span>
                     <div class="test-chat__bubble">
                         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@($"Hi! I'm {Name} from {Business}. How can I help you today?")</Typography>
                     </div>
@@ -70,7 +70,7 @@
                     else if (line.Reply is { } reply)
                     {
                         <li class="test-chat__msg is-agent">
-                            <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                            <span class="test-chat__face"><AgentFace Look="@Mascot" /></span>
                             <div class="test-chat__reply">
                                 <div class="test-chat__bubble">
                                     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@reply.Reply</Typography>
@@ -120,7 +120,7 @@
                 @if (_waiting)
                 {
                     <li class="test-chat__msg is-agent" aria-label="@($"{Name} is typing")">
-                        <img src="@AgentBuilderCopy.MascotImage(Mascot)" alt="" />
+                        <span class="test-chat__face"><AgentFace Look="@Mascot" State="PresenceAvatarState.Thinking" Reactive /></span>
                         <div class="test-chat__bubble is-typing"><i></i><i></i><i></i></div>
                     </li>
                 }

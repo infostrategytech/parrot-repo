@@ -28,12 +28,14 @@
             @foreach (var member in Team.OrderBy(m => m.Id == Me.Id ? 0 : 1))
             {
                 var current = member;
-                <PopoverOption Label="@current.Name" Description="@(current.Id == Me.Id ? "You" : null)"
+                @* "(you)" in the name rather than a line under it: otherwise one
+                   row in the list is taller than the rest, and only yours. *@
+                <PopoverOption Label="@(current.Id == Me.Id ? $"{current.Name} (you)" : current.Name)"
                                Active="@(Assignee?.Id == current.Id)" OnSelect="() => OnAssign.InvokeAsync(current)">
                     <Leading><PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /></Leading>
                 </PopoverOption>
             }
-            <PopoverOption Label="Unassigned" Description="Nobody yet" Active="@(Assignee is null)" OnSelect="() => OnAssign.InvokeAsync(null)" />
+            <PopoverOption Label="Unassigned" Active="@(Assignee is null)" OnSelect="() => OnAssign.InvokeAsync(null)" />
         </ChildContent>
     </FilterPopover>
 </div>

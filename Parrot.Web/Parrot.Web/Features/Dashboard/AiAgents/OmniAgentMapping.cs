@@ -39,7 +39,18 @@ public sealed record OmniAgentSettings(
     bool HandOverBigOrders,
     int BigOrderNaira,
     string Notes,
-    List<string> LeftOut);
+    List<string> LeftOut,
+    // Asked of the AI service (agents-backend-requests, 11 November 2026), sent only when set, so a service that
+    // doesn't know them yet sees the same request as before. Who it brings in: team (the default, not sent),
+    // role or people; and the big-order amount's currency (ISO code; absent means NGN).
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? HandoverMode = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? HandoverRoleId = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    List<string>? HandoverPeople = null,
+    [property: System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    string? BigOrderCurrency = null);
 
 /// <summary>A Parrot connection assigned to an agent. Platform is whatsapp, facebook, instagram or tiktok.</summary>
 public sealed record OmniChannel(Guid ConnectionId, string AgentId, string Platform, bool Enabled, int Version);
@@ -101,6 +112,11 @@ public static class OmniAgentMapping
             Notes = agent.Settings.Notes,
             LeftOut = agent.Settings.LeftOut,
         });
+        // Who it brings in and the amount's currency, once the service keeps them.
+        settings.HandoverMode = agent.Settings.HandoverMode ?? string.Empty;
+        settings.HandoverRoleId = agent.Settings.HandoverRoleId;
+        settings.HandoverPeople = agent.Settings.HandoverPeople is { } people ? [.. people] : [];
+        settings.BigOrderCurrency = agent.Settings.BigOrderCurrency;
         settings.UseCase = agent.UseCase;
         settings.Industry = agent.Industry.Length == 0 ? null : agent.Industry;
         settings.Website = agent.Website;
@@ -133,11 +149,17 @@ public static class OmniAgentMapping
     public static OmniAgentSettings ToSettings(AgentSettings settings)
     {
         var dto = AgentMapping.ToDto(settings);
+        var mode = settings.HandoverMode is HandoverModes.Role or HandoverModes.People ? settings.HandoverMode : null;
+        var currency = Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(settings.BigOrderCurrency);
         return new OmniAgentSettings(
             dto.Tone.ToLowerInvariant(), dto.Length.ToLowerInvariant(), dto.Emoji.ToLowerInvariant(), dto.Greeting,
             dto.AvoidPhrases, dto.HandoverTo, dto.CanOfferDiscounts, dto.CanApproveRefunds, dto.CanRecommend,
             dto.CanCheckOrders, dto.CanTakeDetails, dto.HandOverWhenUpset, dto.HandOverAfterMisses,
-            dto.HandOverBigOrders, dto.BigOrderNaira, dto.Notes, dto.LeftOut);
+            dto.HandOverBigOrders, dto.BigOrderNaira, dto.Notes, dto.LeftOut,
+            HandoverMode: mode,
+            HandoverRoleId: mode == HandoverModes.Role ? settings.HandoverRoleId : null,
+            HandoverPeople: mode == HandoverModes.People ? [.. settings.HandoverPeople] : null,
+            BigOrderCurrency: currency == "NGN" ? null : currency);
     }
 
     /// <summary>The job-role id: the use case it was set up for, or its role's for older agents.</summary>

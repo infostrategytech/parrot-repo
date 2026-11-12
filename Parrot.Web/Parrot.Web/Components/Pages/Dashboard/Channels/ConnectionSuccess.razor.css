@@ -76,7 +76,6 @@
   width: var(--ds-connected-mark);
   height: var(--ds-connected-mark);
   margin-bottom: var(--spacing-md);
-  color: var(--colors-text-inverse);
   border-radius: var(--ds-connected-mark-radius);
 }
 

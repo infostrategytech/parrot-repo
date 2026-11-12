@@ -88,7 +88,7 @@ public static class ItemGuide
             : item.Price is { } single ? [single] : [];
         if (prices.Count == 0) return "No price yet";
         var low = prices.Min();
-        var text = item.PriceType == PriceType.From || prices.Distinct().Count() > 1 ? $"From {Naira(low)}" : Naira(low);
+        var text = item.PriceType == PriceType.From || prices.Distinct().Count() > 1 ? $"From {Parrot.SharedComponents.DesignSystem.CurrencyAmount.Format(low, item.CurrencyCode)}" : Parrot.SharedComponents.DesignSystem.CurrencyAmount.Format(low, item.CurrencyCode);
         return item.PriceUnit.Length > 0 ? $"{text} {item.PriceUnit}" : text;
     }
 

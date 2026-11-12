@@ -92,6 +92,16 @@ public interface IKnowledgeMemory
     /// a channel. Returns what was found.
     /// </summary>
     Task<IReadOnlyList<KnowledgeFact>> ReadWebsiteAsync(string url, CancellationToken cancellationToken = default);
+
+    /// <summary>Whether attached files (a price list, a menu, a policy) can be read for details. Off until the API takes uploads.</summary>
+    bool CanReadFiles => false;
+
+    /// <summary>
+    /// Reads attached files for facts, as a website is read: what it finds waits for the owner's yes in the
+    /// review. Returns what was found. See knowledge-backend-requests (file uploads).
+    /// </summary>
+    Task<IReadOnlyList<KnowledgeFact>> ReadFilesAsync(IReadOnlyList<string> names, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
 }
 
 /// <summary>Real mode: no knowledge API yet.</summary>

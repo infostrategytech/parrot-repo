@@ -115,6 +115,11 @@ public sealed class ApiTaskStore(HttpClient http, AuthState auth, CustomerClient
 
     private static SaveTaskRequest ToRequest(TaskDraft draft)
     {
+        // The API keeps amounts in naira only (tasks-backend-requests asks for currency_code). A task with no
+        // amounts has no currency to lose, so only one with prices or a total is refused rather than saved as naira.
+        bool hasAmounts = draft.Total is not null || draft.Lines?.Any(line => line.Price is not null) == true;
+        if (hasAmounts && Parrot.SharedComponents.DesignSystem.CurrencyAmount.Code(draft.CurrencyCode) != "NGN")
+            throw new ApiException(System.Net.HttpStatusCode.BadRequest, "Saving this currency needs an update to yára. Your task has not been saved.", "CurrencyNotSupported", []);
         TaskCustomerDto? customer = null;
         if (draft.Customer is { } chosen)
         {

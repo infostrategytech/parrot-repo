@@ -109,7 +109,8 @@
 }
 
 .knowledge__composer-actions { justify-content: space-between; }
-.knowledge__add-options ::deep .knowledge__hint { color: var(--colors-text-subtle); }
+/* Attached files, waiting above the box until Save. */
+.knowledge__files { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); margin: 0; padding: 0; list-style: none; }
 
 .knowledge__saved {
   display: flex;

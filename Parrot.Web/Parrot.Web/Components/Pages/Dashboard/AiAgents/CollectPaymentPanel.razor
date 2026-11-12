@@ -23,7 +23,7 @@
 @if (Step.AmountSource != "FromCollected")
 {
     <Input FloatingLabel="Amount"
-           PrefixText="₦"
+           PrefixText="@CurrencyAmount.Symbol(Step.Currency)"
            Numeric="NumericInputKind.Decimal"
            maxlength="12"
            Value="@Step.PaymentAmount.ToString(System.Globalization.CultureInfo.InvariantCulture)"
@@ -61,6 +61,12 @@
 </label>
 
 @code {
+    [CascadingParameter] public WorkspaceCurrencyValue Currency { get; set; } = WorkspaceCurrencyValue.Legacy;
+    protected override void OnParametersSet()
+    {
+        if (string.IsNullOrWhiteSpace(Step.Currency) && Currency.Ready)
+            Step.Currency = Step.PaymentAmount > 0 ? CurrencyAmount.LegacyCode : Currency.Code;
+    }
     [Parameter] public PlaybookStep Step { get; set; } = default!;
     [Parameter] public EventCallback OnChanged { get; set; }
 
