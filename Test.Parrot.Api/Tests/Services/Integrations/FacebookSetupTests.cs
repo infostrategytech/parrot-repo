@@ -4,8 +4,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 using Moq;
 using Parrot.Api.Rest.Controllers;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
@@ -172,6 +174,8 @@ public class FacebookSetupTests
     {
         MemoryFacebookRepository repository = new();
         FacebookConnectionService service = new(repository, new TestProtector(),
+            Mock.Of<IConnectionSourceSyncService>(),
+            Mock.Of<IAppLogger<FacebookConnectionService>>(),
             Options.Create(new FacebookSettings { WebhookBaseUrl = string.Empty }));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetSetupAsync("owner"));
@@ -182,6 +186,8 @@ public class FacebookSetupTests
 
     private static FacebookConnectionService NewService(MemoryFacebookRepository repository) =>
         new(repository, new TestProtector(),
+            Mock.Of<IConnectionSourceSyncService>(),
+            Mock.Of<IAppLogger<FacebookConnectionService>>(),
             Options.Create(new FacebookSettings { WebhookBaseUrl = "https://api.example.com" }));
 
     private sealed class TestProtector : IFacebookCredentialProtector

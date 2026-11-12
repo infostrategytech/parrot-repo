@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
@@ -11,6 +13,8 @@ namespace Parrot.Application.Integrations;
 public sealed class FacebookConnectionService(
     IFacebookConnectionRepository repository,
     IFacebookCredentialProtector protector,
+    IConnectionSourceSyncService sourceSyncService,
+    IAppLogger<FacebookConnectionService> logger,
     IOptions<FacebookSettings> options) : IFacebookConnectionService
 {
     // Creates the connection and its verify token on first call; afterwards replays the same credentials.
@@ -84,6 +88,17 @@ public sealed class FacebookConnectionService(
             throw new ValidationException("Enter a valid Page access token.");
         await repository.SavePageAsync(connection.Id, workspaceId, request.PageId, request.PageName.Trim(),
             protector.Protect(token), cancellationToken);
+
+        // Best-effort: publish the Facebook page source so the AI knows this workspace is on Messenger.
+        try
+        {
+            await sourceSyncService.SyncFacebookPageAsync(workspaceId, connection.Id, request.PageId, request.PageName.Trim(), cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "facebook.page.source.sync_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}",
+                workspaceId, connection.Id);
+        }
     }
 
     public async Task DisableAsync(string workspaceId, CancellationToken cancellationToken = default)

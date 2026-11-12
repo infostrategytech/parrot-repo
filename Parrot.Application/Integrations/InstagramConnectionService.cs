@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
@@ -14,6 +16,8 @@ public sealed class InstagramConnectionService(
     IInstagramConnectionRepository repository,
     IInstagramCredentialProtector protector,
     IInstagramAccountApi instagram,
+    IConnectionSourceSyncService sourceSyncService,
+    IAppLogger<InstagramConnectionService> logger,
     IOptions<InstagramSettings> options) : IInstagramConnectionService
 {
     public async Task<InstagramSetupResponse> GetSetupAsync(string workspaceId, CancellationToken cancellationToken = default)
@@ -103,6 +107,17 @@ public sealed class InstagramConnectionService(
         // A token from the App Dashboard lasts 60 days; the renewer keeps it going from here.
         await repository.SaveAccountAsync(connection.Id, workspaceId, account.AccountId, account.Username,
             protector.Protect(token), DateTime.UtcNow + InstagramTokenRenewer.Lifetime, cancellationToken);
+
+        // Best-effort: publish the Instagram profile source so the AI knows this workspace is on Instagram.
+        try
+        {
+            await sourceSyncService.SyncInstagramProfileAsync(workspaceId, connection.Id, account.AccountId, account.Username, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "instagram.profile.source.sync_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}",
+                workspaceId, connection.Id);
+        }
     }
 
     // Allowed before verification, so it can be saved alongside the callback URL in one sitting.

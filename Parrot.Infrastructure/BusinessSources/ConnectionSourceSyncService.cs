@@ -104,4 +104,66 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
             throw;
         }
     }
+
+    public async Task SyncInstagramProfileAsync(string workspaceId, Guid connectionId, string accountId, string username, CancellationToken ct = default)
+    {
+        await using IDbContextTransaction tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            BusinessSource source = new BusinessSource
+            {
+                WorkspaceId = workspaceId,
+                AuthorizationConnectionId = connectionId,
+                Channel = Channel.Instagram,
+                Kind = BusinessSourceKind.Profile,
+                ExternalId = accountId,
+                Handle = username,
+                IsActive = true,
+                MetadataSyncStatus = MetadataSyncStatus.Pending,
+            };
+            await _sources.UpsertAsync(source, ct);
+            await _db.SaveChangesAsync(ct);
+            await _publisher.PublishAsync(workspaceId, ct);
+            await tx.CommitAsync(ct);
+
+            _logger.LogInformation("instagram.profile.source.synced WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} AccountId={AccountId}",
+                workspaceId, connectionId, accountId);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task SyncFacebookPageAsync(string workspaceId, Guid connectionId, string pageId, string pageName, CancellationToken ct = default)
+    {
+        await using IDbContextTransaction tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            BusinessSource source = new BusinessSource
+            {
+                WorkspaceId = workspaceId,
+                AuthorizationConnectionId = connectionId,
+                Channel = Channel.Facebook,
+                Kind = BusinessSourceKind.Profile,
+                ExternalId = pageId,
+                DisplayName = pageName,
+                IsActive = true,
+                MetadataSyncStatus = MetadataSyncStatus.Pending,
+            };
+            await _sources.UpsertAsync(source, ct);
+            await _db.SaveChangesAsync(ct);
+            await _publisher.PublishAsync(workspaceId, ct);
+            await tx.CommitAsync(ct);
+
+            _logger.LogInformation("facebook.page.source.synced WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} PageId={PageId}",
+                workspaceId, connectionId, pageId);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
 }
