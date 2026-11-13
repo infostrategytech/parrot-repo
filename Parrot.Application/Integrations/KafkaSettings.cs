@@ -68,6 +68,12 @@ public class KafkaSettings
     /// <summary>The AI reply worker's consumer group. Every worker instance shares it, so events are split between them.</summary>
     public string AiReplyConsumerGroupId { get; set; } = "parrot-ai-reply";
 
+    /// <summary>Where Parrot publishes BusinessSourcesUpdated events, keyed by workspace id.</summary>
+    public string BusinessKnowledgeSources { get; set; } = "business.knowledge.sources";
+
+    /// <summary>The sources outbox worker's consumer group (unused — this topic is outbox-pushed, not consumed here).</summary>
+    public string BusinessKnowledgeSourcesConsumerGroupId { get; set; } = "parrot-business-sources";
+
     /// <summary>
     /// Use Google Application Default Credentials (SASL_SSL + OAuthBearer).
     /// Required for GCP Managed Service for Apache Kafka.

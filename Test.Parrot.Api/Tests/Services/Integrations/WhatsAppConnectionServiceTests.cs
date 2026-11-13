@@ -8,8 +8,10 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using Moq;
 using Parrot.Api.Rest.Controllers;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 using Parrot.Infrastructure.SocialMediaIntegrations;
@@ -179,7 +181,10 @@ public class WhatsAppConnectionServiceTests
     }
 
     private WhatsAppConnectionService CreateService(string baseUrl = "https://api.example.com/") =>
-        new(_repository.Object, _protector, Options.Create(new WhatsAppSettings { WebhookBaseUrl = baseUrl }));
+        new(_repository.Object, _protector,
+            Mock.Of<IConnectionSourceSyncService>(),
+            Mock.Of<IAppLogger<WhatsAppConnectionService>>(),
+            Options.Create(new WhatsAppSettings { WebhookBaseUrl = baseUrl }));
 
     [Fact]
     public async Task Create_GeneratesIndependentCredentialsAndStoresOnlyEncryptedToken()

@@ -37,6 +37,7 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
     private readonly Mock<IPrivateObjectStorage> _storage = new();
     private DbContextOptions<ApplicationDbContext>? _options;
     private string _owner = "";
+    private int _whatsAppSequence;
 
     public async Task InitializeAsync()
     {
@@ -73,7 +74,7 @@ public class OutboundFileDispatcherPostgresTests : IAsyncLifetime
     {
         WhatsAppConnection connection = new()
         {
-            WorkspaceId = _owner, Name = "Shop", VerifyTokenEncrypted = "v", PhoneNumberId = "phone-1", AccessTokenEncrypted = "enc",
+            WorkspaceId = _owner, Name = "Shop", VerifyTokenEncrypted = "v", PhoneNumberId = $"phone-{++_whatsAppSequence}", AccessTokenEncrypted = "enc",
             WebhookVerifiedAt = DateTime.UtcNow,
         };
         tweak?.Invoke(connection);

@@ -52,6 +52,15 @@ public class WhatsAppConnectionsController : ControllerBase
         return NoContent();
     }
 
+    // POST /api/whatsapp/connections/{id}/refresh-knowledge — re-queues the profile metadata fetch.
+    [HttpPost("{id:guid}/refresh-knowledge")]
+    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
+    public async Task<IActionResult> RefreshKnowledge(Guid id, CancellationToken cancellationToken)
+    {
+        await _service.RequestKnowledgeRefreshAsync(Owner(), id, cancellationToken);
+        return NoContent();
+    }
+
     [HttpPut("{id:guid}/account")]
     [RequirePermission(WorkspacePermissions.ChannelsConnect)]
     public async Task<IActionResult> ConfigureAccount(Guid id, [FromBody] WhatsAppAccountRequest request)

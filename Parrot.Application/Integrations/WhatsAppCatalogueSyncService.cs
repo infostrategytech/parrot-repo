@@ -1,3 +1,4 @@
+using Parrot.Application.BusinessSources;
 using Parrot.Application.Contracts.WhatsAppCatalogue;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Logging;
@@ -11,6 +12,7 @@ public class WhatsAppCatalogueSyncService(
     ICatalogImportClient catalogImportClient,
     IMetaCatalogueClient catalogueClient,
     IWhatsAppTokenProtector tokenProtector,
+    IConnectionSourceSyncService sourceSyncService,
     IAppLogger<WhatsAppCatalogueSyncService> logger) : IWhatsAppCatalogueSyncService
 {
     private const int MaxPageSize = 100;
@@ -33,6 +35,18 @@ public class WhatsAppCatalogueSyncService(
 
         string? catalogueId = await catalogueClient.GetCatalogueIdAsync(
             connection.WhatsAppBusinessAccountId, accessToken, ct);
+
+        // Best-effort: keep the AI's view of this workspace in sync with the catalog state.
+        // A failure here does not abort the product sync; the reconciliation job will catch up.
+        try
+        {
+            await sourceSyncService.SyncWhatsAppCatalogAsync(workspaceId, connectionId, catalogueId, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "whatsapp.catalog.source.sync_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} CatalogueId={CatalogueId}",
+                workspaceId, connectionId, catalogueId);
+        }
 
         if (catalogueId is null)
         {

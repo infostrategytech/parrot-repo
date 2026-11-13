@@ -13,7 +13,9 @@ public enum WorkerRoles
     Media = 2,
     Outbound = 4,
     AiReply = 8,
-    All = Messages | Media | Outbound | AiReply,
+    SourcesOutbox = 16,
+    BusinessKnowledge = 32,
+    All = Messages | Media | Outbound | AiReply | SourcesOutbox | BusinessKnowledge,
 }
 
 public static class WorkerRoleSettings
@@ -35,7 +37,9 @@ public static class WorkerRoleSettings
                 "media" => WorkerRoles.Media,
                 "outbound" => WorkerRoles.Outbound,
                 "aireplies" => WorkerRoles.AiReply,
-                _ => throw new InvalidOperationException($"{Key} has '{part}'; use messages, media, outbound, aireplies or all."),
+                "sourcesoutbox" => WorkerRoles.SourcesOutbox,
+                "businessknowledge" => WorkerRoles.BusinessKnowledge,
+                _ => throw new InvalidOperationException($"{Key} has '{part}'; use messages, media, outbound, aireplies, sourcesoutbox, businessknowledge or all."),
             };
         }
 
