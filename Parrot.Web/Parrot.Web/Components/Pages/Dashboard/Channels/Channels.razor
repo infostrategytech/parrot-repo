@@ -31,6 +31,17 @@
                 Connect and manage the places your customers message you.
             </Typography>
         </div>
+        @if (HasKnowledgeSource)
+        {
+            <div class="channels__actions">
+                <Button Variant="ButtonVariant.Secondary"
+                        disabled="@(_busy || _refreshingKnowledge)"
+                        @onclick="RefreshKnowledgeAsync">
+                    <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
+                    <ChildContent>@(_refreshingKnowledge ? "Queuing…" : "Refresh AI knowledge")</ChildContent>
+                </Button>
+            </div>
+        }
     </header>
 
     @if (_error is not null)
@@ -350,8 +361,14 @@ else if (Active is { } flow && _view == SetupView.Flow)
     private ChannelWorkspace? _data;
     private bool _loading = true;
     private bool _busy;
+    private bool _refreshingKnowledge;
     private bool _disposed;
     private string? _error;
+
+    private bool HasKnowledgeSource =>
+        (ChannelsState.WhatsAppConnection is { DisabledAt: null, PhoneNumberId: not null }) ||
+        (ChannelsState.InstagramSetup is { AccountId: not null }) ||
+        (ChannelsState.FacebookSetup is { PageId: not null });
     private BusinessChannel? _pendingDisconnect;
 
     private BusinessChannel? _pendingRestart;
@@ -1077,6 +1094,29 @@ else if (Active is { } flow && _view == SetupView.Flow)
             // the page jumps straight to the message test.
             if (!_disposed) await InvokeAsync(StateHasChanged);
         }
+    }
+
+    private async Task RefreshKnowledgeAsync()
+    {
+        string? token = AuthState.CurrentUser?.Token;
+        if (string.IsNullOrEmpty(token) || _refreshingKnowledge) return;
+        _refreshingKnowledge = true;
+        _error = null;
+        try
+        {
+            List<Task> refreshes = [];
+            if (ChannelsState.WhatsAppConnection is { DisabledAt: null } wa)
+                refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(wa.Id, token, _lifetime.Token));
+            if (ChannelsState.InstagramSetup is { ConnectionId: { } igId })
+                refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(igId, token, _lifetime.Token));
+            if (ChannelsState.FacebookSetup is { ConnectionId: { } fbId })
+                refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(fbId, token, _lifetime.Token));
+            await Task.WhenAll(refreshes);
+            Toasts.Show("AI knowledge refresh queued.");
+        }
+        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { }
+        catch (HttpRequestException) { _error = "Could not queue the refresh. Try again."; }
+        finally { _refreshingKnowledge = false; }
     }
 
     private void AskDisconnect(BusinessChannel channel) => _pendingDisconnect = channel;
