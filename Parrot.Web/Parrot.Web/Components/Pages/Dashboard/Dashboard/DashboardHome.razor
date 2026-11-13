@@ -531,9 +531,9 @@
             List<Task> refreshes = [];
             if (ChannelsState.WhatsAppConnection is { DisabledAt: null } wa)
                 refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(wa.Id, token));
-            if (ChannelsState.InstagramSetup is { ConnectionId: { } igId })
+            if (ChannelsState.InstagramSetup is { ConnectionId: { } igId, AccountId: { Length: > 0 } })
                 refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(igId, token));
-            if (ChannelsState.FacebookSetup is { ConnectionId: { } fbId })
+            if (ChannelsState.FacebookSetup is { ConnectionId: { } fbId, PageId: { Length: > 0 } })
                 refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(fbId, token));
             await Task.WhenAll(refreshes);
             Toasts.Show("AI knowledge refresh queued.");
