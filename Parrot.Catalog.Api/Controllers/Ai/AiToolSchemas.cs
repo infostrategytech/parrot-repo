@@ -41,13 +41,16 @@ public static class AiToolSchemas
         {
             Tool(
                 "search_catalog",
-                "Find published products by free text, category and deterministic attribute filters. Use this before answering any question about what exists. Returns at most 10 products with why_matched.",
+                "Find published products by free text, category and deterministic attribute filters. Use this before answering any question about what exists. "
+                + "Leave out query to browse: products then come newest first. Returns at most 10 products with why_matched; "
+                + "when next_cursor is set there are more, so pass it back as cursor (with the same query, category and filters) for the next page.",
                 new JsonObject
                 {
                     ["query"] = new JsonObject { ["type"] = "string", ["maxLength"] = Limits.MaxQueryLength, ["description"] = "Words the customer used." },
                     ["category"] = new JsonObject { ["type"] = "string", ["description"] = "A category id or key." },
                     ["filters"] = filterSchema,
                     ["limit"] = new JsonObject { ["type"] = "integer", ["minimum"] = 1, ["maximum"] = Limits.MaxAiPageSize },
+                    ["cursor"] = new JsonObject { ["type"] = "string", ["description"] = "next_cursor from the previous page of the same search." },
                 },
                 []),
             Tool(

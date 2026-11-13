@@ -10,7 +10,8 @@ using Parrot.Application.Auth;
 namespace Parrot.Api.Mcp;
 
 /// <summary>
-/// The agent's product tools: live prices and stock, and a keyword search to fall back on.
+/// The agent's product tools: live prices and stock, a keyword search to fall back on, and
+/// a plain listing for "what do you have?", which a natural-language index can't answer.
 /// The workspace always comes from the agent's service token (its <c>tenant_id</c>), never
 /// from the arguments, so an agent can only ever see its own business's catalog.
 /// Answers are the catalog's own, passed through: product text in them is marked as
@@ -69,8 +70,24 @@ public sealed class ProductTools(ICatalogToolsClient catalog, IHttpContextAccess
             throw new McpException("Pass the words to search for in query.");
         }
 
-        return await CallAsync("search_catalog", new { Query = query.Trim(), Limit = limit is null ? null : (int?)Math.Clamp(limit.Value, 1, 10) }, ct);
+        return await CallAsync("search_catalog", new { Query = query.Trim(), Limit = ClampLimit(limit) }, ct);
     }
+
+    [McpServerTool(Name = "list_products", Title = "Browse the catalog", ReadOnly = true, Idempotent = true, OpenWorld = false)]
+    [Description(
+        "Lists this business's products, newest first, straight from the live catalog. Use it when the customer asks what's available "
+        + "or wants to see options without naming anything, such as \"what do you have?\" or \"show me your products\". "
+        + "When next_cursor is set there are more: pass it back as cursor to show the next ones when the customer asks for more. "
+        + "Then call get_prices with the ids you want to offer.")]
+    public async Task<JsonElement> ListProducts(
+        [Description("How many products to return, 1 to 10. Defaults to 10.")] int? limit = null,
+        [Description("next_cursor from the previous list_products answer, to get the next page. Leave out for the first page.")] string? cursor = null,
+        CancellationToken ct = default)
+    {
+        return await CallAsync("search_catalog", new { Limit = ClampLimit(limit), Cursor = string.IsNullOrWhiteSpace(cursor) ? null : cursor.Trim() }, ct);
+    }
+
+    private static int? ClampLimit(int? limit) => limit is null ? null : Math.Clamp(limit.Value, 1, 10);
 
     private async Task<JsonElement> CallAsync(string tool, object arguments, CancellationToken ct)
     {
