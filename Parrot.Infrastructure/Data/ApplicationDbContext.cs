@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Parrot.Application.Models;
 using Parrot.Domain.Entities;
+using Parrot.Domain.Enums;
 
 namespace Parrot.Infrastructure.Data;
 
@@ -31,6 +32,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
     public DbSet<WorkTaskEvent> WorkTaskEvents => Set<WorkTaskEvent>();
+
+    public DbSet<BusinessSource> BusinessSources => Set<BusinessSource>();
+    public DbSet<WorkspaceSourceState> WorkspaceSourceStates => Set<WorkspaceSourceState>();
+    public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
 
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -385,6 +390,63 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(e => e.Note).HasMaxLength(1000);
             entity.HasIndex(e => e.TaskId);
         });
+
+        // One row per independently identifiable business resource on a connected channel.
+        // Soft-ref to the connection (no FK — connection entities share no base table).
+        builder.Entity<BusinessSource>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.Property(s => s.WorkspaceId).IsRequired().HasMaxLength(450);
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(s => s.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(s => s.Channel).HasConversion<int>();
+            entity.Property(s => s.Kind).HasConversion<int>();
+            entity.Property(s => s.ExternalId).IsRequired().HasMaxLength(256);
+            entity.Property(s => s.DisplayName).HasMaxLength(512);
+            entity.Property(s => s.Handle).HasMaxLength(256);
+            entity.Property(s => s.Url).HasMaxLength(2048);
+            entity.Property(s => s.Text).HasColumnType("text");
+            entity.Property(s => s.MetadataSyncStatus).HasConversion<int>();
+            entity.Property(s => s.LastMetadataSyncError).HasMaxLength(2000);
+            entity.Property(s => s.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.Property(s => s.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // Idempotent upsert: reconnecting the same provider resource reuses this row.
+            entity.HasIndex(s => new { s.WorkspaceId, s.Channel, s.Kind, s.ExternalId })
+                .IsUnique()
+                .HasDatabaseName("UQ_BusinessSources_Identity");
+
+            entity.HasIndex(s => new { s.WorkspaceId, s.IsActive })
+                .HasDatabaseName("IX_BusinessSources_Workspace_Active");
+
+            entity.HasIndex(s => s.AuthorizationConnectionId)
+                .HasDatabaseName("IX_BusinessSources_Connection");
+        });
+
+        // One row per workspace; holds the monotonically increasing snapshot version.
+        builder.Entity<WorkspaceSourceState>(entity =>
+        {
+            entity.HasKey(s => s.WorkspaceId);
+            entity.Property(s => s.WorkspaceId).HasMaxLength(450);
+            entity.Property(s => s.SnapshotVersion).HasColumnType("bigint");
+            entity.Property(s => s.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+        });
+
+        // Durable outbox for BusinessSourcesUpdated events. Kafka publish happens outside
+        // the claim transaction; LockedUntil prevents double-publish across worker restarts.
+        builder.Entity<OutboxEvent>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.WorkspaceId).IsRequired().HasMaxLength(450);
+            entity.Property(e => e.Payload).IsRequired().HasColumnType("text");
+            entity.Property(e => e.LastError).HasMaxLength(2000);
+            entity.Property(e => e.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+            // Worker poll: unpublished rows with no active lock and retry time reached.
+            entity.HasIndex(e => e.NextAttemptAt)
+                .HasFilter("\"PublishedAt\" IS NULL")
+                .HasDatabaseName("IX_OutboxEvents_Eligible");
+        });
     }
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
@@ -402,7 +464,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     private void UpdateConnectionTimestamps()
     {
         DateTime now = DateTime.UtcNow;
-        foreach (Microsoft.EntityFrameworkCore.ChangeTracking.EntityEntry<WhatsAppConnection> entry in ChangeTracker.Entries<WhatsAppConnection>())
+        foreach (EntityEntry<WhatsAppConnection> entry in ChangeTracker.Entries<WhatsAppConnection>())
         {
             if (entry.State == EntityState.Added)
             {
@@ -412,6 +474,35 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             else if (entry.State == EntityState.Modified)
             {
                 entry.Entity.UpdatedAt = now;
+            }
+        }
+
+        foreach (EntityEntry<BusinessSource> entry in ChangeTracker.Entries<BusinessSource>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = now;
+                entry.Entity.UpdatedAt = now;
+            }
+            else if (entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+            }
+        }
+
+        foreach (EntityEntry<WorkspaceSourceState> entry in ChangeTracker.Entries<WorkspaceSourceState>())
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAt = now;
+            }
+        }
+
+        foreach (EntityEntry<OutboxEvent> entry in ChangeTracker.Entries<OutboxEvent>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAt = now;
             }
         }
     }

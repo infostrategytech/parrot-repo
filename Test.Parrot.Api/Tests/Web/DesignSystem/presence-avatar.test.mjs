@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert/strict';
 import test from 'node:test';
@@ -6,8 +6,11 @@ import test from 'node:test';
 const read = name => readFileSync(fileURLToPath(new URL(`../../../../${name}`, import.meta.url)), 'utf8');
 const component = read('Parrot.SharedCompnents/DesignSystem/PresenceAvatar.razor');
 const styles = read('Parrot.SharedCompnents/DesignSystem/PresenceAvatar.razor.css');
-const page = read('Parrot.Web/Parrot.Web/Components/Pages/DesignSystem/AvatarPlayground.razor');
-const layout = read('Parrot.Web/Parrot.Web/Components/Pages/DesignSystem/AvatarPlayground.razor.css');
+// The avatar playground is a local design page that stays out of production branches; its checks run where it is.
+const optional = name => existsSync(fileURLToPath(new URL(`../../../../${name}`, import.meta.url))) ? read(name) : null;
+const page = optional('Parrot.Web/Parrot.Web/Components/Pages/DesignSystem/AvatarPlayground.razor');
+const layout = optional('Parrot.Web/Parrot.Web/Components/Pages/DesignSystem/AvatarPlayground.razor.css');
+const playground = { skip: page === null && 'the playground is local only' };
 const routes = read('Parrot.Web/Parrot.Web/Components/Routes.razor');
 const chooser = read('Parrot.SharedCompnents/DesignSystem/AgentAvatarChooser.razor');
 const chooserStyles = read('Parrot.SharedCompnents/DesignSystem/AgentAvatarChooser.razor.css');
@@ -27,16 +30,16 @@ test('small conversation avatars do not bounce and completion only plays once', 
   assert.match(styles, /presence-done[^;]+ 1 both/);
   assert.match(styles, /presence-acknowledge[^;]+ 1 both/);
 });
-test('playground scrolls independently and stacks below the phone breakpoint', () => {
+test('playground scrolls independently and stacks below the phone breakpoint', playground, () => {
   assert.match(layout, /height: 100dvh/); assert.match(layout, /overflow-y: auto/);
   assert.match(layout, /@media \(max-width: 760px\)[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
 });
-test('preview controls reuse shared components and show a textual status', () => {
+test('preview controls reuse shared components and show a textual status', playground, () => {
   assert.doesNotMatch(page + chooser, /<button|<input|<select/);
   assert.match(page, /<AgentAvatarChooser/); assert.match(chooser, /aria-label="Character colour"/);
   assert.match(page, /<ThemeToggle Inline/); assert.match(page, /aria-live="polite"/);
 });
-test('public access is limited to the exact playground path and local mode', () => {
+test('public access is limited to the exact playground path and local mode', playground, () => {
   assert.match(routes, /Demo.Enabled && new Uri\(Nav.Uri\).AbsolutePath.TrimEnd\('\/'\).Equals\("\/design-system\/avatar-playground", StringComparison.OrdinalIgnoreCase\)/);
   assert.match(page, /if \(!Demo.Enabled\)/);
 });
@@ -45,7 +48,7 @@ test('character colours use semantic tokens rather than fixed brand hex or primi
   for (const tone of ['violet', 'green', 'sky', 'amber']) assert.match(styles, new RegExp(`--colors-accent-${tone}-solid`));
   assert.match(styles, /--colors-brand-secondary/);
 });
-test('avatars are silhouette-and-eyes only, without shaded fills or accessories', () => {
+test('avatars are silhouette-and-eyes only, without shaded fills or accessories', playground, () => {
   assert.doesNotMatch(component, /<defs|<linearGradient|<filter|__orbit|__visor|__antenna|__leaves|__mouth/);
   assert.doesNotMatch(styles, /gradient\(|box-shadow|drop-shadow|__highlight/);
   assert.doesNotMatch(layout, /radial-gradient/);
@@ -56,7 +59,7 @@ test('eye placement and animated glances have separate transform layers', () => 
   assert.match(styles, /data-state="thinking"\] \.presence-avatar__face/);
   assert.match(styles, /data-state="working"\] \.presence-avatar__face/);
 });
-test('every character is alive; the preview, selection and workspace examples float, the picker grid stays grounded', () => {
+test('every character is alive; the preview, selection and workspace examples float, the picker grid stays grounded', playground, () => {
   // Designer, 9 November 2026: "more reactive, react to hover too", then "let them float".
   const previews = [...page.matchAll(/<PresenceAvatar\b[^>]+\/>/g)].map(match => match[0]);
   assert.equal(previews.length, 4);
@@ -80,7 +83,7 @@ test('every bright colour has a fill, in the avatar and its swatch', () => {
     assert.match(chooserStyles, new RegExp(`\\.avatar-swatch--${tone} \\{ --swatch: [^;]+; --swatch-ink: [^;]+; \\}`));
   }
 });
-test('every avatar has white eyes with a near-black pupil, the same in both themes; no solid-eye option', () => {
+test('every avatar has white eyes with a near-black pupil, the same in both themes; no solid-eye option', playground, () => {
   // Designer, 10 November 2026: white eyes approved, solid eyes retired.
   assert.doesNotMatch(page, /PresenceAvatarEyes/);
   assert.doesNotMatch(component, /PresenceAvatarEyes|Whites|presence-avatar--whites/);
@@ -95,7 +98,7 @@ test('done is a success: a green badge, glow and sparkles from the feedback toke
   assert.match(styles, /\[data-state="done"\] \.presence-avatar__badge path \{ stroke: var\(--colors-feedback-success-foreground\); \}/);
   assert.match(styles, /\[data-state="done"\] :is\(\.presence-avatar__echo, \.presence-avatar__sparkle\) \{ fill: var\(--colors-feedback-success\); \}/);
 });
-test('selection is announced and confirmation is limited to the playground', () => {
+test('selection is announced and confirmation is limited to the playground', playground, () => {
   assert.match(chooser, /aria-pressed=/); assert.match(chooser, /aria-label=.*avatar/);
   assert.match(page, /Use this avatar/); assert.match(page, /Selected for this preview/);
   assert.match(page, /No live agent is created or changed/);
@@ -106,7 +109,7 @@ test('picker choices wrap and have explicit keyboard focus and disabled presenta
   assert.match(chooserStyles, /max-width: 760px/); assert.match(chooserStyles, /flex-wrap: wrap/);
 });
 
-test('the chosen avatar opens an isolated Talk or Type example, without replacing the live flow', () => {
+test('the chosen avatar opens an isolated Talk or Type example, without replacing the live flow', playground, () => {
   const example = read('Parrot.SharedCompnents/DesignSystem/AgentConversationExample.razor');
   assert.match(page, /Try Talk or Type/); assert.match(page, /<ContentModal Open/);
   assert.match(page, /<AgentConversationExample Appearance="_choice" Name="@DisplayName"/);

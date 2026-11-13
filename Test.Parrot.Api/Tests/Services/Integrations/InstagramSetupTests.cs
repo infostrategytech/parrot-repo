@@ -2,9 +2,12 @@ using System.Net;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using Moq;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.Conversations;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 using Parrot.Infrastructure.Conversations;
@@ -22,7 +25,10 @@ public class InstagramSetupTests
     private readonly FakeInstagram _instagram = new();
 
     private InstagramConnectionService Service() =>
-        new(_repository, new Protector(), _instagram, Options.Create(new InstagramSettings { WebhookBaseUrl = "https://api.example.com/" }));
+        new(_repository, new Protector(), _instagram,
+            Mock.Of<IConnectionSourceSyncService>(),
+            Mock.Of<IAppLogger<InstagramConnectionService>>(),
+            Options.Create(new InstagramSettings { WebhookBaseUrl = "https://api.example.com/" }));
 
     private async Task<InstagramSetupResponse> VerifiedAsync()
     {
@@ -142,6 +148,8 @@ public class InstagramSetupTests
     public async Task Setup_NeedsAnHttpsCallbackBase()
     {
         InstagramConnectionService service = new(_repository, new Protector(), _instagram,
+            Mock.Of<IConnectionSourceSyncService>(),
+            Mock.Of<IAppLogger<InstagramConnectionService>>(),
             Options.Create(new InstagramSettings { WebhookBaseUrl = "http://api.example.com" }));
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetSetupAsync("owner"));

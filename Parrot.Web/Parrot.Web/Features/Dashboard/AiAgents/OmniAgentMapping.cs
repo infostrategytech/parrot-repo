@@ -137,12 +137,12 @@ public static class OmniAgentMapping
     }
 
     public static OmniCreateAgent ToCreate(AiAgent agent, IEnumerable<Guid> connectionIds) => new(
-        agent.Name.Trim(), UseCaseOf(agent.Settings), CustomRoleOf(agent.Settings), agent.Description, agent.Mascot,
+        agent.Name.Trim(), UseCaseOf(agent.Settings), CustomRoleOf(agent.Settings), agent.Description, AgentLooks.Key(agent.Mascot),
         agent.HumanTakeover, agent.Settings.Brief?.Summary ?? string.Empty, agent.Settings.Industry ?? string.Empty,
         agent.Settings.Website, [.. connectionIds], ToSettings(agent.Settings));
 
     public static OmniUpdateAgent ToUpdate(AiAgent agent) => new(
-        agent.Name.Trim(), UseCaseOf(agent.Settings), CustomRoleOf(agent.Settings), agent.Description, agent.Mascot,
+        agent.Name.Trim(), UseCaseOf(agent.Settings), CustomRoleOf(agent.Settings), agent.Description, AgentLooks.Key(agent.Mascot),
         agent.HumanTakeover, agent.Settings.Brief?.Summary ?? string.Empty, agent.Settings.Industry ?? string.Empty,
         agent.Settings.Website, ToSettings(agent.Settings));
 

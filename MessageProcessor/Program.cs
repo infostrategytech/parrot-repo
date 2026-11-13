@@ -6,6 +6,7 @@ using MessageProcessor.Monitoring;
 using OpenTelemetry.Metrics;
 using Parrot.Application.Agents;
 using Parrot.Application.Auth;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.Conversations;
 using Parrot.Application.Customers;
 using Parrot.Application.Integrations;
@@ -14,6 +15,7 @@ using Parrot.Application.Messaging;
 using Parrot.Application.Storage;
 using Parrot.Application.Utils;
 using Parrot.Infrastructure.Agents;
+using Parrot.Infrastructure.BusinessSources;
 using Parrot.Infrastructure.Conversations;
 using Parrot.Infrastructure.Customers;
 using Parrot.Infrastructure.Data;
@@ -139,6 +141,20 @@ builder.Services.AddScoped(typeof(IAppLogger<>), typeof(AppLogger<>));
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddSingleton<AiReplyProcessor>();
 
+// Business knowledge: profile metadata fetched by BusinessKnowledgeWorker and published
+// to Kafka by SourcesOutboxWorker. All three services share the same scoped DbContext.
+builder.Services.AddScoped<IBusinessSourceRepository, BusinessSourceRepository>();
+builder.Services.AddScoped<ISnapshotPublisher, SnapshotPublisher>();
+builder.Services.AddSingleton<IWhatsAppProfileClient, WhatsAppProfileClient>();
+builder.Services.AddHttpClient(WhatsAppProfileClient.HttpClientName, client =>
+    client.BaseAddress = new Uri("https://graph.facebook.com/")).RemoveAllLoggers();
+builder.Services.AddSingleton<IInstagramProfileClient, InstagramProfileClient>();
+builder.Services.AddHttpClient(InstagramProfileClient.HttpClientName, client =>
+    client.BaseAddress = new Uri("https://graph.facebook.com/")).RemoveAllLoggers();
+builder.Services.AddSingleton<IFacebookPageClient, FacebookPageClient>();
+builder.Services.AddHttpClient(FacebookPageClient.HttpClientName, client =>
+    client.BaseAddress = new Uri("https://graph.facebook.com/")).RemoveAllLoggers();
+
 // One program, four jobs: Worker:Roles says which this process does, so each can be deployed and scaled by itself.
 WorkerRoles roles = WorkerRoleSettings.Parse(builder.Configuration[WorkerRoleSettings.Key]);
 builder.Services.AddSingleton(typeof(WorkerRoles), roles);
@@ -146,6 +162,8 @@ if (roles.HasFlag(WorkerRoles.Messages)) builder.Services.AddHostedService<Worke
 if (roles.HasFlag(WorkerRoles.Media)) builder.Services.AddHostedService<MediaWorker>();
 if (roles.HasFlag(WorkerRoles.Outbound)) builder.Services.AddHostedService<OutboundWorker>();
 if (roles.HasFlag(WorkerRoles.AiReply)) builder.Services.AddHostedService<AiReplyWorker>();
+if (roles.HasFlag(WorkerRoles.SourcesOutbox)) builder.Services.AddHostedService<SourcesOutboxWorker>();
+if (roles.HasFlag(WorkerRoles.BusinessKnowledge)) builder.Services.AddHostedService<BusinessKnowledgeWorker>();
 if (roles.HasFlag(WorkerRoles.Media | WorkerRoles.Outbound))
 {
     builder.Services.AddSingleton<PendingSweeper>(sp => ActivatorUtilities.CreateInstance<PendingSweeper>(sp));

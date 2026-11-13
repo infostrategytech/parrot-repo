@@ -1,7 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
@@ -11,15 +13,21 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
 {
     private readonly IWhatsAppConnectionRepository _repository;
     private readonly IWhatsAppTokenProtector _protector;
+    private readonly IConnectionSourceSyncService _sourceSyncService;
+    private readonly IAppLogger<WhatsAppConnectionService> _logger;
     private readonly string _baseUrl;
 
     public WhatsAppConnectionService(
         IWhatsAppConnectionRepository repository,
         IWhatsAppTokenProtector protector,
+        IConnectionSourceSyncService sourceSyncService,
+        IAppLogger<WhatsAppConnectionService> logger,
         IOptions<WhatsAppSettings> settings)
     {
         _repository = repository;
         _protector = protector;
+        _sourceSyncService = sourceSyncService;
+        _logger = logger;
         _baseUrl = settings.Value.WebhookBaseUrl.TrimEnd('/');
         if (!Uri.TryCreate(_baseUrl, UriKind.Absolute, out Uri? uri)
             || (uri.Scheme != Uri.UriSchemeHttps && uri.Scheme != Uri.UriSchemeHttp)
@@ -102,6 +110,16 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
     {
         await GetOwnedAsync(workspaceId, id);
         await _repository.DisableAsync(id, workspaceId, DateTime.UtcNow);
+
+        // Best-effort: deactivate sources so the AI snapshot no longer lists this connection.
+        try { await _sourceSyncService.DeactivateConnectionSourcesAsync(workspaceId, id); }
+        catch (Exception ex) { _logger.LogWarning(ex, "whatsapp.sources.deactivate_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}", workspaceId, id); }
+    }
+
+    public async Task RequestKnowledgeRefreshAsync(string workspaceId, Guid id, CancellationToken ct = default)
+    {
+        await GetOwnedAsync(workspaceId, id);
+        await _sourceSyncService.RequestMetadataRefreshAsync(workspaceId, id, ct);
     }
 
     public async Task ConfigureAccountAsync(string workspaceId, Guid id, WhatsAppAccountRequest request)
@@ -110,6 +128,18 @@ public class WhatsAppConnectionService : IWhatsAppConnectionService
         if (!IsMetaId(request.WhatsAppBusinessAccountId) || !IsMetaId(request.PhoneNumberId))
             throw new ValidationException("Enter valid numeric Meta business account and phone number IDs (up to 64 digits).");
         await _repository.ConfigureAccountAsync(id, workspaceId, request.WhatsAppBusinessAccountId, request.PhoneNumberId);
+
+        // Best-effort: publish the WhatsApp profile source so the AI knows this workspace is on WhatsApp.
+        // A failure here does not roll back the account configuration; the reconciliation job will catch up.
+        try
+        {
+            await _sourceSyncService.SyncWhatsAppProfileAsync(workspaceId, id, request.PhoneNumberId);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "whatsapp.profile.source.sync_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}; connection is configured but snapshot was not published.",
+                workspaceId, id);
+        }
     }
 
     public async Task SaveAccessTokenAsync(string workspaceId, Guid id, WhatsAppAccessTokenRequest request)

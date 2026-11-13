@@ -12,7 +12,7 @@
   --ds-presence-listen: 2600ms;
   --ds-presence-speak: 900ms;
   --ds-presence-recolour: 320ms;
-  --ds-presence-hover-gap: -4px; /* drawing units: how high a floating avatar rests above its shadow */
+  --ds-presence-hover-gap: -7px; /* drawing units: how high a floating avatar rests above its shadow (FLOAT.rest in presence-avatar.js) */
   --ds-presence-fill: var(--colors-accent-violet-solid);
   /* White eyes stay white with a near-black pupil in both themes: white on a solid colour, and the dark
      ink the palette puts on its bright solids (both the same in light and dark). */

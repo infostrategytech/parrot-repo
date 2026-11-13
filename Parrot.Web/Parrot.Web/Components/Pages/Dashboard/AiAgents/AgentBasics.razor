@@ -215,7 +215,7 @@
     /// and a summary, and the customer is not left hanging.
     /// </summary>
     private string HandoverDetail(AgentSettings settings) =>
-        $"To {Parrot.Web.Features.Dashboard.AiAgents.HandoverRouting.Phrase(settings, _team?.Solo ?? true)}. It stops replying, sends the reason and a summary of the chat, and waits.";
+        $"To {Parrot.Web.Features.Dashboard.AiAgents.HandoverRouting.Phrase(settings, _team?.Solo ?? true, _team)}. It stops replying, sends the reason and a summary of the chat, and waits.";
 
     private bool Solo => _team?.Solo ?? true;
 
