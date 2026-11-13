@@ -7,6 +7,7 @@
 @using Parrot.Web.Features.Dashboard.Channels.State
 @inject AuthState AuthState
 @inject ChannelsState ChannelsState
+@inject Parrot.Web.Features.Dashboard.Channels.Services.IIntegrationsService IntegrationsService
 @inject NavigationManager Nav
 @inject AgentGate AgentGate
 @inject IBusinessKnowledge BusinessKnowledge
@@ -368,6 +369,10 @@
                     @ConnectedNames @(ConnectedCount == 1 ? "is" : "are") connected to your inbox.
                 </Typography>
             </div>
+            <Button Variant="ButtonVariant.Secondary" disabled="@_refreshingKnowledge" @onclick="RefreshKnowledgeAsync">
+                <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
+                <ChildContent>@(_refreshingKnowledge ? "Queuing…" : "Refresh AI knowledge")</ChildContent>
+            </Button>
             <Button Variant="ButtonVariant.Ghost" @onclick="OpenChannels">Manage Channels</Button>
         </article>
     };
@@ -427,6 +432,10 @@
                 <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2">Your Channels</Typography>
                 <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@ChannelsLine</Typography>
             </div>
+            <Button Variant="ButtonVariant.Secondary" disabled="@_refreshingKnowledge" @onclick="RefreshKnowledgeAsync">
+                <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
+                <ChildContent>@(_refreshingKnowledge ? "Queuing…" : "Refresh AI knowledge")</ChildContent>
+            </Button>
             <Button Variant="ButtonVariant.Ghost" @onclick="OpenChannels">Manage Channels</Button>
         </article>
     };
@@ -509,6 +518,29 @@
             }
         </nav>
     };
+
+    private bool _refreshingKnowledge;
+
+    private async Task RefreshKnowledgeAsync()
+    {
+        string? token = AuthState.CurrentUser?.Token;
+        if (string.IsNullOrEmpty(token) || _refreshingKnowledge) return;
+        _refreshingKnowledge = true;
+        try
+        {
+            List<Task> refreshes = [];
+            if (ChannelsState.WhatsAppConnection is { DisabledAt: null } wa)
+                refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(wa.Id, token));
+            if (ChannelsState.InstagramSetup is { ConnectionId: { } igId })
+                refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(igId, token));
+            if (ChannelsState.FacebookSetup is { ConnectionId: { } fbId })
+                refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(fbId, token));
+            await Task.WhenAll(refreshes);
+            Toasts.Show("AI knowledge refresh queued.");
+        }
+        catch (HttpRequestException) { Toasts.Show("Could not queue the refresh. Try again."); }
+        finally { _refreshingKnowledge = false; }
+    }
 
     // Connecting a channel comes back here once it is connected.
     private void OpenChannels() => Nav.NavigateTo("/dashboard/channels?from=dashboard");

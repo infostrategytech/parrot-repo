@@ -1,5 +1,6 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @using System.Globalization
+@using Parrot.Web.Components.Pages.Dashboard.AiAgents
 @inject AuroraInterop Interop
 @inject ToastService Toasts
 
@@ -94,7 +95,16 @@ else
     <article class="message-bubble @DirectionClass @KindClass @(_highlighted ? "is-highlighted" : null)" @ref="_element" @ondblclick:stopPropagation>
         @if (Message.Kind == MessageKind.Ai)
         {
-            <span class="message-bubble__ai-avatar"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></span>
+            <span class="message-bubble__ai-avatar">
+                @if (AgentMascot is not null)
+                {
+                    <AgentFace Look="@AgentMascot" Size="Parrot.SharedComponents.DesignSystem.PresenceAvatarSize.Small" />
+                }
+                else
+                {
+                    <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                }
+            </span>
         }
         else if (Message.Kind == MessageKind.Customer)
         {
@@ -286,6 +296,8 @@ else
     /// <summary>Who replies are shown as when the API does not name the teammate: the business.</summary>
     [Parameter, EditorRequired] public string AuthorName { get; set; } = "";
     [Parameter, EditorRequired] public string AuthorSeed { get; set; } = "";
+    /// <summary>The agent's saved look ("look:pip:violet" or a mascot name). When set, shown instead of the robot icon on AI messages.</summary>
+    [Parameter] public string? AgentMascot { get; set; }
     /// <summary>The corrections and answers that teach the AI can be saved.</summary>
     [Parameter] public bool CanTeach { get; set; }
     [Parameter] public EventCallback<ConvMessage> OnCorrect { get; set; }

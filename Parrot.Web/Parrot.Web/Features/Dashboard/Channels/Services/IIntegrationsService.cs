@@ -31,4 +31,7 @@ public interface IIntegrationsService
 
     /// <summary>Queues a metadata refresh for the given WhatsApp connection's AI knowledge source.</summary>
     Task RefreshKnowledgeAsync(Guid connectionId, string token, CancellationToken cancellationToken = default);
+
+    /// <summary>Queues a metadata refresh for any channel connection's AI knowledge source.</summary>
+    Task RefreshConnectionKnowledgeAsync(Guid connectionId, string token, CancellationToken cancellationToken = default);
 }

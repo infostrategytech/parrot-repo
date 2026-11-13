@@ -1,10 +1,12 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Conversations
 @using System.Globalization
+@using Parrot.Web.Components.Pages.Dashboard.AiAgents
 @implements IDisposable
 @inject Parrot.Web.Services.ConversationClient Client
 @inject Parrot.Web.Services.IInboxFeatures Features
 @inject AuroraInterop Interop
 @inject Parrot.Web.Services.FeedbackService Feedback
+@inject Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState AgentsState
 
 @* The page owns the conversation data (it polls the list and reads the
    selected thread every 5 seconds); this component draws React's timeline
@@ -79,6 +81,7 @@
                                              CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
                                              CustomerInitials="@Conversation.CustomerInitials"
                                              AuthorName="@(message.Kind == MessageKind.Ai && Conversation.AiAgent?.Name is { } agentLabel ? agentLabel : AuthorName)" AuthorSeed="@AuthorSeed"
+                                             AgentMascot="@AiAgentMascot"
                                              CanTeach="@Features.Available"
                                              OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection" OnAnswer="OpenAnswer"
@@ -100,7 +103,14 @@
                     <div class="ai-typing-indicator" role="status"
                          aria-label="@($"{Conversation.AiAgent?.Name ?? "AI agent"} is replying")">
                         <span class="ai-typing-indicator__avatar" aria-hidden="true">
-                            <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                            @if (AiAgentMascot is not null)
+                            {
+                                <AgentFace Look="@AiAgentMascot" Size="Parrot.SharedComponents.DesignSystem.PresenceAvatarSize.Small" />
+                            }
+                            else
+                            {
+                                <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                            }
                         </span>
                         <div class="ai-typing-indicator__dots" aria-hidden="true">
                             <span></span><span></span><span></span>
@@ -263,6 +273,11 @@
     /// <summary>A line to open at, instead of the newest: brought into view with what came before it above, and lit, once.</summary>
     [Parameter] public string? FocusMessageId { get; set; }
     private string? _focused;
+
+    private string? AiAgentMascot =>
+        Conversation.AiAgent?.Id is { } agentId
+            ? AgentsState.Agents.FirstOrDefault(a => a.Id == agentId)?.Mascot
+            : null;
 
     private readonly CancellationTokenSource _lifetime = new();
     private ElementReference _scrollElement;
