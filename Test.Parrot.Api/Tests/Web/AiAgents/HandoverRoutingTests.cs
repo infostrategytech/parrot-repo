@@ -8,7 +8,7 @@ public class HandoverRoutingTests
 {
     private static readonly HandoverTeam Team = new(
     [
-        new("owner", "You", true, null, null, true, []),
+        new("owner", "Adaeze Okafor", true, null, null, true, []),
         new("chinedu", "Chinedu", false, "conversation-manager", "Customer service", true, []),
         new("funmi", "Funmi", false, "conversation-manager", "Customer service", true, ["instagram"]),
         new("tobi", "Tobi", false, "shop-assistant", "Shop assistant", false, []),
@@ -52,7 +52,21 @@ public class HandoverRoutingTests
         Assert.Equal("owner", HandoverRouting.Assign(settings, Team, WhatsApp, new Dictionary<string, int> { ["owner"] = 9 })?.Id);
         Assert.DoesNotContain(Team.Eligible(WhatsApp), p => p.Id == "tobi");
         Assert.DoesNotContain(Team.Eligible(WhatsApp), p => p.Id == "funmi");
-        Assert.Equal("you and Tobi, shared evenly", HandoverRouting.Describe(HandoverModes.People, Team, null, ["owner", "tobi"]));
+        // The AI's words name the owner (to it, "you" is itself); the owner's own screen says "you".
+        Assert.Equal("Adaeze Okafor and Tobi, shared evenly", HandoverRouting.Describe(HandoverModes.People, Team, null, ["owner", "tobi"]));
+        Assert.Equal("you and Tobi, shared evenly", HandoverRouting.Describe(HandoverModes.People, Team, null, ["owner", "tobi"], onScreen: true));
+    }
+
+    [Fact]
+    public void AnOwnerWithATeamCanKeepItForThemselves()
+    {
+        var settings = new AgentSettings { HandoverMode = HandoverModes.People, HandoverPeople = ["owner"] };
+        settings.HandoverTo = HandoverRouting.Describe(HandoverModes.People, Team, null, settings.HandoverPeople);
+        Assert.Equal("Adaeze Okafor", settings.HandoverTo);
+        Assert.Equal("owner", HandoverRouting.Assign(settings, Team, WhatsApp, new Dictionary<string, int> { ["owner"] = 7 })?.Id);
+        Assert.Equal("you", HandoverRouting.Phrase(settings, solo: false, Team));
+        // Someone who can't read the team sees the saved words.
+        Assert.Equal("Adaeze Okafor", HandoverRouting.Phrase(settings, solo: false, HandoverTeam.Unknown));
     }
 
     [Fact]

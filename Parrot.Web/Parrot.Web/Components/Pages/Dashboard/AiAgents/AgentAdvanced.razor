@@ -155,7 +155,7 @@
                             <span class="agent-advanced__icon"><Icon Name="IconName.RiUserSharedFill" Size="IconSize.Md" /></span>
                             <span class="agent-advanced__text">
                                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@($"{_id}-hand")">When it hands over</Typography>
-                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">To @HandoverRouting.Phrase(Form.Settings, Team?.Solo ?? true).</Typography>
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">To @HandoverRouting.Phrase(Form.Settings, Team?.Solo ?? true, Team).</Typography>
                             </span>
                             <span class="agent-advanced__chevron"><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Md" /></span>
                         </RowButton>

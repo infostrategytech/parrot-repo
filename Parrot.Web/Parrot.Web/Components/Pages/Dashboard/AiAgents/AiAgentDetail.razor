@@ -886,7 +886,7 @@ else
     private bool Solo => _handoverTeam?.Solo ?? true;
 
     // Who it asks before a discount or refund: whoever it brings in.
-    private string AsksWho => _form is null ? "you" : Solo ? "you" : HandoverRouting.Phrase(_form.Settings, false) switch
+    private string AsksWho => _form is null ? "you" : Solo ? "you" : HandoverRouting.Phrase(_form.Settings, false, _handoverTeam) switch
     {
         "anyone on your team" => "your team",
         var who => who.Replace(", shared evenly", ""),

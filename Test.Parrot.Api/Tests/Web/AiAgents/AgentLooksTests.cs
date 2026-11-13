@@ -15,8 +15,10 @@ public sealed class AgentLooksTests
             foreach (var tone in PresenceAvatarTones.Palette)
             {
                 var saved = AgentLooks.Save(new AvatarAppearance(style.Direction, tone));
-                Assert.StartsWith("look:", saved);
+                Assert.StartsWith("look-", saved);
                 Assert.True(saved.Length < 40);
+                // The AI service's rule for a look key: letters, digits, '-' and '_' only.
+                Assert.Matches("^[A-Za-z0-9_-]+$", saved);
                 Assert.Equal(new AvatarAppearance(style.Direction, tone), AgentLooks.Of(saved));
             }
     }
@@ -69,6 +71,17 @@ public sealed class AgentLooksTests
         var form = AgentForm.Suggested([]);
         Assert.True(AgentLooks.IsLook(form.Mascot));
         form.ChooseLook(new AvatarAppearance(PresenceAvatarDirection.Ripple, PresenceAvatarTone.Orange));
-        Assert.Equal("look:ripple:orange", form.Mascot);
+        Assert.Equal("look-ripple-orange", form.Mascot);
+    }
+
+    [Fact]
+    public void ALookSavedTheOldWayStillReadsAndIsSentInTheNewForm()
+    {
+        Assert.Equal(new AvatarAppearance(PresenceAvatarDirection.Fig, PresenceAvatarTone.Teal), AgentLooks.Of("look:fig:teal"));
+        var agent = new AiAgent { Name = "Ada", Description = "", Mascot = "look:fig:teal" };
+        Assert.Equal("look-fig-teal", OmniAgentMapping.ToUpdate(agent).Avatar);
+        Assert.Equal("look-fig-teal", OmniAgentMapping.ToCreate(agent, []).Avatar);
+        agent.Mascot = "Nova";
+        Assert.Equal("Nova", OmniAgentMapping.ToUpdate(agent).Avatar);
     }
 }
