@@ -19,7 +19,7 @@
   --ds-detail-max: 1440px;
   --ds-detail-hairline: 1px;
   --ds-detail-measure: 650px;
-  --ds-detail-avatar: 64px;
+  --ds-detail-avatar: 80px; /* a step up from 64 so its float reads (designer, 12 November 2026) */
   --ds-detail-avatar-radius: 18px;
   --ds-detail-back-height: 34px;
   --ds-detail-tab: 34px;

@@ -86,8 +86,11 @@ public sealed record HandoverTeam(IReadOnlyList<HandoverPerson> People, bool Kno
 public static class HandoverRouting
 {
     /// <summary>Who it brings in, to finish "To …" or "It passes customers to …". Working alone: you.</summary>
-    public static string Phrase(AgentSettings settings, bool solo) =>
+    public static string Phrase(AgentSettings settings, bool solo, HandoverTeam? team = null) =>
         solo ? "you, in the Inbox"
+        // Chosen people, seen by the owner: "you" for themselves, though the AI's words carry their name.
+        : settings.HandoverMode == HandoverModes.People && team is { Known: true }
+            && Describe(HandoverModes.People, team, null, settings.HandoverPeople, onScreen: true) is { Length: > 0 } people ? people
         : settings.HandoverMode switch
         {
             HandoverModes.Role or HandoverModes.People when settings.HandoverTo.Trim().Length > 0 => settings.HandoverTo.Trim(),
@@ -96,11 +99,15 @@ public static class HandoverRouting
             _ => settings.HandoverTo.Trim().Length > 0 ? settings.HandoverTo.Trim() : "anyone on your team",
         };
 
-    /// <summary>The words kept with the agent for the AI and for anyone who can't read the team (see agents-backend-requests).</summary>
-    public static string Describe(string mode, HandoverTeam team, string? roleId, IReadOnlyList<string> peopleIds) => mode switch
+    /// <summary>
+    /// The words kept with the agent for the AI and for anyone who can't read the team (see agents-backend-requests).
+    /// The owner is named in them, because to the AI "you" is itself (designer, 12 November 2026); onScreen gives the
+    /// owner's own view, where they are "you".
+    /// </summary>
+    public static string Describe(string mode, HandoverTeam team, string? roleId, IReadOnlyList<string> peopleIds, bool onScreen = false) => mode switch
     {
         HandoverModes.Role => team.People.FirstOrDefault(p => p.RoleId == roleId)?.RoleName is { } role ? $"{role}, shared evenly" : "",
-        HandoverModes.People => Names(team.People.Where(p => peopleIds.Contains(p.Id)).Select(p => p.IsOwner ? "you" : p.Name).ToList()) is { Length: > 0 } names
+        HandoverModes.People => Names(team.People.Where(p => peopleIds.Contains(p.Id)).Select(p => p.IsOwner && onScreen ? "you" : p.Name).ToList()) is { Length: > 0 } names
             ? peopleIds.Count > 1 ? $"{names}, shared evenly" : names : "",
         _ => "",
     };

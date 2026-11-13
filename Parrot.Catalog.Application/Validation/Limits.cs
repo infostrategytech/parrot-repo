@@ -10,6 +10,9 @@ public static class Limits
     public const int MaxAiPageSize = 10;
     public const int MaxBatchItems = 100;
     public const int MaxCompareItems = 10;
+
+    /// <summary>Products one get_prices call may ask about: a page of search results, with room to spare.</summary>
+    public const int MaxPriceItems = 20;
     public const int MaxFilterKeys = 20;
     public const int MaxInValues = 50;
     public const int MaxQueryLength = 256;

@@ -39,6 +39,7 @@ using Parrot.Infrastructure.FeatureFlags;
 using Parrot.Infrastructure.Realtime;
 using Parrot.Infrastructure.SocialMediaIntegrations;
 using Parrot.Infrastructure.Storage;
+using Parrot.Api.Mcp;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Api.OpenApi;
@@ -454,6 +455,18 @@ builder.Services.AddHttpClient<ICatalogImportClient, HttpCatalogImportClient>((s
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 });
 
+// The agent's tools over MCP (/api/mcp): live prices and stock from the catalog. Each call
+// is answered with a five-minute catalog:ai-tools token for the agent's workspace.
+builder.Services.AddHttpClient<ICatalogToolsClient, HttpCatalogToolsClient>((sp, client) =>
+{
+    string? rawUrl = sp.GetRequiredService<IOptions<CatalogClientSettings>>().Value.BaseUrl;
+    if (Uri.TryCreate(rawUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+});
+builder.Services.AddAgentTools();
+
 builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient>(client =>
 {
     if (Uri.TryCreate(omniAiSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
@@ -717,6 +730,9 @@ app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Only the agent's service token (agent:service, naming the workspace) opens the tools.
+app.MapAgentTools();
 app.MapPrometheusScrapingEndpoint("/metrics");
 
 // The meter provider must exist first: measurements made before it are dropped.

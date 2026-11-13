@@ -84,6 +84,11 @@ export function lid(elapsed) {
 // with the old one, so every in-between frame is a whole, smooth shape: no gaps, no crossing, no jump.
 const SAMPLES = 180;
 const traced = new Map();
+
+// Floating, in drawing units (the drawing is 128 across): where it rests above its shadow, how much higher it
+// rises, the seconds a rise and fall take, and the degrees it sways. Was 4 / 5 / 3.6 / 1.4: too small to see on
+// a card (designer, 12 November 2026).
+const FLOAT = { rest: 7, rise: 11, period: 3.4, sway: 2 };
 const area = points => points.reduce((sum, p, i) => { const q = points[(i + 1) % points.length]; return sum + p[0] * q[1] - q[0] * p[1]; }, 0) / 2;
 export function trace(d) {
     if (traced.has(d)) return traced.get(d);
@@ -317,10 +322,12 @@ export function bindPresence(element, options = {}) {
             const s = springs, breathe = Math.sin(t * 2 * Math.PI / 4.2) * 0.01;
             let sx = s.sx.x - breathe * 0.4, sy = s.sy.x + breathe, y = s.y.x, tilt = s.tilt.x, gx = s.gx.x, gy = s.gy.x, wide = s.wide.x;
             // Floating: a slow rise and fall with a gentle sway, resting a little above its shadow.
+            // Big enough to read as floating at a card's 48px (designer, 12 November 2026: "subtle, but obvious"):
+            // it rests FLOAT.rest units up and rises FLOAT.rise more, eased, with the shadow answering below.
             let rise = 0;
             if (floating) {
-                rise = (Math.sin((t + drift) * 2 * Math.PI / 3.6) + 1) / 2 * 5;
-                y -= 4 + rise; tilt += Math.sin((t + drift) * 2 * Math.PI / 5.3) * 1.4;
+                rise = (Math.sin((t + drift) * 2 * Math.PI / FLOAT.period) + 1) / 2 * FLOAT.rise;
+                y -= FLOAT.rest + rise; tilt += Math.sin((t + drift) * 2 * Math.PI / 5.3) * FLOAT.sway;
             }
             // The happy turn: up in a soft arc, leaning into it, a touch narrower side-on, as if it had depth.
             const { spin, arc, lean } = turnAt(sinceTurn);
@@ -366,9 +373,9 @@ export function bindPresence(element, options = {}) {
             parts.gaze.style.transform = `translate(${faceX.toFixed(2)}px, ${faceY.toFixed(2)}px)`;
             // The shadow answers the height: smaller and fainter as it rises or jumps, fuller as it lands.
             if (parts.shadow) {
-                const height = Math.max(-3, -(y + 4));
-                parts.shadow.style.transform = `translateX(${s.x.x.toFixed(2)}px) scale(${Math.max(0.5, Math.min(1.1, 1 - height * 0.03)).toFixed(3)}, 1)`;
-                parts.shadow.style.opacity = Math.max(0.3, Math.min(1, 1 - height * 0.045)).toFixed(3);
+                const height = Math.max(-3, -(y + FLOAT.rest));
+                parts.shadow.style.transform = `translateX(${s.x.x.toFixed(2)}px) scale(${Math.max(0.5, Math.min(1.1, 1 - height * 0.035)).toFixed(3)}, 1)`;
+                parts.shadow.style.opacity = Math.max(0.3, Math.min(1, 1 - height * 0.05)).toFixed(3);
             }
             // Rings: a speaking word (0.8s), or the happy turn's glow (its own life, size and strength).
             rings = rings.filter(ring => t - ring.at < (ring.life ?? 0.8));

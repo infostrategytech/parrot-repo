@@ -187,6 +187,9 @@
     // The row: who it is, in words and faces.
     private string Summary =>
         Team.Solo ? "You, in the Inbox"
+        // Chosen people: "You" for the owner here; the saved words name them for the AI.
+        : Settings.HandoverMode == HandoverModes.People && Team.Known
+            && HandoverRouting.Describe(HandoverModes.People, Team, null, Settings.HandoverPeople, onScreen: true) is { Length: > 0 } people ? Capitalised(people)
         : Settings.HandoverMode is HandoverModes.Role or HandoverModes.People && Settings.HandoverTo.Trim().Length > 0 ? Capitalised(Settings.HandoverTo.Trim())
         // Not chosen yet: an older agent's own words, else the default.
         : Settings.HandoverMode.Length == 0 && Settings.HandoverTo.Trim().Length > 0 ? Settings.HandoverTo.Trim()
