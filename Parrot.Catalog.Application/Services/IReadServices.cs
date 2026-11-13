@@ -32,6 +32,8 @@ public interface IAiToolService
 
     Task<AiToolResponse<AiOffersResult>> GetProductOffersAsync(GetProductOffersToolRequest request, CancellationToken ct);
 
+    Task<AiToolResponse<AiPricesResult>> GetPricesAsync(GetPricesToolRequest request, CancellationToken ct);
+
     Task<AiToolResponse<AiAvailabilityResult>> GetProductAvailabilityAsync(GetProductAvailabilityToolRequest request, CancellationToken ct);
 
     Task<AiToolResponse<AiCompareResult>> CompareProductsAsync(CompareProductsToolRequest request, CancellationToken ct);

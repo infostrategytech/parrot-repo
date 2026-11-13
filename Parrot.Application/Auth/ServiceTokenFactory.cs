@@ -26,6 +26,12 @@ public interface IServiceTokenFactory
     string MintForCatalog(string ownerUserId);
 
     /// <summary>
+    /// Mints a token with only <c>catalog:ai-tools</c> scope, for answering the agent's tool
+    /// calls: it reads published prices and products, and can change nothing.
+    /// </summary>
+    string MintForCatalogAiTools(string workspaceId);
+
+    /// <summary>
     /// Mints a user-like JWT for calling the AI service. The AI service validates
     /// tokens the same way it validates user sessions — no service-specific claims,
     /// just <c>sub</c> set to the workspace id.
@@ -85,23 +91,9 @@ public sealed class ServiceTokenFactory(IJwtHelper jwt) : IServiceTokenFactory
         return jwt.GenerateToken(claims, now.Add(Lifetime).UtcDateTime);
     }
 
-    public string MintForCatalog(string ownerUserId)
-    {
-        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
-        DateTimeOffset now = DateTimeOffset.UtcNow;
+    public string MintForCatalog(string ownerUserId) => MintCatalogToken(ownerUserId, ServiceScopes.CatalogAdmin);
 
-        Claim[] claims =
-        [
-            new Claim(JwtRegisteredClaimNames.Sub, ownerUserId),
-            new Claim(ServiceScopes.TenantClaim, ownerUserId),
-            new Claim(ServiceScopes.ScopeClaim, ServiceScopes.CatalogAdmin),
-            new Claim(ServiceScopes.ServiceClaim, Service),
-            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
-            new Claim(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
-        ];
-
-        return jwt.GenerateToken(claims, now.Add(Lifetime).UtcDateTime);
-    }
+    public string MintForCatalogAiTools(string workspaceId) => MintCatalogToken(workspaceId, ServiceScopes.CatalogAiTools);
 
     public string MintForAiService(string ownerUserId)
     {
@@ -116,6 +108,24 @@ public sealed class ServiceTokenFactory(IJwtHelper jwt) : IServiceTokenFactory
             new Claim(JwtRegisteredClaimNames.Sub, ownerUserId),
             new Claim(WorkspaceClaims.WorkspaceId, ownerUserId),
             new Claim(ServiceScopes.TenantClaim, ownerUserId),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new Claim(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
+        ];
+
+        return jwt.GenerateToken(claims, now.Add(Lifetime).UtcDateTime);
+    }
+
+    private string MintCatalogToken(string ownerUserId, string scope)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(ownerUserId);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        Claim[] claims =
+        [
+            new Claim(JwtRegisteredClaimNames.Sub, ownerUserId),
+            new Claim(ServiceScopes.TenantClaim, ownerUserId),
+            new Claim(ServiceScopes.ScopeClaim, scope),
+            new Claim(ServiceScopes.ServiceClaim, Service),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
             new Claim(JwtRegisteredClaimNames.Iat, now.ToUnixTimeSeconds().ToString(CultureInfo.InvariantCulture), ClaimValueTypes.Integer64),
         ];

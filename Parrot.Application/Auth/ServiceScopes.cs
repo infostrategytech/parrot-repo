@@ -21,6 +21,12 @@ public static class ServiceScopes
     /// <summary>Lets the main API read and write the catalog on behalf of a tenant.</summary>
     public const string CatalogAdmin = "catalog:admin";
 
+    /// <summary>
+    /// Lets the main API call the catalog's AI tools (live prices, search) for a tenant,
+    /// on behalf of the tenant's agent. Read-only, and nothing else in the catalog opens to it.
+    /// </summary>
+    public const string CatalogAiTools = "catalog:ai-tools";
+
     /// <summary>The authorization policy that requires <see cref="AgentService"/>.</summary>
     public const string PolicyName = "ServiceScope";
 

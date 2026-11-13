@@ -65,8 +65,21 @@ public static class AiToolSchemas
                 },
                 ["id"]),
             Tool(
+                "get_prices",
+                "Live price, availability and quantity left for up to 20 products at once (an array of ids, such as the ones a search found). "
+                + "Call it before telling a customer any price, stock level or that an item is available: these change, so never quote them from memory. "
+                + "Pass min_price and/or max_price to keep items to that range; the rest come back in closest, nearest to the range first, "
+                + "to offer when items is empty. Products in not_on_sale must not be offered.",
+                new JsonObject
+                {
+                    ["ids"] = new JsonObject { ["type"] = "array", ["minItems"] = 1, ["maxItems"] = Limits.MaxPriceItems, ["items"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" } },
+                    ["min_price"] = new JsonObject { ["type"] = "number", ["minimum"] = 0, ["description"] = "Lowest price wanted, in the catalog's currency." },
+                    ["max_price"] = new JsonObject { ["type"] = "number", ["minimum"] = 0, ["description"] = "Highest price wanted (the customer's budget), in the catalog's currency." },
+                },
+                ["ids"]),
+            Tool(
                 "get_product_availability",
-                "Current availability of a product, optionally for one region (ISO 3166-1 alpha-2): mode in_stock (with stock), made_to_order (with lead_time_days) or bookings (with capacity). An empty list means it is not on offer now or nothing is recorded: do not promise it.",
+                "Whether a product can be had now, optionally for one region (ISO 3166-1 alpha-2). available is the answer: false means sold out or switched off, so do not promise it. quantity_left is how many are in stock (0 when sold out, null when not counted). Each row gives its mode, in_stock (with stock), made_to_order (with lead_time_days) or bookings (with capacity), and whether that row, or that option of the product, is available.",
                 new JsonObject
                 {
                     ["id"] = new JsonObject { ["type"] = "string", ["format"] = "uuid" },

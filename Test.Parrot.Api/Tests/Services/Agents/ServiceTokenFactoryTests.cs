@@ -90,4 +90,15 @@ public class ServiceTokenFactoryTests
     {
         Assert.ThrowsAny<ArgumentException>(() => CreateSut().Mint(" "));
     }
+
+    [Fact]
+    public void MintForCatalogAiTools_GrantsOnlyTheAiToolsScope_ForTheWorkspace()
+    {
+        ClaimsPrincipal principal = Validate(CreateSut().MintForCatalogAiTools(Owner), out SecurityToken validated);
+
+        Assert.Equal(Owner, principal.FindFirstValue(ServiceScopes.TenantClaim));
+        Assert.Equal(ServiceScopes.CatalogAiTools, Assert.Single(principal.FindAll(ServiceScopes.ScopeClaim)).Value);
+        Assert.Equal(ServiceTokenFactory.Service, principal.FindFirstValue(ServiceScopes.ServiceClaim));
+        Assert.True(validated.ValidTo <= DateTime.UtcNow.Add(ServiceTokenFactory.Lifetime).AddSeconds(5));
+    }
 }

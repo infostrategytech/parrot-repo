@@ -148,7 +148,7 @@ public static class SecuritySql
         List<string> sql = new List<string>();
         foreach (string view in views)
         {
-            string definition = ViewDefinitions().Single(d => d.Contains($"catalog.{view} AS", StringComparison.Ordinal));
+            string definition = LatestViewDefinitions().Single(d => d.Contains($"catalog.{view} AS", StringComparison.Ordinal));
             sql.Add(definition.Replace("CREATE VIEW", "CREATE OR REPLACE VIEW", StringComparison.Ordinal));
         }
 
@@ -178,6 +178,21 @@ public static class SecuritySql
         return string.Join("\n", sql);
     }
 
+    /// <summary>
+    /// v_products as it stands now: published, not deleted and not hidden. A hidden item is
+    /// kept but not offered, so no reader (and no AI tool) may see it. The first migration
+    /// builds the views before products had a hidden column, so it keeps the original.
+    /// </summary>
+    public const string ProductsView =
+        "CREATE VIEW catalog.v_products AS SELECT * FROM catalog.products p WHERE p.status = 'published' AND p.deleted_at IS NULL AND p.hidden = false;";
+
+    /// <summary>v_products before hidden items were kept from readers; what ReadersSkipHidden's Down puts back.</summary>
+    public const string ProductsViewBeforeHidden =
+        "CREATE VIEW catalog.v_products AS SELECT * FROM catalog.products p WHERE p.status = 'published' AND p.deleted_at IS NULL;";
+
+    private static IEnumerable<string> LatestViewDefinitions()
+        => ViewDefinitions().Select(d => d == ProductsViewBeforeHidden ? ProductsView : d);
+
     // Views run with the owner's privileges, and the owner is under FORCE RLS, so the
     // reader sees only its own tenant's published rows while holding no grant on any table.
     private static IEnumerable<string> ViewDefinitions()
@@ -187,7 +202,7 @@ public static class SecuritySql
         yield return "CREATE VIEW catalog.v_category_closure AS SELECT * FROM catalog.category_closure;";
         yield return "CREATE VIEW catalog.v_product_types AS SELECT * FROM catalog.product_types;";
         yield return "CREATE VIEW catalog.v_attribute_definitions AS SELECT * FROM catalog.attribute_definitions;";
-        yield return "CREATE VIEW catalog.v_products AS SELECT * FROM catalog.products p WHERE p.status = 'published' AND p.deleted_at IS NULL;";
+        yield return ProductsViewBeforeHidden;
         yield return """
             CREATE VIEW catalog.v_product_variants AS
                 SELECT v.* FROM catalog.product_variants v
