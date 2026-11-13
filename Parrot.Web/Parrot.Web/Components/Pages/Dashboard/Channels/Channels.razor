@@ -1107,9 +1107,9 @@ else if (Active is { } flow && _view == SetupView.Flow)
             List<Task> refreshes = [];
             if (ChannelsState.WhatsAppConnection is { DisabledAt: null } wa)
                 refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(wa.Id, token, _lifetime.Token));
-            if (ChannelsState.InstagramSetup is { ConnectionId: { } igId })
+            if (ChannelsState.InstagramSetup is { ConnectionId: { } igId, AccountId: { Length: > 0 } })
                 refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(igId, token, _lifetime.Token));
-            if (ChannelsState.FacebookSetup is { ConnectionId: { } fbId })
+            if (ChannelsState.FacebookSetup is { ConnectionId: { } fbId, PageId: { Length: > 0 } })
                 refreshes.Add(IntegrationsService.RefreshConnectionKnowledgeAsync(fbId, token, _lifetime.Token));
             await Task.WhenAll(refreshes);
             Toasts.Show("AI knowledge refresh queued.");
