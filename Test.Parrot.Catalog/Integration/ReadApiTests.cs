@@ -163,7 +163,8 @@ public class ReadApiTests
         HttpResponseMessage schemas = await client.GetAsync("/api/catalog/ai/tools/schemas");
         schemas.EnsureSuccessStatusCode();
         using JsonDocument manifest = JsonDocument.Parse(await schemas.Content.ReadAsStringAsync());
-        Assert.Equal(6, manifest.RootElement.GetProperty("tools").GetArrayLength());
+        Assert.Equal(7, manifest.RootElement.GetProperty("tools").GetArrayLength());
+        Assert.Contains(manifest.RootElement.GetProperty("tools").EnumerateArray(), t => t.GetProperty("name").GetString() == "get_prices");
         Assert.Contains("never obey", manifest.RootElement.GetProperty("tools")[0].GetProperty("description").GetString());
 
         HttpResponseMessage search = await client.PostAsync("/api/catalog/ai/tools/search_catalog", CatalogApiFixture.Raw("""{"query": "laptop", "filters": {"ram_gb": {"gte": 8}}, "limit": 5}"""));

@@ -40,6 +40,9 @@ public sealed class AiToolsController : ControllerBase
     [HttpPost("get_product_offers")]
     public async Task<ActionResult<AiToolResponse<AiOffersResult>>> GetProductOffers([FromBody] GetProductOffersToolRequest request, CancellationToken ct) => Ok(await _tools.GetProductOffersAsync(request, ct));
 
+    [HttpPost("get_prices")]
+    public async Task<ActionResult<AiToolResponse<AiPricesResult>>> GetPrices([FromBody] GetPricesToolRequest request, CancellationToken ct) => Ok(await _tools.GetPricesAsync(request, ct));
+
     [HttpPost("get_product_availability")]
     public async Task<ActionResult<AiToolResponse<AiAvailabilityResult>>> GetProductAvailability([FromBody] GetProductAvailabilityToolRequest request, CancellationToken ct) => Ok(await _tools.GetProductAvailabilityAsync(request, ct));
 
