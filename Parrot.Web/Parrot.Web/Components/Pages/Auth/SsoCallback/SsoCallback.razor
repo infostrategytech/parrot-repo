@@ -17,14 +17,14 @@
     <div class="account-panel__intro" role="status" aria-live="polite">
         <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Signing You In…</Typography>
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
-            Just a moment while we finish your Google sign-in.
+            Just a moment while we finish signing you in.
         </Typography>
     </div>
 }
 else
 {
     <div class="account-panel__intro">
-        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Google Sign-In Did Not Finish</Typography>
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Sign-In Did Not Finish</Typography>
     </div>
     <InlineError Message="@_error" />
     <Button Size="ButtonSize.Large" Class="account-panel__primary" @onclick="GoToSignIn">Back to Sign In</Button>
@@ -48,6 +48,9 @@ else
 
     [SupplyParameterFromQuery]
     private string? logoUrl { get; set; }
+
+    [SupplyParameterFromQuery]
+    private string? phoneNumber { get; set; }
 
     [SupplyParameterFromQuery]
     private string? workspaceId { get; set; }
@@ -98,13 +101,13 @@ else
 
         if (string.IsNullOrEmpty(token) || string.IsNullOrEmpty(userId) || string.IsNullOrEmpty(email))
         {
-            _error = "Google did not send back what we needed. Try again, or sign in with your email and password.";
+            _error = "Sign-in did not complete — something we needed was missing. Try again, or sign in with your email and password.";
             return;
         }
 
         if (!DateTime.TryParse(expiresAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime parsedExpiry))
         {
-            _error = "The sign-in details from Google were not valid. Try again.";
+            _error = "The sign-in details were not valid. Try again.";
             return;
         }
 
@@ -119,6 +122,7 @@ else
             WorkspaceId = string.IsNullOrEmpty(workspaceId) ? userId : workspaceId,
             BusinessName = businessName,
             LogoUrl = string.IsNullOrEmpty(logoUrl) ? null : logoUrl,
+            PhoneNumber = string.IsNullOrEmpty(phoneNumber) ? null : phoneNumber,
             // An API from before teams sends neither: the session was its owner's.
             Role = string.IsNullOrEmpty(role) ? "Owner" : role,
             Permissions = [.. (permissions ?? "").Split(',', StringSplitOptions.RemoveEmptyEntries)],
