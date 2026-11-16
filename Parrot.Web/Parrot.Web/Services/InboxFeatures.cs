@@ -31,6 +31,8 @@ public interface IInboxFeatures
     Task CorrectAsync(Guid connection, string sender, string messageId, string correction);
     /// <summary>Answers the AI's question. Returns the reply to put in the composer for review.</summary>
     Task<string> AnswerAsync(Guid connection, string sender, string messageId, string answer);
+    /// <summary>A person answered the customer in the chat themselves: the AI's question is closed and nothing is learned.</summary>
+    Task ResolveQuestionAsync(Guid connection, string sender, string messageId);
 
     Task<IReadOnlyList<InboxSavedReply>> GetSavedRepliesAsync();
     Task<InboxSavedReply> CreateSavedReplyAsync(string title, string body);
@@ -59,6 +61,7 @@ public sealed class UnavailableInboxFeatures : IInboxFeatures
     public Task<InboxDraft> DraftReplyAsync(Guid connection, string sender) => throw new NotSupportedException();
     public Task CorrectAsync(Guid connection, string sender, string messageId, string correction) => Fail();
     public Task<string> AnswerAsync(Guid connection, string sender, string messageId, string answer) => throw new NotSupportedException();
+    public Task ResolveQuestionAsync(Guid connection, string sender, string messageId) => throw new NotSupportedException();
     public Task<IReadOnlyList<InboxSavedReply>> GetSavedRepliesAsync() => Task.FromResult<IReadOnlyList<InboxSavedReply>>([]);
     public Task<InboxSavedReply> CreateSavedReplyAsync(string title, string body) => throw new NotSupportedException();
     public Task<InboxSavedReply> UpdateSavedReplyAsync(string id, string title, string body) => throw new NotSupportedException();

@@ -115,3 +115,6 @@
   .conversation-row__menu,
   ::deep .conversation-row__unread { transition: none; }
 }
+
+/* The agent's face in the state line (designer, 15 November 2026). Missing from the token set: an inline avatar size. */
+.conversation-row__face { --ds-row-face: 16px; display: inline-grid; flex: none; width: var(--ds-row-face); height: var(--ds-row-face); }

@@ -7,6 +7,8 @@
 @using Parrot.Web.Features.Dashboard.AiAgents.State
 @implements IDisposable
 @inject ITaskStore Store
+@inject ITaskQuestions Questions
+@inject AuthState Auth
 @inject AiAgentsState Agents
 @inject Parrot.Web.Services.UserClock Clock
 @inject NavigationManager Nav
@@ -146,7 +148,7 @@
                     @foreach (var task in Shown.Skip((CurrentPage - 1) * PageSize).Take(PageSize))
                     {
                         <TaskRow Item="task" Now="_now" Zone="Clock.Zone" Look="@TaskWords.AgentLook(task, Agents.Agents)"
-                                 Team="TeamForRows" Me="Store.Me"
+                                 Team="TeamForRows" Me="Store.Me" QuestionNote="@QuestionNote(task)"
                                  Open="@(task.Id == TaskId)" Fresh="@(task.Id == _fresh)"
                                  MenuOpen="@(_openMenu == "state-" + task.Id)"
                                  MenuOpenChanged="@(open => _openMenu = open ? "state-" + task.Id : null)"
@@ -187,6 +189,13 @@
     private string? _scopeKey;
 
     private IReadOnlyList<TaskRequest>? _tasks;
+    private IReadOnlyList<TaskQuestion> _questions = [];
+    private int _loadGeneration;
+    private bool _disposed;
+    private bool HasQuestionForMe(TaskRequest task) => _questions.Any(q => q.TaskId == task.Id && q.Waits(Store.Me.Id));
+    // On a row: a teammate asked you something on it, or your question has its answer back.
+    private string? QuestionNote(TaskRequest task) => _questions.Where(q => q.TaskId == task.Id && q.Waits(Store.Me.Id))
+        .Select(q => q.Answered ? "Answer is back" : "Question for you").OrderBy(note => note).FirstOrDefault();
     private IReadOnlyList<TaskPerson> _team = [];
     private DateTime _now = DateTime.UtcNow;
     private View _view = View.All;
@@ -210,6 +219,8 @@
     protected override async Task OnInitializedAsync()
     {
         Store.Changed += OnStoreChanged;
+        Questions.Changed += OnStoreChanged;
+        Auth.OnChange += OnWorkspaceChanged;
         Clock.Changed += OnClockChanged;
         if (!Store.Available) return;
         // Without the team, assigning stays hidden; the tasks still show.
@@ -248,9 +259,14 @@
 
     private async Task LoadAsync()
     {
+        var generation = ++_loadGeneration;
+        var workspace = Auth.CurrentUser?.CurrentWorkspaceId;
         try
         {
-            _tasks = await Store.ListAsync();
+            var tasks = await Store.ListAsync();
+            var questions = await Questions.ListAsync();
+            if (_disposed || generation != _loadGeneration || workspace != Auth.CurrentUser?.CurrentWorkspaceId) return;
+            _tasks = tasks; _questions = questions;
             _loadError = null;
         }
         catch (Exception exception) when (AiAgentsState.IsFailure(exception))
@@ -271,6 +287,7 @@
     </InlineError>;
 
     private void OnStoreChanged() => _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); });
+    private void OnWorkspaceChanged() { if (!_disposed) _ = InvokeAsync(async () => { _tasks = null; _questions = []; await LoadAsync(); StateHasChanged(); }); }
     private void OnClockChanged() => _ = InvokeAsync(StateHasChanged);
 
     private TaskRequest? Selected => TaskId is null ? null : _tasks?.FirstOrDefault(t => t.Id == TaskId);
@@ -280,7 +297,7 @@
         .Where(t => view switch
     {
         View.All => t.IsOpen,
-        View.Mine => t.IsOpen && t.Assignee?.Id == Store.Me.Id,
+        View.Mine => (t.IsOpen && t.Assignee?.Id == Store.Me.Id) || HasQuestionForMe(t),
         View.Unassigned => t.IsOpen && t.Assignee is null,
         View.Waiting => t.State == TaskState.Waiting,
         _ => t.IsClosed,
@@ -326,7 +343,7 @@
     private string EmptyText => _view switch
     {
         View.All => "When an agent needs you to act on a conversation, or someone adds a task, it shows here.",
-        View.Mine => "Tasks given to you show here.",
+        View.Mine => "Tasks given to you, and questions your team asked you, show here.",
         View.Unassigned => "New tasks nobody has taken on show here.",
         View.Waiting => "When you've asked a customer something and are waiting to hear back, set the task to Waiting on customer.",
         _ => "Done and cancelled tasks are kept here.",
@@ -444,7 +461,9 @@
 
     public void Dispose()
     {
+        _disposed = true; _loadGeneration++; Auth.OnChange -= OnWorkspaceChanged;
         Store.Changed -= OnStoreChanged;
+        Questions.Changed -= OnStoreChanged;
         Clock.Changed -= OnClockChanged;
     }
 }

@@ -4,6 +4,7 @@
 @inject NavigationManager Nav
 @inject Parrot.Web.Services.InboxUnreadState Unread
 @inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
+@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskQuestions TaskQuestions
 @inject Parrot.Web.Features.Dashboard.Workspace.WorkspaceClient Workspaces
 @inject Parrot.Web.Features.Dashboard.Team.PendingInvite PendingInvite
 @inject Parrot.Web.Features.Dashboard.Workspace.WorkspacePrompt WorkspacePrompt
@@ -78,6 +79,9 @@
         @Body
     </ChildContent>
 </AppShell>
+<Microsoft.AspNetCore.Components.Sections.SectionOutlet SectionName="web-task-question-modal" />
+@* The open chat's own dialog (Answer or correct the agent), apart from the task dialogs so both can exist at once. *@
+<Microsoft.AspNetCore.Components.Sections.SectionOutlet SectionName="web-chat-modal" />
 
 @* New notifications pop up here, or come from the browser when yára is in another tab. *@
 <Parrot.Web.Components.Layout.Notifications.NotificationPopupHost />
@@ -114,6 +118,7 @@
         AuthState.OnChange += AuthChanged;
         Unread.Changed += UnreadChanged;
         Tasks.Changed += TasksChanged;
+        TaskQuestions.Changed += TasksChanged;
         // Where Settings' "Back to app" returns: the last page here before it opened.
         SettingsReturn.Remember(Nav.Uri);
         Nav.LocationChanged += Moved;
@@ -252,7 +257,9 @@
             // With a team, what's yours or nobody's yet; alone, everything that needs acting on.
             var team = await Tasks.TeamAsync();
             var me = Tasks.Me.Id;
-            var count = (await Tasks.ListAsync()).Count(task => task.NeedsAction && (team.Count < 2 || task.Assignee is null || task.Assignee.Id == me));
+            var questions = await TaskQuestions.ListAsync();
+            var count = (await Tasks.ListAsync()).Count(task => (task.NeedsAction && (team.Count < 2 || task.Assignee is null || task.Assignee.Id == me))
+                || questions.Any(q => q.TaskId == task.Id && q.Waits(me)));
             _tasksNeedYou = count == 0 ? null : count;
         }
         // A count that can't be read shows none: it must never take the page down with it.
@@ -302,6 +309,7 @@
         AuthState.OnChange -= AuthChanged;
         Unread.Changed -= UnreadChanged;
         Tasks.Changed -= TasksChanged;
+        TaskQuestions.Changed -= TasksChanged;
         Nav.LocationChanged -= Moved;
         Photo.Changed -= PhotoChanged;
     }

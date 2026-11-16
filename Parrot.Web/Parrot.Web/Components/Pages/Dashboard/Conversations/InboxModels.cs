@@ -10,7 +10,9 @@ public enum InboxScope
 {
     All,
     Mine,
-    Unassigned
+    Unassigned,
+    Unread,
+    NeedsYou
 }
 
 public enum ConversationSort

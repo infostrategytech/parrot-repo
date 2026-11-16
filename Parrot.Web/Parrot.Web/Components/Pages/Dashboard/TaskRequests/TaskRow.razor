@@ -39,6 +39,7 @@ else
                         <span aria-hidden="true">·</span>
                     }
                     <span>@TaskWords.Label(Item.Kind)</span>
+                    @if (QuestionNote is { } note) { <span aria-hidden="true">·</span><span class="task-row__question">@note</span> }
                     <span aria-hidden="true">·</span>
                     @* Who raised it, here only when its column is folded away (a narrower screen). *@
                     <span class="task-row__meta-by"><TaskRaisedBy Item="Item" Look="@Look" Compact /></span>
@@ -104,6 +105,8 @@ else
 }
 
 @code {
+    /// <summary>"Question for you" or "Answer is back": a question on this task is your move.</summary>
+    [Parameter] public string? QuestionNote { get; set; }
     [Parameter] public TaskRequest Item { get; set; } = default!;
 
     /// <summary>Draws the column names instead of a task.</summary>

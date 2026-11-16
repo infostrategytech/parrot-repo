@@ -1,0 +1,47 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* A question between teammates (designer, 15 November 2026): who it is with and what is happening in one line, the
+   question, the answer once there is one (a quiet card, no side accent), then whatever the viewer can do. A used or
+   answered-for-someone-else question is drawn quieter. Presentation only: the page decides the words and actions. *@
+<article class="assigned-question @(Quiet ? "is-quiet" : null) @(Compact ? "is-compact" : null) @(Answer is { Length: > 0 } ? "has-answer" : null) @Class">
+    <PetalAvatar Seed="@PersonId" Initials="@Initials.From(PersonName)" Size="AvatarSize.Sm" />
+    <div class="assigned-question__body">
+        <div class="assigned-question__head">
+            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@Headline</Typography>
+            @if (When is { Length: > 0 })
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="assigned-question__muted">@When</Typography>
+            }
+        </div>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="assigned-question__question">@Question</Typography>
+        @if (Answer is { Length: > 0 })
+        {
+            <div class="assigned-question__answer">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="assigned-question__muted">@AnswerLabel</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@Answer</Typography>
+            </div>
+        }
+        @if (ChildContent is not null)
+        {
+            <div class="assigned-question__actions">@ChildContent</div>
+        }
+    </div>
+</article>
+
+@code {
+    /// <summary>The other person: who asked, or who was asked.</summary>
+    [Parameter, EditorRequired] public string PersonId { get; set; } = "";
+    [Parameter, EditorRequired] public string PersonName { get; set; } = "";
+    /// <summary>"Chinedu asked you", "Waiting for Chinedu", "Chinedu answered".</summary>
+    [Parameter, EditorRequired] public string Headline { get; set; } = "";
+    [Parameter] public string? When { get; set; }
+    [Parameter, EditorRequired] public string Question { get; set; } = "";
+    [Parameter] public string? Answer { get; set; }
+    [Parameter] public string AnswerLabel { get; set; } = "Answer";
+    /// <summary>Nothing left to do here: drawn quieter.</summary>
+    [Parameter] public bool Quiet { get; set; }
+    /// <summary>Above a reply box: the question as one quiet line, the answer as the main words, less padding.</summary>
+    [Parameter] public bool Compact { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

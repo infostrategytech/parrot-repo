@@ -15,6 +15,8 @@
 @inject Parrot.Web.Services.Realtime.RealtimeClient Realtime
 @inject Parrot.Web.Services.InboxUnreadState Unread
 @inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
+@inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskQuestions TaskQuestions
+@inject Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState AgentSetup
 
 <PageTitle>Inbox · yára</PageTitle>
 
@@ -51,8 +53,6 @@
                 @foreach (var scope in ScopeOptions)
                 {
                     <Tab Selected="@(_filters.Scope == scope.Value)"
-                         Disabled="@(scope.Value != InboxScope.All && !HasAssignment)"
-                         Title="@(scope.Value != InboxScope.All && !HasAssignment ? "Assignment is not available yet" : null)"
                          Count="@ScopeCount(scope.Value)"
                          OnClick="() => SetScope(scope.Value)">
                         <Typography TextStyle="TextStyle.Small12Semibold" As="span">@scope.Label</Typography>
@@ -206,7 +206,8 @@
                                          Selected="@(conversation.Id == _selected?.Id)"
                                          OnSelect="() => SelectConversationAsync(conversation.Id)"
                                          OnTogglePin="() => TogglePinAsync(conversation)"
-                                         OnToggleUnread="() => ToggleMarkedUnreadAsync(conversation)" />
+                                         OnToggleUnread="() => ToggleMarkedUnreadAsync(conversation)"
+                                         AgentLook="@AgentLookup.Look(conversation.AiAgent?.Id, conversation.AiAgent?.Name, AgentSetup.Agents)" />
                     }
 
                     @if (_more)
@@ -271,10 +272,10 @@
                     @if (_selected.HasAiAgent)
                     {
                         <span class="inbox-agent-presence is-@_selected.AiState.ToString()!.ToLowerInvariant()">
-                            <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                            <span class="agent-face-inline"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@SelectedLook" Paused="@(_selected.AiState != AiState.Active)" /></span>
                             <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.AiAgent!.Name</Typography>
                             <i aria-hidden="true"></i>
-                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.AiState</Typography>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(_selected.AiState == AiState.Active ? "Replying" : "Paused")</Typography>
                         </span>
                     }
                     @if (_selected.HasAiAgent && _selected.ActiveEscalation is { } esc)
@@ -284,41 +285,11 @@
                             <Typography TextStyle="TextStyle.Small12Semibold" As="span">@HeaderEscalationText(esc)</Typography>
                         </span>
                     }
-                    @if (_selected.Assignee is { } assignee)
-                    {
-                        <span class="inbox-ownership">
-                            <PetalAvatar Seed="@assignee.Id" Initials="@Initials.From(assignee.Name)" Size="AvatarSize.Sm" />
-                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@assignee.Name</Typography>
-                        </span>
-                    }
-                    else if (Features.Available && _selected.HasAiAgent)
-                    {
-                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" disabled="@_acting"
-                                @onclick="() => ActAsync(conversation => Features.AssignToMeAsync(conversation.ConnectionId, conversation.Sender))">
-                            <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
-                            <ChildContent>Assign to me</ChildContent>
-                        </Button>
-                    }
                     <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
                         @if (_selected.HasChannelAgent && _selected.AiState != AiState.Active)
                         {
                             <ActionMenuItem Label="@ResponseControl.ReturnWords(_selected, _selected.AiAgent?.Name ?? _selected.ChannelAgent!.Name)" Glyph="IconName.RiRobot3Fill"
                                             OnClick="() => ActAsync(conversation => Client.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender, _lifetime.Token))" />
-                        }
-                        @if (Features.Available && _selected.HasAiAgent)
-                        {
-                            @if (_selected.Assignee is not null)
-                            {
-                                <ActionMenuItem Label="Unassign conversation" Glyph="IconName.RiUserUnfollowFill"
-                                                OnClick="() => ActAsync(conversation => Features.UnassignAsync(conversation.ConnectionId, conversation.Sender))" />
-                            }
-                            @* Pause AI: shown when the AI is active and the agent wants to take over without sending a message first.
-                               Requires POST /api/conversations/{connectionId}/human-takeover — pending backend implementation. *@
-                            @if (_selected.AiState == AiState.Active)
-                            {
-                                <ActionMenuItem Label="Pause AI and assign to me" Glyph="IconName.RiRobot3Fill"
-                                                OnClick="() => ActAsync(conversation => Features.PauseAiAsync(conversation.ConnectionId, conversation.Sender))" />
-                            }
                         }
                         <ActionMenuItem Label="@(_selected.Pinned ? "Unpin" : "Pin to top")" Glyph="IconName.RiPushpin2Fill"
                                         OnClick="() => TogglePinAsync(_selected)" />
@@ -336,7 +307,9 @@
                     <ConversationTimeline @key="_selected.Id" Conversation="@_selected"
                                           AuthorName="@AuthorName" AuthorSeed="@AuthorSeed" Busy="@_busy"
                                           OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" OnChanged="RefreshAsync"
-                                          OnCustomerDetails="OpenCustomerDetailsAsync" FocusMessageId="@FocusMessage" />
+                                          OnCustomerDetails="OpenCustomerDetailsAsync" FocusMessageId="@FocusMessage"
+                                          AgentLook="@AgentLookup.Look(_selected.AiAgent?.Id, _selected.AiAgent?.Name, AgentSetup.Agents)"
+                                          OnOpenTask="OpenTaskAsync" />
                 </div>
 
                 @* A raw full-area button is intentional: it is the drawer's
@@ -365,6 +338,12 @@
     <Parrot.Web.Components.Pages.Dashboard.TaskRequests.NewTaskDialog Open="_taskOpen" Customer="TaskCustomer(_selected)"
                                                                       OnClose="() => _taskOpen = false" OnCreated="TaskAddedAsync" />
 }
+
+
+@* A chat's task, over the chat: its details, status and actions without leaving the Inbox. *@
+<Parrot.Web.Components.Pages.Dashboard.TaskRequests.TaskPanel Item="OpenTask" Team="_taskTeam" Now="DateTime.UtcNow"
+    Look="@(OpenTask is { } shown ? Parrot.Web.Features.Dashboard.TaskRequests.TaskWords.AgentLook(shown, AgentSetup.Agents) : null)"
+    OnClose="() => _openTaskId = null" OnReply="() => _openTaskId = null" />
 
 @code {
     private bool _taskOpen;
@@ -403,8 +382,47 @@
     private ElementReference _customerPanel;
     private bool _customerFocusPending;
 
+    private string? SelectedLook => AgentLookup.Look(_selected?.AiAgent?.Id, _selected?.AiAgent?.Name, AgentSetup.Agents);
+
     private static readonly (InboxScope Value, string Label)[] ScopeOptions =
-        [(InboxScope.All, "All"), (InboxScope.Mine, "Mine"), (InboxScope.Unassigned, "Unassigned")];
+        [(InboxScope.All, "All"), (InboxScope.Unread, "Unread"), (InboxScope.NeedsYou, "Needs you")];
+
+    // Needs you (designer, 15 November 2026): every chat where it's your move. A task in it is yours and still to do,
+    // (or nobody's yet), a teammate asked you something about it, their answer to your question is back, or the agent is waiting on you.
+    private IReadOnlyList<Parrot.Web.Features.Dashboard.TaskRequests.TaskQuestion> _taskQuestions = [];
+    private HashSet<string> _myTaskChats = [];
+    // A chat's task, opened over the chat (designer, 15 November 2026): the Tasks page stays where it is.
+    private IReadOnlyList<Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest> _allTasks = [];
+    private IReadOnlyList<Parrot.Web.Features.Dashboard.TaskRequests.TaskPerson> _taskTeam = [];
+    private string? _openTaskId;
+    private Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest? OpenTask => _openTaskId is null ? null : _allTasks.FirstOrDefault(t => t.Id == _openTaskId);
+    private async Task OpenTaskAsync(string id)
+    {
+        if (_taskTeam.Count == 0) { try { _taskTeam = await Tasks.TeamAsync(_lifetime.Token); } catch (Exception e) when (e is HttpRequestException or InvalidOperationException) { } }
+        if (_allTasks.All(t => t.Id != id)) await LoadQuestionsAsync();
+        _openTaskId = id;
+    }
+    private int _questionsGeneration;
+    private bool NeedsMe(ConversationItem conversation) => _myTaskChats.Contains(conversation.Id)
+        || _taskQuestions.Any(q => q.ConversationId == conversation.Id && q.Waits(Tasks.Me.Id))
+        || conversation.NeedsAnswer || conversation.PendingApproval is not null;
+    private void QuestionsChanged() { if (!_disposed) _ = InvokeAsync(async () => { await LoadQuestionsAsync(); await RefreshAsync(); StateHasChanged(); }); }
+    private async Task LoadQuestionsAsync()
+    {
+        var generation = ++_questionsGeneration;
+        try
+        {
+            var questions = TaskQuestions.Available ? await TaskQuestions.ListAsync(_lifetime.Token) : [];
+            var tasks = Tasks.Available ? await Tasks.ListAsync(_lifetime.Token) : [];
+            if (_disposed || generation != _questionsGeneration) return;
+            _taskQuestions = questions;
+            _allTasks = tasks;
+            // Yours, or nobody's yet (as the Tasks badge counts): alone, every open task is yours.
+            _myTaskChats = tasks.Where(t => t.NeedsAction && (t.Assignee is null || t.Assignee.Id == Tasks.Me.Id) && t.Customer?.ConversationId is not null)
+                .Select(t => t.Customer!.ConversationId!).ToHashSet();
+        }
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException) { if (!_disposed && generation == _questionsGeneration) { _taskQuestions = []; _myTaskChats = []; _error = "Your tasks couldn't load. Refresh to check what needs you."; } }
+    }
 
     // Filters are labels only: FilterPopover draws no second line (7 November 2026). "Pending" is the weak
     // one — it does not say whose move it is — but that is a label to settle, not a line to explain it away.
@@ -477,6 +495,8 @@
             {
                 InboxScope.Mine => list.Where(item => item.Assignee?.IsMe == true),
                 InboxScope.Unassigned => list.Where(item => item.HasAiAgent && item.Assignee is null),
+                InboxScope.Unread => list.Where(item => item.UnreadCount > 0 || item.MarkedUnread),
+                InboxScope.NeedsYou => list.Where(NeedsMe),
                 _ => list
             };
             if (_filters.Channel is { } channel) list = list.Where(item => item.Channel == channel);
@@ -489,8 +509,12 @@
 
     protected override void OnInitialized()
     {
+        // Agents' looks for their avatars; until they load, each keeps a look of its own.
+        _ = InvokeAsync(async () => { try { await AgentSetup.LoadAsync(); } catch (Exception) { } if (!_disposed) StateHasChanged(); });
         ConversationsState.Clear();
         AuthState.OnChange += AuthChanged;
+        TaskQuestions.Changed += QuestionsChanged; Tasks.Changed += QuestionsChanged;
+        QuestionsChanged();
         Realtime.MessageReceived += OnMessagePushed;
         Realtime.ReceiptsChanged += OnReceiptsChanged;
         Realtime.MediaChanged += OnMediaChanged;
@@ -665,6 +689,7 @@
     {
         await CloseCustomerDetailsAsync();
         ConversationsState.Clear(); _selected = null; _loaded = 50; _initialLoad = true;
+        _taskQuestions = []; await LoadQuestionsAsync();
         await RefreshAsync();
         await Realtime.StartAsync();
         StateHasChanged();
@@ -1001,6 +1026,8 @@
     private string ScopeCount(InboxScope scope) => scope switch
     {
         InboxScope.All => Loaded.Count.ToString(),
+        InboxScope.Unread => Loaded.Count(c => c.UnreadCount > 0 || c.MarkedUnread).ToString(),
+        InboxScope.NeedsYou => Loaded.Count(NeedsMe).ToString(),
         _ when !HasAssignment => "—",
         InboxScope.Mine => Loaded.Count(c => c.Assignee?.IsMe == true).ToString(),
         _ => Loaded.Count(c => c.HasAiAgent && c.Assignee is null).ToString()
@@ -1064,6 +1091,7 @@
 
     public void Dispose()
     {
+        TaskQuestions.Changed -= QuestionsChanged; Tasks.Changed -= QuestionsChanged;
         _disposed = true; AuthState.OnChange -= AuthChanged;
         Realtime.MessageReceived -= OnMessagePushed; Realtime.ReceiptsChanged -= OnReceiptsChanged; Realtime.MediaChanged -= OnMediaChanged; _mediaRefresh?.Cancel(); Realtime.Reconnected -= OnRealtimeReconnected; Realtime.AgentActivityReceived -= OnAgentActivityPushed;
         _lifetime.Cancel(); _lifetime.Dispose();

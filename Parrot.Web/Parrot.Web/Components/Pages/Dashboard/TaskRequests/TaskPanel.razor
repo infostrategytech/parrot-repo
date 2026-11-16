@@ -100,6 +100,7 @@
                 </dl>
 
                 <Parrot.Web.Components.Pages.Dashboard.Tools.ToolTaskAction TaskId="@task.Id" OnPendingChanged="pending => _toolPending = pending" />
+                <TaskQuestions TaskId="@task.Id" />
 
                 <section class="task-panel__section">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">What's needed</Typography>
@@ -237,6 +238,14 @@
                     <ChildContent>Edit</ChildContent>
                 </Button>
                 <div class="task-panel__footer-main">
+                    @* Someone else should do it, or knows the answer (designer, 15 November 2026). *@
+                    @if (!task.IsClosed && Team.Count > 1)
+                    {
+                        <Button Variant="ButtonVariant.Secondary" @onclick="() => _passing = true">
+                            <IconLeft><Icon Name="IconName.RiUserSharedFill" /></IconLeft>
+                            <ChildContent>Pass on</ChildContent>
+                        </Button>
+                    }
                     @if (task.Customer?.ConversationId is not null && !task.IsClosed)
                     {
                         @* A quote with something in it says what the reply is for; either way the conversation opens
@@ -274,6 +283,7 @@
 </SidePanel>
 
 <NewTaskDialog Open="@(_editing && Item is not null)" Editing="Item" OnClose="() => _editing = false" OnCreated="_ => _editing = false" />
+<PassOnDialog Open="_passing" Item="Item" OnClose="() => _passing = false" OnPassed="PassedAsync" />
 
 @code {
     [Parameter] public TaskRequest? Item { get; set; }
@@ -286,6 +296,8 @@
 
     [Parameter] public DateTime Now { get; set; } = DateTime.UtcNow;
     [Parameter] public EventCallback OnClose { get; set; }
+    /// <summary>Opened over its own chat in the Inbox: Reply goes back to the chat instead of opening it again.</summary>
+    [Parameter] public EventCallback OnReply { get; set; }
 
     private string? _openMenu;
     private bool _toolPending;
@@ -318,6 +330,8 @@
     private bool _posting;
     private bool _allHistory;
     private bool _editing;
+    private bool _passing;
+    private async Task PassedAsync() { _passing = false; await OnClose.InvokeAsync(); }
 
     protected override void OnParametersSet()
     {
@@ -329,6 +343,7 @@
             _allHistory = false;
             _openMenu = null;
             _editing = false;
+            _passing = false;
             _toolPending = false;
         }
     }
@@ -412,5 +427,10 @@
         return task.RaisedInMessageId is { } line ? $"{url}?message={Uri.EscapeDataString(line)}" : url;
     }
 
-    private void OpenConversation(TaskRequest task) => Nav.NavigateTo(ConversationUrl(task));
+    private Task OpenConversation(TaskRequest task)
+    {
+        if (OnReply.HasDelegate) return OnReply.InvokeAsync();
+        Nav.NavigateTo(ConversationUrl(task));
+        return Task.CompletedTask;
+    }
 }

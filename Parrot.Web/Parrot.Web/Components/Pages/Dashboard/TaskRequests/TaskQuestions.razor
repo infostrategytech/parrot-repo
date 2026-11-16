@@ -1,0 +1,176 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.AiAgents.State
+@implements IDisposable
+@inject ITaskQuestions Questions
+@inject ITaskStore Tasks
+@inject TaskReplyDraft ReplyDraft
+@inject Parrot.Web.Services.UserClock Clock
+@inject NavigationManager Nav
+@inject ToastService Toasts
+
+@* Questions between teammates (designer, 15 November 2026: super simple). In a task: every question on it, yours to
+   act on first. Above a chat's reply box (Compact): only what is your move there, a question to answer or an answer
+   to use. Answering happens in place; "Use in reply" puts the answer in the reply box, to edit and send. *@
+@if (Questions.Available && Shown.Any() && Only is not < 0)
+{
+    <section class="task-questions @(Compact ? "is-compact" : null)" aria-label="Questions for your team">
+        @if (!Compact)
+        {
+            <Typography TextStyle="TextStyle.BodySmallSemibold" As="h3">Questions</Typography>
+        }
+        @foreach (var question in Only is int only ? Shown.Skip(only).Take(only < 0 ? 0 : 1) : Shown)
+        {
+            var mine = question.AskedBy.Id == Me;
+            var forMe = question.AskedOf.Id == Me;
+            var other = forMe ? question.AskedBy : question.AskedOf;
+            <AssignedQuestionCard PersonId="@other.Id" PersonName="@other.Name" Headline="@Headline(question)"
+                                  When="@TaskWords.Ago(question.UpdatedAt, DateTime.UtcNow, Clock.Zone)"
+                                  Question="@question.Text" Answer="@question.Answer" AnswerLabel="@($"{First(question.AskedOf)}'s answer")"
+                                  Quiet="@(!question.Waits(Me))" Compact="Compact" Class="@(Compact ? "task-questions__strip" : null)">
+                @if (forMe && !question.Answered)
+                {
+                    @if (_answering == question.Id)
+                    {
+                        <div class="task-questions__answer">
+                            <TextArea Value="@_answer" ValueChanged="value => _answer = value ?? string.Empty" Rows="2" AutoGrow MaxLength="TaskQuestionRules.MaxLength"
+                                      AriaLabel="Your answer" Placeholder="@($"Your answer for {First(question.AskedBy)}")" />
+                            @if (_error is not null) { <InlineError Message="@_error" /> }
+                            <div class="task-questions__row">
+                                <Button Size="ButtonSize.Small" Busy="_busy" @onclick="() => AnswerAsync(question)">Send answer</Button>
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_busy" @onclick="CancelAnswer">Cancel</Button>
+                            </div>
+                        </div>
+                    }
+                    else
+                    {
+                        <Button Size="ButtonSize.Small" @onclick="() => StartAnswer(question)">Answer</Button>
+                    }
+                }
+                else if (mine && question.Waits(Me))
+                {
+                    <Button Size="ButtonSize.Small" Busy="@(_busy && _closing == question.Id)" @onclick="() => UseAsync(question)">
+                        <IconLeft><Icon Name="IconName.RiReplyFill" /></IconLeft>
+                        <ChildContent>Use in reply</ChildContent>
+                    </Button>
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_busy" @onclick="() => CloseAsync(question)">Done</Button>
+                }
+            </AssignedQuestionCard>
+        }
+        @if (_error is not null && _answering is null)
+        {
+            <InlineError Message="@_error" OnDismiss="() => _error = null" />
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public string? TaskId { get; set; }
+    [Parameter] public string? ConversationId { get; set; }
+    /// <summary>Above a chat's reply box: only what is the viewer's move.</summary>
+    [Parameter] public bool Compact { get; set; }
+    /// <summary>In a chat: put these words in the reply box. Without it, the chat opens with them there.</summary>
+    [Parameter] public EventCallback<string> OnUseAnswer { get; set; }
+    /// <summary>Above a reply box, one card at a time (designer, 15 November 2026): which of the viewer's questions to
+    /// show; below zero shows none (another card has the place). Null shows them all.</summary>
+    [Parameter] public int? Only { get; set; }
+    /// <summary>How many questions are the viewer's move here, for the place's "1 of 3".</summary>
+    [Parameter] public EventCallback<int> OnCount { get; set; }
+    private int _reported = -1;
+
+    private IReadOnlyList<TaskQuestion> _questions = [];
+    private string? _answering, _closing, _error;
+    private string _answer = "";
+    private bool _busy, _disposed;
+    private int _generation;
+    private Guid? _request;
+
+    private string Me => Tasks.Me.Id;
+
+    private IEnumerable<TaskQuestion> Shown => _questions
+        .Where(q => TaskId is not null ? q.TaskId == TaskId : q.ConversationId == ConversationId)
+        .Where(q => !Compact || q.Waits(Me) || q.Id == _answering)
+        .OrderByDescending(q => q.Waits(Me)).ThenBy(q => q.Closed || (q.Answered && q.AskedBy.Id != Me)).ThenByDescending(q => q.UpdatedAt);
+
+    private static string First(TaskPerson person) => person.Name.Split(' ', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault() ?? person.Name;
+
+    private string Headline(TaskQuestion q) => (q.AskedBy.Id == Me, q.AskedOf.Id == Me, q.Answered) switch
+    {
+        (_, true, false) => $"{First(q.AskedBy)} asked you",
+        (_, true, true) => $"You answered {First(q.AskedBy)}",
+        (true, _, false) => $"Waiting for {First(q.AskedOf)}",
+        (true, _, true) => $"{First(q.AskedOf)} answered",
+        (_, _, false) => $"{First(q.AskedBy)} asked {First(q.AskedOf)}",
+        _ => $"{First(q.AskedOf)} answered {First(q.AskedBy)}",
+    };
+
+    protected override void OnInitialized() { Questions.Changed += Changed; Tasks.Changed += Changed; }
+    protected override Task OnParametersSetAsync() => LoadAsync();
+    private void Changed() { if (!_disposed) _ = InvokeAsync(async () => { await LoadAsync(); StateHasChanged(); }); }
+
+    private async Task LoadAsync()
+    {
+        if (!Questions.Available) return;
+        var generation = ++_generation;
+        try
+        {
+            var questions = await Questions.ListAsync();
+            if (!_disposed && generation == _generation)
+            {
+                _questions = questions;
+                var count = Shown.Count();
+                if (count != _reported) { _reported = count; await OnCount.InvokeAsync(count); }
+            }
+        }
+        catch (Exception e) when (AiAgentsState.IsFailure(e)) { if (!_disposed && generation == _generation) _error = "Questions couldn't load. Refresh to try again."; }
+    }
+
+    private void StartAnswer(TaskQuestion question) { _answering = question.Id; _answer = ""; _error = null; _request = null; }
+    private void CancelAnswer() { if (_busy) return; _answering = null; _answer = ""; _error = null; }
+
+    private async Task AnswerAsync(TaskQuestion question)
+    {
+        _request ??= Guid.NewGuid();
+        if (await RunAsync(new(_request.Value, QuestionAction.Answer, question.TaskId, question.Id, question.Revision, _answer)))
+        {
+            _answering = null; _answer = ""; _request = null;
+            Toasts.Show($"Sent your answer to {First(question.AskedBy)}.");
+        }
+    }
+
+    // The answer goes in the reply box (here, or in the chat once it opens), and the question is done.
+    private async Task UseAsync(TaskQuestion question)
+    {
+        _closing = question.Id;
+        if (!await RunAsync(new(Guid.NewGuid(), QuestionAction.Close, question.TaskId, question.Id, question.Revision))) return;
+        if (OnUseAnswer.HasDelegate) await OnUseAnswer.InvokeAsync(question.Answer!);
+        else
+        {
+            ReplyDraft.Set(question.ConversationId, question.Answer!);
+            Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(question.ConversationId)}");
+        }
+    }
+
+    private async Task CloseAsync(TaskQuestion question)
+    {
+        _closing = question.Id;
+        await RunAsync(new(Guid.NewGuid(), QuestionAction.Close, question.TaskId, question.Id, question.Revision));
+    }
+
+    // Typed words stay in the box when a change doesn't save.
+    private async Task<bool> RunAsync(QuestionCommand command)
+    {
+        if (_busy) return false;
+        if (TaskQuestionRules.Validate(command) is { } invalid) { _error = invalid; return false; }
+        _busy = true; _error = null;
+        try { await Questions.ApplyAsync(command); return true; }
+        catch (Exception e) when (e is InvalidOperationException || AiAgentsState.IsFailure(e))
+        {
+            _error = e is InvalidOperationException ? e.Message : "That didn't save. Check your connection and try again.";
+            return false;
+        }
+        finally { _busy = false; _closing = null; }
+    }
+
+    public void Dispose() { _disposed = true; _generation++; Questions.Changed -= Changed; Tasks.Changed -= Changed; }
+}

@@ -5,7 +5,7 @@ public enum NotificationType
     Legacy, AgentQuestion, AgentApproval, KnowledgeReview, AgentRecovery, ImportFailed, HumanHandoverTask,
     TaskNeedsAttention, TaskAssigned, TaskDue, TaskOverdue, TaskOutcome, BookingConfirmed, BookingChanged,
     BookingCancelled, PaymentReceived, PaymentProblem, ConnectionAttention, ToolActionFailed, UsageNearLimit,
-    UsageLimitReached, BillingPaymentFailed, SignInDetected, PasswordChanged, InvitationAccepted
+    UsageLimitReached, BillingPaymentFailed, SignInDetected, PasswordChanged, InvitationAccepted, TeamQuestionAsked, TeamQuestionAnswered
 }
 
 /// <summary>One notification type and its words. <paramref name="Many"/>: the headline for several of this type still waiting
@@ -32,6 +32,8 @@ public static class NotificationCatalogue
         new(NotificationType.HumanHandoverTask, "conversation.handover.task_created", "A customer has been assigned to you.", "Open task", Many: "{0} customers have been assigned to you.", ManyAction: "View tasks"),
         new(NotificationType.TaskNeedsAttention, "task.action_required", "A task needs your attention.", "Open task", Many: "{0} tasks need your attention.", ManyAction: "View tasks"),
         new(NotificationType.TaskAssigned, "task.assigned", "A task has been assigned to you.", "Open task", Many: "{0} tasks have been assigned to you.", ManyAction: "View tasks"),
+        new(NotificationType.TeamQuestionAsked, "task.question.asked", "A teammate asked you a question.", "Open chat"),
+        new(NotificationType.TeamQuestionAnswered, "task.question.answered", "Your question has an answer.", "Open chat"),
         new(NotificationType.TaskDue, "task.due", "A task is due soon.", "Open task", Many: "{0} tasks are due soon.", ManyAction: "View tasks"),
         new(NotificationType.TaskOverdue, "task.overdue", "A task is overdue.", "Open task", Many: "{0} tasks are overdue.", ManyAction: "View tasks"),
         new(NotificationType.TaskOutcome, "task.outcome.confirmed", "A task has an update.", "Open task"),
@@ -60,6 +62,8 @@ public static class NotificationCatalogue
             return item.Type switch
             {
                 NotificationType.AgentQuestion => $"Question from {agent} · {ResolutionLabel(item)}",
+                NotificationType.TeamQuestionAsked => $"Question from your team · {ResolutionLabel(item)}",
+                NotificationType.TeamQuestionAnswered => $"Answer from your team · {ResolutionLabel(item)}",
                 NotificationType.AgentApproval => $"Action from {agent} · {ResolutionLabel(item)}",
                 NotificationType.HumanHandoverTask or NotificationType.TaskAssigned or NotificationType.TaskNeedsAttention or NotificationType.TaskOverdue => $"Task · {ResolutionLabel(item)}",
                 NotificationType.KnowledgeReview => $"Information review · {ResolutionLabel(item)}",

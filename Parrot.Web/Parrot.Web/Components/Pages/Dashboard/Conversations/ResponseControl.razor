@@ -9,7 +9,7 @@
         <div class="response-control__row">
             <span class="response-control__copy">
                 <span>
-                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">You control customer replies</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">You’re replying</Typography>
                     <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Messages you send go directly to this customer.</Typography>
                 </span>
             </span>
@@ -26,7 +26,8 @@ else
             <span class="response-control__copy">
                 @if (Conversation.AiState == AiState.Active)
                 {
-                    <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                    @if (AgentLook is { } look) { <span class="agent-face-inline"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span> }
+                    else { <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /> }
                 }
                 <span>
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@Title</Typography>
@@ -48,7 +49,6 @@ else
                 <Button Size="ButtonSize.Small" Class="response-control__action" Busy="@(Busy && !_choosing)"
                         aria-controls="takeover-options" aria-expanded="@(_expanded ? "true" : "false")"
                         disabled="@(Busy || _choosing)" @onclick="ToggleAsync">
-                    <IconLeft><Icon Name="IconName.RiUserAddFill" /></IconLeft>
                     <ChildContent>Take over</ChildContent>
                 </Button>
             }
@@ -56,7 +56,6 @@ else
             {
                 <Button Size="ButtonSize.Small" Class="response-control__action is-return" Busy="@Busy"
                         disabled="@Busy" @onclick="OnReturn">
-                    <IconLeft><Icon Name="IconName.RiRobot3Fill" /></IconLeft>
                     <ChildContent>@ReturnLabel</ChildContent>
                 </Button>
             }
@@ -87,6 +86,8 @@ else
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
     /// <summary>The take-over actions exist when supported; otherwise the bar only states who replies.</summary>
     [Parameter] public bool CanAct { get; set; }
+    /// <summary>The agent's saved look: its face, not a robot icon.</summary>
+    [Parameter] public string? AgentLook { get; set; }
     [Parameter] public string? Countdown { get; set; }
     [Parameter] public bool Busy { get; set; }
     /// <summary>Minutes to take over for; null means until the person hands it back.</summary>
@@ -111,11 +112,12 @@ else
     private string? _settle;
     private string Agent => Conversation.AiAgent?.Name ?? Conversation.ChannelAgent?.Name ?? "the AI agent";
     private string ControlClass => Conversation.AiState == AiState.Active ? "ai-has-control" : "human-has-control";
-    private string Title => Conversation.AiState == AiState.Active ? $"{Agent} is responding" : "You control customer replies";
+    // The mobile app's words (designer, 15 November 2026).
+    private string Title => Conversation.AiState == AiState.Active ? $"{Agent} is handling replies" : "You’re replying";
     private string Description => Conversation.AiState == AiState.Active
-        ? "Human reply is locked to prevent a duplicate response."
+        ? "Take over to reply yourself."
         : Conversation.HasAiAgent
-            ? $"{Agent} will not send while you are in control."
+            ? $"{Agent} is paused."
             : $"{Agent} isn't replying to this customer.";
 
     // Our words, not "Handover": in yára a handover is the agent bringing a
