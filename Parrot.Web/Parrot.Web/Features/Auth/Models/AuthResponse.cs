@@ -24,6 +24,9 @@ public class AuthResponse
     // The current workspace's logo, or null when none has been uploaded.
     public string? LogoUrl { get; set; }
 
+    // The signed-in user's phone number, if one is set on their account.
+    public string? PhoneNumber { get; set; }
+
     // "Owner", or the role the person was given in this workspace.
     public string Role { get; set; } = "Owner";
 
