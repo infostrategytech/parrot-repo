@@ -25,7 +25,14 @@
         </Typography>
 
         <span class="conversation-row__meta @StateClass">
-            <Icon Name="StateGlyph" Size="IconSize.Inherit" />
+            @if (Conversation.HasAiAgent && AgentLook is { } look)
+            {
+                <span class="conversation-row__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" Paused="@(Conversation.AiState != AiState.Active)" /></span>
+            }
+            else
+            {
+                <Icon Name="StateGlyph" Size="IconSize.Inherit" />
+            }
             <Typography TextStyle="TextStyle.Small12Medium" As="span">@StateLabel</Typography>
         </span>
         @if (Conversation.ActiveEscalation is { } escalation)
@@ -72,6 +79,8 @@
 @code {
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
     [Parameter] public bool Selected { get; set; }
+    /// <summary>The agent's saved look: its face shows instead of an icon.</summary>
+    [Parameter] public string? AgentLook { get; set; }
     [Parameter] public EventCallback OnSelect { get; set; }
     [Parameter] public EventCallback OnTogglePin { get; set; }
     [Parameter] public EventCallback OnToggleUnread { get; set; }
@@ -112,8 +121,8 @@
     private string StateLabel => !Conversation.HasAiAgent
         ? "Manual replies"
         : Conversation.NeedsAnswer
-            ? $"{Conversation.AiAgent!.Name} needs answer"
-            : $"{Conversation.AiAgent!.Name} · {Conversation.AiState}";
+            ? $"{Conversation.AiAgent!.Name} · Needs your answer"
+            : $"{Conversation.AiAgent!.Name} · {(Conversation.AiState == AiState.Active ? "Replying" : "Paused")}";
 
     private string StateClass => !Conversation.HasAiAgent
         ? "state-handoff"

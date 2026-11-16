@@ -274,3 +274,6 @@
   .inbox-customer { inset: 0; width: 100%; border: 0; border-radius: 0; }
   .inbox-stage { padding: var(--spacing-2xl); }
 }
+
+/* The agent's face in its header pill (designer, 15 November 2026). Missing from the token set: an inline avatar size. */
+.inbox-agent-presence .agent-face-inline { --ds-inline-face: 16px; display: inline-grid; flex: none; width: var(--ds-inline-face); height: var(--ds-inline-face); }

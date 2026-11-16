@@ -73,19 +73,6 @@
 .conversation-timeline__composer > ::deep * { width: 100%; max-width: var(--ds-timeline-rail); margin-inline: auto; pointer-events: auto; transform: translateX(var(--ds-timeline-optical-shift)); }
 .conversation-timeline__resolved { display: flex; gap: var(--spacing-xs); align-items: center; justify-content: center; color: var(--colors-text-muted); }
 
-.learning-dialog { display: grid; gap: var(--spacing-lg); }
-.learning-dialog__source { display: grid; gap: var(--spacing-xs); padding: var(--spacing-md); background: var(--colors-surface-muted); border-radius: var(--radius-radius-lg); }
-.learning-dialog__source ::deep > span { color: var(--colors-text-muted); }
-/* The field label keeps its own colour, not the dialog description's. */
-.learning-dialog__field ::deep > span { color: var(--colors-text-secondary); }
-.learning-dialog__source ::deep p { color: var(--colors-text-secondary); white-space: pre-wrap; }
-.learning-dialog > label { display: grid; gap: var(--spacing-xs); }
-.learning-dialog > label textarea { width: 100%; padding: var(--spacing-md); color: var(--colors-text-primary); line-height: var(--typography-leading-leading-lg); resize: vertical; background: var(--colors-surface-input); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-lg); outline: 0; }
-.learning-dialog > label textarea:focus { border-color: var(--colors-brand-primary); }
-.learning-dialog__commitment { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: var(--spacing-sm); align-items: start; padding: var(--spacing-md); color: var(--colors-accent-teal-text); background: var(--colors-accent-teal-subtle); border-radius: var(--radius-radius-lg); }
-.learning-dialog__commitment > span { display: grid; gap: var(--spacing-2xs); }
-.learning-dialog__commitment ::deep strong { color: var(--colors-text-secondary); }
-.learning-dialog__commitment ::deep small { color: var(--colors-text-muted); }
 
 .conversation-timeline {
   /* Missing from the token set: no z-index or backdrop-blur scale. */
@@ -120,8 +107,6 @@
   .conversation-timeline__tabs { transform: translateX(var(--ds-timeline-optical-shift)); }
 }
 
-/* The take-over window counts down in the control bar; the answer field in the teaching dialog. */
-.learning-dialog__field { display: grid; gap: var(--spacing-xs); }
 
 /* Up to this width the composer reaches the right-hand corner, where the
    shell's floating theme toggle sits; the footer keeps clear of it so Send
@@ -135,20 +120,6 @@
   --ds-timeline-toggle-reserve: 48px;
 }
 
-/* React's teaching dialog: a little wider, a hairline under the header, and a
-   quieter Cancel. */
-.learning-dialog-host ::deep .dialog-backdrop { --ds-dialog-width: 540px; }
-.learning-dialog-host ::deep .dialog > header {
-  margin-inline: calc(var(--spacing-3xl) * -1);
-  padding: 0 var(--spacing-3xl) var(--spacing-lg);
-  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
-}
-.learning-dialog-host ::deep .dialog > footer .ds-button.ds-button--secondary {
-  box-shadow: none;
-  background: var(--colors-surface-muted);
-  border-color: transparent;
-}
-.learning-dialog-host ::deep .learning-dialog__source .ds-overline { color: var(--colors-text-subtle); }
 
 /* ── AI typing indicator ─────────────────────────────────────────────────── */
 /* Mirrors a message-bubble row's left-aligned layout without being one. */
@@ -241,3 +212,27 @@
   .conversation-timeline__composer { padding-inline: var(--spacing-sm); }
   .conversation-timeline__loading { padding-inline: var(--spacing-md); }
 }
+
+/* The "did that answer it?" card sits on the conversation as the reply control does: lifted. */
+.conversation-timeline__composer ::deep .conversation-timeline__resolve { box-shadow: 0 var(--spacing-xs) var(--spacing-xl) var(--colors-surface-shadow-diffuse); }
+
+/* Answer or correct the agent (designer, 15 November 2026): its words as its own chat bubble, then one box. */
+.learning-dialog { display: grid; gap: var(--spacing-lg); }
+.learning-dialog__bubble { display: flex; flex-direction: row-reverse; gap: var(--spacing-sm); align-items: flex-start; justify-self: end; max-width: 92%; }
+.learning-dialog__avatar { display: grid; flex: none; place-items: center; width: var(--spacing-3xl); height: var(--spacing-3xl); color: var(--colors-brand-primary); }
+.learning-dialog__said { display: grid; gap: var(--spacing-2xs); padding: var(--spacing-sm) var(--spacing-md); color: var(--colors-text-secondary); background: var(--colors-accent-brand-subtle); border: var(--ds-hairline) solid var(--colors-accent-brand-muted); border-radius: var(--radius-radius-lg); border-top-right-radius: var(--radius-radius-xs); }
+.learning-dialog__said ::deep strong { color: var(--colors-text-primary); }
+.learning-dialog__said ::deep p { white-space: pre-wrap; }
+.learning-dialog ::deep .learning-dialog__note { color: var(--colors-text-muted); }
+.learning-dialog__footer { display: flex; gap: var(--spacing-md); align-items: center; justify-content: flex-end; width: 100%; }
+
+/* One open task in this chat, above the reply box: what it is, whose, and View task. Lifted like the reply control. */
+.conversation-timeline__task { display: flex; gap: var(--spacing-md); align-items: center; padding: var(--spacing-sm) var(--spacing-md); background: var(--colors-surface-card); border: var(--ds-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); box-shadow: 0 var(--spacing-xs) var(--spacing-xl) var(--colors-surface-shadow-diffuse); }
+.conversation-timeline__task-copy { display: grid; flex: 1 1 auto; gap: var(--spacing-2xs); min-width: 0; }
+.conversation-timeline__task-copy ::deep .conversation-timeline__task-who { color: var(--colors-text-muted); }
+.conversation-timeline__task-copy ::deep .conversation-timeline__task-title { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+
+/* One card at a time above the reply box, with its "1 of 3" (designer, 15 November 2026). */
+.conversation-timeline__attention { display: grid; gap: var(--spacing-xs); }
+.conversation-timeline__attention.is-empty { display: none; }
+.conversation-timeline__pager { display: flex; gap: var(--spacing-2xs); align-items: center; justify-content: flex-end; color: var(--colors-text-muted); }

@@ -1,0 +1,171 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.TaskRequests
+@using Parrot.Web.Features.Dashboard.AiAgents.State
+@using Microsoft.AspNetCore.Components.Sections
+@inject ITaskStore Store
+@inject ITaskQuestions Questions
+@inject ToastService Toasts
+
+@* Pass on (designer, 15 November 2026: one simple way to get a teammate involved). The first choice decides the rest:
+   give them the whole task (a quote to send, a question to answer: it becomes theirs), or just ask them something and
+   keep the task (an order where one detail has to reach the customer; the answer comes back to you, ready to send).
+   Then who, with their role, and one box. Rendered at the layout, outside the side panel, so it covers the window. *@
+<SectionContent SectionName="web-task-question-modal">
+    <ContentModal Open="@(Open && Item is not null)" Title="Pass on" Subtitle="@Item?.Title" Busy="_busy" OnClose="CloseAsync" Footer="Actions">
+        <div class="pass-on">
+            @if (CanAsk)
+            {
+                <SegmentedControl TValue="PassOnMode" Label="What do they need to do?" Options="Modes" Value="_mode" ValueChanged="ChooseMode" Class="pass-on__modes" />
+            }
+            <div class="pass-on__people" role="radiogroup" aria-label="Who">
+                <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="pass-on__label">Who</Typography>
+                @if (_loading)
+                {
+                    <Skeleton Height="var(--ds-pass-on-row)" /><Skeleton Height="var(--ds-pass-on-row)" />
+                }
+                else if (Candidates.Count == 0)
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="pass-on__muted">
+                        @(_people.Count == 0 ? "Your team couldn't load. Close this and try again." : "There's nobody else on your team who can see this task yet.")
+                    </Typography>
+                }
+                else
+                {
+                    @foreach (var candidate in Candidates)
+                    {
+                        var person = candidate;
+                        <ChoiceCard Label="@person.Person.Name" Description="@person.Role" Picked="@(_person == person.Person.Id)"
+                                    OnSelect="() => { _person = person.Person.Id; _error = null; }">
+                            <Leading><PetalAvatar Seed="@person.Person.Id" Initials="@Initials.From(person.Person.Name)" Size="AvatarSize.Sm" /></Leading>
+                        </ChoiceCard>
+                    }
+                }
+            </div>
+            <TextArea Value="@_text" ValueChanged="value => _text = value ?? string.Empty" Rows="3" AutoGrow MaxLength="TaskQuestionRules.MaxLength"
+                      AriaLabel="@(_mode == PassOnMode.Ask ? "Question" : "Note")"
+                      Placeholder="@(_mode == PassOnMode.Ask ? "What do you need to know?" : $"Add a note for {Chosen ?? "them"} (optional)")" />
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="pass-on__muted">@Helper</Typography>
+            @if (_error is not null) { <InlineError Message="@_error" /> }
+        </div>
+    </ContentModal>
+</SectionContent>
+
+@code {
+    private enum PassOnMode { Task, Ask }
+
+    [Parameter] public bool Open { get; set; }
+    [Parameter] public TaskRequest? Item { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
+    /// <summary>The whole task went to someone else.</summary>
+    [Parameter] public EventCallback OnPassed { get; set; }
+
+    private static readonly IReadOnlyList<SegmentedOption<PassOnMode>> Modes =
+        [new(PassOnMode.Task, "Take over the task"), new(PassOnMode.Ask, "Answer a question")];
+
+    private IReadOnlyList<QuestionPerson> _people = [];
+    private PassOnMode _mode;
+    private string? _person, _error, _for;
+    private string _text = "";
+    private bool _busy, _loading;
+    private Guid? _request;
+
+    // Asking needs the questions service and a customer chat for the answer to go to.
+    private bool CanAsk => Questions.Available && Item is { IsOpen: true, Customer.ConversationId: not null };
+
+    // Never yourself; for the whole task, never whoever already has it.
+    private IReadOnlyList<QuestionPerson> Candidates => _people
+        .Where(p => p.Person.Id != Store.Me.Id && (_mode == PassOnMode.Ask || p.Person.Id != Item?.Assignee?.Id)).ToArray();
+
+    private string? Chosen => Candidates.FirstOrDefault(p => p.Person.Id == _person)?.Person.Name.Split(' ')[0];
+
+    private string Helper => (_mode, Chosen) switch
+    {
+        (PassOnMode.Ask, { } name) => $"You keep the task. {name}'s answer comes back to you here and in the chat, ready to send.",
+        (PassOnMode.Ask, null) => "You keep the task. Their answer comes back to you here and in the chat, ready to send.",
+        (_, { } name) => $"It moves to {name}'s tasks, with your note.",
+        _ => "It moves to their tasks, with your note.",
+    };
+
+    private RenderFragment<string> Actions => _ => @<div class="pass-on__footer">
+        <Button Variant="ButtonVariant.Secondary" disabled="_busy" @onclick="CloseAsync">Cancel</Button>
+        <Button Busy="_busy" disabled="@(_loading || Candidates.Count == 0)" @onclick="SaveAsync">
+            <IconLeft><Icon Name="@(_mode == PassOnMode.Ask ? IconName.RiQuestionAnswerFill : IconName.RiUserSharedFill)" /></IconLeft>
+            <ChildContent>@(_mode == PassOnMode.Ask ? (Chosen is { } a ? $"Ask {a}" : "Ask") : (Chosen is { } p ? $"Pass to {p}" : "Pass on"))</ChildContent>
+        </Button>
+    </div>;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = Open && Item is not null ? Item.Id : null;
+        if (key == _for) return;
+        _for = key;
+        if (key is null) return;
+        // An order or a booking usually stays with you while someone answers one thing; anything else is passed whole.
+        _mode = CanAsk && Item!.Kind is TaskKind.Order or TaskKind.Booking ? PassOnMode.Ask : PassOnMode.Task;
+        _person = null; _text = ""; _error = null; _request = null;
+        await LoadPeopleAsync(key);
+    }
+
+    // The team with roles where the questions service knows them; otherwise the people Tasks can assign to.
+    private async Task LoadPeopleAsync(string taskId)
+    {
+        _loading = true; _people = [];
+        try
+        {
+            var people = Questions.Available ? await Questions.PeopleAsync(taskId) : [];
+            if (people.Count == 0) people = (await Store.TeamAsync()).Select(p => new QuestionPerson(p, null, false)).ToArray();
+            if (_for == taskId) _people = people;
+        }
+        catch (Exception e) when (e is InvalidOperationException || AiAgentsState.IsFailure(e)) { if (_for == taskId) _people = []; }
+        finally { if (_for == taskId) _loading = false; }
+    }
+
+    private void ChooseMode(PassOnMode mode)
+    {
+        _mode = mode; _error = null; _request = null;
+        if (!Candidates.Any(p => p.Person.Id == _person)) _person = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || Item is not { } task) return;
+        var person = Candidates.FirstOrDefault(p => p.Person.Id == _person)?.Person;
+        if (person is null) { _error = _mode == PassOnMode.Ask ? "Choose who to ask." : "Choose who to pass it to."; return; }
+        var first = person.Name.Split(' ')[0];
+        _busy = true; _error = null;
+        try
+        {
+            if (_mode == PassOnMode.Ask)
+            {
+                _request ??= Guid.NewGuid();
+                var command = new QuestionCommand(_request.Value, QuestionAction.Ask, task.Id, Text: _text, PersonId: person.Id);
+                if (TaskQuestionRules.Validate(command) is { } invalid) { _error = invalid; return; }
+                await Questions.ApplyAsync(command);
+                Toasts.Show($"Asked {first}. You'll see the answer here and in the chat.");
+            }
+            else
+            {
+                // The note first, so it's there when they open it; a note that fails stops before the task moves.
+                if (!string.IsNullOrWhiteSpace(_text)) await Store.PostUpdateAsync(task.Id, _text.Trim());
+                _text = "";
+                var before = task.Assignee;
+                await Store.AssignAsync(task.Id, new TaskPerson(person.Id, person.Name));
+                // It isn't yours any more: the task closes, back to the list, with a way back (designer, 15 November 2026).
+                Toasts.Show(new ToastMessage($"Passed to {first}.", ActionLabel: "Undo",
+                    OnAction: () => _ = InvokeAsync(() => Store.AssignAsync(task.Id, before))));
+                _text = ""; _request = null;
+                await OnPassed.InvokeAsync();
+                return;
+            }
+            _text = ""; _request = null;
+            await OnClose.InvokeAsync();
+        }
+        catch (Exception e) when (e is InvalidOperationException || AiAgentsState.IsFailure(e))
+        {
+            _error = e is InvalidOperationException ? e.Message : "That didn't save. Check your connection and try again.";
+        }
+        finally { _busy = false; }
+    }
+
+    private Task CloseAsync() => _busy ? Task.CompletedTask : OnClose.InvokeAsync();
+}

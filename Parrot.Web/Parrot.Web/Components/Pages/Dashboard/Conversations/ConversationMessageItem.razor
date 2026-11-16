@@ -25,24 +25,37 @@
 }
 else if (Message.Kind == MessageKind.AiQuestion)
 {
-    <article class="message-question @(Message.Answered ? "is-answered" : null)">
+    <article class="message-question @(Message.Answered || TaskDone ? "is-answered" : null)">
         <header>
             <span class="message-question__icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Sm" /></span>
             <div>
-                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@AuthorLabel needs your answer</Typography>
-                <Typography TextStyle="TextStyle.Small12Regular" As="small">The AI could not find an approved answer</Typography>
+                @* The same item as its task (designer, 15 November 2026): it says whose it is while it waits. Once
+                   answered it just says what the agent asked; no "team", knowledge base or task words, so it reads
+                   the same for a business of one. *@
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@(Resolved ? $"{AuthorLabel} asked" : $"{AuthorLabel} needs your answer")</Typography>
+                @if (!Resolved)
+                {
+                    <Typography TextStyle="TextStyle.Small12Regular" As="small">@(TaskNote is { } note ? $"{note} · No approved answer yet" : "The AI could not find an approved answer")</Typography>
+                }
             </div>
         </header>
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="message-question__body">@Message.Text</Typography>
-        @if (Message.Answered)
+        @if (Resolved && string.IsNullOrWhiteSpace(Message.Answer))
+        {
+            @* Answered in the chat by a person, or closed in Tasks: nothing was learned, so it doesn't say so. *@
+            <div class="message-question__answer">
+                <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@(Message.Answered ? "Answered in the chat" : "Closed in Tasks")</Typography>
+            </div>
+        }
+        else if (Message.Answered)
         {
             <div class="message-question__answer">
-                <Icon Name="IconName.RiBookAiFill" Size="IconSize.Sm" />
+                <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />
                 <span>
-                    <Typography TextStyle="TextStyle.Small10Semibold" As="small">Team answer</Typography>
                     <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@Message.Answer</Typography>
+                    <Typography TextStyle="TextStyle.Small12Medium" As="small">@($"{AuthorLabel} will know this next time.")</Typography>
                 </span>
-                <Typography TextStyle="TextStyle.Small10Semibold" As="strong">Knowledge updated</Typography>
             </div>
         }
         else
@@ -95,16 +108,15 @@ else
     <article class="message-bubble @DirectionClass @KindClass @(_highlighted ? "is-highlighted" : null)" @ref="_element" @ondblclick:stopPropagation>
         @if (Message.Kind == MessageKind.Ai)
         {
-            <span class="message-bubble__ai-avatar">
-                @if (AgentMascot is not null)
-                {
-                    <AgentFace Look="@AgentMascot" Size="Parrot.SharedComponents.DesignSystem.PresenceAvatarSize.Small" />
-                }
-                else
-                {
-                    <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
-                }
-            </span>
+            @if ((AgentLook ?? AgentMascot) is { } look)
+            {
+                <span class="message-bubble__ai-face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span>
+            }
+            else
+            {
+                <span class="message-bubble__ai-avatar"><Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /></span>
+            }
+
         }
         else if (Message.Kind == MessageKind.Customer)
         {
@@ -122,10 +134,6 @@ else
         <div class="message-bubble__content">
             <header>
                 <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@AuthorLabel</Typography>
-                @if (Message.Kind == MessageKind.Ai)
-                {
-                    <Typography TextStyle="TextStyle.Small10Semibold" As="span">AI agent</Typography>
-                }
             </header>
 
             @* The message itself (its quote, words and files): hovered, it shows its arrow. *@
@@ -300,6 +308,12 @@ else
     [Parameter] public string? AgentMascot { get; set; }
     /// <summary>The corrections and answers that teach the AI can be saved.</summary>
     [Parameter] public bool CanTeach { get; set; }
+    /// <summary>The conversation agent's saved look, for its bubbles.</summary>
+    [Parameter] public string? AgentLook { get; set; }
+    /// <summary>An AI question's task: "Task for you", "Task for Chinedu", "Task done".</summary>
+    [Parameter] public string? TaskNote { get; set; }
+    [Parameter] public bool TaskDone { get; set; }
+    private bool Resolved => Message.Answered || TaskDone;
     [Parameter] public EventCallback<ConvMessage> OnCorrect { get; set; }
     [Parameter] public EventCallback<ConvMessage> OnAnswer { get; set; }
     [Parameter] public EventCallback<ConvMessage> OnDeleteNote { get; set; }

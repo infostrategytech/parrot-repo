@@ -1,0 +1,6 @@
+/* Missing from the token set: the height of one person row while the team loads. */
+.pass-on { --ds-pass-on-row: 58px; display: grid; gap: var(--spacing-lg); }
+.pass-on__people { display: grid; gap: var(--spacing-sm); }
+.pass-on ::deep .pass-on__label { color: var(--colors-text-secondary); }
+.pass-on ::deep .pass-on__muted { color: var(--colors-text-muted); }
+.pass-on__footer { display: flex; gap: var(--spacing-md); align-items: center; justify-content: flex-end; width: 100%; }

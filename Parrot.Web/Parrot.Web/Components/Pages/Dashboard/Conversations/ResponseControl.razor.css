@@ -181,3 +181,7 @@
   .response-control.is-settling-ai,
   .response-control__row.is-arriving > ::deep * { animation: none; }
 }
+
+/* The agent's face (designer, 15 November 2026). Missing from the token set: an inline avatar size. */
+.agent-face-inline { --ds-inline-face: 40px; display: inline-grid; flex: none; width: var(--ds-inline-face); height: var(--ds-inline-face); }
+.ai-has-control .response-control__row { padding-left: var(--spacing-xs); }

@@ -9,6 +9,7 @@ namespace Parrot.Web.Features.Dashboard.TaskRequests;
 /// <summary>How tasks read on screen: the words, icons and tones for kinds and states, and times said plainly.</summary>
 public static partial class TaskWords
 {
+    // Question is recognised for incoming agent tasks, but the current Tasks API cannot create that kind yet.
     public static readonly TaskKind[] Kinds = [TaskKind.Order, TaskKind.Quote, TaskKind.Booking, TaskKind.Issue, TaskKind.CallBack, TaskKind.Other];
 
     /// <summary>The states a person can move a task to, in the order the menu lists them.</summary>
@@ -21,6 +22,7 @@ public static partial class TaskWords
         TaskKind.Booking => "Booking",
         TaskKind.Issue => "Refund or complaint",
         TaskKind.CallBack => "Call back",
+        TaskKind.Question => "Question",
         _ => "Other",
     };
 
@@ -31,6 +33,7 @@ public static partial class TaskWords
         TaskKind.Booking => "A time to agree with the customer",
         TaskKind.Issue => "A refund, a return or something gone wrong",
         TaskKind.CallBack => "A customer wants to hear from a person",
+        TaskKind.Question => "Something the agent couldn't answer",
         _ => "Anything else that needs doing",
     };
 
@@ -41,6 +44,7 @@ public static partial class TaskWords
         TaskKind.Booking => IconName.RiCalendarCheckFill,
         TaskKind.Issue => IconName.RiRefund2Fill,
         TaskKind.CallBack => IconName.RiPhoneFill,
+        TaskKind.Question => IconName.RiQuestionAnswerFill,
         _ => IconName.RiTaskFill,
     };
 

@@ -600,10 +600,18 @@ export function reserveUnder(scroller, footer, property) {
   if (!(scroller instanceof Element) || !(footer instanceof Element)) return { release() {} };
   const base = parseFloat(getComputedStyle(scroller).getPropertyValue(property)) || 0;
   let rest = null;
+  const bound = performance.now();
   const update = () => {
     const height = footer.getBoundingClientRect().height;
-    // The footer's height the first time it is measured is its resting size.
-    rest ??= height;
+    // Cards that come and go above the reply box (data-footer-extra) are never part of its resting size, even when
+    // they are already there the first time it is measured: the last message stays above them.
+    const gap = parseFloat(getComputedStyle(footer).rowGap) || 0;
+    const extras = [...footer.children].filter(child => child.hasAttribute("data-footer-extra"))
+      .reduce((sum, child) => { const h = child.getBoundingClientRect().height; return h > 0 ? sum + h + gap : sum; }, 0);
+    // The footer's resting size, without those cards: its largest height while it first settles (its controls draw
+    // in over a few frames), then fixed, so later growth (an error, a longer draft) keeps room too.
+    const resting = height - extras;
+    if (rest === null || performance.now() - bound < 1500) rest = Math.max(rest ?? 0, resting);
     const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
     scroller.style.setProperty(property, Math.max(base, base + height - rest) + "px");
     if (pinned) scroller.scrollTop = scroller.scrollHeight;

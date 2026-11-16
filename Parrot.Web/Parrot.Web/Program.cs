@@ -241,6 +241,9 @@ builder.Services.AddSingleton<Parrot.Web.Features.Profile.IEmailChange, Parrot.W
 builder.Services.AddSingleton<Parrot.Web.Features.Profile.IProfilePhoto, Parrot.Web.Features.Profile.UnavailableProfilePhoto>();
 // A person brought in by an agent: the API creates and assigns that task (tasks- and agents-backend-requests).
 builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.TaskRequests.ICustomerHandoverTasks, Parrot.Web.Features.Dashboard.TaskRequests.UnavailableCustomerHandoverTasks>();
+// Teammate questions have no real endpoint yet; never register local fixtures in this branch.
+builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.TaskRequests.ITaskQuestions, Parrot.Web.Features.Dashboard.TaskRequests.UnavailableTaskQuestions>();
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.TaskRequests.TaskReplyDraft>();
 
 WebApplication app = builder.Build();
 

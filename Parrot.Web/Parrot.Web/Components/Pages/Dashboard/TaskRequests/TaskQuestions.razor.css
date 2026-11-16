@@ -1,0 +1,7 @@
+.task-questions { display: grid; gap: var(--spacing-md); }
+.task-questions:not(.is-compact) { padding-block: var(--spacing-lg); }
+.task-questions.is-compact { gap: var(--spacing-sm); }
+.task-questions__answer { display: grid; gap: var(--spacing-sm); width: 100%; }
+.task-questions__row { display: flex; gap: var(--spacing-sm); align-items: center; }
+/* Above the reply box it sits on the conversation like the reply control does: a lifted card. */
+.task-questions ::deep .task-questions__strip { box-shadow: 0 var(--spacing-xs) var(--spacing-xl) var(--colors-surface-shadow-diffuse); }

@@ -4,7 +4,7 @@ namespace Parrot.Web.Features.Dashboard.TaskRequests;
 /// What a task is about (designer, 20 October 2026). It picks the icon, the words and which details
 /// the panel shows; it never changes how a task moves: every kind is opened, worked and closed the same way.
 /// </summary>
-public enum TaskKind { Order, Quote, Booking, Issue, CallBack, Other }
+public enum TaskKind { Order, Quote, Booking, Issue, CallBack, Other, Question }
 
 /// <summary>
 /// Where a task has got to. Open and InProgress need the business; Waiting is on the customer.

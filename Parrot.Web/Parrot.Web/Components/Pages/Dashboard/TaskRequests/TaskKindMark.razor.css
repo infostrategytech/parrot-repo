@@ -16,4 +16,5 @@
 .task-kind.is-booking { color: var(--colors-accent-orange-text); background: var(--colors-accent-orange-subtle); }
 .task-kind.is-issue { color: var(--colors-accent-amber-text); background: var(--colors-accent-amber-subtle); }
 .task-kind.is-callback { color: var(--colors-accent-cyan-text); background: var(--colors-accent-cyan-subtle); }
+.task-kind.is-question { color: var(--colors-accent-blue-text); background: var(--colors-accent-blue-subtle); }
 .task-kind.is-other { color: var(--colors-icon-brand); background: var(--colors-accent-brand-subtle); }
