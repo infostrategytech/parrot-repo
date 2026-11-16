@@ -157,6 +157,29 @@ public class ReadApiTests
     }
 
     [PostgresFact]
+    public async Task Search_catalog_without_words_lists_the_catalog_a_page_at_a_time()
+    {
+        using HttpClient client = _fx.Client(_fx.TenantA, CatalogScopes.AiTools);
+
+        HttpResponseMessage first = await client.PostAsync("/api/catalog/ai/tools/search_catalog", CatalogApiFixture.Raw("""{"limit": 1}"""));
+        first.EnsureSuccessStatusCode();
+        using JsonDocument page1 = JsonDocument.Parse(await first.Content.ReadAsStringAsync());
+        JsonElement result1 = page1.RootElement.GetProperty("result");
+        Assert.Equal(1, result1.GetProperty("count").GetInt32());
+        string cursor = result1.GetProperty("next_cursor").GetString()!;
+        Assert.False(string.IsNullOrEmpty(cursor));
+
+        HttpResponseMessage second = await client.PostAsync("/api/catalog/ai/tools/search_catalog", CatalogApiFixture.Body(new { limit = 1, cursor }));
+        second.EnsureSuccessStatusCode();
+        using JsonDocument page2 = JsonDocument.Parse(await second.Content.ReadAsStringAsync());
+        JsonElement result2 = page2.RootElement.GetProperty("result");
+        Assert.Equal(1, result2.GetProperty("count").GetInt32());
+        Assert.NotEqual(
+            result1.GetProperty("items")[0].GetProperty("product").GetProperty("id").GetString(),
+            result2.GetProperty("items")[0].GetProperty("product").GetProperty("id").GetString());
+    }
+
+    [PostgresFact]
     public async Task Ai_tools_return_sanitised_untrusted_text_and_why_matched()
     {
         using HttpClient client = _fx.Client(_fx.TenantA, CatalogScopes.AiTools);

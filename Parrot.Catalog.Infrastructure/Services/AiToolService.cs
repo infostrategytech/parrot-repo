@@ -38,7 +38,7 @@ public sealed class AiToolService : IAiToolService
         Stopwatch sw = Stopwatch.StartNew();
         Guid? category = await ResolveCategoryAsync(request.Category, ct);
         int limit = PageSize.Clamp(request.Limit, Limits.MaxAiPageSize, Limits.MaxAiPageSize);
-        SearchResponse response = await _read.SearchAsync(new SearchRequest(request.Query, category, null, null, request.Filters, null, null, limit), Limits.MaxAiPageSize, ct);
+        SearchResponse response = await _read.SearchAsync(new SearchRequest(request.Query, category, null, null, request.Filters, null, request.Cursor, limit), Limits.MaxAiPageSize, ct);
         List<AiSearchHit> hits = new List<AiSearchHit>(response.Items.Count);
         foreach (SearchHit hit in response.Items)
         {
@@ -46,7 +46,7 @@ public sealed class AiToolService : IAiToolService
         }
 
         _metrics.SearchCompleted(sw.Elapsed.TotalMilliseconds, "ai-tool");
-        return Wrap("search_catalog", new AiSearchResult(hits, hits.Count));
+        return Wrap("search_catalog", new AiSearchResult(hits, hits.Count, response.NextCursor));
     }
 
     public async Task<AiToolResponse<AiProduct>> GetProductAsync(GetProductToolRequest request, CancellationToken ct)

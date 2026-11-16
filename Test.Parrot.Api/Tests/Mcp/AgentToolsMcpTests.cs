@@ -79,6 +79,9 @@ public sealed class AgentToolsMcpTests : IAsyncLifetime
         Assert.True(properties.TryGetProperty("max_price", out _));
         Assert.Equal("array", properties.GetProperty("ids").GetProperty("type").GetString());
         Assert.Contains(tools, t => t.Name == "search_products");
+        McpClientTool list = Assert.Single(tools, t => t.Name == "list_products");
+        Assert.Contains("what do you have?", list.Description);
+        Assert.True(list.JsonSchema.GetProperty("properties").TryGetProperty("cursor", out _));
     }
 
     [Fact]
@@ -139,6 +142,22 @@ public sealed class AgentToolsMcpTests : IAsyncLifetime
         Assert.Equal("search_catalog", tool);
         Assert.Equal("bag", arguments.GetProperty("query").GetString());
         Assert.Equal(10, arguments.GetProperty("limit").GetInt32());
+    }
+
+    [Fact]
+    public async Task Listing_asks_the_catalog_for_no_words_and_passes_the_cursor_on()
+    {
+        _catalog.Answer = """{"tool":"search_catalog","result":{"items":[],"count":0,"next_cursor":"abc"}}""";
+        await using McpClient client = await ConnectAsync(AgentToken());
+
+        await client.CallToolAsync("list_products", new Dictionary<string, object?> { ["limit"] = 0, ["cursor"] = " next-page " });
+
+        (string workspace, string tool, JsonElement arguments) = Assert.Single(_catalog.Calls);
+        Assert.Equal(Workspace, workspace);
+        Assert.Equal("search_catalog", tool);
+        Assert.False(arguments.TryGetProperty("query", out _));
+        Assert.Equal(1, arguments.GetProperty("limit").GetInt32());
+        Assert.Equal("next-page", arguments.GetProperty("cursor").GetString());
     }
 
     [Fact]
