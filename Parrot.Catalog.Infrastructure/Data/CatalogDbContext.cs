@@ -257,6 +257,8 @@ public class CatalogDbContext : DbContext
             e.Property(m => m.MimeType).HasMaxLength(128);
             e.Property(m => m.AltText).HasMaxLength(512);
             e.Property(m => m.Title).HasMaxLength(256);
+            e.Property(m => m.AiStatus).HasMaxLength(MediaAiStatus.MaxLength);
+            e.Property(m => m.AiUrl).HasMaxLength(MediaAiStatus.MaxUrlLength);
             e.HasIndex(m => new { m.TenantId, m.ProductId });
             e.HasOne<Product>().WithMany().HasForeignKey(m => m.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasOne<ProductVariant>().WithMany().HasForeignKey(m => m.VariantId).OnDelete(DeleteBehavior.Cascade);

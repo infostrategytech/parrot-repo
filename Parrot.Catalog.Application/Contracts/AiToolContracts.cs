@@ -15,7 +15,7 @@ public sealed record AiAttribute(string Label, string? Unit, JsonElement Value);
 
 public sealed record AiVariant(Guid Id, string Sku, UntrustedTextField Name, IReadOnlyList<AiAttribute> Attributes);
 
-[Description("A product. images are its catalogue photos, best first (at most 3; empty when it has none). "
+[Description("A product. images are its catalogue photos the AI has learned, best first (at most 3; empty when it has none). "
     + "Send one to show the customer the product; never make up or change a photo link.")]
 public sealed record AiProduct(
     Guid Id,
@@ -86,7 +86,7 @@ public sealed record AiVariantPrice(Guid VariantId, UntrustedTextField Name, dec
     + "quantity_left is how many are left, null when the business doesn't count them. "
     + "mode is in_stock, made_to_order (see lead_time_days) or bookings. "
     + "in_range: the product, or one of its available options, costs within the price range asked for; null when none was given. "
-    + "images are its catalogue photos, best first (at most 3; empty when it has none): send one to show the product, never a link you made up.")]
+    + "images are its catalogue photos the AI has learned, best first (at most 3; empty when it has none): send one to show the product, never a link you made up.")]
 public sealed record AiItemPrice(
     Guid ProductId,
     UntrustedTextField Name,

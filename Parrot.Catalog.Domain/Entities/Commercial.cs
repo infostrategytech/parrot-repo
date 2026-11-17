@@ -163,9 +163,35 @@ public sealed class MediaAsset : ITenantScoped, ITimestamped, ISoftDeletable
 
     public int SortOrder { get; set; }
 
+    /// <summary>
+    /// What the AI made of this photo in its latest report that named it: embedded (it learned
+    /// it), rejected or failed. Null until a report names it. Only embedded photos are offered
+    /// to the AI's agents to send to customers.
+    /// </summary>
+    public string? AiStatus { get; set; }
+
+    /// <summary>When the report that set <see cref="AiStatus"/> was made.</summary>
+    public DateTime? AiStatusAt { get; set; }
+
+    /// <summary>
+    /// The link the AI says it learned this photo from, as its report gave it. The AI's tools
+    /// return this link, so it matches what the AI holds; null when the report gave none.
+    /// </summary>
+    public string? AiUrl { get; set; }
+
     public DateTime CreatedAt { get; set; }
 
     public DateTime UpdatedAt { get; set; }
 
     public DateTime? DeletedAt { get; set; }
+}
+
+/// <summary>The AI's per-photo statuses, as its ingestion report names them.</summary>
+public static class MediaAiStatus
+{
+    public const string Embedded = "embedded";
+
+    public const int MaxLength = 32;
+
+    public const int MaxUrlLength = 2048;
 }

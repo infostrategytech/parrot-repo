@@ -657,6 +657,20 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<string>("AiStatus")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("ai_status");
+
+                    b.Property<DateTime?>("AiStatusAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ai_status_at");
+
+                    b.Property<string>("AiUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("ai_url");
+
                     b.Property<string>("AltText")
                         .HasMaxLength(512)
                         .HasColumnType("character varying(512)")

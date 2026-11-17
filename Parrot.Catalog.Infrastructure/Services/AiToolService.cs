@@ -5,6 +5,7 @@ using Parrot.Catalog.Application.Contracts;
 using Parrot.Catalog.Application.Pagination;
 using Parrot.Catalog.Application.Services;
 using Parrot.Catalog.Application.Validation;
+using Parrot.Catalog.Domain.Entities;
 using Parrot.Catalog.Domain.Enums;
 using Parrot.Catalog.Infrastructure.Data;
 using Parrot.Domain.Exceptions;
@@ -357,28 +358,34 @@ public sealed class AiToolService : IAiToolService
 
     /// <summary>
     /// Each product's first few photos, with public links, in the order the business set, in one
-    /// query. The read view already leaves out removed photos and products that aren't on sale.
-    /// With no photo bucket set there are no links to give, so every product gets none.
+    /// query. Only photos the AI reported it embedded are given: those are the ones it has learned,
+    /// and each comes with the link the AI says it learned it from (ours when it named none), so the
+    /// links match what it holds. A photo it rejected is never sent to a customer.
+    /// The read view already leaves out removed photos and products that aren't on sale.
+    /// With no photo bucket set, a photo the AI named no link for has none to give, so it is left out.
     /// </summary>
     private async Task<Dictionary<Guid, AiImage[]>> ImagesAsync(IEnumerable<Guid> productIds, CancellationToken ct)
     {
         List<Guid> ids = productIds.Distinct().ToList();
-        if (ids.Count == 0 || !_photos.IsConfigured)
+        if (ids.Count == 0)
         {
             return [];
         }
 
+        bool ownLinks = _photos.IsConfigured;
         var media = await _db.Media.AsNoTracking()
-            .Where(m => ids.Contains(m.ProductId) && m.Kind == MediaKind.Image)
+            .Where(m => ids.Contains(m.ProductId) && m.Kind == MediaKind.Image && m.AiStatus == MediaAiStatus.Embedded)
             .OrderBy(m => m.SortOrder).ThenBy(m => m.CreatedAt)
-            .Select(m => new { m.Id, m.ProductId, m.S3Key, m.AltText })
+            .Select(m => new { m.Id, m.ProductId, m.S3Key, m.AiUrl, m.AltText })
             .ToListAsync(ct);
         return media
             .GroupBy(m => m.ProductId)
             .ToDictionary(g => g.Key, g => g
-                .DistinctBy(m => m.S3Key, StringComparer.Ordinal)
+                .Select(m => new { m.Id, Url = m.AiUrl ?? (ownLinks ? _photos.UrlFor(m.S3Key) : null), m.AltText })
+                .Where(m => m.Url is not null)
+                .DistinctBy(m => m.Url, StringComparer.Ordinal)
                 .Take(MaxPhotosPerProduct)
-                .Select(m => new AiImage(m.Id, _photos.UrlFor(m.S3Key), string.IsNullOrWhiteSpace(m.AltText) ? null : new UntrustedTextField(UntrustedText.Sanitize(m.AltText, 300))))
+                .Select(m => new AiImage(m.Id, m.Url!, string.IsNullOrWhiteSpace(m.AltText) ? null : new UntrustedTextField(UntrustedText.Sanitize(m.AltText, 300))))
                 .ToArray());
     }
 

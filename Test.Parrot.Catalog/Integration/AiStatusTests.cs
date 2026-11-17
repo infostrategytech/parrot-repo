@@ -124,13 +124,94 @@ public class AiStatusTests
         Assert.Null(ItemAiView.Of(new ItemAiStatus(), new Dictionary<Guid, string>()));
     }
 
+    [PostgresFact]
+    public async Task The_ai_tools_offer_only_photos_the_ai_embedded_with_the_link_it_learned_them_from()
+    {
+        Guid workspace = Guid.NewGuid();
+        using HttpClient owner = _fx.Client(workspace, Owner);
+        using HttpClient ai = _fx.Client(workspace, CatalogScopes.AiTools);
+        List<ItemPhoto> uploaded = [];
+        for (int i = 0; i < 4; i++)
+        {
+            uploaded.Add(await CatalogApiFixture.ReadAsync<ItemPhoto>(await owner.PostAsync("/api/catalog/items/photos", Photo())));
+        }
+
+        object Form(int amount) => new
+        {
+            name = "Adire scarf",
+            kind = "product",
+            pricing = new { mode = "single", amount },
+            availability = new { mode = "in_stock" },
+            status = "published",
+            photos = uploaded.Select(p => p.Key).ToArray(),
+        };
+
+        ItemResponse item = await CatalogApiFixture.ReadAsync<ItemResponse>(await owner.PostAsync("/api/catalog/items", CatalogApiFixture.Body(Form(12500))));
+
+        // Nothing reported yet: no photo is offered.
+        Assert.Empty(await ImagesFromPricesAsync(ai, item.Id));
+
+        (Guid firstSave, _, _) = await LatestItemEventAsync(workspace, item.Id);
+        Guid[] media = await MediaIdsAsync(workspace, firstSave);
+        Assert.Equal(4, media.Length);
+        DateTime at = DateTime.UtcNow;
+
+        // Embedded at the AI's own link, rejected, embedded with no link given (ours is used), and not reported.
+        Assert.True(await HandleAsync(Report(workspace, item.Id, firstSave, at, new object[]
+        {
+            PhotoResult(media[0], "embedded", null, null, "https://cdn.omni.test/m0.jpg"),
+            PhotoResult(media[1], "rejected", "client_err", "Not the item.", "https://cdn.omni.test/m1.jpg"),
+            PhotoResult(media[2], "embedded", null, null, url: null),
+        })));
+
+        string[] expected = ["https://cdn.omni.test/m0.jpg", $"https://photos.test/{uploaded[2].Key}"];
+        AiImage[] prices = await ImagesFromPricesAsync(ai, item.Id);
+        Assert.Equal(expected, prices.Select(m => m.Url));
+        Assert.Equal([media[0], media[2]], prices.Select(m => m.MediaId));
+        Assert.Equal(expected, (await ImagesFromListAsync(ai, item.Id)).Select(m => m.Url));
+
+        // A later save whose report names only the last photo: the others keep their marks, and at most 3 are offered.
+        await owner.PutAsync($"/api/catalog/items/{item.Id}", CatalogApiFixture.Body(Form(13000)));
+        (Guid secondSave, _, _) = await LatestItemEventAsync(workspace, item.Id);
+        Assert.True(await HandleAsync(Report(workspace, item.Id, secondSave, at.AddMinutes(1), PhotoResult(media[3], "embedded", null, null, "https://cdn.omni.test/m3.jpg"))));
+        Assert.Equal(
+            ["https://cdn.omni.test/m0.jpg", $"https://photos.test/{uploaded[2].Key}", "https://cdn.omni.test/m3.jpg"],
+            (await ImagesFromPricesAsync(ai, item.Id)).Select(m => m.Url));
+    }
+
+    private static async Task<AiImage[]> ImagesFromPricesAsync(HttpClient ai, Guid productId)
+    {
+        HttpResponseMessage response = await ai.PostAsync("/api/catalog/ai/tools/get_prices", CatalogApiFixture.Body(new { ids = new[] { productId } }));
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        AiPricesResult result = (await CatalogApiFixture.ReadAsync<AiToolResponse<AiPricesResult>>(response)).Result;
+        return Assert.Single(result.Items).Images.ToArray();
+    }
+
+    /// <summary>list_products is search_catalog with no query.</summary>
+    private static async Task<AiImage[]> ImagesFromListAsync(HttpClient ai, Guid productId)
+    {
+        HttpResponseMessage response = await ai.PostAsync("/api/catalog/ai/tools/search_catalog", CatalogApiFixture.Body(new { limit = 10 }));
+        Assert.Equal(System.Net.HttpStatusCode.OK, response.StatusCode);
+        AiSearchResult result = (await CatalogApiFixture.ReadAsync<AiToolResponse<AiSearchResult>>(response)).Result;
+        return result.Items.Single(h => h.Product.Id == productId).Product.Images.ToArray();
+    }
+
+    /// <summary>The media ids an item message sent, in the order sent.</summary>
+    private async Task<Guid[]> MediaIdsAsync(Guid workspace, Guid eventId)
+    {
+        string payload = await _fx.Database.ScalarAsync<string>(_fx.Database.Relay, workspace,
+            "SELECT payload::text FROM catalog.outbox WHERE id = @id", new Npgsql.NpgsqlParameter("id", eventId));
+        using JsonDocument doc = JsonDocument.Parse(payload);
+        return doc.RootElement.GetProperty("photos").EnumerateArray().Select(p => p.GetProperty("media_id").GetGuid()).ToArray();
+    }
+
     private Guid _lastReportId;
 
-    private static object PhotoResult(Guid mediaId, string status, string? reasonCode, string? reason) => new
+    private static object PhotoResult(Guid mediaId, string status, string? reasonCode, string? reason, string? url = "https://cdn.example.com/media/x.jpg") => new
     {
         media_id = mediaId,
         variant_id = (Guid?)null,
-        url = "https://cdn.example.com/media/x.jpg",
+        url,
         status,
         embedded = status == "embedded",
         match_score = status == "embedded" ? 0.9 : 0.05,
@@ -139,7 +220,7 @@ public class AiStatusTests
         reason,
     };
 
-    /// <summary>A report in the shape of the AI team's contract (catalog.ingestion-report, schema 1).</summary>
+    /// <summary>A report in the shape of the AI team's contract (catalog.ingestion-report, schema 1). photo is one result or an object[] of them.</summary>
     private string Report(Guid workspace, Guid productId, Guid causationId, DateTime occurredAt, object photo,
         Guid? reportId = null, string type = "ItemIndexed", string status = "indexed")
     {
@@ -162,7 +243,7 @@ public class AiStatusTests
                 status,
                 searchable = status == "indexed",
                 text = new { status = "embedded", reason_code = (string?)null, reason = (string?)null },
-                photos = new { status = "completed", total = 1, items = new[] { photo } },
+                photos = new { status = "completed", total = photo is object[] many ? many.Length : 1, items = photo as object[] ?? new[] { photo } },
                 indexed_at = occurredAt,
             },
         });
