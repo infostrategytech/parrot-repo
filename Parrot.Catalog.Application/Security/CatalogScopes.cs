@@ -8,9 +8,12 @@ public static class CatalogScopes
     public const string Admin = "catalog:admin";
     public const string AiTools = "catalog:ai-tools";
 
+    /// <summary>Holding, committing and releasing stock for payment orders. Granted to Parrot alone; nothing implies it.</summary>
+    public const string Orders = "catalog:orders";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
-        Read, Write, Publish, Admin, AiTools,
+        Read, Write, Publish, Admin, AiTools, Orders,
     };
 
     /// <summary>The scopes that satisfy a given requirement. Admin implies read, write and publish; nothing implies ai-tools.</summary>
@@ -21,6 +24,7 @@ public static class CatalogScopes
         Publish => [Publish, Admin],
         Admin => [Admin],
         AiTools => [AiTools],
+        Orders => [Orders],
         _ => throw new ArgumentOutOfRangeException(nameof(required), required, "Unknown catalog scope."),
     };
 
@@ -40,6 +44,7 @@ public static class CatalogPolicies
     public const string Publish = "catalog.publish";
     public const string Admin = "catalog.admin";
     public const string AiTools = "catalog.ai-tools";
+    public const string Orders = "catalog.orders";
 }
 
 public static class CatalogClaims

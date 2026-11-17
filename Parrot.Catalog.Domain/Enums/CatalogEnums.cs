@@ -117,3 +117,11 @@ public enum CatalogStatus
     Active,
     Inactive,
 }
+
+// A stock hold: kept for a payment link, then taken off stock when it's paid, or let go.
+public enum StockHoldStatus
+{
+    Held,
+    Committed,
+    Released,
+}

@@ -23,7 +23,7 @@ public static class SecuritySql
     /// Tables added after the first migration. Each gets the same tenant policy as
     /// <see cref="Tables"/>, in the migration that creates it (see <see cref="ItemAiStatusUp"/>).
     /// </summary>
-    public static readonly IReadOnlyList<string> LaterTables = ["item_ai_status"];
+    public static readonly IReadOnlyList<string> LaterTables = ["item_ai_status", "stock_holds"];
 
     public static readonly IReadOnlyList<string> Views =
     [
@@ -137,6 +137,25 @@ public static class SecuritySql
     public static string ItemAiStatusDown() => """
         DROP POLICY IF EXISTS relay_all ON catalog.item_ai_status;
         DROP POLICY IF EXISTS tenant_isolation ON catalog.item_ai_status;
+        """;
+
+    /// <summary>
+    /// Security for stock_holds: tenant isolation like every table. The writer places,
+    /// commits and releases holds; the reader sees only those still held (v_stock_holds),
+    /// to take them off what's left when it answers about stock.
+    /// </summary>
+    public static string StockHoldsUp() => $"""
+        ALTER TABLE catalog.stock_holds ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE catalog.stock_holds FORCE ROW LEVEL SECURITY;
+        CREATE POLICY tenant_isolation ON catalog.stock_holds FOR ALL USING (tenant_id = catalog.current_tenant_id()) WITH CHECK (tenant_id = catalog.current_tenant_id());
+        GRANT SELECT, INSERT, UPDATE ON catalog.stock_holds TO {WriterRole};
+        CREATE VIEW catalog.v_stock_holds AS SELECT h.* FROM catalog.stock_holds h WHERE h.status = 'held';
+        GRANT SELECT ON catalog.v_stock_holds TO {ReaderRole};
+        """;
+
+    public static string StockHoldsDown() => """
+        DROP VIEW IF EXISTS catalog.v_stock_holds;
+        DROP POLICY IF EXISTS tenant_isolation ON catalog.stock_holds;
         """;
 
     /// <summary>

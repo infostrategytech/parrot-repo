@@ -151,3 +151,15 @@ public interface IItemService
 
     Task<ItemCategory> CreateCategoryAsync(CreateItemCategoryRequest request, CancellationToken ct);
 }
+
+/// <summary>Stock kept for payment orders: placed when a link is made, committed when it's paid, released when it isn't.</summary>
+public interface IStockHoldService
+{
+    /// <summary>Holds every counted line, or none. A line short of stock is a 409 that says how many are left.</summary>
+    Task<StockHoldsResponse> PlaceAsync(PlaceStockHoldsRequest request, CancellationToken ct);
+
+    /// <summary>Takes the order's holds off stock. A hold that ran out and lost its stock comes back as short.</summary>
+    Task<CommitStockHoldsResponse> CommitAsync(string reference, CancellationToken ct);
+
+    Task<ReleaseStockHoldsResponse> ReleaseAsync(string reference, CancellationToken ct);
+}

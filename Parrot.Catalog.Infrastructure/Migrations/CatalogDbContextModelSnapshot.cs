@@ -1537,6 +1537,71 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                     b.ToTable("product_versions", "catalog");
                 });
 
+            modelBuilder.Entity("Parrot.Catalog.Domain.Entities.StockHold", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTime>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at");
+
+                    b.Property<string>("OrderReference")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("order_reference");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<int>("Quantity")
+                        .HasColumnType("integer")
+                        .HasColumnName("quantity");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid?>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stock_holds");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_stock_holds_product_id");
+
+                    b.HasIndex("TenantId", "OrderReference")
+                        .HasDatabaseName("ix_stock_holds_tenant_id_order_reference");
+
+                    b.HasIndex("TenantId", "ProductId", "Status")
+                        .HasDatabaseName("ix_stock_holds_tenant_id_product_id_status");
+
+                    b.ToTable("stock_holds", "catalog", t =>
+                        {
+                            t.HasCheckConstraint("ck_stock_holds_status", "status IN ('held', 'committed', 'released')");
+                        });
+                });
+
             modelBuilder.Entity("Parrot.Catalog.Domain.Entities.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1801,6 +1866,16 @@ namespace Parrot.Catalog.Infrastructure.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_product_versions_product_id");
+                });
+
+            modelBuilder.Entity("Parrot.Catalog.Domain.Entities.StockHold", b =>
+                {
+                    b.HasOne("Parrot.Catalog.Domain.Entities.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_stock_holds_product_id");
                 });
 #pragma warning restore 612, 618
         }

@@ -49,6 +49,8 @@ public class CatalogDbContext : DbContext
 
     public DbSet<ItemAiStatus> ItemAiStatus => Set<ItemAiStatus>();
 
+    public DbSet<StockHold> StockHolds => Set<StockHold>();
+
     public DbSet<AuditLogEntry> AuditLog => Set<AuditLogEntry>();
 
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
@@ -320,6 +322,15 @@ public class CatalogDbContext : DbContext
             e.HasOne<Product>().WithOne().HasForeignKey<ItemAiStatus>(s => s.ProductId).OnDelete(DeleteBehavior.Cascade);
             e.HasIndex(s => s.TenantId);
         });
+
+        builder.Entity<StockHold>(e =>
+        {
+            e.HasKey(h => h.Id);
+            e.Property(h => h.OrderReference).HasMaxLength(64);
+            e.HasOne<Product>().WithMany().HasForeignKey(h => h.ProductId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(h => new { h.TenantId, h.OrderReference });
+            e.HasIndex(h => new { h.TenantId, h.ProductId, h.Status });
+        });
     }
 }
 
@@ -363,10 +374,13 @@ public class CatalogReadDbContext : DbContext
 
     public DbSet<CatalogDocument> CatalogDocuments => Set<CatalogDocument>();
 
+    /// <summary>Holds still held (v_stock_holds); whether each is still in time is for the query.</summary>
+    public DbSet<StockHold> StockHolds => Set<StockHold>();
+
     protected override void OnModelCreating(ModelBuilder builder)
     {
         base.OnModelCreating(builder);
-        foreach (Type t in new[] { typeof(CatalogEntity), typeof(Category), typeof(CategoryClosure), typeof(ProductType), typeof(AttributeDefinition), typeof(Product), typeof(ProductVariant), typeof(ProductAttributeIndex), typeof(Offer), typeof(Price), typeof(Availability), typeof(ProductRelationship), typeof(MediaAsset), typeof(CatalogDocument) })
+        foreach (Type t in new[] { typeof(CatalogEntity), typeof(Category), typeof(CategoryClosure), typeof(ProductType), typeof(AttributeDefinition), typeof(Product), typeof(ProductVariant), typeof(ProductAttributeIndex), typeof(Offer), typeof(Price), typeof(Availability), typeof(ProductRelationship), typeof(MediaAsset), typeof(CatalogDocument), typeof(StockHold) })
         {
             builder.Entity(t);
         }

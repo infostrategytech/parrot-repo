@@ -116,6 +116,7 @@ public sealed class AiToolService : IAiToolService
             .Where(a => a.ValidFrom <= now && (a.ValidUntil == null || a.ValidUntil > now))
             .Where(a => (a.ProductId != null && found.Contains(a.ProductId.Value)) || (a.VariantId != null && variantIds.Contains(a.VariantId.Value)))
             .ToListAsync(ct);
+        await TakeOffHeldAsync(rows, found, now, ct);
 
         List<AiItemPrice> items = new List<AiItemPrice>(products.Count);
         foreach (Domain.Entities.Product product in products)
@@ -214,6 +215,36 @@ public sealed class AiToolService : IAiToolService
             : max is { } high && p > high ? p - high
             : 0;
 
+    /// <summary>
+    /// Takes stock held for customers who are paying off what's left, on the same row the
+    /// hold was placed against (the item's or the option's counted row, everywhere first).
+    /// Only holds still in time count, so one nobody paid for stops counting on its own.
+    /// The rows are read-only copies; nothing is saved.
+    /// </summary>
+    private async Task TakeOffHeldAsync(List<Domain.Entities.Availability> rows, IReadOnlyCollection<Guid> productIds, DateTime now, CancellationToken ct)
+    {
+        List<Guid> ids = productIds.ToList();
+        var held = await _db.StockHolds
+            .Where(h => ids.Contains(h.ProductId) && h.ExpiresAt > now)
+            .GroupBy(h => new { h.ProductId, h.VariantId })
+            .Select(g => new { g.Key.ProductId, g.Key.VariantId, Quantity = g.Sum(h => h.Quantity) })
+            .ToListAsync(ct);
+        List<Domain.Entities.Availability> counted = rows
+            .Where(a => a.Status == AvailabilityStatus.Active && a.Mode == AvailabilityMode.InStock && a.StockQty != null)
+            .OrderBy(a => a.Region == "*" ? 0 : 1)
+            .ToList();
+        foreach (var hold in held)
+        {
+            // An option without its own count draws on the product's, as the hold did.
+            Domain.Entities.Availability? row = (hold.VariantId is { } v ? counted.FirstOrDefault(a => a.VariantId == v) : null)
+                ?? counted.FirstOrDefault(a => a.ProductId == hold.ProductId && a.VariantId == null);
+            if (row is not null)
+            {
+                row.StockQty = Math.Max(0, row.StockQty!.Value - hold.Quantity);
+            }
+        }
+    }
+
     /// <summary>Off when a row says so, or when it counts stock and none is left; nothing recorded means on offer.</summary>
     private static bool IsAvailable(IEnumerable<Domain.Entities.Availability> rows)
         => !rows.Any(a => a.Status == AvailabilityStatus.Inactive || (a.Mode == AvailabilityMode.InStock && a.StockQty == 0));
@@ -268,6 +299,7 @@ public sealed class AiToolService : IAiToolService
             .Where(a => region == null || a.Region == region || a.Region == "*")
             .OrderBy(a => a.Region)
             .ToListAsync(ct);
+        await TakeOffHeldAsync(rows, [id], now, ct);
 
         List<Domain.Entities.Availability> own = rows.Where(a => a.VariantId == null).ToList();
         bool productAvailable = IsAvailable(own);

@@ -40,6 +40,7 @@ internal static class ModelConventions
         [typeof(OutboxMessage)] = "outbox",
         [typeof(ConsumerInboxEntry)] = "consumer_inbox",
         [typeof(ItemAiStatus)] = "item_ai_status",
+        [typeof(StockHold)] = "stock_holds",
     };
 
     private static readonly HashSet<string> JsonColumns = new HashSet<string>(StringComparer.Ordinal)
