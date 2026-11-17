@@ -33,6 +33,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<WorkTask> WorkTasks => Set<WorkTask>();
     public DbSet<WorkTaskEvent> WorkTaskEvents => Set<WorkTaskEvent>();
 
+    public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
+    public DbSet<WorkspacePaymentSettings> WorkspacePaymentSettings => Set<WorkspacePaymentSettings>();
+
     public DbSet<BusinessSource> BusinessSources => Set<BusinessSource>();
     public DbSet<WorkspaceSourceState> WorkspaceSourceStates => Set<WorkspaceSourceState>();
     public DbSet<OutboxEvent> OutboxEvents => Set<OutboxEvent>();
@@ -389,6 +392,71 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(e => e.TargetId).HasMaxLength(64);
             entity.Property(e => e.Note).HasMaxLength(1000);
             entity.HasIndex(e => e.TaskId);
+        });
+
+        // A payment link's order: priced from the catalog when the link was made, kept in kobo.
+        builder.Entity<PaymentOrder>(entity =>
+        {
+            entity.HasKey(o => o.Id);
+            entity.Property(o => o.Id).ValueGeneratedNever();
+            entity.Property(o => o.WorkspaceId).IsRequired().HasMaxLength(450);
+            entity.HasOne<Workspace>().WithMany().HasForeignKey(o => o.WorkspaceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(o => o.CustomerSender).HasMaxLength(256).IsRequired();
+            entity.Property(o => o.CustomerName).HasMaxLength(120);
+            entity.Property(o => o.CustomerEmail).HasMaxLength(254);
+            entity.Property(o => o.CustomerPhone).HasMaxLength(32);
+            entity.Property(o => o.Note).HasMaxLength(500);
+            entity.Property(o => o.Reference).HasMaxLength(64).IsRequired();
+            entity.Property(o => o.IdempotencyKey).HasMaxLength(100).IsRequired();
+            entity.Property(o => o.Status).HasConversion<string>().HasMaxLength(32);
+            entity.Property(o => o.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(o => o.Provider).HasMaxLength(32).IsRequired();
+            entity.Property(o => o.ProviderSessionId).HasMaxLength(256);
+            entity.Property(o => o.PaymentUrl).HasMaxLength(2048);
+            entity.Property(o => o.FailureReason).HasMaxLength(500);
+            entity.Property(o => o.ProviderTransactionId).HasMaxLength(256);
+            entity.Property(o => o.AttentionReason).HasMaxLength(1000);
+            entity.Property(o => o.HoldMode).HasConversion<string>().HasMaxLength(32);
+            entity.Ignore(o => o.IsPaid);
+
+            // The lines are copied in and only ever read whole, so one JSON document.
+            entity.Property(o => o.Lines)
+                .HasConversion(
+                    lines => JsonSerializer.Serialize(lines, (JsonSerializerOptions?)null),
+                    json => JsonSerializer.Deserialize<List<PaymentOrderLine>>(json, (JsonSerializerOptions?)null) ?? new List<PaymentOrderLine>(),
+                    new ValueComparer<List<PaymentOrderLine>>(
+                        (left, right) => (left ?? new List<PaymentOrderLine>()).SequenceEqual(right ?? new List<PaymentOrderLine>()),
+                        lines => lines.Aggregate(0, (hash, line) => HashCode.Combine(hash, line.GetHashCode())),
+                        lines => lines.ToList()))
+                .HasColumnType("jsonb")
+                .IsRequired();
+
+            // The provider sends the reference back with the payment; it finds exactly one order.
+            entity.HasIndex(o => o.Reference).IsUnique().HasDatabaseName("UQ_PaymentOrders_Reference");
+            entity.HasIndex(o => new { o.WorkspaceId, o.IdempotencyKey }).IsUnique()
+                .HasDatabaseName(Parrot.Infrastructure.Payments.EfPaymentOrderRepository.IdempotencyIndex);
+            entity.HasIndex(o => new { o.WorkspaceId, o.ConnectionId, o.CustomerSender, o.Status })
+                .HasDatabaseName("IX_PaymentOrders_Conversation");
+            // The sweep finds pending orders whose time is up.
+            entity.HasIndex(o => new { o.Status, o.ExpiresAt }).HasDatabaseName("IX_PaymentOrders_Status_ExpiresAt");
+        });
+
+        // A workspace's checkout settings: one row per workspace, made when the business first saves.
+        builder.Entity<WorkspacePaymentSettings>(entity =>
+        {
+            entity.HasKey(s => s.WorkspaceId);
+            entity.Property(s => s.WorkspaceId).HasMaxLength(450);
+            entity.HasOne<Workspace>().WithOne().HasForeignKey<WorkspacePaymentSettings>(s => s.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(s => s.HoldMode).HasConversion<string>().HasMaxLength(32);
+            entity.Property(s => s.PriceChangeRule).HasConversion<string>().HasMaxLength(32);
+            entity.Property(s => s.UpdatedBy).HasMaxLength(450);
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_WorkspacePaymentSettings_CheckoutMinutes", "\"CheckoutMinutes\" BETWEEN 5 AND 1440");
+                t.HasCheckConstraint("CK_WorkspacePaymentSettings_PaymentMinutes", "\"PaymentMinutes\" BETWEEN 5 AND 120");
+            });
         });
 
         // One row per independently identifiable business resource on a connected channel.

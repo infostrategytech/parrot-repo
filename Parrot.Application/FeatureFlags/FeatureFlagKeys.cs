@@ -7,4 +7,8 @@ public static class FeatureFlagKeys
     // straight in, and sign-in lets unverified accounts through, confirming
     // them as it does. Off is for deployments with no working mail.
     public const string RequireEmailVerification = "RequireEmailVerification";
+
+    // On: agents can make checkouts (create_checkout), from which customers pay. The key keeps its
+    // old name so existing config (FeatureFlags__PaymentLinks) still switches it. Off by default.
+    public const string PaymentLinks = "PaymentLinks";
 }

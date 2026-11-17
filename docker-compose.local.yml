@@ -202,6 +202,17 @@ services:
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
       OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
+      # Checkouts (create_checkout): the customer pays from the checkout page, through the
+      # platform's Accelerate account (the sandbox unless ACCELERATE_BASE_URL says otherwise).
+      # The keys come from the shell (ACCELERATE_PUBLIC_KEY / ACCELERATE_SECRET_KEY, and
+      # ACCELERATE_CLIENT_SECRET for webhooks), never this file. Without them checkouts are
+      # still made, but Pay is refused. PAYMENT_LINKS_ENABLED=false turns checkouts off.
+      FeatureFlags__PaymentLinks: ${PAYMENT_LINKS_ENABLED:-true}
+      Payments__CallbackUrl: ${PAYMENT_CALLBACK_URL:-http://localhost:5255/}
+      Payments__Accelerate__BaseUrl: ${ACCELERATE_BASE_URL:-https://staging.payment.irechargetech.com}
+      Payments__Accelerate__PublicKey: ${ACCELERATE_PUBLIC_KEY:-}
+      Payments__Accelerate__SecretKey: ${ACCELERATE_SECRET_KEY:-}
+      Payments__Accelerate__ClientSecret: ${ACCELERATE_CLIENT_SECRET:-}
       # The object store for image uploads. The app writes to MinIO over the
       # compose network; the URLs it hands back are read by the browser
       # through the published port, so the two bases are not the same host.

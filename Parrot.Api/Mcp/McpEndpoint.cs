@@ -11,13 +11,15 @@ public static class McpEndpoint
 {
     public const string Path = "/api/mcp";
 
-    /// <summary>The MCP server and its tools. The caller registers <see cref="Parrot.Application.Agents.ICatalogToolsClient"/>.</summary>
+    /// <summary>The MCP server and its tools. The caller registers <see cref="Parrot.Application.Agents.ICatalogToolsClient"/>
+    /// and <see cref="Parrot.Application.Payments.CheckoutService"/>.</summary>
     public static IServiceCollection AddAgentTools(this IServiceCollection services)
     {
         services.AddHttpContextAccessor();
         services.AddMcpServer(options => options.ServerInfo = new () { Name = "parrot", Title = "Parrot", Version = "1" })
             .WithHttpTransport()
-            .WithTools<ProductTools>();
+            .WithTools<ProductTools>()
+            .WithTools<PaymentTools>();
         return services;
     }
 

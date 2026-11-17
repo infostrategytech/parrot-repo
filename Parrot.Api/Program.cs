@@ -40,6 +40,8 @@ using Parrot.Infrastructure.Realtime;
 using Parrot.Infrastructure.SocialMediaIntegrations;
 using Parrot.Infrastructure.Storage;
 using Parrot.Api.Mcp;
+using Parrot.Application.Payments;
+using Parrot.Infrastructure.Payments;
 using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Api.OpenApi;
@@ -348,6 +350,19 @@ builder.Services.AddRateLimiter(options =>
                 QueueLimit = 0,
             }));
 
+    // The public checkout page: 60 reads or Pay presses per IP per minute. Each one prices the order
+    // live from the catalog, so a link being hammered mustn't load the catalog for everyone.
+    options.AddPolicy(RateLimitPolicies.Checkout, ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 60,
+                Window = TimeSpan.FromMinutes(1),
+                QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                QueueLimit = 0,
+            }));
+
     // 20 invite emails (new or resent) per owner per hour. Per account, not per
     // IP: sending needs a session, and every email goes to someone else's inbox.
     options.AddPolicy(RateLimitPolicies.TeamInvite, ctx =>
@@ -466,6 +481,35 @@ builder.Services.AddHttpClient<ICatalogToolsClient, HttpCatalogToolsClient>((sp,
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 });
 builder.Services.AddAgentTools();
+// Checkouts (create_checkout) and their payment links: the platform's Accelerate account, whose keys
+// come from the environment (Payments__Accelerate__PublicKey / SecretKey), never a committed file.
+builder.Services.AddOptions<PaymentSettings>().BindConfiguration(PaymentSettings.SectionName);
+builder.Services.AddSingleton<AccelerateSession>();
+builder.Services.AddHttpClient<IPaymentProvider, AccelerateClient>((sp, client) =>
+{
+    string? rawUrl = sp.GetRequiredService<IOptions<PaymentSettings>>().Value.Accelerate.BaseUrl;
+    if (Uri.TryCreate(rawUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
+    client.Timeout = TimeSpan.FromSeconds(20);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+});
+builder.Services.AddSingleton<IPaymentOrderRepository, EfPaymentOrderRepository>();
+builder.Services.AddSingleton<IWorkspacePaymentSettingsRepository, EfWorkspacePaymentSettingsRepository>();
+builder.Services.AddScoped<WorkspacePaymentSettingsService>();
+builder.Services.AddSingleton<CheckoutTokens>();
+builder.Services.AddSingleton<CheckoutLinks>();
+builder.Services.AddScoped<CheckoutService>();
+builder.Services.AddHttpClient<ICatalogStockClient, HttpCatalogStockClient>((sp, client) =>
+{
+    string? rawUrl = sp.GetRequiredService<IOptions<CatalogClientSettings>>().Value.BaseUrl;
+    if (Uri.TryCreate(rawUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
+    client.Timeout = TimeSpan.FromSeconds(10);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+});
+builder.Services.AddScoped<IPaymentNotifier, TaskPaymentNotifier>();
+builder.Services.AddScoped<PaymentConfirmationService>();
+builder.Services.AddHostedService<Parrot.Api.Realtime.PaymentExpiryService>();
 
 builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient>(client =>
 {
