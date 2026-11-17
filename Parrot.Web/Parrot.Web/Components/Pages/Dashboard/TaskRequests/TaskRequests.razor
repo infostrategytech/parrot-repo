@@ -436,18 +436,28 @@
     private Task UndoStateAsync(TaskRequest task, TaskState before) =>
         SaveAsync("state-" + task.Id, () => Store.SetStateAsync(task.Id, before), "Couldn't undo that.", () => UndoStateAsync(task, before));
 
-    private Task UndoAssignAsync(TaskRequest task, TaskPerson? before) =>
-        SaveAsync("assign-" + task.Id, () => Store.AssignAsync(task.Id, before), "Couldn't undo that.", () => UndoAssignAsync(task, before));
+    private async Task UndoAssignAsync(TaskRequest task, TaskPerson? before, TaskPerson? expected)
+    {
+        await SaveAsync("assign-" + task.Id, async () =>
+        {
+            if (await TaskAssignmentRules.TryUndoAsync(Store, task.Id, expected, before)) Toasts.Show("Assignment undone.");
+            else Toasts.ShowError("This task has changed. Open it to review the assignee.");
+        }, "Couldn't undo that.", () => UndoAssignAsync(task, before, expected));
+        // Toast actions are outside this page's event tree: release its busy picker explicitly.
+        StateHasChanged();
+    }
 
     private async Task AssignAsync(TaskRequest task, TaskPerson? person)
     {
         _openMenu = null;
         var before = task.Assignee;
+        // The table is for sorting work quickly (designer, 17 November 2026): a pick saves at once, with Undo. A note or a
+        // question for the teammate is Pass on, in the task.
         if (before?.Id == person?.Id) return;
         if (!await SaveAsync("assign-" + task.Id, () => Store.AssignAsync(task.Id, person),
                 TaskWords.AssignFailed(person, Store.Me.Id), () => AssignAsync(task, person))) return;
-        var said = person is null ? "Unassigned." : person.Id == Store.Me.Id ? "It's yours." : $"Given to {person.Name}.";
-        Toasts.Show(new ToastMessage(said, ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(() => UndoAssignAsync(task, before))));
+        var said = TaskAssignmentRules.Confirmation(person, Store.Me.Id);
+        Toasts.Show(new ToastMessage(said, ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(() => UndoAssignAsync(task, before, person))));
     }
 
     private async Task CreatedAsync(TaskRequest task)

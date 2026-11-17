@@ -93,7 +93,7 @@ else
         @if (HasTeam)
         {
             <div class="task-row__assignee" role="cell">
-                <TaskAssigneeMenu Assignee="Item.Assignee" Team="Team" Me="Me" LabelStyle="TextStyle.Small12Medium"
+                <TaskAssigneeMenu TaskId="@Item.Id" Assignee="Item.Assignee" Team="Team" Me="Me" LabelStyle="TextStyle.Small12Medium"
                                   Busy="AssignBusy" Open="AssignOpen" OpenChanged="AssignOpenChanged" OnAssign="OnAssign" />
             </div>
         }
