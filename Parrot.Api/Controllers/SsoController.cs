@@ -8,6 +8,7 @@ using Parrot.Api.Middleware;
 using Parrot.Api.Monitoring;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
+using Parrot.Application.Logging;
 
 namespace Parrot.Api.Controllers;
 
@@ -21,12 +22,18 @@ public class SsoController : ControllerBase
     private readonly IAuthService _authService;
     private readonly FrontendSettings _frontendSettings;
     private readonly IAuthenticationSchemeProvider _schemes;
+    private readonly IAppLogger<SsoController> _logger;
 
-    public SsoController(IAuthService authService, IOptions<FrontendSettings> frontendSettings, IAuthenticationSchemeProvider schemes)
+    public SsoController(
+        IAuthService authService,
+        IOptions<FrontendSettings> frontendSettings,
+        IAuthenticationSchemeProvider schemes,
+        IAppLogger<SsoController> logger)
     {
         _authService = authService;
         _frontendSettings = frontendSettings.Value;
         _schemes = schemes;
+        _logger = logger;
     }
 
     [HttpGet("google")]
@@ -34,9 +41,11 @@ public class SsoController : ControllerBase
     [EndpointDescription("Challenges the browser over to Google's consent screen. Nobody is signed in yet; the session is made at the callback that follows.")]
     public IActionResult InitiateGoogle()
     {
+        string? callbackUri = Url.Action(nameof(GoogleCallback), "Sso");
+        _logger.LogInformation("Google SSO initiated. CallbackUri={CallbackUri} FrontendBaseUrl={FrontendBaseUrl}", callbackUri, _frontendSettings.BaseUrl);
         AuthenticationProperties properties = new AuthenticationProperties
         {
-            RedirectUri = Url.Action(nameof(GoogleCallback), "Sso"),
+            RedirectUri = callbackUri,
         };
         return Challenge(properties, GoogleDefaults.AuthenticationScheme);
     }
@@ -53,11 +62,16 @@ public class SsoController : ControllerBase
     public async Task<IActionResult> InitiateFacebook()
     {
         if (await _schemes.GetSchemeAsync(FacebookDefaults.AuthenticationScheme) is null)
+        {
+            _logger.LogWarning("Facebook SSO initiated but no Facebook scheme is registered — FacebookOAuth:AppId or AppSecret is missing.");
             return Redirect($"{_frontendSettings.BaseUrl}/login?error=facebook_unavailable");
+        }
 
+        string? callbackUri = Url.Action(nameof(FacebookCallback), "Sso");
+        _logger.LogInformation("Facebook SSO initiated. CallbackUri={CallbackUri} FrontendBaseUrl={FrontendBaseUrl}", callbackUri, _frontendSettings.BaseUrl);
         AuthenticationProperties properties = new AuthenticationProperties
         {
-            RedirectUri = Url.Action(nameof(FacebookCallback), "Sso"),
+            RedirectUri = callbackUri,
         };
         return Challenge(properties, FacebookDefaults.AuthenticationScheme);
     }
@@ -76,21 +90,29 @@ public class SsoController : ControllerBase
 
         if (!result.Succeeded || result.Principal is null)
         {
+            _logger.LogWarning("{Provider} SSO callback — authentication failed or was cancelled. Failure={Failure}", provider, result.Failure?.Message ?? "(no message)");
             return Redirect($"{_frontendSettings.BaseUrl}/login?error={failed}");
         }
 
         string? email = result.Principal.FindFirstValue(ClaimTypes.Email);
         string? providerKey = result.Principal.FindFirstValue(ClaimTypes.NameIdentifier);
 
+        _logger.LogInformation("{Provider} SSO callback — claims received. EmailPresent={EmailPresent} ProviderKeyPresent={ProviderKeyPresent}", provider, email is not null, providerKey is not null);
+
         if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(providerKey))
         {
             await HttpContext.SignOutAsync(ExternalCookieScheme);
+            _logger.LogWarning("{Provider} SSO callback — missing required claims; redirecting with error={Error}", provider, missing);
             return Redirect($"{_frontendSettings.BaseUrl}/login?error={missing}");
         }
 
         await HttpContext.SignOutAsync(ExternalCookieScheme);
 
+        _logger.LogInformation("{Provider} SSO callback — calling ExternalLoginAsync. Email={Email}", provider, email);
         AuthResponse authResponse = await _authService.ExternalLoginAsync(email, provider, providerKey);
+
+        _logger.LogInformation("{Provider} SSO callback — session issued. UserId={UserId} WorkspaceId={WorkspaceId}", provider, authResponse.UserId, authResponse.WorkspaceId);
+
         // Business name and logo are filled in by the setup step after sign-in,
         // so both are optional here and the callback must not assume them.
         string redirectUrl = string.Format(
