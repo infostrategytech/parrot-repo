@@ -31,6 +31,10 @@
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
+/* A long label (an email used as a name) ends in an ellipsis inside its column instead of running into the next;
+   the menu shows it in full. */
+.filter-popover__trigger ::deep .filter-popover__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
 .filter-popover__leading {
   display: grid;
   place-items: center;
@@ -136,6 +140,7 @@
 .filter-popover.is-quiet { justify-self: start; width: fit-content; max-width: 100%; }
 .filter-popover.is-quiet .filter-popover__trigger {
   width: auto;
+  max-width: 100%;
   height: var(--spacing-3xl);
   padding-inline: var(--spacing-sm);
   background: transparent;

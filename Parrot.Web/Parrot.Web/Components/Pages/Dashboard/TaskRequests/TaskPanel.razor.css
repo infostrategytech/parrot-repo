@@ -31,13 +31,15 @@
 .task-panel__prop dt { color: var(--colors-text-muted); }
 .task-panel__prop dd { display: flex; flex-wrap: wrap; gap: var(--spacing-xs) var(--spacing-md); align-items: center; min-width: 0; }
 /* A quiet menu's words line up with the plain values under it. */
-.task-panel__prop dd ::deep .filter-popover.is-quiet { margin-left: calc(var(--spacing-sm) * -1); }
+.task-panel__prop dd ::deep .filter-popover.is-quiet { left: calc(var(--spacing-sm) * -1); }
 .task-panel__due.is-late ::deep .filter-popover__trigger { color: var(--colors-text-destructive); }
 .task-panel__due.is-today ::deep .filter-popover__trigger { color: var(--colors-feedback-warning-text); }
 .task-panel__due.is-none ::deep .filter-popover__trigger { color: var(--colors-text-muted); }
 /* The calendar opens in the due date's menu, a little wider than a list of choices. */
 .task-panel__due ::deep .task-panel__due-menu .filter-popover__menu { width: var(--ds-task-panel-calendar); padding: var(--spacing-md); }
-.task-panel__customer { display: inline-flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+.task-panel__customer, .task-panel__person { display: inline-flex; gap: var(--spacing-sm); align-items: center; min-width: 0; }
+/* A long name (an email used as one) wraps rather than running out of the panel. */
+.task-panel__person ::deep span { overflow-wrap: anywhere; }
 .task-panel__customer a { color: var(--colors-text-primary); text-decoration: none; }
 .task-panel__customer a:hover { color: var(--colors-text-link); text-decoration: underline; text-underline-offset: var(--spacing-2xs); }
 

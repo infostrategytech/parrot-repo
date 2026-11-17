@@ -51,7 +51,7 @@
 .popover-option.is-active { color: var(--colors-text-secondary); background: transparent; }
 .popover-option.is-active:hover { background: var(--colors-interaction-hover); }
 .popover-option__leading { width: var(--ds-option-leading); height: var(--ds-option-leading); }
-.popover-option__text ::deep strong { color: var(--colors-text-secondary); }
+.popover-option__text ::deep strong { color: var(--colors-text-secondary); overflow-wrap: anywhere; }
 ::deep .popover-option__check { color: var(--colors-brand-primary); }
 
 .popover-option {

@@ -30,9 +30,23 @@
                         <div class="task-panel__prop">
                             <dt><Typography TextStyle="TextStyle.Small12Medium" As="span">Assignee</Typography></dt>
                             <dd>
-                                <TaskAssigneeMenu Assignee="task.Assignee" Team="Team" Me="Store.Me" Busy="@_saving.Contains("assign")"
-                                                  Open='@(_openMenu == "assign")' OpenChanged="@(open => _openMenu = open ? "assign" : null)"
-                                                  OnAssign="person => AssignAsync(task, person)" />
+                                @* Said once (designer, 17 November 2026): Pass on below is how it moves to a teammate,
+                                   with a note or a question; the table's menu is for quick sorting. *@
+                                @if (task.Assignee is { } who)
+                                {
+                                    <span class="task-panel__person">
+                                        <PetalAvatar Seed="@who.Id" Initials="@Initials.From(who.Name)" Size="AvatarSize.Sm" />
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@(who.Id == Store.Me.Id ? $"{who.Name} (you)" : who.Name)</Typography>
+                                    </span>
+                                }
+                                else
+                                {
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="task-panel__muted">Unassigned</Typography>
+                                    @if (!task.IsClosed)
+                                    {
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="@_saving.Contains("assign")" @onclick="() => AssignAsync(task, Store.Me)">Take it</Button>
+                                    }
+                                }
                             </dd>
                         </div>
                     }
@@ -241,7 +255,7 @@
                     @* Someone else should do it, or knows the answer (designer, 15 November 2026). *@
                     @if (!task.IsClosed && Team.Count > 1)
                     {
-                        <Button Variant="ButtonVariant.Secondary" @onclick="() => _passing = true">
+                        <Button Variant="ButtonVariant.Secondary" @onclick="() => OpenPassOn()">
                             <IconLeft><Icon Name="IconName.RiUserSharedFill" /></IconLeft>
                             <ChildContent>Pass on</ChildContent>
                         </Button>
@@ -331,6 +345,7 @@
     private bool _allHistory;
     private bool _editing;
     private bool _passing;
+    private void OpenPassOn() { _openMenu = null; _passing = true; }
     private async Task PassedAsync() { _passing = false; await OnClose.InvokeAsync(); }
 
     protected override void OnParametersSet()
@@ -388,7 +403,20 @@
     {
         _openMenu = null;
         if (task.Assignee?.Id == person?.Id) return;
-        await SaveAsync("assign", () => Store.AssignAsync(task.Id, person), TaskWords.AssignFailed(person, Store.Me.Id), () => AssignAsync(task, person));
+        var before = task.Assignee;
+        if (await SaveAsync("assign", () => Store.AssignAsync(task.Id, person), TaskWords.AssignFailed(person, Store.Me.Id), () => AssignAsync(task, person)))
+            Toasts.Show(new ToastMessage(TaskAssignmentRules.Confirmation(person, Store.Me.Id), ActionLabel: "Undo", OnAction: () => _ = InvokeAsync(() => UndoAssignAsync(task, before, person))));
+    }
+
+    private async Task UndoAssignAsync(TaskRequest task, TaskPerson? before, TaskPerson? expected)
+    {
+        await SaveAsync("assign", async () =>
+        {
+            if (await TaskAssignmentRules.TryUndoAsync(Store, task.Id, expected, before)) Toasts.Show("Assignment undone.");
+            else Toasts.ShowError("This task has changed. Open it to review the assignee.");
+        }, "Couldn't undo that.", () => UndoAssignAsync(task, before, expected));
+        // Toast actions do not automatically rerender the detail panel after its save finishes.
+        StateHasChanged();
     }
 
     // A day keeps the time it had; no day takes the time off too.

@@ -1,5 +1,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.TaskRequests
 @using Parrot.Web.Features.Dashboard.TaskRequests
+@inject ITaskStore Store
+@inject ITaskQuestions Questions
 
 @* Who is on a task, changed in place: on a row of the list and in the task's panel. Only drawn once
    the business has a team; a solo owner never sees it. *@
@@ -13,7 +15,7 @@
                    Class="@(Assignee is null ? "is-nobody" : null)"
                    Busy="Busy"
                    Open="Open"
-                   OpenChanged="OpenChanged">
+                   OpenChanged="SetOpenAsync">
         <Leading>
             @if (Assignee is { } person)
             {
@@ -25,23 +27,38 @@
             }
         </Leading>
         <ChildContent>
-            @foreach (var member in Team.OrderBy(m => m.Id == Me.Id ? 0 : 1))
+            @if (_loading)
+            {
+                <Typography TextStyle="TextStyle.Small12Medium" As="span">Loading teammates…</Typography>
+                <Skeleton Shape="SkeletonShape.Line" /><Skeleton Shape="SkeletonShape.Line" />
+            }
+            else if (_loadError)
+            {
+                <InlineError Message="Your teammates couldn't load.">
+                    <Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadPeopleAsync">Try again</Button></Action>
+                </InlineError>
+            }
+            @foreach (var member in _people.OrderBy(m => m.Id == Me.Id ? 0 : 1))
             {
                 var current = member;
                 @* "(you)" in the name rather than a line under it: otherwise one
                    row in the list is taller than the rest, and only yours. *@
-                <PopoverOption Label="@(current.Id == Me.Id ? $"{current.Name} (you)" : current.Name)"
-                               Active="@(Assignee?.Id == current.Id)" OnSelect="() => OnAssign.InvokeAsync(current)">
+                <PopoverOption Label="@(current.Id == Me.Id ? (Assignee?.Id == Me.Id ? $"{current.Name} (you)" : "Take on myself") : current.Name)"
+                               Active="@(Assignee?.Id == current.Id)" OnSelect="() => SelectAsync(current)">
                     <Leading><PetalAvatar Seed="@current.Id" Initials="@Initials.From(current.Name)" Size="AvatarSize.Sm" /></Leading>
                 </PopoverOption>
             }
-            <PopoverOption Label="Unassigned" Active="@(Assignee is null)" OnSelect="() => OnAssign.InvokeAsync(null)" />
+            @if (!_loading && !_loadError)
+            {
+                <PopoverOption Label="Unassigned" Active="@(Assignee is null)" OnSelect="() => SelectAsync(null)" />
+            }
         </ChildContent>
     </FilterPopover>
 </div>
 
 @code {
     [Parameter] public TaskPerson? Assignee { get; set; }
+    [Parameter, EditorRequired] public string TaskId { get; set; } = "";
     [Parameter, EditorRequired] public IReadOnlyList<TaskPerson> Team { get; set; } = [];
     [Parameter, EditorRequired] public TaskPerson Me { get; set; } = default!;
     [Parameter] public bool AlignEnd { get; set; }
@@ -54,4 +71,49 @@
     [Parameter] public bool Open { get; set; }
     [Parameter] public EventCallback<bool> OpenChanged { get; set; }
     [Parameter] public EventCallback<TaskPerson?> OnAssign { get; set; }
+
+    private IReadOnlyList<TaskPerson> _people = [];
+    private bool _loading, _loadError;
+    private string? _loadedFor;
+    private int _generation;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!Open)
+        {
+            if (_loadedFor is not null) { _generation++; _loading = false; _loadedFor = null; }
+            return;
+        }
+        if (_loadedFor != TaskId) { _generation++; _loading = false; await LoadPeopleAsync(); }
+    }
+
+    private async Task SetOpenAsync(bool open)
+    {
+        await OpenChanged.InvokeAsync(open);
+        if (open && _loadedFor != TaskId) await LoadPeopleAsync();
+    }
+
+    private async Task LoadPeopleAsync()
+    {
+        if (_loading) return;
+        var id = TaskId;
+        var generation = ++_generation;
+        _loading = true; _loadError = false; _people = []; _loadedFor = id;
+        try
+        {
+            var people = await TaskAssignmentRules.PeopleAsync(Store, Questions, id);
+            if (TaskId == id && generation == _generation) _people = people.Select(p => p.Person).ToArray();
+        }
+        catch (Exception e) when (Parrot.Web.Features.Dashboard.AiAgents.State.AiAgentsState.IsFailure(e) || e is InvalidOperationException)
+        { if (TaskId == id && generation == _generation) _loadError = true; }
+        finally { if (TaskId == id && generation == _generation) _loading = false; }
+    }
+
+    private async Task SelectAsync(TaskPerson? person)
+    {
+        if (Busy || _loading || _loadError) return;
+        if (person is not null && !_people.Any(p => p.Id == person.Id)) return;
+        await OpenChanged.InvokeAsync(false);
+        await OnAssign.InvokeAsync(person);
+    }
 }

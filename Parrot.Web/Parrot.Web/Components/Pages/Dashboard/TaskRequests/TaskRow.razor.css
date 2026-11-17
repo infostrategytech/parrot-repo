@@ -65,7 +65,8 @@
 /* Their words line up with their column's name. The status starts its column, as every table's states do,
    so the dots line up (designer, 28 October 2026; this replaces the right-aligned status of 21 October). */
 .task-row__assignee ::deep .filter-popover.is-quiet,
-.task-row__status ::deep .filter-popover.is-quiet { margin-left: calc(var(--spacing-sm) * -1); }
+.task-row__status ::deep .filter-popover.is-quiet { left: calc(var(--spacing-sm) * -1); }
+/* Nudged, not a negative margin: a margin made the flex cell 8px narrower than its words, cutting them short. */
 .task-row__status { display: flex; justify-content: flex-start; }
 /* Who raised it, under the title: only where its column folds away. */
 .task-row__words ::deep .task-row__meta-by { display: none; }
@@ -99,12 +100,12 @@
   }
   .task-row__customer { display: inline-flex; gap: var(--spacing-sm); align-items: center; }
   .task-row__assignee { grid-column: 1 / -1; grid-row: 3; padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md)); }
-  .task-row__assignee ::deep .filter-popover.is-quiet { margin-left: var(--spacing-none); }
+  .task-row__assignee ::deep .filter-popover.is-quiet { left: var(--spacing-none); }
 }
 
 @media (max-width: 760px) {
   .task-row,
   .task-row.has-team { --ds-table-columns: minmax(0, 1fr); }
   .task-row__status { grid-row: 4; justify-content: flex-start; padding-left: calc(var(--ds-tasks-icon) + var(--spacing-md)); }
-  .task-row__status ::deep .filter-popover.is-quiet { margin-left: var(--spacing-none); }
+  .task-row__status ::deep .filter-popover.is-quiet { left: var(--spacing-none); }
 }
