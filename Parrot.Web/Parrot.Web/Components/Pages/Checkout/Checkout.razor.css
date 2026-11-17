@@ -1,0 +1,88 @@
+/* A phone first: one narrow column, the business at the top, the order in a card, Pay at the foot. On a wider
+   screen the same column sits in the middle. */
+.checkout {
+  /* Gaps in the token set: a column a phone's width, and the logo's size. */
+  --ds-checkout-width: 480px;
+  --ds-checkout-logo: 56px;
+
+  min-height: 100dvh;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
+}
+
+.checkout__panel { display: grid; gap: var(--spacing-xl); width: 100%; max-width: var(--ds-checkout-width); }
+.checkout__panel ::deep p,
+.checkout__panel ::deep h1,
+.checkout__panel ::deep h2 { margin: var(--spacing-none); }
+
+.checkout__loading { display: grid; gap: var(--spacing-lg); justify-items: center; }
+
+/* Whose checkout it is, and who it's for. */
+.checkout__head { display: grid; gap: var(--spacing-xs); justify-items: center; text-align: center; }
+.checkout__logo {
+  width: var(--ds-checkout-logo);
+  height: var(--ds-checkout-logo);
+  margin-bottom: var(--spacing-xs);
+  object-fit: cover;
+  border-radius: var(--radius-radius-full);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.checkout__head ::deep h1 { text-wrap: balance; }
+.checkout__head ::deep p { color: var(--colors-text-muted); }
+
+/* The order: an item a row, its price on the right, any problem under it; the total below a rule. */
+.checkout__card {
+  display: grid;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.checkout__lines { display: grid; margin: var(--spacing-none); padding: var(--spacing-none) var(--spacing-xl); list-style: none; }
+.checkout__line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--spacing-sm) var(--spacing-lg);
+  padding-block: var(--spacing-lg);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+.checkout__line:first-child { border-top: none; }
+.checkout__item { display: grid; gap: var(--spacing-2xs); min-width: 0; overflow-wrap: anywhere; }
+.checkout__price { display: grid; gap: var(--spacing-2xs); justify-items: end; text-align: end; white-space: nowrap; }
+.checkout__problem { grid-column: 1 / -1; }
+
+.checkout__total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-xl);
+  border-top: var(--ds-hairline) solid var(--colors-surface-border);
+}
+
+.checkout__panel ::deep .checkout__muted { color: var(--colors-text-muted); }
+.checkout__panel ::deep .checkout__was { color: var(--colors-text-muted); text-decoration: line-through; }
+
+.checkout__actions { display: grid; gap: var(--spacing-md); }
+.checkout__panel ::deep .checkout__note { color: var(--colors-text-muted); text-align: center; }
+
+/* Paid, expired, replaced or unavailable: what happened, with an icon in its tone. */
+.checkout__status {
+  display: grid;
+  gap: var(--spacing-sm);
+  justify-items: center;
+  padding: var(--spacing-2xl) var(--spacing-xl);
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.checkout__status ::deep p { color: var(--colors-text-muted); }
+.checkout__status-icon { display: inline-flex; color: var(--colors-text-muted); }
+.checkout__status--paid .checkout__status-icon { color: var(--colors-feedback-success-text); }
+.checkout__status--unavailable .checkout__status-icon { color: var(--colors-feedback-destructive-text); }
+.checkout__status--expired .checkout__status-icon,
+.checkout__status--replaced .checkout__status-icon { color: var(--colors-feedback-warning-text); }
