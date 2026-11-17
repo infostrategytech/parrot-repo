@@ -10,6 +10,7 @@ using Moq;
 using Parrot.Api.Controllers;
 using Parrot.Application.Auth;
 using Parrot.Application.DTOs.Auth;
+using Parrot.Application.Logging;
 
 namespace Test.Parrot.Api.Tests.Services.Auth;
 
@@ -22,6 +23,7 @@ public class GoogleSsoTests
     private readonly Mock<IAuthService> _auth = new();
     private readonly Mock<IAuthenticationSchemeProvider> _schemes = new();
     private readonly Mock<IAuthenticationService> _authentication = new();
+    private readonly Mock<IAppLogger<SsoController>> _logger = new();
 
     private SsoController Create(ClaimsPrincipal? external = null)
     {
@@ -32,7 +34,7 @@ public class GoogleSsoTests
         ServiceProvider services = new ServiceCollection().AddSingleton(_authentication.Object).BuildServiceProvider();
         Mock<IUrlHelper> url = new();
         url.Setup(u => u.Action(It.IsAny<UrlActionContext>())).Returns("/api/auth/sso/google/callback");
-        return new SsoController(_auth.Object, Options.Create(new FrontendSettings { BaseUrl = Frontend }), _schemes.Object)
+        return new SsoController(_auth.Object, Options.Create(new FrontendSettings { BaseUrl = Frontend }), _schemes.Object, _logger.Object)
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext { RequestServices = services } },
             Url = url.Object,

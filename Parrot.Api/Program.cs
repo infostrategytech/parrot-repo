@@ -668,6 +668,38 @@ if (!storageConfigured)
         "Storage:Bucket and Storage:PublicBaseUrl are not set. The API is starting without them, but image uploads will fail until they are.");
 }
 
+// SSO startup diagnostic — logs what is configured so live issues can be traced without guessing.
+// ClientId is a public value (it appears in the OAuth URL the browser visits), so logging it is safe.
+// ClientSecret is never logged; only whether it is present.
+string? googleClientId = builder.Configuration["GoogleOAuth:ClientId"];
+bool googleSecretSet = !string.IsNullOrWhiteSpace(builder.Configuration["GoogleOAuth:ClientSecret"]);
+string frontendBaseUrl = builder.Configuration["FrontendSettings:BaseUrl"] ?? "(not set)";
+string? fbAppId = builder.Configuration["FacebookOAuth:AppId"];
+bool fbSecretSet = !string.IsNullOrWhiteSpace(builder.Configuration["FacebookOAuth:AppSecret"]);
+
+bool googlePlaceholder = string.IsNullOrWhiteSpace(googleClientId)
+    || googleClientId.Contains("your-google", StringComparison.OrdinalIgnoreCase);
+
+app.Logger.LogInformation(
+    "SSO config — Google: ClientId={GoogleClientId} SecretSet={GoogleSecretSet} | Facebook: AppId={FacebookAppId} SecretSet={FacebookSecretSet} | FrontendBaseUrl={FrontendBaseUrl}",
+    googleClientId ?? "(not set)",
+    googleSecretSet,
+    string.IsNullOrWhiteSpace(fbAppId) ? "(not set)" : fbAppId,
+    fbSecretSet,
+    frontendBaseUrl);
+
+if (googlePlaceholder || !googleSecretSet)
+{
+    app.Logger.LogWarning(
+        "SSO — Google sign-in will fail: {Reason}",
+        googlePlaceholder ? "ClientId is missing or still the placeholder value" : "ClientSecret is not set");
+}
+
+if (!string.IsNullOrWhiteSpace(fbAppId) && !fbSecretSet)
+{
+    app.Logger.LogWarning("SSO — Facebook AppId is set but AppSecret is missing; Facebook sign-in will not be registered.");
+}
+
 if (builder.Configuration.GetValue<bool>("Database:ApplyMigrations"))
 {
     using IServiceScope scope = app.Services.CreateScope();
