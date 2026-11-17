@@ -95,7 +95,8 @@ public static class CatalogAuthentication
             .AddPolicy(CatalogPolicies.Write, p => Scope(p, CatalogScopes.Write))
             .AddPolicy(CatalogPolicies.Publish, p => Scope(p, CatalogScopes.Publish))
             .AddPolicy(CatalogPolicies.Admin, p => Scope(p, CatalogScopes.Admin))
-            .AddPolicy(CatalogPolicies.AiTools, p => Scope(p, CatalogScopes.AiTools));
+            .AddPolicy(CatalogPolicies.AiTools, p => Scope(p, CatalogScopes.AiTools))
+            .AddPolicy(CatalogPolicies.Orders, p => Scope(p, CatalogScopes.Orders));
 
         return services;
     }

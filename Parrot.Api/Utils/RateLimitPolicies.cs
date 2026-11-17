@@ -16,4 +16,5 @@ public static class RateLimitPolicies
     public const string FileSend = "uploads:file-send";
     public const string ImageUpload = "uploads:image";
     public const string TeamInvite = "team:invite";
+    public const string Checkout = "checkout";
 }

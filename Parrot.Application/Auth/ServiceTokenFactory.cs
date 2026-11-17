@@ -32,6 +32,12 @@ public interface IServiceTokenFactory
     string MintForCatalogAiTools(string workspaceId);
 
     /// <summary>
+    /// Mints a token with only <c>catalog:orders</c> scope, for holding stock while a
+    /// customer pays and taking it off stock once they have.
+    /// </summary>
+    string MintForCatalogOrders(string workspaceId);
+
+    /// <summary>
     /// Mints a user-like JWT for calling the AI service. The AI service validates
     /// tokens the same way it validates user sessions — no service-specific claims,
     /// just <c>sub</c> set to the workspace id.
@@ -94,6 +100,8 @@ public sealed class ServiceTokenFactory(IJwtHelper jwt) : IServiceTokenFactory
     public string MintForCatalog(string ownerUserId) => MintCatalogToken(ownerUserId, ServiceScopes.CatalogAdmin);
 
     public string MintForCatalogAiTools(string workspaceId) => MintCatalogToken(workspaceId, ServiceScopes.CatalogAiTools);
+
+    public string MintForCatalogOrders(string workspaceId) => MintCatalogToken(workspaceId, ServiceScopes.CatalogOrders);
 
     public string MintForAiService(string ownerUserId)
     {

@@ -1,0 +1,279 @@
+@page "/checkout/{Token}"
+@layout BareLayout
+@using System.Globalization
+@using Parrot.Web.Features.Checkout
+@inject CheckoutClient Checkouts
+@inject NavigationManager Navigation
+@inject UserClock Clock
+
+<PageTitle>@(_view is null ? "Checkout" : $"Checkout · {_view.Business}")</PageTitle>
+
+@* The link an agent sends a customer in WhatsApp or Instagram: what they're buying from whom, what it costs now,
+   and one button to pay. Opened on a phone, signed out (Routes lets /checkout/ through), so it is the business's
+   page, not yára's: no app chrome. The prices come from the API as they are now; when they differ from what the
+   business sent, the old one is struck through beside the new. *@
+<main class="checkout">
+    <div class="checkout__panel">
+        @if (_invalid)
+        {
+            <EmptyState Title="This checkout link isn't valid" Glyph="IconName.RiLinksFill"
+                        Description="Check you opened the whole link, or ask the business to send you a new one." />
+        }
+        else if (_view is null && _loadError is not null)
+        {
+            <EmptyState Title="We couldn't open this checkout" Glyph="IconName.RiErrorWarningFill" Description="@_loadError">
+                <Action><Button Variant="ButtonVariant.Secondary" Busy="_loading" @onclick="LoadAsync">Try again</Button></Action>
+            </EmptyState>
+        }
+        else if (_view is null)
+        {
+            <div class="checkout__loading" aria-busy="true" aria-label="Loading your checkout">
+                <Skeleton Shape="SkeletonShape.Circle" Width="var(--spacing-4xl)" Height="var(--spacing-4xl)" />
+                <Skeleton Shape="SkeletonShape.Line" Width="60%" Order="1" />
+                <Skeleton Shape="SkeletonShape.Block" Order="2" />
+                <Skeleton Shape="SkeletonShape.Line" Order="3" />
+            </div>
+        }
+        else
+        {
+            var view = _view;
+            <header class="checkout__head">
+                @if (!string.IsNullOrWhiteSpace(view.LogoUrl))
+                {
+                    <img class="checkout__logo" src="@view.LogoUrl" alt="" />
+                }
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1" Prose>@view.Business</Typography>
+                @if (!string.IsNullOrWhiteSpace(view.CustomerName))
+                {
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p">Hi @view.CustomerName</Typography>
+                }
+            </header>
+
+            @if (Ended(view.State))
+            {
+                @* Paid, expired, replaced or no longer available: what happened is the page. A paid one keeps its
+                   items, as a receipt. *@
+                <section class="@($"checkout__status checkout__status--{view.State}")" role="status">
+                    <span class="checkout__status-icon"><Icon Name="@StateGlyph(view.State)" Size="IconSize.Lg" /></span>
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">@StateTitle(view.State)</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(view.Message ?? StateFallback(view.State))</Typography>
+                </section>
+            }
+
+            @if (!Ended(view.State) || view.State == "paid")
+            {
+                <section class="checkout__card" aria-label="Your order">
+                    <ul class="checkout__lines">
+                        @foreach (var line in view.Lines)
+                        {
+                            <li class="checkout__line">
+                                <div class="checkout__item">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" Prose>@line.Name</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="checkout__muted">@Detail(line)</Typography>
+                                </div>
+                                <div class="checkout__price">
+                                    @if (line.UnitPrice is not { } price)
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="checkout__muted">@Money(line.QuotedUnitPrice)</Typography>
+                                    }
+                                    else
+                                    {
+                                        @if (line.PriceChanged)
+                                        {
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="del" Class="checkout__was" aria-label="@($"Was {Money(line.QuotedUnitPrice)}")">@Money(line.QuotedUnitPrice)</Typography>
+                                        }
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@Money(price)</Typography>
+                                        @if (line.Quantity > 1 && line.LineTotal is { } lineTotal)
+                                        {
+                                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="checkout__muted">@($"{Money(lineTotal)} for {line.Quantity}")</Typography>
+                                        }
+                                    }
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(line.Problem))
+                                {
+                                    <div class="checkout__problem"><InlineError Message="@line.Problem" /></div>
+                                }
+                            </li>
+                        }
+                    </ul>
+
+                    <div class="checkout__total">
+                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">@(view.State == "paid" ? "Paid" : "Total")</Typography>
+                        <div class="checkout__price">
+                            @if (view.PriceChanged)
+                            {
+                                <Typography TextStyle="TextStyle.BodySmallMedium" As="del" Class="checkout__was" aria-label="@($"Was {Money(view.QuotedTotal)}")">@Money(view.QuotedTotal)</Typography>
+                            }
+                            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span">@Money(view.Total)</Typography>
+                        </div>
+                    </div>
+                </section>
+            }
+
+            @if (!Ended(view.State))
+            {
+                <div class="checkout__actions">
+                    @* Why the last Pay didn't go through (the total changed, say): above everything else it bears on. *@
+                    @if (_notice is not null)
+                    {
+                        <InlineError Tone="InlineErrorTone.Warning" Message="@_notice" />
+                    }
+                    @if (!string.IsNullOrWhiteSpace(view.Message) && view.Message != _notice)
+                    {
+                        <InlineError Tone="@(view.CanPay ? InlineErrorTone.Info : InlineErrorTone.Error)" Message="@view.Message" />
+                    }
+                    @if (_payError is not null)
+                    {
+                        <InlineError Message="@_payError" />
+                    }
+
+                    @if (view.State == "paying")
+                    {
+                        @if (!string.IsNullOrWhiteSpace(view.PaymentUrl))
+                        {
+                            <Button Size="ButtonSize.Large" FullWidth @onclick="() => Go(view.PaymentUrl)">
+                                <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                                <ChildContent>Continue to payment</ChildContent>
+                            </Button>
+                        }
+                        else
+                        {
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="checkout__note">Your payment is being prepared.</Typography>
+                            <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" FullWidth Busy="_loading" @onclick="LoadAsync">
+                                <IconLeft><Icon Name="IconName.RiRefreshLine" /></IconLeft>
+                                <ChildContent>Refresh</ChildContent>
+                            </Button>
+                        }
+                    }
+                    else
+                    {
+                        <Button Size="ButtonSize.Large" FullWidth Busy="_paying" disabled="@(!view.CanPay || _paying)" @onclick="PayAsync">
+                            <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
+                            <ChildContent>@($"Pay {Money(view.Total)}")</ChildContent>
+                        </Button>
+                        @if (view.ExpiresAt is { } expires)
+                        {
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="checkout__note">@OpenUntil(expires)</Typography>
+                        }
+                    }
+                </div>
+            }
+        }
+    </div>
+</main>
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+
+    private CheckoutView? _view;
+    private bool _invalid, _loading, _paying;
+    private string? _loadError, _payError, _notice;
+
+    // Read after the first render, as the invite page does: the browser's time zone is known only then.
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        await Clock.ReadAsync();
+        await LoadAsync();
+        StateHasChanged();
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_loading) return;
+        _loading = true; _loadError = null; _payError = null;
+        try
+        {
+            _view = await Checkouts.GetAsync(Token);
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound) { _invalid = true; }
+        catch (HttpRequestException exception) when (exception.StatusCode is null) { Failed("We couldn't reach the checkout. Check your internet connection and try again."); }
+        catch (HttpRequestException) { Failed("Something went wrong on our side. Try again in a moment."); }
+        finally { _loading = false; }
+    }
+
+    // On a refresh the checkout already shown stays, with the problem under it.
+    private void Failed(string message)
+    {
+        if (_view is null) _loadError = message; else _payError = message;
+    }
+
+    // The total the customer is looking at goes with the request, so they never pay a total they weren't shown.
+    private async Task PayAsync()
+    {
+        if (_view is not { CanPay: true } view || _paying) return;
+        _paying = true; _payError = null; _notice = null;
+        try
+        {
+            var result = await Checkouts.PayAsync(Token, view.Total);
+            if (result.Checkout is { } changed)
+            {
+                _view = changed;
+                _notice = result.Message;
+            }
+            else if (!string.IsNullOrWhiteSpace(result.PaymentUrl))
+            {
+                // Busy until the payment page loads.
+                Go(result.PaymentUrl);
+                return;
+            }
+            else
+            {
+                await LoadAsync();
+            }
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.TooManyRequests) { _payError = "Too many attempts. Wait a minute, then try again."; }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound) { _view = null; _invalid = true; }
+        catch (ApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { _payError = exception.UserMessage; }
+        catch (HttpRequestException exception) when (exception.StatusCode is null) { _payError = "We couldn't reach the checkout. Check your internet connection and try again."; }
+        catch (HttpRequestException) { _payError = "Something went wrong on our side. Try again in a moment."; }
+        _paying = false;
+    }
+
+    // A whole page load: the payment page is another site.
+    private void Go(string? url)
+    {
+        if (!string.IsNullOrWhiteSpace(url)) Navigation.NavigateTo(url, forceLoad: true);
+    }
+
+    private string Money(decimal amount) => CheckoutMoney.Format(amount, _view?.Currency);
+
+    private static string Detail(CheckoutLine line) =>
+        string.IsNullOrWhiteSpace(line.VariantName) ? $"Qty {line.Quantity}" : $"{line.VariantName} · Qty {line.Quantity}";
+
+    private static bool Ended(string state) => state is "paid" or "expired" or "replaced" or "unavailable";
+
+    private static IconName StateGlyph(string state) => state switch
+    {
+        "paid" => IconName.RiCheckboxCircleFill,
+        "expired" => IconName.RiTimerFill,
+        "replaced" => IconName.RiExchangeBoxFill,
+        _ => IconName.RiErrorWarningFill,
+    };
+
+    private static string StateTitle(string state) => state switch
+    {
+        "paid" => "Paid, thank you",
+        "expired" => "This checkout has expired",
+        "replaced" => "There's a newer checkout",
+        _ => "This checkout can't be paid",
+    };
+
+    // Only when the API sends no message of its own.
+    private static string StateFallback(string state) => state switch
+    {
+        "paid" => "The business has your payment.",
+        "expired" => "Ask the business to send you a new one.",
+        "replaced" => "The business sent you a newer checkout. Open that one instead.",
+        _ => "Ask the business for help with your order.",
+    };
+
+    // In the customer's own time: "Open until 3:30 pm today", or the day when it isn't today.
+    private string OpenUntil(DateTime expiresAt)
+    {
+        var local = Clock.ToLocal(expiresAt.Kind == DateTimeKind.Local ? expiresAt.ToUniversalTime() : expiresAt);
+        var time = local.ToString("h:mm tt", CultureInfo.InvariantCulture).ToLowerInvariant();
+        var day = DateOnly.FromDateTime(local) == Clock.Today ? "today" : "on " + local.ToString("ddd d MMM", CultureInfo.InvariantCulture);
+        return $"Open until {time} {day}";
+    }
+}

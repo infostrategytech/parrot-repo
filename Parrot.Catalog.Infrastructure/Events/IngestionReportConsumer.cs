@@ -91,6 +91,7 @@ public sealed class IngestionReportHandler
         else
         {
             Apply(row, reportId, reportedAt, root, payload);
+            await MarkPhotosAsync(row, reportedAt, payload, ct);
             recorded = true;
         }
 
@@ -148,6 +149,45 @@ public sealed class IngestionReportHandler
             }
         }
     }
+
+    /// <summary>
+    /// Marks each photo the report names with what the AI made of it (embedded, rejected,
+    /// failed), on the photo's own row, so the AI's tools can offer only the photos it
+    /// learned. A photo the report doesn't name keeps its mark: a report about a save that
+    /// left the photos alone may not list them again. The link the AI learned it from is kept
+    /// with the mark, so the tools hand back that same link. Only this item's photos are touched.
+    /// Setting the same mark twice changes nothing, so a redelivered report is harmless.
+    /// </summary>
+    private async Task MarkPhotosAsync(ItemAiStatus row, DateTime reportedAt, JsonElement payload, CancellationToken ct)
+    {
+        JsonElement photos = Object(payload, "photos");
+        if (photos.ValueKind != JsonValueKind.Object || !photos.TryGetProperty("items", out JsonElement items) || items.ValueKind != JsonValueKind.Array)
+        {
+            return;
+        }
+
+        foreach (JsonElement item in items.EnumerateArray())
+        {
+            if (GuidOf(item, "media_id") is not { } mediaId || StringOf(item, "status") is not { Length: > 0 } status)
+            {
+                continue;
+            }
+
+            string mark = Clip(status.ToLowerInvariant(), MediaAiStatus.MaxLength)!;
+            string? url = WebLink(StringOf(item, "url"));
+            await _db.Database.ExecuteSqlInterpolatedAsync(
+                $"UPDATE catalog.media SET ai_status = {mark}, ai_status_at = {reportedAt}, ai_url = {url} WHERE id = {mediaId} AND product_id = {row.ProductId} AND tenant_id = {row.TenantId}",
+                ct);
+        }
+    }
+
+    /// <summary>An absolute http(s) link of a sane length, or null: anything else is never handed to an agent.</summary>
+    private static string? WebLink(string? value)
+        => value is { Length: > 0 and <= MediaAiStatus.MaxUrlLength }
+            && Uri.TryCreate(value, UriKind.Absolute, out Uri? uri)
+            && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+                ? value
+                : null;
 
     private static bool Is(string? value, string expected) => string.Equals(value, expected, StringComparison.OrdinalIgnoreCase);
 

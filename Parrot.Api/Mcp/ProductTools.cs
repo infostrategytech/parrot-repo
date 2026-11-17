@@ -30,7 +30,8 @@ public sealed class ProductTools(ICatalogToolsClient catalog, IHttpContextAccess
         + "To find what fits a budget, pass min_price and/or max_price: items then holds only the products in that range, and closest "
         + "the others, nearest to the range first; when items is empty, offer from closest. "
         + "quantity_left is how many are left (null when the business doesn't count them; 0 when sold out). "
-        + "price_on_request means the business quotes it; say so and never guess. Never offer products listed in not_on_sale.")]
+        + "price_on_request means the business quotes it; say so and never guess. Never offer products listed in not_on_sale. "
+        + "images are each product's catalogue photos (at most 3, best first; empty when it has none), each with a url and alt_text: use these to show the customer a product, never a link you made up.")]
     public async Task<JsonElement> GetPrices(
         [Description("Product ids, from your search: an array of 1 to 20.")] Guid[] ids,
         [Description("Lowest price wanted, in the business's currency (naira unless the result says otherwise). Leave out when there's no lower limit.")] decimal? min_price = null,
@@ -78,6 +79,7 @@ public sealed class ProductTools(ICatalogToolsClient catalog, IHttpContextAccess
         "Lists this business's products, newest first, straight from the live catalog. Use it when the customer asks what's available "
         + "or wants to see options without naming anything, such as \"what do you have?\" or \"show me your products\". "
         + "When next_cursor is set there are more: pass it back as cursor to show the next ones when the customer asks for more. "
+        + "Each product's images are its catalogue photos (at most 3, best first; empty when it has none), each with a url and alt_text. "
         + "Then call get_prices with the ids you want to offer.")]
     public async Task<JsonElement> ListProducts(
         [Description("How many products to return, 1 to 10. Defaults to 10.")] int? limit = null,

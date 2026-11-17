@@ -85,6 +85,9 @@ builder.Services.AddScoped<WorkspacePrompt>();
 // The owner's team, and invite links opened before signing in.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.TeamClient>();
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.PendingInvite>();
+// How checkout links behave (Settings > Payments), and the checkout page customers open without signing in.
+builder.Services.AddScoped<Parrot.Web.Features.Settings.PaymentSettingsClient>();
+builder.Services.AddScoped<Parrot.Web.Features.Checkout.CheckoutClient>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>
 {

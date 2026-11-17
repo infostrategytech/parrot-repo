@@ -1,3 +1,5 @@
+using Parrot.Catalog.Domain.Entities;
+
 namespace Parrot.Catalog.Infrastructure.Data;
 
 /// <summary>
@@ -23,7 +25,7 @@ public static class SecuritySql
     /// Tables added after the first migration. Each gets the same tenant policy as
     /// <see cref="Tables"/>, in the migration that creates it (see <see cref="ItemAiStatusUp"/>).
     /// </summary>
-    public static readonly IReadOnlyList<string> LaterTables = ["item_ai_status"];
+    public static readonly IReadOnlyList<string> LaterTables = ["item_ai_status", "stock_holds"];
 
     public static readonly IReadOnlyList<string> Views =
     [
@@ -137,6 +139,56 @@ public static class SecuritySql
     public static string ItemAiStatusDown() => """
         DROP POLICY IF EXISTS relay_all ON catalog.item_ai_status;
         DROP POLICY IF EXISTS tenant_isolation ON catalog.item_ai_status;
+        """;
+
+    /// <summary>
+    /// The AI's mark on each photo (media.ai_status, and the link it learned it from, ai_url). The relay records it from the AI's
+    /// reports: it may read only the columns that find the photo and write only the mark.
+    /// v_media is re-created so readers (the AI tools) see the new columns. Existing reports
+    /// are copied onto the photos they name, under a policy that lives only for the copy,
+    /// because the migrator is under FORCE RLS like every other role.
+    /// </summary>
+    public static string MediaAiStatusUp() => $"""
+        CREATE POLICY relay_ai_status ON catalog.media FOR ALL TO {RelayRole} USING (true) WITH CHECK (true);
+        GRANT SELECT (id, tenant_id, product_id), UPDATE (ai_status, ai_status_at, ai_url) ON catalog.media TO {RelayRole};
+        {ReplaceViews("v_media")}
+        CREATE POLICY ai_status_backfill_media ON catalog.media FOR ALL TO CURRENT_USER USING (true) WITH CHECK (true);
+        CREATE POLICY ai_status_backfill_status ON catalog.item_ai_status FOR SELECT TO CURRENT_USER USING (true);
+        UPDATE catalog.media m
+            SET ai_status = left(lower(p.item->>'status'), {MediaAiStatus.MaxLength}), ai_status_at = s.reported_at,
+                ai_url = CASE WHEN p.item->>'url' ~* '^https?://' AND length(p.item->>'url') <= {MediaAiStatus.MaxUrlLength} THEN p.item->>'url' END
+            FROM catalog.item_ai_status s
+            CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(s.photos) = 'array' THEN s.photos ELSE '[]'::jsonb END) AS p(item)
+            WHERE p.item->>'media_id' = m.id::text
+              AND m.product_id = s.product_id AND m.tenant_id = s.tenant_id
+              AND coalesce(p.item->>'status', '') <> '';
+        DROP POLICY ai_status_backfill_status ON catalog.item_ai_status;
+        DROP POLICY ai_status_backfill_media ON catalog.media;
+        """;
+
+    public static string MediaAiStatusDown() => $"""
+        REVOKE SELECT (id, tenant_id, product_id), UPDATE (ai_status, ai_status_at, ai_url) ON catalog.media FROM {RelayRole};
+        DROP POLICY IF EXISTS relay_ai_status ON catalog.media;
+        DROP VIEW IF EXISTS catalog.v_media;
+        """;
+
+    /// <summary>
+    /// Security for stock_holds: tenant isolation like every table. The writer places,
+    /// commits and releases holds; the reader sees only those still held (v_stock_holds),
+    /// to take them off what's left when it answers about stock.
+    /// </summary>
+    public static string StockHoldsUp() => $"""
+        ALTER TABLE catalog.stock_holds ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE catalog.stock_holds FORCE ROW LEVEL SECURITY;
+        CREATE POLICY tenant_isolation ON catalog.stock_holds FOR ALL USING (tenant_id = catalog.current_tenant_id()) WITH CHECK (tenant_id = catalog.current_tenant_id());
+        GRANT SELECT, INSERT, UPDATE ON catalog.stock_holds TO {WriterRole};
+        CREATE VIEW catalog.v_stock_holds AS SELECT h.* FROM catalog.stock_holds h WHERE h.status = 'held';
+        GRANT SELECT ON catalog.v_stock_holds TO {ReaderRole};
+        """;
+
+    public static string StockHoldsDown() => """
+        DROP VIEW IF EXISTS catalog.v_stock_holds;
+        DROP POLICY IF EXISTS tenant_isolation ON catalog.stock_holds;
         """;
 
     /// <summary>

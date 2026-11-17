@@ -1,0 +1,140 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@inject PaymentSettingsClient Payments
+@inject ToastService Toasts
+@inject NavigationManager Navigation
+
+@* How the checkout links agents send behave: how long a checkout and its payment link last, when stock is kept
+   aside, and what a price change does. Four choices, each with its consequence under it; changes wait for the
+   save bar, as in Business profile. *@
+@if (_forbidden)
+{
+    <InlineError Tone="InlineErrorTone.Info" Message="Only the business owner can change checkout and payment settings." />
+}
+else if (_settings is null)
+{
+    @if (_loadError is null)
+    {
+        <Skeleton Shape="SkeletonShape.Block" />
+    }
+    else
+    {
+        <InlineError Message="@_loadError"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action></InlineError>
+    }
+}
+else
+{
+    var settings = _settings;
+    var limits = settings.Limits ?? PaymentLimits.Defaults;
+    @if (settings.IsDefault)
+    {
+        <InlineError Tone="InlineErrorTone.Info" Message="These are yára's defaults. They become yours when you save." />
+    }
+
+    <SettingsCard Title="Checkout" Description="The link an agent sends with the customer's order.">
+        <ChildContent>
+            <div class="payments__grid">
+                <SelectField FloatingLabel="Checkout link lasts" Value="@PaymentChoices.Duration(settings.CheckoutMinutes)" Disabled="_saving"
+                             HelperText="How long the customer has to open it and press Pay." HelperTextStyle="TextStyle.Small12Medium"
+                             Open="@(_open == "checkout")" OpenChanged="@(open => _open = open ? "checkout" : null)">
+                    @foreach (var minutes in PaymentChoices.Options(PaymentChoices.CheckoutPresets, limits.MinCheckoutMinutes, limits.MaxCheckoutMinutes, settings.CheckoutMinutes))
+                    { var value = minutes; <PopoverOption Label="@PaymentChoices.Duration(value)" Active="@(settings.CheckoutMinutes == value)" OnSelect="() => Edit(_settings! with { CheckoutMinutes = value })" /> }
+                </SelectField>
+                <SelectField FloatingLabel="When to keep stock aside" Value="@PaymentChoices.HoldModeLabel(settings.HoldMode)" Disabled="_saving"
+                             HelperText="@PaymentChoices.HoldModeHelp(settings.HoldMode)" HelperTextStyle="TextStyle.Small12Medium"
+                             Open="@(_open == "hold")" OpenChanged="@(open => _open = open ? "hold" : null)">
+                    @foreach (var (mode, label) in PaymentChoices.HoldModes)
+                    { var value = mode; <PopoverOption Label="@label" Active="@(settings.HoldMode == value)" OnSelect="() => Edit(_settings! with { HoldMode = value })" /> }
+                </SelectField>
+            </div>
+        </ChildContent>
+    </SettingsCard>
+
+    <SettingsCard Title="Payment" Description="What happens once the customer presses Pay.">
+        <ChildContent>
+            <div class="payments__grid">
+                <SelectField FloatingLabel="Payment link lasts" Value="@PaymentChoices.Duration(settings.PaymentMinutes)" Disabled="_saving"
+                             HelperText="@PaymentHelp(settings.HoldMode)" HelperTextStyle="TextStyle.Small12Medium"
+                             Open="@(_open == "payment")" OpenChanged="@(open => _open = open ? "payment" : null)">
+                    @foreach (var minutes in PaymentChoices.Options(PaymentChoices.PaymentPresets, limits.MinPaymentMinutes, limits.MaxPaymentMinutes, settings.PaymentMinutes))
+                    { var value = minutes; <PopoverOption Label="@PaymentChoices.Duration(value)" Active="@(settings.PaymentMinutes == value)" OnSelect="() => Edit(_settings! with { PaymentMinutes = value })" /> }
+                </SelectField>
+                <SelectField FloatingLabel="If a price changes" Value="@PaymentChoices.PriceChangeLabel(settings.PriceChangeRule)" Disabled="_saving"
+                             HelperText="When a price changes between the checkout being sent and the customer paying." HelperTextStyle="TextStyle.Small12Medium"
+                             Open="@(_open == "price")" OpenChanged="@(open => _open = open ? "price" : null)">
+                    @foreach (var (rule, label) in PaymentChoices.PriceChangeRules)
+                    { var value = rule; <PopoverOption Label="@label" Active="@(settings.PriceChangeRule == value)" OnSelect="() => Edit(_settings! with { PriceChangeRule = value })" /> }
+                </SelectField>
+            </div>
+        </ChildContent>
+    </SettingsCard>
+
+    @if (_dirty)
+    {
+        <SaveBar Error="@_error" Saving="_saving" OnDiscard="Discard" OnSave="SaveAsync" />
+    }
+}
+
+@* As Business profile: leaving with unsaved changes asks first. *@
+<NavigationLock ConfirmExternalNavigation="@(_dirty && !_allowNavigation)" OnBeforeInternalNavigation="CheckNavigation" />
+<Dialog Open="_confirmLeave" Title="Leave without saving?" ConfirmLabel="Leave without saving" CancelLabel="Keep editing"
+        OnConfirm="Leave" OnCancel="() => { _confirmLeave = false; _navigationTarget = null; }">
+    <Body><Typography TextStyle="TextStyle.BodySmallMedium" As="p">Your checkout and payment changes haven't been saved.</Typography></Body>
+</Dialog>
+
+@code {
+    private PaymentSettings? _settings, _saved;
+    private string? _open, _error, _loadError, _navigationTarget;
+    private bool _saving, _dirty, _forbidden, _confirmLeave, _allowNavigation;
+
+    private static string PaymentHelp(string holdMode) => holdMode == "Never"
+        ? "How long the customer has to pay after pressing Pay."
+        : "How long the customer has to pay after pressing Pay. Stock is kept aside for this long.";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        try { _settings = _saved = await Payments.ReadAsync(); }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Forbidden) { _forbidden = true; }
+        catch (HttpRequestException) { _loadError = "Your checkout settings couldn't be loaded. Try again."; }
+    }
+
+    private void Edit(PaymentSettings next) { _open = null; _settings = next; _dirty = next != _saved; _error = null; }
+
+    private void Discard()
+    {
+        if (_saving) return;
+        _settings = _saved; _dirty = false; _error = null; _open = null;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_settings is null || _saving) return;
+        _saving = true; _error = null;
+        try
+        {
+            _settings = _saved = await Payments.SaveAsync(_settings);
+            _dirty = false;
+            Toasts.Show("Checkout settings saved.");
+        }
+        catch (ApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.BadRequest) { _error = exception.UserMessage; }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Forbidden) { _error = "Only the business owner can change these."; }
+        catch (HttpRequestException) { _error = "Your checkout settings couldn't be saved. Try again."; }
+        finally { _saving = false; }
+    }
+
+    private void CheckNavigation(LocationChangingContext context)
+    {
+        if (_allowNavigation || !_dirty) return;
+        context.PreventNavigation();
+        if (!_saving) { _navigationTarget = context.TargetLocation; _confirmLeave = true; }
+    }
+
+    private void Leave()
+    {
+        if (_saving || _navigationTarget is null) return;
+        _allowNavigation = true; _confirmLeave = false;
+        Navigation.NavigateTo(_navigationTarget);
+    }
+}

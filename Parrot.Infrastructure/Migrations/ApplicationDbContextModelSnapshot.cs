@@ -800,6 +800,143 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("OwnerRoles");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.PaymentOrder", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AgentId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AttentionReason")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTime?>("CheckoutExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("ConnectionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<string>("CustomerEmail")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
+                    b.Property<string>("CustomerName")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)");
+
+                    b.Property<string>("CustomerPhone")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("CustomerSender")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FailureReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("HoldMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("IdempotencyKey")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Lines")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime?>("PaidAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("PaidMinor")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("PaymentStartedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("PaymentUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<string>("Provider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("ProviderSessionId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ProviderTransactionId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long>("QuotedTotalMinor")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Reference")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<long>("TotalMinor")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("WorkspaceId")
+                        .IsRequired()
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Reference")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PaymentOrders_Reference");
+
+                    b.HasIndex("Status", "ExpiresAt")
+                        .HasDatabaseName("IX_PaymentOrders_Status_ExpiresAt");
+
+                    b.HasIndex("WorkspaceId", "IdempotencyKey")
+                        .IsUnique()
+                        .HasDatabaseName("UQ_PaymentOrders_Workspace_IdempotencyKey");
+
+                    b.HasIndex("WorkspaceId", "ConnectionId", "CustomerSender", "Status")
+                        .HasDatabaseName("IX_PaymentOrders_Conversation");
+
+                    b.ToTable("PaymentOrders");
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.TeamInvite", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1267,6 +1404,45 @@ namespace Parrot.Infrastructure.Migrations
                         });
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.WorkspacePaymentSettings", b =>
+                {
+                    b.Property<string>("WorkspaceId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<int>("CheckoutMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("HoldMode")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<int>("PaymentMinutes")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("PriceChangeRule")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("WorkspaceId");
+
+                    b.ToTable("WorkspacePaymentSettings", t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkspacePaymentSettings_CheckoutMinutes", "\"CheckoutMinutes\" BETWEEN 5 AND 1440");
+
+                            t.HasCheckConstraint("CK_WorkspacePaymentSettings_PaymentMinutes", "\"PaymentMinutes\" BETWEEN 5 AND 120");
+                        });
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.WorkspaceSourceState", b =>
                 {
                     b.Property<string>("WorkspaceId")
@@ -1412,6 +1588,15 @@ namespace Parrot.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.PaymentOrder", b =>
+                {
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
+                        .WithMany()
+                        .HasForeignKey("WorkspaceId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Parrot.Domain.Entities.TeamInvite", b =>
                 {
                     b.HasOne("Parrot.Application.Models.ApplicationUser", null)
@@ -1489,6 +1674,15 @@ namespace Parrot.Infrastructure.Migrations
                         .WithMany()
                         .HasForeignKey("WorkspaceId")
                         .OnDelete(DeleteBehavior.Restrict);
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.WorkspacePaymentSettings", b =>
+                {
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
+                        .WithOne()
+                        .HasForeignKey("Parrot.Domain.Entities.WorkspacePaymentSettings", "WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Parrot.Domain.Entities.Customer", b =>

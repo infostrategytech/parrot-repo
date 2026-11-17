@@ -27,6 +27,9 @@ public static class ServiceScopes
     /// </summary>
     public const string CatalogAiTools = "catalog:ai-tools";
 
+    /// <summary>Holding, committing and releasing stock for payment orders.</summary>
+    public const string CatalogOrders = "catalog:orders";
+
     /// <summary>The authorization policy that requires <see cref="AgentService"/>.</summary>
     public const string PolicyName = "ServiceScope";
 

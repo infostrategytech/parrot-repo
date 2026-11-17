@@ -51,7 +51,11 @@
     private bool IsPublicPath() => PublicPaths.Contains(new Uri(Nav.Uri).AbsolutePath.TrimEnd('/').ToLowerInvariant())
         || new Uri(Nav.Uri).AbsolutePath == "/"
         // An invite link is opened before signing in; the page itself asks for it.
-        || new Uri(Nav.Uri).AbsolutePath.StartsWith("/invite/", StringComparison.OrdinalIgnoreCase);
+        || new Uri(Nav.Uri).AbsolutePath.StartsWith("/invite/", StringComparison.OrdinalIgnoreCase)
+        || IsCheckoutPath();
+
+    // A customer's checkout link, opened from a chat: never signed in, and never sent to sign-in.
+    private bool IsCheckoutPath() => new Uri(Nav.Uri).AbsolutePath.StartsWith("/checkout/", StringComparison.OrdinalIgnoreCase);
 
     protected override void OnInitialized()
     {
@@ -146,7 +150,8 @@
         if (_endingSession || _disposed) return;
         // An expired sign-in must not throw away the email reset link. These recovery routes are already
         // public and still require server-verified reset credentials; every protected route keeps its guard.
-        var keepRecovery = PasswordResetHandoff.IsRecoveryPath(new Uri(Nav.Uri).AbsolutePath);
+        // A checkout is the customer's page, so an owner's expired sign-in on the same browser doesn't take it away either.
+        var keepRecovery = PasswordResetHandoff.IsRecoveryPath(new Uri(Nav.Uri).AbsolutePath) || IsCheckoutPath();
         _endingSession = true;
         AuthState.ClearUser();
         StateHasChanged();
