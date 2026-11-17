@@ -211,6 +211,48 @@ builder.Services.AddAuthentication(options =>
     options.CallbackPath = "/signin-google";
     options.Scope.Add("email");
     options.Scope.Add("profile");
+    // Log the exact client_id and redirect_uri the middleware sends to Google so live logs can
+    // confirm they match Google Cloud Console without guessing at config values.
+    // client_id is a public value; redirect_uri is a URL — neither is a secret.
+    options.Events.OnRedirectToAuthorizationEndpoint = context =>
+    {
+        ILogger logger = context.HttpContext.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Parrot.Api.Auth.GoogleSso");
+        string sentClientId = "(missing)";
+        string sentRedirectUri = "(missing)";
+        foreach (string part in new Uri(context.RedirectUri).Query.TrimStart('?').Split('&'))
+        {
+            string[] kv = part.Split('=', 2);
+            if (kv.Length != 2) continue;
+            if (kv[0] == "client_id") sentClientId = Uri.UnescapeDataString(kv[1]);
+            if (kv[0] == "redirect_uri") sentRedirectUri = Uri.UnescapeDataString(kv[1]);
+        }
+        logger.LogInformation(
+            "Google OAuth dispatching browser to Google. SentClientId={SentClientId} SentRedirectUri={SentRedirectUri}",
+            sentClientId,
+            sentRedirectUri);
+        context.Response.Redirect(context.RedirectUri);
+        return Task.CompletedTask;
+    };
+    // Log and absorb failures that come back from Google (wrong secret, access denied, etc.)
+    // so they appear in CloudWatch and the user lands on /login rather than a 500.
+    options.Events.OnRemoteFailure = context =>
+    {
+        ILogger logger = context.HttpContext.RequestServices
+            .GetRequiredService<ILoggerFactory>()
+            .CreateLogger("Parrot.Api.Auth.GoogleSso");
+        string frontend = context.HttpContext.RequestServices
+            .GetRequiredService<IOptions<FrontendSettings>>().Value.BaseUrl;
+        logger.LogWarning(
+            "Google OAuth remote failure. Error={Error} ErrorDescription={ErrorDescription} Failure={Failure}",
+            context.Request.Query["error"].ToString(),
+            context.Request.Query["error_description"].ToString(),
+            context.Failure?.Message ?? "(none)");
+        context.Response.Redirect($"{frontend}/login?error=sso_failed");
+        context.HandleResponse();
+        return Task.CompletedTask;
+    };
 });
 
 // Facebook sign-in, once a Facebook app is configured (FacebookOAuth:AppId and AppSecret). Unlike Google's it is
