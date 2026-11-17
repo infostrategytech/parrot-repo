@@ -8,8 +8,14 @@ namespace Parrot.Web.Services;
 // Reads into the web app's own InboxContracts, a superset of the API's
 // conversation records: the API's fields plus the optional ones the inbox
 // design uses. Today's API leaves those out, so they read as null.
-public sealed class ConversationClient(HttpClient http, AuthState auth)
+public sealed class ConversationClient(HttpClient http, AuthState auth, IConfiguration? configuration = null)
 {
+    // Where the browser reaches the API. The web server may call it by an internal name (parrot-api:8080 in
+    // Docker) that the browser can't resolve, so file addresses use the public one when it's set.
+    private Uri? BrowserApi => Uri.TryCreate(configuration?["ApiSettings:PublicBaseUrl"], UriKind.Absolute, out Uri? publicApi)
+        ? publicApi
+        : http.BaseAddress;
+
     public Task<List<InboxConversationDto>> ListAsync(int skip, CancellationToken ct) =>
         RequestAsync<List<InboxConversationDto>>(HttpMethod.Get, $"api/conversations?skip={skip}&take=50", null, ct);
     public async Task<InboxMessagePageDto> ReadAsync(Guid connection, string sender, string? before, CancellationToken ct)
@@ -26,7 +32,7 @@ public sealed class ConversationClient(HttpClient http, AuthState auth)
     }
     // The API sends a file's address relative to itself; the browser needs the whole address, since the inbox is another site.
     private InboxMediaDto Resolve(InboxMediaDto media) =>
-        media.Url is { } url && !media.IsLink && http.BaseAddress is { } api && !Uri.IsWellFormedUriString(url, UriKind.Absolute)
+        media.Url is { } url && !media.IsLink && BrowserApi is { } api && !Uri.IsWellFormedUriString(url, UriKind.Absolute)
             ? media with { Url = new Uri(api, url).ToString() }
             : media;
     public Task<InboxMessageDto> SendAsync(Guid connection, string sender, InboxReplyDto request, CancellationToken ct) =>
