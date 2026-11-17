@@ -18,17 +18,22 @@ namespace Parrot.Catalog.Infrastructure.Services;
 /// </summary>
 public sealed class AiToolService : IAiToolService
 {
+    /// <summary>Photos per product in an answer: as many as an agent reply can carry.</summary>
+    public const int MaxPhotosPerProduct = 3;
+
     private readonly ICatalogReadService _read;
     private readonly CatalogReadDbContext _db;
     private readonly TimeProvider _clock;
     private readonly CatalogMetrics _metrics;
+    private readonly IItemPhotoStorage _photos;
 
-    public AiToolService(ICatalogReadService read, CatalogReadDbContext db, TimeProvider clock, CatalogMetrics metrics)
+    public AiToolService(ICatalogReadService read, CatalogReadDbContext db, TimeProvider clock, CatalogMetrics metrics, IItemPhotoStorage photos)
     {
         _read = read;
         _db = db;
         _clock = clock;
         _metrics = metrics;
+        _photos = photos;
     }
 
     private DateTime Now => _clock.GetUtcNow().UtcDateTime;
@@ -40,9 +45,10 @@ public sealed class AiToolService : IAiToolService
         int limit = PageSize.Clamp(request.Limit, Limits.MaxAiPageSize, Limits.MaxAiPageSize);
         SearchResponse response = await _read.SearchAsync(new SearchRequest(request.Query, category, null, null, request.Filters, null, request.Cursor, limit), Limits.MaxAiPageSize, ct);
         List<AiSearchHit> hits = new List<AiSearchHit>(response.Items.Count);
+        Dictionary<Guid, AiImage[]> photos = await ImagesAsync(response.Items.Select(h => h.Product.Id), ct);
         foreach (SearchHit hit in response.Items)
         {
-            hits.Add(new AiSearchHit(await ProductAsync(hit.Product, ct), hit.WhyMatched.Select(w => UntrustedText.Sanitize(w, 200)).ToArray()));
+            hits.Add(new AiSearchHit(await ProductAsync(hit.Product, photos, ct), hit.WhyMatched.Select(w => UntrustedText.Sanitize(w, 200)).ToArray()));
         }
 
         _metrics.SearchCompleted(sw.Elapsed.TotalMilliseconds, "ai-tool");
@@ -52,7 +58,8 @@ public sealed class AiToolService : IAiToolService
     public async Task<AiToolResponse<AiProduct>> GetProductAsync(GetProductToolRequest request, CancellationToken ct)
     {
         ProductDetail detail = await _read.GetProductAsync(RequireId(request.Id), ct);
-        return Wrap("get_product", Product(detail.Product, detail.Variants));
+        Dictionary<Guid, AiImage[]> photos = await ImagesAsync([detail.Product.Id], ct);
+        return Wrap("get_product", Product(detail.Product, detail.Variants, photos));
     }
 
     public async Task<AiToolResponse<AiOffersResult>> GetProductOffersAsync(GetProductOffersToolRequest request, CancellationToken ct)
@@ -117,6 +124,7 @@ public sealed class AiToolService : IAiToolService
             .Where(a => (a.ProductId != null && found.Contains(a.ProductId.Value)) || (a.VariantId != null && variantIds.Contains(a.VariantId.Value)))
             .ToListAsync(ct);
         await TakeOffHeldAsync(rows, found, now, ct);
+        Dictionary<Guid, AiImage[]> photos = await ImagesAsync(found, ct);
 
         List<AiItemPrice> items = new List<AiItemPrice>(products.Count);
         foreach (Domain.Entities.Product product in products)
@@ -189,7 +197,8 @@ public sealed class AiToolService : IAiToolService
                 available ? quantityLeft : 0,
                 stock?.LeadTimeDays,
                 inRange,
-                options));
+                options,
+                photos.GetValueOrDefault(product.Id) ?? []));
         }
 
         List<AiItemPrice> inside = items
@@ -316,10 +325,11 @@ public sealed class AiToolService : IAiToolService
     public async Task<AiToolResponse<AiCompareResult>> CompareProductsAsync(CompareProductsToolRequest request, CancellationToken ct)
     {
         CompareResponse compare = await _read.CompareAsync(new CompareRequest(request.Ids ?? []), ct);
+        Dictionary<Guid, AiImage[]> photos = await ImagesAsync(compare.Products.Select(p => p.Id), ct);
         List<AiProduct> products = new List<AiProduct>();
         foreach (ProductSummary s in compare.Products)
         {
-            products.Add(Product(s, []));
+            products.Add(Product(s, [], photos));
         }
 
         AiCompareRow[] rows = compare.Rows.Select(r => new AiCompareRow(Text(r.Label).Value, r.Unit, r.Values)).ToArray();
@@ -329,22 +339,50 @@ public sealed class AiToolService : IAiToolService
     public async Task<AiToolResponse<AiRelatedResult>> GetRelatedProductsAsync(GetRelatedProductsToolRequest request, CancellationToken ct)
     {
         IReadOnlyList<RelatedProductView> related = await _read.GetRelatedAsync(RequireId(request.Id), request.RelationshipType, ct);
-        return Wrap("get_related_products", new AiRelatedResult(request.Id, related.Select(r => new AiRelated(r.RelationshipType, Product(r.Product, []))).ToArray()));
+        Dictionary<Guid, AiImage[]> photos = await ImagesAsync(related.Select(r => r.Product.Id), ct);
+        return Wrap("get_related_products", new AiRelatedResult(request.Id, related.Select(r => new AiRelated(r.RelationshipType, Product(r.Product, [], photos))).ToArray()));
     }
 
-    private async Task<AiProduct> ProductAsync(ProductSummary summary, CancellationToken ct)
+    private async Task<AiProduct> ProductAsync(ProductSummary summary, IReadOnlyDictionary<Guid, AiImage[]> photos, CancellationToken ct)
     {
         List<Domain.Entities.ProductVariant> variants = await _db.ProductVariants.Where(v => v.ProductId == summary.Id).OrderBy(v => v.SortOrder).ToListAsync(ct);
         if (variants.Count == 0)
         {
-            return Product(summary, []);
+            return Product(summary, [], photos);
         }
 
         ProductDetail detail = await _read.GetProductAsync(summary.Id, ct);
-        return Product(summary, detail.Variants);
+        return Product(summary, detail.Variants, photos);
     }
 
-    private static AiProduct Product(ProductSummary s, IReadOnlyList<VariantView> variants) => new(
+    /// <summary>
+    /// Each product's first few photos, with public links, in the order the business set, in one
+    /// query. The read view already leaves out removed photos and products that aren't on sale.
+    /// With no photo bucket set there are no links to give, so every product gets none.
+    /// </summary>
+    private async Task<Dictionary<Guid, AiImage[]>> ImagesAsync(IEnumerable<Guid> productIds, CancellationToken ct)
+    {
+        List<Guid> ids = productIds.Distinct().ToList();
+        if (ids.Count == 0 || !_photos.IsConfigured)
+        {
+            return [];
+        }
+
+        var media = await _db.Media.AsNoTracking()
+            .Where(m => ids.Contains(m.ProductId) && m.Kind == MediaKind.Image)
+            .OrderBy(m => m.SortOrder).ThenBy(m => m.CreatedAt)
+            .Select(m => new { m.Id, m.ProductId, m.S3Key, m.AltText })
+            .ToListAsync(ct);
+        return media
+            .GroupBy(m => m.ProductId)
+            .ToDictionary(g => g.Key, g => g
+                .DistinctBy(m => m.S3Key, StringComparer.Ordinal)
+                .Take(MaxPhotosPerProduct)
+                .Select(m => new AiImage(m.Id, _photos.UrlFor(m.S3Key), string.IsNullOrWhiteSpace(m.AltText) ? null : new UntrustedTextField(UntrustedText.Sanitize(m.AltText, 300))))
+                .ToArray());
+    }
+
+    private static AiProduct Product(ProductSummary s, IReadOnlyList<VariantView> variants, IReadOnlyDictionary<Guid, AiImage[]> photos) => new(
         s.Id,
         s.Sku,
         Text(s.Name),
@@ -353,7 +391,8 @@ public sealed class AiToolService : IAiToolService
         s.Type.Kind,
         s.Category?.Path.Select(p => UntrustedText.Sanitize(p, 128)).ToArray() ?? [],
         s.Attributes.Select(Attribute).ToArray(),
-        variants.Select(v => new AiVariant(v.Id, v.Sku, Text(v.Name), v.Attributes.Select(Attribute).ToArray())).ToArray());
+        variants.Select(v => new AiVariant(v.Id, v.Sku, Text(v.Name), v.Attributes.Select(Attribute).ToArray())).ToArray(),
+        photos.GetValueOrDefault(s.Id) ?? []);
 
     private static AiAttribute Attribute(AttributeValue a)
     {

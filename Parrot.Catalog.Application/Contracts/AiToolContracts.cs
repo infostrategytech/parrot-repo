@@ -15,6 +15,8 @@ public sealed record AiAttribute(string Label, string? Unit, JsonElement Value);
 
 public sealed record AiVariant(Guid Id, string Sku, UntrustedTextField Name, IReadOnlyList<AiAttribute> Attributes);
 
+[Description("A product. images are its catalogue photos, best first (at most 3; empty when it has none). "
+    + "Send one to show the customer the product; never make up or change a photo link.")]
 public sealed record AiProduct(
     Guid Id,
     string Sku,
@@ -24,7 +26,11 @@ public sealed record AiProduct(
     ProductTypeKind Kind,
     IReadOnlyList<string> CategoryPath,
     IReadOnlyList<AiAttribute> Attributes,
-    IReadOnlyList<AiVariant> Variants);
+    IReadOnlyList<AiVariant> Variants,
+    IReadOnlyList<AiImage> Images);
+
+[Description("A catalogue photo of the product: url is a public link to the image; alt_text is the business's description of it, if any.")]
+public sealed record AiImage(Guid MediaId, string Url, UntrustedTextField? AltText);
 
 public sealed record AiPrice(decimal Amount, string Currency, PriceType PriceType);
 
@@ -79,7 +85,8 @@ public sealed record AiVariantPrice(Guid VariantId, UntrustedTextField Name, dec
     + "(among all options when none is). price_on_request means the business quotes it: say so, never guess a price. "
     + "quantity_left is how many are left, null when the business doesn't count them. "
     + "mode is in_stock, made_to_order (see lead_time_days) or bookings. "
-    + "in_range: the product, or one of its available options, costs within the price range asked for; null when none was given.")]
+    + "in_range: the product, or one of its available options, costs within the price range asked for; null when none was given. "
+    + "images are its catalogue photos, best first (at most 3; empty when it has none): send one to show the product, never a link you made up.")]
 public sealed record AiItemPrice(
     Guid ProductId,
     UntrustedTextField Name,
@@ -93,7 +100,8 @@ public sealed record AiItemPrice(
     int? QuantityLeft,
     int? LeadTimeDays,
     bool? InRange,
-    IReadOnlyList<AiVariantPrice> Variants);
+    IReadOnlyList<AiVariantPrice> Variants,
+    IReadOnlyList<AiImage> Images);
 
 [Description("items: the products asked about that are on sale and, when a price range was given, within it; available first, then cheapest first. "
     + "closest: with a price range, the products on sale outside it, nearest to the range first (price on request last); offer these when items is empty. "
