@@ -72,6 +72,7 @@ public class ConversationItem
     public InboxPersonDto? Assignee { get; set; }
     public DateTime? ControlUntil { get; set; }
     public bool NeedsAnswer { get; set; }
+    public InboxAttentionDto? Attention { get; set; }
     public InboxCustomerDto? Customer { get; set; }
 
     /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>

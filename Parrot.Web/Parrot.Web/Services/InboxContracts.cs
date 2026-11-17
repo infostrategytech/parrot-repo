@@ -39,6 +39,9 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public DateTime? ControlUntil { get; init; }
     /// <summary>The AI agent has asked the team a question it could not answer.</summary>
     public bool? NeedsAnswer { get; init; }
+    /// <summary>Canonical conversation input/recipient state, not a projection of open or urgent tasks.
+    /// Null on older APIs: do not guess a reply obligation from unread counts or partial history.</summary>
+    public InboxAttentionDto? Attention { get; init; }
     public InboxCustomerDto? Customer { get; init; }
     /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
     public InboxPersonDto? ChannelAgent { get; init; }
@@ -46,6 +49,11 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>
 public sealed record InboxUnreadDto(int Total);
+
+/// <summary>The responsible human, resolved server-side (including owner fallback). ReplyNeeded clears
+/// after a confirmed customer-facing reply or return to AI, independently of the task's lifecycle.
+/// HandoverTaskId links the actual handoff work; an ordinary linked order is not a handoff.</summary>
+public sealed record InboxAttentionDto(string ResponsiblePersonId, bool ReplyNeeded = false, string? HandoverTaskId = null);
 
 public sealed record InboxPinDto(bool Pinned);
 

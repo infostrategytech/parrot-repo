@@ -34,6 +34,8 @@
    bubbles retain their own readable measure while the rail can breathe on a
    large display, as conversation-first products do. */
 .conversation-timeline__messages { display: flex; flex-direction: column; gap: var(--spacing-xl); box-sizing: border-box; width: 100%; max-width: var(--ds-timeline-rail); margin-inline: auto; padding: 0 var(--spacing-2xl) var(--ds-timeline-composer-reserve); transform: translateX(var(--ds-timeline-optical-shift)); }
+/* A short chat also rests near the reply area; internal-note lists keep their normal top alignment. */
+.conversation-timeline__messages.is-chat { min-height: 100%; justify-content: flex-end; }
 /* Parrot pages message history; Aurora has no equivalent control. */
 .conversation-timeline__older { display: flex; justify-content: center; }
 .conversation-timeline__date { display: flex; align-items: center; gap: var(--spacing-md); align-self: stretch; color: var(--colors-text-subtle); }
@@ -213,9 +215,6 @@
   .conversation-timeline__loading { padding-inline: var(--spacing-md); }
 }
 
-/* The "did that answer it?" card sits on the conversation as the reply control does: lifted. */
-.conversation-timeline__composer ::deep .conversation-timeline__resolve { box-shadow: 0 var(--spacing-xs) var(--spacing-xl) var(--colors-surface-shadow-diffuse); }
-
 /* Answer or correct the agent (designer, 15 November 2026): its words as its own chat bubble, then one box. */
 .learning-dialog { display: grid; gap: var(--spacing-lg); }
 .learning-dialog__bubble { display: flex; flex-direction: row-reverse; gap: var(--spacing-sm); align-items: flex-start; justify-self: end; max-width: 92%; }
@@ -231,6 +230,13 @@
 .conversation-timeline__task-copy { display: grid; flex: 1 1 auto; gap: var(--spacing-2xs); min-width: 0; }
 .conversation-timeline__task-copy ::deep .conversation-timeline__task-who { color: var(--colors-text-muted); }
 .conversation-timeline__task-copy ::deep .conversation-timeline__task-title { overflow: hidden; color: var(--colors-text-primary); text-overflow: ellipsis; white-space: nowrap; }
+
+/* Unanswered AI questions share the task strip, not the scrolling history. The full question opens in
+   the existing answer modal; two lines keep a long question from crowding the conversation. */
+.conversation-timeline__task.conversation-timeline__agent-question { background: var(--colors-feedback-warning-subtle); border-color: var(--colors-feedback-warning-border); }
+.conversation-timeline__agent-question .conversation-timeline__task-copy ::deep .conversation-timeline__task-who { color: var(--colors-feedback-warning-text); }
+.conversation-timeline__task-copy ::deep .conversation-timeline__agent-question-text { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; color: var(--colors-text-primary); }
+.conversation-timeline__agent-actions { display: flex; align-items: center; flex: none; gap: var(--spacing-xs); }
 
 /* One card at a time above the reply box, with its "1 of 3" (designer, 15 November 2026). */
 .conversation-timeline__attention { display: grid; gap: var(--spacing-xs); }

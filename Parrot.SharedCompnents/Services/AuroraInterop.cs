@@ -242,8 +242,9 @@ public sealed class AuroraInterop : IAsyncDisposable
 
     /// <summary>
     /// Keeps room at the end of <paramref name="scroller"/> for a footer that
-    /// floats over it, growing the CSS length <paramref name="property"/> as the
-    /// footer grows, until the handle is disposed.
+    /// floats over it, measuring the first visible footer card plus a small gap into
+    /// <paramref name="property"/>. Follows size changes only while the reader is at the end,
+    /// until the handle is disposed.
     /// </summary>
     public async Task<IAsyncDisposable> ReserveUnderAsync(ElementReference scroller, ElementReference footer, string property)
     {
@@ -252,10 +253,13 @@ public sealed class AuroraInterop : IAsyncDisposable
         return new Handle(handle);
     }
 
-    public async Task ScrollToBottomAsync(ElementReference element)
+    public Task ScrollToBottomAsync(ElementReference element) => ScrollToBottomAsync(element, true);
+
+    /// <summary>Non-forced updates preserve reading position on an opt-in measured chat footer.</summary>
+    public async Task ScrollToBottomAsync(ElementReference element, bool force)
     {
         var module = await _module.Value;
-        await module.InvokeVoidAsync("scrollToBottom", element);
+        await module.InvokeVoidAsync("scrollToBottom", element, force);
     }
 
     public async Task ClearSelectionAsync()

@@ -27,7 +27,12 @@ public sealed record AgentToday(int Conversations, int AnsweredAlone, int Passed
 }
 
 /// <summary>A customer's question an agent could not answer, waiting for the owner.</summary>
-public sealed record WaitingQuestion(string AgentName, string Customer, string Question);
+public sealed record WaitingQuestion(string AgentName, string Customer, string Question)
+{
+    public string? AgentId { get; init; }
+    public string? ConversationId { get; init; }
+    public string? MessageId { get; init; }
+}
 
 public enum ConversationOutcome { Answered, PassedToTeam, TaskCreated }
 

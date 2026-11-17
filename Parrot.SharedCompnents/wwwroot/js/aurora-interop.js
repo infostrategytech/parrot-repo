@@ -593,41 +593,67 @@ export function selectText(element, text) {
 // ── Scrolling ───────────────────────────────────────────────────────────────
 
 // A footer floating over a scrolling area (a chat's reply box over its
-// thread) covers whatever sits under it, so the area keeps room at the end
-// for it: the room the design gives, plus however much taller the footer
-// grows (an error above the reply box, say). The last line stays in view.
+// thread) measures the actual first visible card, rather than guessing a fixed
+// resting height. Only this opt-in chat follows the end; other scroll surfaces
+// (including native mobile) keep their existing behaviour.
 export function reserveUnder(scroller, footer, property) {
   if (!(scroller instanceof Element) || !(footer instanceof Element)) return { release() {} };
-  const base = parseFloat(getComputedStyle(scroller).getPropertyValue(property)) || 0;
-  let rest = null;
-  const bound = performance.now();
-  const update = () => {
-    const height = footer.getBoundingClientRect().height;
-    // Cards that come and go above the reply box (data-footer-extra) are never part of its resting size, even when
-    // they are already there the first time it is measured: the last message stays above them.
-    const gap = parseFloat(getComputedStyle(footer).rowGap) || 0;
-    const extras = [...footer.children].filter(child => child.hasAttribute("data-footer-extra"))
-      .reduce((sum, child) => { const h = child.getBoundingClientRect().height; return h > 0 ? sum + h + gap : sum; }, 0);
-    // The footer's resting size, without those cards: its largest height while it first settles (its controls draw
-    // in over a few frames), then fixed, so later growth (an error, a longer draft) keeps room too.
-    const resting = height - extras;
-    if (rest === null || performance.now() - bound < 1500) rest = Math.max(rest ?? 0, resting);
-    const pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
-    scroller.style.setProperty(property, Math.max(base, base + height - rest) + "px");
-    if (pinned) scroller.scrollTop = scroller.scrollHeight;
+  let pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
+  let adjusting = false;
+  let released = false;
+  let frame = 0;
+  const move = () => { if (!released && pinned) scroller.scrollTop = scroller.scrollHeight; };
+  const onScroll = () => {
+    if (!adjusting) pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 48;
   };
+  const onWheel = event => { if (event.deltaY < 0) pinned = false; };
+  const update = () => {
+    if (released) return;
+    const first = [...footer.children].find(child => child.getBoundingClientRect().height > 0);
+    const top = first?.getBoundingClientRect().top ?? footer.getBoundingClientRect().top;
+    // Read a resolved length, not a custom property's unevaluated calc() token expression.
+    const gap = (parseFloat(getComputedStyle(footer).rowGap) || 8) * 2;
+    const reserve = Math.max(0, scroller.getBoundingClientRect().bottom - top + gap);
+    adjusting = true;
+    if (Math.abs(parseFloat(scroller.style.getPropertyValue(property)) - reserve) > 0.5
+        || !scroller.style.getPropertyValue(property)) scroller.style.setProperty(property, reserve + "px");
+    move();
+    cancelAnimationFrame(frame);
+    frame = requestAnimationFrame(() => { move(); adjusting = false; });
+  };
+  const controller = {
+    scrollToLatest(force) {
+      if (force) pinned = true;
+      update();
+    }
+  };
+  scroller.__auroraReservedEnd = controller;
+  scroller.addEventListener("scroll", onScroll, { passive: true });
+  scroller.addEventListener("wheel", onWheel, { passive: true });
   const observer = new ResizeObserver(update);
   observer.observe(footer);
+  observer.observe(scroller);
+  if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
+  update();
   return {
     release() {
+      released = true;
+      cancelAnimationFrame(frame);
       observer.disconnect();
+      scroller.removeEventListener("scroll", onScroll);
+      scroller.removeEventListener("wheel", onWheel);
+      if (scroller.__auroraReservedEnd === controller) delete scroller.__auroraReservedEnd;
       scroller.style.removeProperty(property);
     }
   };
 }
 
-export function scrollToBottom(element) {
+export function scrollToBottom(element, force = true) {
   if (!element) return;
+  if (element.__auroraReservedEnd) {
+    element.__auroraReservedEnd.scrollToLatest(force);
+    return;
+  }
   const moveToLatest = () => { element.scrollTop = element.scrollHeight; };
   // Two frames let Blazor finish the new thread's layout before the jump.
   // Attachments may increase the thread again after their images load, so

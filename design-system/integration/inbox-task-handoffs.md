@@ -1,5 +1,9 @@
 # Inbox attention and task handoffs
 
+Historical PR #121 handoff: queue membership and AI Question-task presentation
+below are superseded by [Personal Inbox attention](inbox-personal-attention.md).
+Existing task APIs/whole-task Pass on behaviour still apply.
+
 Frontend handoff for `update/inbox-task-handoffs`, based on main `3ed73163`.
 Selected from reviewed web checkpoint `4b2e1c3f`; not a merge of the cumulative
 local design branch. No backend implementation, mobile files, sample records,
