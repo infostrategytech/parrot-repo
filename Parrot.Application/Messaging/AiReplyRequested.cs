@@ -22,4 +22,13 @@ public sealed record AiReplyRequested
 
     /// <summary>The reply text.</summary>
     required public string Text { get; init; }
+
+    /// <summary>
+    /// Product photos to send after the text, in order: 1 to 3, each an https link to a catalogue
+    /// photo with a one-line caption (possibly empty). Null or empty for a text-only reply.
+    /// </summary>
+    public IReadOnlyList<AiReplyAttachment>? Attachments { get; init; }
 }
+
+/// <summary>A photo for <see cref="AiReplyRequested.Attachments"/>: where it is, and its caption.</summary>
+public sealed record AiReplyAttachment(string Url, string? Caption);
