@@ -59,12 +59,32 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         SendReplyRequest request, CancellationToken ct)
     {
         ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct, isAiReply: true);
+        await PublishAgentReplyAsync(owner, connectionId, recipient, request.RequestId, ct);
+        return result;
+    }
 
+    /// <summary>
+    /// A photo the AI sends after its text: stored and sent like a teammate's picture, marked as the
+    /// AI's, and published as MessagePersisted(AgentToUser) so history has it. Messenger takes no
+    /// caption with a file, so the caption is dropped there. Instagram and TikTok can't take files
+    /// yet, so those refuse (ValidationException) and the caller skips the photo.
+    /// </summary>
+    public async Task<ConversationMessage> SendAgentFileAsync(string owner, Guid connectionId, string recipient,
+        Guid requestId, string? caption, OutgoingFile file, CancellationToken ct)
+    {
+        ConversationMessage result = await SendFileAsync(owner, connectionId, recipient, requestId, caption, file, ct, isAiReply: true);
+        await PublishAgentReplyAsync(owner, connectionId, recipient, requestId, ct);
+        return result;
+    }
+
+    // Omni-AI sees its own sends through MessagePersisted(AgentToUser). Best-effort: the send already happened.
+    private async Task PublishAgentReplyAsync(string owner, Guid connectionId, string recipient, Guid requestId, CancellationToken ct)
+    {
         if (publisher is not null)
         {
             try
             {
-                MessageDocument? doc = await store.FindRequestAsync(owner, request.RequestId, ct);
+                MessageDocument? doc = await store.FindRequestAsync(owner, requestId, ct);
                 if (doc?.ConversationKey is not null && doc.Sequence is not null)
                 {
                     string? tenantId = tenantLookup is not null && doc.OwnerUserId is not null
@@ -85,7 +105,6 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
                     connectionId, recipient);
             }
         }
-        return result;
     }
 
     private async Task<ConversationMessage> SendCoreAsync(string owner, Guid connectionId, string recipient,
@@ -155,7 +174,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     // A picture or file goes out on WhatsApp or Messenger. Instagram's API takes only a public address and TikTok's
     // no files at all, so those say so rather than failing at the channel.
     public async Task<ConversationMessage> SendFileAsync(string owner, Guid connectionId, string recipient,
-        Guid requestId, string? caption, OutgoingFile file, CancellationToken ct, string? replyToMessageId = null)
+        Guid requestId, string? caption, OutgoingFile file, CancellationToken ct, string? replyToMessageId = null, bool isAiReply = false)
     {
         caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
         if (requestId == Guid.Empty || recipient.Length is < 1 or > 32 || !recipient.All(char.IsAsciiDigit))
@@ -179,14 +198,20 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         if (whatsApp is not null)
         {
             if (recipient.Length > 20) throw new ValidationException("Supply a request ID, a numeric recipient and a file.");
-            return await SendWhatsAppFileAsync(owner, whatsApp, recipient, request, caption, allowed.Kind, safe, ct);
+            return await SendWhatsAppFileAsync(owner, whatsApp, recipient, request, caption, allowed.Kind, safe, ct, isAiReply);
         }
 
         FacebookConnection? page = await facebookConnections.GetByOwnerAsync(owner, ct);
         if (page is not null && page.Id == connectionId)
         {
+            // The AI's photo follows its own text, so on Messenger its caption is simply left off.
+            if (caption is not null && isAiReply)
+            {
+                caption = null;
+                request = request with { Text = "" };
+            }
             if (caption is not null) throw new ValidationException("Messenger cannot send text with a file. Send the file on its own, then your message.");
-            return await SendFacebookFileAsync(owner, page, recipient, request, allowed.Kind, safe, ct);
+            return await SendFacebookFileAsync(owner, page, recipient, request, allowed.Kind, safe, ct, isAiReply);
         }
 
         if ((tikTok is not null && await tikTok.FindConnectionAsync(owner, connectionId, ct) is not null)
@@ -312,7 +337,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     }
 
     private async Task<ConversationMessage> SendWhatsAppFileAsync(string owner, WhatsAppConnection connection, string recipient,
-        SendReplyRequest request, string? caption, string kind, OutgoingFile file, CancellationToken ct)
+        SendReplyRequest request, string? caption, string kind, OutgoingFile file, CancellationToken ct, bool isAiReply = false)
     {
         if (connection.DisabledAt.HasValue || connection.WebhookVerifiedAt is null)
             throw new ConflictException("This connection is disabled or unverified.");
@@ -336,7 +361,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             ChannelId = connection.PhoneNumberId!, ChannelDisplayName = connection.DisplayPhoneNumber ?? "",
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeSeconds().ToString(), SentAt = now,
             Type = kind, TextBody = caption, Attachments = [attachment], ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending", ReplyTo = quote,
+            Outgoing = true, SendStatus = "pending", ReplyTo = quote, IsAiReply = isAiReply ? true : null,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
         };
 
@@ -361,7 +386,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     }
 
     private async Task<ConversationMessage> SendFacebookFileAsync(string owner, FacebookConnection page, string recipient,
-        SendReplyRequest request, string kind, OutgoingFile file, CancellationToken ct)
+        SendReplyRequest request, string kind, OutgoingFile file, CancellationToken ct, bool isAiReply = false)
     {
         if (page.DisabledAt.HasValue || page.WebhookVerifiedAt is null)
             throw new ConflictException("This connection is disabled or unverified.");
@@ -384,7 +409,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             ChannelId = page.PageId!, ChannelDisplayName = page.PageName ?? "",
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
             Type = kind, Attachments = [attachment], ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending", ReplyTo = quote,
+            Outgoing = true, SendStatus = "pending", ReplyTo = quote, IsAiReply = isAiReply ? true : null,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver ?? page.PageId,
         };
 

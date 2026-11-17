@@ -140,6 +140,14 @@ builder.Services.AddScoped<IInstagramConnectionRepository, InstagramConnectionRe
 builder.Services.AddScoped(typeof(IAppLogger<>), typeof(AppLogger<>));
 builder.Services.AddScoped<ConversationService>();
 builder.Services.AddSingleton<AiReplyProcessor>();
+// The product photos the AI sends with a reply are downloaded here, then sent like a teammate's picture.
+builder.Services.AddHttpClient<IAgentPhotoFetcher, Parrot.Infrastructure.Messaging.HttpAgentPhotoFetcher>(client =>
+    {
+        client.Timeout = Parrot.Infrastructure.Messaging.HttpAgentPhotoFetcher.Timeout;
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+    })
+    .ConfigurePrimaryHttpMessageHandler(Parrot.Infrastructure.Messaging.HttpAgentPhotoFetcher.Handler)
+    .RemoveAllLoggers();
 
 // Business knowledge: profile metadata fetched by BusinessKnowledgeWorker and published
 // to Kafka by SourcesOutboxWorker. All three services share the same scoped DbContext.
