@@ -1,4 +1,3 @@
-using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using Parrot.Application.Contracts.BusinessSources;
@@ -134,11 +133,7 @@ public sealed class SourcesOutboxWorker : BackgroundService
             string? errorMessage = null;
             try
             {
-                // Deserialize the stored payload back to the typed message so that
-                // KafkaMessageBus.PublishAsync serializes it correctly (not double-encoded).
-                BusinessSourcesUpdatedMessage message =
-                    JsonSerializer.Deserialize<BusinessSourcesUpdatedMessage>(payload, MessageJson.Options)
-                    ?? throw new InvalidOperationException("Outbox payload deserialized as null.");
+                BusinessSourcesUpdatedMessage message = BusinessSourcesUpdatedMessage.FromStoredPayload(payload);
                 await _bus.PublishAsync(_kafka.BusinessKnowledgeSources, workspaceId, message, ct);
                 success = true;
                 published++;

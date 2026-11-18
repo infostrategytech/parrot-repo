@@ -122,8 +122,7 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         };
 
         // Use MessageJson.Options so the payload is consistent with what KafkaMessageBus
-        // would produce if the typed message were published directly. The [JsonPropertyName]
-        // attributes ensure snake_case regardless of the naming policy.
+        // would produce if the typed message were published directly.
         return JsonSerializer.Serialize(message, MessageJson.Options);
     }
 
@@ -178,15 +177,15 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         connectionWabaIds.TryGetValue(source.AuthorizationConnectionId, out string? wabaId);
 
         Dictionary<string, string?> data = source.Kind == BusinessSourceKind.Catalog
-            ? new Dictionary<string, string?> { ["waba_id"] = wabaId, ["catalog_id"] = source.ExternalId }
-            : new Dictionary<string, string?> { ["waba_id"] = wabaId, ["phone_number_id"] = source.ExternalId };
+            ? new Dictionary<string, string?> { ["wabaId"] = wabaId, ["catalogId"] = source.ExternalId }
+            : new Dictionary<string, string?> { ["wabaId"] = wabaId, ["phoneNumberId"] = source.ExternalId };
 
         return JsonSerializer.SerializeToElement(data);
     }
 
     private static JsonElement BuildInstagramProviderData(BusinessSource source) =>
-        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["account_id"] = source.ExternalId });
+        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["accountId"] = source.ExternalId });
 
     private static JsonElement BuildFacebookProviderData(BusinessSource source) =>
-        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["page_id"] = source.ExternalId });
+        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["pageId"] = source.ExternalId });
 }

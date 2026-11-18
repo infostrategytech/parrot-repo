@@ -1,39 +1,40 @@
 using System.Globalization;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 using Parrot.Application.Agents;
+using Parrot.Application.Messaging;
 
 namespace Parrot.Application.Contracts.BusinessSources;
 
 /// <summary>
 /// Published to <c>business.knowledge.sources</c> whenever the workspace's active source
-/// set or its metadata changes. The entire message is snake_case with explicit
-/// [JsonPropertyName] attributes — the bus options write camelCase by default, so every
-/// name is given here rather than left to the policy (same pattern as AgentConfigChangedEvent).
+/// set or its metadata changes. camelCase, like <c>messages.persisted</c>; every name is
+/// spelled out so a change to the bus options can never change this contract.
 /// </summary>
 public sealed record BusinessSourcesUpdatedMessage
 {
     /// <summary>Stable identifier for this specific Kafka event; consumers use it for idempotency.</summary>
-    [JsonPropertyName("event_id")]
+    [JsonPropertyName("eventId")]
     public required string EventId { get; init; }
 
-    [JsonPropertyName("event_type")]
+    [JsonPropertyName("eventType")]
     public string EventType { get; init; } = "BusinessSourcesUpdated";
 
-    [JsonPropertyName("schema_version")]
+    [JsonPropertyName("schemaVersion")]
     public int SchemaVersion { get; init; } = 1;
 
-    [JsonPropertyName("workspace_id")]
+    [JsonPropertyName("workspaceId")]
     public required string WorkspaceId { get; init; }
 
     /// <summary>
     /// Monotonically increasing per workspace. Omni must use this — not occurred_at — to
     /// determine the latest snapshot. Stale snapshots (lower version) must be discarded.
     /// </summary>
-    [JsonPropertyName("snapshot_version")]
+    [JsonPropertyName("snapshotVersion")]
     public long SnapshotVersion { get; init; }
 
-    [JsonPropertyName("occurred_at")]
+    [JsonPropertyName("occurredAt")]
     [JsonConverter(typeof(AgentEventInstantConverter))]
     public required DateTimeOffset OccurredAt { get; init; }
 
@@ -42,7 +43,7 @@ public sealed record BusinessSourcesUpdatedMessage
     /// Distinct from event_id (identifies this Kafka message) and snapshot_version
     /// (identifies the workspace state version).
     /// </summary>
-    [JsonPropertyName("refresh_request_id")]
+    [JsonPropertyName("refreshRequestId")]
     public string? RefreshRequestId { get; init; }
 
     [JsonPropertyName("data")]
@@ -50,6 +51,43 @@ public sealed record BusinessSourcesUpdatedMessage
 
     [JsonPropertyName("sources")]
     public required IReadOnlyList<SourceEntry> Sources { get; init; }
+
+    /// <summary>
+    /// Reads a payload the outbox stored, so it is published as the typed message (not a JSON string).
+    /// Rows queued before the contract moved to camelCase still hold snake_case names; they are
+    /// read the same way, so they go out in the current shape.
+    /// </summary>
+    public static BusinessSourcesUpdatedMessage FromStoredPayload(string payload)
+    {
+        JsonNode node = JsonNode.Parse(payload) ?? throw new InvalidOperationException("Outbox payload is empty.");
+        CamelCaseNames(node);
+        return node.Deserialize<BusinessSourcesUpdatedMessage>(MessageJson.Options)
+            ?? throw new InvalidOperationException("Outbox payload deserialized as null.");
+    }
+
+    private static void CamelCaseNames(JsonNode? node)
+    {
+        if (node is JsonArray array)
+        {
+            foreach (JsonNode? item in array) CamelCaseNames(item);
+            return;
+        }
+
+        if (node is not JsonObject properties) return;
+        foreach (KeyValuePair<string, JsonNode?> property in properties.ToList())
+        {
+            CamelCaseNames(property.Value);
+            if (!property.Key.Contains('_')) continue;
+            properties.Remove(property.Key);
+            properties[ToCamelCase(property.Key)] = property.Value;
+        }
+    }
+
+    private static string ToCamelCase(string snakeCase)
+    {
+        string[] words = snakeCase.Split('_', StringSplitOptions.RemoveEmptyEntries);
+        return words[0] + string.Concat(words.Skip(1).Select(word => char.ToUpperInvariant(word[0]) + word[1..]));
+    }
 }
 
 public sealed record BusinessData
@@ -61,13 +99,13 @@ public sealed record BusinessData
 public sealed record SourceEntry
 {
     /// <summary>Stable composite identifier: e.g. <c>whatsapp:17654321098</c>.</summary>
-    [JsonPropertyName("source_id")]
+    [JsonPropertyName("sourceId")]
     public required string SourceId { get; init; }
 
-    [JsonPropertyName("external_id")]
+    [JsonPropertyName("externalId")]
     public required string ExternalId { get; init; }
 
-    [JsonPropertyName("connection_id")]
+    [JsonPropertyName("connectionId")]
     public required string ConnectionId { get; init; }
 
     /// <summary>"whatsapp" | "instagram" | "facebook"</summary>
@@ -78,7 +116,7 @@ public sealed record SourceEntry
     [JsonPropertyName("kind")]
     public required string Kind { get; init; }
 
-    [JsonPropertyName("display_name")]
+    [JsonPropertyName("displayName")]
     public string? DisplayName { get; init; }
 
     [JsonPropertyName("handle")]
@@ -89,10 +127,10 @@ public sealed record SourceEntry
 
     /// <summary>
     /// Channel-specific provider identifiers that do not fit the generic model.
-    /// WhatsApp: { "waba_id": "...", "phone_number": "+1 234 567 8900" }
-    /// Other channels: null. Field names subject to Omni agreement (open item O5).
+    /// WhatsApp: { "wabaId", "phoneNumberId" } (or "catalogId" for a catalog);
+    /// Instagram: { "accountId" }; Facebook: { "pageId" }.
     /// </summary>
-    [JsonPropertyName("provider_data")]
+    [JsonPropertyName("providerData")]
     public JsonElement? ProviderData { get; init; }
 
     /// <summary>
@@ -102,7 +140,7 @@ public sealed record SourceEntry
     [JsonPropertyName("text")]
     public string? Text { get; init; }
 
-    [JsonPropertyName("captured_at")]
+    [JsonPropertyName("capturedAt")]
     [JsonConverter(typeof(NullableAgentEventInstantConverter))]
     public DateTimeOffset? CapturedAt { get; init; }
 }
