@@ -66,7 +66,7 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
             Answer<TicketData>? answer = await ReadAsync<Answer<TicketData>>(response, ct);
             if (response.IsSuccessStatusCode && answer is { Success: true, OperationCode: Success, Data: { SessionToken.Length: > 0, RedirectUrl.Length: > 0 } data })
             {
-                return new PaymentLink(data.SessionToken, data.RedirectUrl);
+                return new PaymentLink(data.SessionToken, PayPage(data.RedirectUrl, reference));
             }
 
             string code = answer?.OperationCode ?? ((int)response.StatusCode).ToString();
@@ -75,6 +75,17 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
                 ? "Accelerate's rate limit was reached."
                 : answer?.Message ?? $"Accelerate answered {(int)response.StatusCode}.", code);
         }
+    }
+
+    /// <summary>
+    /// Accelerate answers with its payment page and an empty query ("https://accelerate.ng/payment?"); the page finds
+    /// the payment from ?ref=, which takes our reference (or the session token, a 1,300-character JWT).
+    /// </summary>
+    private static string PayPage(string redirectUrl, string reference)
+    {
+        if (redirectUrl.Contains("ref=", StringComparison.OrdinalIgnoreCase)) return redirectUrl;
+        string separator = redirectUrl.EndsWith('?') || redirectUrl.EndsWith('&') ? "" : redirectUrl.Contains('?') ? "&" : "?";
+        return $"{redirectUrl}{separator}ref={Uri.EscapeDataString(reference)}";
     }
 
     private async Task<HttpResponseMessage> SendAsync(object body, string token, CancellationToken ct)

@@ -26,6 +26,17 @@ public sealed class AccelerateClientTests
         NullLogger<AccelerateClient>.Instance);
 
     [Fact]
+    public async Task The_pay_page_is_given_the_reference_Accelerate_leaves_off()
+    {
+        _accelerate.Answer("api/v1/auth/api-client/token", Login);
+        _accelerate.Answer("api/merchant/create-ticket", Ticket.Replace("https://pay.accelerate.example/s/sess-1", "https://accelerate.ng/payment?"));
+
+        PaymentLink link = await Client().CreateLinkAsync("prt_1", 800_000, "x", null, default);
+
+        Assert.Equal("https://accelerate.ng/payment?ref=prt_1", link.Url);
+    }
+
+    [Fact]
     public async Task It_logs_in_with_the_keys_and_creates_the_ticket_in_kobo()
     {
         _accelerate.Answer("api/v1/auth/api-client/token", Login);
@@ -33,7 +44,7 @@ public sealed class AccelerateClientTests
 
         PaymentLink link = await Client().CreateLinkAsync("prt_1", 800_000, "Ada's Bags: 2 x Quilted bag", null, default);
 
-        Assert.Equal(new PaymentLink("sess-1", "https://pay.accelerate.example/s/sess-1"), link);
+        Assert.Equal(new PaymentLink("sess-1", "https://pay.accelerate.example/s/sess-1?ref=prt_1"), link);
         // Login is on the user-management API; the ticket on the payments API.
         Assert.Equal(["auth.accelerate.example", "staging.payment.example"], _accelerate.Hosts);
         (string _, JsonElement _, string? login) = _accelerate.Calls[0];
