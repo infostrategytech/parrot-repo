@@ -153,6 +153,36 @@ public sealed class PaymentConfirmationServiceTests
     }
 
     [Fact]
+    public async Task When_nothing_was_held_the_stock_is_found_and_taken_off_when_it_is_paid()
+    {
+        PaymentOrder order = Order();
+        order.HoldMode = CheckoutHoldMode.Never;
+
+        await _service.HandleAsync(Paid(order.Reference), Sign(order.Reference), default);
+
+        Assert.Equal(PaymentOrderStatus.Paid, _orders.Get(order.Id).Status);
+        var held = Assert.Single(_stock.Held);
+        Assert.Equal((order.Reference, 2), (held.Reference, Assert.Single(held.Lines).Quantity));
+        Assert.Equal([order.Reference], _stock.Committed);
+    }
+
+    [Fact]
+    public async Task When_nothing_was_held_and_it_has_gone_it_is_paid_out_of_stock()
+    {
+        PaymentOrder order = Order();
+        order.HoldMode = CheckoutHoldMode.Never;
+        _stock.ShortWith = "Only 1 Quilted bag left.";
+
+        await _service.HandleAsync(Paid(order.Reference), Sign(order.Reference), default);
+
+        PaymentOrder saved = _orders.Get(order.Id);
+        Assert.Equal(PaymentOrderStatus.PaidOutOfStock, saved.Status);
+        Assert.Contains("Only 1 Quilted bag left.", saved.AttentionReason);
+        Assert.Empty(_stock.Committed);
+        Assert.Single(_notifier.Told);
+    }
+
+    [Fact]
     public async Task A_late_payment_whose_stock_went_is_paid_out_of_stock()
     {
         PaymentOrder order = Order(PaymentOrderStatus.Expired);

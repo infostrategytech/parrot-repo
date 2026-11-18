@@ -162,9 +162,25 @@ public sealed partial class PaymentConfirmationService(
             else
             {
                 IReadOnlyList<StockLine> shortLines;
+                string? notHeld = null;
                 try
                 {
-                    shortLines = await stock.CommitAsync(order.WorkspaceId, order.Reference, ct);
+                    // Nothing was kept aside for this order (the workspace holds no stock), so its stock is found
+                    // now and taken off with the rest. A retried webhook finds the same hold, never a second one.
+                    if (order.HoldMode == CheckoutHoldMode.Never)
+                    {
+                        try
+                        {
+                            await stock.HoldAsync(order.WorkspaceId, order.Reference, Now.AddMinutes(10),
+                                order.Lines.Select(l => new StockLine(l.ProductId, l.VariantId, l.Quantity)).ToArray(), ct);
+                        }
+                        catch (StockShortException ex)
+                        {
+                            notHeld = ex.Message;
+                        }
+                    }
+
+                    shortLines = notHeld is null ? await stock.CommitAsync(order.WorkspaceId, order.Reference, ct) : [];
                 }
                 catch (CatalogStockUnavailableException ex)
                 {
@@ -180,7 +196,12 @@ public sealed partial class PaymentConfirmationService(
                     _ => $"Paid while the order was {before}.",
                 };
 
-                if (shortLines.Count > 0)
+                if (notHeld is not null)
+                {
+                    order.Status = PaymentOrderStatus.PaidOutOfStock;
+                    order.AttentionReason = $"{late} Paid, but not enough was left: {notHeld} Refund or arrange it with the customer.".Trim();
+                }
+                else if (shortLines.Count > 0)
                 {
                     order.Status = PaymentOrderStatus.PaidOutOfStock;
                     string missing = string.Join(", ", shortLines.Select(s => $"{s.Quantity} x {NameOf(order, s)}"));
