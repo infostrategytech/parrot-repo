@@ -218,7 +218,8 @@ services:
       FeatureFlags__PaymentLinks: ${PAYMENT_LINKS_ENABLED:-true}
       Payments__CheckoutBaseUrl: ${PUBLIC_SCHEME:-https}://${APP_DOMAIN}
       Payments__CallbackUrl: ${PAYMENT_CALLBACK_URL:-${PUBLIC_SCHEME:-https}://${APP_DOMAIN}/payment/complete}
-      Payments__Accelerate__BaseUrl: ${ACCELERATE_BASE_URL:-https://staging.payment.irechargetech.com}
+      Payments__Accelerate__BaseUrl: ${ACCELERATE_BASE_URL:-https://prod.payment.irechargetech.com}
+      Payments__Accelerate__AuthBaseUrl: ${ACCELERATE_AUTH_BASE_URL:-https://prod.user-mgt.irechargetech.com/api/v1}
       Payments__Accelerate__PublicKey: ${ACCELERATE_PUBLIC_KEY:-}
       Payments__Accelerate__SecretKey: ${ACCELERATE_SECRET_KEY:-}
       Payments__Accelerate__ClientSecret: ${ACCELERATE_CLIENT_SECRET:-}

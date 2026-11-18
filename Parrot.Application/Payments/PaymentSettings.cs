@@ -45,8 +45,11 @@ public sealed class PaymentSettings
 /// <summary>The platform's Accelerate account. The keys come from the environment, never from a committed file.</summary>
 public sealed class AccelerateSettings
 {
-    /// <summary>The payments API; the sandbox unless set.</summary>
-    public string BaseUrl { get; set; } = "https://staging.payment.irechargetech.com";
+    /// <summary>The payments API: production unless set (the sandbox is https://staging.payment.irechargetech.com).</summary>
+    public string BaseUrl { get; set; } = "https://prod.payment.irechargetech.com";
+
+    /// <summary>Where the keys are exchanged for a token (GET auth/api-client/token): a separate user-management API, not the payments one.</summary>
+    public string AuthBaseUrl { get; set; } = "https://prod.user-mgt.irechargetech.com/api/v1";
 
     public string? PublicKey { get; set; }
 
