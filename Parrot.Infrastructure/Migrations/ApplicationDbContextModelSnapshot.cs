@@ -878,8 +878,8 @@ namespace Parrot.Infrastructure.Migrations
                         .HasColumnType("timestamp with time zone");
 
                     b.Property<string>("PaymentUrl")
-                        .HasMaxLength(2048)
-                        .HasColumnType("character varying(2048)");
+                        .HasMaxLength(4096)
+                        .HasColumnType("character varying(4096)");
 
                     b.Property<string>("Provider")
                         .IsRequired()
@@ -887,8 +887,7 @@ namespace Parrot.Infrastructure.Migrations
                         .HasColumnType("character varying(32)");
 
                     b.Property<string>("ProviderSessionId")
-                        .HasMaxLength(256)
-                        .HasColumnType("character varying(256)");
+                        .HasColumnType("text");
 
                     b.Property<string>("ProviderTransactionId")
                         .HasMaxLength(256)
