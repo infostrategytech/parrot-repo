@@ -1,4 +1,5 @@
 using Parrot.Application.Auth;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Workspaces;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
@@ -13,17 +14,20 @@ public class WorkspaceService : IWorkspaceService
     private readonly IWorkspaceRepository _repository;
     private readonly ITeamRepository _team;
     private readonly IWorkspaceAccessService _access;
+    private readonly IConnectionSourceSyncService _sources;
     private readonly IAppLogger<WorkspaceService> _logger;
 
     public WorkspaceService(
         IWorkspaceRepository repository,
         ITeamRepository team,
         IWorkspaceAccessService access,
+        IConnectionSourceSyncService sources,
         IAppLogger<WorkspaceService> logger)
     {
         _repository = repository;
         _team = team;
         _access = access;
+        _sources = sources;
         _logger = logger;
     }
 
@@ -89,6 +93,7 @@ public class WorkspaceService : IWorkspaceService
             _logger.LogInformation("Workspace created for tenant {UserId}", userId);
         }
 
+        await AnnounceAsync(workspace.Id);
         return ToResponse(workspace, currentWorkspaceId: null);
     }
 
@@ -191,6 +196,7 @@ public class WorkspaceService : IWorkspaceService
                 _logger.LogInformation("First workspace created for tenant {UserId}", user.Id);
             }
 
+            await AnnounceAsync(first.Id);
             return WorkspaceAccess.ForOwner(first);
         }
 
@@ -198,6 +204,20 @@ public class WorkspaceService : IWorkspaceService
         Workspace made = await _repository.GetByIdAsync(first.Id)
             ?? throw new InvalidOperationException($"Workspace {first.Id} was reported as existing but could not be read.");
         return WorkspaceAccess.ForOwner(made);
+    }
+
+    // Best-effort: the workspace is made either way, and it is announced again (with its owner)
+    // in the snapshot its first channel sends.
+    private async Task AnnounceAsync(string workspaceId)
+    {
+        try
+        {
+            await _sources.PublishWorkspaceCreatedAsync(workspaceId);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "workspace.created.snapshot_failed WorkspaceId={WorkspaceId}; continuing", workspaceId);
+        }
     }
 
     /// <summary>

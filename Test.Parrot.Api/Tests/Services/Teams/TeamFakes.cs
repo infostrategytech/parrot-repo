@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using Parrot.Api.Realtime;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.Logging;
 using Parrot.Application.Workspaces;
 using Parrot.Application.Teams;
@@ -150,10 +151,12 @@ public static class TeamFixture
     }), TimeProvider.System);
 
     /// <summary>A workspace service over fakes. Pass a team to give people grants.</summary>
-    public static WorkspaceService Workspaces(FakeWorkspaceRepository workspaces, IAppLogger<WorkspaceService>? logger = null, FakeTeamRepository? team = null)
+    public static WorkspaceService Workspaces(FakeWorkspaceRepository workspaces, IAppLogger<WorkspaceService>? logger = null,
+        FakeTeamRepository? team = null, IConnectionSourceSyncService? sources = null)
     {
         team ??= new FakeTeamRepository();
-        return new WorkspaceService(workspaces, team, Access(workspaces, team), logger ?? Mock.Of<IAppLogger<WorkspaceService>>());
+        return new WorkspaceService(workspaces, team, Access(workspaces, team), sources ?? Mock.Of<IConnectionSourceSyncService>(),
+            logger ?? Mock.Of<IAppLogger<WorkspaceService>>());
     }
 
     /// <summary>A real access service over fakes, with a cache of its own so tests never share answers.</summary>

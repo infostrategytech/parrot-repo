@@ -1,9 +1,12 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.Contracts.BusinessSources;
 using Parrot.Application.Integrations;
 using Parrot.Application.Messaging;
 using Parrot.Domain.Entities;
+using Parrot.Domain.Enums;
 using Parrot.Infrastructure.Data;
 
 namespace MessageProcessor;
@@ -18,6 +21,7 @@ namespace MessageProcessor;
 public sealed class SourcesOutboxWorker : BackgroundService
 {
     private readonly IDbContextFactory<ApplicationDbContext> _dbFactory;
+    private readonly IServiceScopeFactory _scopes;
     private readonly IMessageBus _bus;
     private readonly KafkaSettings _kafka;
     private readonly ILogger<SourcesOutboxWorker> _logger;
@@ -28,11 +32,13 @@ public sealed class SourcesOutboxWorker : BackgroundService
 
     public SourcesOutboxWorker(
         IDbContextFactory<ApplicationDbContext> dbFactory,
+        IServiceScopeFactory scopes,
         IMessageBus bus,
         IOptions<KafkaSettings> kafka,
         ILogger<SourcesOutboxWorker> logger)
     {
         _dbFactory = dbFactory;
+        _scopes = scopes;
         _bus = bus;
         _kafka = kafka.Value;
         _logger = logger;
@@ -127,16 +133,29 @@ public sealed class SourcesOutboxWorker : BackgroundService
 
         // ── 2. Publish to Kafka outside any DB transaction ───────────────────
         int published = 0;
+        HashSet<string> replaced = [];
         foreach ((Guid id, string workspaceId, string payload) in claimed)
         {
             bool success = false;
             string? errorMessage = null;
             try
             {
-                BusinessSourcesUpdatedMessage message = BusinessSourcesUpdatedMessage.FromStoredPayload(payload);
-                await _bus.PublishAsync(_kafka.BusinessKnowledgeSources, workspaceId, message, ct);
+                BusinessSourcesUpdatedMessage? message = BusinessSourcesUpdatedMessage.FromStoredPayload(payload);
+                if (message is null)
+                {
+                    // Queued before schema 2, a shape Omni can't read. The workspace as it is now
+                    // replaces it: a snapshot is the whole picture, so nothing is lost.
+                    if (replaced.Add(workspaceId)) await QueueCurrentSnapshotAsync(workspaceId, ct);
+                    errorMessage = "Not sent: queued before schema 2 and replaced by a new snapshot.";
+                    _logger.LogWarning("business_knowledge.snapshot_replaced EventId={EventId} WorkspaceId={WorkspaceId}", id, workspaceId);
+                }
+                else
+                {
+                    await _bus.PublishAsync(_kafka.BusinessKnowledgeSources, workspaceId, message, ct);
+                    published++;
+                }
+
                 success = true;
-                published++;
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -158,6 +177,7 @@ public sealed class SourcesOutboxWorker : BackgroundService
             {
                 row.PublishedAt = DateTime.UtcNow;
                 row.LockedUntil = null;
+                row.LastError = errorMessage;
             }
             else
             {
@@ -173,5 +193,15 @@ public sealed class SourcesOutboxWorker : BackgroundService
         }
 
         return published;
+    }
+
+    private async Task QueueCurrentSnapshotAsync(string workspaceId, CancellationToken ct)
+    {
+        await using AsyncServiceScope scope = _scopes.CreateAsyncScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        ISnapshotPublisher publisher = scope.ServiceProvider.GetRequiredService<ISnapshotPublisher>();
+        await using IDbContextTransaction tx = await db.Database.BeginTransactionAsync(ct);
+        await publisher.PublishAsync(workspaceId, SnapshotTrigger.Scheduled, ct);
+        await tx.CommitAsync(ct);
     }
 }

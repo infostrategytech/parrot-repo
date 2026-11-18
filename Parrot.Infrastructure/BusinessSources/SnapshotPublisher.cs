@@ -30,7 +30,7 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         _logger = logger;
     }
 
-    public async Task PublishAsync(string workspaceId, CancellationToken ct = default)
+    public async Task PublishAsync(string workspaceId, SnapshotTrigger trigger, CancellationToken ct = default)
     {
         // Ensure the state row exists (idempotent; no-op if it already does).
         await _db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -54,27 +54,27 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             .OrderBy(s => s.CreatedAt)
             .ToListAsync(ct);
 
-        string? workspaceName = await _db.Workspaces
-            .Where(w => w.Id == workspaceId)
-            .Select(w => w.Name)
-            .FirstOrDefaultAsync(ct);
+        Workspace? workspace = await _db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == workspaceId, ct);
 
-        if (string.IsNullOrWhiteSpace(workspaceName))
-            throw new InvalidOperationException($"Cannot publish business-knowledge snapshot: workspace {workspaceId} has no name set.");
+        if (workspace is null || string.IsNullOrWhiteSpace(workspace.Name))
+            throw new InvalidOperationException($"Cannot publish business-knowledge snapshot: workspace {workspaceId} is missing or has no name set.");
 
         // Load provider-specific data needed for the snapshot (WABA IDs for WhatsApp sources).
         Dictionary<Guid, string?> connectionWabaIds = await LoadWabaIdsAsync(sources, ct);
 
         state.SnapshotVersion += 1;
 
-        string payload = BuildPayload(state.SnapshotVersion, workspaceId, workspaceName!, sources, connectionWabaIds);
+        // The outbox row's id is the event id, so a retried row is the same event to Omni.
+        Guid eventId = Guid.NewGuid();
+        string payload = BuildPayload(eventId, state.SnapshotVersion, trigger, workspace, workspace.Name, sources, connectionWabaIds);
 
         _logger.LogInformation(
-            "business_knowledge.snapshot_payload WorkspaceId={WorkspaceId} SnapshotVersion={SnapshotVersion} SourceCount={SourceCount} Payload={Payload}",
-            workspaceId, state.SnapshotVersion, sources.Count, payload);
+            "business_knowledge.snapshot_payload WorkspaceId={WorkspaceId} SnapshotVersion={SnapshotVersion} Trigger={Trigger} SourceCount={SourceCount} Payload={Payload}",
+            workspaceId, state.SnapshotVersion, trigger, sources.Count, payload);
 
         OutboxEvent outbox = new OutboxEvent
         {
+            Id = eventId,
             WorkspaceId = workspaceId,
             Payload = payload,
         };
@@ -105,20 +105,28 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
     }
 
     private static string BuildPayload(
+        Guid eventId,
         long snapshotVersion,
-        string workspaceId,
-        string workspaceName,
+        SnapshotTrigger trigger,
+        Workspace workspace,
+        string businessName,
         IReadOnlyList<BusinessSource> sources,
         IReadOnlyDictionary<Guid, string?> connectionWabaIds)
     {
         BusinessSourcesUpdatedMessage message = new BusinessSourcesUpdatedMessage
         {
-            EventId = Guid.NewGuid().ToString(),
-            WorkspaceId = workspaceId,
-            SnapshotVersion = snapshotVersion,
+            EventId = eventId.ToString(),
             OccurredAt = DateTimeOffset.UtcNow,
-            Data = new BusinessData { Name = workspaceName },
-            Sources = sources.Select(s => ToEntry(s, connectionWabaIds)).ToList(),
+            CorrelationId = InboundMessagePublisher.CurrentCorrelationId(),
+            Data = new BusinessSourcesSnapshot
+            {
+                WorkspaceId = workspace.Id,
+                TenantId = workspace.OwnerId,
+                Trigger = trigger,
+                SnapshotVersion = snapshotVersion,
+                Business = new BusinessData { Name = businessName },
+                Sources = sources.Select(s => ToEntry(s, connectionWabaIds)).ToList(),
+            },
         };
 
         // Use MessageJson.Options so the payload is consistent with what KafkaMessageBus

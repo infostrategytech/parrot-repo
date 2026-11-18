@@ -38,6 +38,7 @@ public class BusinessSourceRepository : IBusinessSourceRepository
         existing.Url = candidate.Url;
         existing.IsActive = true;
         existing.MetadataSyncStatus = candidate.MetadataSyncStatus;
+        existing.MetadataSyncTrigger = candidate.MetadataSyncTrigger;
         existing.NextMetadataSyncAttemptAt = null;
         existing.MetadataSyncLockedUntil = null;
         existing.MetadataSyncAttemptCount = 0;

@@ -2,19 +2,19 @@ namespace Parrot.Domain.Entities;
 
 /// <summary>
 /// Durable outbox row for a BusinessSourcesUpdated Kafka event.
-/// The <see cref="Id"/> doubles as the <c>event_id</c> in the Kafka envelope so
+/// The <see cref="Id"/> doubles as the <c>eventId</c> in the Kafka envelope so
 /// consumers can use it for idempotency. Kafka publish happens OUTSIDE the claim
 /// transaction; <see cref="LockedUntil"/> prevents double-publish if the worker restarts.
 /// </summary>
 public class OutboxEvent
 {
-    /// <summary>Also the event_id in the Kafka envelope.</summary>
+    /// <summary>Also the eventId in the Kafka envelope.</summary>
     public Guid Id { get; set; } = Guid.NewGuid();
 
     /// <summary>Kafka partition key.</summary>
     public required string WorkspaceId { get; set; }
 
-    /// <summary>Serialized <c>BusinessSourcesUpdatedMessage</c> (JSON, snake_case).</summary>
+    /// <summary>Serialized <c>BusinessSourcesUpdatedMessage</c> (JSON, camelCase; schema 2 nests the snapshot under data).</summary>
     public required string Payload { get; set; }
 
     public DateTime CreatedAt { get; set; }

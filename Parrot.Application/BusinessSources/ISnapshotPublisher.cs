@@ -1,3 +1,5 @@
+using Parrot.Domain.Enums;
+
 namespace Parrot.Application.BusinessSources;
 
 /// <summary>
@@ -9,5 +11,5 @@ namespace Parrot.Application.BusinessSources;
 /// </summary>
 public interface ISnapshotPublisher
 {
-    Task PublishAsync(string workspaceId, CancellationToken ct = default);
+    Task PublishAsync(string workspaceId, SnapshotTrigger trigger, CancellationToken ct = default);
 }

@@ -42,7 +42,7 @@ public sealed class SnapshotPublisherPostgresTests : IAsyncLifetime
     }
 
     [PostgresFact]
-    public async Task PublishAsync_QueuesTheSnapshotInCamelCaseIncludingProviderData()
+    public async Task PublishAsync_QueuesSchemaTwoWithTheOwnerAsTenantAndTheTrigger()
     {
         await using (ApplicationDbContext seed = new(_options!))
         {
@@ -75,7 +75,7 @@ public sealed class SnapshotPublisherPostgresTests : IAsyncLifetime
             await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
             SnapshotPublisher publisher = new(db, Options.Create(new KafkaSettings()),
                 new AppLogger<SnapshotPublisher>(NullLogger<SnapshotPublisher>.Instance));
-            await publisher.PublishAsync("ws-a");
+            await publisher.PublishAsync("ws-a", SnapshotTrigger.ChannelConnected);
             await transaction.CommitAsync();
         }
 
@@ -83,10 +83,18 @@ public sealed class SnapshotPublisherPostgresTests : IAsyncLifetime
         OutboxEvent queued = await read.OutboxEvents.SingleAsync();
         using JsonDocument payload = JsonDocument.Parse(queued.Payload);
         JsonElement root = payload.RootElement;
+        JsonElement data = root.GetProperty("data");
 
-        Assert.Equal("ws-a", root.GetProperty("workspaceId").GetString());
-        Assert.Equal(1, root.GetProperty("snapshotVersion").GetInt64());
-        JsonElement source = Assert.Single(root.GetProperty("sources").EnumerateArray());
+        // The outbox row's id is the event id, so a retried row is the same event to Omni.
+        Assert.Equal(queued.Id.ToString(), root.GetProperty("eventId").GetString());
+        Assert.Equal(2, root.GetProperty("schemaVersion").GetInt32());
+        Assert.False(string.IsNullOrEmpty(root.GetProperty("correlationId").GetString()));
+        Assert.Equal("ws-a", data.GetProperty("workspaceId").GetString());
+        Assert.Equal("owner", data.GetProperty("tenantId").GetString());
+        Assert.Equal("ChannelConnected", data.GetProperty("trigger").GetString());
+        Assert.Equal(1, data.GetProperty("snapshotVersion").GetInt64());
+        Assert.Equal("Adire House", data.GetProperty("business").GetProperty("name").GetString());
+        JsonElement source = Assert.Single(data.GetProperty("sources").EnumerateArray());
         Assert.Equal("whatsapp:15550001234", source.GetProperty("sourceId").GetString());
         Assert.Equal("waba-1", source.GetProperty("providerData").GetProperty("wabaId").GetString());
         Assert.Equal("15550001234", source.GetProperty("providerData").GetProperty("phoneNumberId").GetString());

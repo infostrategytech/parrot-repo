@@ -42,10 +42,11 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
                 ExternalId = phoneNumberId,
                 IsActive = true,
                 MetadataSyncStatus = MetadataSyncStatus.Pending,
+                MetadataSyncTrigger = SnapshotTrigger.ChannelConnected,
             };
             await _sources.UpsertAsync(source, ct);
             await _db.SaveChangesAsync(ct);
-            await _publisher.PublishAsync(workspaceId, ct);
+            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.ChannelConnected, ct);
             await tx.CommitAsync(ct);
 
             _logger.LogInformation("whatsapp.profile.source.synced WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} PhoneNumberId={PhoneNumberId}",
@@ -93,7 +94,7 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
                         .SetProperty(s => s.UpdatedAt, DateTime.UtcNow), ct);
             }
 
-            await _publisher.PublishAsync(workspaceId, ct);
+            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.ManualRefresh, ct);
             await tx.CommitAsync(ct);
 
             _logger.LogInformation("whatsapp.catalog.source.synced WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} CatalogId={CatalogId}",
@@ -121,10 +122,11 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
                 Handle = username,
                 IsActive = true,
                 MetadataSyncStatus = MetadataSyncStatus.Pending,
+                MetadataSyncTrigger = SnapshotTrigger.ChannelConnected,
             };
             await _sources.UpsertAsync(source, ct);
             await _db.SaveChangesAsync(ct);
-            await _publisher.PublishAsync(workspaceId, ct);
+            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.ChannelConnected, ct);
             await tx.CommitAsync(ct);
 
             _logger.LogInformation("instagram.profile.source.synced WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} AccountId={AccountId}",
@@ -152,10 +154,11 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
                 DisplayName = pageName,
                 IsActive = true,
                 MetadataSyncStatus = MetadataSyncStatus.Pending,
+                MetadataSyncTrigger = SnapshotTrigger.ChannelConnected,
             };
             await _sources.UpsertAsync(source, ct);
             await _db.SaveChangesAsync(ct);
-            await _publisher.PublishAsync(workspaceId, ct);
+            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.ChannelConnected, ct);
             await tx.CommitAsync(ct);
 
             _logger.LogInformation("facebook.page.source.synced WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} PageId={PageId}",
@@ -175,11 +178,28 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
         {
             await _sources.DeactivateByConnectionAsync(workspaceId, connectionId, DateTime.UtcNow, ct);
             await _db.SaveChangesAsync(ct);
-            await _publisher.PublishAsync(workspaceId, ct);
+            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.ChannelDisconnected, ct);
             await tx.CommitAsync(ct);
 
             _logger.LogInformation("connection.sources.deactivated WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}",
                 workspaceId, connectionId);
+        }
+        catch
+        {
+            await tx.RollbackAsync(ct);
+            throw;
+        }
+    }
+
+    public async Task PublishWorkspaceCreatedAsync(string workspaceId, CancellationToken ct = default)
+    {
+        await using IDbContextTransaction tx = await _db.Database.BeginTransactionAsync(ct);
+        try
+        {
+            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.WorkspaceCreated, ct);
+            await tx.CommitAsync(ct);
+
+            _logger.LogInformation("workspace.created.snapshot_queued WorkspaceId={WorkspaceId}", workspaceId);
         }
         catch
         {
@@ -201,6 +221,7 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
             throw new NotFoundException("No knowledge source found for this connection.");
 
         source.MetadataSyncStatus = MetadataSyncStatus.Pending;
+        source.MetadataSyncTrigger = SnapshotTrigger.ManualRefresh;
         source.MetadataSyncAttemptCount = 0;
         source.NextMetadataSyncAttemptAt = null;
         source.UpdatedAt = DateTime.UtcNow;

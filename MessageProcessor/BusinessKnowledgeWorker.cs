@@ -194,9 +194,11 @@ public sealed class BusinessKnowledgeWorker : BackgroundService
             source.MetadataSyncStatus = MetadataSyncStatus.Completed;
             source.LastMetadataSyncSucceededAt = DateTime.UtcNow;
             source.LastMetadataSyncError = null;
+            SnapshotTrigger trigger = source.MetadataSyncTrigger ?? SnapshotTrigger.Scheduled;
+            source.MetadataSyncTrigger = null;
 
             await db.SaveChangesAsync(ct);
-            await publisher.PublishAsync(workspaceId, ct);
+            await publisher.PublishAsync(workspaceId, trigger, ct);
 
             _logger.LogInformation(
                 "business_knowledge.metadata_fetched SourceId={SourceId} Channel={Channel} WorkspaceId={WorkspaceId} ExternalId={ExternalId}",
