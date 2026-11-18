@@ -142,6 +142,9 @@ public sealed class FakePaymentProvider : IPaymentProvider
 {
     public List<(string Reference, long AmountMinor, string Description)> Calls { get; } = [];
 
+    /// <summary>Where each link was told to send the customer after paying.</summary>
+    public List<string?> ReturnUrls { get; } = [];
+
     public bool Configured { get; set; } = true;
 
     public PaymentProviderException? FailWith { get; set; }
@@ -150,9 +153,10 @@ public sealed class FakePaymentProvider : IPaymentProvider
 
     public bool IsConfigured => Configured;
 
-    public Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, CancellationToken ct)
+    public Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, string? returnUrl, CancellationToken ct)
     {
         Calls.Add((reference, amountMinor, description));
+        ReturnUrls.Add(returnUrl);
         if (FailWith is not null) throw FailWith;
         return Task.FromResult(new PaymentLink("session-" + reference, "https://pay.example/" + reference));
     }

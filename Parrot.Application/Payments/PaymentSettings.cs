@@ -15,8 +15,11 @@ public sealed class PaymentSettings
     /// <summary>Default: how long a checkout link stays open.</summary>
     public int CheckoutMinutes { get; set; } = 30;
 
-    /// <summary>Default: how long the payment link (and any stock held for it) stays open after Pay is pressed.</summary>
-    public int LinkMinutes { get; set; } = 15;
+    /// <summary>
+    /// Default: how long the payment link (and any stock held for it) stays open after Pay is pressed. Accelerate's
+    /// links never expire on their side, so this is the only limit; it's generous enough for a customer to finish.
+    /// </summary>
+    public int LinkMinutes { get; set; } = 30;
 
     /// <summary>Default: when stock is kept aside.</summary>
     public Parrot.Domain.Entities.CheckoutHoldMode HoldMode { get; set; } = Parrot.Domain.Entities.CheckoutHoldMode.AtPay;
@@ -30,7 +33,10 @@ public sealed class PaymentSettings
     /// </summary>
     public string? CheckoutBaseUrl { get; set; }
 
-    /// <summary>Where the customer lands after paying. A public page.</summary>
+    /// <summary>
+    /// Where the customer lands after paying when there's no checkout to send them back to. Checkouts send the
+    /// customer back to their own checkout page, so this is only a fallback.
+    /// </summary>
     public string? CallbackUrl { get; set; }
 
     public AccelerateSettings Accelerate { get; set; } = new ();

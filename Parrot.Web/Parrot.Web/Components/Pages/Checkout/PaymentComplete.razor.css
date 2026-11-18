@@ -1,0 +1,31 @@
+/* The checkout's column and status card, with nothing else on the page. */
+.payment-complete {
+  /* A gap in the token set: a column a phone's width, as the checkout's. */
+  --ds-payment-complete-width: 480px;
+
+  min-height: 100dvh;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  padding: var(--spacing-2xl) var(--spacing-lg);
+  color: var(--colors-text-primary);
+  background: var(--colors-surface-background);
+}
+
+.payment-complete__card {
+  display: grid;
+  gap: var(--spacing-sm);
+  justify-items: center;
+  width: 100%;
+  max-width: var(--ds-payment-complete-width);
+  padding: var(--spacing-2xl) var(--spacing-xl);
+  text-align: center;
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+.payment-complete__card ::deep h1,
+.payment-complete__card ::deep p { margin: var(--spacing-none); }
+.payment-complete__card ::deep h1 { text-wrap: balance; }
+.payment-complete__card ::deep p { color: var(--colors-text-muted); }
+.payment-complete__icon { display: inline-flex; color: var(--colors-feedback-success-text); }

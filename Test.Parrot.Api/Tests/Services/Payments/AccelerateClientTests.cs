@@ -31,7 +31,7 @@ public sealed class AccelerateClientTests
         _accelerate.Answer("auth/login", Login);
         _accelerate.Answer("api/merchant/create-ticket", Ticket);
 
-        PaymentLink link = await Client().CreateLinkAsync("prt_1", 800_000, "Ada's Bags: 2 x Quilted bag", default);
+        PaymentLink link = await Client().CreateLinkAsync("prt_1", 800_000, "Ada's Bags: 2 x Quilted bag", null, default);
 
         Assert.Equal(new PaymentLink("sess-1", "https://pay.accelerate.example/s/sess-1"), link);
         (string _, JsonElement login, string? _) = _accelerate.Calls[0];
@@ -48,13 +48,24 @@ public sealed class AccelerateClientTests
     }
 
     [Fact]
+    public async Task The_customer_is_sent_back_to_their_checkout_when_one_is_given()
+    {
+        _accelerate.Answer("auth/login", Login);
+        _accelerate.Answer("api/merchant/create-ticket", Ticket);
+
+        await Client().CreateLinkAsync("prt_1", 100, "a", "https://app.example/checkout/tok?paid=1", default);
+
+        Assert.Equal("https://app.example/checkout/tok?paid=1", _accelerate.Calls[1].Body.GetProperty("callback_url").GetString());
+    }
+
+    [Fact]
     public async Task The_token_is_kept_between_links()
     {
         _accelerate.Answer("auth/login", Login);
         _accelerate.Answer("api/merchant/create-ticket", Ticket);
 
-        await Client().CreateLinkAsync("prt_1", 100, "a", default);
-        await Client().CreateLinkAsync("prt_2", 100, "b", default);
+        await Client().CreateLinkAsync("prt_1", 100, "a", null, default);
+        await Client().CreateLinkAsync("prt_2", 100, "b", null, default);
 
         Assert.Equal(1, _accelerate.Calls.Count(c => c.Path == "auth/login"));
     }
@@ -66,7 +77,7 @@ public sealed class AccelerateClientTests
         _accelerate.Answer("api/merchant/create-ticket", """{"success":false,"message":"Unauthorized"}""", HttpStatusCode.Unauthorized);
         _accelerate.Then("api/merchant/create-ticket", Ticket);
 
-        PaymentLink link = await Client().CreateLinkAsync("prt_1", 100, "a", default);
+        PaymentLink link = await Client().CreateLinkAsync("prt_1", 100, "a", null, default);
 
         Assert.Equal("sess-1", link.SessionId);
         Assert.Equal(["auth/login", "api/merchant/create-ticket", "auth/login", "api/merchant/create-ticket"], _accelerate.Calls.Select(c => c.Path));
@@ -78,7 +89,7 @@ public sealed class AccelerateClientTests
         _accelerate.Answer("auth/login", Login);
         _accelerate.Answer("api/merchant/create-ticket", """{"success":false,"message":"Duplicate reference","operation_code":"00H1","data":null}""", HttpStatusCode.BadRequest);
 
-        var failed = await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", default));
+        var failed = await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", null, default));
 
         Assert.Equal("00H1", failed.Code);
         Assert.Equal("Duplicate reference", failed.Message);
@@ -88,16 +99,16 @@ public sealed class AccelerateClientTests
     public async Task Bad_keys_unreachable_or_rate_limited_all_fail_as_provider_errors()
     {
         _accelerate.Answer("auth/login", """{"status":"error","message":"Invalid credentials"}""", HttpStatusCode.Unauthorized);
-        await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", default));
+        await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", null, default));
 
         _accelerate.Answer("auth/login", Login);
         _accelerate.Answer("api/merchant/create-ticket", """{"retry_after":30}""", HttpStatusCode.TooManyRequests);
-        var limited = await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", default));
+        var limited = await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", null, default));
         Assert.Contains("rate limit", limited.Message);
 
         _accelerate.Unreachable = true;
         _session.Forget();
-        await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", default));
+        await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", null, default));
     }
 
     [Fact]
@@ -106,7 +117,7 @@ public sealed class AccelerateClientTests
         _accelerate.Answer("auth/login", Login);
         _accelerate.Answer("api/merchant/create-ticket", """{"success":true,"operation_code":"0000","data":{"session_token":"sess-1"}}""");
 
-        await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", default));
+        await Assert.ThrowsAsync<PaymentProviderException>(() => Client().CreateLinkAsync("prt_1", 100, "a", null, default));
     }
 
     [Fact]
