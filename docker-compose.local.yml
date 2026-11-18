@@ -208,7 +208,7 @@ services:
       # ACCELERATE_CLIENT_SECRET for webhooks), never this file. Without them checkouts are
       # still made, but Pay is refused. PAYMENT_LINKS_ENABLED=false turns checkouts off.
       FeatureFlags__PaymentLinks: ${PAYMENT_LINKS_ENABLED:-true}
-      Payments__CallbackUrl: ${PAYMENT_CALLBACK_URL:-http://localhost:5255/}
+      Payments__CallbackUrl: ${PAYMENT_CALLBACK_URL:-http://localhost:5255/payment/complete}
       Payments__Accelerate__BaseUrl: ${ACCELERATE_BASE_URL:-https://staging.payment.irechargetech.com}
       Payments__Accelerate__PublicKey: ${ACCELERATE_PUBLIC_KEY:-}
       Payments__Accelerate__SecretKey: ${ACCELERATE_SECRET_KEY:-}
