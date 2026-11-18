@@ -1,9 +1,9 @@
-using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Parrot.Application.BusinessSources;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 
 namespace Parrot.Infrastructure.BusinessSources;
 
@@ -28,13 +28,22 @@ public sealed class WhatsAppProfileClient : IWhatsAppProfileClient
             phoneNumberId, _apiVersion);
         try
         {
-            PhoneNumberResponse? phone = await _http.GetFromJsonAsync<PhoneNumberResponse>(
-                $"/{_apiVersion}/{phoneNumberId}?fields=verified_name,display_phone_number&access_token={accessToken}",
-                ct);
+            (PhoneNumberResponse? phone, MetaGraph.Refusal? phoneRefused) = await MetaGraph.GetAsync<PhoneNumberResponse>(
+                _http, $"/{_apiVersion}/{phoneNumberId}?fields=verified_name,display_phone_number", accessToken, ct);
+            if (phoneRefused is not null)
+            {
+                MetaGraph.LogRefused(_logger, "whatsapp.phone_number", phoneNumberId, _apiVersion, phoneRefused);
+                return null;
+            }
 
-            BusinessProfileResponse? profileResponse = await _http.GetFromJsonAsync<BusinessProfileResponse>(
-                $"/{_apiVersion}/{phoneNumberId}/whatsapp_business_profile?fields=about,description,address,email,vertical,profile_picture_url,websites&access_token={accessToken}",
-                ct);
+            (BusinessProfileResponse? profileResponse, MetaGraph.Refusal? profileRefused) = await MetaGraph.GetAsync<BusinessProfileResponse>(
+                _http, $"/{_apiVersion}/{phoneNumberId}/whatsapp_business_profile?fields=about,description,address,email,vertical,profile_picture_url,websites",
+                accessToken, ct);
+            if (profileRefused is not null)
+            {
+                MetaGraph.LogRefused(_logger, "whatsapp.business_profile", phoneNumberId, _apiVersion, profileRefused);
+                return null;
+            }
 
             BusinessProfileEntry? profile = profileResponse?.Data?.FirstOrDefault();
 
@@ -51,7 +60,7 @@ public sealed class WhatsAppProfileClient : IWhatsAppProfileClient
 
             _logger.LogInformation(
                 "whatsapp.profile.fetch_ok PhoneNumberId={PhoneNumberId} VerifiedName={VerifiedName} DisplayPhone={DisplayPhone}",
-                phoneNumberId, result.VerifiedName, result.DisplayPhoneNumber);
+                phoneNumberId, result.VerifiedName, LogMask.Phone(result.DisplayPhoneNumber));
             return result;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)

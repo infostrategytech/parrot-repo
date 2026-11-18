@@ -197,6 +197,15 @@ IHost host = builder.Build();
 host.Services.GetRequiredService<IMessageDocumentMapperFactory>();
 host.Services.GetRequiredService<MongoMessageRepository>();
 
+// A job this service doesn't run logs nothing at all, so say once which ones it does.
+static string OnOff(WorkerRoles roles, WorkerRoles role) => roles.HasFlag(role) ? "on" : "off";
+host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("MessageProcessor.WorkerRoles").LogInformation(
+    "worker.roles Configured={Configured} Messages={Messages} Media={Media} Outbound={Outbound} AiReplies={AiReplies} " +
+    "SourcesOutbox={SourcesOutbox} BusinessKnowledge={BusinessKnowledge}",
+    builder.Configuration[WorkerRoleSettings.Key] ?? "(not set, so all)",
+    OnOff(roles, WorkerRoles.Messages), OnOff(roles, WorkerRoles.Media), OnOff(roles, WorkerRoles.Outbound),
+    OnOff(roles, WorkerRoles.AiReply), OnOff(roles, WorkerRoles.SourcesOutbox), OnOff(roles, WorkerRoles.BusinessKnowledge));
+
 // The meter provider must exist first: measurements made before it are dropped.
 host.Services.GetRequiredService<MeterProvider>();
 MessageMetrics.StartAtZero();

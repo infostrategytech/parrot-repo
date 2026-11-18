@@ -1,5 +1,6 @@
 using System.Net;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging.Abstractions;
 using Parrot.Web.Features.Auth.Models;
 using Parrot.Web.Features.Auth.State;
 using Parrot.Web.Features.Dashboard.Knowledge;
@@ -122,7 +123,8 @@ public class OmniKnowledgeMemoryTests
             IConfiguration configuration = new ConfigurationBuilder()
                 .AddInMemoryCollection(new Dictionary<string, string?> { ["OmniAi:Knowledge"] = on ? "true" : "false" })
                 .Build();
-            Store = new OmniKnowledgeMemory(new OmniAiClient(new HttpClient(Omni) { BaseAddress = new Uri("http://omni.test/") }, auth), configuration);
+            Store = new OmniKnowledgeMemory(new OmniAiClient(new HttpClient(Omni) { BaseAddress = new Uri("http://omni.test/") }, auth), configuration,
+                NullLogger<OmniKnowledgeMemory>.Instance);
         }
     }
 }

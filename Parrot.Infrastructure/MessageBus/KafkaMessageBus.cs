@@ -98,6 +98,16 @@ public sealed class KafkaMessageBus : IMessageBus, IDisposable
         return latest.Sum(p => Math.Max(0, p.Value - Math.Max(earliest[p.Key], committed.GetValueOrDefault(p.Key, earliest[p.Key]))));
     }
 
+    /// <summary>How many partitions <paramref name="topic"/> has, or null when the broker doesn't have it.</summary>
+    public async Task<int?> PartitionCountAsync(string topic, TimeSpan timeout)
+    {
+        using IAdminClient admin = new DependentAdminClientBuilder(_producer.Handle).Build();
+        // GetMetadata blocks; keep it off the caller's thread.
+        Metadata metadata = await Task.Run(() => admin.GetMetadata(topic, timeout));
+        TopicMetadata? found = metadata.Topics.FirstOrDefault(t => t.Topic == topic);
+        return found is null || found.Error.IsError ? null : found.Partitions.Count;
+    }
+
     public void Dispose()
     {
         _producer.Flush(TimeSpan.FromSeconds(10));

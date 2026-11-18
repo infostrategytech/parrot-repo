@@ -218,7 +218,12 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
             .FirstOrDefaultAsync(ct);
 
         if (source is null)
+        {
+            // The usual cause: a connection made before business knowledge, whose source was never seeded.
+            _logger.LogWarning("knowledge.refresh.no_source WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}: no active profile source for this connection",
+                workspaceId, connectionId);
             throw new NotFoundException("No knowledge source found for this connection.");
+        }
 
         source.MetadataSyncStatus = MetadataSyncStatus.Pending;
         source.MetadataSyncTrigger = SnapshotTrigger.ManualRefresh;

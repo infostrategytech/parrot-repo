@@ -1,3 +1,4 @@
+using Confluent.Kafka;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.Options;
@@ -8,6 +9,7 @@ using Parrot.Application.Messaging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
 using Parrot.Infrastructure.Data;
+using Parrot.Infrastructure.MessageBus;
 
 namespace MessageProcessor;
 
@@ -61,6 +63,16 @@ public sealed class SourcesOutboxWorker : BackgroundService
                 "Events accumulate in the OutboxEvents table and will be flushed once the setting is correct.",
                 _kafka.BootstrapServers);
 
+        try
+        {
+            await LogStartupStateAsync(stoppingToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Only a diagnosis: the relay runs either way.
+            _logger.LogWarning(ex, "business_knowledge.startup_check_failed Topic={Topic}", _kafka.BusinessKnowledgeSources);
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             int published = 0;
@@ -94,7 +106,7 @@ public sealed class SourcesOutboxWorker : BackgroundService
     private async Task<int> RelayOnceAsync(CancellationToken ct)
     {
         // ── 1. Claim a batch inside a short transaction ──────────────────────
-        List<(Guid Id, string WorkspaceId, string Payload)> claimed;
+        List<(Guid Id, string WorkspaceId, string Payload, DateTime CreatedAt, int Attempts)> claimed;
         {
             await using ApplicationDbContext db = await _dbFactory.CreateDbContextAsync(ct);
             await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction tx =
@@ -128,16 +140,17 @@ public sealed class SourcesOutboxWorker : BackgroundService
             await db.SaveChangesAsync(ct);
             await tx.CommitAsync(ct);
 
-            claimed = batch.Select(r => (r.Id, r.WorkspaceId, r.Payload)).ToList();
+            claimed = batch.Select(r => (r.Id, r.WorkspaceId, r.Payload, r.CreatedAt, r.AttemptCount)).ToList();
         }
 
         // ── 2. Publish to Kafka outside any DB transaction ───────────────────
         int published = 0;
         HashSet<string> replaced = [];
-        foreach ((Guid id, string workspaceId, string payload) in claimed)
+        foreach ((Guid id, string workspaceId, string payload, DateTime createdAt, int attempts) in claimed)
         {
             bool success = false;
             string? errorMessage = null;
+            Exception? failure = null;
             try
             {
                 BusinessSourcesUpdatedMessage? message = BusinessSourcesUpdatedMessage.FromStoredPayload(payload);
@@ -153,6 +166,11 @@ public sealed class SourcesOutboxWorker : BackgroundService
                 {
                     await _bus.PublishAsync(_kafka.BusinessKnowledgeSources, workspaceId, message, ct);
                     published++;
+                    _logger.LogInformation(
+                        "business_knowledge.snapshot_published EventId={EventId} CorrelationId={CorrelationId} WorkspaceId={WorkspaceId} " +
+                        "SnapshotVersion={SnapshotVersion} Trigger={Trigger} Topic={Topic} Attempt={Attempt} WaitedMs={WaitedMs}",
+                        id, message.CorrelationId, workspaceId, message.Data.SnapshotVersion, message.Data.Trigger,
+                        _kafka.BusinessKnowledgeSources, attempts + 1, (long)(DateTime.UtcNow - createdAt).TotalMilliseconds);
                 }
 
                 success = true;
@@ -164,8 +182,7 @@ public sealed class SourcesOutboxWorker : BackgroundService
             catch (Exception ex)
             {
                 errorMessage = ex.Message.Length > 2000 ? ex.Message[..2000] : ex.Message;
-                _logger.LogError(ex, "SourcesOutboxWorker publish failed. EventId={EventId} WorkspaceId={WorkspaceId} AttemptCount will increment.",
-                    id, workspaceId);
+                failure = ex;
             }
 
             // ── 3. Mark each row in its own short transaction ────────────────
@@ -187,12 +204,58 @@ public sealed class SourcesOutboxWorker : BackgroundService
                 // Exponential backoff: 30s, 60s, 2m, 4m … capped at 1h.
                 int backoffSeconds = Math.Min(3600, 30 * (int)Math.Pow(2, row.AttemptCount - 1));
                 row.NextAttemptAt = DateTime.UtcNow.AddSeconds(backoffSeconds);
+                // A missing topic or an unreachable broker reads here as Kafka's own reason ("Unknown topic or partition").
+                _logger.LogError(failure,
+                    "business_knowledge.snapshot_publish_failed EventId={EventId} WorkspaceId={WorkspaceId} Topic={Topic} KafkaBootstrap={KafkaBootstrap} " +
+                    "Attempt={Attempt} NextAttemptAt={NextAttemptAt} Reason={Reason}",
+                    id, workspaceId, _kafka.BusinessKnowledgeSources, _kafka.BootstrapServers, row.AttemptCount, row.NextAttemptAt, errorMessage);
             }
 
             await db.SaveChangesAsync(ct);
         }
 
         return published;
+    }
+
+    // Said once at start, for whoever wonders why Omni has heard nothing: does the topic exist
+    // (topics are never created automatically), and is anything waiting or failing in the outbox.
+    private async Task LogStartupStateAsync(CancellationToken ct)
+    {
+        string topic = _kafka.BusinessKnowledgeSources;
+        if (_bus is KafkaMessageBus kafka)
+        {
+            try
+            {
+                int? partitions = await kafka.PartitionCountAsync(topic, TimeSpan.FromSeconds(10));
+                if (partitions is null)
+                    _logger.LogError(
+                        "business_knowledge.topic_missing Topic={Topic} KafkaBootstrap={KafkaBootstrap}: no snapshot can be sent until it exists. " +
+                        "Topics are not created automatically; add it to kafka-topic-init.",
+                        topic, _kafka.BootstrapServers);
+                else
+                    _logger.LogInformation("business_knowledge.topic_ok Topic={Topic} Partitions={Partitions}", topic, partitions);
+            }
+            catch (KafkaException ex)
+            {
+                _logger.LogError(ex, "business_knowledge.topic_check_failed Topic={Topic} KafkaBootstrap={KafkaBootstrap} Reason={Reason}",
+                    topic, _kafka.BootstrapServers, ex.Error.Reason);
+            }
+        }
+
+        await using ApplicationDbContext db = await _dbFactory.CreateDbContextAsync(ct);
+        IQueryable<OutboxEvent> waiting = db.OutboxEvents.Where(e => e.PublishedAt == null);
+        int pending = await waiting.CountAsync(ct);
+        int failing = await waiting.CountAsync(e => e.AttemptCount > 0, ct);
+        DateTime? oldest = await waiting.MinAsync(e => (DateTime?)e.CreatedAt, ct);
+        double? oldestMinutes = oldest is null ? null : Math.Round((DateTime.UtcNow - oldest.Value).TotalMinutes, 1);
+        if (failing > 0)
+            _logger.LogWarning(
+                "business_knowledge.outbox_backlog Pending={Pending} Failing={Failing} OldestPendingMinutes={OldestPendingMinutes}: " +
+                "each failing row keeps its last error in OutboxEvents.LastError",
+                pending, failing, oldestMinutes);
+        else
+            _logger.LogInformation("business_knowledge.outbox_backlog Pending={Pending} Failing={Failing} OldestPendingMinutes={OldestPendingMinutes}",
+                pending, failing, oldestMinutes);
     }
 
     private async Task QueueCurrentSnapshotAsync(string workspaceId, CancellationToken ct)

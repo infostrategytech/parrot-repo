@@ -252,6 +252,13 @@ builder.Services.AddScoped<Parrot.Web.Features.Dashboard.TaskRequests.TaskReplyD
 
 WebApplication app = builder.Build();
 
+// Where the Knowledge page reads from, said once: a page showing "Coming in phase 6" is a switch, not a bug.
+app.Logger.LogInformation("knowledge.page Source={Source} OmniBaseUrl={OmniBaseUrl}",
+    app.Configuration.GetValue<bool>("OmniAi:Knowledge") ? "omni (read-only)"
+        : app.Configuration.GetValue<bool>("Knowledge:Preview") ? "preview (this browser only)"
+        : "placeholder (OmniAi:Knowledge is off)",
+    omniBaseUrl?.ToString() ?? "(OmniAi:BaseUrl not set)");
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {

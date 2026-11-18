@@ -190,10 +190,22 @@ builder.Services.AddAuthentication(options =>
                 context.Token = token;
             return Task.CompletedTask;
         },
+        // Why Omni's calls to /api/internal were turned away; the responses are unchanged.
+        OnAuthenticationFailed = ctx =>
+        {
+            Parrot.Api.Security.InternalAuthLog.AuthenticationFailed(ctx);
+            return Task.CompletedTask;
+        },
+        OnForbidden = ctx =>
+        {
+            Parrot.Api.Security.InternalAuthLog.Forbidden(ctx);
+            return Task.CompletedTask;
+        },
         // Return 404 for unauthenticated requests so the endpoint's existence
         // is not revealed to anonymous callers.
         OnChallenge = async ctx =>
         {
+            Parrot.Api.Security.InternalAuthLog.Challenged(ctx);
             ctx.HandleResponse();
             ctx.Response.StatusCode = StatusCodes.Status404NotFound;
             ctx.Response.ContentType = "application/json";

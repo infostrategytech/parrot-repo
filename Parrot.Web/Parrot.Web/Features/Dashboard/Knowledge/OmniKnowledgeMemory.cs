@@ -8,7 +8,7 @@ namespace Parrot.Web.Features.Dashboard.Knowledge;
 /// Knowledge page uses it, and only to read: changing knowledge waits on the service's rules for who may write.
 /// On when the web app's configuration says "OmniAi": { "Knowledge": true } (or OmniAi__Knowledge=true).
 /// </summary>
-public sealed class OmniKnowledgeMemory(OmniAiClient omni, IConfiguration configuration) : IKnowledgeMemory
+public sealed class OmniKnowledgeMemory(OmniAiClient omni, IConfiguration configuration, ILogger<OmniKnowledgeMemory> logger) : IKnowledgeMemory
 {
     /// <summary>The service's answer when business knowledge is switched off on its side.</summary>
     public const string KnowledgeUnavailable = "KNOWLEDGE_UNAVAILABLE";
@@ -50,6 +50,11 @@ public sealed class OmniKnowledgeMemory(OmniAiClient omni, IConfiguration config
         facts.AddRange(cards.Where(card => card.Type == "found_detail").Select(ToConfirm));
         List<KnowledgeQuestion> questions = [.. cards.Where(card => card.Type is "customer_question" or "gap_ask").Select(ToQuestion)];
         List<KnowledgeConflict> conflicts = [.. cards.Where(card => card.Type == "disagreement").Select(ToConflict)];
+        // A refused call is logged by the Omni-AI call logger (status, errorCode, traceId); this is what came back.
+        logger.LogInformation(
+            "knowledge.page.loaded Items={Items} Cards={Cards} ToConfirm={ToConfirm} Questions={Questions} Conflicts={Conflicts} UnknownCards={UnknownCards}",
+            items.Count, cards.Count, facts.Count - items.Count, questions.Count, conflicts.Count,
+            cards.Count(card => card.Type is not ("found_detail" or "customer_question" or "gap_ask" or "disagreement")));
         return new KnowledgeSnapshot(facts, questions, conflicts);
     }
 

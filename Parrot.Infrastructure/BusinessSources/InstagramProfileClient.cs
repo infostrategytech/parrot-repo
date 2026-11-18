@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,11 +26,16 @@ public sealed class InstagramProfileClient : IInstagramProfileClient
 
     public async Task<InstagramProfileData?> GetProfileAsync(string igUserId, string accessToken, CancellationToken ct)
     {
-        string url = $"/{_apiVersion}/{igUserId}?fields=name,biography,website,followers_count,profile_picture_url&access_token={accessToken}";
+        string url = $"/{_apiVersion}/{igUserId}?fields=name,biography,website,followers_count,profile_picture_url";
         _logger.LogDebug("instagram.profile.fetch_start IgUserId={IgUserId} ApiVersion={ApiVersion}", igUserId, _apiVersion);
         try
         {
-            ProfileResponse? response = await _http.GetFromJsonAsync<ProfileResponse>(url, ct);
+            (ProfileResponse? response, MetaGraph.Refusal? refused) = await MetaGraph.GetAsync<ProfileResponse>(_http, url, accessToken, ct);
+            if (refused is not null)
+            {
+                MetaGraph.LogRefused(_logger, "instagram.profile", igUserId, _apiVersion, refused);
+                return null;
+            }
             if (response is null)
             {
                 _logger.LogWarning("instagram.profile.fetch_empty IgUserId={IgUserId}", igUserId);

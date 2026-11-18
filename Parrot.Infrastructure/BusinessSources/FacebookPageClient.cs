@@ -1,4 +1,3 @@
-using System.Net.Http.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -27,11 +26,16 @@ public sealed class FacebookPageClient : IFacebookPageClient
 
     public async Task<FacebookPageData?> GetPageAsync(string pageId, string accessToken, CancellationToken ct)
     {
-        string url = $"/{_apiVersion}/{pageId}?fields=name,about,description,website,category,fan_count&access_token={accessToken}";
+        string url = $"/{_apiVersion}/{pageId}?fields=name,about,description,website,category,fan_count";
         _logger.LogDebug("facebook.page.fetch_start PageId={PageId} ApiVersion={ApiVersion}", pageId, _apiVersion);
         try
         {
-            PageResponse? response = await _http.GetFromJsonAsync<PageResponse>(url, ct);
+            (PageResponse? response, MetaGraph.Refusal? refused) = await MetaGraph.GetAsync<PageResponse>(_http, url, accessToken, ct);
+            if (refused is not null)
+            {
+                MetaGraph.LogRefused(_logger, "facebook.page", pageId, _apiVersion, refused);
+                return null;
+            }
             if (response is null)
             {
                 _logger.LogWarning("facebook.page.fetch_empty PageId={PageId}", pageId);

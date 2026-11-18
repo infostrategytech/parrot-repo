@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Npgsql;
 using Parrot.Application.Contracts.BusinessSources;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Application.Models;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
@@ -49,7 +51,8 @@ public sealed class BusinessSourceCredentialsPostgresTests : IAsyncLifetime
             new StubFacebookProtector(),
             Options.Create(new WhatsAppSettings()),
             Options.Create(new InstagramSettings()),
-            Options.Create(new FacebookSettings()));
+            Options.Create(new FacebookSettings()),
+            new AppLogger<BusinessSourceCredentialsService>(NullLogger<BusinessSourceCredentialsService>.Instance));
 
     // Seeds one WhatsApp connection + source for workspace ws-a and returns the source id.
     private async Task<(Guid SourceId, Guid ConnectionId)> SeedWhatsAppAsync(

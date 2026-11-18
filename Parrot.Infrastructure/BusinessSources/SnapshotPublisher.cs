@@ -66,11 +66,16 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
 
         // The outbox row's id is the event id, so a retried row is the same event to Omni.
         Guid eventId = Guid.NewGuid();
-        string payload = BuildPayload(eventId, state.SnapshotVersion, trigger, workspace, workspace.Name, sources, connectionWabaIds);
+        BusinessSourcesUpdatedMessage message = BuildMessage(eventId, state.SnapshotVersion, trigger, workspace, workspace.Name, sources, connectionWabaIds);
+        // Use MessageJson.Options so the payload is consistent with what KafkaMessageBus
+        // would produce if the typed message were published directly.
+        string payload = JsonSerializer.Serialize(message, MessageJson.Options);
 
         _logger.LogInformation(
-            "business_knowledge.snapshot_payload WorkspaceId={WorkspaceId} SnapshotVersion={SnapshotVersion} Trigger={Trigger} SourceCount={SourceCount} Payload={Payload}",
-            workspaceId, state.SnapshotVersion, trigger, sources.Count, payload);
+            "business_knowledge.snapshot_payload EventId={EventId} CorrelationId={CorrelationId} WorkspaceId={WorkspaceId} TenantId={TenantId} " +
+            "SnapshotVersion={SnapshotVersion} Trigger={Trigger} SourceCount={SourceCount} Payload={Payload}",
+            eventId, message.CorrelationId, workspaceId, workspace.OwnerId, state.SnapshotVersion, trigger, sources.Count,
+            JsonSerializer.Serialize(ForLog(message), MessageJson.Options));
 
         OutboxEvent outbox = new OutboxEvent
         {
@@ -82,8 +87,10 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         _db.OutboxEvents.Add(outbox);
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("business_knowledge.snapshot_queued SnapshotVersion={SnapshotVersion} WorkspaceId={WorkspaceId} Sources={SourceCount} OutboxEventId={OutboxEventId}",
-            state.SnapshotVersion, workspaceId, sources.Count, outbox.Id);
+        _logger.LogInformation(
+            "business_knowledge.snapshot_queued EventId={EventId} CorrelationId={CorrelationId} WorkspaceId={WorkspaceId} SnapshotVersion={SnapshotVersion} " +
+            "Trigger={Trigger} Sources={SourceCount}",
+            outbox.Id, message.CorrelationId, workspaceId, state.SnapshotVersion, trigger, sources.Count);
     }
 
     private async Task<Dictionary<Guid, string?>> LoadWabaIdsAsync(IReadOnlyList<BusinessSource> sources, CancellationToken ct)
@@ -104,7 +111,7 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             .ToDictionaryAsync(c => c.Id, c => c.WhatsAppBusinessAccountId, ct);
     }
 
-    private static string BuildPayload(
+    private static BusinessSourcesUpdatedMessage BuildMessage(
         Guid eventId,
         long snapshotVersion,
         SnapshotTrigger trigger,
@@ -129,10 +136,24 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             },
         };
 
-        // Use MessageJson.Options so the payload is consistent with what KafkaMessageBus
-        // would produce if the typed message were published directly.
-        return JsonSerializer.Serialize(message, MessageJson.Options);
+        return message;
     }
+
+    // What the log shows: the same message with the business's phone, email and address masked.
+    private static BusinessSourcesUpdatedMessage ForLog(BusinessSourcesUpdatedMessage message) => message with
+    {
+        Data = message.Data with
+        {
+            Sources =
+            [
+                .. message.Data.Sources.Select(source => source with
+                {
+                    Handle = source.Channel == "whatsapp" ? LogMask.Phone(source.Handle) : source.Handle,
+                    Text = LogMask.ProfileJson(source.Text),
+                }),
+            ],
+        },
+    };
 
     private static SourceEntry ToEntry(BusinessSource source, IReadOnlyDictionary<Guid, string?> connectionWabaIds)
     {
