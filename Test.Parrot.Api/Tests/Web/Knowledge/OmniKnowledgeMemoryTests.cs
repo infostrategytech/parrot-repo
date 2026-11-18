@@ -111,6 +111,23 @@ public class OmniKnowledgeMemoryTests
         Assert.False(new Fixture(on: false).Store.Enabled);
     }
 
+    // A switch left empty (OmniAi__Knowledge=) or mistyped must mean off, never stop the web app from starting.
+    [Theory]
+    [InlineData(null, false)]
+    [InlineData("", false)]
+    [InlineData("yes", false)]
+    [InlineData("false", false)]
+    [InlineData("true", true)]
+    [InlineData("True", true)]
+    public void IsOn_ReadsAMissingEmptyOrMistypedSwitchAsOff(string? value, bool expected)
+    {
+        IConfiguration configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?> { ["OmniAi:Knowledge"] = value })
+            .Build();
+
+        Assert.Equal(expected, OmniKnowledgeMemory.IsOn(configuration, "OmniAi:Knowledge"));
+    }
+
     private sealed class Fixture
     {
         public Routes Omni { get; } = new();

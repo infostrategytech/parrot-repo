@@ -33,7 +33,13 @@ public sealed class OmniKnowledgeMemory(OmniAiClient omni, IConfiguration config
     // Where the owner said it themselves: there is no "found on" to show.
     private static readonly HashSet<string> OwnOrigins = ["manual", "owner_input", "test_chat"];
 
-    public bool Enabled => configuration.GetValue("OmniAi:Knowledge", false);
+    public bool Enabled => IsOn(configuration, "OmniAi:Knowledge");
+
+    /// <summary>
+    /// A switch that is on only when it says "true". GetValue&lt;bool&gt; throws on an empty value
+    /// (OmniAi__Knowledge= in a compose file), which would stop the app; missing, empty or mistyped is off.
+    /// </summary>
+    public static bool IsOn(IConfiguration configuration, string key) => bool.TryParse(configuration[key], out bool on) && on;
 
     public bool Available => Enabled;
 
