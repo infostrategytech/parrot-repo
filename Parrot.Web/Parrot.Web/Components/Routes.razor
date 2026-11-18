@@ -54,8 +54,14 @@
         || new Uri(Nav.Uri).AbsolutePath.StartsWith("/invite/", StringComparison.OrdinalIgnoreCase)
         || IsCheckoutPath();
 
-    // A customer's checkout link, opened from a chat: never signed in, and never sent to sign-in.
-    private bool IsCheckoutPath() => new Uri(Nav.Uri).AbsolutePath.StartsWith("/checkout/", StringComparison.OrdinalIgnoreCase);
+    // A customer's checkout link, opened from a chat, and the page the payment provider sends them back to:
+    // never signed in, and never sent to sign-in.
+    private bool IsCheckoutPath()
+    {
+        var path = new Uri(Nav.Uri).AbsolutePath;
+        return path.StartsWith("/checkout/", StringComparison.OrdinalIgnoreCase)
+            || path.TrimEnd('/').Equals("/payment/complete", StringComparison.OrdinalIgnoreCase);
+    }
 
     protected override void OnInitialized()
     {

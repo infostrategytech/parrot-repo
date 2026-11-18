@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging;
@@ -10,8 +11,8 @@ using Parrot.Application.Payments;
 namespace Parrot.Infrastructure.Payments;
 
 /// <summary>
-/// The platform's Accelerate account (iStrategy's payments API). It logs in with the
-/// account's public and secret keys for a bearer token that lasts a day, keeps it in
+/// The platform's Accelerate account (iStrategy's payments API). It trades the account's
+/// public and secret keys (Basic auth, on the user-management API) for a bearer token that lasts a day, keeps it in
 /// <see cref="AccelerateSession"/>, and logs in again when it's refused.
 /// Docs: https://istrategytech.gitbook.io/accelerate-1/api-documentation/payments/payment-links
 /// </summary>
@@ -26,11 +27,12 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
 
     public string Name => ProviderName;
 
-    public bool IsConfigured => !string.IsNullOrWhiteSpace(Keys.PublicKey) && !string.IsNullOrWhiteSpace(Keys.SecretKey) && http.BaseAddress is not null;
+    public bool IsConfigured => !string.IsNullOrWhiteSpace(Keys.PublicKey) && !string.IsNullOrWhiteSpace(Keys.SecretKey) && http.BaseAddress is not null
+        && Uri.TryCreate(Keys.AuthBaseUrl, UriKind.Absolute, out _);
 
     private AccelerateSettings Keys => settings.Value.Accelerate;
 
-    public async Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, CancellationToken ct)
+    public async Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, string? returnUrl, CancellationToken ct)
     {
         if (!IsConfigured)
         {
@@ -42,7 +44,13 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
             throw new PaymentProviderException("The amount must be at least 1 kobo.");
         }
 
-        object body = new { PayAmount = amountMinor, Reference = reference, CallbackUrl = settings.Value.CallbackUrl, Description = description };
+        string? callback = string.IsNullOrWhiteSpace(returnUrl) ? settings.Value.CallbackUrl : returnUrl;
+        if (string.IsNullOrWhiteSpace(callback))
+        {
+            throw new PaymentProviderException("There's no page to send the customer back to after paying.");
+        }
+
+        object body = new { PayAmount = amountMinor, Reference = reference, CallbackUrl = callback, Description = description };
 
         // A token the account no longer accepts is replaced once.
         HttpResponseMessage response = await SendAsync(body, await session.TokenAsync(LoginAsync, ct), ct);
@@ -58,7 +66,7 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
             Answer<TicketData>? answer = await ReadAsync<Answer<TicketData>>(response, ct);
             if (response.IsSuccessStatusCode && answer is { Success: true, OperationCode: Success, Data: { SessionToken.Length: > 0, RedirectUrl.Length: > 0 } data })
             {
-                return new PaymentLink(data.SessionToken, data.RedirectUrl);
+                return new PaymentLink(data.SessionToken, PayPage(data.RedirectUrl, reference));
             }
 
             string code = answer?.OperationCode ?? ((int)response.StatusCode).ToString();
@@ -67,6 +75,17 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
                 ? "Accelerate's rate limit was reached."
                 : answer?.Message ?? $"Accelerate answered {(int)response.StatusCode}.", code);
         }
+    }
+
+    /// <summary>
+    /// Accelerate answers with its payment page and an empty query ("https://accelerate.ng/payment?"); the page finds
+    /// the payment from ?ref=, which takes our reference (or the session token, a 1,300-character JWT).
+    /// </summary>
+    private static string PayPage(string redirectUrl, string reference)
+    {
+        if (redirectUrl.Contains("ref=", StringComparison.OrdinalIgnoreCase)) return redirectUrl;
+        string separator = redirectUrl.EndsWith('?') || redirectUrl.EndsWith('&') ? "" : redirectUrl.Contains('?') ? "&" : "?";
+        return $"{redirectUrl}{separator}ref={Uri.EscapeDataString(reference)}";
     }
 
     private async Task<HttpResponseMessage> SendAsync(object body, string token, CancellationToken ct)
@@ -79,8 +98,10 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
 
     private async Task<string> LoginAsync(CancellationToken ct)
     {
-        using HttpRequestMessage request = new (HttpMethod.Post, "auth/login");
-        request.Content = JsonContent.Create(new { Username = Keys.PublicKey, Password = Keys.SecretKey }, options: Json);
+        // An API client's token comes from Accelerate's user-management API, not the payments host the client is
+        // based on: GET with the public and secret keys as Basic credentials.
+        using HttpRequestMessage request = new (HttpMethod.Get, new Uri(new Uri(Keys.AuthBaseUrl.TrimEnd('/') + "/"), "auth/api-client/token"));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Keys.PublicKey}:{Keys.SecretKey}")));
         using HttpResponseMessage response = await Guard(() => http.SendAsync(request, ct), ct);
         LoginAnswer? answer = await ReadAsync<LoginAnswer>(response, ct);
         if (response.IsSuccessStatusCode && answer?.Data?.Token is { Length: > 0 } token)
@@ -88,7 +109,7 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
             return token;
         }
 
-        logger.LogError("Accelerate login failed. Status={Status} GotToken={GotToken}", (int)response.StatusCode, answer?.Data?.Token is { Length: > 0 });
+        logger.LogError("Accelerate login failed. Status={Status} GotToken={GotToken} Message={Message}", (int)response.StatusCode, answer?.Data?.Token is { Length: > 0 }, answer?.Message);
         throw new PaymentProviderException("Accelerate wouldn't log in with the configured keys.", ((int)response.StatusCode).ToString());
     }
 
@@ -127,7 +148,7 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
     private sealed record Answer<T>(bool Success, string? Message, string? OperationCode, T? Data);
 
     // Login answers {status, data: {token, expires_in}}.
-    private sealed record LoginAnswer(LoginData? Data);
+    private sealed record LoginAnswer(LoginData? Data, string? Message);
 
     private sealed record LoginData(string? Token);
 

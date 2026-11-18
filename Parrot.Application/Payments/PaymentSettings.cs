@@ -15,8 +15,11 @@ public sealed class PaymentSettings
     /// <summary>Default: how long a checkout link stays open.</summary>
     public int CheckoutMinutes { get; set; } = 30;
 
-    /// <summary>Default: how long the payment link (and any stock held for it) stays open after Pay is pressed.</summary>
-    public int LinkMinutes { get; set; } = 15;
+    /// <summary>
+    /// Default: how long the payment link (and any stock held for it) stays open after Pay is pressed. Accelerate's
+    /// links never expire on their side, so this is the only limit; it's generous enough for a customer to finish.
+    /// </summary>
+    public int LinkMinutes { get; set; } = 30;
 
     /// <summary>Default: when stock is kept aside.</summary>
     public Parrot.Domain.Entities.CheckoutHoldMode HoldMode { get; set; } = Parrot.Domain.Entities.CheckoutHoldMode.AtPay;
@@ -30,7 +33,10 @@ public sealed class PaymentSettings
     /// </summary>
     public string? CheckoutBaseUrl { get; set; }
 
-    /// <summary>Where the customer lands after paying. A public page.</summary>
+    /// <summary>
+    /// Where the customer lands after paying when there's no checkout to send them back to. Checkouts send the
+    /// customer back to their own checkout page, so this is only a fallback.
+    /// </summary>
     public string? CallbackUrl { get; set; }
 
     public AccelerateSettings Accelerate { get; set; } = new ();
@@ -39,8 +45,11 @@ public sealed class PaymentSettings
 /// <summary>The platform's Accelerate account. The keys come from the environment, never from a committed file.</summary>
 public sealed class AccelerateSettings
 {
-    /// <summary>The payments API; the sandbox unless set.</summary>
-    public string BaseUrl { get; set; } = "https://staging.payment.irechargetech.com";
+    /// <summary>The payments API: production unless set (the sandbox is https://staging.payment.irechargetech.com).</summary>
+    public string BaseUrl { get; set; } = "https://prod.payment.irechargetech.com";
+
+    /// <summary>Where the keys are exchanged for a token (GET auth/api-client/token): a separate user-management API, not the payments one.</summary>
+    public string AuthBaseUrl { get; set; } = "https://prod.user-mgt.irechargetech.com/api/v1";
 
     public string? PublicKey { get; set; }
 

@@ -9,9 +9,12 @@ public interface IPaymentProvider
     /// <summary>Whether its keys and addresses are set. Without them no link can be made.</summary>
     bool IsConfigured { get; }
 
-    /// <summary>A link for <paramref name="amountMinor"/> (kobo) under our <paramref name="reference"/>.</summary>
+    /// <summary>
+    /// A link for <paramref name="amountMinor"/> (kobo) under our <paramref name="reference"/>. After paying, the
+    /// customer is sent to <paramref name="returnUrl"/> (their checkout), or to the configured callback when it's null.
+    /// </summary>
     /// <exception cref="PaymentProviderException">The provider refused, failed or couldn't be reached.</exception>
-    Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, CancellationToken ct);
+    Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, string? returnUrl, CancellationToken ct);
 }
 
 /// <param name="SessionId">The provider's id for the payment.</param>

@@ -247,7 +247,8 @@ public sealed class CheckoutService(
         PaymentLink link;
         try
         {
-            link = await provider.CreateLinkAsync(starting.Reference, total, description, ct);
+            // After paying, Accelerate sends the customer back to this checkout, which waits for the webhook.
+            link = await provider.CreateLinkAsync(starting.Reference, total, description, links.ReturnFor(starting), ct);
         }
         catch (PaymentProviderException ex)
         {
@@ -400,9 +401,9 @@ public sealed class CheckoutService(
             throw new CheckoutUnavailableException("Checkouts aren't set up yet. Tell the customer the business will send payment details.");
         }
 
-        if (paying && (!provider.IsConfigured || string.IsNullOrWhiteSpace(settings.Value.CallbackUrl)))
+        if (paying && !provider.IsConfigured)
         {
-            logger.LogError("Pay was pressed but the payment provider or its callback URL isn't configured.");
+            logger.LogError("Pay was pressed but the payment provider isn't configured.");
             throw new CheckoutUnavailableException("Payment can't be taken right now. Try again later, or message the business to pay another way.");
         }
     }

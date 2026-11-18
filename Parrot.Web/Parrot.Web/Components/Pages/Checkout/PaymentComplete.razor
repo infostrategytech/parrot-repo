@@ -1,0 +1,22 @@
+@page "/payment/complete"
+@layout BareLayout
+
+<PageTitle>Payment received</PageTitle>
+
+@* Where Accelerate sends a customer after paying when it has no checkout to send them back to: the
+   Payments:CallbackUrl fallback (PAYMENT_CALLBACK_URL). Signed out, on a phone, straight from the payment page,
+   so it is a plain thank-you with no app chrome, and never the sign-in page (Routes lets /payment/ through).
+   It doesn't claim the order is paid: that is the provider's webhook's to say, and the business hears of it from
+   the webhook. *@
+<main class="payment-complete">
+    <section class="payment-complete__card" role="status">
+        <span class="payment-complete__icon"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Lg" /></span>
+        <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1">Thanks for your payment</Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            We're confirming it now, and the business is told as soon as it's through.
+        </Typography>
+        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+            You can close this page and go back to the chat. Please don't pay again.
+        </Typography>
+    </section>
+</main>

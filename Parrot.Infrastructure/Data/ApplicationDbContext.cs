@@ -412,8 +412,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(o => o.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(o => o.Currency).HasMaxLength(3).IsRequired();
             entity.Property(o => o.Provider).HasMaxLength(32).IsRequired();
-            entity.Property(o => o.ProviderSessionId).HasMaxLength(256);
-            entity.Property(o => o.PaymentUrl).HasMaxLength(2048);
+            // Accelerate's session token is a long JWT, so no limit.
+            entity.Property(o => o.ProviderSessionId);
+            entity.Property(o => o.PaymentUrl).HasMaxLength(4096);
             entity.Property(o => o.FailureReason).HasMaxLength(500);
             entity.Property(o => o.ProviderTransactionId).HasMaxLength(256);
             entity.Property(o => o.AttentionReason).HasMaxLength(1000);
