@@ -194,6 +194,8 @@ builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.BusinessKind>(
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.AgentReadiness>();
 // Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
+// The Knowledge page from the AI service's business knowledge, read-only, when "OmniAi:Knowledge" is on.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.OmniKnowledgeMemory>();
 // Products & Services: kept by the catalog service (CatalogApi:BaseUrl), called as the signed-in person.
 // Without one, items last for the session.
 if (Uri.TryCreate(builder.Configuration["CatalogApi:BaseUrl"], UriKind.Absolute, out var catalogUri))

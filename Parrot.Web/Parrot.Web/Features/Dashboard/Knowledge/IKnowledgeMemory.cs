@@ -52,6 +52,9 @@ public interface IKnowledgeMemory
     /// <summary>Whether a website or social link can be read for details.</summary>
     bool CanReadLinks => true;
 
+    /// <summary>Whether knowledge can be added, changed or decided on here; false while the store only reads.</summary>
+    bool CanEdit => true;
+
     Task<KnowledgeSnapshot> ListAsync(CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -3,6 +3,7 @@
 @layout DashboardLayout
 @inject Parrot.Web.Features.Dashboard.Knowledge.IKnowledgeMemory Memory
 @inject Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview Preview
+@inject Parrot.Web.Features.Dashboard.Knowledge.OmniKnowledgeMemory Omni
 
 <PageTitle>Knowledge · yára</PageTitle>
 
@@ -13,6 +14,11 @@
 @if (Memory.Available)
 {
     <KnowledgeMemory />
+}
+else if (Omni.Enabled)
+{
+    @* What the AI service knows, read-only until it says who may change it. *@
+    <KnowledgeMemory Store="Omni" />
 }
 else if (Preview.Enabled)
 {

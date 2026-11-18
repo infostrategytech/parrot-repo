@@ -68,7 +68,7 @@
                                         </div>
                                     }
                                 }
-                                else
+                                else if (CanTeach)
                                 {
                                     <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Class="knowledge-test__teach" @onclick="() => Teach(turn.Question)">
                                         <IconLeft><Icon Name="IconName.RiBookOpenFill" /></IconLeft>
@@ -120,6 +120,9 @@
     [Parameter] public IReadOnlyList<KnowledgeFact> Facts { get; set; } = [];
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback<string> OnTeach { get; set; }
+
+    /// <summary>Whether an unanswered question can be taught from here (off while knowledge is read-only).</summary>
+    [Parameter] public bool CanTeach { get; set; } = true;
 
     private sealed class TestTurn
     {
