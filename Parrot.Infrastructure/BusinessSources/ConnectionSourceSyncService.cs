@@ -94,7 +94,7 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
                         .SetProperty(s => s.UpdatedAt, DateTime.UtcNow), ct);
             }
 
-            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.ManualRefresh, ct);
+            await _publisher.PublishAsync(workspaceId, SnapshotTrigger.CatalogSynced, ct);
             await tx.CommitAsync(ct);
 
             _logger.LogInformation("whatsapp.catalog.source.synced WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} CatalogId={CatalogId}",

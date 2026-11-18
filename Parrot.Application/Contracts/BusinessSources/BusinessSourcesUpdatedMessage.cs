@@ -14,7 +14,11 @@ namespace Parrot.Application.Contracts.BusinessSources;
 /// </summary>
 public sealed record BusinessSourcesUpdatedMessage
 {
-    public const int CurrentSchemaVersion = 2;
+    /// <summary>
+    /// Omni's contract version for this event: 1, for this camelCase shape with the snapshot under data.
+    /// A separate counter from messages.persisted's 2; Omni refuses any other value.
+    /// </summary>
+    public const int CurrentSchemaVersion = 1;
 
     /// <summary>Stable identifier for this specific Kafka event; consumers use it for idempotency.</summary>
     [JsonPropertyName("eventId")]
@@ -35,17 +39,22 @@ public sealed record BusinessSourcesUpdatedMessage
 
     /// <summary>
     /// Reads a payload the outbox stored, so it is published as the typed message (not a JSON string).
-    /// Null for a row queued before schema 2, whose shape Omni can't read.
+    /// Null for a row queued in an older shape Omni can't read: snake_case, flat camelCase (the same
+    /// version number, so the shape decides), or the short-lived schemaVersion 2.
     /// </summary>
     public static BusinessSourcesUpdatedMessage? FromStoredPayload(string payload)
     {
         using JsonDocument document = JsonDocument.Parse(payload);
-        bool isCurrent = document.RootElement.TryGetProperty("schemaVersion", out JsonElement version)
+        JsonElement root = document.RootElement;
+        bool isCurrent = root.TryGetProperty("schemaVersion", out JsonElement version)
             && version.ValueKind == JsonValueKind.Number
-            && version.GetInt32() == CurrentSchemaVersion;
+            && version.GetInt32() == CurrentSchemaVersion
+            && root.TryGetProperty("data", out JsonElement data)
+            && data.ValueKind == JsonValueKind.Object
+            && data.TryGetProperty("workspaceId", out _);
         if (!isCurrent) return null;
 
-        return document.RootElement.Deserialize<BusinessSourcesUpdatedMessage>(MessageJson.Options)
+        return root.Deserialize<BusinessSourcesUpdatedMessage>(MessageJson.Options)
             ?? throw new InvalidOperationException("Outbox payload deserialized as null.");
     }
 }

@@ -42,7 +42,7 @@ public sealed class SnapshotPublisherPostgresTests : IAsyncLifetime
     }
 
     [PostgresFact]
-    public async Task PublishAsync_QueuesSchemaTwoWithTheOwnerAsTenantAndTheTrigger()
+    public async Task PublishAsync_QueuesVersionOneWithTheOwnerAsTenantAndTheTrigger()
     {
         await using (ApplicationDbContext seed = new(_options!))
         {
@@ -87,7 +87,7 @@ public sealed class SnapshotPublisherPostgresTests : IAsyncLifetime
 
         // The outbox row's id is the event id, so a retried row is the same event to Omni.
         Assert.Equal(queued.Id.ToString(), root.GetProperty("eventId").GetString());
-        Assert.Equal(2, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
         Assert.False(string.IsNullOrEmpty(root.GetProperty("correlationId").GetString()));
         Assert.Equal("ws-a", data.GetProperty("workspaceId").GetString());
         Assert.Equal("owner", data.GetProperty("tenantId").GetString());

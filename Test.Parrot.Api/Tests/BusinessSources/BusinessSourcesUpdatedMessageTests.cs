@@ -5,7 +5,7 @@ using Parrot.Domain.Enums;
 
 namespace Test.Parrot.Api.Tests.BusinessSources;
 
-// The business.knowledge.sources wire contract (schema 2): camelCase, the snapshot nested under data.
+// The business.knowledge.sources wire contract (Omni's version 1): camelCase, the snapshot nested under data.
 public sealed class BusinessSourcesUpdatedMessageTests
 {
     private static BusinessSourcesUpdatedMessage Message() => new()
@@ -48,7 +48,7 @@ public sealed class BusinessSourcesUpdatedMessageTests
         JsonElement data = root.GetProperty("data");
 
         Assert.Equal(["eventId", "schemaVersion", "occurredAt", "correlationId", "data"], root.EnumerateObject().Select(p => p.Name));
-        Assert.Equal(2, root.GetProperty("schemaVersion").GetInt32());
+        Assert.Equal(1, root.GetProperty("schemaVersion").GetInt32());
         Assert.Equal(["workspaceId", "tenantId", "trigger", "snapshotVersion", "business", "sources"], data.EnumerateObject().Select(p => p.Name));
         Assert.Equal("owner-1", data.GetProperty("tenantId").GetString());
         Assert.Equal("ManualRefresh", data.GetProperty("trigger").GetString());
@@ -64,6 +64,7 @@ public sealed class BusinessSourcesUpdatedMessageTests
     [InlineData(SnapshotTrigger.ManualRefresh, "ManualRefresh")]
     [InlineData(SnapshotTrigger.Scheduled, "Scheduled")]
     [InlineData(SnapshotTrigger.WorkspaceCreated, "WorkspaceCreated")]
+    [InlineData(SnapshotTrigger.CatalogSynced, "CatalogSynced")]
     public void Serialize_WritesEachTriggerAsTheAgreedName(SnapshotTrigger trigger, string expected)
     {
         BusinessSourcesUpdatedMessage message = Message() with { Data = Message().Data with { Trigger = trigger } };
@@ -74,7 +75,7 @@ public sealed class BusinessSourcesUpdatedMessageTests
     }
 
     [Fact]
-    public void FromStoredPayload_WhenSchemaTwo_ReadsItBackUnchanged()
+    public void FromStoredPayload_WhenTheCurrentShape_ReadsItBackUnchanged()
     {
         string stored = JsonSerializer.Serialize(Message(), MessageJson.Options);
 
@@ -87,7 +88,8 @@ public sealed class BusinessSourcesUpdatedMessageTests
     [Theory]
     [InlineData("""{"event_id":"evt-1","schema_version":1,"workspace_id":"ws-a","snapshot_version":3,"data":{"name":"Adire House"},"sources":[]}""")]
     [InlineData("""{"eventId":"evt-1","schemaVersion":1,"workspaceId":"ws-a","snapshotVersion":3,"data":{"name":"Adire House"},"sources":[]}""")]
-    public void FromStoredPayload_WhenQueuedBeforeSchemaTwo_ReturnsNull(string stored)
+    [InlineData("""{"eventId":"evt-1","schemaVersion":2,"occurredAt":"2026-11-18T10:00:00.000000+00:00","correlationId":"c","data":{"workspaceId":"ws-a","tenantId":"o","trigger":"Scheduled","snapshotVersion":1,"business":{"name":"A"},"sources":[]}}""")]
+    public void FromStoredPayload_WhenQueuedInAnOlderShape_ReturnsNull(string stored)
     {
         Assert.Null(BusinessSourcesUpdatedMessage.FromStoredPayload(stored));
     }

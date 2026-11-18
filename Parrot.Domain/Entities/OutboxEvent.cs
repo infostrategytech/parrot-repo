@@ -14,7 +14,7 @@ public class OutboxEvent
     /// <summary>Kafka partition key.</summary>
     public required string WorkspaceId { get; set; }
 
-    /// <summary>Serialized <c>BusinessSourcesUpdatedMessage</c> (JSON, camelCase; schema 2 nests the snapshot under data).</summary>
+    /// <summary>Serialized <c>BusinessSourcesUpdatedMessage</c> (JSON, camelCase, the snapshot under data).</summary>
     public required string Payload { get; set; }
 
     public DateTime CreatedAt { get; set; }

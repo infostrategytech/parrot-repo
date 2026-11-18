@@ -156,10 +156,10 @@ public sealed class SourcesOutboxWorker : BackgroundService
                 BusinessSourcesUpdatedMessage? message = BusinessSourcesUpdatedMessage.FromStoredPayload(payload);
                 if (message is null)
                 {
-                    // Queued before schema 2, a shape Omni can't read. The workspace as it is now
+                    // Queued in an older shape Omni can't read. The workspace as it is now
                     // replaces it: a snapshot is the whole picture, so nothing is lost.
                     if (replaced.Add(workspaceId)) await QueueCurrentSnapshotAsync(workspaceId, ct);
-                    errorMessage = "Not sent: queued before schema 2 and replaced by a new snapshot.";
+                    errorMessage = "Not sent: queued in an older shape and replaced by a new snapshot.";
                     _logger.LogWarning("business_knowledge.snapshot_replaced EventId={EventId} WorkspaceId={WorkspaceId}", id, workspaceId);
                 }
                 else

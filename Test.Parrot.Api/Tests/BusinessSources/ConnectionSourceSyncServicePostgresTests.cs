@@ -133,14 +133,15 @@ public sealed class ConnectionSourceSyncServicePostgresTests : IAsyncLifetime
     }
 
     [PostgresFact]
-    public async Task SyncWhatsAppCatalogAsync_QueuesManualRefresh()
+    // Not ManualRefresh: that makes Omni pay to re-read every channel on each catalogue sync.
+    public async Task SyncWhatsAppCatalogAsync_QueuesCatalogSynced()
     {
         await using (ApplicationDbContext db = new(_options!))
         {
             await Service(db).SyncWhatsAppCatalogAsync("ws-a", Guid.NewGuid(), "catalog-1");
         }
 
-        Assert.Equal("ManualRefresh", (await QueuedDataAsync()).GetProperty("trigger").GetString());
+        Assert.Equal("CatalogSynced", (await QueuedDataAsync()).GetProperty("trigger").GetString());
     }
 
     [PostgresFact]
