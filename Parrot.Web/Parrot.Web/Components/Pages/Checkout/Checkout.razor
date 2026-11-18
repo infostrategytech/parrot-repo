@@ -5,13 +5,16 @@
 @inject CheckoutClient Checkouts
 @inject NavigationManager Navigation
 @inject UserClock Clock
+@implements IDisposable
 
 <PageTitle>@(_view is null ? "Checkout" : $"Checkout · {_view.Business}")</PageTitle>
 
 @* The link an agent sends a customer in WhatsApp or Instagram: what they're buying from whom, what it costs now,
    and one button to pay. Opened on a phone, signed out (Routes lets /checkout/ through), so it is the business's
    page, not yára's: no app chrome. The prices come from the API as they are now; when they differ from what the
-   business sent, the old one is struck through beside the new. *@
+   business sent, the old one is struck through beside the new.
+   After paying, Accelerate sends the customer back here with ?paid=1: the page then waits for the payment to be
+   confirmed (the provider's webhook), rather than offering to pay again. *@
 <main class="checkout">
     <div class="checkout__panel">
         @if (_invalid)
@@ -49,7 +52,15 @@
                 }
             </header>
 
-            @if (Ended(view.State))
+            @if (_waiting)
+            {
+                <section class="checkout__status checkout__status--paying" role="status" aria-busy="true">
+                    <span class="checkout__status-icon"><Icon Name="IconName.RiTimerFill" Size="IconSize.Lg" /></span>
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">Finishing your payment…</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>We're waiting for the payment to be confirmed. This usually takes a few seconds.</Typography>
+                </section>
+            }
+            else if (Ended(view.State))
             {
                 @* Paid, expired, replaced or no longer available: what happened is the page. A paid one keeps its
                    items, as a receipt. *@
@@ -58,6 +69,11 @@
                     <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2">@StateTitle(view.State)</Typography>
                     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@(view.Message ?? StateFallback(view.State))</Typography>
                 </section>
+            }
+
+            @if (_unconfirmed && view.State != "paid")
+            {
+                <InlineError Tone="InlineErrorTone.Info" Message="We haven't had confirmation of your payment yet. If you've paid, don't pay again: the business will confirm it with you." />
             }
 
             @if (!Ended(view.State) || view.State == "paid")
@@ -110,7 +126,7 @@
                 </section>
             }
 
-            @if (!Ended(view.State))
+            @if (!Ended(view.State) && !_waiting)
             {
                 <div class="checkout__actions">
                     @* Why the last Pay didn't go through (the total changed, say): above everything else it bears on. *@
@@ -165,6 +181,16 @@
 @code {
     [Parameter] public string Token { get; set; } = "";
 
+    // Set on the address Accelerate sends the customer back to after paying.
+    [SupplyParameterFromQuery(Name = "paid")] public string? Paid { get; set; }
+
+    // Back from paying: how often, and for how long, to look for the payment's confirmation.
+    private static readonly TimeSpan PollEvery = TimeSpan.FromSeconds(3);
+    private const int PollTimes = 40;
+
+    private readonly CancellationTokenSource _stop = new();
+    private bool _waiting, _unconfirmed;
+
     private CheckoutView? _view;
     private bool _invalid, _loading, _paying;
     private string? _loadError, _payError, _notice;
@@ -176,6 +202,41 @@
         await Clock.ReadAsync();
         await LoadAsync();
         StateHasChanged();
+        if (Paid == "1" && _view?.State is "paying" or "expired")
+        {
+            await WaitForPaymentAsync();
+        }
+    }
+
+    // Back from the payment page before its webhook has arrived: look again every few seconds until it's paid.
+    // A link that ran out on our side can still have been paid there, so an expired checkout is waited on too.
+    private async Task WaitForPaymentAsync()
+    {
+        _waiting = true;
+        StateHasChanged();
+        try
+        {
+            for (int i = 0; i < PollTimes && _view?.State != "paid"; i++)
+            {
+                await Task.Delay(PollEvery, _stop.Token);
+                await LoadAsync();
+                StateHasChanged();
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+
+        _waiting = false;
+        _unconfirmed = _view?.State != "paid";
+        StateHasChanged();
+    }
+
+    public void Dispose()
+    {
+        _stop.Cancel();
+        _stop.Dispose();
     }
 
     private async Task LoadAsync()

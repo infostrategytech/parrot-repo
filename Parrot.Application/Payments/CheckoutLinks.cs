@@ -28,5 +28,8 @@ public sealed class CheckoutLinks(CheckoutTokens tokens, IOptions<PaymentSetting
         return $"{BaseUrl ?? throw new InvalidOperationException("No checkout base URL is configured.")}/checkout/{token}";
     }
 
+    /// <summary>Where Accelerate sends the customer after paying: their own checkout, which then waits for the payment to be confirmed.</summary>
+    public string ReturnFor(PaymentOrder order) => For(order) + "?paid=1";
+
     public (Guid OrderId, string WorkspaceId)? Read(string? token) => tokens.Read(token);
 }

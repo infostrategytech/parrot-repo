@@ -327,6 +327,9 @@ public sealed class CheckoutServiceTests
         Assert.Equal((order.Reference, order.ExpiresAt!.Value), (held.Reference, held.ExpiresAt));
         Assert.Equal((order.Reference, 800_000L, "Ada's Bags: 2 x Quilted bag"), Assert.Single(_provider.Calls));
 
+        // After paying, the customer comes back to this checkout, which waits for the payment to be confirmed.
+        Assert.Equal(_links.For(order) + "?paid=1", Assert.Single(_provider.ReturnUrls));
+
         // Pressing Pay again, or opening the page, gives the same link.
         Assert.Equal(paying.PaymentUrl, (await _service.PayAsync(TokenOf(checkout), new PayCheckoutRequest(8000m), default)).PaymentUrl);
         CheckoutView now = await _service.GetAsync(TokenOf(checkout), default);

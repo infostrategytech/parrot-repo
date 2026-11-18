@@ -30,7 +30,7 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
 
     private AccelerateSettings Keys => settings.Value.Accelerate;
 
-    public async Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, CancellationToken ct)
+    public async Task<PaymentLink> CreateLinkAsync(string reference, long amountMinor, string description, string? returnUrl, CancellationToken ct)
     {
         if (!IsConfigured)
         {
@@ -42,7 +42,13 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
             throw new PaymentProviderException("The amount must be at least 1 kobo.");
         }
 
-        object body = new { PayAmount = amountMinor, Reference = reference, CallbackUrl = settings.Value.CallbackUrl, Description = description };
+        string? callback = string.IsNullOrWhiteSpace(returnUrl) ? settings.Value.CallbackUrl : returnUrl;
+        if (string.IsNullOrWhiteSpace(callback))
+        {
+            throw new PaymentProviderException("There's no page to send the customer back to after paying.");
+        }
+
+        object body = new { PayAmount = amountMinor, Reference = reference, CallbackUrl = callback, Description = description };
 
         // A token the account no longer accepts is replaced once.
         HttpResponseMessage response = await SendAsync(body, await session.TokenAsync(LoginAsync, ct), ct);

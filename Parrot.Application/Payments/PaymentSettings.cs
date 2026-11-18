@@ -30,7 +30,10 @@ public sealed class PaymentSettings
     /// </summary>
     public string? CheckoutBaseUrl { get; set; }
 
-    /// <summary>Where the customer lands after paying. A public page.</summary>
+    /// <summary>
+    /// Where the customer lands after paying when there's no checkout to send them back to. Checkouts send the
+    /// customer back to their own checkout page, so this is only a fallback.
+    /// </summary>
     public string? CallbackUrl { get; set; }
 
     public AccelerateSettings Accelerate { get; set; } = new ();
