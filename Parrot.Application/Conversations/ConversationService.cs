@@ -50,8 +50,18 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
                     connectionId, recipient);
             }
         }
+        await PublishTeammateReplyAsync(owner, connectionId, request.RequestId, result);
         return result;
     }
+
+    // Omni-AI reads a teammate's reply as MessagePersisted(TenantToUser), so it knows what the business has told the
+    // customer. One the channel refused never reached them, so it is not published.
+    private Task PublishTeammateReplyAsync(string owner, Guid connectionId, Guid requestId, ConversationMessage sent) =>
+        sent.Status == "failed"
+            ? Task.CompletedTask
+            // Not the request's token: the reply has gone, so the browser leaving must not keep it from the AI.
+            // Kafka's own send timeout (seconds) bounds the wait.
+            : PublishSentAsync(owner, connectionId, requestId, CommsType.TenantToUser, CancellationToken.None);
 
     // Called by the AI orchestrator. Sends as a human reply would, but does not set the human takeover
     // flag and explicitly publishes MessagePersisted with AgentToUser so Omni-AI sees its own send.
@@ -59,7 +69,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         SendReplyRequest request, CancellationToken ct)
     {
         ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct, isAiReply: true);
-        await PublishAgentReplyAsync(owner, connectionId, recipient, request.RequestId, ct);
+        await PublishSentAsync(owner, connectionId, request.RequestId, CommsType.AgentToUser, ct);
         return result;
     }
 
@@ -72,13 +82,14 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     public async Task<ConversationMessage> SendAgentFileAsync(string owner, Guid connectionId, string recipient,
         Guid requestId, string? caption, OutgoingFile file, CancellationToken ct)
     {
-        ConversationMessage result = await SendFileAsync(owner, connectionId, recipient, requestId, caption, file, ct, isAiReply: true);
-        await PublishAgentReplyAsync(owner, connectionId, recipient, requestId, ct);
+        ConversationMessage result = await SendFileCoreAsync(owner, connectionId, recipient, requestId, caption, file, ct, isAiReply: true);
+        await PublishSentAsync(owner, connectionId, requestId, CommsType.AgentToUser, ct);
         return result;
     }
 
-    // Omni-AI sees its own sends through MessagePersisted(AgentToUser). Best-effort: the send already happened.
-    private async Task PublishAgentReplyAsync(string owner, Guid connectionId, string recipient, Guid requestId, CancellationToken ct)
+    // Omni-AI sees each reply through MessagePersisted: its own as AgentToUser, a teammate's as TenantToUser.
+    // Best-effort: the send already happened, and the reply is in the inbox either way.
+    private async Task PublishSentAsync(string owner, Guid connectionId, Guid requestId, CommsType commsType, CancellationToken ct)
     {
         if (publisher is not null)
         {
@@ -93,16 +104,19 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
                     MessagePersisted persisted = new MessagePersisted
                     {
                         Source = doc.Platform,
-                        Data = doc.ToStoredMessage() with { CommsType = CommsType.AgentToUser, TenantId = tenantId },
+                        Data = doc.ToStoredMessage() with { CommsType = commsType, TenantId = tenantId },
                         CorrelationId = InboundMessagePublisher.CurrentCorrelationId(),
                     };
                     await publisher.PublishAsync(persisted, ct);
+                    logger?.LogInformation("reply.persisted_published CommsType={CommsType} MessageId={MessageId} ConnectionId={ConnectionId}",
+                        commsType, doc.MessageId, connectionId);
                 }
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (ex is not OperationCanceledException || !ct.IsCancellationRequested)
             {
-                logger?.LogWarning(ex, "agent_reply_persisted_failed ConnectionId={ConnectionId} Sender={Sender}; continuing",
-                    connectionId, recipient);
+                // Kafka down or slow: the AI misses this one reply; the customer and the inbox already have it.
+                logger?.LogWarning(ex, "reply.persisted_failed CommsType={CommsType} ConnectionId={ConnectionId} RequestId={RequestId}; continuing",
+                    commsType, connectionId, requestId);
             }
         }
     }
@@ -174,9 +188,18 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     // A picture or file goes out on WhatsApp or Messenger. Instagram's API takes only a public address and TikTok's
     // no files at all, so those say so rather than failing at the channel.
     public async Task<ConversationMessage> SendFileAsync(string owner, Guid connectionId, string recipient,
+        Guid requestId, string? caption, OutgoingFile file, CancellationToken ct, string? replyToMessageId = null)
+    {
+        ConversationMessage result = await SendFileCoreAsync(owner, connectionId, recipient, requestId, caption, file, ct, replyToMessageId);
+        // A queued file is published as pending, as the AI's own files are: the send worker settles it later.
+        await PublishTeammateReplyAsync(owner, connectionId, requestId, result);
+        return result;
+    }
+
+    private async Task<ConversationMessage> SendFileCoreAsync(string owner, Guid connectionId, string recipient,
         Guid requestId, string? caption, OutgoingFile file, CancellationToken ct, string? replyToMessageId = null, bool isAiReply = false)
     {
-        caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
+        caption =string.IsNullOrWhiteSpace(caption) ? null : caption.Trim();
         if (requestId == Guid.Empty || recipient.Length is < 1 or > 32 || !recipient.All(char.IsAsciiDigit))
             throw new ValidationException("Supply a request ID, a numeric recipient and a file.");
         if (caption is { Length: > MaxCaption }) throw new ValidationException($"A caption can be up to {MaxCaption} characters.");

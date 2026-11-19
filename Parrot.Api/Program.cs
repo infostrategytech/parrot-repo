@@ -699,6 +699,11 @@ builder.Services.AddHostedService<Parrot.Api.Realtime.MessageSettledDeliveryServ
 builder.Services.Configure<Parrot.Application.Conversations.OutboundSettings>(builder.Configuration.GetSection(Parrot.Application.Conversations.OutboundSettings.SectionName));
 builder.Services.AddSingleton<IOutboundJobPublisher, Parrot.Infrastructure.MessageBus.KafkaOutboundJobPublisher>();
 
+// A teammate's reply from the inbox goes to messages.persisted as TenantToUser, so Omni-AI knows what the
+// business told the customer. The realtime gateway reads it too; the inbox already has the reply by its id.
+builder.Services.AddSingleton<IMessagePersistedPublisher, KafkaMessagePersistedPublisher>();
+builder.Services.AddSingleton<ITenantIdLookup, EfTenantIdLookup>();
+
 // What the orchestrator's agents did, kept per event in MongoDB and pushed
 // to the owner's connections as it arrives; the AI Operations screens read it.
 builder.Services.AddSingleton<IAgentActivityStore, MongoAgentActivityStore>();
