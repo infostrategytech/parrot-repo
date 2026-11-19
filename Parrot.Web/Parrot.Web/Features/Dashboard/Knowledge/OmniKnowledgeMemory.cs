@@ -175,7 +175,7 @@ public sealed class OmniKnowledgeMemory(OmniAiClient omni, IConfiguration config
     public async Task<KnowledgeSectionDraft> OpenSectionAsync(string label, CancellationToken cancellationToken = default)
     {
         string key = KeyOf(label);
-        Section section = await omni.GetAsync<Section>($"{Root}/sections/{key}", cancellationToken);
+        Section section = await WriteAsync("open_section", label, () => omni.GetAsync<Section>($"{Root}/sections/{key}", cancellationToken));
         // The service sends up to 200 details: rewriting a longer section from here would remove the rest.
         if (section.ItemCount > section.Items.Count)
         {

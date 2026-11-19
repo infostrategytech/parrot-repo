@@ -223,6 +223,20 @@ public class OmniKnowledgeMemoryTests
         Assert.Equal([true, false], draft.Lines.Select(line => line.Rewritable));
     }
 
+    // Knowledge switched off on the service is said as it is, not as a lost connection.
+    [Fact]
+    public async Task OpenSectionAsync_WhenKnowledgeIsOffOnTheService_SaysSoInPlainWords()
+    {
+        Fixture f = new();
+        f.Omni.On("GET", DeliverySection,
+            """{"success": false, "errorCode": "KNOWLEDGE_UNAVAILABLE", "message": "Business knowledge is not available.", "traceId": "t1"}""",
+            HttpStatusCode.ServiceUnavailable);
+
+        KnowledgeSaveRefusedException refused = await Assert.ThrowsAsync<KnowledgeSaveRefusedException>(() => f.Store.OpenSectionAsync("Delivery"));
+
+        Assert.Equal("Your AI's knowledge can't be changed right now. Try again in a minute.", refused.Message);
+    }
+
     // Rewriting from a partial list would remove what wasn't shown.
     [Fact]
     public async Task OpenSectionAsync_WhenTheSectionHoldsMoreThanTheServiceSends_RefusesToEditIt()
