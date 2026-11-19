@@ -101,14 +101,210 @@ public class OmniKnowledgeMemoryTests
         Assert.Equal(OmniKnowledgeMemory.KnowledgeUnavailable, error.ErrorCode);
     }
 
-    // Writing waits on the service's rules for who may change knowledge, so the page offers nothing it can't do.
+    // Telling and rewriting come first; deciding the things to check and reading links come in later phases,
+    // so the page offers nothing the store can't do yet.
     [Fact]
-    public void TheStoreReadsOnly_AndIsOnlyUsedWhenSwitchedOn()
+    public void TheStoreTakesEditsButNotYetDecisions_AndIsOnlyUsedWhenSwitchedOn()
     {
-        Assert.False(new Fixture().Store.CanEdit);
+        Assert.True(new Fixture().Store.CanEdit);
+        Assert.False(new Fixture().Store.CanReview);
         Assert.False(new Fixture().Store.CanReadLinks);
         Assert.True(new Fixture(on: true).Store.Enabled);
         Assert.False(new Fixture(on: false).Store.Enabled);
+    }
+
+    // ── Telling the AI something ──
+
+    private const string AddedDelivery = """
+        {"items": [{"id": "itm_new", "kind": "knowledge", "section": "delivery", "text": "We deliver across Lagos in 1 to 2 days.",
+          "state": "active", "sources": [{"origin": "manual", "label": "You told your AI"}], "version": 1,
+          "created_at": "2026-11-19T10:00:00Z", "updated_at": "2026-11-19T10:00:00Z"}], "replaced": []}
+        """;
+
+    // The service files everything in one request under one section, so each sentence goes on its own and
+    // the service picks the section for each.
+    [Fact]
+    public async Task AddAsync_SendsEachStatementOnItsOwn_LeavingTheSectionToTheService()
+    {
+        Fixture f = new();
+        f.Omni.On("POST", Items, AddedDelivery, HttpStatusCode.Created);
+
+        IReadOnlyList<KnowledgeFact> saved = await f.Store.AddAsync("We deliver across Lagos in 1 to 2 days.  Customers pay by bank transfer.\n");
+
+        Assert.Equal(
+            ["""{"text":"We deliver across Lagos in 1 to 2 days."}""", """{"text":"Customers pay by bank transfer."}"""],
+            f.Omni.Requests.Where(r => r.Method == "POST").Select(r => r.Body));
+        Assert.Equal(2, saved.Count);
+        Assert.All(saved, fact => Assert.Equal(("Delivery", FactState.Known), (fact.Label, fact.State)));
+    }
+
+    [Fact]
+    public async Task AddAsync_WhenTheAIAlreadyKnowsIt_SavesNothing()
+    {
+        Fixture f = new();
+        f.Omni.On("POST", Items, """{"items": [], "replaced": []}""", HttpStatusCode.Created);
+
+        Assert.Empty(await f.Store.AddAsync("We deliver across Lagos in 1 to 2 days."));
+    }
+
+    // A statement the addition replaced is retired, and the service can't restore a retired one, so Undo writes it back.
+    [Fact]
+    public async Task UndoAddAsync_RemovesWhatWasAdded_AndWritesBackWhatItReplaced()
+    {
+        Fixture f = new();
+        f.Omni.On("GET", Items, """
+            {"items": [{"id": "itm_old", "kind": "knowledge", "section": "delivery", "text": "Delivery in Lagos costs 2,000 naira.",
+              "state": "active", "sources": [], "version": 1, "created_at": "2026-11-14T10:00:00Z", "updated_at": null}], "next_cursor": null}
+            """);
+        f.Omni.On("GET", Review, """{"items": [], "next_cursor": null}""");
+        f.Omni.On("POST", Items, AddedDelivery.Replace("\"replaced\": []", "\"replaced\": [\"itm_old\"]"), HttpStatusCode.Created);
+        f.Omni.On("DELETE", $"{Items}/itm_new", "", HttpStatusCode.NoContent);
+        await f.Store.ListAsync();
+        IReadOnlyList<KnowledgeFact> saved = await f.Store.AddAsync("Delivery in Lagos costs 2,500 naira.");
+
+        await f.Store.UndoAddAsync(saved);
+
+        f.Omni.Single("DELETE", $"{Items}/itm_new");
+        Assert.Equal("""{"text":"Delivery in Lagos costs 2,000 naira.","section":"delivery"}""",
+            f.Omni.Requests.Where(r => r.Method == "POST").Last().Body);
+    }
+
+    [Fact]
+    public async Task UndoAddAsync_WhenTheItemIsAlreadyGone_CountsItAsUndone()
+    {
+        Fixture f = new();
+        f.Omni.On("DELETE", $"{Items}/itm_new",
+            """{"success": false, "errorCode": "ITEM_NOT_FOUND", "message": "No such item.", "traceId": "t1"}""", HttpStatusCode.NotFound);
+
+        await f.Store.UndoAddAsync([new KnowledgeFact("itm_new", KnowledgeTopic.Delivery, "x", FactState.Known, null, DateTimeOffset.UtcNow, "Delivery")]);
+    }
+
+    [Fact]
+    public async Task AddAsync_WhenThePersonMayNotChangeKnowledge_IsRefusedInPlainWords()
+    {
+        Fixture f = new();
+        f.Omni.On("POST", Items,
+            """{"success": false, "errorCode": "FORBIDDEN", "message": "Your role can't change business knowledge.", "traceId": "t1"}""",
+            HttpStatusCode.Forbidden);
+
+        KnowledgeSaveRefusedException refused = await Assert.ThrowsAsync<KnowledgeSaveRefusedException>(() => f.Store.AddAsync("We open at 9."));
+
+        Assert.Equal("You don't have permission to change what your AI knows. Ask the workspace owner.", refused.Message);
+        Assert.False(refused.SectionChanged);
+    }
+
+    // ── Rewriting a section ──
+
+    private const string DeliverySection = "api/v1/business-knowledge/sections/delivery";
+
+    private static Fixture WithDeliverySection(int itemCount = 2)
+    {
+        Fixture f = new();
+        f.Omni.On("GET", DeliverySection, $$"""
+            {"key": "delivery", "label": "Delivery", "summary": null, "item_count": {{itemCount}}, "updated_at": "2026-11-18T10:20:00Z", "version": 3,
+             "items": [
+               {"id": "itm_k", "kind": "knowledge", "section": "delivery", "text": "Delivery in Lagos takes 1 to 2 days.", "state": "active", "sources": [], "version": 1},
+               {"id": "itm_f", "kind": "fact", "section": "delivery", "text": "Delivery in Lagos costs 2,000 naira.", "state": "active", "sources": [], "version": 1}]}
+            """);
+        f.Omni.On("PUT", DeliverySection, """{"key": "delivery", "label": "Delivery", "version": 4, "items": [], "changes": {"kept": ["itm_k"], "added": [], "retired": []}}""");
+        f.Omni.On("DELETE", $"{Items}/itm_f", "", HttpStatusCode.NoContent);
+        return f;
+    }
+
+    [Fact]
+    public async Task OpenSectionAsync_GivesItsDetailsOnePerLine_AndTheVersionTheyWereReadAt()
+    {
+        Fixture f = WithDeliverySection();
+
+        KnowledgeSectionDraft draft = await f.Store.OpenSectionAsync("Delivery");
+
+        Assert.Equal("Delivery in Lagos takes 1 to 2 days.\nDelivery in Lagos costs 2,000 naira.", draft.Text);
+        Assert.Equal(3, draft.Version);
+        Assert.Equal([true, false], draft.Lines.Select(line => line.Rewritable));
+    }
+
+    // Rewriting from a partial list would remove what wasn't shown.
+    [Fact]
+    public async Task OpenSectionAsync_WhenTheSectionHoldsMoreThanTheServiceSends_RefusesToEditIt()
+    {
+        Fixture f = WithDeliverySection(itemCount: 250);
+
+        await Assert.ThrowsAsync<KnowledgeSaveRefusedException>(() => f.Store.OpenSectionAsync("Delivery"));
+    }
+
+    [Fact]
+    public async Task SaveSectionAsync_RewritesTheStatementsAgainstTheOpenedVersion_AndRemovesAFactWhoseLineIsGone()
+    {
+        Fixture f = WithDeliverySection();
+        KnowledgeSectionDraft draft = await f.Store.OpenSectionAsync("Delivery");
+
+        await f.Store.SaveSectionAsync(draft, "Delivery in Lagos takes 1 to 2 days.\n\nWe ship abroad on request.");
+
+        Recorded rewrite = f.Omni.Single("PUT", DeliverySection);
+        Assert.Equal("""{"text":"Delivery in Lagos takes 1 to 2 days.\nWe ship abroad on request."}""", rewrite.Body);
+        Assert.Equal("3", rewrite.Header("If-Match"));
+        f.Omni.Single("DELETE", $"{Items}/itm_f");
+    }
+
+    // A fact is kept as a fact: its line is not written again as a statement, and it is not removed.
+    [Fact]
+    public async Task SaveSectionAsync_KeepsAFactWhoseLineStays_OutOfTheRewrite()
+    {
+        Fixture f = WithDeliverySection();
+        KnowledgeSectionDraft draft = await f.Store.OpenSectionAsync("Delivery");
+
+        await f.Store.SaveSectionAsync(draft, "Delivery in Lagos takes 1 to 3 days.\nDelivery in Lagos costs 2,000 naira.");
+
+        Assert.Equal("""{"text":"Delivery in Lagos takes 1 to 3 days."}""", f.Omni.Single("PUT", DeliverySection).Body);
+        Assert.DoesNotContain(f.Omni.Requests, r => r.Method == "DELETE");
+    }
+
+    [Fact]
+    public async Task SaveSectionAsync_WhenSomeoneElseChangedTheSectionFirst_IsRefusedAndRemovesNothing()
+    {
+        Fixture f = WithDeliverySection();
+        f.Omni.On("PUT", DeliverySection,
+            """{"success": false, "errorCode": "VERSION_MISMATCH", "message": "The section has changed.", "traceId": "t1"}""",
+            HttpStatusCode.PreconditionFailed);
+        KnowledgeSectionDraft draft = await f.Store.OpenSectionAsync("Delivery");
+
+        KnowledgeSaveRefusedException refused = await Assert.ThrowsAsync<KnowledgeSaveRefusedException>(
+            () => f.Store.SaveSectionAsync(draft, "We ship abroad on request."));
+
+        Assert.True(refused.SectionChanged);
+        Assert.DoesNotContain(f.Omni.Requests, r => r.Method == "DELETE");
+    }
+
+    // The browser preview edits the same way: a kept line keeps its fact, a new one is added, one taken out goes.
+    [Fact]
+    public async Task ThePreview_SavesASectionLineByLine()
+    {
+        AuthState auth = new();
+        auth.SetUser(new AuthResponse { Token = "session-token", ExpiresAt = DateTime.UtcNow.AddHours(1) });
+        KnowledgePreview preview = new(new ConfigurationBuilder().Build(), new BrowserStorage(), auth);
+        await preview.AddAsync("We deliver across Lagos in 1 to 2 days. We deliver to Abuja on Fridays.");
+        KnowledgeSectionDraft draft = await preview.OpenSectionAsync("Delivery");
+        string kept = draft.Lines[0].Id;
+
+        await preview.SaveSectionAsync(draft, "We deliver across Lagos in 1 to 2 days.\nWe ship abroad on request.");
+
+        IReadOnlyList<KnowledgeFact> delivery = [.. (await preview.ListAsync()).Facts.Where(fact => fact.Label == "Delivery")];
+        Assert.Equal(["We deliver across Lagos in 1 to 2 days.", "We ship abroad on request."], delivery.Select(fact => fact.Text));
+        Assert.Equal(kept, delivery[0].Id);
+    }
+
+    private sealed class BrowserStorage : Microsoft.JSInterop.IJSRuntime
+    {
+        private readonly Dictionary<string, string> _items = [];
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, object?[]? args) => InvokeAsync<TValue>(identifier, CancellationToken.None, args);
+
+        public ValueTask<TValue> InvokeAsync<TValue>(string identifier, CancellationToken cancellationToken, object?[]? args)
+        {
+            if (identifier == "localStorage.setItem") _items[(string)args![0]!] = (string)args[1]!;
+            object? value = identifier == "localStorage.getItem" ? _items.GetValueOrDefault((string)args![0]!) : null;
+            return ValueTask.FromResult((TValue)value!);
+        }
     }
 
     // A switch left empty (OmniAi__Knowledge=) or mistyped must mean off, never stop the web app from starting.

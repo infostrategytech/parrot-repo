@@ -105,6 +105,29 @@ public sealed class KnowledgePreview(IConfiguration configuration, IJSRuntime js
         await KeepAsync();
     }
 
+    public async Task<KnowledgeSectionDraft> OpenSectionAsync(string label, CancellationToken cancellationToken = default)
+    {
+        List<KnowledgeFact> facts = await FactsAsync();
+        return new KnowledgeSectionDraft(label,
+            [.. facts.Where(fact => fact.Label == label && fact.State == FactState.Known).OrderBy(fact => fact.UpdatedAt)
+                .Select(fact => new KnowledgeLine(fact.Id, fact.Text.Trim()))],
+            null);
+    }
+
+    // As the AI service does it: a line kept keeps its fact, a new line becomes one, a fact whose line is gone goes.
+    public async Task SaveSectionAsync(KnowledgeSectionDraft opened, string text, CancellationToken cancellationToken = default)
+    {
+        List<KnowledgeFact> facts = await FactsAsync();
+        IReadOnlyList<string> lines = KnowledgeSectionDraft.Split(text);
+        HashSet<string> had = [.. opened.Lines.Select(line => line.Text)];
+        HashSet<string> gone = [.. opened.Lines.Where(line => !lines.Contains(line.Text)).Select(line => line.Id)];
+        KnowledgeTopic? topic = facts.FirstOrDefault(fact => fact.Label == opened.Label)?.Topic;
+        facts.RemoveAll(fact => gone.Contains(fact.Id));
+        facts.AddRange(lines.Where(line => !had.Contains(line))
+            .Select(line => KnowledgeSorting.New(KnowledgeSorting.Tidy(line), topic) with { Label = opened.Label }));
+        await KeepAsync();
+    }
+
     // Nothing to review in the preview: no questions customers asked, no disagreements, no links read.
     public Task<IReadOnlyList<KnowledgeFact>> AnswerAsync(string questionId, string answer, CancellationToken cancellationToken = default) => throw new NotSupportedException();
     public Task DismissAsync(string questionId, CancellationToken cancellationToken = default) => throw new NotSupportedException();

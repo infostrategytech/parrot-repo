@@ -66,7 +66,7 @@
                         Found on your channels, and questions your AI couldn't answer. About a minute; nothing is used until you say yes.
                     </Typography>
                 </div>
-                @if (Knowledge.CanEdit)
+                @if (Knowledge.CanReview)
                 {
                     <Button Class="ds-no-shrink" @onclick="() => _reviewOpen = true">Check them</Button>
                 }
@@ -160,7 +160,7 @@
                     <div class="knowledge__saved" role="status">
                         <Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" />
                         <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose>@SavedLine(saved)</Typography>
-                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="UndoAddAsync">Undo</Button>
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_undoing" disabled="_undoing" @onclick="UndoAddAsync">Undo</Button>
                     </div>
                 }
             </section>
@@ -212,17 +212,27 @@
                                 <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h3" id="@SectionId(current)">@current.Label</Typography>
                                 @if (editing)
                                 {
+                                    @* One detail per line, as the AI keeps them: a line taken out is no longer used. *@
                                     <TextArea Value="@_editText"
                                               ValueChanged="value => _editText = value"
-                                              AriaLabel="@($"{current.Label}: what your AI knows")"
+                                              AriaLabel="@($"{current.Label}: what your AI knows, one detail per line")"
                                               TextStyle="TextStyle.BodySmallMedium"
                                               Rows="3"
                                               AutoGrow
-                                              MaxLength="1200"
+                                              MaxLength="20000"
                                               Disabled="_savingEdit" />
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="knowledge__muted">One detail per line. Take a line out and your AI stops using it.</Typography>
+                                    @if (_editStale)
+                                    {
+                                        <div class="knowledge__stale" role="alert">
+                                            <Icon Name="IconName.RiAlertFill" Size="IconSize.Sm" />
+                                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@($"Someone else changed {current.Label} while you were editing. Load their version, then make your change again.")</Typography>
+                                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_openingEdit == current.Label" @onclick="() => LoadLatestAsync(current)">Load their version</Button>
+                                        </div>
+                                    }
                                     <div class="knowledge__edit-actions">
                                         <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_savingEdit" @onclick="CancelEdit">Cancel</Button>
-                                        <Button Size="ButtonSize.Small" Busy="_savingEdit" disabled="@(string.IsNullOrWhiteSpace(_editText) || _savingEdit)" @onclick="() => SaveSummaryAsync(current)">Save</Button>
+                                        <Button Size="ButtonSize.Small" Busy="_savingEdit" disabled="@(string.IsNullOrWhiteSpace(_editText) || _savingEdit || _editStale)" @onclick="() => SaveEditAsync(current)">Save</Button>
                                     </div>
                                 }
                                 else
@@ -233,7 +243,8 @@
                             </div>
                             @if (!editing && Knowledge.CanEdit)
                             {
-                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="knowledge__edit" aria-describedby="@SectionId(current)" disabled="@(_editing is not null)" @onclick="() => StartEditing(current)">
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="knowledge__edit" aria-describedby="@SectionId(current)"
+                                        Busy="_openingEdit == current.Label" disabled="@(_editing is not null || _openingEdit is not null)" @onclick="() => StartEditingAsync(current)">
                                     <IconLeft><Icon Name="IconName.RiPencilFill" /></IconLeft>
                                     <ChildContent>Edit</ChildContent>
                                 </Button>
@@ -291,8 +302,9 @@
 
     private KnowledgeSnapshot _snapshot = new([], [], []);
     private bool _loading = true, _adding, _reviewOpen, _testOpen, _focusBox;
-    private bool _linkOpen, _readingLink, _savingEdit;
-    private string? _draft, _forQuestion, _link, _search, _editing, _editText, _loadError;
+    private bool _linkOpen, _readingLink, _savingEdit, _editStale, _undoing;
+    private string? _draft, _forQuestion, _link, _search, _editing, _editText, _loadError, _openingEdit;
+    private KnowledgeSectionDraft? _editDraft;
     private List<KnowledgeFact>? _justSaved;
     private IReadOnlyCollection<string> _freshLabels = [];
     private TextArea? _box;
@@ -311,7 +323,7 @@
     {
         await TryLoadAsync();
         _loading = false;
-        if (new Uri(Nav.Uri).Query.TrimStart('?').Split('&').Contains("review=1") && ReviewCount > 0 && Knowledge.CanEdit) _reviewOpen = true;
+        if (new Uri(Nav.Uri).Query.TrimStart('?').Split('&').Contains("review=1") && ReviewCount > 0 && Knowledge.CanReview) _reviewOpen = true;
     }
 
     // The AI service can be down, or have knowledge switched off on its side.
@@ -494,7 +506,7 @@
 
     private string EmptyDescription =>
         !Knowledge.CanEdit ? "What your AI learns about your business shows here."
-        : Knowledge.IsPreview ? "Tell your AI something above. Each detail goes into its section."
+        : Knowledge.IsPreview || !Knowledge.CanReview ? "Tell your AI something above. Each detail goes into its section."
         : "Tell your AI something above, or review what was found for you.";
 
     private IReadOnlyList<KnowledgeFact> KnownFacts => [.. _snapshot.Facts.Where(fact => fact.State == FactState.Known)];
@@ -570,10 +582,20 @@
         {
             if (!string.IsNullOrEmpty(text))
             {
-                _justSaved = [.. await Knowledge.AddAsync(text)];
-                _freshLabels = [.. _justSaved.Select(fact => fact.Label)];
+                IReadOnlyList<KnowledgeFact> saved = await Knowledge.AddAsync(text);
                 _draft = null;
                 _forQuestion = null;
+                if (saved.Count == 0)
+                {
+                    // Said word for word before: nothing new to add, or to undo.
+                    _justSaved = null;
+                    Toasts.Show("Your AI already knows that.");
+                }
+                else
+                {
+                    _justSaved = [.. saved];
+                    _freshLabels = [.. saved.Select(fact => fact.Label)];
+                }
             }
             if (_files.Count > 0)
             {
@@ -589,6 +611,11 @@
             }
             await LoadAsync();
         }
+        catch (KnowledgeSaveRefusedException refused)
+        {
+            // What they wrote stays in the box, to try again.
+            Toasts.ShowError(refused.Message);
+        }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
             Toasts.ShowError("We couldn't save that. Check your connection and try again.");
@@ -601,11 +628,27 @@
 
     private async Task UndoAddAsync()
     {
-        if (_justSaved is null) return;
-        foreach (var fact in _justSaved) await Knowledge.DeleteAsync(fact.Id);
-        _justSaved = null;
-        _freshLabels = [];
-        await LoadAsync();
+        if (_justSaved is not { } saved || _undoing) return;
+        _undoing = true;
+        try
+        {
+            await Knowledge.UndoAddAsync(saved);
+            _justSaved = null;
+            _freshLabels = [];
+            await LoadAsync();
+        }
+        catch (KnowledgeSaveRefusedException refused)
+        {
+            Toasts.ShowError(refused.Message);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            Toasts.ShowError("We couldn't undo that. Check your connection and try again.");
+        }
+        finally
+        {
+            _undoing = false;
+        }
     }
 
     private void TeachFromTest(string question)
@@ -629,38 +672,72 @@
 
     private void OpenCatalog() => Nav.NavigateTo("/dashboard/products");
 
-    // Editing a section: its summary, in place.
-    private void StartEditing(SummarySection section)
+    // Editing a section: its details, one per line, read fresh so the save knows which version it changes.
+    private async Task StartEditingAsync(SummarySection section)
     {
-        _editing = section.Label;
-        _editText = section.Summary;
+        if (_openingEdit is not null) return;
+        _openingEdit = section.Label;
+        try
+        {
+            KnowledgeSectionDraft draft = await Knowledge.OpenSectionAsync(section.Label);
+            _editDraft = draft;
+            _editing = section.Label;
+            _editText = draft.Text;
+            _editStale = false;
+        }
+        catch (KnowledgeSaveRefusedException refused)
+        {
+            Toasts.ShowError(refused.Message);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            Toasts.ShowError("We couldn't open that section. Check your connection and try again.");
+        }
+        finally
+        {
+            _openingEdit = null;
+        }
     }
 
     private void CancelEdit()
     {
         _editing = null;
         _editText = null;
+        _editDraft = null;
+        _editStale = false;
     }
 
-    // Saved: the section becomes the summary they wrote (one entry; the details it was made from are let go),
-    // with Undo, which brings those back as they were.
-    private async Task SaveSummaryAsync(SummarySection section)
+    // Someone else saved first: their version replaces what is in the box, to edit again.
+    private async Task LoadLatestAsync(SummarySection section)
     {
-        var text = _editText?.Trim();
-        if (string.IsNullOrEmpty(text) || _savingEdit) return;
-        if (text == section.Summary) { CancelEdit(); return; }
+        CancelEdit();
+        await StartEditingAsync(section);
+    }
+
+    // Saved: lines kept stay, new lines are added, lines taken out go. Undo saves the lines as they were.
+    private async Task SaveEditAsync(SummarySection section)
+    {
+        string? text = _editText?.Trim();
+        if (string.IsNullOrEmpty(text) || _savingEdit || _editDraft is not { } opened) return;
+        if (KnowledgeSectionDraft.Split(text).SequenceEqual(KnowledgeSectionDraft.Split(opened.Text))) { CancelEdit(); return; }
         _savingEdit = true;
-        var before = KnownFacts.Where(fact => fact.Label == section.Label).ToList();
         try
         {
-            var keep = before.OrderByDescending(fact => fact.UpdatedAt).First();
-            await Knowledge.UpdateAsync(keep.Id, text);
-            foreach (var other in before.Where(fact => fact.Id != keep.Id)) await Knowledge.DeleteAsync(other.Id);
+            await Knowledge.SaveSectionAsync(opened, text);
+            string before = opened.Text;
             await LoadAsync();
             CancelEdit();
             _freshLabels = [section.Label];
             Toasts.Show(new ToastMessage($"{section.Label} updated. Your AI uses it from now on.", null, ToastStatus.Success, "Undo",
-                () => InvokeAsync(() => UndoSummaryAsync(before))));
+                () => InvokeAsync(() => UndoEditAsync(section.Label, before))));
+        }
+        catch (KnowledgeSaveRefusedException refused) when (refused.SectionChanged)
+        {
+            _editStale = true;
+        }
+        catch (KnowledgeSaveRefusedException refused)
+        {
+            Toasts.ShowError(refused.Message);
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
         {
@@ -672,15 +749,24 @@
         }
     }
 
-    private async Task UndoSummaryAsync(IReadOnlyList<KnowledgeFact> before)
+    // The section as it is now, saved back to the lines it had before the edit.
+    private async Task UndoEditAsync(string label, string before)
     {
-        foreach (var fact in before)
+        try
         {
-            await Knowledge.DeleteAsync(fact.Id);
-            await Knowledge.RestoreAsync(fact);
+            KnowledgeSectionDraft now = await Knowledge.OpenSectionAsync(label);
+            await Knowledge.SaveSectionAsync(now, before);
+            _freshLabels = [];
+            await LoadAsync();
         }
-        _freshLabels = [];
-        await LoadAsync();
+        catch (KnowledgeSaveRefusedException refused)
+        {
+            Toasts.ShowError(refused.Message);
+        }
+        catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException)
+        {
+            Toasts.ShowError("We couldn't undo that. Check your connection and try again.");
+        }
         StateHasChanged();
     }
 

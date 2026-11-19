@@ -48,6 +48,14 @@ public sealed class OmniAiClient(HttpClient http, AuthState auth)
             ?? throw new HttpRequestException("The AI service returned an empty response.");
     }
 
+    /// <summary>A change the service answers with no body (204), such as removing a knowledge item.</summary>
+    public async Task SendNoContentAsync(HttpMethod method, string path, CancellationToken cancellationToken = default)
+    {
+        using HttpRequestMessage request = Request(method, path);
+        using HttpResponseMessage response = await http.SendAsync(request, cancellationToken);
+        await response.EnsureApiSuccessAsync();
+    }
+
     /// <summary>Every page of a cursor list ({ items, next_cursor }).</summary>
     public async Task<List<T>> ListAllAsync<T>(string path, CancellationToken cancellationToken = default)
     {
