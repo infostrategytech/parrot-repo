@@ -28,6 +28,30 @@ public sealed record KnowledgeConflict(string Id, KnowledgeTopic Topic, string Q
 /// <summary>One side of a conflict: what it says, and where.</summary>
 public sealed record KnowledgeClaim(string Text, string Source);
 
+/// <summary>
+/// One detail of a section as it was opened to edit. Rewritable: the section's own rewrite keeps, adds and removes
+/// it. The others (the AI service's facts and policies, which its rewrite leaves alone) are removed one by one when
+/// their line goes.
+/// </summary>
+public sealed record KnowledgeLine(string Id, string Text, bool Rewritable = true);
+
+/// <summary>A section opened to edit: its details as they stood, and the version they were read at (null where the store keeps none).</summary>
+public sealed record KnowledgeSectionDraft(string Label, IReadOnlyList<KnowledgeLine> Lines, int? Version)
+{
+    /// <summary>What the edit box starts with: one detail per line.</summary>
+    public string Text => string.Join("\n", Lines.Select(line => line.Text));
+
+    /// <summary>The details written in a box: one a line, blank lines and repeats left out.</summary>
+    public static IReadOnlyList<string> Split(string text) =>
+        [.. text.Split('\n').Select(line => line.Trim()).Where(line => line.Length > 0).Distinct()];
+}
+
+/// <summary>A change the store refused, in words for the owner. SectionChanged: someone else changed the section after it was opened.</summary>
+public sealed class KnowledgeSaveRefusedException(string message, bool sectionChanged = false) : Exception(message)
+{
+    public bool SectionChanged { get; } = sectionChanged;
+}
+
 /// <summary>Everything the page shows at once.</summary>
 public sealed record KnowledgeSnapshot(
     IReadOnlyList<KnowledgeFact> Facts,
@@ -52,7 +76,31 @@ public interface IKnowledgeMemory
     /// <summary>Whether a website or social link can be read for details.</summary>
     bool CanReadLinks => true;
 
+    /// <summary>Whether knowledge can be added, changed or decided on here; false while the store only reads.</summary>
+    bool CanEdit => true;
+
+    /// <summary>Whether the things to check can be decided here: a store can take edits before it takes decisions.</summary>
+    bool CanReview => CanEdit;
+
     Task<KnowledgeSnapshot> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>A section opened to edit: its details, one per line, and the version they were read at.</summary>
+    Task<KnowledgeSectionDraft> OpenSectionAsync(string label, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    /// <summary>
+    /// Saves a section as the lines written: an unchanged line keeps its detail, a new line is added, and a detail
+    /// whose line is gone is removed. Refused (KnowledgeSaveRefusedException with SectionChanged) when someone else
+    /// changed the section after it was opened.
+    /// </summary>
+    Task SaveSectionAsync(KnowledgeSectionDraft opened, string text, CancellationToken cancellationToken = default) =>
+        throw new NotSupportedException();
+
+    /// <summary>Takes back what AddAsync just saved (Undo), and puts back anything it replaced.</summary>
+    async Task UndoAddAsync(IReadOnlyList<KnowledgeFact> saved, CancellationToken cancellationToken = default)
+    {
+        foreach (KnowledgeFact fact in saved) await DeleteAsync(fact.Id, cancellationToken);
+    }
 
     /// <summary>
     /// Saves what the owner wrote, as one fact or several, each under its

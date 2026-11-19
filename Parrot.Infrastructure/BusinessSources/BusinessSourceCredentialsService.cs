@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using Parrot.Application.BusinessSources;
 using Parrot.Application.Contracts.BusinessSources;
 using Parrot.Application.Integrations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Enums;
 using Parrot.Domain.Exceptions;
@@ -22,15 +23,20 @@ public sealed class BusinessSourceCredentialsService(
     IFacebookCredentialProtector facebookProtector,
     IOptions<WhatsAppSettings> whatsAppSettings,
     IOptions<InstagramSettings> instagramSettings,
-    IOptions<FacebookSettings> facebookSettings) : IBusinessSourceCredentialsService
+    IOptions<FacebookSettings> facebookSettings,
+    IAppLogger<BusinessSourceCredentialsService> logger) : IBusinessSourceCredentialsService
 {
     public async Task<BusinessSourceCredentialsResponse> GetCredentialsAsync(
         Guid sourceId, string workspaceId, CancellationToken ct = default)
     {
         BusinessSource? source = await db.BusinessSources
             .Where(s => s.Id == sourceId && s.WorkspaceId == workspaceId && s.IsActive)
-            .FirstOrDefaultAsync(ct)
-            ?? throw new NotFoundException("Business source not found.");
+            .FirstOrDefaultAsync(ct);
+        if (source is null)
+        {
+            await LogMissingSourceAsync(sourceId, workspaceId, ct);
+            throw new NotFoundException("Business source not found.");
+        }
 
         return source.Channel switch
         {
@@ -50,7 +56,7 @@ public sealed class BusinessSourceCredentialsService(
                 c => c.Id == source.AuthorizationConnectionId && c.WorkspaceId == source.WorkspaceId && c.DisabledAt == null,
                 ct))
         {
-            throw new NotFoundException("Business source not found.");
+            throw Refused(source, "the source's connection is missing or disabled");
         }
 
         string? encryptedToken = await db.WhatsAppConnections
@@ -60,7 +66,7 @@ public sealed class BusinessSourceCredentialsService(
             .Select(c => c.AccessTokenEncrypted)
             .FirstOrDefaultAsync(ct);
 
-        return BuildResponse(encryptedToken, whatsAppProtector.Unprotect, whatsAppSettings.Value.ApiVersion);
+        return BuildResponse(source, encryptedToken, whatsAppProtector.Unprotect, whatsAppSettings.Value.ApiVersion);
     }
 
     private async Task<BusinessSourceCredentialsResponse> InstagramCredentialsAsync(BusinessSource source, CancellationToken ct)
@@ -69,7 +75,7 @@ public sealed class BusinessSourceCredentialsService(
                 c => c.Id == source.AuthorizationConnectionId && c.WorkspaceId == source.WorkspaceId && c.DisabledAt == null,
                 ct))
         {
-            throw new NotFoundException("Business source not found.");
+            throw Refused(source, "the source's connection is missing or disabled");
         }
 
         string? encryptedToken = await db.InstagramConnections
@@ -79,7 +85,7 @@ public sealed class BusinessSourceCredentialsService(
             .Select(c => c.AccessTokenEncrypted)
             .FirstOrDefaultAsync(ct);
 
-        return BuildResponse(encryptedToken, instagramProtector.Unprotect, instagramSettings.Value.ApiVersion);
+        return BuildResponse(source, encryptedToken, instagramProtector.Unprotect, instagramSettings.Value.ApiVersion);
     }
 
     private async Task<BusinessSourceCredentialsResponse> FacebookCredentialsAsync(BusinessSource source, CancellationToken ct)
@@ -88,7 +94,7 @@ public sealed class BusinessSourceCredentialsService(
                 c => c.Id == source.AuthorizationConnectionId && c.WorkspaceId == source.WorkspaceId && c.DisabledAt == null,
                 ct))
         {
-            throw new NotFoundException("Business source not found.");
+            throw Refused(source, "the source's connection is missing or disabled");
         }
 
         string? encryptedToken = await db.FacebookConnections
@@ -98,17 +104,42 @@ public sealed class BusinessSourceCredentialsService(
             .Select(c => c.AccessTokenEncrypted)
             .FirstOrDefaultAsync(ct);
 
-        return BuildResponse(encryptedToken, facebookProtector.Unprotect, facebookSettings.Value.ApiVersion);
+        return BuildResponse(source, encryptedToken, facebookProtector.Unprotect, facebookSettings.Value.ApiVersion);
     }
 
     // Callers resolve the connection first (missing or disabled → 404 upstream, so the source
     // id cannot be probed). Here a token that is null or empty therefore means the connection
     // exists but the token has not been saved yet — 409 so the caller knows to wait for setup.
-    private static BusinessSourceCredentialsResponse BuildResponse(
-        string? encryptedToken, Func<string, string> unprotect, string apiVersion)
+    private BusinessSourceCredentialsResponse BuildResponse(
+        BusinessSource source, string? encryptedToken, Func<string, string> unprotect, string apiVersion)
     {
         if (string.IsNullOrEmpty(encryptedToken))
+        {
+            LogRefused(source.Id, source.WorkspaceId, source.WorkspaceId, source.Channel, "the connection has no access token saved yet (409)");
             throw new ConflictException("This connection has no access token configured yet.");
+        }
         return new BusinessSourceCredentialsResponse(unprotect(encryptedToken!), apiVersion);
     }
+
+    // The caller always hears the same "not found"; the log says which it was, so a wrong tenant_id on
+    // Omni's token (the source is in another workspace) is easy to tell from a source that never existed.
+    private async Task LogMissingSourceAsync(Guid sourceId, string workspaceId, CancellationToken ct)
+    {
+        BusinessSource? any = await db.BusinessSources.AsNoTracking().FirstOrDefaultAsync(s => s.Id == sourceId, ct);
+        string reason = any is null ? "no such source"
+            : any.WorkspaceId != workspaceId ? "the source belongs to another workspace than the token's tenant_id"
+            : "the source is inactive (its channel was disconnected)";
+        LogRefused(sourceId, workspaceId, any?.WorkspaceId, any?.Channel, reason);
+    }
+
+    private NotFoundException Refused(BusinessSource source, string reason)
+    {
+        LogRefused(source.Id, source.WorkspaceId, source.WorkspaceId, source.Channel, reason);
+        return new NotFoundException("Business source not found.");
+    }
+
+    private void LogRefused(Guid sourceId, string workspaceId, string? sourceWorkspaceId, Channel? channel, string reason) =>
+        logger.LogWarning(
+            "internal.credentials.refused SourceId={SourceId} WorkspaceId={WorkspaceId} SourceWorkspaceId={SourceWorkspaceId} Channel={Channel} Reason={Reason}",
+            sourceId, workspaceId, sourceWorkspaceId, channel, reason);
 }

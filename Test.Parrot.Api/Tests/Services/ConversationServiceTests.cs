@@ -1002,4 +1002,98 @@ public class ConversationServiceTests
         Assert.Empty(takeover.SetCalls);
         Assert.Empty(takeover.TouchCalls);
     }
+
+    // --- A teammate's reply reaches Omni-AI as TenantToUser ---
+
+    private sealed class FailingPublisher : IMessagePersistedPublisher
+    {
+        public Task PublishAsync(MessagePersisted persisted, CancellationToken cancellationToken = default) =>
+            throw new InvalidOperationException("Kafka is down");
+    }
+
+    private ConversationService CreateWithPublisher(IMessagePersistedPublisher publisher)
+    {
+        _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
+        return new ConversationService(_store, _connections.Object, _sender.Object,
+            _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
+            _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(),
+            receipts: _receipts.Object, mediaStorage: _media.Object, logger: new NullAppLogger(),
+            publisher: publisher, tenantLookup: new FakeTenantIdLookup("root-account-1"));
+    }
+
+    [Fact]
+    public async Task SendAsync_FromATeammate_PublishesTenantToUserWithTheOwnerAsTenant()
+    {
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.human");
+        FakeMessagePersistedPublisher publisher = new();
+        Guid requestId = Guid.NewGuid();
+
+        ConversationMessage sent = await CreateWithPublisher(publisher).SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(requestId, "We open at 9"), default);
+
+        MessagePersisted published = Assert.Single(publisher.Published);
+        Assert.Equal(CommsType.TenantToUser, published.Data.CommsType);
+        Assert.Equal(ConversationService.RequestKey(Owner, requestId), published.Data.MessageId);
+        Assert.Equal(sent.Id, published.Data.MessageId);
+        Assert.Equal("root-account-1", published.Data.TenantId);
+        Assert.Equal(Owner, published.Data.WorkspaceId);
+        Assert.Equal("We open at 9", published.Data.Text);
+        Assert.True(published.Data.Outgoing);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenTheChannelRefusesTheReply_PublishesNothing()
+    {
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>())).ThrowsAsync(new WhatsAppRejectedException());
+        FakeMessagePersistedPublisher publisher = new();
+
+        ConversationMessage sent = await CreateWithPublisher(publisher).SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "We open at 9"), default);
+
+        Assert.Equal("failed", sent.Status);
+        Assert.Empty(publisher.Published);
+    }
+
+    [Fact]
+    public async Task SendAsync_WhenPublishingFails_StillReturnsTheSentReply()
+    {
+        _sender.Setup(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.human");
+
+        ConversationMessage sent = await CreateWithPublisher(new FailingPublisher()).SendAsync(Owner, _connection.Id, Recipient,
+            new SendReplyRequest(Guid.NewGuid(), "We open at 9"), default);
+
+        Assert.Equal("accepted", sent.Status);
+    }
+
+    [Fact]
+    public async Task SendFileAsync_FromATeammate_PublishesTenantToUser()
+    {
+        _sender.Setup(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), Recipient, "image", "image/png", "menu.png",
+            It.IsAny<Stream>(), "Today's menu", It.IsAny<CancellationToken>())).ReturnsAsync("wamid.file");
+        FakeMessagePersistedPublisher publisher = new();
+
+        ConversationMessage sent = await CreateWithPublisher(publisher).SendFileAsync(Owner, _connection.Id, Recipient,
+            Guid.NewGuid(), "Today's menu", File("menu.png", Png), default);
+
+        MessagePersisted published = Assert.Single(publisher.Published);
+        Assert.Equal(CommsType.TenantToUser, published.Data.CommsType);
+        Assert.Equal(sent.Id, published.Data.MessageId);
+        Assert.Equal("image", Assert.Single(published.Data.Attachments!).Kind);
+    }
+
+    [Fact]
+    public async Task SendAgentFileAsync_PublishesOnlyAsTheAgent()
+    {
+        _sender.Setup(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), Recipient, "image", "image/png", "menu.png",
+            It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.ai-file");
+        FakeMessagePersistedPublisher publisher = new();
+
+        await CreateWithPublisher(publisher).SendAgentFileAsync(Owner, _connection.Id, Recipient,
+            Guid.NewGuid(), null, File("menu.png", Png), default);
+
+        Assert.Equal(CommsType.AgentToUser, Assert.Single(publisher.Published).Data.CommsType);
+    }
 }

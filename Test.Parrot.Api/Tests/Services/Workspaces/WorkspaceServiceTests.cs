@@ -1,6 +1,7 @@
 using Test.Parrot.Api.Tests.Services.Teams;
 using Moq;
 using Parrot.Application.Auth;
+using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Workspaces;
 using Parrot.Application.Logging;
 using Parrot.Application.Models;
@@ -15,6 +16,7 @@ public class WorkspaceServiceTests
     private const string Tenant = "tenant-1";
 
     private readonly FakeWorkspaceRepository _repository = new();
+    private readonly Mock<IConnectionSourceSyncService> _sources = new();
     private readonly WorkspaceService _sut;
 
     public WorkspaceServiceTests()
@@ -24,7 +26,7 @@ public class WorkspaceServiceTests
             .Setup(l => l.BeginEntityScope(It.IsAny<string>(), It.IsAny<string>()))
             .Returns(Mock.Of<IDisposable>());
 
-        _sut = TeamFixture.Workspaces(_repository, logger.Object);
+        _sut = TeamFixture.Workspaces(_repository, logger.Object, sources: _sources.Object);
     }
 
     // ---------------------------------------------------------------------------
@@ -64,6 +66,27 @@ public class WorkspaceServiceTests
         Assert.Equal("https://cdn.example.com/logo.png", saved.LogoUrl);
         Assert.NotEqual(Tenant, created.Id);
         Assert.False(created.IsCurrent);
+    }
+
+    [Fact]
+    public async Task CreateAsync_TellsTheAiAboutTheNewWorkspace()
+    {
+        WorkspaceResponse created = await _sut.CreateAsync(Tenant, new CreateWorkspaceRequest { Name = "Oma's Kitchen" });
+
+        _sources.Verify(s => s.PublishWorkspaceCreatedAsync(created.Id, It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // Best-effort: the workspace's first channel sends everything the announcement would have.
+    [Fact]
+    public async Task CreateAsync_WhenTellingTheAiFails_StillCreatesTheWorkspace()
+    {
+        _sources
+            .Setup(s => s.PublishWorkspaceCreatedAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new InvalidOperationException("database unavailable"));
+
+        WorkspaceResponse created = await _sut.CreateAsync(Tenant, new CreateWorkspaceRequest { Name = "Oma's Kitchen" });
+
+        Assert.True(_repository.Rows.ContainsKey(created.Id));
     }
 
     [Theory]
@@ -136,6 +159,7 @@ public class WorkspaceServiceTests
         Assert.Equal("Oma's Kitchen", workspace.Name);
         Assert.Equal("https://cdn.example.com/logo.png", workspace.LogoUrl);
         Assert.Same(workspace, _repository.Rows[workspace.Id]);
+        _sources.Verify(s => s.PublishWorkspaceCreatedAsync(workspace.Id, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // Two sign-ins racing to make the first workspace must agree on its id, so

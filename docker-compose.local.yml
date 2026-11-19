@@ -85,6 +85,7 @@ services:
         create messages.outbound 24
         create messages.outbound.dlq 3
         create agent.events 6
+        create business.knowledge.sources 6
     restart: "no"
     networks: [parrot]
 
@@ -277,6 +278,8 @@ services:
 
   # One program, four jobs, each its own service so each scales on its own backlog (Worker__Roles):
   #   message-processor: messages.inbound -> MongoDB -> messages.persisted, the only thing that stores incoming messages.
+  #     It also reads each channel's business profile (businessknowledge) and sends the snapshots to
+  #     business.knowledge.sources (sourcesoutbox); both take rows by lease, so running several is safe.
   #   media-worker: copies customers' pictures and files into private storage (messages.media).
   #   outbound-worker: hands agents' pictures and files to WhatsApp or Messenger (messages.outbound).
   #   ai-reply-worker: consumes ai.reply.requested events and routes AI-generated replies back through the channel.
@@ -288,7 +291,7 @@ services:
     restart: unless-stopped
     environment: &message-worker-env
       DOTNET_ENVIRONMENT: Development
-      Worker__Roles: messages
+      Worker__Roles: messages,sourcesoutbox,businessknowledge
       ConnectionStrings__DefaultConnection: Host=postgres;Port=5432;Database=parrot;Username=postgres;Password=${POSTGRES_PASSWORD:-parrot_dev_password}
       Kafka__BootstrapServers: kafka:9092
       MongoDB__ConnectionString: mongodb://mongodb:27017

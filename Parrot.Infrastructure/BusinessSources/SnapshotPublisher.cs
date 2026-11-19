@@ -30,7 +30,7 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         _logger = logger;
     }
 
-    public async Task PublishAsync(string workspaceId, CancellationToken ct = default)
+    public async Task PublishAsync(string workspaceId, SnapshotTrigger trigger, CancellationToken ct = default)
     {
         // Ensure the state row exists (idempotent; no-op if it already does).
         await _db.Database.ExecuteSqlInterpolatedAsync($"""
@@ -54,27 +54,32 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             .OrderBy(s => s.CreatedAt)
             .ToListAsync(ct);
 
-        string? workspaceName = await _db.Workspaces
-            .Where(w => w.Id == workspaceId)
-            .Select(w => w.Name)
-            .FirstOrDefaultAsync(ct);
+        Workspace? workspace = await _db.Workspaces.AsNoTracking().FirstOrDefaultAsync(w => w.Id == workspaceId, ct);
 
-        if (string.IsNullOrWhiteSpace(workspaceName))
-            throw new InvalidOperationException($"Cannot publish business-knowledge snapshot: workspace {workspaceId} has no name set.");
+        if (workspace is null || string.IsNullOrWhiteSpace(workspace.Name))
+            throw new InvalidOperationException($"Cannot publish business-knowledge snapshot: workspace {workspaceId} is missing or has no name set.");
 
         // Load provider-specific data needed for the snapshot (WABA IDs for WhatsApp sources).
         Dictionary<Guid, string?> connectionWabaIds = await LoadWabaIdsAsync(sources, ct);
 
         state.SnapshotVersion += 1;
 
-        string payload = BuildPayload(state.SnapshotVersion, workspaceId, workspaceName!, sources, connectionWabaIds);
+        // The outbox row's id is the event id, so a retried row is the same event to Omni.
+        Guid eventId = Guid.NewGuid();
+        BusinessSourcesUpdatedMessage message = BuildMessage(eventId, state.SnapshotVersion, trigger, workspace, workspace.Name, sources, connectionWabaIds);
+        // Use MessageJson.Options so the payload is consistent with what KafkaMessageBus
+        // would produce if the typed message were published directly.
+        string payload = JsonSerializer.Serialize(message, MessageJson.Options);
 
         _logger.LogInformation(
-            "business_knowledge.snapshot_payload WorkspaceId={WorkspaceId} SnapshotVersion={SnapshotVersion} SourceCount={SourceCount} Payload={Payload}",
-            workspaceId, state.SnapshotVersion, sources.Count, payload);
+            "business_knowledge.snapshot_payload EventId={EventId} CorrelationId={CorrelationId} WorkspaceId={WorkspaceId} TenantId={TenantId} " +
+            "SnapshotVersion={SnapshotVersion} Trigger={Trigger} SourceCount={SourceCount} Payload={Payload}",
+            eventId, message.CorrelationId, workspaceId, workspace.OwnerId, state.SnapshotVersion, trigger, sources.Count,
+            JsonSerializer.Serialize(ForLog(message), MessageJson.Options));
 
         OutboxEvent outbox = new OutboxEvent
         {
+            Id = eventId,
             WorkspaceId = workspaceId,
             Payload = payload,
         };
@@ -82,8 +87,10 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         _db.OutboxEvents.Add(outbox);
         await _db.SaveChangesAsync(ct);
 
-        _logger.LogInformation("business_knowledge.snapshot_queued SnapshotVersion={SnapshotVersion} WorkspaceId={WorkspaceId} Sources={SourceCount} OutboxEventId={OutboxEventId}",
-            state.SnapshotVersion, workspaceId, sources.Count, outbox.Id);
+        _logger.LogInformation(
+            "business_knowledge.snapshot_queued EventId={EventId} CorrelationId={CorrelationId} WorkspaceId={WorkspaceId} SnapshotVersion={SnapshotVersion} " +
+            "Trigger={Trigger} Sources={SourceCount}",
+            outbox.Id, message.CorrelationId, workspaceId, state.SnapshotVersion, trigger, sources.Count);
     }
 
     private async Task<Dictionary<Guid, string?>> LoadWabaIdsAsync(IReadOnlyList<BusinessSource> sources, CancellationToken ct)
@@ -104,28 +111,49 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
             .ToDictionaryAsync(c => c.Id, c => c.WhatsAppBusinessAccountId, ct);
     }
 
-    private static string BuildPayload(
+    private static BusinessSourcesUpdatedMessage BuildMessage(
+        Guid eventId,
         long snapshotVersion,
-        string workspaceId,
-        string workspaceName,
+        SnapshotTrigger trigger,
+        Workspace workspace,
+        string businessName,
         IReadOnlyList<BusinessSource> sources,
         IReadOnlyDictionary<Guid, string?> connectionWabaIds)
     {
         BusinessSourcesUpdatedMessage message = new BusinessSourcesUpdatedMessage
         {
-            EventId = Guid.NewGuid().ToString(),
-            WorkspaceId = workspaceId,
-            SnapshotVersion = snapshotVersion,
+            EventId = eventId.ToString(),
             OccurredAt = DateTimeOffset.UtcNow,
-            Data = new BusinessData { Name = workspaceName },
-            Sources = sources.Select(s => ToEntry(s, connectionWabaIds)).ToList(),
+            CorrelationId = InboundMessagePublisher.CurrentCorrelationId(),
+            Data = new BusinessSourcesSnapshot
+            {
+                WorkspaceId = workspace.Id,
+                TenantId = workspace.OwnerId,
+                Trigger = trigger,
+                SnapshotVersion = snapshotVersion,
+                Business = new BusinessData { Name = businessName },
+                Sources = sources.Select(s => ToEntry(s, connectionWabaIds)).ToList(),
+            },
         };
 
-        // Use MessageJson.Options so the payload is consistent with what KafkaMessageBus
-        // would produce if the typed message were published directly. The [JsonPropertyName]
-        // attributes ensure snake_case regardless of the naming policy.
-        return JsonSerializer.Serialize(message, MessageJson.Options);
+        return message;
     }
+
+    // What the log shows: the same message with the business's phone, email and address masked.
+    private static BusinessSourcesUpdatedMessage ForLog(BusinessSourcesUpdatedMessage message) => message with
+    {
+        Data = message.Data with
+        {
+            Sources =
+            [
+                .. message.Data.Sources.Select(source => source with
+                {
+                    Handle = source.Channel == "whatsapp" ? LogMask.Phone(source.Handle) : source.Handle,
+                    Text = LogMask.ProfileJson(source.Text),
+                }),
+            ],
+        },
+    };
 
     private static SourceEntry ToEntry(BusinessSource source, IReadOnlyDictionary<Guid, string?> connectionWabaIds)
     {
@@ -178,15 +206,15 @@ public sealed class SnapshotPublisher : ISnapshotPublisher
         connectionWabaIds.TryGetValue(source.AuthorizationConnectionId, out string? wabaId);
 
         Dictionary<string, string?> data = source.Kind == BusinessSourceKind.Catalog
-            ? new Dictionary<string, string?> { ["waba_id"] = wabaId, ["catalog_id"] = source.ExternalId }
-            : new Dictionary<string, string?> { ["waba_id"] = wabaId, ["phone_number_id"] = source.ExternalId };
+            ? new Dictionary<string, string?> { ["wabaId"] = wabaId, ["catalogId"] = source.ExternalId }
+            : new Dictionary<string, string?> { ["wabaId"] = wabaId, ["phoneNumberId"] = source.ExternalId };
 
         return JsonSerializer.SerializeToElement(data);
     }
 
     private static JsonElement BuildInstagramProviderData(BusinessSource source) =>
-        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["account_id"] = source.ExternalId });
+        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["accountId"] = source.ExternalId });
 
     private static JsonElement BuildFacebookProviderData(BusinessSource source) =>
-        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["page_id"] = source.ExternalId });
+        JsonSerializer.SerializeToElement(new Dictionary<string, string?> { ["pageId"] = source.ExternalId });
 }

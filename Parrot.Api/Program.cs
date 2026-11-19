@@ -190,10 +190,22 @@ builder.Services.AddAuthentication(options =>
                 context.Token = token;
             return Task.CompletedTask;
         },
+        // Why Omni's calls to /api/internal were turned away; the responses are unchanged.
+        OnAuthenticationFailed = ctx =>
+        {
+            Parrot.Api.Security.InternalAuthLog.AuthenticationFailed(ctx);
+            return Task.CompletedTask;
+        },
+        OnForbidden = ctx =>
+        {
+            Parrot.Api.Security.InternalAuthLog.Forbidden(ctx);
+            return Task.CompletedTask;
+        },
         // Return 404 for unauthenticated requests so the endpoint's existence
         // is not revealed to anonymous callers.
         OnChallenge = async ctx =>
         {
+            Parrot.Api.Security.InternalAuthLog.Challenged(ctx);
             ctx.HandleResponse();
             ctx.Response.StatusCode = StatusCodes.Status404NotFound;
             ctx.Response.ContentType = "application/json";
@@ -686,6 +698,11 @@ builder.Services.AddSingleton<Parrot.Api.Realtime.MessageSettledRouter>();
 builder.Services.AddHostedService<Parrot.Api.Realtime.MessageSettledDeliveryService>();
 builder.Services.Configure<Parrot.Application.Conversations.OutboundSettings>(builder.Configuration.GetSection(Parrot.Application.Conversations.OutboundSettings.SectionName));
 builder.Services.AddSingleton<IOutboundJobPublisher, Parrot.Infrastructure.MessageBus.KafkaOutboundJobPublisher>();
+
+// A teammate's reply from the inbox goes to messages.persisted as TenantToUser, so Omni-AI knows what the
+// business told the customer. The realtime gateway reads it too; the inbox already has the reply by its id.
+builder.Services.AddSingleton<IMessagePersistedPublisher, KafkaMessagePersistedPublisher>();
+builder.Services.AddSingleton<ITenantIdLookup, EfTenantIdLookup>();
 
 // What the orchestrator's agents did, kept per event in MongoDB and pushed
 // to the owner's connections as it arrives; the AI Operations screens read it.

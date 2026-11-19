@@ -194,6 +194,8 @@ builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.BusinessKind>(
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.AgentReadiness>();
 // Knowledge before its store exists: the page, empty, kept in the browser, when "Knowledge:Preview" is on.
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.KnowledgePreview>();
+// The Knowledge page from the AI service's business knowledge, read-only, when "OmniAi:Knowledge" is on.
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Knowledge.OmniKnowledgeMemory>();
 // Products & Services: kept by the catalog service (CatalogApi:BaseUrl), called as the signed-in person.
 // Without one, items last for the session.
 if (Uri.TryCreate(builder.Configuration["CatalogApi:BaseUrl"], UriKind.Absolute, out var catalogUri))
@@ -249,6 +251,13 @@ builder.Services.AddSingleton<Parrot.Web.Features.Dashboard.TaskRequests.ITaskQu
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.TaskRequests.TaskReplyDraft>();
 
 WebApplication app = builder.Build();
+
+// Where the Knowledge page reads from, said once: a page showing "Coming in phase 6" is a switch, not a bug.
+app.Logger.LogInformation("knowledge.page Source={Source} OmniBaseUrl={OmniBaseUrl}",
+    Parrot.Web.Features.Dashboard.Knowledge.OmniKnowledgeMemory.IsOn(app.Configuration, "OmniAi:Knowledge") ? "omni (read-only)"
+        : Parrot.Web.Features.Dashboard.Knowledge.OmniKnowledgeMemory.IsOn(app.Configuration, "Knowledge:Preview") ? "preview (this browser only)"
+        : "placeholder (OmniAi:Knowledge is off)",
+    omniBaseUrl?.ToString() ?? "(OmniAi:BaseUrl not set)");
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

@@ -51,6 +51,16 @@ public sealed class BusinessKnowledgeWorker : BackgroundService
             "BusinessKnowledgeWorker started. Channels=WhatsApp,Instagram,Facebook Kind=Profile BatchSize={BatchSize} PollIntervalMs={PollIntervalMs}",
             BatchSize, (int)PollInterval.TotalMilliseconds);
 
+        try
+        {
+            await LogWaitingSourcesAsync(stoppingToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Only a diagnosis: the worker runs either way.
+            _logger.LogWarning(ex, "business_knowledge.startup_check_failed");
+        }
+
         while (!stoppingToken.IsCancellationRequested)
         {
             int processed = 0;
@@ -79,6 +89,28 @@ public sealed class BusinessKnowledgeWorker : BackgroundService
                 }
             }
         }
+    }
+
+    // Said once at start: how many channel profiles are waiting to be read, and how many have failed for good.
+    private async Task LogWaitingSourcesAsync(CancellationToken ct)
+    {
+        await using AsyncServiceScope scope = _scopeFactory.CreateAsyncScope();
+        ApplicationDbContext db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+        Dictionary<MetadataSyncStatus, int> byStatus = await db.BusinessSources
+            .Where(s => s.IsActive && s.Kind == BusinessSourceKind.Profile)
+            .GroupBy(s => s.MetadataSyncStatus)
+            .ToDictionaryAsync(g => g.Key, g => g.Count(), ct);
+        int failed = byStatus.GetValueOrDefault(MetadataSyncStatus.Failed);
+        // Claimed by a worker that stopped mid-read (a deploy, a crash), lease run out: the next
+        // claim takes them again. Counted so a worker dying mid-read still shows in the logs.
+        DateTime now = DateTime.UtcNow;
+        int stuck = await db.BusinessSources.CountAsync(s => s.IsActive && s.Kind == BusinessSourceKind.Profile
+            && s.MetadataSyncStatus == MetadataSyncStatus.Processing && s.MetadataSyncLockedUntil < now, ct);
+        _logger.Log(failed > 0 || stuck > 0 ? LogLevel.Warning : LogLevel.Information,
+            "business_knowledge.sources_waiting Pending={Pending} Retrying={Retrying} Processing={Processing} Stuck={Stuck} Completed={Completed} Failed={Failed}" +
+            (failed > 0 || stuck > 0 ? ": failed sources keep their reason in BusinessSources.LastMetadataSyncError; stuck ones were left processing by a stopped worker and are read again now" : ""),
+            byStatus.GetValueOrDefault(MetadataSyncStatus.Pending), byStatus.GetValueOrDefault(MetadataSyncStatus.RetryScheduled),
+            byStatus.GetValueOrDefault(MetadataSyncStatus.Processing), stuck, byStatus.GetValueOrDefault(MetadataSyncStatus.Completed), failed);
     }
 
     private async Task<int> ProcessBatchAsync(CancellationToken ct)
@@ -194,13 +226,15 @@ public sealed class BusinessKnowledgeWorker : BackgroundService
             source.MetadataSyncStatus = MetadataSyncStatus.Completed;
             source.LastMetadataSyncSucceededAt = DateTime.UtcNow;
             source.LastMetadataSyncError = null;
+            SnapshotTrigger trigger = source.MetadataSyncTrigger ?? SnapshotTrigger.Scheduled;
+            source.MetadataSyncTrigger = null;
 
             await db.SaveChangesAsync(ct);
-            await publisher.PublishAsync(workspaceId, ct);
+            await publisher.PublishAsync(workspaceId, trigger, ct);
 
             _logger.LogInformation(
-                "business_knowledge.metadata_fetched SourceId={SourceId} Channel={Channel} WorkspaceId={WorkspaceId} ExternalId={ExternalId}",
-                sourceId, channel, workspaceId, externalId);
+                "business_knowledge.metadata_fetched SourceId={SourceId} Channel={Channel} WorkspaceId={WorkspaceId} ExternalId={ExternalId} Trigger={Trigger}",
+                sourceId, channel, workspaceId, externalId, trigger);
         }
         else
         {
@@ -217,9 +251,11 @@ public sealed class BusinessKnowledgeWorker : BackgroundService
 
             await db.SaveChangesAsync(ct);
 
-            _logger.LogWarning(
-                "business_knowledge.metadata_fetch_failed SourceId={SourceId} Channel={Channel} AttemptCount={AttemptCount} Exhausted={Exhausted} Error={Error}",
-                sourceId, channel, source.MetadataSyncAttemptCount, exhausted, fetchError);
+            // Given up for good: nothing more happens until the owner reconnects or refreshes, so it needs a person.
+            _logger.Log(exhausted ? LogLevel.Error : LogLevel.Warning,
+                "business_knowledge.metadata_fetch_failed SourceId={SourceId} Channel={Channel} WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} " +
+                "AttemptCount={AttemptCount} Exhausted={Exhausted} NextAttemptAt={NextAttemptAt} Error={Error}",
+                sourceId, channel, workspaceId, connectionId, source.MetadataSyncAttemptCount, exhausted, source.NextMetadataSyncAttemptAt, fetchError);
         }
 
         await tx.CommitAsync(ct);

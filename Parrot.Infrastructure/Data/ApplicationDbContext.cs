@@ -476,6 +476,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(s => s.Url).HasMaxLength(2048);
             entity.Property(s => s.Text).HasColumnType("text");
             entity.Property(s => s.MetadataSyncStatus).HasConversion<int>();
+            entity.Property(s => s.MetadataSyncTrigger).HasConversion<int>();
             entity.Property(s => s.LastMetadataSyncError).HasMaxLength(2000);
             entity.Property(s => s.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.Property(s => s.UpdatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");

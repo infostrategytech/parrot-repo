@@ -170,6 +170,18 @@
 .knowledge__section-body ::deep .knowledge__updated { margin-top: var(--spacing-2xs); color: var(--colors-text-subtle); }
 .knowledge__section-body ::deep textarea { margin-top: var(--spacing-xs); }
 .knowledge__edit-actions { display: flex; gap: var(--spacing-sm); justify-content: flex-end; }
+
+/* Someone else saved the section first: said in place, above Save, with the way to their version. */
+.knowledge__stale {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: var(--spacing-sm);
+  align-items: center;
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-feedback-warning-text);
+  background: var(--colors-feedback-warning-subtle);
+  border-radius: var(--radius-radius-lg);
+}
 /* Just added to, or just rewritten: lit for a moment. */
 .knowledge__section.is-fresh { animation: knowledge-fresh var(--ds-knowledge-glow) var(--ds-motion-ease) both; }
 @keyframes knowledge-fresh { from { background-color: var(--colors-accent-brand-subtle); box-shadow: 0 0 0 var(--spacing-sm) var(--colors-accent-brand-subtle); } }

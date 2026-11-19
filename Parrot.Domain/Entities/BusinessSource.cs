@@ -72,6 +72,12 @@ public class BusinessSource
     /// <summary>Incremented on each completed sync attempt (success or failure) for backoff.</summary>
     public int MetadataSyncAttemptCount { get; set; }
 
+    /// <summary>
+    /// Why the pending fetch was asked for, sent as the trigger of the snapshot that follows it.
+    /// Cleared once that snapshot is queued; none (e.g. a seeded source) is sent as Scheduled.
+    /// </summary>
+    public SnapshotTrigger? MetadataSyncTrigger { get; set; }
+
     // ── Lifecycle ────────────────────────────────────────────────────────────
 
     public bool IsActive { get; set; } = true;
