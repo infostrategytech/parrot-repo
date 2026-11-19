@@ -1,0 +1,24 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* One public page to read: a title, when it last changed, a short opening, then its sections. *@
+<article class="landing-document" aria-labelledby="landing-document-title">
+    <header class="landing-document__head">
+        <Typography TextStyle="TextStyle.DisplayBold" As="h1" Id="landing-document-title" Prose>@Title</Typography>
+        @if (ShowUpdated)
+        {
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="landing-document__muted">Last updated @LandingCompany.DocumentsUpdated.ToString("d MMMM yyyy")</Typography>
+        }
+        @if (Intro is not null)
+        {
+            <Typography TextStyle="TextStyle.BodyLargeMedium" As="p" Prose Class="landing-document__intro">@Intro</Typography>
+        }
+    </header>
+    <div class="landing-document__body">@ChildContent</div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public string? Intro { get; set; }
+    [Parameter] public bool ShowUpdated { get; set; } = true;
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

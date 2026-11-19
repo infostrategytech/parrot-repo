@@ -71,8 +71,8 @@ body {
    phone the floor shrank the page, and the dialog with it, to a third of
    its size; it lays itself out at the screen's width. Nor Settings, its own
    space, which shows its list or one section on a phone. */
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .settings-shell, .business-intro-host .dialog-backdrop),
-html:has(.account-access-page, .account-panel-page, .legal-page, .agent-create, .inbox-workspace, .settings-shell, .business-intro-host .dialog-backdrop) body {
+html:has(.account-access-page, .account-panel-page, .legal-page, .landing-page, .agent-create, .inbox-workspace, .settings-shell, .business-intro-host .dialog-backdrop),
+html:has(.account-access-page, .account-panel-page, .legal-page, .landing-page, .agent-create, .inbox-workspace, .settings-shell, .business-intro-host .dialog-backdrop) body {
   min-width: 0;
 }
 

@@ -1,0 +1,6 @@
+.landing-section { display: grid; gap: var(--spacing-sm); }
+.landing-section__text { display: grid; gap: var(--spacing-md); color: var(--colors-text-secondary); line-height: 1.65; }
+.landing-section__text ::deep p { margin: 0; }
+.landing-section__text ::deep ul { display: grid; gap: var(--spacing-xs); margin: 0; padding-left: var(--spacing-xl); }
+.landing-section__text ::deep a { color: var(--colors-text-link); text-underline-offset: var(--spacing-2xs); }
+.landing-section__text ::deep strong { color: var(--colors-text-primary); font-weight: 600; }

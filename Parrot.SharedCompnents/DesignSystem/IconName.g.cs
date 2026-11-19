@@ -200,6 +200,8 @@ public enum IconName
     RiSparkling2Fill,
     /// <summary>react-icons/ri/RiSparklingFill</summary>
     RiSparklingFill,
+    /// <summary>react-icons/ri/RiStickyNoteFill</summary>
+    RiStickyNoteFill,
     /// <summary>react-icons/ri/RiStopFill</summary>
     RiStopFill,
     /// <summary>react-icons/ri/RiStore2Fill</summary>
@@ -365,6 +367,7 @@ public static class IconNameExtensions
         "ri-smartphone-fill",
         "ri-sparkling2-fill",
         "ri-sparkling-fill",
+        "ri-sticky-note-fill",
         "ri-stop-fill",
         "ri-store2-fill",
         "ri-subtract-fill",

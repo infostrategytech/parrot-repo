@@ -1,0 +1,38 @@
+@namespace Parrot.Web.Components.Layout.Landing
+@inject NavigationManager Navigation
+
+@* One head contract for public pages. Local hosts and comparison URLs never become canonical addresses.
+   Form-only routes and alternative design concepts should not compete with the public home page in search. *@
+<PageTitle>@Title</PageTitle>
+<HeadContent>
+    <meta name="description" content="@Description" />
+    <meta name="robots" content="@(CanIndex ? "index,follow" : "noindex,follow")" />
+    <link rel="canonical" href="@CanonicalUrl" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="yára" />
+    <meta property="og:title" content="@Title" />
+    <meta property="og:description" content="@Description" />
+    <meta property="og:url" content="@CanonicalUrl" />
+    <meta property="og:image" content="@ImageUrl" />
+    <meta property="og:image:width" content="512" />
+    <meta property="og:image:height" content="512" />
+    <meta property="og:image:alt" content="yára brand mark" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="@Title" />
+    <meta name="twitter:description" content="@Description" />
+    <meta name="twitter:image" content="@ImageUrl" />
+    <meta name="twitter:image:alt" content="yára brand mark" />
+</HeadContent>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter, EditorRequired] public string Path { get; set; } = "/";
+    [Parameter] public bool Indexable { get; set; } = true;
+
+    private string CanonicalUrl => LandingCompany.SiteUrl.TrimEnd('/') + "/" + Path.TrimStart('/');
+    // Existing approved mark; the internal filename remains compatibility-safe.
+    private string ImageUrl => LandingCompany.SiteUrl + "/brand/omniai-logo-512.png";
+    private bool CanIndex => Indexable && !Microsoft.AspNetCore.WebUtilities.QueryHelpers
+        .ParseQuery(new Uri(Navigation.Uri).Query).ContainsKey("concept");
+}

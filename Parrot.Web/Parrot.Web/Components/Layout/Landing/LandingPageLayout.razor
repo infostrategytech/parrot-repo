@@ -1,0 +1,18 @@
+@namespace Parrot.Web.Components.Layout.Landing
+@inherits LayoutComponentBase
+
+@* The reading pages around the landing page (About, Privacy, Terms, Data deletion): the same sky, top bar
+   and footer as Sign In, and one comfortable column. Sign in and Get started show from the start, since
+   there is no form here. *@
+<main class="landing-page">
+    <LandingSky Short />
+    <LandingHeader />
+    <div class="landing-page__body">@Body</div>
+    <LandingFooter />
+</main>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

@@ -1,0 +1,54 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* Public, fictional Inbox fragments. These are illustrations, not working agent controls.
+   Knowledge questions stay in Inbox Needs you, not Tasks; taking over pauses AI replies. *@
+<section class="human-control" id="you-stay-in-control" aria-labelledby="human-control-title">
+    <header class="human-control__intro">
+        <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h2" Prose Id="human-control-title">An AI teammate.<br />You’re still in charge.</Typography>
+        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="human-control__lead">Let it handle the everyday. Give it an answer or step in yourself when a conversation needs you.</Typography>
+    </header>
+
+    <div class="human-control__grid">
+        <article class="human-control__example is-question" aria-labelledby="human-control-question">
+            <div class="human-control__words">
+                <span class="human-control__mark tone-amber" aria-hidden="true"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Md" /></span>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" Prose Id="human-control-question">It asks when it needs you.</Typography>
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="human-control__copy">Questions it can’t answer appear in your inbox’s Needs you view. Answer there, without losing the conversation.</Typography>
+            </div>
+
+            <div class="human-control__scene" role="img" aria-label="Example: Musa asks about gift wrapping. Kora's amber Needs you card offers Answer and Done above the reply box, so the question stays easy to find.">
+                <div class="human-control__scene-content" aria-hidden="true">
+                    <div class="human-control__customer">
+                        <ChannelGlyph Channel="whatsapp" Compact ShowTitle="false" />
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">Musa Abdullahi</Typography>
+                    </div>
+                    <div class="human-control__bubble"><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Can you gift-wrap it? It’s for a birthday.</Typography></div>
+                    <div class="human-control__question">
+                        <div class="human-control__question-head"><span><Icon Name="IconName.RiChat3Fill" Size="IconSize.Sm" /></span><div><Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Kora needs your answer</Typography><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="human-control__muted">Inbox · Needs you</Typography></div></div>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Do you offer gift wrapping, and does it cost extra?</Typography>
+                        <div class="human-control__illustrated-actions"><Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="human-control__quiet-action">Done</Typography><Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="human-control__solid-action">Answer</Typography></div>
+                    </div>
+                    <div class="human-control__composer"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.BodySmallMedium" As="span">The conversation stays right here.</Typography></div>
+                </div>
+            </div>
+        </article>
+
+        <article class="human-control__example is-takeover" aria-labelledby="human-control-takeover">
+            <div class="human-control__words">
+                <span class="human-control__mark tone-teal" aria-hidden="true"><Icon Name="IconName.RiUser3Fill" Size="IconSize.Md" /></span>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" Prose Id="human-control-takeover">Make it personal. Take over.</Typography>
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="human-control__copy">Read the chat and pick up where your AI left off. It pauses while you reply, until you’re ready to hand it back.</Typography>
+            </div>
+
+            <div class="human-control__scene" role="img" aria-label="Example: Adaeze takes over Musa's chat and replies personally. The You're replying strip says Kora is paused and offers Return to Kora. The AI does not send alongside the person.">
+                <div class="human-control__scene-content" aria-hidden="true">
+                    <div class="human-control__agent"><span class="human-control__avatar"><PresenceAvatar Direction="PresenceAvatarDirection.Pip" Tone="PresenceAvatarTone.Violet" Size="PresenceAvatarSize.Fill" Paused Decorative /></span><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Kora</Typography></div>
+                    <div class="human-control__bubble is-ai"><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>I’ll bring someone in to help with that.</Typography></div>
+                    <div class="human-control__event"><span></span><Typography TextStyle="TextStyle.Small12Medium" As="p">Adaeze took over</Typography><span></span></div>
+                    <div class="human-control__bubble is-human"><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>I can help, Musa. What would you like on the card?</Typography></div>
+                    <div class="human-control__ownership"><div><Typography TextStyle="TextStyle.BodySmallSemibold" As="p">You’re replying</Typography><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="human-control__muted">Kora is paused.</Typography></div><Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="human-control__return">Return to Kora</Typography></div>
+                </div>
+            </div>
+        </article>
+    </div>
+</section>

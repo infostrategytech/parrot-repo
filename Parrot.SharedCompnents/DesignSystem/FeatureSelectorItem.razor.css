@@ -1,0 +1,31 @@
+/* Missing Figma tokens: explanatory-selector easing, duration and focus-ring thickness. */
+::deep .ds-feature-selector {
+  /* Missing tokens: feature-selection transition timing and keyboard focus-ring thickness. */
+  --ds-feature-duration: 300ms;
+  --ds-feature-ring: 2px;
+  --ds-feature-ease: cubic-bezier(.22, 1, .36, 1);
+  display: flex;
+  align-items: start;
+  gap: var(--spacing-md);
+  width: 100%;
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-radius-xl);
+  color: var(--colors-text-subtle);
+  transition: background-color var(--ds-feature-duration) ease, color var(--ds-feature-duration) ease;
+}
+::deep .ds-feature-selector.is-selected { background: var(--colors-surface-muted); color: var(--colors-text-primary); }
+::deep .ds-feature-selector:focus-visible { outline: var(--ds-feature-ring) solid var(--colors-brand-primary); outline-offset: var(--spacing-xs); }
+.ds-feature-selector__icon { display: grid; place-items: center; flex: none; width: var(--spacing-3xl); height: var(--spacing-3xl); border-radius: var(--radius-radius-lg); color: var(--ds-feature-icon-color, var(--colors-icon-secondary)); background: var(--ds-feature-icon-background, var(--colors-surface-background)); }
+::deep .is-selected .ds-feature-selector__icon { color: var(--ds-feature-icon-color, var(--colors-icon-primary)); background: var(--ds-feature-icon-background, var(--colors-accent-brand-subtle)); }
+/* Explicit accents persist when a different feature is selected, in either theme. */
+.tone-teal { --ds-feature-icon-color: var(--colors-accent-teal-text); --ds-feature-icon-background: var(--colors-accent-teal-subtle); }
+.tone-violet { --ds-feature-icon-color: var(--colors-accent-violet-text); --ds-feature-icon-background: var(--colors-accent-violet-subtle); }
+.tone-amber { --ds-feature-icon-color: var(--colors-accent-amber-text); --ds-feature-icon-background: var(--colors-accent-amber-subtle); }
+.ds-feature-selector__copy { display: grid; min-width: 0; padding-top: var(--spacing-xs); text-align: left; }
+.ds-feature-selector__description { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows var(--ds-feature-duration) var(--ds-feature-ease), opacity var(--ds-feature-duration) ease; }
+.ds-feature-selector__description > span { min-height: 0; overflow: hidden; }
+.ds-feature-selector__description > span > ::deep span { display: block; padding-top: var(--spacing-sm); color: var(--colors-text-subtle); }
+::deep .is-selected .ds-feature-selector__description { grid-template-rows: 1fr; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  ::deep .ds-feature-selector, .ds-feature-selector__description { transition: none; }
+}

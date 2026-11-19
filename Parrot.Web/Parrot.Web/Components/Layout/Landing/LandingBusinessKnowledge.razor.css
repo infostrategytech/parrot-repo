@@ -1,0 +1,99 @@
+.business-knowledge {
+  /* Missing Figma tokens: marketing measures, illustration frame, hairline and finite transition timings. */
+  --ds-knowledge-measure: 1092px;
+  --ds-knowledge-words: 380px;
+  --ds-knowledge-hairline: 1px;
+  --ds-knowledge-card: 440px;
+  --ds-knowledge-stage: 560px;
+  --ds-knowledge-change: 380ms;
+  --ds-knowledge-instant: 0s;
+  --ds-knowledge-edit: 2400ms;
+  --ds-knowledge-ease: cubic-bezier(.22, 1, .36, 1);
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  align-items: center;
+  gap: var(--spacing-5xl);
+  width: 100%;
+  min-width: 0;
+  max-width: var(--ds-knowledge-measure);
+  margin-inline: auto;
+  padding-block: var(--spacing-5xl);
+  scroll-margin-top: var(--spacing-5xl);
+  color: var(--colors-text-primary);
+}
+.business-knowledge__words { display: grid; gap: var(--spacing-xl); max-width: var(--ds-knowledge-words); }
+.business-knowledge__words ::deep h2 { margin: 0; text-wrap: balance; }
+::deep .business-knowledge__eyebrow { display: flex; align-items: center; gap: var(--spacing-sm); margin: 0; color: var(--colors-text-subtle); }
+::deep .business-knowledge__eyebrow svg { color: var(--colors-icon-primary); }
+::deep .business-knowledge__lead { margin: 0; color: var(--colors-text-secondary); }
+.business-knowledge__features { display: grid; gap: var(--spacing-xs); margin-top: var(--spacing-md); }
+.business-knowledge__visual { display: grid; gap: var(--spacing-md); min-width: 0; }
+.business-knowledge__stage {
+  --ds-knowledge-tint: var(--colors-accent-teal-muted);
+  display: grid;
+  place-items: center;
+  min-width: 0;
+  min-height: var(--ds-knowledge-stage);
+  padding: var(--spacing-3xl);
+  border-radius: var(--radius-radius-3xl);
+  background-color: color-mix(in srgb, var(--ds-knowledge-tint) 50%, var(--colors-surface-background));
+  transition: background-color var(--ds-knowledge-change) ease;
+}
+.business-knowledge__stage[data-feature="review"] { --ds-knowledge-tint: var(--colors-accent-violet-muted); }
+.business-knowledge__stage[data-feature="update"] { --ds-knowledge-tint: var(--colors-accent-amber-muted); }
+.business-knowledge__product { width: 100%; min-width: 0; max-width: var(--ds-knowledge-card); overflow: hidden; border: var(--ds-knowledge-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-2xl); background: var(--colors-surface-card); }
+.business-knowledge__product-head { display: flex; align-items: center; gap: var(--spacing-md); padding: var(--spacing-xl) var(--spacing-2xl); border-bottom: var(--ds-knowledge-hairline) solid var(--colors-surface-border); }
+.business-knowledge__product-head > div { display: grid; gap: var(--spacing-xs); min-width: 0; }
+.business-knowledge__product-head ::deep p, .business-knowledge__scene ::deep p { margin: 0; }
+.business-knowledge__book { display: grid; place-items: center; flex: none; width: var(--spacing-3xl); height: var(--spacing-3xl); border-radius: var(--radius-radius-lg); background: var(--colors-accent-brand-subtle); color: var(--colors-icon-primary); }
+/* All three scenes stay in one grid cell. Their natural maximum reserves room before interaction,
+   keeping the surrounding page steady without clipping wrapped text at a fixed height. */
+.business-knowledge__scenes { display: grid; min-width: 0; padding: var(--spacing-2xl); }
+.business-knowledge__scene { display: flex; flex-direction: column; gap: var(--spacing-lg); grid-area: 1/1; min-width: 0; visibility: hidden; opacity: 0; transform: translateY(var(--spacing-sm)) scale(.985); transition: opacity var(--ds-knowledge-change) ease, transform var(--ds-knowledge-change) var(--ds-knowledge-ease), visibility var(--ds-knowledge-instant) var(--ds-knowledge-change); pointer-events: none; }
+[data-feature="natural"] .scene-natural, [data-feature="review"] .scene-review, [data-feature="update"] .scene-update { visibility: visible; opacity: 1; transform: none; transition-delay: var(--ds-knowledge-instant); }
+.business-knowledge__scene-title { display: grid; gap: var(--spacing-sm); }
+::deep .business-knowledge__muted { color: var(--colors-text-subtle); }
+.business-knowledge__facts { display: grid; gap: var(--spacing-md); }
+.business-knowledge__fact { display: flex; align-items: start; gap: var(--spacing-md); padding: var(--spacing-lg); border: var(--ds-knowledge-hairline) solid var(--colors-surface-border); border-radius: var(--radius-radius-xl); }
+.business-knowledge__fact > div { min-width: 0; flex: 1; display: grid; gap: var(--spacing-sm); }
+.business-knowledge__fact-icon { display: flex; flex: none; padding-top: var(--spacing-2xs); color: var(--colors-icon-primary); }
+.business-knowledge__fact > ::deep svg { color: var(--colors-icon-secondary); flex: none; }
+::deep .business-knowledge__provenance { display: flex; align-items: center; gap: var(--spacing-xs); color: var(--colors-text-subtle); }
+::deep .business-knowledge__approve { display: flex; align-items: center; justify-content: center; gap: var(--spacing-sm); margin-top: auto; padding: var(--spacing-md) var(--spacing-lg); border-radius: var(--radius-radius-full); background: var(--colors-brand-primary); color: var(--colors-brand-primary-foreground); }
+::deep .business-knowledge__reassurance { text-align: center; color: var(--colors-text-subtle); }
+.business-knowledge__fact.is-editing { background: var(--colors-surface-muted); }
+.business-knowledge__swap { display: inline-grid; vertical-align: bottom; }
+.business-knowledge__swap > span { grid-area: 1/1; }
+.business-knowledge__swap > .is-before { opacity: 0; }
+.business-knowledge__swap > .is-after { opacity: 1; }
+::deep .business-knowledge__timestamp { color: var(--colors-text-subtle); }
+.business-knowledge__saved { display: flex; align-items: center; justify-content: center; gap: var(--spacing-sm); padding: var(--spacing-md); margin-top: auto; border-radius: var(--radius-radius-lg); background: var(--colors-feedback-success-subtle); color: var(--colors-feedback-success-text); }
+/* A finite illustration only when this feature is chosen. No timers, auto-cycling or hidden loops. */
+[data-feature="update"] .business-knowledge__swap > .is-before { animation: knowledge-value-out var(--ds-knowledge-edit) both; }
+[data-feature="update"] .business-knowledge__swap > .is-after { animation: knowledge-value-in var(--ds-knowledge-edit) both; }
+[data-feature="update"] .business-knowledge__saved { animation: knowledge-saved-in var(--ds-knowledge-edit) both; }
+::deep .business-knowledge__caption { margin: 0; color: var(--colors-text-subtle); }
+::deep .business-knowledge__sr-only { position: absolute; width: var(--ds-knowledge-hairline); height: var(--ds-knowledge-hairline); padding: 0; margin: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[data-theme="aurora-dark"] .business-knowledge__stage { background-color: color-mix(in srgb, var(--ds-knowledge-tint) 25%, var(--colors-surface-background)); }
+@keyframes knowledge-value-out { 0%, 28% { opacity: 1; } 45%, 100% { opacity: 0; } }
+@keyframes knowledge-value-in { 0%, 28% { opacity: 0; } 45%, 100% { opacity: 1; } }
+@keyframes knowledge-saved-in { 0%, 60% { opacity: 0; transform: translateY(var(--spacing-xs)); } 80%, 100% { opacity: 1; transform: none; } }
+@media (max-width: 1024px) {
+  .business-knowledge { gap: var(--spacing-3xl); grid-template-columns: minmax(0, 4fr) minmax(0, 6fr); }
+  .business-knowledge__stage { padding: var(--spacing-2xl); }
+}
+@media (max-width: 760px) {
+  .business-knowledge { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-3xl); padding-block: var(--spacing-4xl); }
+  .business-knowledge__words { max-width: none; }
+  .business-knowledge__stage { padding: var(--spacing-lg); min-height: 0; }
+  .business-knowledge__product-head { padding: var(--spacing-lg); }
+  .business-knowledge__scenes { padding: var(--spacing-lg); }
+  .business-knowledge__fact { gap: var(--spacing-sm); padding: var(--spacing-md); }
+  .business-knowledge__fact > ::deep svg { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .business-knowledge__stage, .business-knowledge__scene { transition: none; }
+  [data-feature="update"] .business-knowledge__swap > span, [data-feature="update"] .business-knowledge__saved { animation: none; }
+}

@@ -11,13 +11,17 @@
   margin-top: var(--spacing-2xl);
 }
 
+/* Columns, not grids: a grid keeps the gap above a folding row until the row is gone, so the form would snap
+   at the end of the Confirm Password and meter slides. */
 .signup-form__fields {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--spacing-lg);
 }
 
 .signup-form__password {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--spacing-sm);
 }
 
@@ -63,3 +67,40 @@
 }
 
 .signup-form__signin a { font-weight: var(--typography-font-weight-semibold); }
+
+/* Confirm Password slides open as it arrives (once a password is being typed): from no height, with its share
+   of the fields' gap folding in with it, to its full height. */
+.signup-form__reveal {
+  /* Missing from the token set: the reveal's length, in step with the page's other slides. */
+  --ds-signup-reveal: 360ms;
+
+  display: grid;
+  grid-template-rows: 1fr;
+  animation: signup-reveal var(--ds-signup-reveal) cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+/* Clipped while it opens; a little room inside so the field's focus ring isn't cut. */
+.signup-form__reveal-inner { min-height: 0; overflow: hidden; margin: calc(var(--spacing-2xs) * -1); padding: var(--spacing-2xs); }
+@keyframes signup-reveal {
+  from { grid-template-rows: 0fr; margin-top: calc(var(--spacing-lg) * -1); opacity: 0; }
+  to { grid-template-rows: 1fr; margin-top: 0; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .signup-form__reveal { animation: none; } }
+/* Leaving: the same slide, backwards. */
+.signup-form__reveal.is-leaving { animation: signup-unreveal var(--ds-signup-reveal) cubic-bezier(0.32, 0.72, 0, 1) both; }
+@keyframes signup-unreveal {
+  from { grid-template-rows: 1fr; margin-top: 0; opacity: 1; }
+  to { grid-template-rows: 0fr; margin-top: calc(var(--spacing-lg) * -1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .signup-form__reveal.is-leaving { animation: none; } }
+
+/* The strength meter's gap above it folds with it as it slides, and the last of its own height with it, so its last step doesn't snap. */
+.signup-form__password ::deep .password-strength-reveal { animation-name: signup-meter-open; align-self: stretch; }
+.signup-form__password ::deep .password-strength-reveal.is-leaving { animation-name: signup-meter-close; }
+@keyframes signup-meter-open {
+  from { grid-template-rows: 0fr; margin-top: calc(var(--spacing-sm) * -1); opacity: 0; }
+  to { grid-template-rows: 1fr; margin-top: 0; opacity: 1; }
+}
+@keyframes signup-meter-close {
+  from { grid-template-rows: 1fr; margin-top: 0; opacity: 1; }
+  to { grid-template-rows: 0fr; margin-top: calc(var(--spacing-sm) * -1); opacity: 0; }
+}

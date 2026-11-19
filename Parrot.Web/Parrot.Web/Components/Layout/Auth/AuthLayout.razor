@@ -1,73 +1,32 @@
 @inherits LayoutComponentBase
+@using Parrot.Web.Components.Layout.Landing
+@inject NavigationManager Nav
 
-@* The signed-out stage for Sign In and Sign Up: the brand in the corner, the
-   theme switch opposite it, and two columns. The left one rotates through what
-   yára does, with a glow that cross-fades in the matching colour; the right
-   one is the page's form. Below 1180px the columns share the width, and on a
-   phone the story moves above the form. *@
-
-<main class="account-access-page">
+@* Public yára website and existing sign-in/sign-up forms. Concept D is the
+   production presentation; design comparisons and local reset tools stay local.
+   Internal composition classes retain their existing CSS hooks. *@
+<main class="account-access-page is-concept-b is-concept-d">
     <AuthGlow />
-
-    <header class="account-access-header">
-        <LogoDownloadMenu>
-            <a class="account-access-brand" href="/login" aria-label="yára home">
-                <CadenceMark Size="26" Tight />
-                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span">yára</Typography>
-            </a>
-        </LogoDownloadMenu>
-        <ThemeToggle Inline />
-    </header>
+    <LandingSky />
+    <LandingHeader Page="@Page" HasSections />
 
     <section class="account-access-content">
-        <div class="account-access-story" aria-label="What yára helps your business do">
-            <div class="account-access-story__rotation">
-                <article class="account-access-story__item story-cyan">
-                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
-                        Turn Messages Into Clear Next Steps
-                    </Typography>
-                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
-                        Capture orders, bookings and customer requests directly from every conversation.
-                    </Typography>
-                </article>
-
-                <article class="account-access-story__item story-violet">
-                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
-                        Let AI Handle Repetitive Questions
-                    </Typography>
-                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
-                        Give customers helpful answers using knowledge approved by your business.
-                    </Typography>
-                </article>
-
-                <article class="account-access-story__item story-amber">
-                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
-                        Know When Your Attention Is Needed
-                    </Typography>
-                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
-                        Bring payments, unanswered questions and important requests to the right person.
-                    </Typography>
-                </article>
-
-                <article class="account-access-story__item story-pink">
-                    <Typography TextStyle="TextStyle.DisplayBold" As="h2" Prose>
-                        Keep Customer Conversations Together
-                    </Typography>
-                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose>
-                        Manage WhatsApp, Instagram and Facebook messages from one shared inbox.
-                    </Typography>
-                </article>
-            </div>
-
-            <div class="account-access-story__progress" aria-hidden="true">
-                <i></i><i></i><i></i><i></i>
-            </div>
+        <div class="account-access-story is-hero">
+            <LandingAgentHero />
         </div>
-
-        <div class="account-access-form-panel">
-            @Body
+        <div class="account-access-form-panel" data-landing-form>
+            <CascadingValue TValue="bool" Name="HasMarketingHero" Value="true">@Body</CascadingValue>
         </div>
     </section>
+
+    <LandingAgentIntroduction />
+    <LandingBusinessKnowledge />
+    <LandingWorkForward />
+    <LandingHumanControl />
+    <LandingHowItWorks />
+    <LandingFaq />
+    <LandingAgentClosing />
+    <LandingFooter />
 </main>
 
 <ToastHost />
@@ -77,3 +36,8 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    private string Page => Nav.ToBaseRelativePath(Nav.Uri).Split('?', '#')[0].Trim('/') is var path
+        && (path.Length == 0 || path.StartsWith("register", StringComparison.OrdinalIgnoreCase)) ? "signup" : "signin";
+}

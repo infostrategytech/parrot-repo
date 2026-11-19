@@ -1,0 +1,117 @@
+/* Sticky inside the page's scrolling <main>, edge to edge: the page's side gutter becomes the bar's own
+   padding, so the frosted strip reaches both edges. */
+.landing-header {
+  /* Missing from the token set: the bar's fades, its glass blur and the focus ring. */
+  --ds-header-fade: 360ms;
+  --ds-header-link-fade: 150ms;
+  --ds-header-ease: cubic-bezier(0.23, 1, 0.32, 1);
+  --ds-header-instant: 0s;
+  --ds-header-glass: 16px;
+  --ds-header-ring: 2px;
+
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+  margin-inline: calc(var(--ds-landing-gutter, var(--spacing-3xl)) * -1);
+  padding: var(--spacing-lg) var(--ds-landing-gutter, var(--spacing-3xl));
+  transition: background-color var(--ds-header-fade) ease, box-shadow var(--ds-header-fade) ease;
+}
+
+.landing-header__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  color: var(--colors-text-primary);
+  text-decoration: none;
+}
+
+.landing-header__links {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xl);
+  margin-left: auto;
+}
+
+.landing-header__links a {
+  color: var(--colors-text-secondary);
+  text-decoration: none;
+  transition: color var(--ds-header-link-fade) ease;
+}
+.landing-header__links a:hover { color: var(--colors-text-primary); }
+.landing-header__links a:focus-visible { outline: var(--ds-header-ring) solid var(--colors-brand-primary); outline-offset: var(--spacing-xs); border-radius: var(--radius-radius-sm); }
+
+.landing-header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+/* Sign in and Get started: away while the form is in view. When it scrolls away they arrive the way Apple's
+   bars bring in their buttons (designer, 17 November 2026): each one rises a little, grows to full size and
+   comes into focus from a soft blur, Get started a beat after Sign in. Going, they simply fade, quicker and
+   together. They keep their room throughout, so nothing beside them moves. */
+.landing-header__start {
+  /* Missing from the token set: the arrival's length, the leaving's, the beat between the two buttons, the
+     soft focus they arrive from, and Apple's long, gentle ease-out. */
+  --ds-header-arrive: 560ms;
+  --ds-header-leave: 220ms;
+  --ds-header-beat: 70ms;
+  --ds-header-soft: 6px;
+  --ds-header-arrive-ease: cubic-bezier(0.32, 0.72, 0, 1);
+
+  display: flex;
+  gap: var(--spacing-xs);
+  visibility: hidden;
+  transition: visibility var(--ds-header-instant) linear var(--ds-header-leave);
+}
+.landing-header__arrive {
+  display: inline-flex;
+  opacity: 0;
+  transform: translateY(var(--spacing-sm)) scale(0.92);
+  filter: blur(var(--ds-header-soft));
+  transition: opacity var(--ds-header-leave) ease, transform var(--ds-header-leave) ease, filter var(--ds-header-leave) ease;
+}
+
+/* Frosted once the page moves; no hard line, just a soft shadow where it meets the content. */
+[data-scrolled] .landing-header {
+  background: color-mix(in srgb, var(--colors-surface-background) 76%, transparent);
+  box-shadow: 0 var(--spacing-xs) var(--spacing-xl) color-mix(in srgb, var(--colors-text-primary) 5%, transparent);
+  backdrop-filter: blur(var(--ds-header-glass)) saturate(180%);
+}
+
+/* The light theme's text-colour shadow becomes a pale glow at night. Keep the frost, not the glow. */
+[data-theme="aurora-dark"] [data-scrolled] .landing-header { box-shadow: none; }
+
+[data-past-form] .landing-header__start {
+  visibility: visible;
+  transition-delay: var(--ds-header-instant);
+}
+[data-past-form] .landing-header__arrive {
+  opacity: 1;
+  transform: none;
+  filter: none;
+  transition: opacity var(--ds-header-arrive) var(--ds-header-arrive-ease), transform var(--ds-header-arrive) var(--ds-header-arrive-ease), filter var(--ds-header-arrive) var(--ds-header-arrive-ease);
+}
+[data-past-form] .landing-header__arrive + .landing-header__arrive { transition-delay: var(--ds-header-beat); }
+
+/* Less motion: they only fade. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-header__arrive, [data-past-form] .landing-header__arrive { transform: none; filter: none; }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  [data-scrolled] .landing-header { background: var(--colors-surface-background); backdrop-filter: none; }
+}
+
+/* A phone: the links make room for the two buttons. */
+@media (max-width: 760px) {
+  .landing-header { gap: var(--spacing-sm); padding-block: var(--spacing-md); }
+  .landing-header__links { display: none; }
+  .landing-header__actions { margin-left: auto; gap: var(--spacing-xs); }
+  .landing-header__start { display: none; gap: 0; }
+  [data-past-form] .landing-header__start { display: flex; }
+  .landing-header__start ::deep .ds-button { padding-inline: var(--spacing-sm); }
+}

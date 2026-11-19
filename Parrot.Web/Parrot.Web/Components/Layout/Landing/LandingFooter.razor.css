@@ -1,0 +1,70 @@
+.landing-footer {
+  /* Missing from the token set: the page measure, a hairline, the link fade, the focus ring, the brand column's
+     reading width and the narrowest a link column may get. */
+  --ds-footer-measure: 1092px;
+  --ds-footer-hairline: 1px;
+  --ds-footer-fade: 150ms;
+  --ds-footer-ring: 2px;
+  --ds-footer-brand: 320px;
+  --ds-footer-column: 128px;
+
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--spacing-4xl);
+  width: 100%;
+  max-width: var(--ds-footer-measure);
+  margin-inline: auto;
+  padding-block: var(--spacing-5xl) var(--spacing-3xl);
+  border-top: var(--ds-footer-hairline) solid var(--colors-surface-border);
+}
+
+/* yára and its help on the left, the pages on the right, with a wide gap between them. */
+.landing-footer__top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--spacing-4xl) var(--spacing-5xl);
+}
+
+.landing-footer__brand { display: grid; justify-items: start; align-content: start; gap: var(--spacing-lg); max-width: var(--ds-footer-brand); }
+.landing-footer__home { display: inline-flex; align-items: center; gap: var(--spacing-sm); color: var(--colors-text-primary); text-decoration: none; }
+::deep .landing-footer__about { margin: 0; color: var(--colors-text-secondary); }
+::deep .landing-footer__muted { margin: 0; color: var(--colors-text-muted); }
+
+/* The support inbox, set apart from the description above it. */
+.landing-footer__help { display: grid; justify-items: start; gap: var(--spacing-xs); padding-top: var(--spacing-sm); }
+.landing-footer__email { color: var(--colors-text-primary); text-decoration: none; transition: color var(--ds-footer-fade) ease; }
+.landing-footer__phone { color: var(--colors-text-secondary); text-decoration: none; transition: color var(--ds-footer-fade) ease; }
+.landing-footer__email:hover, .landing-footer__phone:hover { color: var(--colors-brand-primary); }
+
+.landing-footer__columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(var(--ds-footer-column), auto));
+  gap: var(--spacing-2xl) var(--spacing-4xl);
+}
+.landing-footer__column { display: grid; align-content: start; gap: var(--spacing-lg); }
+::deep .landing-footer__title { margin: 0; color: var(--colors-text-primary); }
+.landing-footer__column ul { display: grid; gap: var(--spacing-md); margin: 0; padding: 0; list-style: none; }
+.landing-footer__column a { color: var(--colors-text-secondary); text-decoration: none; transition: color var(--ds-footer-fade) ease; }
+.landing-footer__column a:hover { color: var(--colors-text-primary); }
+
+.landing-footer a:focus-visible { outline: var(--ds-footer-ring) solid var(--colors-brand-primary); outline-offset: var(--spacing-2xs); border-radius: var(--radius-radius-sm); }
+
+/* Who owns yára, under its own hairline: the registered name and address, then the company's logo. */
+.landing-footer__bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-lg) var(--spacing-3xl);
+  padding-top: var(--spacing-2xl);
+  border-top: var(--ds-footer-hairline) solid var(--colors-surface-border);
+}
+.landing-footer__legal { display: grid; gap: var(--spacing-xs); min-width: 0; }
+
+@media (max-width: 760px) {
+  .landing-footer { gap: var(--spacing-3xl); padding-block: var(--spacing-4xl) var(--spacing-2xl); }
+  .landing-footer__columns { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; gap: var(--spacing-2xl) var(--spacing-xl); }
+  .landing-footer__bottom { flex-direction: column-reverse; align-items: stretch; }
+}

@@ -1,0 +1,326 @@
+.agent-hero {
+  /* Not tokens: the promise's measure, a focus ring, and the orbit: the agent's size, the circle's radius, its
+     tilt towards us, the depth of the view, one app's size, the stage around them and where in it the circle's
+     centre sits, one full turn, the apps' arrival and their gentle bob. */
+  --ds-agent-hero-measure: 540px;
+  --ds-agent-hero-ring: 2px;
+  --ds-orbit-face: 120px;
+  --ds-orbit-radius: 140px;
+  --ds-orbit-tilt: -26deg;
+  --ds-orbit-depth: 900px;
+  --ds-orbit-app: 52px;
+  --ds-orbit-stage-height: 236px;
+  --ds-orbit-centre: 120px;
+  --ds-orbit-hairline: 1px;
+  --ds-orbit-turn: 18s;
+  --ds-orbit-arrive: 760ms;
+  --ds-orbit-arrive-at: 1150ms;
+  --ds-orbit-arrive-step: 130ms;
+  --ds-orbit-bob: 3.4s;
+
+  display: grid;
+  justify-items: start;
+  gap: var(--spacing-3xl);
+  width: 100%;
+  max-width: var(--ds-agent-hero-measure);
+  /* Balance with the form, as placed in Figma (871:29, designer, 17 November 2026): the headline starts 124
+     below the form's title, and the block sits 9 in from the page's left edge, so the words and the form read as
+     one weight. Not tokens: the designer's placement. */
+  --ds-agent-hero-lift: -76px;
+  --ds-agent-hero-nudge: 9px;
+  translate: var(--ds-agent-hero-nudge) var(--ds-agent-hero-lift);
+}
+
+/* ── The orbit ────────────────────────────────────────────────────────────────
+   A real 3D scene: the agent stands at its centre, the apps travel a tilted circle round it. The browser sorts
+   them by depth, so an app at the back really passes behind the agent and comes out on the other side. Each app
+   turns back to face you as it goes, so its mark is never seen edge-on. */
+.agent-hero__stage {
+  position: relative;
+  width: calc(var(--ds-orbit-radius) * 2 + var(--ds-orbit-app) * 1.4);
+  height: var(--ds-orbit-stage-height);
+  margin-bottom: calc(var(--spacing-md) * -1);
+  perspective: var(--ds-orbit-depth);
+  perspective-origin: 50% var(--ds-orbit-centre);
+  transform-style: preserve-3d;
+  pointer-events: none;
+}
+
+/* The agent stands in the circle: the foot of its body (about 80% down its box) meets the middle of the circle,
+   and its shadow falls just in front, so it reads as inside the ring, neither on its front edge nor floating high
+   above it (designer, 17 November 2026). */
+.agent-hero__face {
+  position: absolute;
+  top: var(--ds-orbit-centre);
+  left: 50%;
+  width: var(--ds-orbit-face);
+  height: var(--ds-orbit-face);
+  transform: translate(-50%, -80%);
+  /* The agent can still be held (the stage lets the pointer through to it). */
+  pointer-events: auto;
+}
+
+/* A soft light behind the agent in daylight, set far back so every app passes in front of it. None at night:
+   a glow in the dark reads as a smudge, not light. */
+.agent-hero__halo {
+  position: absolute;
+  top: calc(var(--ds-orbit-centre) - var(--ds-orbit-face) / 2);
+  left: 50%;
+  width: calc(var(--ds-orbit-radius) * 2.4);
+  height: calc(var(--ds-orbit-radius) * 2.4);
+  background: radial-gradient(circle, color-mix(in srgb, var(--colors-surface-card) 70%, transparent) 0%, transparent 62%);
+  border-radius: var(--radius-radius-full);
+  transform: translate(-50%, -50%) translateZ(calc(var(--ds-orbit-radius) * -1.3));
+}
+
+/* The path: a faint circle in the same tilted plane, its back half behind the agent and fading into the
+   distance, its front half a little stronger. */
+.agent-hero__ring {
+  position: absolute;
+  top: var(--ds-orbit-centre);
+  left: 50%;
+  width: calc(var(--ds-orbit-radius) * 2);
+  height: calc(var(--ds-orbit-radius) * 2);
+  border: var(--ds-orbit-hairline) solid color-mix(in srgb, var(--colors-text-primary) 22%, transparent);
+  border-radius: var(--radius-radius-full);
+  transform: translate(-50%, -50%) rotateX(var(--ds-orbit-tilt)) rotateX(90deg);
+  -webkit-mask: linear-gradient(to bottom, color-mix(in srgb, var(--colors-text-primary) 15%, transparent), var(--colors-text-primary) 70%);
+  mask: linear-gradient(to bottom, color-mix(in srgb, var(--colors-text-primary) 15%, transparent), var(--colors-text-primary) 70%);
+  /* It draws itself in with the apps, not before them. */
+  animation: agent-hero-ring-in var(--ds-orbit-arrive) ease-out var(--ds-orbit-arrive-at) both;
+}
+
+/* Where an app is on the circle. All four share one turn, a quarter apart, and start an eighth of the way
+   round so none begins right in front of the agent's face. The first (WhatsApp) starts just short of the front and
+   comes round it first, then the second (Instagram), and so on. */
+.agent-hero__spot {
+  position: absolute;
+  top: var(--ds-orbit-centre);
+  left: 50%;
+  width: var(--ds-orbit-app);
+  height: var(--ds-orbit-app);
+  animation: agent-hero-orbit var(--ds-orbit-turn) linear infinite, agent-hero-depth var(--ds-orbit-turn) linear infinite;
+  will-change: transform, opacity;
+}
+.agent-hero__spot.spot-0 { animation-delay: calc(var(--ds-orbit-turn) * -0.875); }
+.agent-hero__spot.spot-1 { animation-delay: calc(var(--ds-orbit-turn) * -0.625); }
+.agent-hero__spot.spot-2 { animation-delay: calc(var(--ds-orbit-turn) * -0.375); }
+.agent-hero__spot.spot-3 { animation-delay: calc(var(--ds-orbit-turn) * -0.125); }
+
+/* The app itself: a little lit bubble with the app's own mark, light from the top left, a soft shade under it
+   and a shadow below, floating a little as it travels. It pops in as the agent lands its hello. */
+.agent-hero__app {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle at 32% 26%, var(--colors-surface-card) 0 34%, color-mix(in srgb, var(--colors-surface-card) 91%, var(--colors-text-primary)) 100%);
+  border: var(--ds-orbit-hairline) solid color-mix(in srgb, var(--colors-surface-border) 70%, transparent);
+  border-radius: var(--radius-radius-full);
+  box-shadow:
+    inset 0 calc(var(--spacing-2xs) * -1) var(--spacing-sm) color-mix(in srgb, var(--colors-text-primary) 7%, transparent),
+    inset 0 var(--spacing-2xs) var(--spacing-2xs) color-mix(in srgb, var(--colors-surface-card) 80%, transparent),
+    0 var(--spacing-xs) var(--spacing-md) color-mix(in srgb, var(--colors-text-primary) 8%, transparent),
+    0 var(--spacing-lg) var(--spacing-2xl) color-mix(in srgb, var(--colors-text-primary) 10%, transparent);
+  animation: agent-hero-arrive var(--ds-orbit-arrive) cubic-bezier(0.34, 1.56, 0.64, 1) both, agent-hero-bob var(--ds-orbit-bob) ease-in-out infinite alternate;
+  animation-delay: var(--ds-orbit-arrive-at), calc(var(--ds-orbit-bob) * -0.1);
+}
+.spot-1 .agent-hero__app { animation-delay: calc(var(--ds-orbit-arrive-at) + var(--ds-orbit-arrive-step)), calc(var(--ds-orbit-bob) * -0.4); animation-duration: var(--ds-orbit-arrive), calc(var(--ds-orbit-bob) * 1.18); }
+.spot-2 .agent-hero__app { animation-delay: calc(var(--ds-orbit-arrive-at) + var(--ds-orbit-arrive-step) * 2), calc(var(--ds-orbit-bob) * -0.8); animation-duration: var(--ds-orbit-arrive), calc(var(--ds-orbit-bob) * 0.9); }
+.spot-3 .agent-hero__app { animation-delay: calc(var(--ds-orbit-arrive-at) + var(--ds-orbit-arrive-step) * 3), calc(var(--ds-orbit-bob) * -1.2); animation-duration: var(--ds-orbit-arrive), calc(var(--ds-orbit-bob) * 1.3); }
+
+/* Round the agent: tilt into the circle's plane, turn to the angle, step out to the edge, then undo the turn
+   and the tilt so the app faces you. Last, it sits half its own size towards you, like a bead threaded on the
+   line: the line goes behind it instead of into it. Turning a full circle interpolates every angle between. */
+@keyframes agent-hero-orbit {
+  from { transform: translate(-50%, -50%) rotateX(var(--ds-orbit-tilt)) rotateY(0deg) translateZ(var(--ds-orbit-radius)) rotateY(0deg) rotateX(calc(var(--ds-orbit-tilt) * -1)) translateZ(calc(var(--ds-orbit-app) / 2)); }
+  to { transform: translate(-50%, -50%) rotateX(var(--ds-orbit-tilt)) rotateY(360deg) translateZ(var(--ds-orbit-radius)) rotateY(-360deg) rotateX(calc(var(--ds-orbit-tilt) * -1)) translateZ(calc(var(--ds-orbit-app) / 2)); }
+}
+/* Further away is a little fainter, like air between you and it; nearest is full strength. */
+@keyframes agent-hero-depth {
+  0% { opacity: 1; animation-timing-function: ease-in-out; }
+  50% { opacity: .7; animation-timing-function: ease-in-out; }
+  100% { opacity: 1; }
+}
+@keyframes agent-hero-ring-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes agent-hero-arrive {
+  from { opacity: 0; scale: .2; }
+  to { opacity: 1; scale: 1; }
+}
+@keyframes agent-hero-bob {
+  from { translate: 0 calc(var(--spacing-xs) * -1); }
+  to { translate: 0 var(--spacing-xs); }
+}
+
+/* ── The words (Concept C's) ─────────────────────────────────────────────── */
+/* The headline and its line under it read as one block, 24 apart; the blocks around them are 32 apart, so the
+   words breathe (designer, 17 November 2026: it read as clustered). */
+.agent-hero__words {
+  display: grid;
+  gap: var(--spacing-2xl);
+}
+.agent-hero__words ::deep .agent-hero__title {
+  margin: 0;
+  color: var(--colors-text-primary);
+  /* More room between the two lines than the display style's own (designer, 17 November 2026), so the underline
+     under the first has air before the second. */
+  line-height: var(--typography-leading-leading-5xl);
+  /* Where a line has to break (a phone), break it into even halves: "All your chats." / "One inbox." */
+  text-wrap: balance;
+}
+/* "An AI teammate." in the agent's own colour (the text shade of it, so it reads on the sky and at night),
+   fading to the next as the agent becomes the next teammate. */
+.agent-hero__accent {
+  /* Missing from the token set: the colour change, in step with the agent's, and the line's draw and delay. */
+  --ds-accent-fade: 700ms;
+  --ds-swoosh-draw: 900ms;
+  --ds-swoosh-at: 1700ms;
+  --ds-swoosh-weight: 3px;
+  --ds-accent: var(--colors-brand-primary);
+
+  color: var(--ds-accent);
+  transition: color var(--ds-accent-fade) ease;
+}
+.agent-hero__accent.tone-amber { --ds-accent: var(--colors-accent-amber-text); }
+.agent-hero__accent.tone-violet { --ds-accent: var(--colors-accent-violet-text); }
+.agent-hero__accent.tone-coral { --ds-accent: var(--colors-accent-rose-text); }
+.agent-hero__accent.tone-green { --ds-accent: var(--colors-accent-green-text); }
+.agent-hero__accent.tone-fuchsia { --ds-accent: var(--colors-accent-fuchsia-text); }
+.agent-hero__accent.tone-orange { --ds-accent: var(--colors-accent-orange-text); }
+.agent-hero__accent.tone-indigo { --ds-accent: var(--colors-accent-indigo-text); }
+.agent-hero__accent.tone-teal { --ds-accent: var(--colors-accent-teal-text); }
+
+/* A hand-drawn line under "AI teammate.", drawn once from left to right as the agent lands its hello. */
+.agent-hero__mark { position: relative; white-space: nowrap; }
+.agent-hero__swoosh {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--spacing-xs) * -1);
+  width: 100%;
+  height: var(--spacing-md);
+  overflow: visible;
+  pointer-events: none;
+}
+.agent-hero__swoosh path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: var(--ds-swoosh-weight);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  /* Hidden until it starts drawing: an undrawn line with round ends would still show its cap as a dot. */
+  opacity: 0;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: agent-hero-swoosh var(--ds-swoosh-draw) cubic-bezier(0.65, 0, 0.35, 1) var(--ds-swoosh-at) forwards;
+}
+@keyframes agent-hero-swoosh {
+  0% { opacity: 0; stroke-dashoffset: 1; }
+  2% { opacity: .55; }
+  100% { opacity: .55; stroke-dashoffset: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .agent-hero__swoosh path { animation: none; stroke-dashoffset: 0; opacity: .55; }
+}
+/* The description keeps a reading measure narrower than the headline, and never leaves a word alone on its line. */
+.agent-hero__words ::deep .agent-hero__lead { /* Not a token: the reading measure. */ --ds-agent-hero-read: 480px; max-width: var(--ds-agent-hero-read); margin: 0; color: var(--colors-text-secondary); line-height: var(--typography-leading-leading-lg); text-wrap: pretty; }
+
+.agent-hero__actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--spacing-lg); }
+.agent-hero__see {
+  color: var(--colors-text-primary);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--colors-text-primary) 30%, transparent);
+  text-underline-offset: var(--spacing-xs);
+}
+.agent-hero__see:hover { text-decoration-color: currentColor; }
+.agent-hero__see:focus-visible { outline: var(--ds-agent-hero-ring) solid var(--colors-brand-primary); outline-offset: var(--spacing-xs); border-radius: var(--radius-radius-sm); }
+
+/* The owner, set apart from the actions by a hairline so it reads as a signature, not another button. */
+.agent-hero__owner {
+  width: 100%;
+  padding-top: var(--spacing-xl);
+  border-top: var(--ds-orbit-hairline) solid var(--colors-surface-border);
+}
+
+@media (max-width: 760px) {
+  .agent-hero { /* A smaller orbit on a phone. */ translate: none; --ds-orbit-face: 96px; --ds-orbit-radius: 112px; --ds-orbit-app: 44px; --ds-orbit-stage-height: 188px; --ds-orbit-centre: 96px; }
+}
+
+/* Reduced motion: the apps rest at their starting places round the agent, already arrived. */
+@media (prefers-reduced-motion: reduce) {
+  .agent-hero__spot {
+    --ds-orbit-rest: 315deg;
+    animation: none;
+    transform: translate(-50%, -50%) rotateX(var(--ds-orbit-tilt)) rotateY(var(--ds-orbit-rest)) translateZ(var(--ds-orbit-radius)) rotateY(calc(var(--ds-orbit-rest) * -1)) rotateX(calc(var(--ds-orbit-tilt) * -1)) translateZ(calc(var(--ds-orbit-app) / 2));
+  }
+  .agent-hero__spot.spot-1 { --ds-orbit-rest: 225deg; }
+  .agent-hero__spot.spot-2 { --ds-orbit-rest: 135deg; }
+  .agent-hero__spot.spot-3 { --ds-orbit-rest: 45deg; }
+  .agent-hero__app, .agent-hero__ring { animation: none; }
+}
+
+[data-theme="aurora-dark"] .agent-hero__halo { display: none; }
+
+/* A short window (a small laptop): lift a little less, so the agent keeps clear of the top bar. */
+@media (max-height: 820px) {
+  .agent-hero { /* Not a token: the lift that still leaves the agent clear of the bar. */ --ds-agent-hero-lift: -20px; }
+}
+
+/* ── Download app ─────────────────────────────────────────────────────────── */
+.agent-hero__download {
+  /* Missing from the token set: the store marks' size, a hairline, the menu's width, and its arrival. */
+  --ds-store-mark: 16px;
+  --ds-store-hairline: 1px;
+  --ds-store-menu: 240px;
+  --ds-store-arrive: 200ms;
+
+  position: relative;
+  display: inline-flex;
+}
+/* Apple and Google Play side by side, with a thin rule between them. */
+.agent-hero__stores { display: inline-flex; align-items: center; gap: var(--spacing-sm); }
+.agent-hero__stores i { width: var(--ds-store-hairline); height: var(--spacing-lg); background: currentColor; opacity: .35; }
+.agent-hero__store-mark { width: var(--ds-store-mark); height: var(--ds-store-mark); fill: currentColor; flex: none; }
+
+.agent-hero__dismiss { position: fixed; inset: 0; z-index: 20; padding: 0; background: transparent; border: 0; cursor: default; }
+.agent-hero__stores-menu {
+  position: absolute;
+  z-index: 21;
+  top: calc(100% + var(--spacing-sm));
+  left: 0;
+  display: grid;
+  gap: var(--spacing-2xs);
+  width: var(--ds-store-menu);
+  padding: var(--spacing-xs);
+  background: var(--colors-surface-card);
+  border: var(--ds-store-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  box-shadow: 0 var(--spacing-md) var(--spacing-3xl) color-mix(in srgb, var(--colors-text-primary) 12%, transparent);
+  animation: agent-hero-menu var(--ds-store-arrive) cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.agent-hero__store {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  color: var(--colors-text-primary);
+  text-decoration: none;
+  border-radius: var(--radius-radius-lg);
+}
+.agent-hero__store > span { display: grid; }
+.agent-hero__store ::deep small { color: var(--colors-text-muted); }
+a.agent-hero__store:hover { background: var(--colors-surface-muted); }
+a.agent-hero__store:focus-visible { outline: var(--ds-agent-hero-ring) solid var(--colors-brand-primary); }
+.agent-hero__store.is-soon { color: var(--colors-text-secondary); cursor: default; }
+.agent-hero__store .agent-hero__store-mark { --ds-store-mark: 20px; }
+@keyframes agent-hero-menu {
+  from { opacity: 0; transform: translateY(calc(var(--spacing-xs) * -1)) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { .agent-hero__stores-menu { animation: none; } }
+/* The two marks sit in the label itself, ahead of the words, a step apart from them. */
+.agent-hero__app-label { display: inline-flex; align-items: center; gap: var(--spacing-md); white-space: nowrap; }
+.agent-hero__coming-soon { align-items: center; gap: var(--spacing-md); color: var(--colors-text-subtle); }

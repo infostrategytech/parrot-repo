@@ -1,0 +1,108 @@
+@namespace Parrot.Web.Components.Layout.Landing
+@using Parrot.Web.Components.Layout.Auth
+@using Microsoft.AspNetCore.Components.Routing
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+@implements IAsyncDisposable
+
+@* The top bar of the signed-out pages (designer, 17 November 2026). At the top of Sign In it shows only the
+   brand and a few links: the form is right there, so Sign in and Get started would say it twice. Once the
+   form has scrolled away the bar turns frosted and offers both; the one for the page you're on takes you back
+   up to its form. On the reading pages they show from the start. *@
+<header class="landing-header" @ref="_header">
+    <LogoDownloadMenu>
+        <a class="landing-header__brand" href="/" aria-label="yára home">
+            <CadenceMark Size="26" Tight />
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span">yára</Typography>
+        </a>
+    </LogoDownloadMenu>
+
+    <nav class="landing-header__links" aria-label="yára">
+        <a href="/#how-it-works" @onclick="HowItWorksAsync" @onclick:preventDefault="HasSections">
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="span">How it works</Typography>
+        </a>
+        <a href="/about"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">About</Typography></a>
+        <a href="/contact"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Contact</Typography></a>
+    </nav>
+
+    <div class="landing-header__actions">
+        @* Each button in its own wrapper, so the arrival can move and soften it without touching the button's
+           own hover and press. *@
+        <div class="landing-header__start">
+            <span class="landing-header__arrive"><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="SignInAsync">Sign in</Button></span>
+            <span class="landing-header__arrive"><Button Size="ButtonSize.Small" @onclick="GetStartedAsync">Get started</Button></span>
+        </div>
+        <ThemeToggle Inline />
+    </div>
+</header>
+
+@code {
+    /// <summary>The page this bar sits on: "signin", "signup", or none for the reading pages.</summary>
+    [Parameter] public string? Page { get; set; }
+    /// <summary>The page has How it works on it, so the link scrolls instead of leaving.</summary>
+    [Parameter] public bool HasSections { get; set; }
+
+    private ElementReference _header;
+    private IJSObjectReference? _module, _watch;
+    // The page as last shown, without its #section: a new page (or concept) starts at the top; a jump to a
+    // section on the same page does not.
+    private string _page = "";
+
+    protected override void OnInitialized()
+    {
+        _page = Nav.Uri.Split('#')[0];
+        Nav.LocationChanged += PageChanged;
+    }
+
+    private void PageChanged(object? sender, LocationChangedEventArgs e)
+    {
+        var page = e.Location.Split('#')[0];
+        if (page == _page) return;
+        _page = page;
+        _ = InvokeAsync(async () =>
+        {
+            if (_module is null) return;
+            try { await _module.InvokeVoidAsync("toTop", _header); } catch (JSDisconnectedException) { } catch (JSException) { }
+        });
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "/js/landing.js");
+            _watch = await _module.InvokeAsync<IJSObjectReference>("watch", _header);
+        }
+        catch (JSDisconnectedException) { }
+        catch (JSException) { }
+    }
+
+    private Task SignInAsync() => Page == "signin" ? ToFormAsync() : Go("/login");
+    private Task GetStartedAsync() => Page == "signup" ? ToFormAsync() : Go("/register");
+
+    private Task Go(string path) { Nav.NavigateTo(path); return Task.CompletedTask; }
+
+    private async Task ToFormAsync()
+    {
+        if (_module is null) return;
+        try { await _module.InvokeVoidAsync("toForm", _header); } catch (JSDisconnectedException) { }
+    }
+
+    private async Task HowItWorksAsync()
+    {
+        if (!HasSections || _module is null) return;
+        try { await _module.InvokeAsync<bool>("toSection", _header, "how-it-works"); } catch (JSDisconnectedException) { }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Nav.LocationChanged -= PageChanged;
+        try
+        {
+            if (_watch is not null) { await _watch.InvokeVoidAsync("dispose"); await _watch.DisposeAsync(); }
+            if (_module is not null) await _module.DisposeAsync();
+        }
+        catch (JSDisconnectedException) { }
+    }
+}

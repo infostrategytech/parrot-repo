@@ -1,0 +1,48 @@
+.agent-closing {
+  /* Not tokens: the page measure, the words' measure, one agent's size in the row, and how far they overlap. */
+  --ds-agent-closing-measure: 1092px;
+  --ds-agent-closing-text: 640px;
+  --ds-agent-closing-member: 168px;
+  --ds-agent-closing-overlap: -20px;
+
+  position: relative;
+  z-index: 1;
+  display: grid;
+  /* One column the width of the page, so the row of agents can spill past it without widening the words. */
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  gap: var(--spacing-4xl);
+  width: 100%;
+  max-width: var(--ds-agent-closing-measure);
+  margin-inline: auto;
+  padding-top: var(--spacing-6xl);
+  /* The row is cut by the section's floor, so the agents peek up rather than stand. */
+  overflow: hidden;
+  color: var(--colors-text-primary);
+}
+
+.agent-closing__body { display: grid; justify-items: center; gap: var(--spacing-lg); max-width: var(--ds-agent-closing-text); text-align: center; }
+.agent-closing__body ::deep h2 { margin: 0; }
+::deep .agent-closing__lead { margin: 0; color: var(--colors-text-secondary); }
+
+.agent-closing__crew {
+  display: flex;
+  justify-content: center;
+  /* Sink the bottom third under the floor. */
+  margin-bottom: calc(var(--ds-agent-closing-member) * -0.32);
+}
+.agent-closing__member {
+  display: block;
+  flex: none;
+  width: var(--ds-agent-closing-member);
+  height: var(--ds-agent-closing-member);
+  margin-inline: calc(var(--ds-agent-closing-overlap) / 2);
+}
+/* Not all at one height: a row of friends, not a row of icons. */
+.agent-closing__member.member-1 { transform: translateY(calc(var(--spacing-md) * -1)) rotate(-4deg); }
+.agent-closing__member.member-2 { transform: translateY(var(--spacing-sm)); }
+.agent-closing__member.member-3 { transform: translateY(calc(var(--spacing-xs) * -1)) rotate(5deg); }
+
+@media (max-width: 760px) {
+  .agent-closing { /* Smaller faces on a phone. */ --ds-agent-closing-member: 72px; --ds-agent-closing-overlap: -8px; padding-top: var(--spacing-5xl); gap: var(--spacing-3xl); }
+}

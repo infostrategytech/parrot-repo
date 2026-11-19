@@ -1,7 +1,7 @@
-@page "/"
 @page "/login"
 @layout AuthLayout
 @using Parrot.Web.Components.Pages.Auth
+@using Parrot.Web.Components.Layout.Landing
 @inject ILoginService LoginService
 @inject AuthState AuthState
 @inject AuthFormState Forms
@@ -13,10 +13,10 @@
 @inject Parrot.Web.Features.Auth.TwoFactor.RememberedDeviceStorage RememberedDevices
 @implements IDisposable
 
-<PageTitle>Sign In · yára</PageTitle>
+<LandingMetadata Title="Sign in · yára" Description="Sign in to yára to manage customer conversations, work with your AI teammates and keep track of what needs doing." Path="/login" Indexable="false" />
 
 <div class="login-intro">
-    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1" Id="login-title">
+    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="@(HasMarketingHero ? "h2" : "h1")" Id="login-title">
         Welcome Back
     </Typography>
     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="login-intro__copy">
@@ -90,6 +90,7 @@
 </form>
 
 @code {
+    [CascadingParameter(Name = "HasMarketingHero")] public bool HasMarketingHero { get; set; }
     private enum Problem { Invalid, TooManyAttempts, GoogleFailed, FacebookFailed, FacebookNoEmail, FacebookUnavailable, Unreachable, Unknown }
 
     [SupplyParameterFromQuery(Name = "sessionExpired")]
@@ -248,13 +249,11 @@
         Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/facebook", forceLoad: true);
     }
 
-    // Google the same way.
-
+    // Google uses the existing backend SSO endpoint.
     private async Task ContinueWithGoogle()
     {
         if (Busy) return;
         _googleBusy = true;
-
 
         var apiBaseUrl = (Configuration["ApiSettings:PublicBaseUrl"] ?? Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
         Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);

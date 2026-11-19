@@ -18,6 +18,8 @@
      ink the palette puts on its bright solids (both the same in light and dark). */
   --ds-presence-white: var(--colors-text-on-primary);
   --ds-presence-pupil: var(--colors-accent-yellow-on-solid);
+  /* Missing token: spectacle-frame stroke in the avatar's 128-unit illustration. */
+  --ds-presence-glasses-line: 3;
 
   /* Each state's still face (the resting pose). The live engine starts from the
      same numbers in presence-avatar.js, so pausing or reduced motion never loses
@@ -69,6 +71,7 @@
 
 .presence-avatar svg { display: block; width: 100%; height: 100%; overflow: visible; }
 .presence-avatar__body { fill: var(--ds-presence-fill); transition: fill var(--ds-presence-recolour) ease; }
+.presence-avatar__spectacles { fill: none; stroke: var(--ds-presence-pupil); stroke-width: var(--ds-presence-glasses-line); stroke-linecap: round; stroke-linejoin: round; }
 .presence-avatar__attention { transform-box: view-box; transform-origin: center; transform: scale(calc(1 + clamp(0, var(--level, 0), 1) * 0.06)); transition: transform var(--ds-motion-base) var(--ds-motion-ease); }
 
 /* The resting pose, drawn from the state's numbers above. */

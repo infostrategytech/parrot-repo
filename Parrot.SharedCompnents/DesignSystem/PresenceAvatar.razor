@@ -57,6 +57,16 @@
                             </g>
                         </g>
                     </g>
+                    @if (Glasses)
+                    {
+                        @* Original accessory, inside the existing face anchor so it follows its optical
+                           alignment and expression. Off by default; not a change to saved appearances. *@
+                        <g class="presence-avatar__spectacles">
+                            <rect x="34" y="46" width="29" height="30" rx="10" />
+                            <rect x="65" y="46" width="29" height="30" rx="10" />
+                            <path d="M63 57q1-4 2 0M34 55l-8-4M94 55l8-4" />
+                        </g>
+                    }
                 </g>
                 </g>
             </g>
@@ -93,16 +103,22 @@
     [Parameter] public PresenceAvatarDirection Direction { get; set; }
     [Parameter] public PresenceAvatarState State { get; set; }
     [Parameter] public PresenceAvatarTone Tone { get; set; }
+    /// <summary>Optional illustration accessory; leaves all existing avatars unchanged by default.</summary>
+    [Parameter] public bool Glasses { get; set; }
     [Parameter] public PresenceAvatarSize Size { get; set; } = PresenceAvatarSize.Medium;
     [Parameter] public bool Paused { get; set; }
     /// <summary>Alive: blinks, follows the pointer, perks up on hover and squishes on press. Cosmetic and local.</summary>
     [Parameter] public bool Reactive { get; set; }
     /// <summary>Hovers over a soft shadow, gently rising and falling (with Reactive). For a presence, not a list.</summary>
     [Parameter] public bool Floating { get; set; }
+    /// <summary>With Reactive, its eyes follow the pointer around the page. Off where it performs rather than listens.</summary>
+    [Parameter] public bool FollowsPointer { get; set; } = true;
     /// <summary>Changing it plays a small happy hop (a choice made, a replay).</summary>
     [Parameter] public int Replay { get; set; }
     /// <summary>A success moment: shown already Done, it plays the happy turn as soon as it appears (after CueDelay).</summary>
     [Parameter] public bool Celebrate { get; set; }
+    /// <summary>A hello: plays the press-and-hold happy turn once as it comes alive (after CueDelay), in any state.</summary>
+    [Parameter] public bool Greet { get; set; }
     /// <summary>Milliseconds to wait before a reaction, so a row of avatars can ripple.</summary>
     [Parameter] public int CueDelay { get; set; }
     /// <summary>Use when an adjacent label already names the agent and state.</summary>
@@ -142,9 +158,9 @@
                     _module ??= await JS.InvokeAsync<IJSObjectReference>("import", "./_content/Parrot.SharedComponents/js/presence-avatar.js");
                     if (_disposed) { if (_module is not null) await _module.DisposeAsync(); _module = null; return; }
                     var bound = (State, Direction, Tone, Replay);
-                    _live = await _module.InvokeAsync<IJSObjectReference>("bindPresence", Element, new { state = StateName, floating = Floating });
+                    _live = await _module.InvokeAsync<IJSObjectReference>("bindPresence", Element, new { state = StateName, floating = Floating, follow = FollowsPointer });
                     (_sentState, _sentDirection, _sentTone, _sentReplay) = bound;
-                    if (Celebrate && bound.State == PresenceAvatarState.Done) await _live.InvokeVoidAsync("cue", "celebrate", CueDelay);
+                    if (Greet || (Celebrate && bound.State == PresenceAvatarState.Done)) await _live.InvokeVoidAsync("cue", "celebrate", CueDelay);
                     if (_disposed) { await ReleaseAsync(); return; }
                 }
                 finally { _binding = false; }

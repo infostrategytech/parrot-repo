@@ -1,0 +1,58 @@
+@namespace Parrot.Web.Components.Layout.Landing
+@using Parrot.Web.Components.Pages.Dashboard.AiAgents
+
+@* Below the sign-in form: what yára does, in three steps, for a first-time visitor (and Meta's reviewers).
+   Each step has a small picture made of the product's own pieces. *@
+<section class="landing-how" id="how-it-works" aria-labelledby="how-it-works-title">
+    <div class="landing-how__intro">
+        <Typography TextStyle="TextStyle.HeadingH2Semibold" As="h2" Id="how-it-works-title" Prose>From the first message to the finished order</Typography>
+        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="landing-how__lead">
+            yára answers your customers on the apps they already use, and brings your team in when a person is needed.
+        </Typography>
+    </div>
+
+    <ol class="landing-how__steps">
+        <li class="landing-how__step">
+            <div class="landing-how__picture">
+                <span class="landing-how__channels">
+                    @foreach (var channel in Channels)
+                    {
+                        <span class="landing-how__channel"><ChannelGlyph Channel="@channel" Tile ShowTitle="false" /></span>
+                    }
+                </span>
+            </div>
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3" Prose>Connect your channels</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="landing-how__copy">
+                Link the apps you sell on: WhatsApp, Instagram, Facebook and TikTok. Every customer message arrives in one shared inbox.
+            </Typography>
+        </li>
+        <li class="landing-how__step">
+            <div class="landing-how__picture">
+                <span class="landing-how__face"><AgentFace State="PresenceAvatarState.Speaking" Floating /></span>
+            </div>
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3" Prose>Teach your AI agent</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="landing-how__copy">
+                Tell it about your products, prices and how you work. It replies to customers in your voice, and asks you when it isn't sure.
+            </Typography>
+        </li>
+        <li class="landing-how__step">
+            <div class="landing-how__picture">
+                <span class="landing-how__task">
+                    <span class="landing-how__tile"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span>
+                    <span class="landing-how__task-text">
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span">Pack Amaka's order</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="landing-how__muted">Tolu · Due today</Typography>
+                    </span>
+                </span>
+            </div>
+            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h3" Prose>Your team takes it from there</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="landing-how__copy">
+                Orders, bookings and follow-ups become tasks for the right teammate. Questions your AI needs help with stay in your inbox.
+            </Typography>
+        </li>
+    </ol>
+</section>
+
+@code {
+    private static readonly string[] Channels = ["whatsapp", "instagram", "facebook", "tiktok"];
+}

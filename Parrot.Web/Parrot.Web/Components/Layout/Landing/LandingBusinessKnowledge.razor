@@ -1,0 +1,101 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* The reference's expanding feature list controls one steady product frame. Fictional public examples,
+   never a visitor's records. Inner teaching/approval/edit shapes are an aria-hidden illustration, not
+   working app controls. Only the shared selectors are interactive; no microphone, files or API access. *@
+<section class="business-knowledge" id="knows-your-business" aria-labelledby="business-knowledge-title">
+    <div class="business-knowledge__words">
+        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__eyebrow">
+            <Icon Name="IconName.RiBookOpenFill" Size="IconSize.Sm" />Built around your business
+        </Typography>
+        <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h2" Prose id="business-knowledge-title">Your business.<br />Your way of working.</Typography>
+        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="business-knowledge__lead">
+            Tell your AI what you sell and how things work. It uses the details you approve to help your customers.
+        </Typography>
+
+        <div class="business-knowledge__features" role="group" aria-label="Explore how your AI learns about your business">
+            @foreach (var feature in Features)
+            {
+                var choice = feature;
+                <FeatureSelectorItem Id="@($"knowledge-feature-{choice.Id}")" Title="@choice.Title" Description="@choice.Description"
+                                     Glyph="choice.Icon" IconTone="choice.Tone" Selected="@(_selected == choice.Id)" Controls="knowledge-feature-preview"
+                                     OnSelect="() => SelectFeature(choice.Id)" />
+            }
+        </div>
+    </div>
+
+    <div class="business-knowledge__visual">
+        <div class="business-knowledge__stage" data-feature="@_selected" id="knowledge-feature-preview"
+             role="img" aria-label="@Active.PreviewDescription">
+            <div class="business-knowledge__product" aria-hidden="true">
+                <header class="business-knowledge__product-head">
+                    <span class="business-knowledge__book"><Icon Name="IconName.RiBookAiFill" Size="IconSize.Md" /></span>
+                    <div><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__muted">Business knowledge</Typography><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p">Adire Lagos</Typography></div>
+                </header>
+
+                <div class="business-knowledge__scenes">
+                    <div class="business-knowledge__scene scene-natural">
+                        <div class="business-knowledge__scene-title">
+                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="p" Prose>Tell us about your business</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="business-knowledge__muted">Your agent learns from what you share here.</Typography>
+                        </div>
+                        <AvatarTeachingScene Active="@(_selected == "natural")" Replay="_teachingReplay" Decorative />
+                    </div>
+
+                    <div class="business-knowledge__scene scene-review">
+                        <div class="business-knowledge__scene-title">
+                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="p" Prose>Here’s what your agent will know</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="business-knowledge__muted">Check the details before your AI uses them.</Typography>
+                        </div>
+                        <div class="business-knowledge__facts">
+                            <div class="business-knowledge__fact"><span class="business-knowledge__fact-icon"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span><div><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__muted">About the business</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Handmade adire fabrics, made in Lagos.</Typography></div><Icon Name="IconName.RiPencilFill" Size="IconSize.Sm" /></div>
+                            <div class="business-knowledge__fact"><span class="business-knowledge__fact-icon"><Icon Name="IconName.RiTruckFill" Size="IconSize.Sm" /></span><div><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__muted">Delivery</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Nationwide delivery in 3–5 working days.</Typography></div><Icon Name="IconName.RiPencilFill" Size="IconSize.Sm" /></div>
+                        </div>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__provenance"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Sm" />From your conversation</Typography>
+                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" Class="business-knowledge__approve"><Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" />Approve and continue</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="business-knowledge__reassurance">You choose what your AI can use.</Typography>
+                    </div>
+
+                    <div class="business-knowledge__scene scene-update">
+                        <div class="business-knowledge__scene-title">
+                            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="p" Prose>What your AI knows</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="business-knowledge__muted">Your latest business details, all in one place.</Typography>
+                        </div>
+                        <div class="business-knowledge__facts">
+                            <div class="business-knowledge__fact"><span class="business-knowledge__fact-icon"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" /></span><div><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__muted">About the business</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Handmade adire fabrics, made in Lagos.</Typography></div></div>
+                            <div class="business-knowledge__fact is-editing">
+                                <span class="business-knowledge__fact-icon"><Icon Name="IconName.RiTruckFill" Size="IconSize.Sm" /></span>
+                                <div>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__muted">Delivery</Typography>
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Nationwide delivery in <span class="business-knowledge__swap"><span class="is-before">3–5</span><span class="is-after">2–4</span></span> working days.</Typography>
+                                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__timestamp"><span class="business-knowledge__swap"><span class="is-before">Updated today</span><span class="is-after">Updated just now</span></span></Typography>
+                                </div>
+                                <Icon Name="IconName.RiPencilFill" Size="IconSize.Sm" />
+                            </div>
+                        </div>
+                        <div class="business-knowledge__saved"><Icon Name="IconName.RiCheckboxCircleFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Changes saved</Typography></div>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="business-knowledge__reassurance">Your AI has the latest details for its next reply.</Typography>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="business-knowledge__caption">An example of how you teach, review and update your business knowledge.</Typography>
+        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="business-knowledge__sr-only" role="status" aria-live="polite" aria-atomic="true">@Active.PreviewDescription</Typography>
+    </div>
+</section>
+
+@code {
+    private string _selected = "natural";
+    private int _teachingReplay;
+    private void SelectFeature(string id) { _selected = id; if (id == "natural") _teachingReplay++; }
+    private FeatureExample Active => Features.First(feature => feature.Id == _selected);
+    private sealed record FeatureExample(string Id, IconName Icon, FeatureSelectorTone Tone, string Title, string Description, string PreviewDescription);
+    private static readonly FeatureExample[] Features = [
+        new("natural", IconName.RiVoiceprintFill, FeatureSelectorTone.Teal, "Tell it naturally", "Talk, type or share the information you already have.",
+            "Teaching illustration: two avatars wear glasses. Your business avatar points a cane at a board with products, prices and delivery details while your AI teammate listens. Select Tell it naturally again to replay."),
+        new("review", IconName.RiShieldCheckFill, FeatureSelectorTone.Violet, "You approve what it knows", "Check the details before your AI uses them.",
+            "Review example: the business description and delivery details are ready to check, edit and approve before the AI can use them."),
+        new("update", IconName.RiPencilFill, FeatureSelectorTone.Amber, "Keep it up to date", "Change a detail whenever your business changes.",
+            "Update example: delivery changes from 3–5 to 2–4 working days. The detail is saved with an Updated just now timestamp.")
+    ];
+}

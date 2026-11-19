@@ -1,0 +1,45 @@
+@page "/privacy"
+@namespace Parrot.Web.Components.Pages.Legal
+@using Parrot.Web.Components.Layout.Landing
+@layout LandingPageLayout
+
+@* Starter text (designer, 17 November 2026): to be replaced by the reviewed policy. *@
+<LandingMetadata Title="Privacy Policy · yára" Description="How yára handles account information, connected conversations and business knowledge, and how to contact us about your data." Path="/privacy" />
+
+<LandingDocument Title="Privacy Policy"
+                 Intro="@($"This policy explains what information yára collects, how {LandingCompany.Name} uses it, and the choices you have.")">
+    <LandingSection Title="Who we are">
+        <p>yára is a customer-messaging product made by @LandingCompany.Name, based in @LandingCompany.City. It helps businesses reply to their customers on WhatsApp, Instagram, Facebook and TikTok, with an AI agent and their team working from one inbox.</p>
+    </LandingSection>
+    <LandingSection Title="What we collect">
+        <ul>
+            <li><strong>Account details</strong>: your name, email address, phone number and business details when you sign up.</li>
+            <li><strong>Messages</strong>: the conversations between your business and your customers on the channels you connect, including names, profile details and any files they send.</li>
+            <li><strong>Business knowledge</strong>: the products, prices and information you give your AI agent.</li>
+            <li><strong>Usage information</strong>: how you use yára, such as sign-ins, settings and device details, to keep the service secure and working well.</li>
+        </ul>
+    </LandingSection>
+    <LandingSection Title="How we use it">
+        <ul>
+            <li>To provide yára: show your conversations, let your AI agent reply on your behalf, and create tasks for your team.</li>
+            <li>To keep accounts secure, prevent misuse and fix problems.</li>
+            <li>To contact you about your account and important changes to the service.</li>
+        </ul>
+        <p>We don't sell personal information, and we don't use your customers' messages to advertise to them.</p>
+    </LandingSection>
+    <LandingSection Title="Messaging platforms">
+        <p>When you connect WhatsApp, Instagram, Facebook or TikTok, we receive and send messages through those platforms' official services, under their terms. We only access the accounts you connect, and only to provide yára to your business.</p>
+    </LandingSection>
+    <LandingSection Title="Who we share it with">
+        <p>We share information only with service providers that help us run yára (such as hosting and AI providers), under agreements that protect it, or when the law requires it.</p>
+    </LandingSection>
+    <LandingSection Title="How long we keep it">
+        <p>We keep your information while your account is active and for as long as needed to provide the service or meet legal obligations. You can ask us to delete it at any time; see <a href="/data-deletion">Data deletion</a>.</p>
+    </LandingSection>
+    <LandingSection Title="Your choices">
+        <p>You can see and update your account details in yára, disconnect a channel whenever you want, and ask us for a copy of your information or to delete it.</p>
+    </LandingSection>
+    <LandingSection Title="Contact us">
+        <p>Questions about privacy: <a href="mailto:@LandingCompany.Email">@LandingCompany.Email</a>.</p>
+    </LandingSection>
+</LandingDocument>

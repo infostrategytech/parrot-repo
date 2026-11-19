@@ -1,0 +1,4 @@
+<Project>
+  <!-- Verification builds consume committed Figma outputs without regenerating designer-owned values. -->
+  <Target Name="BuildDesignTokens" />
+</Project>

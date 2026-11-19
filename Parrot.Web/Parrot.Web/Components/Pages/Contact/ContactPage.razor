@@ -1,0 +1,24 @@
+@page "/contact"
+@namespace Parrot.Web.Components.Pages.Contact
+@using Parrot.Web.Components.Layout.Landing
+@layout LandingPageLayout
+
+@* Who to reach and where (designer, 18 November 2026): the business details Meta's verification checks against
+   the Business account, in one place. The phone is a placeholder until the real line is confirmed. *@
+<LandingMetadata Title="Contact · yára" Description="Get in touch with the yára team for help with your account, your business or your data." Path="/contact" />
+
+<LandingDocument Title="Contact us" ShowUpdated="false"
+                 Intro="Questions about yára, your account or your data? We're happy to help.">
+    <LandingSection Title="Email">
+        <p><a href="mailto:@LandingCompany.Email">@LandingCompany.Email</a></p>
+    </LandingSection>
+    <LandingSection Title="Phone">
+        <p><a href="@LandingCompany.PhoneLink">@LandingCompany.Phone</a></p>
+    </LandingSection>
+    <LandingSection Title="Address">
+        <p><strong>@LandingCompany.Name</strong><br />@LandingCompany.Address</p>
+    </LandingSection>
+    <LandingSection Title="Your data">
+        <p>To have your account and information deleted, see <a href="/data-deletion">Data deletion</a>. How we handle your information is in our <a href="/privacy">Privacy Policy</a>.</p>
+    </LandingSection>
+</LandingDocument>

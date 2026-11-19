@@ -1,0 +1,235 @@
+@namespace Parrot.Web.Components.Layout.Landing
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@* The product film (designer, 18 November 2026): a fictional story, never live workspace data. Every element is a
+   persistent actor that carries into the next moment: chats pile up across every app and gather into yára, the
+   inbox rows rise out of them, Tunde's row becomes the conversation's header and its preview its first bubble,
+   Kora answers, asks you when it isn't sure, and turns the order into a task to act on. It ends on a call to get
+   started. Only cards from the app, never the whole app. The film is one image to assistive technology; its
+   controls and closing button are real. *@
+<div class="product-film" data-scene="0" data-beat="0" @ref="_element">
+    <div class="product-film__screen">
+        <div class="product-film__canvas" role="img" aria-label="Chats arrive from WhatsApp, Instagram, TikTok and Facebook, too many to keep up with. They gather into yára. Tunde's Instagram message opens from your yára inbox. Kora answers from approved information. Tunde asks about gift wrapping, Kora asks you, you answer, and Kora replies. Tunde orders two, and Kora creates a task with the order inside, assigned to Adaeze, and your team adds a note. Get started with yára today. Fictional product illustration.">
+            <div class="product-film__light" data-film-actor="light"></div>
+
+            <div class="product-film__headline" data-film-actor="chaos-title"><Typography TextStyle="TextStyle.DisplaySemibold" As="p">Chats everywhere.</Typography></div>
+            <div class="product-film__headline" data-film-actor="chaos-line"><Typography TextStyle="TextStyle.BodyLargeMedium" As="p" Class="product-film__tagline">Every app. Every customer. All at once.</Typography></div>
+            @foreach (var (channel, text, index) in Pings)
+            {
+                <div class="product-film__ping" data-film-actor="@($"ping-{index}")"><ChannelGlyph Channel="@channel" Tile ShowTitle="false" /><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@text</Typography></div>
+            }
+
+            <div class="product-film__headline" data-film-actor="intro-title"><Typography TextStyle="TextStyle.DisplaySemibold" As="p">Introducing <span class="product-film__brand">yára</span></Typography></div>
+            <div class="product-film__headline" data-film-actor="intro-line"><Typography TextStyle="TextStyle.BodyLargeMedium" As="p" Class="product-film__tagline">Your inbox. Your team. A little more help.</Typography></div>
+            @foreach (var (shape, tone, index) in Cast)
+            {
+                <span class="product-film__face" data-film-actor="@($"cast-{index}")"><PresenceAvatar Direction="shape" Tone="tone" Size="PresenceAvatarSize.Fill" Decorative /></span>
+            }
+
+            @for (var i = 0; i < Captions.Length; i++)
+            {
+                var caption = Captions[i];
+                <div class="product-film__caption" data-film-actor="@($"caption-{i + 1}")">
+                    <Typography TextStyle="TextStyle.BodyLargeSemibold" As="p" Prose>@caption.Title</Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultRegular" As="p" Prose Class="product-film__caption-line">@caption.Description</Typography>
+                </div>
+            }
+
+            @* Your yára inbox: the mark and name, the four apps it brings together, and Kora's seat. *@
+            <div class="product-film__inbox-head" data-film-actor="inbox-head">
+                <span class="product-film__inbox-name"><CadenceMark Size="22" Tight /><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">Your yára inbox</Typography></span>
+                <span class="product-film__on">
+                    <span class="product-film__apps">
+                        @foreach (var channel in Channels)
+                        { <ChannelGlyph Channel="@channel" Compact ShowTitle="false" /> }
+                    </span>
+                    <span class="product-film__seat"></span>
+                </span>
+            </div>
+            @foreach (var (name, channel, snippet, time, index) in People)
+            {
+                <div class="product-film__row" data-film-actor="@($"row-{index}")">
+                    <ChannelGlyph Channel="@channel" Tile ShowTitle="false" />
+                    <span class="product-film__row-text"><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">@name</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="product-film__snippet">@snippet</Typography></span>
+                    <span class="product-film__row-meta"><Typography TextStyle="TextStyle.Small12Medium" As="span">@time</Typography><i class="product-film__unread"></i></span>
+                </div>
+            }
+            @* Tunde's row: it becomes the conversation's header. Its preview line is the first bubble, drawn over it. *@
+            <div class="product-film__row is-customer" data-film-actor="customer">
+                <ChannelGlyph Channel="instagram" Tile ShowTitle="false" />
+                <span class="product-film__row-text"><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">Tunde Bello</Typography><span class="product-film__row-sub" data-film-actor="customer-sub"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Instagram</Typography></span></span>
+                <span class="product-film__row-meta" data-film-actor="customer-meta"><Typography TextStyle="TextStyle.Small12Medium" As="span">now</Typography><i class="product-film__unread"></i></span>
+            </div>
+            <div class="product-film__inquiry" data-film-actor="inquiry"><span class="product-film__inquiry-bg" data-film-actor="inquiry-bg"></span><Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">Hi! How much is the indigo adire?</Typography></div>
+
+            <div class="product-film__bubble is-ai product-film__typing" data-film-actor="typing-0"><i></i><i></i><i></i></div>
+            <div class="product-film__reply" data-film-actor="reply">
+                <div class="product-film__bubble is-ai"><Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">₦18,500 for 6 yards. Delivery to Abuja is ₦4,000.</Typography></div>
+                <span class="product-film__source" data-film-actor="reply-source"><Icon Name="IconName.RiCheckDoubleFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.Small12Medium" As="span">From your approved information</Typography></span>
+            </div>
+            <div class="product-film__bubble is-customer" data-film-actor="followup"><Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">Can you gift-wrap it and add a small card?</Typography></div>
+            <div class="product-film__bubble is-ai product-film__typing" data-film-actor="typing-1"><i></i><i></i><i></i></div>
+
+            @* Kora isn't sure, so it asks you, in the chat. Kora itself settles into the card's corner. *@
+            <div class="product-film__help" data-film-actor="help">
+                <div class="product-film__help-head"><span class="product-film__help-slot"></span><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Kora needs your answer</Typography></div>
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Class="product-film__help-question">Do you offer gift wrapping and a card?</Typography>
+                <div class="product-film__field" data-film-actor="help-field"><span class="product-film__typed" data-film-actor="field-text"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Yes, gift wrapping and a card are free.</Typography></span></div>
+                <div class="product-film__help-actions" data-film-actor="help-actions">
+                    <span class="product-film__actions" data-film-actor="actions-a"><span class="product-film__pill is-quiet"><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Done</Typography></span><span class="product-film__pill" data-film-actor="answer-pill"><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Answer</Typography></span></span>
+                    <span class="product-film__actions" data-film-actor="actions-b"><span class="product-film__pill" data-film-actor="send-pill"><Icon Name="IconName.RiSendPlaneFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Send</Typography></span></span>
+                </div>
+            </div>
+            <div class="product-film__event" data-film-actor="answered"><Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.Small12Medium" As="span">You answered Kora</Typography></div>
+            <div class="product-film__reply" data-film-actor="resolution">
+                <div class="product-film__bubble is-ai">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="product-film__quote">Tunde: Can you gift-wrap it and add a small card?</Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">Yes, we can do both at no extra cost.</Typography>
+                </div>
+            </div>
+
+            <div class="product-film__bubble is-customer" data-film-actor="order-message"><Typography TextStyle="TextStyle.BodyDefaultMedium" As="p">Perfect. I'll take two, please.</Typography></div>
+            <div class="product-film__bubble is-ai product-film__typing" data-film-actor="typing-2"><i></i><i></i><i></i></div>
+            @* A task: something for your team to act on. The order is inside it. Closing the card doesn't finish it. *@
+            <div class="product-film__task" data-film-actor="task">
+                <div class="product-film__task-head">
+                    <span class="product-film__mark is-teal"><Icon Name="IconName.RiTaskFill" Size="IconSize.Md" /></span>
+                    <span class="product-film__stack"><Typography TextStyle="TextStyle.Small12Medium" As="span" Class="product-film__muted">New task from Kora</Typography><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">Pack and deliver Tunde’s order</Typography></span>
+                    <span class="product-film__task-side">
+                        <span class="product-film__due" data-film-actor="task-meta"><Typography TextStyle="TextStyle.Small12Semibold" As="span">Due today</Typography></span>
+                        <span class="product-film__close" data-film-actor="task-close"><Icon Name="IconName.RiCloseFill" Size="IconSize.Sm" /></span>
+                    </span>
+                </div>
+                <div class="product-film__task-body">
+                    <div class="product-film__order" data-film-actor="task-row-0">
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="product-film__label">The order</Typography>
+                        <div class="product-film__item">
+                            <span class="product-film__mark is-violet"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Md" /></span>
+                            <span class="product-film__stack"><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Indigo adire fabric</Typography><Typography TextStyle="TextStyle.Small12Medium" As="span" Class="product-film__muted">2 × ₦18,500 · 6 yards each · Gift-wrapped</Typography></span>
+                        </div>
+                        <div class="product-film__amount"><Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="product-film__muted">Delivery to Abuja</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="span">₦4,000</Typography></div>
+                        <div class="product-film__amount is-total"><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Total</Typography><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">₦41,000</Typography></div>
+                    </div>
+                    <div class="product-film__assignee" data-film-actor="task-row-1"><PetalAvatar Seed="Adaeze" Initials="AD" Size="AvatarSize.Sm" /><span class="product-film__stack"><Typography TextStyle="TextStyle.Small12Medium" As="span" Class="product-film__muted">Assigned to</Typography><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Adaeze</Typography></span></div>
+                    <div class="product-film__steps" data-film-actor="task-row-2">
+                        <span class="product-film__step is-done"><Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.Small12Medium" As="span">Payment confirmed</Typography></span>
+                        <span class="product-film__step"><i></i><Typography TextStyle="TextStyle.Small12Medium" As="span">Pack</Typography></span>
+                        <span class="product-film__step"><i></i><Typography TextStyle="TextStyle.Small12Medium" As="span">Deliver</Typography></span>
+                    </div>
+                    <div class="product-film__note-cell">
+                        <span class="product-film__add-note" data-film-actor="add-note"><Icon Name="IconName.RiStickyNoteFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Add internal note</Typography></span>
+                        <div class="product-film__note" data-film-actor="note">
+                            <span class="product-film__note-head"><Icon Name="IconName.RiStickyNoteFill" Size="IconSize.Sm" /><Typography TextStyle="TextStyle.Small12Semibold" As="span">Internal note</Typography><Typography TextStyle="TextStyle.Small12Medium" As="span" Class="product-film__muted">Only your team sees this</Typography></span>
+                            <span class="product-film__typed" data-film-actor="note-text"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Confirm the delivery address before dispatch.</Typography></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="product-film__headline" data-film-actor="end-title"><Typography TextStyle="TextStyle.DisplaySemibold" As="p">Get started with <span class="product-film__brand">yára</span> today.</Typography></div>
+
+            @* On the closing card Kora comes alive and says hello with its press-and-hold turn, as on the hero, without
+               following the pointer (designer, 18 November 2026). *@
+            <span class="product-film__face is-kora" data-film-actor="kora"><PresenceAvatar Direction="PresenceAvatarDirection.Pip" Tone="PresenceAvatarTone.Violet" Size="PresenceAvatarSize.Fill" Reactive="@_hello" FollowsPointer="false" Greet CueDelay="60" Decorative /></span>
+            @* Our own pointer, drawn here: a soft dot that grows over what it is about to press. *@
+            <span class="product-film__click" data-film-actor="click"></span>
+            <span class="product-film__cursor" data-film-actor="cursor"></span>
+        </div>
+
+        @* The closing call is a real button: it appears with the last frame and takes you to the form. *@
+        <div class="product-film__cta" data-film-cta><Button @onclick="SignupAsync">Create your account</Button></div>
+
+        @* The controls (designer, 18 November 2026): no bar. The chapter you're in, named on the left; a thin
+           timeline along the bottom, one stretch per chapter in proportion to its length (point at one for its name,
+           press it to play from there); and two round glass buttons, sound and play, with play's ring filling as the
+           film plays. *@
+        <div class="product-film__controls">
+            <span class="product-film__now" aria-hidden="true">
+                @for (var i = 0; i < ChapterNames.Length; i++)
+                {
+                    var number = $"{i + 1:00}";
+                    var name = ChapterNames[i];
+                    <span class="@($"product-film__now-item now-{i}")"><Typography TextStyle="TextStyle.Small12Medium" As="span" Class="product-film__muted">@number</Typography><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">@name</Typography></span>
+                }
+            </span>
+            <nav class="product-film__chapters" aria-label="Film chapters">
+                @for (var i = 0; i < ChapterNames.Length; i++)
+                {
+                    var chapter = i;
+                    <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="@($"product-film__chapter chapter-{chapter}")" @onclick="() => SeekAsync(chapter)" aria-label="@($"Play chapter: {ChapterNames[chapter]}")"><span class="product-film__track"><i></i></span><span class="product-film__tip"><Typography TextStyle="TextStyle.Small12Semibold" As="span">@ChapterNames[chapter]</Typography></span></Button>
+                }
+            </nav>
+            @* A native click keeps the browser's audio unlock inside the gesture, not after a server round trip. Sound
+               is never on at load, and the story reads the same without it. *@
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="product-film__round is-sound" data-film-sound="true" aria-pressed="@_soundOn.ToString().ToLowerInvariant()" aria-label="@(_soundOn ? "Turn sound off" : "Turn sound on. The film works without sound.")" title="@(_soundOn ? "Sound on" : "Play with sound")"><IconLeft>@(_soundOn ? Playing : SpeakerOff)</IconLeft></Button>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="product-film__round is-play" @onclick="ToggleAsync" aria-label="@(_playing ? "Pause the film" : _finished ? "Play the film again" : "Play the film")"><IconLeft><svg class="product-film__ring" viewBox="0 0 44 44" aria-hidden="true"><circle class="product-film__ring-track" cx="22" cy="22" r="20" pathLength="1" /><circle class="product-film__ring-fill" cx="22" cy="22" r="20" pathLength="1" /></svg><Icon Name="@(_playing ? IconName.RiPauseFill : _finished ? IconName.RiRefreshLine : IconName.RiPlayFill)" Size="IconSize.Sm" /></IconLeft></Button>
+        </div>
+    </div>
+    @if (_soundUnavailable)
+    { <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="product-film__audio-status" role="status">Sound isn’t available in this browser. The film works without it.</Typography> }
+</div>
+
+@code {
+    private ElementReference _element;
+    private IJSObjectReference? _module, _player;
+    private DotNetObjectReference<LandingProductFilm>? _self;
+    private bool _playing, _finished, _disposed, _soundOn, _soundUnavailable, _hello;
+    private static readonly string[] ChapterNames = ["Meet yára", "One inbox", "Replies", "Your say", "Tasks"];
+    private static readonly string[] Channels = ["whatsapp", "instagram", "tiktok", "facebook"];
+    private static readonly (string Title, string Description)[] Captions = [
+        ("Every chat, in one place.", "WhatsApp, Instagram, TikTok and Facebook, together in your yára inbox."),
+        ("Answers that know your business.", "Kora replies from the information you approve."),
+        ("You’re there when it matters.", "When Kora isn’t sure, it asks you first."),
+        ("From chat to action.", "Kora creates a task for anything your team needs to do, with the details from the chat inside.")];
+    private static readonly (string Channel, string Text, int Index)[] Pings = [
+        ("whatsapp", "Is this still available?", 0), ("instagram", "How much for two?", 1),
+        ("tiktok", "Do you deliver to Lagos?", 2), ("facebook", "What time do you close?", 3),
+        ("instagram", "Price please", 4), ("whatsapp", "I’ve sent the payment", 5),
+        ("tiktok", "Is the green one back?", 6), ("instagram", "Can I pick up today?", 7),
+        ("whatsapp", "Hello? Are you there?", 8), ("facebook", "Do you have size 42?", 9),
+        ("tiktok", "Send your account number", 10), ("instagram", "Still waiting on my order", 11)];
+    private static readonly (string Name, string Channel, string Snippet, string Time, int Index)[] People = [
+        ("Amaka Obi", "whatsapp", "I've sent my delivery address.", "2m", 1),
+        ("Halima Musa", "tiktok", "Do you have this in green?", "5m", 2),
+        ("Ifeoma Nwosu", "facebook", "What time do you close?", "9m", 3)];
+    // Four teammates, four different shapes (designer, 18 November 2026): the triangle and the flower beside Kora,
+    // the robot and the cloud further out.
+    private static readonly (PresenceAvatarDirection Shape, PresenceAvatarTone Tone, int Index)[] Cast = [
+        (PresenceAvatarDirection.Fig, PresenceAvatarTone.Orange, 0),
+        (PresenceAvatarDirection.Bloom, PresenceAvatarTone.Teal, 1),
+        (PresenceAvatarDirection.Pixel, PresenceAvatarTone.Coral, 2),
+        (PresenceAvatarDirection.Ripple, PresenceAvatarTone.Sky, 3)];
+
+    // The icon set has no speaker, so the sound control draws its own (one colour, like every icon). While sound
+    // plays, three bars move with it.
+    private static readonly RenderFragment Playing = @<span class="product-film__eq" aria-hidden="true"><i></i><i></i><i></i></span>;
+    private static readonly RenderFragment SpeakerOff = @<svg class="product-film__speaker" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9.5h3.6L12.5 5v14l-4.9-4.5H4z" fill="currentColor" /><path d="M16.5 9.5l5 5m0-5l-5 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" /></svg>;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender || _disposed) return;
+        try
+        {
+            _self = DotNetObjectReference.Create(this);
+            _module = await JS.InvokeAsync<IJSObjectReference>("import", "./js/landing-product-film.js");
+            if (_disposed) { await _module.DisposeAsync(); return; }
+            _player = await _module.InvokeAsync<IJSObjectReference>("bindFilm", _element, _self);
+            if (_disposed) { await _player.InvokeVoidAsync("release"); await _player.DisposeAsync(); }
+        }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or OperationCanceledException) { }
+    }
+    [JSInvokable] public Task PlaybackChanged(bool playing, bool finished) { if (_disposed) return Task.CompletedTask; _playing = playing; _finished = finished; return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public Task KoraHello(bool hello) { if (_disposed || _hello == hello) return Task.CompletedTask; _hello = hello; return InvokeAsync(StateHasChanged); }
+    [JSInvokable] public Task SoundChanged(bool enabled, bool unavailable) { if (_disposed) return Task.CompletedTask; _soundOn = enabled; _soundUnavailable = unavailable; return InvokeAsync(StateHasChanged); }
+    private async Task ToggleAsync() { if (_player is not null) await _player.InvokeVoidAsync("toggle"); }
+    private async Task SeekAsync(int chapter) { if (_player is not null) await _player.InvokeVoidAsync("seek", chapter); }
+    private async Task SignupAsync() { if (_player is not null) await _player.InvokeVoidAsync("signup"); }
+    public async ValueTask DisposeAsync()
+    {
+        _disposed = true;
+        try { if (_player is not null) { await _player.InvokeVoidAsync("release"); await _player.DisposeAsync(); } if (_module is not null) await _module.DisposeAsync(); }
+        catch (Exception ex) when (ex is JSException or JSDisconnectedException or InvalidOperationException or OperationCanceledException) { }
+        _self?.Dispose();
+    }
+}

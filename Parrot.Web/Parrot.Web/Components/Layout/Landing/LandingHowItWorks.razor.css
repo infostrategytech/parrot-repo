@@ -1,0 +1,97 @@
+.landing-how {
+  /* Missing from the token set: the section's measure and the pictures' height. */
+  --ds-landing-measure: 1092px;
+  --ds-landing-picture: 120px;
+  --ds-landing-intro: 620px;
+  --ds-landing-hairline: 1px;
+
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--spacing-4xl);
+  width: 100%;
+  max-width: var(--ds-landing-measure);
+  margin-inline: auto;
+  padding-block: var(--spacing-5xl);
+  scroll-margin-top: var(--spacing-5xl);
+}
+
+.landing-how__intro { display: grid; gap: var(--spacing-md); max-width: var(--ds-landing-intro); }
+::deep .landing-how__lead, ::deep .landing-how__copy { color: var(--colors-text-secondary); }
+::deep .landing-how__muted { color: var(--colors-text-muted); }
+
+.landing-how__steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--spacing-xl);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-how__step {
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-landing-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  color: var(--colors-text-primary);
+}
+
+.landing-how__picture {
+  display: grid;
+  place-items: center;
+  height: var(--ds-landing-picture);
+  margin-bottom: var(--spacing-md);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-xl);
+}
+
+.landing-how__channels { display: flex; gap: var(--spacing-sm); }
+.landing-how__face { width: var(--spacing-5xl); height: var(--spacing-5xl); }
+
+.landing-how__task {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--colors-surface-card);
+  border: var(--ds-landing-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-lg);
+}
+.landing-how__tile {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-2xl);
+  height: var(--spacing-2xl);
+  color: var(--colors-accent-green-text);
+  background: var(--colors-accent-green-subtle);
+  border-radius: var(--radius-radius-md);
+}
+.landing-how__task-text { display: grid; }
+
+/* The steps rise in as they scroll into view, where the browser can tie it to the scroll; elsewhere they are
+   simply there. */
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .landing-how__step {
+      animation: landing-how-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 60%;
+    }
+    .landing-how__step:nth-child(2) { animation-range: entry 8% entry 68%; }
+    .landing-how__step:nth-child(3) { animation-range: entry 16% entry 76%; }
+  }
+}
+
+@keyframes landing-how-rise {
+  from { opacity: 0; transform: translateY(var(--spacing-xl)); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (max-width: 1024px) {
+  .landing-how { padding-block: var(--spacing-4xl); gap: var(--spacing-2xl); }
+  .landing-how__steps { grid-template-columns: minmax(0, 1fr); }
+}
