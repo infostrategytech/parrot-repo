@@ -1,0 +1,12 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* A heading and its paragraphs on a public page. Paragraphs and lists inside take the body text style. *@
+<section class="landing-section">
+    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" Prose>@Title</Typography>
+    <div class="landing-section__text @TextStyle.BodyDefaultRegular.ToClassName()">@ChildContent</div>
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

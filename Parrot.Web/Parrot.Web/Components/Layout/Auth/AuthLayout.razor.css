@@ -20,6 +20,12 @@
   /* The story lifts above the form on a tall screen. On a short one there is
      no room above it, so the lift would push it into the header. */
   --ds-account-story-lift: calc((var(--spacing-4xl) + var(--spacing-3xl) + var(--spacing-md)) * -1);
+  /* The landing page (17 November 2026): the product demo under the story makes it as tall as the form, so
+     the lift that balanced a short story goes. The bar's padding takes the page's side gutter. */
+  --ds-account-story-lift: 0px;
+  --ds-landing-gutter: var(--ds-account-page-gutter);
+  /* Missing from the token set: the top bar's height, so the first screen is the sign-in stage. */
+  --ds-landing-header-height: 76px;
 
   position: relative;
   isolation: isolate;
@@ -27,30 +33,11 @@
   max-height: 100dvh;
   overflow-y: auto;
   display: grid;
-  grid-template-rows: auto 1fr;
-  padding: var(--spacing-2xl) var(--ds-account-page-gutter);
+  align-content: start;
+  padding: 0 var(--ds-account-page-gutter);
   color: var(--colors-text-primary);
   background: var(--colors-surface-background);
 }
-
-.account-access-header {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--spacing-md);
-}
-
-.account-access-brand {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  color: var(--colors-text-primary);
-  text-decoration: none;
-}
-
-.account-access-brand:hover { color: var(--colors-text-primary); }
 
 .account-access-content {
   position: relative;
@@ -64,8 +51,8 @@
   gap: var(--ds-account-column-gap);
   width: 100%;
   max-width: var(--ds-account-section-width);
-  min-height: min(var(--ds-account-stage-height), 100%);
-  margin: auto;
+  min-height: calc(100dvh - var(--ds-landing-header-height));
+  margin-inline: auto;
   padding-block: var(--spacing-4xl);
   /* An optical nudge, not a layout change. The box is centred exactly, but
      the form is a solid block and the story is ragged text, so the pair reads
@@ -82,8 +69,24 @@
   align-content: center;
   width: 100%;
   max-width: var(--ds-account-story-width);
-  min-height: calc(var(--spacing-4xl) * 7);
   transform: translateY(var(--ds-account-story-lift));
+}
+
+/* The product at work, under the words, with who makes it. */
+.account-access-story__demo {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: var(--spacing-md);
+  margin-top: var(--spacing-xl);
+}
+/* The four steps of the story, on the demo's top corner, in line with its header. */
+.account-access-story__demo .account-access-story__progress {
+  position: absolute;
+  z-index: 1;
+  top: var(--spacing-xl);
+  right: var(--spacing-lg);
+  margin-top: 0;
 }
 
 .account-access-story__rotation {
@@ -157,7 +160,11 @@
 .account-access-story:hover .account-access-story__item,
 .account-access-story:hover .account-access-story__progress i::after,
 .account-access-story:focus-within .account-access-story__item,
-.account-access-story:focus-within .account-access-story__progress i::after {
+.account-access-story:focus-within .account-access-story__progress i::after,
+.account-access-story:hover ::deep .landing-demo *,
+.account-access-story:focus-within ::deep .landing-demo *,
+.account-access-story:hover ::deep .landing-stage *,
+.account-access-story:focus-within ::deep .landing-stage * {
   animation-play-state: paused;
 }
 
@@ -184,7 +191,8 @@
 }
 
 .account-access-form-panel {
-  align-self: start;
+  /* Centred against the story, so the two columns share a top and a bottom edge. */
+  align-self: center;
   width: 100%;
   max-width: var(--ds-account-form-width);
   min-height: var(--ds-account-form-stage-height);
@@ -250,6 +258,39 @@
   }
 }
 
+/* Concept B: the promise beside the form, a little wider than the rotating words. */
+.account-access-page.is-concept-b {
+  /* Not a token: the promise's width beside the form. */
+  --ds-account-story-width: 520px;
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) { .account-access-page.is-concept-b { scroll-behavior: auto; } }
+/* The promise is a solid block, not ragged words, so the optical nudge goes and the hero lines up with the
+   sections below it. */
+.account-access-page.is-concept-b { --ds-account-optical-shift: 0px; }
+
+/* Concept C is a marketing page, not a tall sign-in stage. A/B and real auth keep their current composition. */
+.account-access-page.is-concept-c {
+  --ds-landing-c-width: 1280px; /* Marketing composition width, not defined by Figma. */
+  --ds-landing-gutter: clamp(var(--spacing-xl), 4vw, var(--spacing-5xl));
+  padding-inline: var(--ds-landing-gutter);
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  .account-access-page.is-concept-c { scroll-behavior: auto; }
+}
+
+/* A phone: the headline, then the form, then the demo, so people coming back to sign in don't scroll past it. */
+@media (max-width: 760px) {
+  .account-access-story { display: contents; }
+  .account-access-story__rotation, .account-access-story__demo { flex: 1 1 100%; }
+  .account-access-story__rotation { order: 1; }
+  .account-access-form-panel { order: 2; min-height: 0; }
+  .account-access-story__demo { order: 3; width: 100%; margin-top: 0; }
+  /* Concept B: the promise first (it is the reason to sign up), then the form. */
+  .account-access-story.is-hero { display: block; order: 1; flex: 1 1 100%; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .account-access-story__item,
   .account-access-story__progress i::after { animation: none; }
@@ -257,4 +298,21 @@
   .account-access-story__item { display: none; }
   .account-access-story__item:first-child { display: grid; opacity: 1; transform: none; }
   .account-access-story__progress { display: none; }
+}
+
+/* Concept D (Figma "Sign In · yára", 871:29): the promise column is 540 wide, so "More time for your business."
+   stays on one line. The gap between the columns is only a minimum here; the space left over is shared out
+   between them, so a wide screen never squeezes the words to make the gap bigger. */
+.account-access-page.is-concept-d {
+  /* Not a token: the width the headline's first line needs. */
+  --ds-account-story-width: 540px;
+  --ds-account-column-gap: var(--spacing-4xl);
+  /* A content-heavy film/form must not make the page's implicit grid column wider than the viewport. */
+  grid-template-columns: minmax(0, 1fr);
+}
+/* The form sits one step lower than the centre line (designer, 17 November 2026), so it lines up with the words
+   beside it rather than with the circle above them. Side by side only: on a phone it simply follows the words. */
+.account-access-page.is-concept-d .account-access-form-panel { translate: 0 var(--spacing-2xl); }
+@media (max-width: 760px) {
+  .account-access-page.is-concept-d .account-access-form-panel { translate: none; }
 }

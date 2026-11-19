@@ -1,0 +1,36 @@
+@page "/terms"
+@namespace Parrot.Web.Components.Pages.Legal
+@using Parrot.Web.Components.Layout.Landing
+@layout LandingPageLayout
+
+@* Starter text (designer, 17 November 2026): to be replaced by the reviewed terms. *@
+<LandingMetadata Title="Terms of Service · yára" Description="Terms covering your use of yára, your account, business content and AI teammates." Path="/terms" />
+
+<LandingDocument Title="Terms of Service"
+                 Intro="@($"These terms cover your use of yára, a product of {LandingCompany.Name}. By creating an account, you agree to them.")">
+    <LandingSection Title="Using yára">
+        <p>yára lets your business manage customer conversations, use an AI agent to reply, and organise work for your team. You must be at least 18 and able to act for the business you sign up for.</p>
+    </LandingSection>
+    <LandingSection Title="Your account">
+        <p>Keep your sign-in details safe and tell us straight away if you think someone else has used your account. You're responsible for what happens in your account, including what teammates you invite do there.</p>
+    </LandingSection>
+    <LandingSection Title="Your content and your customers">
+        <p>Your messages, customer information and business knowledge stay yours. You give us permission to process them only to provide yára. You're responsible for having the right to message your customers and for following the rules of each platform you connect.</p>
+    </LandingSection>
+    <LandingSection Title="Your AI agent">
+        <p>Your agent replies using the knowledge and instructions you give it. Check what it knows and review its answers; you remain responsible for the information your business gives customers.</p>
+    </LandingSection>
+    <LandingSection Title="Acceptable use">
+        <ul>
+            <li>No spam, unsolicited bulk messaging or misleading content.</li>
+            <li>Nothing illegal, harmful or that breaks the messaging platforms' policies.</li>
+            <li>No attempts to break, overload or get around the security of yára.</li>
+        </ul>
+    </LandingSection>
+    <LandingSection Title="Changes and ending">
+        <p>We may update yára and these terms; we'll tell you about important changes. You can stop using yára at any time, and we may suspend accounts that break these terms.</p>
+    </LandingSection>
+    <LandingSection Title="Contact us">
+        <p>Questions about these terms: <a href="mailto:@LandingCompany.Email">@LandingCompany.Email</a>.</p>
+    </LandingSection>
+</LandingDocument>

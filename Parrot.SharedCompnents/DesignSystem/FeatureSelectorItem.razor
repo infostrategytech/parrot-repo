@@ -1,0 +1,31 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+@* One feature in an explanatory selector. It chooses an external preview, not an app setting.
+   A real shared row button provides Enter/Space and Tab support; the selected description expands
+   without adding a second focus target. Keep selection controlled by the caller. *@
+<div class="ds-feature-selector-item">
+<RowButton Class="@($"ds-feature-selector{(Selected ? " is-selected" : null)} {Class}")" OnClick="OnSelect"
+           id="@Id" aria-label="@Title" aria-pressed="@Selected.ToString().ToLowerInvariant()"
+           aria-controls="@Controls" aria-describedby="@(Selected ? DescriptionId : null)">
+    <span class="ds-feature-selector__icon tone-@IconTone.ToString().ToLowerInvariant()" aria-hidden="true"><Icon Name="Glyph" Size="IconSize.Sm" /></span>
+    <span class="ds-feature-selector__copy">
+        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Prose>@Title</Typography>
+        <span class="ds-feature-selector__description" aria-hidden="@((!Selected).ToString().ToLowerInvariant())">
+            <span><Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose id="@DescriptionId">@Description</Typography></span>
+        </span>
+    </span>
+</RowButton>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter, EditorRequired] public string Title { get; set; } = "";
+    [Parameter, EditorRequired] public string Description { get; set; } = "";
+    [Parameter, EditorRequired] public IconName Glyph { get; set; }
+    [Parameter] public FeatureSelectorTone IconTone { get; set; } = FeatureSelectorTone.Neutral;
+    [Parameter] public bool Selected { get; set; }
+    [Parameter] public string? Controls { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public EventCallback OnSelect { get; set; }
+    private string DescriptionId => Id + "-description";
+}

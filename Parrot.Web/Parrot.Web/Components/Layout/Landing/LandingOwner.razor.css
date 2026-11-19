@@ -1,0 +1,26 @@
+.landing-owner {
+  /* Missing from the token set: the logo's height (its width follows its own proportions), and a focus ring. */
+  --ds-owner-logo: 32px;
+  --ds-owner-ring: 2px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin: 0;
+  color: var(--colors-text-muted);
+}
+.landing-owner.is-large { /* The first screen's lockup. */ --ds-owner-logo: 48px; gap: var(--spacing-md); }
+
+.landing-owner__link { display: inline-flex; color: var(--colors-text-primary); border-radius: var(--radius-radius-sm); }
+.landing-owner__link:hover { color: var(--colors-brand-primary); }
+.landing-owner__link:focus-visible { outline: var(--ds-owner-ring) solid var(--colors-brand-primary); outline-offset: var(--spacing-xs); }
+
+/* The company's own mark, used as a stencil so it takes the colour around it. */
+.landing-owner__logo {
+  display: block;
+  height: var(--ds-owner-logo);
+  aspect-ratio: 154 / 54;
+  background: currentColor;
+  -webkit-mask: url('/brand/infostrategy-logo.svg') center / contain no-repeat;
+  mask: url('/brand/infostrategy-logo.svg') center / contain no-repeat;
+}

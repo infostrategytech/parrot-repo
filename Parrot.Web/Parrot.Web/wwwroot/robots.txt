@@ -1,0 +1,8 @@
+User-agent: *
+Disallow: /dashboard
+Disallow: /sso-callback
+Disallow: /reset-password
+Disallow: /verify-email
+Disallow: /verify-sign-in
+
+Sitemap: https://yarahq.com/sitemap.xml

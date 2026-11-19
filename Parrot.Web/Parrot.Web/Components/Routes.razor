@@ -31,6 +31,8 @@
         "/verify-sign-in",
         // Sign Up links to these before anyone has an account.
         "/terms", "/privacy",
+        // Public company/contact/policy pages belong to the signed-out website.
+        "/about", "/contact", "/data-deletion",
     ];
     private readonly CancellationTokenSource _lifetime = new();
     private bool _ready, _endingSession, _disposed;

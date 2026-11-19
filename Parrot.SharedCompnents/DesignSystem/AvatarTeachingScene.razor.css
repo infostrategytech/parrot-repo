@@ -1,0 +1,53 @@
+.avatar-teaching {
+  /* Missing Figma tokens: original illustration geometry, board border, pointer anchor and finite timing. */
+  --ds-teaching-ratio: 512 / 440;
+  --ds-teaching-line: 2px;
+  --ds-teaching-duration: 4800ms;
+  --ds-teaching-pointer-x: 175px;
+  --ds-teaching-pointer-y: 303px;
+  --ds-teaching-lift: -3px;
+  --ds-teaching-play-state: paused;
+  position: relative;
+  width: 100%;
+  aspect-ratio: var(--ds-teaching-ratio);
+  container-type: inline-size;
+  isolation: isolate;
+}
+.avatar-teaching[data-playing="true"] { --ds-teaching-play-state: running; }
+.avatar-teaching__ground, .avatar-teaching__pointer { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.avatar-teaching__ground { z-index: 0; fill: var(--colors-surface-shadow); }
+.avatar-teaching__legs { fill: none; stroke: var(--colors-icon-secondary); stroke-width: 5; stroke-linecap: round; }
+.avatar-teaching__board { position: absolute; z-index: 1; top: 3%; left: 22%; width: 65%; min-height: 48%; display: grid; gap: var(--spacing-sm); padding: var(--spacing-lg); background: var(--colors-surface-card); border: var(--ds-teaching-line) solid var(--colors-brand-primary); border-radius: var(--radius-radius-xl); box-shadow: 0 var(--spacing-md) var(--spacing-2xl) var(--colors-surface-shadow); }
+.avatar-teaching__board > ::deep p { margin: 0 0 var(--spacing-xs); color: var(--colors-text-primary); }
+.avatar-teaching__board-row { display: flex; align-items: center; gap: var(--spacing-sm); padding: var(--spacing-sm); border-radius: var(--radius-radius-md); background: var(--colors-surface-muted); color: var(--colors-text-secondary); }
+.avatar-teaching__board-row > ::deep span { flex: 1; }
+.avatar-teaching__board-row > ::deep svg { flex: none; color: var(--colors-accent-teal-text); }
+.avatar-teaching__pointer { z-index: 2; }
+.avatar-teaching__cane { transform-origin: var(--ds-teaching-pointer-x) var(--ds-teaching-pointer-y); }
+.avatar-teaching__cane-shaft { fill: none; stroke: var(--colors-text-primary); stroke-width: 4; stroke-linecap: round; }
+.avatar-teaching__cane-tip { fill: var(--colors-accent-amber-solid); }
+.avatar-teaching__hand { fill: var(--colors-accent-teal-solid); }
+.avatar-teaching__character { position: absolute; z-index: 3; }
+.avatar-teaching__character.is-teacher { width: 32%; top: 53%; left: 6%; }
+.avatar-teaching__character.is-learner { width: 26%; top: 60%; right: 5%; }
+.avatar-teaching__teacher, .avatar-teaching__learner { width: 100%; aspect-ratio: 1; transform-origin: 50% 85%; }
+.avatar-teaching__character ::deep .avatar-teaching__label { position: absolute; top: 100%; left: 50%; transform: translateX(-50%); white-space: nowrap; color: var(--colors-text-subtle); }
+/* Each motion is finite and shares the same play-state. Visibility/lifecycle binding pauses all of
+   them together; default/no-JS/reduced-motion is a complete, readable still with both glasses visible. */
+[data-running="true"] .avatar-teaching__teacher { animation: teaching-explain var(--ds-teaching-duration) ease-in-out both; animation-play-state: var(--ds-teaching-play-state); }
+[data-running="true"] .avatar-teaching__learner { animation: teaching-listen var(--ds-teaching-duration) ease-in-out both; animation-play-state: var(--ds-teaching-play-state); }
+[data-running="true"] .avatar-teaching__cane { animation: teaching-point var(--ds-teaching-duration) ease-in-out both; animation-play-state: var(--ds-teaching-play-state); }
+[data-running="true"] .avatar-teaching__board-row { animation: teaching-highlight var(--ds-teaching-duration) ease-in-out both; animation-play-state: var(--ds-teaching-play-state); }
+@keyframes teaching-explain { 0%, 100% { transform: rotate(0deg); } 18%, 55% { transform: translateY(var(--ds-teaching-lift)) rotate(-3deg); } 38%, 76% { transform: rotate(2deg); } }
+@keyframes teaching-listen { 0%, 35%, 100% { transform: rotate(0deg); } 48%, 72% { transform: rotate(7deg) translateY(var(--spacing-2xs)); } 60%, 84% { transform: rotate(-2deg); } }
+@keyframes teaching-point { 0%, 18%, 100% { transform: rotate(0deg); } 37% { transform: rotate(12deg); } 58%, 74% { transform: rotate(24deg); } }
+@keyframes teaching-highlight { 0%, 12%, 100% { background: var(--colors-surface-muted); } 30%, 70% { background: var(--colors-accent-teal-subtle); } }
+@container (max-width: 300px) {
+  .avatar-teaching__board { padding: var(--spacing-sm); gap: var(--spacing-xs); }
+  .avatar-teaching__board-row { padding: var(--spacing-xs); gap: var(--spacing-xs); }
+  .avatar-teaching__board-row > ::deep svg:first-child { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-running="true"] .avatar-teaching__teacher, [data-running="true"] .avatar-teaching__learner,
+  [data-running="true"] .avatar-teaching__cane, [data-running="true"] .avatar-teaching__board-row { animation: none; }
+}

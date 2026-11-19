@@ -1,0 +1,25 @@
+.agent-introduction {
+  /* Marketing section/read measures, not defined in the Figma token set. */
+  --ds-introduction-width: 1092px;
+  --ds-introduction-read: 530px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: var(--spacing-4xl);
+  width: 100%;
+  min-width: 0;
+  max-width: var(--ds-introduction-width);
+  margin-inline: auto;
+  padding-block: var(--spacing-4xl) var(--spacing-5xl);
+  scroll-margin-top: var(--spacing-5xl);
+  color: var(--colors-text-primary);
+}
+.agent-introduction__words { display: grid; grid-template-columns: 1fr 1fr; gap: var(--spacing-4xl); align-items: start; }
+.agent-introduction__words ::deep h2 { margin: 0; text-wrap: balance; }
+.agent-introduction__lead { display: grid; gap: var(--spacing-lg); max-width: var(--ds-introduction-read); }
+.agent-introduction__lead ::deep p { margin: 0; color: var(--colors-text-secondary); text-wrap: pretty; }
+@media (max-width: 760px) {
+  .agent-introduction { gap: var(--spacing-2xl); padding-block: var(--spacing-3xl) var(--spacing-4xl); }
+  .agent-introduction__words { grid-template-columns: minmax(0, 1fr); gap: var(--spacing-xl); }
+  .agent-introduction__words br { display: none; }
+}

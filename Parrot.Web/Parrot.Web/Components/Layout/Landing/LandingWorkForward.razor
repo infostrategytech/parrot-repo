@@ -1,0 +1,79 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* Fictional public product examples, not workspace records. Focused fragments of Tasks and Inbox:
+   an order is captured, a requested booking still needs confirmation, and Pass on retains its note.
+   No live action, calendar availability, payment verification or task completion is simulated here. *@
+<section class="work-forward" id="work-moves-forward" aria-labelledby="work-forward-title">
+    <header class="work-forward__intro">
+        <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h2" Prose id="work-forward-title">More than replies.<br />Work moves forward.</Typography>
+        <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="work-forward__lead">Turn orders, bookings and follow-ups into clear tasks, with the details your team needs to act.</Typography>
+    </header>
+
+    <div class="work-forward__grid">
+        <article class="work-forward__panel is-order" aria-labelledby="work-forward-orders">
+            <div class="work-forward__words">
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__category tone-teal"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Sm" />Orders</Typography>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" Prose id="work-forward-orders">From “I’ll take two” to a clear next step.</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="work-forward__description">Items, quantities and delivery details stay with the task. Your team picks up where the chat left off.</Typography>
+            </div>
+
+            <div class="work-forward__order-scene" aria-label="Example of a customer message becoming an order task">
+                <div class="work-forward__message">
+                    <div class="work-forward__customer"><ChannelGlyph Channel="instagram" Compact ShowTitle="false" /><Typography TextStyle="TextStyle.Small12Medium" As="span">Tunde Bello · Instagram</Typography></div>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>I’ll take two. Delivery to Abuja, please.</Typography>
+                </div>
+                <div class="work-forward__bridge" aria-hidden="true"><span><Icon Name="IconName.RiArrowDownSLine" Size="IconSize.Sm" /></span></div>
+
+                <div class="work-forward__task">
+                    <header class="work-forward__task-head">
+                        <span class="work-forward__task-mark" aria-hidden="true"><Icon Name="IconName.RiTaskFill" Size="IconSize.Sm" /></span>
+                        <div><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__muted">Order task</Typography><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="p">Prepare Tunde’s order</Typography></div>
+                        <StatusBadge Tone="StatusTone.Neutral">Open</StatusBadge>
+                    </header>
+                    <div class="work-forward__item">
+                        <span class="work-forward__item-mark" aria-hidden="true"><Icon Name="IconName.RiShoppingBag3Fill" Size="IconSize.Lg" /></span>
+                        <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Indigo adire fabric</Typography><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__muted">2 × ₦18,500 · 6 yards each</Typography></div>
+                    </div>
+                    <dl class="work-forward__amounts">
+                        <div><dt><Typography TextStyle="TextStyle.BodySmallMedium" As="span">Delivery to Abuja</Typography></dt><dd><Typography TextStyle="TextStyle.BodySmallMedium" As="span">₦4,000</Typography></dd></div>
+                        <div class="is-total"><dt><Typography TextStyle="TextStyle.BodySmallSemibold" As="span">Total</Typography></dt><dd><Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">₦41,000</Typography></dd></div>
+                    </dl>
+                    <footer class="work-forward__task-foot">
+                        <div class="work-forward__person"><PetalAvatar Seed="marketing-teammate-adaeze" Initials="AD" Size="AvatarSize.Sm" /><div><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__muted">Assigned to</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p">Adaeze</Typography></div></div>
+                        <div class="work-forward__raised"><span class="work-forward__agent"><PresenceAvatar Direction="PresenceAvatarDirection.Pip" Tone="PresenceAvatarTone.Violet" Size="PresenceAvatarSize.Fill" Paused Decorative /></span><Typography TextStyle="TextStyle.Small12Medium" As="span">Raised by Kora</Typography></div>
+                    </footer>
+                </div>
+            </div>
+        </article>
+
+        <article class="work-forward__panel is-booking" aria-labelledby="work-forward-bookings">
+            <div class="work-forward__words">
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__category tone-sky"><Icon Name="IconName.RiCalendarCheckFill" Size="IconSize.Sm" />Bookings</Typography>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" Prose id="work-forward-bookings">Keep the details. Confirm the time.</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="work-forward__description">Capture the service and preferred date as a task, ready to arrange with the customer.</Typography>
+            </div>
+            <div class="work-forward__booking-example" aria-label="Example booking request awaiting confirmation">
+                <div class="work-forward__compact-head"><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__muted">Booking task</Typography><StatusBadge Tone="StatusTone.Neutral">Open</StatusBadge></div>
+                <div class="work-forward__booking">
+                    <span class="work-forward__calendar" aria-hidden="true"><Icon Name="IconName.RiCalendarCheckFill" Size="IconSize.Lg" /></span>
+                    <div><Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Kemi’s consultation</Typography><Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="work-forward__muted">Friday · Time to be confirmed</Typography></div>
+                </div>
+                <div class="work-forward__next-step"><Typography TextStyle="TextStyle.Small12Medium" As="span" Class="work-forward__muted">Next step</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Confirm a suitable time with Kemi.</Typography></div>
+            </div>
+        </article>
+
+        <article class="work-forward__panel is-followup" aria-labelledby="work-forward-followups">
+            <div class="work-forward__words">
+                <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__category tone-amber"><Icon Name="IconName.RiChat3Fill" Size="IconSize.Sm" />Follow-ups</Typography>
+                <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h3" Prose id="work-forward-followups">A clear owner. The full context.</Typography>
+                <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="work-forward__description">Pass a task to a teammate with a note, without losing the customer conversation.</Typography>
+            </div>
+            <div class="work-forward__followup-example" aria-label="Example task passed from Adaeze to Tolu with an internal note">
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="p">Check Amaka’s delivery</Typography>
+                <div class="work-forward__handoff"><PetalAvatar Seed="marketing-teammate-adaeze" Initials="AD" Size="AvatarSize.Sm" /><span aria-hidden="true"><Icon Name="IconName.RiArrowRightLine" Size="IconSize.Sm" /></span><PetalAvatar Seed="marketing-teammate-tolu" Initials="TO" Size="AvatarSize.Sm" /><Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="work-forward__muted">Adaeze passed this to Tolu</Typography></div>
+                <div class="work-forward__note"><Typography TextStyle="TextStyle.Small12Medium" As="p" Class="work-forward__muted">Internal note · Adaeze</Typography><Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Please check with dispatch and update Amaka in the chat.</Typography></div>
+            </div>
+        </article>
+    </div>
+    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="work-forward__connection"><Icon Name="IconName.RiLinksFill" Size="IconSize.Sm" />Each task stays connected to the customer conversation.</Typography>
+</section>

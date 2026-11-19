@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings><Nullable>enable</Nullable>
+    <!-- Render-tree inspection is intentionally confined to this controlled test harness. -->
+    <NoWarn>$(NoWarn);BL0006</NoWarn>
+    <ParrotWebBin Condition="'$(ParrotWebBin)' == ''">../../Parrot.Web/Parrot.Web/bin/Release/net10.0/</ParrotWebBin>
+  </PropertyGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <Reference Include="Parrot.Web"><HintPath>$(ParrotWebBin)Parrot.Web.dll</HintPath></Reference>
+    <Reference Include="Parrot.SharedComponents"><HintPath>$(ParrotWebBin)Parrot.SharedComponents.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

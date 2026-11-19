@@ -1,7 +1,9 @@
+@page "/"
 @page "/register"
 @layout AuthLayout
 @using Parrot.Web.Components.Pages.Auth
 @using Parrot.Web.Services
+@using Parrot.Web.Components.Layout.Landing
 @inject IRegisterService RegisterService
 @inject RegisterState RegisterState
 @inject AuthState AuthState
@@ -11,14 +13,15 @@
 @inject IConfiguration Configuration
 @implements IDisposable
 
-<PageTitle>Create Your Account · yára</PageTitle>
+<LandingMetadata Title="@(IsHome ? LandingCompany.MarketingTitle : "Create your account · yára")"
+                 Description="@LandingCompany.MarketingDescription" Path="@(IsHome ? "/" : "/register")" Indexable="IsHome" />
 
 @* Sign-up asks for the least it can: an email and a password. The business
    name is asked for on the workspace welcome card once they are inside. *@
 
 <div class="signup-intro">
-    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h1" Id="signup-title">
-        Create Your Account
+    <Typography TextStyle="TextStyle.HeadingH3Semibold" As="@(HasMarketingHero ? "h2" : "h1")" Id="signup-title">
+        Create your account
     </Typography>
     <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="signup-intro__copy">
         Get started now. You can tell us about your business once you are inside.
@@ -43,10 +46,17 @@
             <PasswordInput FloatingLabel="Create Password"
                            Id="signup-password"
                            IsNew
-                           @bind-Value="_password"
+                           @bind-Value="Password"
                            ErrorText="@_passwordError" />
         </div>
 
+        @* Confirm Password waits until a password is being typed (designer, 17 November 2026): the form opens with
+           two fields, and the third slides in when it's needed and away again if the password is deleted. Until
+           then it isn't in the form at all. *@
+        @if (_confirmShown)
+        {
+        <div class="signup-form__reveal @(_confirmLeaving ? "is-leaving" : null)" inert="@_confirmLeaving">
+        <div class="signup-form__reveal-inner">
         <div class="signup-form__password">
             <PasswordInput FloatingLabel="Confirm Password"
                            Id="signup-confirm-password"
@@ -62,6 +72,9 @@
                 </p>
             }
         </div>
+        </div>
+        </div>
+        }
     </div>
 
     <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="signup-form__legal">
@@ -99,10 +112,41 @@
 </form>
 
 @code {
+    [CascadingParameter(Name = "HasMarketingHero")] public bool HasMarketingHero { get; set; }
+    private bool IsHome => new Uri(Navigation.Uri).AbsolutePath == "/";
     private enum Problem { AccountExists, TooManyAttempts, Rejected, Unreachable, Unknown }
 
     private string? _email;
     private string? _password;
+    // Confirm Password is in the form while there is a password to confirm. Typing one slides it in; deleting the
+    // password slides it away and clears it (it would have to match a new password anyway). _confirmLeaving holds
+    // it on screen while it slides out.
+    private bool _confirmShown, _confirmLeaving;
+    private int _confirmTurn;
+    private string? Password
+    {
+        get => _password;
+        set
+        {
+            _password = value;
+            if (!string.IsNullOrEmpty(value)) { _confirmShown = true; _confirmLeaving = false; _confirmTurn++; }
+            else if (_confirmShown && !_confirmLeaving) _ = HideConfirmAsync(++_confirmTurn);
+        }
+    }
+
+    private async Task HideConfirmAsync(int turn)
+    {
+        _confirmLeaving = true;
+        await Task.Delay(ConfirmSlide);
+        if (turn != _confirmTurn) return;   // They started typing again: it stays.
+        _confirmShown = _confirmLeaving = false;
+        _confirmPassword = null;
+        _confirmAttempted = false;
+        try { await InvokeAsync(StateHasChanged); } catch (ObjectDisposedException) { }
+    }
+
+    // The same length as the slide in Register.razor.css.
+    private static readonly TimeSpan ConfirmSlide = TimeSpan.FromMilliseconds(360);
     private string? _confirmPassword;
     private string? _emailError;
     private string? _passwordError;
@@ -255,7 +299,6 @@
     {
         if (Busy) return;
         _googleBusy = true;
-
 
         var apiBaseUrl = (Configuration["ApiSettings:PublicBaseUrl"] ?? Configuration["ApiSettings:BaseUrl"] ?? string.Empty).TrimEnd('/');
         Navigation.NavigateTo($"{apiBaseUrl}/api/auth/sso/google", forceLoad: true);

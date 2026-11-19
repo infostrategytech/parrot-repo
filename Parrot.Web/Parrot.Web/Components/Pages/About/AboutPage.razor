@@ -1,0 +1,20 @@
+@page "/about"
+@namespace Parrot.Web.Components.Pages.About
+@using Parrot.Web.Components.Layout.Landing
+@layout LandingPageLayout
+
+@* About yára and who makes it (designer, 17 November 2026). Starter text, to be replaced. *@
+<LandingMetadata Title="About · yára" Description="Meet yára, an AI-powered shared inbox built for businesses that sell through social media and messaging. A product of Infostrategy Technology Limited." Path="/about" />
+
+<LandingDocument Title="Helping businesses answer every customer" ShowUpdated="false"
+                 Intro="Most of our customers sell on Instagram, TikTok and WhatsApp. Their customers ask the same questions all day, and the ones that matter get lost. yára is built to change that.">
+    <LandingSection Title="What yára does">
+        <p>yára brings a business's customer conversations from WhatsApp, Instagram, Facebook and TikTok into one inbox. An AI agent, taught by the business, answers everyday questions in the business's voice. When something needs a person, like a payment to confirm or a price to agree, yára hands it to the right teammate as a clear task.</p>
+    </LandingSection>
+    <LandingSection Title="Who makes it">
+        <p>yára is made by <strong>@LandingCompany.Name</strong>, in @LandingCompany.City. We build for small and growing businesses that sell through social media and messaging.</p>
+    </LandingSection>
+    <LandingSection Title="Get in touch">
+        <p>We'd love to hear from you. See <a href="/contact">Contact</a> for our email, phone and address.</p>
+    </LandingSection>
+</LandingDocument>

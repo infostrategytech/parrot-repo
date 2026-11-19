@@ -1,0 +1,24 @@
+.landing-document {
+  /* Missing from the token set: a reading measure. */
+  --ds-landing-reading: 680px;
+
+  display: grid;
+  gap: var(--spacing-3xl);
+  width: 100%;
+  max-width: var(--ds-landing-reading);
+  margin-inline: auto;
+  padding-block: var(--spacing-4xl) var(--spacing-5xl);
+}
+
+.landing-document__head { display: grid; gap: var(--spacing-md); }
+::deep .landing-document__muted { color: var(--colors-text-muted); }
+::deep .landing-document__intro { color: var(--colors-text-secondary); }
+
+/* The sections are plain HTML from each page, styled here. */
+.landing-document__body { display: grid; gap: var(--spacing-xl); color: var(--colors-text-secondary); }
+.landing-document__body ::deep section { display: grid; gap: var(--spacing-sm); }
+.landing-document__body ::deep h2 { margin: var(--spacing-md) 0 0; color: var(--colors-text-primary); }
+.landing-document__body ::deep p, .landing-document__body ::deep li { margin: 0; }
+.landing-document__body ::deep ul { display: grid; gap: var(--spacing-xs); margin: 0; padding-left: var(--spacing-xl); }
+.landing-document__body ::deep a { color: var(--colors-text-link); text-underline-offset: var(--spacing-2xs); }
+.landing-document__body ::deep strong { color: var(--colors-text-primary); }

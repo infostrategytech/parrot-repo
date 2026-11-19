@@ -1,0 +1,36 @@
+@namespace Parrot.Web.Components.Layout.Landing
+@inject NavigationManager Nav
+
+@* Concept D's last word (designer, 17 November 2026, after ChatGPT dots): one line, one way to start, and a row of
+   agents peeking up over the footer, watching your pointer. Each is a different face and colour, which is the
+   one thing said here that isn't said above: you choose what yours looks like. *@
+<section class="agent-closing" aria-labelledby="agent-closing-title">
+    <div class="agent-closing__body">
+        <Typography TextStyle="TextStyle.DisplayExtrabold" As="h2" Id="agent-closing-title" Prose>Let your agent take it from here</Typography>
+        <Typography TextStyle="TextStyle.BodyLargeMedium" As="p" Prose Class="agent-closing__lead">Pick its face and colour, teach it what you sell, and let it answer while you make, pack and deliver.</Typography>
+        <Button Size="ButtonSize.Large" @onclick="@(() => Nav.NavigateTo("/register"))">
+            <ChildContent>Create your agent</ChildContent>
+            <IconRight><Icon Name="IconName.RiArrowRightLine" /></IconRight>
+        </Button>
+    </div>
+
+    <div class="agent-closing__crew" aria-hidden="true">
+        @foreach (var (direction, tone, index) in Crew.Select((c, i) => (c.Direction, c.Tone, i)))
+        {
+            <span class="agent-closing__member member-@index">
+                <PresenceAvatar Direction="direction" Tone="tone" Size="PresenceAvatarSize.Fill" Reactive Decorative />
+            </span>
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly (PresenceAvatarDirection Direction, PresenceAvatarTone Tone)[] Crew =
+    [
+        (PresenceAvatarDirection.Bo, PresenceAvatarTone.Blue),
+        (PresenceAvatarDirection.Fig, PresenceAvatarTone.Yellow),
+        (PresenceAvatarDirection.Luma, PresenceAvatarTone.Fuchsia),
+        (PresenceAvatarDirection.Ripple, PresenceAvatarTone.Lime),
+        (PresenceAvatarDirection.Pip, PresenceAvatarTone.Amber),
+    ];
+}

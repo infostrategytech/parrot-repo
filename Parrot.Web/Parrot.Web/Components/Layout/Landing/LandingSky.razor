@@ -1,0 +1,19 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* The sky over the signed-out pages (designer, 17 November 2026): soft blue fading down from the top into the
+   page, with a few pale clouds drifting one way, slowly. Behind everything and only at the top, so the form and
+   the words keep their contrast. Night blue in dark mode; still when motion is reduced. Render it as the first
+   child of a position: relative page. *@
+<div class="landing-sky @(Short ? "is-short" : null)" aria-hidden="true">
+    @for (var index = 0; index < 4; index++)
+    {
+        <svg class="landing-sky__cloud cloud-@index" viewBox="0 0 240 90" focusable="false">
+            <path d="M44 78c-20 0-34-12-34-27 0-14 12-25 28-26 4-15 19-25 36-25 15 0 28 7 34 19 5-3 11-4 17-4 19 0 34 13 35 30 16 2 28 13 28 26 0 4-1 7-3 10H44z" />
+        </svg>
+    }
+</div>
+
+@code {
+    /// <summary>A shorter sky, for the reading pages.</summary>
+    [Parameter] public bool Short { get; set; }
+}

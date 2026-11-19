@@ -1,0 +1,16 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* Who makes yára, with their logo, so it's plain who owns the product (designer, 17 November 2026): Infostrategy
+   Technology Limited. The logo links to the company's own site, so a reviewer can check it in one click. It is
+   one colour, drawn in the text colour around it, so it reads in light and dark. *@
+<p class="landing-owner @(Large ? "is-large" : null)">
+    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="landing-owner__label">A product of</Typography>
+    <a class="landing-owner__link" href="@LandingCompany.Website" target="_blank" rel="noopener" aria-label="@($"{LandingCompany.Name} (opens in a new tab)")">
+        <span class="landing-owner__logo" role="img" aria-label="@LandingCompany.Name"></span>
+    </a>
+</p>
+
+@code {
+    /// <summary>The bigger lockup, for the first screen.</summary>
+    [Parameter] public bool Large { get; set; }
+}

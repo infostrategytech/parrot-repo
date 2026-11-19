@@ -1,0 +1,61 @@
+.landing-sky {
+  /* Missing from the token set: the sky's reach and the clouds' sizes and drift times. Long, one-way drifts
+     (never a back-and-forth loop), so the motion is felt rather than watched. */
+  --ds-sky-height: min(78vh, 760px);
+  /* Light, but a real blue (designer, 17 November 2026: the first version was too pale). */
+  --ds-sky-top: color-mix(in srgb, var(--colors-accent-sky-base) 24%, var(--colors-accent-sky-muted));
+  --ds-sky-cloud: var(--colors-surface-card);
+  --ds-sky-cloud-opacity: 0.95;
+
+  position: absolute;
+  z-index: 0;
+  inset: 0 0 auto;
+  height: var(--ds-sky-height);
+  overflow: hidden;
+  pointer-events: none;
+  background: linear-gradient(to bottom, var(--ds-sky-top), color-mix(in srgb, var(--ds-sky-top) 55%, var(--colors-surface-background)) 38%, var(--colors-surface-background));
+}
+
+/* Not a token: the reading pages' shorter sky. */
+.landing-sky.is-short { --ds-sky-height: min(48vh, 420px); }
+
+[data-theme="aurora-dark"] .landing-sky {
+  /* Night: a deep blue that settles into the page, and dim clouds. */
+  --ds-sky-top: color-mix(in srgb, var(--colors-accent-sky-subtle) 38%, var(--colors-surface-background));
+  --ds-sky-cloud: var(--colors-text-primary);
+  --ds-sky-cloud-opacity: 0.045;
+}
+
+.landing-sky__cloud {
+  position: absolute;
+  left: 0;
+  width: var(--ds-cloud-width);
+  height: auto;
+  fill: var(--ds-sky-cloud);
+  opacity: var(--ds-sky-cloud-opacity);
+  /* Soft edges, drawn once; only the position moves. */
+  filter: blur(var(--ds-cloud-soft));
+  transform: translateX(-30vw);
+  animation: landing-cloud-drift var(--ds-cloud-time) linear infinite;
+  animation-delay: var(--ds-cloud-start);
+}
+
+/* Different sizes, heights and speeds, started part-way so the sky is never empty. */
+.cloud-0 { --ds-cloud-width: 260px; --ds-cloud-soft: 6px; --ds-cloud-time: 150s; --ds-cloud-start: -40s; top: 9%; }
+.cloud-1 { --ds-cloud-width: 180px; --ds-cloud-soft: 5px; --ds-cloud-time: 190s; --ds-cloud-start: -120s; top: 24%; opacity: calc(var(--ds-sky-cloud-opacity) * 0.7); }
+.cloud-2 { --ds-cloud-width: 340px; --ds-cloud-soft: 8px; --ds-cloud-time: 230s; --ds-cloud-start: -150s; top: 3%; opacity: calc(var(--ds-sky-cloud-opacity) * 0.8); }
+.cloud-3 { --ds-cloud-width: 140px; --ds-cloud-soft: 4px; --ds-cloud-time: 170s; --ds-cloud-start: -10s; top: 33%; opacity: calc(var(--ds-sky-cloud-opacity) * 0.55); }
+
+@keyframes landing-cloud-drift {
+  from { transform: translateX(-30vw); }
+  to { transform: translateX(110vw); }
+}
+
+/* Still, but the same sky. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-sky__cloud { animation: none; }
+  .cloud-0 { transform: translateX(8vw); }
+  .cloud-1 { transform: translateX(46vw); }
+  .cloud-2 { transform: translateX(70vw); }
+  .cloud-3 { transform: translateX(28vw); }
+}

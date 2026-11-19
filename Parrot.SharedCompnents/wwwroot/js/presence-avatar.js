@@ -185,6 +185,8 @@ export function bindPresence(element, options = {}) {
         shadow: one('.presence-avatar__shadow'), echoes: all('.presence-avatar__echo'), sparkles: all('.presence-avatar__sparkle'),
     };
     const floating = options.floating ?? element.classList?.contains('presence-avatar--floating') ?? false;
+    // Off where the avatar performs rather than listens (the landing film's closing card): it glances on its own.
+    const follows = options.follow ?? true;
     const drift = Math.random() * 10; // so avatars side by side don't rise and fall in step
     // A shape change in flight: where it started, where it's going, and how far it has got.
     let morph = null, shape = null, face = null, pivot = [64, 64];
@@ -293,7 +295,7 @@ export function bindPresence(element, options = {}) {
 
             // Where to look: at the pointer anywhere on the page, or, when it's still, small natural glances.
             let lx = 0, ly = 0;
-            if (t - pointer.at < 3.5) {
+            if (follows && t - pointer.at < 3.5) {
                 const r = element.getBoundingClientRect();
                 const dx = pointer.x - (r.left + r.width / 2), dy = pointer.y - (r.top + r.height / 2);
                 const distance = Math.hypot(dx, dy) || 1, reach = Math.min(1, distance / Math.max(48, r.width * 1.6));

@@ -1,0 +1,67 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* The foot of every signed-out page (designer, 18 November 2026). Three parts, each with room around it:
+   yára itself with the support inbox one click away; the pages, grouped so a reviewer finds them at a glance;
+   and a closing line saying who owns yára, with their logo, registered name and address. On the policy pages
+   too, so the owner is never more than a scroll away. *@
+<footer class="landing-footer">
+    <div class="landing-footer__top">
+        <div class="landing-footer__brand">
+            <a class="landing-footer__home" href="/" aria-label="yára home">
+                <CadenceMark Size="26" Tight />
+                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span">yára</Typography>
+            </a>
+            <Typography TextStyle="TextStyle.BodySmallRegular" As="p" Prose Class="landing-footer__about">
+                Every customer chat in one inbox, with an AI teammate that knows your business.
+            </Typography>
+
+            @* Help is the thing someone in the footer is most often looking for, so the inbox stands on its own. *@
+            <div class="landing-footer__help">
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="landing-footer__muted">Need help?</Typography>
+                <a class="landing-footer__email" href="mailto:@LandingCompany.Email">
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="span">@LandingCompany.Email</Typography>
+                </a>
+                <a class="landing-footer__phone" href="@LandingCompany.PhoneLink">
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@LandingCompany.Phone</Typography>
+                </a>
+            </div>
+        </div>
+
+        <nav class="landing-footer__columns" aria-label="About yára">
+            @foreach (var (title, links) in Columns)
+            {
+                <div class="landing-footer__column">
+                    <Typography TextStyle="TextStyle.Small12Semibold" As="h2" Class="landing-footer__title">@title</Typography>
+                    <ul>
+                        @foreach (var (label, href) in links)
+                        {
+                            <li><a href="@href"><Typography TextStyle="TextStyle.BodySmallMedium" As="span">@label</Typography></a></li>
+                        }
+                    </ul>
+                </div>
+            }
+        </nav>
+    </div>
+
+    <div class="landing-footer__bottom">
+        <div class="landing-footer__legal">
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="landing-footer__muted">
+                @LandingCompany.Name, @LandingCompany.Address.
+            </Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="landing-footer__muted">
+                © @DateTime.UtcNow.Year @LandingCompany.Name. All rights reserved.
+            </Typography>
+        </div>
+        <LandingOwner />
+    </div>
+</footer>
+
+@code {
+    // Only pages that exist: no "coming soon" links. Contact sits under Company, so the word appears once.
+    private static readonly (string Title, (string Label, string Href)[] Links)[] Columns =
+    [
+        ("Product", [("How it works", "/#how-it-works"), ("Sign in", "/login"), ("Create account", "/register")]),
+        ("Company", [("About", "/about"), ("Contact", "/contact")]),
+        ("Legal", [("Privacy", "/privacy"), ("Terms", "/terms"), ("Data deletion", "/data-deletion")]),
+    ];
+}

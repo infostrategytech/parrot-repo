@@ -1,0 +1,336 @@
+.product-film {
+  /* Film composition values the token set doesn't have: the stage, its hairline, the agent's face (matches FACE
+     in landing-product-film.js), the pointer and its press ring, the room beside Kora's replies, the controls'
+     frosting, track, round buttons, the chapter name's width and handover, the controls' fade, and the beats of the typing dots, the sound bars and the sound button's invitation. The JS sets the card and caption widths for the stage's size. */
+  --ds-film-height: 640px;
+  --ds-film-line: 1px;
+  --ds-film-face: 88px;
+  --ds-film-pointer: 22px;
+  --ds-film-pointer-ring: 2px;
+  --ds-film-ring: 48px;
+  --ds-film-ai-gap: 36px;
+  --ds-film-frost: 18px;
+  --ds-film-track: 3px;
+  --ds-film-typing: 1.1s;
+  --ds-film-typing-step: .15s;
+  --ds-film-round: 44px;
+  --ds-film-now: 132px;
+  --ds-film-now-out: .16s;
+  --ds-film-now-in: .12s;
+  --ds-film-controls-fade: .4s;
+  --ds-film-eq: .45s;
+  --ds-film-invite: 1.6s;
+  --ds-film-card-width: 440px;
+  --ds-film-caption-width: 360px;
+  --ds-film-shadow: 0 var(--spacing-md) var(--spacing-3xl) color-mix(in srgb, var(--colors-text-primary) 7%, transparent);
+  --ds-film-shadow-lifted: 0 var(--spacing-xl) var(--spacing-5xl) color-mix(in srgb, var(--colors-text-primary) 12%, transparent);
+  display: grid;
+  gap: var(--spacing-lg);
+  min-width: 0;
+}
+
+.product-film__screen {
+  position: relative;
+  isolation: isolate;
+  height: var(--ds-film-height);
+  overflow: hidden;
+  border: var(--ds-film-line) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-3xl);
+  background: var(--colors-surface-card);
+}
+.product-film__canvas { position: absolute; inset: 0; overflow: hidden; }
+.product-film__canvas > [data-film-actor] { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+/* Until the motion is composed nothing shows, so no actor flashes in the corner. */
+.product-film:not([data-motion-ready]) .product-film__canvas > [data-film-actor] { opacity: 0; }
+.product-film__canvas ::deep p { margin: 0; }
+::deep .product-film__muted { color: var(--colors-text-subtle); }
+
+/* Dark mode: no glow behind the film, and only a faint one behind its cards (designer, 18 November 2026). The
+   shadows are made of the text colour, which is light there, so at full strength they read as halos; at under half
+   they just lift the cards off the page. */
+[data-theme="aurora-dark"] .product-film__light { display: none; }
+[data-theme="aurora-dark"] .product-film {
+  --ds-film-shadow: 0 var(--spacing-md) var(--spacing-3xl) color-mix(in srgb, var(--colors-text-primary) 3%, transparent);
+  --ds-film-shadow-lifted: 0 var(--spacing-xl) var(--spacing-5xl) color-mix(in srgb, var(--colors-text-primary) 5%, transparent);
+}
+.product-film__light {
+  width: 100%;
+  height: 100%;
+  transform-origin: 50% 50%;
+  background: radial-gradient(ellipse 55% 50% at 50% 42%, var(--colors-accent-teal-subtle), transparent 72%);
+  pointer-events: none;
+}
+
+/* Act one: the chats that pile up. */
+.product-film__ping {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-lg) var(--spacing-xs) var(--spacing-xs);
+  border: var(--ds-film-line) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+  background: var(--colors-surface-card);
+  box-shadow: var(--ds-film-shadow);
+  white-space: nowrap;
+  color: var(--colors-text-primary);
+}
+.product-film__canvas > .product-film__ping { transform-origin: 50% 50%; }
+.product-film__headline { width: 100%; padding-inline: var(--spacing-xl); text-align: center; color: var(--colors-text-primary); }
+.product-film__canvas > .product-film__headline { transform-origin: 50% 50%; }
+.product-film__headline ::deep p { text-wrap: balance; }
+::deep .product-film__tagline { color: var(--colors-text-secondary); }
+.product-film__brand, ::deep .product-film__brand { color: var(--colors-brand-primary); white-space: nowrap; }
+.product-film__face { width: var(--ds-film-face); height: var(--ds-film-face); pointer-events: none; }
+.product-film__canvas > .product-film__face { transform-origin: 50% 50%; }
+/* Kora sits above the cards it joins (the help card's corner); it steps out of the way while the task is open. */
+.product-film__face.is-kora { z-index: 8; }
+
+.product-film__caption { display: grid; gap: var(--spacing-sm); width: var(--ds-film-caption-width); color: var(--colors-text-primary); }
+.product-film__caption ::deep p { text-wrap: balance; }
+::deep .product-film__caption-line { color: var(--colors-text-secondary); }
+
+/* The inbox rows. */
+.product-film__inbox-head { display: flex; align-items: center; justify-content: space-between; width: var(--ds-film-card-width); padding-inline: var(--spacing-xs); color: var(--colors-text-primary); }
+.product-film__inbox-name { display: flex; align-items: center; gap: var(--spacing-sm); }
+.product-film__on { display: flex; align-items: center; gap: var(--spacing-md); color: var(--colors-text-subtle); }
+/* The four apps it brings together, overlapping like a stack of chats. */
+.product-film__apps { display: flex; align-items: center; padding-left: var(--spacing-xs); }
+.product-film__apps > ::deep * { margin-left: calc(var(--spacing-xs) * -1); border-radius: var(--radius-radius-full); box-shadow: 0 0 0 var(--ds-film-pointer-ring) var(--colors-surface-card); }
+.product-film__seat { width: var(--spacing-2xl); height: var(--spacing-2xl); }
+.product-film__row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: var(--spacing-md);
+  width: var(--ds-film-card-width);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--ds-film-line) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xl);
+  background: var(--colors-surface-card);
+  box-shadow: var(--ds-film-shadow);
+  color: var(--colors-text-primary);
+}
+.product-film__canvas > .product-film__row { transform-origin: 50% 50%; }
+.product-film__row.is-customer { z-index: 2; }
+.product-film__row-text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+::deep .product-film__snippet, .product-film__row-sub { overflow: hidden; color: var(--colors-text-subtle); white-space: nowrap; text-overflow: ellipsis; }
+.product-film__row-meta { display: grid; justify-items: end; gap: var(--spacing-xs); color: var(--colors-text-subtle); }
+.product-film__unread { width: var(--spacing-sm); height: var(--spacing-sm); border-radius: var(--radius-radius-full); background: var(--colors-brand-primary); }
+
+/* The conversation. Kora's messages sit on the right, with room beside them for Kora itself. */
+.product-film__inquiry { z-index: 3; isolation: isolate; padding: var(--spacing-md) var(--spacing-lg); white-space: nowrap; color: var(--colors-text-primary); }
+.product-film__inquiry-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border: var(--ds-film-line) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-xs) var(--radius-radius-xl) var(--radius-radius-xl);
+  background: var(--colors-surface-card);
+  box-shadow: var(--ds-film-shadow);
+}
+.product-film__bubble { width: max-content; max-width: calc(var(--ds-film-card-width) - var(--ds-film-ai-gap) * 2); padding: var(--spacing-md) var(--spacing-lg); border-radius: var(--radius-radius-xl); box-shadow: var(--ds-film-shadow); }
+.product-film__bubble ::deep p { text-wrap: pretty; }
+.product-film__bubble.is-ai { border-top-right-radius: var(--radius-radius-xs); background: var(--colors-brand-primary); color: var(--colors-text-on-primary); }
+.product-film__bubble.is-customer { border: var(--ds-film-line) solid var(--colors-surface-border); border-top-left-radius: var(--radius-radius-xs); background: var(--colors-surface-card); color: var(--colors-text-primary); }
+.product-film__canvas > .product-film__bubble.is-ai, .product-film__canvas > .product-film__reply { transform-origin: 100% 0; }
+.product-film__reply { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: end; gap: var(--spacing-xs); width: max-content; max-width: calc(var(--ds-film-card-width) - var(--ds-film-ai-gap)); }
+.product-film__reply .product-film__bubble { max-width: 100%; }
+.product-film__source { display: flex; align-items: center; gap: var(--spacing-xs); color: var(--colors-text-subtle); }
+.product-film__typing { display: flex; align-items: center; gap: var(--spacing-xs); padding-block: var(--spacing-lg); }
+.product-film__typing i { width: var(--spacing-sm); height: var(--spacing-sm); border-radius: var(--radius-radius-full); background: currentColor; opacity: .5; animation: film-typing var(--ds-film-typing) ease-in-out infinite; }
+.product-film__typing i:nth-child(2) { animation-delay: var(--ds-film-typing-step); }
+.product-film__typing i:nth-child(3) { animation-delay: calc(var(--ds-film-typing-step) * 2); }
+@keyframes film-typing { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(calc(var(--spacing-2xs) * -1)); } }
+::deep .product-film__quote { display: block; margin-bottom: var(--spacing-sm); padding: var(--spacing-xs) var(--spacing-md); border-radius: var(--radius-radius-lg); background: color-mix(in srgb, var(--colors-text-on-primary) 16%, transparent); color: color-mix(in srgb, var(--colors-text-on-primary) 85%, transparent); }
+.product-film__event { display: flex; align-items: center; gap: var(--spacing-xs); padding: var(--spacing-xs) var(--spacing-md); border-radius: var(--radius-radius-full); background: var(--colors-surface-muted); color: var(--colors-text-secondary); white-space: nowrap; }
+
+/* The order task. Its height is the motion's: closed it shows only its head. */
+.product-film__task {
+  z-index: 6;
+  width: var(--ds-film-card-width);
+  overflow: hidden;
+  border: var(--ds-film-line) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+  background: var(--colors-surface-card);
+  box-shadow: var(--ds-film-shadow-lifted);
+  color: var(--colors-text-primary);
+}
+.product-film__canvas > .product-film__task, .product-film__canvas > .product-film__help { transform-origin: 50% 0; }
+.product-film__task-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--spacing-md); padding: var(--spacing-lg) var(--spacing-xl); }
+.product-film__stack { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.product-film__mark { display: grid; place-items: center; width: var(--spacing-4xl); height: var(--spacing-4xl); border-radius: var(--radius-radius-lg); }
+.product-film__mark.is-teal { background: var(--colors-accent-teal-subtle); color: var(--colors-accent-teal-text); }
+.product-film__mark.is-violet { background: var(--colors-accent-violet-subtle); color: var(--colors-accent-violet-text); }
+.product-film__task-side { display: grid; justify-items: end; align-items: center; }
+.product-film__task-side > * { grid-area: 1 / 1; }
+.product-film__due { padding: var(--spacing-2xs) var(--spacing-sm); border-radius: var(--radius-radius-full); background: var(--colors-accent-teal-subtle); color: var(--colors-accent-teal-text); white-space: nowrap; }
+.product-film__close { display: grid; place-items: center; width: var(--spacing-3xl); height: var(--spacing-3xl); border-radius: var(--radius-radius-full); background: var(--colors-surface-muted); color: var(--colors-icon-secondary); }
+.product-film__task-body { display: grid; gap: var(--spacing-lg); padding: 0 var(--spacing-xl) var(--spacing-xl); }
+/* The order, inside the task: a quiet panel, so the task reads as the thing to do and the order as its detail. */
+.product-film__order { display: grid; gap: var(--spacing-md); padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg); border-radius: var(--radius-radius-xl); background: var(--colors-surface-muted); }
+::deep .product-film__label { color: var(--colors-text-subtle); }
+.product-film__item { display: flex; align-items: center; gap: var(--spacing-md); }
+.product-film__steps { display: flex; align-items: center; gap: var(--spacing-lg); color: var(--colors-text-subtle); }
+.product-film__step { display: flex; align-items: center; gap: var(--spacing-xs); }
+.product-film__step i { width: var(--spacing-md); height: var(--spacing-md); border: var(--ds-film-pointer-ring) solid var(--colors-surface-border); border-radius: var(--radius-radius-full); }
+.product-film__step.is-done { color: var(--colors-accent-teal-text); }
+.product-film__amount { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-md); }
+.product-film__amount.is-total { padding-top: var(--spacing-md); border-top: var(--ds-film-line) solid var(--colors-surface-border); }
+.product-film__assignee { display: flex; align-items: center; gap: var(--spacing-md); }
+.product-film__note-cell { display: grid; align-items: start; padding-top: var(--spacing-xs); }
+.product-film__note-cell > * { grid-area: 1 / 1; }
+.product-film__add-note { display: flex; align-items: center; justify-self: start; gap: var(--spacing-xs); padding: var(--spacing-sm) var(--spacing-md); border-radius: var(--radius-radius-full); background: var(--colors-surface-muted); color: var(--colors-text-secondary); }
+.product-film__canvas .product-film__add-note { transform-origin: 50% 50%; }
+.product-film__note { display: grid; gap: var(--spacing-sm); padding: var(--spacing-md) var(--spacing-lg); border-radius: var(--radius-radius-lg); background: color-mix(in srgb, var(--colors-accent-amber-subtle) 55%, var(--colors-surface-card)); }
+.product-film__note-head { display: flex; align-items: center; gap: var(--spacing-xs); color: var(--colors-accent-amber-text); }
+.product-film__note-head ::deep .product-film__muted { margin-left: auto; }
+.product-film__typed { display: block; color: var(--colors-text-primary); }
+
+/* Kora asks you: an amber card in the chat, with Kora in its corner. */
+.product-film__help {
+  z-index: 5;
+  display: grid;
+  align-content: start;
+  gap: var(--spacing-md);
+  width: var(--ds-film-card-width);
+  overflow: hidden;
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+  border: var(--ds-film-line) solid var(--colors-accent-amber-border);
+  border-radius: var(--radius-radius-2xl);
+  /* A tint, not the full amber: the solid one is heavy in dark mode. */
+  background: color-mix(in srgb, var(--colors-accent-amber-subtle) 40%, var(--colors-surface-card));
+  box-shadow: var(--ds-film-shadow-lifted);
+  color: var(--colors-text-primary);
+}
+.product-film__help-head { display: flex; align-items: center; gap: var(--spacing-sm); color: var(--colors-accent-amber-text); }
+.product-film__help-slot { width: var(--spacing-2xl); height: var(--spacing-2xl); flex: none; }
+.product-film__field { padding: var(--spacing-md) var(--spacing-lg); border: var(--ds-film-line) solid var(--colors-surface-border); border-radius: var(--radius-radius-lg); background: var(--colors-surface-card); }
+.product-film__help-actions { display: grid; justify-items: end; }
+.product-film__help-actions > * { grid-area: 1 / 1; }
+.product-film__actions { display: flex; align-items: center; gap: var(--spacing-sm); }
+.product-film__pill { display: inline-flex; align-items: center; gap: var(--spacing-xs); padding: var(--spacing-sm) var(--spacing-lg); border-radius: var(--radius-radius-full); background: var(--colors-brand-primary); color: var(--colors-text-on-primary); }
+.product-film__canvas .product-film__pill { transform-origin: 50% 50%; }
+.product-film__pill.is-quiet { background: transparent; color: var(--colors-text-secondary); }
+
+/* Our pointer: a soft dot with a light rim, and the ring a press leaves behind. */
+.product-film__cursor {
+  z-index: 12;
+  width: var(--ds-film-pointer);
+  height: var(--ds-film-pointer);
+  border-radius: var(--radius-radius-full);
+  background: color-mix(in srgb, var(--colors-text-primary) 70%, transparent);
+  box-shadow: 0 0 0 var(--ds-film-pointer-ring) color-mix(in srgb, var(--colors-surface-card) 90%, transparent), var(--ds-film-shadow-lifted);
+  pointer-events: none;
+}
+.product-film__click { z-index: 11; width: var(--ds-film-ring); height: var(--ds-film-ring); border: var(--ds-film-pointer-ring) solid var(--colors-brand-primary); border-radius: var(--radius-radius-full); pointer-events: none; }
+.product-film__canvas > .product-film__cursor, .product-film__canvas > .product-film__click { transform-origin: 50% 50%; }
+
+/* The closing call: a real button, there only with the last frame. */
+.product-film__cta { position: absolute; top: 0; left: 0; z-index: 15; transform-origin: 50% 50%; }
+.product-film:not([data-beat="1"]) .product-film__cta, .product-film:not([data-motion-ready]) .product-film__cta { visibility: hidden; }
+
+/* The controls: no bar. The chapter you're in on the left, a hairline timeline in the middle, and two round glass
+   buttons on the right. While the film plays, the name and timeline quieten until you point at the film. */
+.product-film__controls {
+  position: absolute;
+  left: var(--spacing-2xl);
+  right: var(--spacing-2xl);
+  bottom: var(--spacing-xl);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+.product-film__now, .product-film__chapters { transition: opacity var(--ds-film-controls-fade) ease; }
+@media (hover: hover) {
+  .product-film[data-playing="true"] .product-film__screen:not(:hover):not(:focus-within) .product-film__now,
+  .product-film[data-playing="true"] .product-film__screen:not(:hover):not(:focus-within) .product-film__chapters { opacity: .4; }
+}
+
+/* The chapter you're in: its number and name, the next one rising in as the film moves on. */
+.product-film__now { display: grid; flex: none; width: var(--ds-film-now); color: var(--colors-text-primary); }
+/* The old name leaves quickly; the new one rises in just after, so the two never sit on top of each other. */
+.product-film__now-item { display: flex; align-items: baseline; gap: var(--spacing-sm); grid-area: 1 / 1; opacity: 0; translate: 0 var(--spacing-sm); transition: opacity var(--ds-film-now-out) ease, translate var(--ds-film-now-out) ease; }
+[data-scene="0"] .now-0, [data-scene="1"] .now-1, [data-scene="2"] .now-2, [data-scene="3"] .now-3, [data-scene="4"] .now-4 { opacity: 1; translate: 0 0; transition: opacity var(--ds-film-controls-fade) ease var(--ds-film-now-in), translate var(--ds-film-controls-fade) cubic-bezier(.16, 1, .3, 1) var(--ds-film-now-in); }
+
+/* The timeline: one stretch per chapter, as long as the chapter. */
+.product-film__chapters { display: flex; flex: 1; gap: var(--spacing-xs); min-width: 0; }
+.product-film__chapters ::deep .ds-button.product-film__chapter { position: relative; display: flex; align-items: center; min-width: 0; height: var(--spacing-3xl); padding: 0; overflow: visible; background: transparent; box-shadow: none; }
+.product-film__chapters ::deep .product-film__chapter .ds-button__label { display: block; width: 100%; padding: 0; }
+/* Each stretch's share of the line, in tenths of a second (the chapter starts in landing-product-film.js). */
+.product-film__chapters ::deep .chapter-0 { flex: 84 1 0; }
+.product-film__chapters ::deep .chapter-1 { flex: 45 1 0; }
+.product-film__chapters ::deep .chapter-2 { flex: 44 1 0; }
+.product-film__chapters ::deep .chapter-3 { flex: 64 1 0; }
+.product-film__chapters ::deep .chapter-4 { flex: 141 1 0; }
+.product-film__track { display: block; width: 100%; height: var(--ds-film-track); overflow: hidden; border-radius: var(--radius-radius-full); background: color-mix(in srgb, var(--colors-text-primary) 14%, transparent); transition: height var(--ds-film-controls-fade) cubic-bezier(.16, 1, .3, 1); }
+.product-film__chapters ::deep .product-film__chapter:hover .product-film__track, .product-film__chapters ::deep .product-film__chapter:focus-visible .product-film__track { height: calc(var(--ds-film-track) * 2.5); }
+.product-film__track i { display: block; height: 100%; border-radius: inherit; background: var(--colors-text-primary); transform-origin: left; }
+::deep .chapter-0 .product-film__track i { transform: scaleX(var(--ds-film-chapter-0, 0)); }
+::deep .chapter-1 .product-film__track i { transform: scaleX(var(--ds-film-chapter-1, 0)); }
+::deep .chapter-2 .product-film__track i { transform: scaleX(var(--ds-film-chapter-2, 0)); }
+::deep .chapter-3 .product-film__track i { transform: scaleX(var(--ds-film-chapter-3, 0)); }
+::deep .chapter-4 .product-film__track i { transform: scaleX(var(--ds-film-chapter-4, 0)); }
+/* Point at a stretch and its name floats above it. */
+.product-film__tip {
+  position: absolute;
+  bottom: calc(100% + var(--spacing-2xs));
+  left: 50%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-radius-md);
+  background: var(--colors-text-primary);
+  color: var(--colors-surface-card);
+  white-space: nowrap;
+  opacity: 0;
+  translate: -50% var(--spacing-xs);
+  pointer-events: none;
+  transition: opacity var(--ds-film-controls-fade) ease, translate var(--ds-film-controls-fade) cubic-bezier(.16, 1, .3, 1);
+}
+.product-film__chapters ::deep .product-film__chapter:hover .product-film__tip, .product-film__chapters ::deep .product-film__chapter:focus-visible .product-film__tip { opacity: 1; translate: -50% 0; }
+
+/* Two round glass buttons. */
+.product-film__controls ::deep .ds-button.product-film__round {
+  position: relative;
+  flex: none;
+  justify-content: center;
+  width: var(--ds-film-round);
+  height: var(--ds-film-round);
+  padding: 0;
+  border: var(--ds-film-line) solid color-mix(in srgb, var(--colors-surface-border) 70%, transparent);
+  border-radius: var(--radius-radius-full);
+  background: color-mix(in srgb, var(--colors-surface-card) 70%, transparent);
+  box-shadow: var(--ds-film-shadow);
+  color: var(--colors-text-primary);
+  backdrop-filter: blur(var(--ds-film-frost)) saturate(1.6);
+  transition: scale var(--ds-film-controls-fade) cubic-bezier(.34, 1.36, .64, 1), background-color var(--ds-film-controls-fade) ease;
+}
+.product-film__controls ::deep .ds-button.product-film__round:hover { background: var(--colors-surface-card); scale: 1.06; }
+.product-film__controls ::deep .ds-button.product-film__round:active { scale: .94; }
+/* Play's ring fills as the film plays. */
+.product-film__ring { position: absolute; inset: calc(var(--ds-film-line) * -1); width: calc(100% + var(--ds-film-line) * 2); height: calc(100% + var(--ds-film-line) * 2); rotate: -90deg; pointer-events: none; }
+.product-film__ring circle { fill: none; stroke-width: 2; }
+.product-film__ring-track { stroke: color-mix(in srgb, var(--colors-text-primary) 10%, transparent); }
+.product-film__ring-fill { stroke: var(--colors-text-primary); stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: calc(1 - var(--ds-film-progress, 0)); }
+.product-film__speaker { width: var(--spacing-lg); height: var(--spacing-lg); }
+/* Sound on: three bars that move with it. */
+.product-film__eq { display: flex; align-items: flex-end; gap: var(--spacing-2xs); width: var(--spacing-lg); height: var(--spacing-lg); padding-block: var(--spacing-2xs); }
+.product-film__eq i { flex: 1; height: 100%; border-radius: var(--radius-radius-full); background: currentColor; transform-origin: bottom; animation: film-eq var(--ds-film-eq) ease-in-out infinite alternate; }
+.product-film__eq i:nth-child(2) { animation-delay: calc(var(--ds-film-eq) * -.4); }
+.product-film__eq i:nth-child(3) { animation-delay: calc(var(--ds-film-eq) * -.75); }
+@keyframes film-eq { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+/* Until sound has been tried, its button breathes softly once the film starts: an invitation, not an alarm. */
+.product-film[data-playing="true"] .product-film__controls ::deep .product-film__round.is-sound[aria-pressed="false"] { animation: film-invite var(--ds-film-invite) ease-in-out 3; }
+@keyframes film-invite { 0%, 100% { box-shadow: var(--ds-film-shadow), 0 0 0 0 transparent; } 50% { box-shadow: var(--ds-film-shadow), 0 0 0 var(--spacing-sm) color-mix(in srgb, var(--colors-brand-primary) 20%, transparent); } }
+::deep .product-film__audio-status { margin: 0; color: var(--colors-text-subtle); text-align: center; }
+
+@media (max-width: 760px) {
+  /* A phone: a taller stage for the stacked story; the timeline takes the name's place. */
+  .product-film { --ds-film-height: 760px; }
+  .product-film__controls { left: var(--spacing-lg); right: var(--spacing-lg); bottom: var(--spacing-lg); gap: var(--spacing-md); }
+  .product-film__now { display: none; }
+  .product-film__caption { text-align: center; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .product-film__typing i, .product-film__eq i, .product-film__controls ::deep .product-film__round.is-sound { animation: none; }
+  .product-film__cursor, .product-film__click { visibility: hidden; }
+}

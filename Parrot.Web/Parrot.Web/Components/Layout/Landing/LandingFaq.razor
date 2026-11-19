@@ -1,0 +1,31 @@
+@namespace Parrot.Web.Components.Layout.Landing
+
+@* The questions a seller asks before trying it (designer, 17 November 2026). Each answer is something yára
+   does today. Native disclosures: they open with a keyboard and need no script. *@
+<section class="landing-faq" aria-labelledby="landing-faq-title">
+    <Typography TextStyle="TextStyle.HeadingH1Semibold" As="h2" Id="landing-faq-title" Prose>Questions sellers ask us</Typography>
+    <div class="landing-faq__list">
+        @foreach (var (question, answer) in Questions)
+        {
+            <details class="landing-faq__item">
+                <summary>
+                    <Typography TextStyle="TextStyle.HeadingH4Semibold" As="span">@question</Typography>
+                    <span class="landing-faq__mark" aria-hidden="true"><Icon Name="IconName.RiAddFill" Size="IconSize.Sm" /></span>
+                </summary>
+                <Typography TextStyle="TextStyle.BodyDefaultMedium" As="p" Prose Class="landing-faq__answer">@answer</Typography>
+            </details>
+        }
+    </div>
+</section>
+
+@code {
+    private static readonly (string Question, string Answer)[] Questions =
+    [
+        ("Which apps does yára work with?", "Instagram, TikTok, WhatsApp and Facebook. Connect the ones you sell on, and every chat lands in one inbox."),
+        ("What if a customer asks something yára doesn't know?", "It asks you in your inbox’s Needs you view. Answer there so it can reply, or take over the conversation yourself. You decide what it learns for next time."),
+        ("Will it use my real prices?", "Yes. yára answers from the products, prices, delivery fees and policies you give it, and you can change them whenever you like."),
+        ("Can I still reply to customers myself?", "Yes. Open any chat and reply yourself whenever you want. yára steps back while you're talking."),
+        ("Can my staff use it too?", "Yes. Invite your team, choose what each person can see, and pass orders and questions to the right person."),
+        ("How do I get started?", "Create your account, connect the app you sell on, and tell yára about your business. It's ready when you are."),
+    ];
+}
