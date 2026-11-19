@@ -101,14 +101,14 @@ public sealed class BusinessKnowledgeWorker : BackgroundService
             .GroupBy(s => s.MetadataSyncStatus)
             .ToDictionaryAsync(g => g.Key, g => g.Count(), ct);
         int failed = byStatus.GetValueOrDefault(MetadataSyncStatus.Failed);
-        // Claimed by a worker that stopped mid-read (a deploy, a crash), lease run out: the claim
-        // only takes pending and retrying sources, so these wait until the owner refreshes.
+        // Claimed by a worker that stopped mid-read (a deploy, a crash), lease run out: the next
+        // claim takes them again. Counted so a worker dying mid-read still shows in the logs.
         DateTime now = DateTime.UtcNow;
         int stuck = await db.BusinessSources.CountAsync(s => s.IsActive && s.Kind == BusinessSourceKind.Profile
             && s.MetadataSyncStatus == MetadataSyncStatus.Processing && s.MetadataSyncLockedUntil < now, ct);
         _logger.Log(failed > 0 || stuck > 0 ? LogLevel.Warning : LogLevel.Information,
             "business_knowledge.sources_waiting Pending={Pending} Retrying={Retrying} Processing={Processing} Stuck={Stuck} Completed={Completed} Failed={Failed}" +
-            (failed > 0 || stuck > 0 ? ": failed sources keep their reason in BusinessSources.LastMetadataSyncError; stuck ones are processing with an expired lease" : ""),
+            (failed > 0 || stuck > 0 ? ": failed sources keep their reason in BusinessSources.LastMetadataSyncError; stuck ones were left processing by a stopped worker and are read again now" : ""),
             byStatus.GetValueOrDefault(MetadataSyncStatus.Pending), byStatus.GetValueOrDefault(MetadataSyncStatus.RetryScheduled),
             byStatus.GetValueOrDefault(MetadataSyncStatus.Processing), stuck, byStatus.GetValueOrDefault(MetadataSyncStatus.Completed), failed);
     }

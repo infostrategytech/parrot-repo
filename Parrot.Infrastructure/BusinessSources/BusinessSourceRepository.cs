@@ -87,10 +87,12 @@ public class BusinessSourceRepository : IBusinessSourceRepository
         // FOR UPDATE SKIP LOCKED so concurrent workers don't process the same source.
         // The caller must hold an open transaction; the lease is committed before
         // the transaction is released so the lock has effect.
+        // Processing is included so a source left by a worker that stopped mid-read is taken
+        // again once its lease runs out; a live lease still keeps it out.
         string sql = $"""
             SELECT * FROM "BusinessSources"
             WHERE "IsActive" = true
-              AND "MetadataSyncStatus" IN ({(int)MetadataSyncStatus.Pending}, {(int)MetadataSyncStatus.RetryScheduled})
+              AND "MetadataSyncStatus" IN ({(int)MetadataSyncStatus.Pending}, {(int)MetadataSyncStatus.RetryScheduled}, {(int)MetadataSyncStatus.Processing})
               AND ("NextMetadataSyncAttemptAt" IS NULL OR "NextMetadataSyncAttemptAt" <= NOW())
               AND ("MetadataSyncLockedUntil" IS NULL OR "MetadataSyncLockedUntil" < NOW())
               {channelClause}

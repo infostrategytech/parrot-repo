@@ -150,4 +150,31 @@ public sealed class BusinessSourceRepositoryPostgresTests : IAsyncLifetime
         Assert.Equal(2, all.Count(s => s.AuthorizationConnectionId == connectionId && !s.IsActive));
         Assert.True(all.Single(s => s.ExternalId == "15550000099").IsActive);
     }
+
+    [PostgresFact]
+    // A worker stopped mid-read (a deploy, a crash) leaves the source processing; once its lease
+    // runs out another worker must take it, or it waits forever.
+    public async Task ClaimBatchForMetadataAsync_WhenProcessingLeaseHasRunOut_ClaimsItAgain()
+    {
+        await using (ApplicationDbContext seed = new(_options!))
+        {
+            BusinessSource abandoned = WaProfile("ws-1", Guid.NewGuid(), "15550000010");
+            abandoned.MetadataSyncStatus = MetadataSyncStatus.Processing;
+            abandoned.MetadataSyncLockedUntil = DateTime.UtcNow.AddMinutes(-1);
+            BusinessSource held = WaProfile("ws-1", Guid.NewGuid(), "15550000011");
+            held.MetadataSyncStatus = MetadataSyncStatus.Processing;
+            held.MetadataSyncLockedUntil = DateTime.UtcNow.AddMinutes(5);
+            seed.BusinessSources.AddRange(abandoned, held);
+            await seed.SaveChangesAsync();
+        }
+
+        await using ApplicationDbContext db = new(_options!);
+        await using Microsoft.EntityFrameworkCore.Storage.IDbContextTransaction transaction = await db.Database.BeginTransactionAsync();
+        IReadOnlyList<BusinessSource> claimed = await new BusinessSourceRepository(db)
+            .ClaimBatchForMetadataAsync(10, TimeSpan.FromMinutes(5), kind: BusinessSourceKind.Profile);
+
+        BusinessSource only = Assert.Single(claimed);
+        Assert.Equal("15550000010", only.ExternalId);
+        Assert.True(only.MetadataSyncLockedUntil > DateTime.UtcNow);
+    }
 }
