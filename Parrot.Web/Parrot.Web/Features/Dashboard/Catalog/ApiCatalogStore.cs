@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Parrot.Web.Features.Auth.State;
 using Parrot.Web.Features.Dashboard.Catalog.ConceptE;
 using Parrot.Web.Services;
@@ -19,8 +21,10 @@ namespace Parrot.Web.Features.Dashboard.Catalog;
 /// <para>Categories are created as they're needed. The service doesn't keep their order
 /// or delete them yet, so the order shown is the service's.</para>
 /// </summary>
-public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogStore
+public sealed class ApiCatalogStore(HttpClient http, AuthState auth, ILogger<ApiCatalogStore>? logger = null) : ICatalogStore
 {
+    private readonly ILogger<ApiCatalogStore> _log = logger ?? NullLogger<ApiCatalogStore>.Instance;
+
     private static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web)
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -211,7 +215,16 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         List<string> photos = [];
         foreach (string photo in entry.Photos)
         {
-            if (await PhotoKeyAsync(photo, ct) is { } key) photos.Add(key);
+            if (await PhotoKeyAsync(photo, ct) is { } key)
+            {
+                photos.Add(key);
+            }
+            else
+            {
+                // Not one this page uploaded or loaded: it can't be named to the service, so saving drops it.
+                _log.LogWarning("A photo was left out of the save: its address isn't one the catalog gave this page. Item={Item} Photo={Photo}",
+                    entry.Id, photo.Length > 200 ? photo[..200] + "…" : photo);
+            }
         }
 
         return new SaveItem(
@@ -262,7 +275,19 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth) : ICatalogS
         using ByteArrayContent file = new(bytes);
         file.Headers.ContentType = new MediaTypeHeaderValue(contentType);
         using MultipartFormDataContent form = new() { { file, "file", "photo" } };
-        Photo uploaded = await SendAsync<Photo>(HttpMethod.Post, "api/catalog/items/photos", form, ct);
+        _log.LogInformation("Uploading a photo to the catalog. ContentType={ContentType} Bytes={Bytes}", contentType, bytes.Length);
+        Photo uploaded;
+        try
+        {
+            uploaded = await SendAsync<Photo>(HttpMethod.Post, "api/catalog/items/photos", form, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogError(ex, "Photo upload to the catalog failed. ContentType={ContentType} Bytes={Bytes}", contentType, bytes.Length);
+            throw;
+        }
+
+        _log.LogInformation("Photo uploaded to the catalog. Key={Key} Url={Url}", uploaded.Key, uploaded.Url);
         _photoKeys[photo] = uploaded.Key;
         _photoKeys[uploaded.Url] = uploaded.Key;
         return uploaded.Key;
