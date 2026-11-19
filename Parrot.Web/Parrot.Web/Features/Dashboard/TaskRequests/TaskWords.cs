@@ -9,7 +9,7 @@ namespace Parrot.Web.Features.Dashboard.TaskRequests;
 /// <summary>How tasks read on screen: the words, icons and tones for kinds and states, and times said plainly.</summary>
 public static partial class TaskWords
 {
-    // Question is recognised for incoming agent tasks, but the current Tasks API cannot create that kind yet.
+    // Question stays readable for legacy records, but unknown AI answers are handled in Inbox, not created as tasks.
     public static readonly TaskKind[] Kinds = [TaskKind.Order, TaskKind.Quote, TaskKind.Booking, TaskKind.Issue, TaskKind.CallBack, TaskKind.Other];
 
     /// <summary>The states a person can move a task to, in the order the menu lists them.</summary>

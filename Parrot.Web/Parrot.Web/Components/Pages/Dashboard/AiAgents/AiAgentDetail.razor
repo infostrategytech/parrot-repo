@@ -225,6 +225,18 @@ else
                 </section>
             }
             @* Its day: is it doing the work, does it need me, what has it said. *@
+            @if (Feed.Waiting(AiAgentsState.Agents).Where(q => InboxQuestionLinks.BelongsTo(q, agent, AiAgentsState.Agents)).ToList() is { Count: > 0 } inboxQuestions)
+            {
+                <section class="agent-detail__needs" aria-labelledby="agent-needs-title">
+                    <span class="agent-detail__needs-icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
+                    <div class="agent-detail__row-text">
+                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-needs-title">@(inboxQuestions.Count == 1 ? "1 question needs your answer" : $"{inboxQuestions.Count} questions need your answer")</Typography>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Questions for @agent.Name are handled in Inbox.</Typography>
+                    </div>
+                    <Button Variant="ButtonVariant.Secondary" Class="ds-no-shrink" @onclick="() => Nav.NavigateTo(InboxQuestionLinks.Review(inboxQuestions, agent.Id))">View in Inbox</Button>
+                </section>
+            }
+
             @if (!Feed.Available)
             {
                 @* Real mode: no operations feed yet, so there is no day to show. *@
@@ -312,20 +324,6 @@ else
                     </div>
                 </section>
 
-                @if (Feed.Waiting(AiAgentsState.Agents).Where(q => q.AgentName == agent.Name).ToList() is { Count: > 0 } waiting)
-                {
-                    <section class="agent-detail__needs" aria-labelledby="agent-needs-title">
-                        <span class="agent-detail__needs-icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
-                        <div class="agent-detail__row-text">
-                            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-needs-title">
-                                @(waiting.Count == 1 ? $"1 question {agent.Name} couldn't answer" : $"{waiting.Count} questions {agent.Name} couldn't answer")
-                            </Typography>
-                            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>“@waiting[0].Question” from @waiting[0].Customer@(waiting.Count > 1 ? $", and {waiting.Count - 1} more" : ""). Answer once and it will know next time.</Typography>
-                        </div>
-                        <Button Class="ds-no-shrink" @onclick="OpenInbox">Answer</Button>
-                    </section>
-                }
-
                 <div class="agent-detail__pair">
                     <section class="agent-detail__card" aria-labelledby="agent-recent-title">
                         <header class="agent-detail__card-head">
@@ -350,7 +348,7 @@ else
                             </div>
                         }
                         <ul class="agent-detail__recent">
-                            @foreach (var chat in recent)
+                            @foreach (var chat in recent.Take(5))
                             {
                                 <li>
                                     <RowButton Class="agent-detail__recent-row" OnClick="OpenInbox">

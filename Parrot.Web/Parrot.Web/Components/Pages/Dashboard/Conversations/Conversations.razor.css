@@ -63,7 +63,7 @@
 .inbox-filters ::deep .inbox-filter-sort { grid-column: 2; }
 .inbox-filters ::deep .inbox-filters__clear { grid-column: 1 / -1; width: fit-content; }
 
-.inbox-queue__summary { padding: var(--spacing-sm) var(--spacing-xl); color: var(--colors-text-muted); background: var(--colors-surface-background); border-block: var(--ds-hairline) solid var(--colors-surface-border); }
+.inbox-queue__summary { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-sm); padding: var(--spacing-sm) var(--spacing-xl); color: var(--colors-text-muted); background: var(--colors-surface-background); border-block: var(--ds-hairline) solid var(--colors-surface-border); }
 .inbox-list { min-height: 0; overflow-y: auto; scrollbar-color: var(--colors-accent-neutral-border) transparent; }
 .inbox-list > ::deep .inline-error { margin: var(--spacing-md); }
 .inbox-list > ::deep .empty-state { min-height: 100%; }

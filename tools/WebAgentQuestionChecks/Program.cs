@@ -1,0 +1,40 @@
+using System.Collections;
+using System.Reflection;
+using Parrot.Web.Components.Pages.Dashboard.Conversations;
+using Parrot.Web.Features.Dashboard.TaskRequests;
+
+// Controlled presentation state only: no demo dataset, live API or backend dependency.
+var type = typeof(ConversationTimeline); const BindingFlags flags = BindingFlags.Instance|BindingFlags.NonPublic;
+var timeline = new ConversationTimeline(); var checks = 0;
+void Check(bool value, string message) { if (!value) throw new Exception(message); checks++; }
+void Set(string name, object value) => type.GetField(name, flags)!.SetValue(timeline,value);
+T Read<T>(string name) => (T)type.GetProperty(name,flags)!.GetValue(timeline)!;
+string[] Pending() => Read<IEnumerable<ConvMessage>>("PendingAgentQuestions").Select(m=>m.Id).ToArray();
+string[] History() => Read<IEnumerable<ConvMessage>>("VisibleMessages").Select(m=>m.Id).ToArray();
+var now=DateTime.UtcNow;
+var older=new ConvMessage { Id="older-question",Kind=MessageKind.AiQuestion,Text="Question one",ReceivedAt=now.AddMinutes(-2) };
+var newer=new ConvMessage { Id="newer-question",Kind=MessageKind.AiQuestion,Text="Question two",ReceivedAt=now };
+var answered=new ConvMessage { Id="answered",Kind=MessageKind.AiQuestion,Answered=true,Answer="An approved answer" };
+var closed=new ConvMessage { Id="closed",Kind=MessageKind.AiQuestion,Answered=true };
+var conversation=new ConversationItem { Id="controlled-chat",Messages=[newer,older,answered,closed,new(){Id="customer",Kind=MessageKind.Customer},new(){Id="note",Kind=MessageKind.Note},new(){Id="completion-event",Kind=MessageKind.System,Text="A teammate answered the agent.",ReceivedAt=now.AddMinutes(1)}] };
+type.GetProperty("Conversation")!.SetValue(timeline,conversation);
+Check(Pending().SequenceEqual(["older-question","newer-question"]),"Pending AI questions appear oldest first, without answered/closed ones.");
+Check(!History().Contains("older-question")&&!History().Contains("newer-question"),"No pending question trigger in scrolling history.");
+Check(!History().Contains("answered")&&!History().Contains("closed")&&History().Contains("customer"),"Resolved questions do not reappear as cards; customer messages remain.");
+Check(History().Count(id=>id=="completion-event")==1,"The real completion event remains exactly once at its own timestamp.");
+Check(!History().Contains("note"),"Internal note filtering is unchanged.");
+Check(Read<int>("SlotCount")==2,"Both pending questions are counted.");
+Set("_questionCount",2);Check(Read<int>("TaskStart")==4,"Teammate questions follow AI questions without overlapping slots.");
+Set("_slot",100);Check(Read<int>("Slot")==3,"Pager clamps after attention items change.");
+conversation.Messages.Add(new(){Id="manual-reply",Kind=MessageKind.Human,Text="A manually written customer reply",ReceivedAt=now.AddMinutes(1)});
+Check(Pending().Length==2,"A normal manual reply does not clear an AI question.");
+Check(type.GetField("_askResolved",flags) is null,"The automatic did-that-answer-it prompt has been removed.");
+Check(type.GetField("_questionTasks",flags) is null && type.GetMethod("CloseTaskAsync",flags) is null,"Inbox AI questions no longer create or settle tasks.");
+Check(!TaskWords.Kinds.Contains(TaskKind.Question),"Unknown AI answers are not offered as a new task type.");
+older.Answered=true;newer.Answered=true;Set("_questionCount",0);
+Check(Pending().Length==0&&Read<int>("SlotCount")==0,"Answering removes the persistent triggers.");
+Check(!History().Contains("older-question")&&!History().Contains("newer-question"),"Answer/Done never puts a question card back in history.");
+conversation.Messages.Clear();Check(Read<int>("SlotCount")==0,"An empty/new conversation has no carried-over AI prompt.");
+checks+=await QuestionLinksChecks.RunAsync();
+checks+=InboxAttentionChecks.Run();
+Console.WriteLine($"{checks} controlled AI-question attention/navigation checks passed.");

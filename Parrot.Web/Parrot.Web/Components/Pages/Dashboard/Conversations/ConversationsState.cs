@@ -43,6 +43,7 @@ public class ConversationsState
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
+            item.Attention = summary.Attention;
             item.Customer = summary.Customer;
             item.ChannelAgent = summary.ChannelAgent;
         }
@@ -105,6 +106,18 @@ public class ConversationsState
                 ReplyTo = message.ReplyTo,
             };
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
+    }
+
+    /// <summary>Only a newly confirmed local send can settle the optimistic reply need. Reading an older
+    /// reply from history must never override a newer canonical handoff/attention snapshot.</summary>
+    public static void SettleReplyNeed(ConversationItem item, InboxMessageDto reply)
+    {
+        var latestInbound = item.Messages.Where(m => m.Kind == MessageKind.Customer).Select(m => (DateTime?)m.ReceivedAt)
+            .Append(item.LastCustomerMessageAt).Max();
+        if (item.Attention is { ReplyNeeded: true } attention && reply.Outgoing
+            && (reply.Kind is null or "human") && reply.Status is "sent" or "accepted" or "delivered" or "read"
+            && latestInbound is { } last && reply.ReceivedAt >= last)
+            item.Attention = attention with { ReplyNeeded = false };
     }
 
     /// <summary>
