@@ -43,6 +43,9 @@
             }
         </header>
 
+        @* Pending questions remain reachable even when no agent is active or a list refresh fails. *@
+        @if (IsEmpty || AiAgentsState.LoadFailed) { @WaitingSummary }
+
         @if (Loading)
         {
             <div class="agent-grid" aria-busy="true">
@@ -136,18 +139,7 @@
                 </section>
             }
 
-            @* The one thing to act on. Only there when something is waiting. *@
-            @if (Waiting.Count > 0)
-            {
-                <section class="operations-needs" aria-labelledby="operations-needs-title">
-                    <span class="operations-needs__icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
-                    <div class="operations-needs__text">
-                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="operations-needs-title">@WaitingTitle</Typography>
-                        <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@WaitingLine</Typography>
-                    </div>
-                    <Button Class="ds-no-shrink" @onclick="ReviewWaiting">Answer</Button>
-                </section>
-            }
+            @WaitingSummary
 
             <section class="operations-agents" aria-labelledby="operations-agents-title">
                 <header class="operations-section-head">
@@ -195,6 +187,21 @@
 @* What every agent answers from: the business knowledge from "Tell us about…".
    Blue is knowledge, wherever it shows. *@
 @code {
+    private RenderFragment WaitingSummary => __builder =>
+    {
+        if (!Loading && Waiting.Count > 0)
+        {
+            <section class="operations-needs" aria-labelledby="operations-needs-title">
+                <span class="operations-needs__icon"><Icon Name="IconName.RiQuestionAnswerFill" Size="IconSize.Md" /></span>
+                <div class="operations-needs__text">
+                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="operations-needs-title">@WaitingTitle</Typography>
+                    <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>Review them in Inbox, alongside the customer conversations.</Typography>
+                </div>
+                <Button Variant="ButtonVariant.Secondary" Class="ds-no-shrink" @onclick="ReviewWaiting">View in Inbox</Button>
+            </section>
+        }
+    };
+
     private RenderFragment KnowledgeSummary => __builder =>
     {
         if (Knowledge.Available && Intro.CanAdd)
@@ -250,18 +257,8 @@
     private IReadOnlyList<WaitingQuestion> Waiting => Feed.Waiting(AiAgentsState.Agents);
 
     private string WaitingTitle => Waiting.Count == 1
-        ? "1 question your agents couldn't answer"
-        : $"{Waiting.Count} questions your agents couldn't answer";
-
-    private string WaitingLine
-    {
-        get
-        {
-            var first = Waiting[0];
-            var more = Waiting.Count > 1 ? $", and {Waiting.Count - 1} more" : "";
-            return $"“{first.Question}” from {first.Customer}{more}. Answer once and they'll know next time.";
-        }
-    }
+        ? "1 question needs your answer"
+        : $"{Waiting.Count} questions need your answer";
 
     // Drafts are frontend only for now (saved on the setup screen, never turned on).
     private IReadOnlyList<SegmentedOption<AgentFilter>> FilterOptions =>
@@ -350,7 +347,7 @@
     }
 
     // The questions wait in the inbox, where the agent asks them.
-    private void ReviewWaiting() => Nav.NavigateTo("/dashboard/inbox");
+    private void ReviewWaiting() => Nav.NavigateTo(InboxQuestionLinks.Review(Waiting));
 
     private List<AiAgent> FilteredAgents
     {

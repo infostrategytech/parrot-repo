@@ -157,7 +157,11 @@
         }
 
         <div class="inbox-queue__summary">
-            <Typography TextStyle="TextStyle.Small12Medium" As="span">@Items.Count in this view</Typography>
+            <Typography TextStyle="TextStyle.Small12Medium" As="span">@(_onlyAiQuestions ? $"{Items.Count} {(Items.Count == 1 ? "conversation" : "conversations")} · AI questions" : $"{Items.Count} in this view")</Typography>
+            @if (_onlyAiQuestions)
+            {
+                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="ClearFilters">Clear</Button>
+            }
         </div>
 
         <div class="inbox-list" aria-busy="@(_busy && _initialLoad)">
@@ -192,8 +196,8 @@
                 else if (Items.Count == 0)
                 {
                     <EmptyState Size="EmptyStateSize.Panel"
-                                Title="No conversations found"
-                                Description="Try adjusting your search or filters.">
+                                Title="@(_filters.Scope == InboxScope.NeedsYou && ActiveFilterCount == 0 && string.IsNullOrWhiteSpace(_filters.Search) ? "You're all caught up" : "No conversations found")"
+                                Description="@(_filters.Scope == InboxScope.NeedsYou && ActiveFilterCount == 0 && string.IsNullOrWhiteSpace(_filters.Search) ? "Conversations waiting for your reply, answer or approval appear here." : "Try adjusting your search or filters.")">
                         <GlyphContent><img class="inbox-mascot" src="assets/images/mascot/empty-inbox.png" alt="" /></GlyphContent>
                     </EmptyState>
                 }
@@ -203,6 +207,7 @@
                     {
                         <ConversationRow @key="conversation.Id"
                                          Conversation="conversation"
+                                         AttentionLabel="@(_filters.Scope == InboxScope.NeedsYou ? InboxAttentionRules.Label(Need(conversation)) : null)"
                                          Selected="@(conversation.Id == _selected?.Id)"
                                          OnSelect="() => SelectConversationAsync(conversation.Id)"
                                          OnTogglePin="() => TogglePinAsync(conversation)"
@@ -364,6 +369,13 @@
 
     /// <summary>Opened at one line of the thread (a task's Reply: where the task was raised), brought into view and lit.</summary>
     [SupplyParameterFromQuery(Name = "message")] public string? FocusMessage { get; set; }
+    [SupplyParameterFromQuery(Name = "view")] public string? RequestedView { get; set; }
+    [SupplyParameterFromQuery(Name = "questions")] public bool QuestionsOnly { get; set; }
+    [SupplyParameterFromQuery(Name = "agent")] public string? RequestedAgent { get; set; }
+    private bool _onlyAiQuestions;
+    private string? _questionRoute;
+    private string QuestionQueueQuery => _onlyAiQuestions
+        ? Parrot.Web.Features.Dashboard.AiAgents.InboxQuestionLinks.Queue(_filters.AgentId)["/dashboard/inbox".Length..] : "";
 
     private readonly CancellationTokenSource _lifetime = new();
     private readonly ConversationFilters _filters = new();
@@ -387,10 +399,8 @@
     private static readonly (InboxScope Value, string Label)[] ScopeOptions =
         [(InboxScope.All, "All"), (InboxScope.Unread, "Unread"), (InboxScope.NeedsYou, "Needs you")];
 
-    // Needs you (designer, 15 November 2026): every chat where it's your move. A task in it is yours and still to do,
-    // (or nobody's yet), a teammate asked you something about it, their answer to your question is back, or the agent is waiting on you.
+    // Needs you is conversation input, not every open/urgent task. Task context remains available in the chat.
     private IReadOnlyList<Parrot.Web.Features.Dashboard.TaskRequests.TaskQuestion> _taskQuestions = [];
-    private HashSet<string> _myTaskChats = [];
     // A chat's task, opened over the chat (designer, 15 November 2026): the Tasks page stays where it is.
     private IReadOnlyList<Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest> _allTasks = [];
     private IReadOnlyList<Parrot.Web.Features.Dashboard.TaskRequests.TaskPerson> _taskTeam = [];
@@ -403,9 +413,8 @@
         _openTaskId = id;
     }
     private int _questionsGeneration;
-    private bool NeedsMe(ConversationItem conversation) => _myTaskChats.Contains(conversation.Id)
-        || _taskQuestions.Any(q => q.ConversationId == conversation.Id && q.Waits(Tasks.Me.Id))
-        || conversation.NeedsAnswer || conversation.PendingApproval is not null;
+    private InboxNeed Need(ConversationItem conversation) => InboxAttentionRules.Reason(conversation, Tasks.Me.Id, _taskQuestions);
+    private bool NeedsMe(ConversationItem conversation) => Need(conversation) != InboxNeed.None;
     private void QuestionsChanged() { if (!_disposed) _ = InvokeAsync(async () => { await LoadQuestionsAsync(); await RefreshAsync(); StateHasChanged(); }); }
     private async Task LoadQuestionsAsync()
     {
@@ -417,11 +426,8 @@
             if (_disposed || generation != _questionsGeneration) return;
             _taskQuestions = questions;
             _allTasks = tasks;
-            // Yours, or nobody's yet (as the Tasks badge counts): alone, every open task is yours.
-            _myTaskChats = tasks.Where(t => t.NeedsAction && (t.Assignee is null || t.Assignee.Id == Tasks.Me.Id) && t.Customer?.ConversationId is not null)
-                .Select(t => t.Customer!.ConversationId!).ToHashSet();
         }
-        catch (Exception e) when (e is HttpRequestException or InvalidOperationException) { if (!_disposed && generation == _questionsGeneration) { _taskQuestions = []; _myTaskChats = []; _error = "Your tasks couldn't load. Refresh to check what needs you."; } }
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException) { if (!_disposed && generation == _questionsGeneration) { _taskQuestions = []; _error = "Your tasks couldn't load. Refresh to check what needs you."; } }
     }
 
     // Filters are labels only: FilterPopover draws no second line (7 November 2026). "Pending" is the weak
@@ -465,7 +471,7 @@
     private IEnumerable<Parrot.Web.Services.InboxPersonDto> Agents =>
         Loaded.Where(c => c.AiAgent is not null).Select(c => c.AiAgent!).DistinctBy(a => a.Id).OrderBy(a => a.Name);
 
-    private int ActiveFilterCount => (_filters.Channel is not null ? 1 : 0) + (_filters.Status is not null ? 1 : 0) +
+    private int ActiveFilterCount => (_onlyAiQuestions ? 1 : 0) + (_filters.Channel is not null ? 1 : 0) + (_filters.Status is not null ? 1 : 0) +
                                      (_filters.AgentId is not null ? 1 : 0) + (_filters.Sort != ConversationSort.Newest ? 1 : 0);
     private string ChannelLabel => ChannelOptions.First(option => option.Value == _filters.Channel).Label;
     private string StatusLabel => StatusOptions.First(option => option.Value == _filters.Status).Label;
@@ -499,6 +505,7 @@
                 InboxScope.NeedsYou => list.Where(NeedsMe),
                 _ => list
             };
+            if (_onlyAiQuestions) list = list.Where(item => item.NeedsAnswer);
             if (_filters.Channel is { } channel) list = list.Where(item => item.Channel == channel);
             if (_filters.Status is { } status) list = list.Where(item => item.Status == status);
             if (_filters.AgentId is { } agent) list = list.Where(item => item.AiAgent?.Id == agent);
@@ -524,6 +531,15 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        var questionRoute = $"{RequestedView}|{QuestionsOnly}|{RequestedAgent}";
+        if (questionRoute != _questionRoute)
+        {
+            var hadQuestionFilter = _onlyAiQuestions;
+            _questionRoute = questionRoute;
+            _onlyAiQuestions = QuestionsOnly;
+            if (RequestedView == "needs-you") _filters.Scope = InboxScope.NeedsYou;
+            if (QuestionsOnly || hadQuestionFilter) _filters.AgentId = RequestedAgent;
+        }
         // Inbox from the sidebar (no id in the route): nothing is open, the page shows "Select a conversation".
         if (string.IsNullOrWhiteSpace(ConversationId))
         {
@@ -770,7 +786,7 @@
     private async Task BackToListAsync()
     {
         await CloseCustomerDetailsAsync();
-        Nav.NavigateTo("/dashboard/inbox");
+        Nav.NavigateTo("/dashboard/inbox" + QuestionQueueQuery);
     }
 
     private async Task SelectConversationAsync(string id)
@@ -779,7 +795,7 @@
         if (item is null) return;
         await CloseCustomerDetailsAsync();
         _selected = item;
-        Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(id)}");
+        Nav.NavigateTo($"/dashboard/inbox/{Uri.EscapeDataString(id)}" + QuestionQueueQuery);
         // If a refresh is in flight, the new selection is read as soon as it is done.
         await ReadSelectedSoonAsync();
     }
@@ -994,7 +1010,11 @@
 
     private void OnSearchChanged(string? value) => _filters.Search = value ?? "";
 
-    private void SetScope(InboxScope scope) => _filters.Scope = scope;
+    private void SetScope(InboxScope scope)
+    {
+        _filters.Scope = scope;
+        if (scope != InboxScope.NeedsYou) _onlyAiQuestions = false;
+    }
     private void SetChannel(string? channel) { _filters.Channel = channel; _openFilter = null; }
     private void SetStatus(ConversationStatus? status) { _filters.Status = status; _openFilter = null; }
     private void SetAgent(string? agent) { _filters.AgentId = agent; _openFilter = null; }
@@ -1002,11 +1022,14 @@
 
     private void ClearFilters()
     {
+        _onlyAiQuestions = false;
         _filters.Channel = null;
         _filters.Status = null;
         _filters.AgentId = null;
         _filters.Sort = ConversationSort.Newest;
         _openFilter = null;
+        if (QuestionsOnly || RequestedAgent is not null)
+            Nav.NavigateTo(Nav.GetUriWithQueryParameters(new Dictionary<string, object?> { ["questions"] = null, ["agent"] = null }), replace: true);
     }
 
     private void ToggleFilters()

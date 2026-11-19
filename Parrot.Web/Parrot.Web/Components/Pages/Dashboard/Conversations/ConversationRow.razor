@@ -81,6 +81,8 @@
     [Parameter] public bool Selected { get; set; }
     /// <summary>The agent's saved look: its face shows instead of an icon.</summary>
     [Parameter] public string? AgentLook { get; set; }
+    /// <summary>In Needs you, explain the personal action instead of repeating a paused-agent label.</summary>
+    [Parameter] public string? AttentionLabel { get; set; }
     [Parameter] public EventCallback OnSelect { get; set; }
     [Parameter] public EventCallback OnTogglePin { get; set; }
     [Parameter] public EventCallback OnToggleUnread { get; set; }
@@ -118,11 +120,11 @@
                 _ => IconName.RiRobot3Fill
             };
 
-    private string StateLabel => !Conversation.HasAiAgent
+    private string StateLabel => AttentionLabel ?? (!Conversation.HasAiAgent
         ? "Manual replies"
         : Conversation.NeedsAnswer
             ? $"{Conversation.AiAgent!.Name} · Needs your answer"
-            : $"{Conversation.AiAgent!.Name} · {(Conversation.AiState == AiState.Active ? "Replying" : "Paused")}";
+            : $"{Conversation.AiAgent!.Name} · {(Conversation.AiState == AiState.Active ? "Replying" : "Paused")}");
 
     private string StateClass => !Conversation.HasAiAgent
         ? "state-handoff"

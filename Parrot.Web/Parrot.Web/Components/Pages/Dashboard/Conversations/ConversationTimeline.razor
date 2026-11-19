@@ -49,7 +49,7 @@
         </div>
 
         <section class="conversation-timeline__scroll" aria-live="polite" @ref="_scrollElement">
-            <div class="conversation-timeline__messages">
+            <div class="conversation-timeline__messages @(_view == ThreadView.Messages ? "is-chat" : null)">
                 @if (_view == ThreadView.Notes)
                 {
                     <div class="conversation-timeline__notes-heading">
@@ -87,10 +87,8 @@
                                              AuthorName="@(message.Kind == MessageKind.Ai && Conversation.AiAgent?.Name is { } agentLabel ? agentLabel : AuthorName)" AuthorSeed="@AuthorSeed"
                                              AgentMascot="@AiAgentMascot"
                                              CanTeach="@Features.Available" AgentLook="@AgentLook"
-                                             TaskNote="@QuestionTaskNote(message)" TaskDone="@(QuestionTask(message)?.IsClosed == true)"
-
                                              OnDeleteNote="DeleteNoteAsync"
-                                             OnCorrect="OpenCorrection" OnAnswer="OpenAnswer"
+                                             OnCorrect="OpenCorrection"
                                              OnCustomerDetails="OnCustomerDetails"
                                              OnPreviewImage="OpenMedia" OnPreviewMedia="OpenFile"
                                              CanReply="@CanQuoteReplies" OnReply="ReplyTo" OnJumpTo="JumpToAsync" />
@@ -176,8 +174,8 @@
         </section>
 
         <footer class="conversation-timeline__composer" @ref="_composerElement">
-            @* What needs someone here, one card at a time (designer, 15 November 2026): a "did that answer it?" first,
-               then a teammate's question or answer, then this chat's open tasks (why it is in Needs you). More than
+            @* What needs someone here, one card at a time: unanswered AI questions, a teammate's question or
+               answer, then this chat's open tasks (why it is in Needs you). More than
                one: a small "1 of 3" to step through, so cards never pile up over the conversation. The place is
                counted as part of the reply box, so the last message always sits above it. *@
             <div class="conversation-timeline__attention @(SlotCount == 0 ? "is-empty" : null)" data-footer-extra>
@@ -193,20 +191,28 @@
                         </Button>
                     </div>
                 }
-                @if (Slot < ResolveCount && _askResolved is { } open)
+                @if (Slot < TeamQuestionStart && PendingAgentQuestions.ElementAtOrDefault(Slot) is { } question)
                 {
-                    <AssignedQuestionCard Compact PersonId="@(Conversation.AiAgent?.Id ?? "agent")" PersonName="@LearningAgent"
-                                          Headline="@($"Did that answer {LearningAgent}'s question?")" Question="@(open.Summary ?? open.Title)" Class="conversation-timeline__resolve">
-                        <Button Size="ButtonSize.Small" Busy="_resolving" @onclick="() => ResolveQuestionTaskAsync(open)">
-                            <IconLeft><Icon Name="IconName.RiCheckFill" /></IconLeft>
-                            <ChildContent>Yes, mark task done</ChildContent>
-                        </Button>
-                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" disabled="_resolving" @onclick="() => _askResolved = null">Not yet</Button>
-                    </AssignedQuestionCard>
+                    <div class="conversation-timeline__task conversation-timeline__agent-question" data-agent-question-prompt="@question.Id"
+                         role="region" aria-label="@($"{LearningAgent} needs your answer")">
+                        <span class="conversation-timeline__task-copy">
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="conversation-timeline__task-who">@LearningAgent needs your answer</Typography>
+                            <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="conversation-timeline__agent-question-text">@question.Text</Typography>
+                        </span>
+                        @if (Features.Available)
+                        {
+                            <span class="conversation-timeline__agent-actions">
+                                <Button Size="ButtonSize.Small" disabled="@(_savingLearning || _resolving)" aria-label="@($"Answer {LearningAgent}")"
+                                        @onclick="() => OpenAnswer(question)">Answer</Button>
+                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_resolving" disabled="@_savingLearning"
+                                        @onclick="() => MarkAgentQuestionDoneAsync(question)">Done</Button>
+                            </span>
+                        }
+                    </div>
                 }
                 <Parrot.Web.Components.Pages.Dashboard.TaskRequests.TaskQuestions ConversationId="@Conversation.Id" Compact OnUseAnswer="UseAnswer"
-                    Only="@(Slot >= ResolveCount && Slot < ResolveCount + _questionCount ? Slot - ResolveCount : -1)" OnCount="count => _questionCount = count" />
-                @if (Slot >= ResolveCount + _questionCount && ChatTasks.ElementAtOrDefault(Slot - ResolveCount - _questionCount) is { } task)
+                    Only="@(Slot >= TeamQuestionStart && Slot < TaskStart ? Slot - TeamQuestionStart : -1)" OnCount="count => _questionCount = count" />
+                @if (Slot >= TaskStart && ChatTasks.ElementAtOrDefault(Slot - TaskStart) is { } task)
                 {
                     <div class="conversation-timeline__task">
                         <Parrot.Web.Components.Pages.Dashboard.TaskRequests.TaskKindMark Kind="task.Kind" />
@@ -323,6 +329,7 @@
     private IAsyncDisposable? _reserve;
     private string? _tailId;
     private bool _scrollPending;
+    private bool _forceScrollPending = true;
     private ComposerMode _composerMode = ComposerMode.Reply;
     private ThreadView _view = ThreadView.Messages;
     private string? _draftedBy;
@@ -344,23 +351,24 @@
     private string? _learningError;
     private bool _savingLearning;
 
+    // Questions stay as state for the attention strip; their completion is a real conversation event,
+    // not a second amber card (and never a fabricated event at the original question's timestamp).
     private IEnumerable<ConvMessage> VisibleMessages => Conversation.Messages.Where(message =>
-        _view == ThreadView.Notes ? message.Kind == MessageKind.Note : message.Kind != MessageKind.Note);
+        _view == ThreadView.Notes ? message.Kind == MessageKind.Note : message.Kind is not (MessageKind.Note or MessageKind.AiQuestion));
     private int NoteCount => Conversation.Messages.Count(message => message.Kind == MessageKind.Note);
 
     protected override void OnParametersSet()
     {
-        if (_questionsFor != Conversation.Id)
+        if (_tasksFor != Conversation.Id)
         {
-            _questionsFor = Conversation.Id; _askResolved = null; _closeOnSend = null; _questionTasks = []; _chatTasks = []; _slot = 0; _questionCount = 0;
-            _ = InvokeAsync(async () => { await LoadQuestionTasksAsync(); StateHasChanged(); });
+            _tasksFor = Conversation.Id; _chatTasks = []; _slot = 0; _questionCount = 0;
+            _ = InvokeAsync(async () => { await LoadChatTasksAsync(); StateHasChanged(); });
         }
         // A reply waiting on Take over belongs to the conversation it was asked in.
         if (_quoteOnTakeOver is { } waiting && !Conversation.Messages.Any(m => m.Id == waiting.Id)) _quoteOnTakeOver = null;
 
-        // Polling merges new messages in place; only a new tail (or the first
-        // load) pulls the view to the bottom, so paging older history keeps
-        // the reader's place.
+        // First load opens at the latest message. Later arrivals follow only when the reader
+        // is still at the end; paging/reading older history must not jump to the newest reply.
         var tail = Conversation.HistoryLoaded ? Conversation.Messages.LastOrDefault()?.Id ?? "" : null;
         if (tail != _tailId)
         {
@@ -435,16 +443,31 @@
             catch (JSException) { _reserve = NoReserve.Instance; }
         }
         // Opened at one line (where a task was raised): there, not the newest.
+        // An unanswered AI question now lives above the composer, not in the history. A task/notification
+        // link to its old message selects that persistent card instead; the answer modal is still explicit.
+        if (FocusMessageId is { } questionFocus && questionFocus != _focused)
+        {
+            var pending = PendingAgentQuestions.ToList().FindIndex(m => m.Id == questionFocus);
+            if (pending >= 0)
+            {
+                _focused = questionFocus;
+                _slot = pending;
+                StateHasChanged();
+            }
+        }
         if (FocusMessageId is { } focus && focus != _focused && _items.TryGetValue(focus, out var target) && VisibleMessages.Any(m => m.Id == focus))
         {
             _focused = focus;
             _scrollPending = false;
+            _forceScrollPending = false;
             _ = target.ShowAsync("center");
             return;
         }
         if (!_scrollPending) return;
         _scrollPending = false;
-        await Interop.ScrollToBottomAsync(_scrollElement);
+        var force = _forceScrollPending;
+        _forceScrollPending = false;
+        await Interop.ScrollToBottomAsync(_scrollElement, force);
     }
 
     private async Task TickAsync(DateTime until)
@@ -496,6 +519,7 @@
         _view = mode == ComposerMode.Note ? ThreadView.Notes : ThreadView.Messages;
         _draftedBy = null;
         _scrollPending = true;
+        _forceScrollPending = true;
     }
 
     private void OnComposerTextChanged(string value)
@@ -596,6 +620,7 @@
                 : await Client.SendAsync(item.ConnectionId, item.Sender,
                     new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft) { ReplyToMessageId = replyTo }, CancellationToken.None);
             ConversationsState.Merge(item, new[] { result });
+            ConversationsState.SettleReplyNeed(item, result);
             item.SendError = result.Status switch
             {
                 "failed" => "WhatsApp rejected this reply. Check the recipient and server credentials before sending a new message.",
@@ -603,7 +628,6 @@
                 _ => null,
             };
             Feedback.Play(item.SendError is null ? Parrot.Web.Services.FeedbackSound.Send : Parrot.Web.Services.FeedbackSound.Error);
-            if (item.SendError is null) await AfterReplyAsync();
             if (!keepText) item.Draft = "";
             item.DraftRequestId = null;
             item.PendingFile = null;
@@ -688,7 +712,6 @@
     private async Task ReturnToAiAsync()
     {
         await ActAsync(() => Client.ReturnToAiAsync(Conversation.ConnectionId, Conversation.Sender, _lifetime.Token));
-        if (_actionError is null && OpenQuestionTask() is { } open) _askResolved = open;
         _composerMode = ComposerMode.Reply;
         Conversation.Draft = "";
         _draftedBy = null;
@@ -746,19 +769,12 @@
                 // The answer goes into the composer for review before it is sent.
                 var agentReplies = Conversation.ReplyLocked;
                 var reply = await Features.AnswerAsync(Conversation.ConnectionId, Conversation.Sender, _learningMessage.Id, _learningText);
-                var task = QuestionTask(_learningMessage) is { IsOpen: true } open ? open : null;
                 _learningMessage.Answered = true;
                 SettleNeedsAnswer();
                 _view = ThreadView.Messages;
-                if (agentReplies)
+                if (!agentReplies)
                 {
-                    // The agent is replying here: it tells the customer itself, so the task is done now.
-                    if (task is not null) await CloseTaskAsync(task, $"{LearningAgent} replied to {Conversation.CustomerName}. Task done.");
-                }
-                else
-                {
-                    // You're replying: the answer waits in the reply box, and the task closes once it's sent.
-                    _closeOnSend = task?.Id;
+                    // You're replying: the answer waits in the reply box. AI questions are not tasks.
                     _composerMode = ComposerMode.Reply;
                     Conversation.Draft = reply;
                     _draftedBy = null;
@@ -786,7 +802,7 @@
     private string LearningCommitment => _learningMode == LearningMode.Correction
         ? $"What was already sent stays as it is. {LearningAgent} will use this next time."
         : Conversation.ReplyLocked
-            ? $"{LearningAgent} will reply to {Conversation.CustomerName} with this, and remember it for next time."
+            ? $"{LearningAgent} will use this to answer {Conversation.CustomerName} in its own words, and remember it for next time."
             : $"{LearningAgent} will remember this for next time. You'll check the reply before it goes to {Conversation.CustomerName}.";
 
     private static string DateLabel(DateOnly date)
@@ -823,12 +839,8 @@
     };
 
     // ── The agent's questions as tasks (designer, 15 November 2026) ──────────────────────────────────────────
-    // When the agent can't answer, it raises a Question task linked to its card here (the task's RaisedInMessageId).
-    // Answer the agent: the task is done once that reply is sent. Reply yourself, or hand back: one tap confirms.
-    // Orders and payments never close from the chat; their status is kept in Tasks.
-    private IReadOnlyList<Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest> _questionTasks = [];
-    private Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest? _askResolved;
-    private string? _closeOnSend, _questionsFor;
+    // Unknown AI answers are Inbox questions only. Ordinary tasks/teammate consultations remain independent.
+    private string? _tasksFor;
     private bool _resolving, _watchingTasks;
 
     // Every open task here but the agent's questions: yours and nobody's first.
@@ -838,8 +850,14 @@
         .Where(t => t.NeedsAction && t.Kind != Parrot.Web.Features.Dashboard.TaskRequests.TaskKind.Question && (t.Assignee is null || t.Assignee.Id == Tasks.Me.Id))
         .OrderByDescending(t => t.Urgent).ThenBy(t => t.DueAt ?? DateTime.MaxValue);
     private int _slot, _questionCount;
-    private int ResolveCount => _askResolved is { IsOpen: true } ? 1 : 0;
-    private int SlotCount => ResolveCount + _questionCount + ChatTasks.Count();
+    private bool IsPendingAgentQuestion(ConvMessage message) => message.Kind == MessageKind.AiQuestion
+        && !message.Answered;
+    private IEnumerable<ConvMessage> PendingAgentQuestions => Conversation.Messages
+        .Where(IsPendingAgentQuestion)
+        .OrderBy(message => message.ReceivedAt);
+    private int TeamQuestionStart => PendingAgentQuestions.Count();
+    private int TaskStart => TeamQuestionStart + _questionCount;
+    private int SlotCount => TaskStart + ChatTasks.Count();
     private int Slot => SlotCount == 0 ? 0 : Math.Clamp(_slot, 0, SlotCount - 1);
     private string TaskOwner(Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest task) => task.Assignee switch
     {
@@ -848,88 +866,50 @@
         { } who => $"{who.Name.Split(' ')[0]}'s task",
     };
 
-    private Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest? QuestionTask(ConvMessage message) =>
-        message.Kind == MessageKind.AiQuestion ? _questionTasks.FirstOrDefault(t => t.RaisedInMessageId == message.Id) : null;
-
-    private string? QuestionTaskNote(ConvMessage message) => QuestionTask(message) switch
-    {
-        null => null,
-        { IsClosed: true } => "Task done",
-        { Assignee: null } => "Task for anyone",
-        { Assignee: { } who } when who.Id == Tasks.Me.Id => "Task for you",
-        { Assignee: { } who } => $"Task for {who.Name.Split(' ')[0]}",
-    };
-
-    // The oldest of the agent's questions here still unanswered, with its task still open.
-    private Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest? OpenQuestionTask() => Conversation.Messages
-        .Where(m => m.Kind == MessageKind.AiQuestion && !m.Answered).Select(QuestionTask).FirstOrDefault(t => t is { IsOpen: true });
-
-    private async Task LoadQuestionTasksAsync()
+    private async Task LoadChatTasksAsync()
     {
         if (!Tasks.Available) return;
-        if (!_watchingTasks) { _watchingTasks = true; Tasks.Changed += QuestionTasksChanged; }
+        if (!_watchingTasks) { _watchingTasks = true; Tasks.Changed += ChatTasksChanged; }
         var id = Conversation.Id;
         try
         {
             var tasks = await Tasks.ListAsync(_lifetime.Token);
             if (id != Conversation.Id) return;
-            _questionTasks = tasks.Where(t => t.Kind == Parrot.Web.Features.Dashboard.TaskRequests.TaskKind.Question && t.Customer?.ConversationId == id).ToArray();
             _chatTasks = tasks.Where(t => t.Customer?.ConversationId == id).ToArray();
-            if (_askResolved is { } asked) _askResolved = _questionTasks.FirstOrDefault(t => t.Id == asked.Id && t.IsOpen);
         }
         catch (Exception e) when (e is HttpRequestException or InvalidOperationException or OperationCanceledException) { }
     }
 
-    private void QuestionTasksChanged() => _ = InvokeAsync(async () => { await LoadQuestionTasksAsync(); StateHasChanged(); });
+    private void ChatTasksChanged() => _ = InvokeAsync(async () => { await LoadChatTasksAsync(); StateHasChanged(); });
 
     // The list row and Needs you follow straight away, without waiting for the next refresh.
     private void SettleNeedsAnswer() => Conversation.NeedsAnswer = Conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
 
-    private async Task AfterReplyAsync()
+    // Done clears this Inbox question only. It never creates/settles a task, learns or sends a customer reply.
+    private async Task MarkAgentQuestionDoneAsync(ConvMessage question)
     {
-        if (_closeOnSend is { } id)
-        {
-            _closeOnSend = null;
-            if (_questionTasks.FirstOrDefault(t => t.Id == id) is { IsOpen: true } task) await CloseTaskAsync(task);
-            return;
-        }
-        if (OpenQuestionTask() is { } open) { _askResolved = open; _slot = 0; }
-    }
-
-    private async Task ResolveQuestionTaskAsync(Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest task)
-    {
-        if (_resolving) return;
+        if (_resolving || _savingLearning || !Features.Available || !IsPendingAgentQuestion(question)) return;
         _resolving = true;
+        var conversation = Conversation;
         try
         {
-            if (Conversation.Messages.FirstOrDefault(m => m.Id == task.RaisedInMessageId) is { Answered: false } question)
-            {
-                await Features.ResolveQuestionAsync(Conversation.ConnectionId, Conversation.Sender, question.Id);
-                question.Answered = true;
-                SettleNeedsAnswer();
-            }
-            await CloseTaskAsync(task);
-            _askResolved = null;
+            await Features.ResolveQuestionAsync(conversation.ConnectionId, conversation.Sender, question.Id);
+            question.Answered = true;
+            conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+            Toasts.Show("Marked as done.");
             await OnChanged.InvokeAsync();
         }
-        catch (Exception e) when (e is HttpRequestException or InvalidOperationException or NotSupportedException) { _actionError = "Couldn't mark the task done. Try again, or mark it done in Tasks."; }
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException or NotSupportedException)
+        {
+            _actionError = "Couldn't mark the question done. Try again.";
+        }
         finally { _resolving = false; }
     }
 
-    private async Task CloseTaskAsync(Parrot.Web.Features.Dashboard.TaskRequests.TaskRequest task, string said = "Task done.")
-    {
-        try
-        {
-            await Tasks.SetStateAsync(task.Id, Parrot.Web.Features.Dashboard.TaskRequests.TaskState.Done);
-            Toasts.Show(new ToastMessage(said, ActionLabel: "Undo",
-                OnAction: () => _ = InvokeAsync(() => Tasks.SetStateAsync(task.Id, Parrot.Web.Features.Dashboard.TaskRequests.TaskState.Open))));
-        }
-        catch (Exception e) when (e is HttpRequestException or InvalidOperationException) { _actionError = "The reply was sent, but the task couldn't be marked done. Mark it done in Tasks."; }
-    }
 
     public void Dispose()
     {
-        if (_watchingTasks) Tasks.Changed -= QuestionTasksChanged;
+        if (_watchingTasks) Tasks.Changed -= ChatTasksChanged;
         if (_reserve is not null) _ = _reserve.DisposeAsync().AsTask();
         _clockFor = null;
         _lifetime.Cancel();

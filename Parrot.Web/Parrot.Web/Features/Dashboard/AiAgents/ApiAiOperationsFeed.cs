@@ -107,8 +107,11 @@ public sealed class ApiAiOperationsFeed(HttpClient http, AuthState auth, ILogger
 
     private async Task LoadWaitingAsync(CancellationToken cancellationToken)
     {
-        var waiting = await GetAsync<List<WaitingItemResponse>>("api/ai-operations/waiting", cancellationToken);
-        _waiting = waiting.Select(w => new WaitingQuestion(w.AgentName, w.Customer, w.Question)).ToList();
+        // Additive frontend read: older API responses still work; missing identities lead to the queue,
+        // never a guessed customer/agent link. The backend must project the same pending Inbox records.
+        var waiting = await GetAsync<List<InboxWaitingItemResponse>>("api/ai-operations/waiting", cancellationToken);
+        _waiting = waiting.Select(w => new WaitingQuestion(w.AgentName, w.Customer, w.Question)
+        { AgentId = w.AgentId, ConversationId = w.ConversationId, MessageId = w.MessageId }).ToList();
     }
 
     private async Task<T> GetAsync<T>(string path, CancellationToken cancellationToken)
@@ -135,4 +138,7 @@ public sealed class ApiAiOperationsFeed(HttpClient http, AuthState auth, ILogger
     {
         public static readonly AgentDay None = new(AgentToday.None, [], []);
     }
+
+    private sealed record InboxWaitingItemResponse(string AgentName, string Customer, string Question,
+        string? AgentId = null, string? ConversationId = null, string? MessageId = null);
 }
