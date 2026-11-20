@@ -204,7 +204,8 @@ if (Uri.TryCreate(builder.Configuration["CatalogApi:BaseUrl"], UriKind.Absolute,
         {
             InnerHandler = new SessionExpiryHandler(sp.GetRequiredService<AuthState>()) { InnerHandler = new HttpClientHandler() },
         }) { BaseAddress = catalogUri },
-        sp.GetRequiredService<AuthState>()));
+        sp.GetRequiredService<AuthState>(),
+        sp.GetRequiredService<ILogger<Parrot.Web.Features.Dashboard.Catalog.ApiCatalogStore>>()));
 else
     builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Catalog.ICatalogStore, Parrot.Web.Features.Dashboard.Catalog.SessionCatalogStore>();
 // The backend does not expose owned social content or extraction yet: posts and post links are not offered.

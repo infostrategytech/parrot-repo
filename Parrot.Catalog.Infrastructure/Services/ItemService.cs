@@ -248,23 +248,40 @@ public sealed class ItemService : AdminServiceBase, IItemService
     {
         if (!_photos.IsConfigured)
         {
+            _log.LogWarning("Photo upload refused: no photo storage is set up. Tenant={Tenant}", TenantId);
             throw new ServiceUnavailableException("Photos can't be added yet: no photo storage is set up.", new InvalidOperationException("Catalog:Photos:Bucket is not set."));
         }
 
         string type = (contentType ?? string.Empty).Split(';')[0].Trim().ToLowerInvariant();
         if (!PhotoTypes.TryGetValue(type, out string? extension))
         {
+            _log.LogInformation("Photo upload refused: not a JPEG, PNG or WebP. Tenant={Tenant} ContentType={ContentType} Bytes={Bytes}", TenantId, contentType, length);
             throw new ValidationException("A photo must be a JPEG, PNG or WebP image.");
         }
 
         if (length is <= 0 or > MaxPhotoBytes)
         {
+            _log.LogInformation("Photo upload refused: size out of range. Tenant={Tenant} ContentType={ContentType} Bytes={Bytes}", TenantId, type, length);
             throw new ValidationException($"A photo must be at most {MaxPhotoBytes / (1024 * 1024)} MB.");
         }
 
         string key = $"{PhotoPrefix}{Guid.NewGuid():N}.{extension}";
-        await _photos.PutAsync(key, content, type, ct);
-        return new ItemPhoto(key, _photos.UrlFor(key));
+        long started = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            await _photos.PutAsync(key, content, type, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _log.LogError(ex, "Photo upload failed while storing it. Tenant={Tenant} Key={Key} ContentType={ContentType} Bytes={Bytes}", TenantId, key, type, length);
+            throw;
+        }
+
+        ItemPhoto photo = new (key, _photos.UrlFor(key));
+        _log.LogInformation(
+            "Photo uploaded. Tenant={Tenant} Key={Key} ContentType={ContentType} Bytes={Bytes} ElapsedMs={ElapsedMs} Url={Url}",
+            TenantId, key, type, length, (long)System.Diagnostics.Stopwatch.GetElapsedTime(started).TotalMilliseconds, photo.Url);
+        return photo;
     }
 
     public async Task<IReadOnlyList<ItemCategory>> ListCategoriesAsync(CancellationToken ct)
