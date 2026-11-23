@@ -10,6 +10,8 @@
 @inject Parrot.Web.Features.Dashboard.TaskRequests.TaskReplyDraft ReplyDraft
 @inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
 @inject ToastService Toasts
+@inject AuthState Auth
+@inject Parrot.Web.Features.Dashboard.Knowledge.OmniKnowledgeMemory Knowledge
 
 
 @* The page owns the conversation data (it polls the list and reads the
@@ -290,9 +292,25 @@
                 <TextArea Value="@_learningText" ValueChanged="value => _learningText = value ?? string.Empty"
                           AriaLabel="@LearningPrompt" Rows="4" AutoGrow Placeholder="@LearningPrompt" />
                 <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="learning-dialog__note">@LearningCommitment</Typography>
+                @* Above the save option, so a refusal is in view without scrolling the dialog. *@
                 @if (_learningError is not null)
                 {
                     <InlineError Message="@_learningError" OnDismiss="() => _learningError = null" />
+                }
+                @if (_learningMode == LearningMode.Answer && CanSaveForNextTime)
+                {
+                    @* Off unless chosen: many answers are about this customer only (an order, a delivery date), and what is
+                       saved is used with every customer from the next message. *@
+                    <Checkbox State="@(_saveForNextTime ? CheckboxState.Checked : CheckboxState.Unchecked)" StateChanged="SetSaveForNextTime"
+                              Label="Save for next time"
+                              Description="@($"{CapitalisedAgent} will use it with every customer. Leave it off for an answer about this customer only, like their order.")" />
+                    @if (_saveForNextTime)
+                    {
+                        <TextArea Value="@RememberText" ValueChanged="value => _rememberText = value ?? string.Empty"
+                                  AriaLabel="@($"What {LearningAgent} should know")" Rows="3" AutoGrow
+                                  Placeholder="For example: We deliver to Ibadan for 3,500 naira, in 2 days." />
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="learning-dialog__note">Write it so it makes sense without the question.</Typography>
+                    }
                 }
             </div>
         }
@@ -352,6 +370,20 @@
     private LearningMode _learningMode;
     private string _learningText = "";
     private string? _learningError;
+    private bool _saveForNextTime;
+    // Null until the person edits what to remember: until then it is the answer, as it is typed.
+    private string? _rememberText;
+    private string RememberText => _rememberText ?? _learningText.Trim();
+
+    // Saving an answer as knowledge: when the AI service keeps it, and for people who may change it (as on the Knowledge page).
+    private bool CanSaveForNextTime => Knowledge.Enabled
+        && Auth.CurrentUser?.Allows(Parrot.SharedComponents.Layout.AccessRules.Knowledge) == true;
+
+    private void SetSaveForNextTime(CheckboxState state)
+    {
+        _saveForNextTime = state == CheckboxState.Checked;
+        _learningError = null;
+    }
     private bool _savingLearning;
 
     // Questions stay as state for the attention strip; their completion is a real conversation event,
@@ -747,6 +779,8 @@
         _learningMessage = message;
         _learningText = "";
         _learningError = null;
+        _saveForNextTime = false;
+        _rememberText = null;
     }
 
     private void CloseLearning()
@@ -770,6 +804,18 @@
             }
             else
             {
+                // Saved first: if the AI service refuses it, the dialog stays open with the reason and nothing has moved.
+                if (_saveForNextTime && CanSaveForNextTime && string.IsNullOrWhiteSpace(RememberText))
+                {
+                    _learningError = $"Write what {LearningAgent} should know, or untick Save for next time.";
+                    return;
+                }
+                if (_saveForNextTime && CanSaveForNextTime)
+                {
+                    await Knowledge.AddStatementAsync(RememberText, _lifetime.Token);
+                    Toasts.Show("Saved for next time.", description: $"{CapitalisedAgent} will use it from the next customer message.");
+                }
+
                 // The answer waits in the reply box to be checked; sending it is what closes the question (the server
                 // counts a sent reply as the answer). While the agent is replying, the take-over choice opens.
                 _view = ThreadView.Messages;
@@ -780,11 +826,18 @@
             _scrollPending = true;
             await OnChanged.InvokeAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _learningError = ex.Message; }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException
+            or Parrot.Web.Features.Dashboard.Knowledge.KnowledgeSaveRefusedException) { _learningError = ex.Message; }
+        catch (HttpRequestException)
+        {
+            _learningError = "We couldn't save it for next time. Try again, or untick Save for next time.";
+        }
         finally { _savingLearning = false; }
     }
 
     private string LearningAgent => Conversation.AiAgent?.Name ?? "the AI agent";
+    // The same, starting a sentence.
+    private string CapitalisedAgent => LearningAgent.Length == 0 ? LearningAgent : char.ToUpperInvariant(LearningAgent[0]) + LearningAgent[1..];
     private string LearningTitle => _learningMode == LearningMode.Correction ? "Correct for next time" : $"Answer {LearningAgent}";
     private RenderFragment<string> LearningFooter => _ => @<div class="learning-dialog__footer">
         <Button Variant="ButtonVariant.Secondary" disabled="@_savingLearning" @onclick="CloseLearning">Cancel</Button>

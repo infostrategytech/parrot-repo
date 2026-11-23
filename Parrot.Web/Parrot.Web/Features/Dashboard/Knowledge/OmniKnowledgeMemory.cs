@@ -135,6 +135,22 @@ public sealed class OmniKnowledgeMemory(OmniAiClient omni, IConfiguration config
     }
 
     /// <summary>
+    /// Saves an answer the team gave a customer as one detail, however many sentences it has: split, "It costs 3,500
+    /// naira" would lose what it is about. The service picks the section from the words. Returns what was saved
+    /// (nothing when the AI already knew it).
+    /// </summary>
+    public async Task<IReadOnlyList<KnowledgeFact>> AddStatementAsync(string statement, CancellationToken cancellationToken = default)
+    {
+        // The service makes a detail of each line, so the answer goes as one line.
+        string line = Regex.Replace(statement.Trim(), @"\s*\n+\s*", " ");
+        if (line.Length == 0) return [];
+        Added added = await WriteAsync("add_answer", null,
+            () => omni.SendAsync<Added>(HttpMethod.Post, $"{Root}/items", new NewItem(line), cancellationToken: cancellationToken));
+        logger.LogInformation("knowledge.answer_saved Added={Added} Replaced={Replaced}", added.Items.Count, added.Replaced?.Count ?? 0);
+        return [.. added.Items.Select(ToKnown)];
+    }
+
+    /// <summary>
     /// Removes what was just added. A statement it replaced was retired, which the service can't restore, so it is
     /// written again, under the section it was in.
     /// </summary>
