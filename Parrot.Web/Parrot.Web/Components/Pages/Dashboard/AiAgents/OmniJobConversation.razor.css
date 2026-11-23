@@ -131,6 +131,16 @@
   border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
 }
 
+/* How far along orientation is: above the start's orb, then a strip across the top of the chat,
+   where the topics would be. */
+.job-editor__progress { justify-self: stretch; margin-bottom: var(--spacing-xl); text-align: start; }
+.job-editor__voice.is-talking > .job-editor__progress {
+  flex: none;
+  margin-bottom: var(--spacing-none);
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+
 .job-editor__log {
   flex: 1;
   min-height: 0;

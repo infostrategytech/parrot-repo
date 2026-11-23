@@ -42,6 +42,72 @@ public class OrientationApiTests
     }
 
     [Fact]
+    public async Task ReadProgressAsync_WhenProgressChanges_GivesItNowThenEachChangeForThisAgentOnly()
+    {
+        // The middle event is the AI team's sample (Orientation Progress Stream API, 23 November 2026).
+        const string stream = """
+            : connected
+
+            id: 1-0
+            event: orientation.progress.agt_other
+            data: {"agent_id":"agt_other","percent":5,"ready":false,"required_count":7,"reviewed_count":0}
+
+            id: 1732361200000-0
+            event: orientation.progress.agt_1
+            data: {"agent_id":"agt_1","percent":42,"ready":false,"complete":false,"can_activate":false,"stage":"discovering","required":["products_services","prices","payment_methods","delivery","opening_hours","returns_refunds","handover_contact"],"reviewed":["products_services","prices"],"remaining_required":["payment_methods","delivery","opening_hours","returns_refunds","handover_contact"],"pending_review":[],"generating_review":[],"required_count":7,"reviewed_count":2,"total_topics":8,"active_topic":{"key":"payment_methods","label":"Payment methods","required":true,"stage":"in_progress","questions_asked":1,"details_covered":1,"details_total":2},"topics":[{"key":"products_services","label":"Products and services","required":true,"status":"reviewed","questions_asked":2,"details_covered":2,"details_total":2}],"updated_at":"2026-11-23T12:00:00+00:00"}
+
+            : keep-alive
+
+            id: 2-0
+            event: orientation.progress.agt_1
+            data: not json
+
+            id: snapshot
+            event: orientation.progress.agt_1
+            data: {"agent_id":"agt_1","percent":100,"ready":true,"complete":true,"can_activate":true,"stage":"complete","required_count":7,"reviewed_count":7}
+
+
+            """;
+        (OrientationApi api, Routes routes) = Build();
+        routes.On("GET", "api/v1/orientation/progress/stream/agt_1", stream.Replace("\r\n", "\n"));
+
+        List<OrientationProgress> snapshots = [];
+        await foreach (OrientationProgress progress in api.ReadProgressAsync("agt_1")) snapshots.Add(progress);
+
+        Assert.Equal([new OrientationProgress(42, false, 7, 2), new OrientationProgress(100, true, 7, 7)], snapshots);
+        Assert.Equal("text/event-stream", routes.Single("GET", "api/v1/orientation/progress/stream/agt_1").Header("Accept"));
+        Assert.Equal("Bearer session-token", routes.Single("GET", "api/v1/orientation/progress/stream/agt_1").Header("Authorization"));
+    }
+
+    [Fact]
+    public async Task GetProgressAsync_WhenAsked_ReadsTheProgressNowAsTheSignedInOwner()
+    {
+        (OrientationApi api, Routes routes) = Build();
+        routes.On("GET", "api/v1/orientation/progress/agt_1/detail",
+            """{"agent_id":"agt_1","percent":30,"ready":false,"stage":"discovering","required_count":7,"reviewed_count":1}""");
+
+        OrientationProgress progress = await api.GetProgressAsync("agt_1");
+
+        Assert.Equal(new OrientationProgress(30, false, 7, 1), progress);
+        Assert.Equal("Bearer session-token", routes.Single("GET", "api/v1/orientation/progress/agt_1/detail").Header("Authorization"));
+    }
+
+    [Fact]
+    public async Task ReadProgressAsync_WhenTheAgentIsNotFound_ThrowsNotFoundSoTheScreenStopsAsking()
+    {
+        (OrientationApi api, Routes routes) = Build();
+        routes.On("GET", "api/v1/orientation/progress/stream/agt_1",
+            """{"errorCode":"NOT_FOUND","message":"Agent not found in the requested scope"}""", System.Net.HttpStatusCode.NotFound);
+
+        ApiException error = await Assert.ThrowsAsync<ApiException>(async () =>
+        {
+            await foreach (OrientationProgress _ in api.ReadProgressAsync("agt_1")) { }
+        });
+
+        Assert.Equal(System.Net.HttpStatusCode.NotFound, error.StatusCode);
+    }
+
+    [Fact]
     public async Task AnAnswerGoesAsAJsonString()
     {
         (OrientationApi api, Routes routes) = Build();
