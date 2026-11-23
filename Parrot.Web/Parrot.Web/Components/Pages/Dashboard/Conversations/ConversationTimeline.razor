@@ -818,8 +818,8 @@
                     Toasts.Show("Saved for next time.", description: $"{CapitalisedAgent} will use it from the next customer message.");
                 }
 
-                // The answer waits in the reply box to be checked; sending it is what closes the question (the server
-                // counts a sent reply as the answer). While the agent is replying, the take-over choice opens.
+                // The answer waits in the reply box to be checked; sending it is what closes the question (the AI
+                // service takes a team reply as the answer). While the agent is replying, the take-over choice opens.
                 _view = ThreadView.Messages;
                 UseAnswer(_learningText.Trim());
             }

@@ -13,10 +13,10 @@ public class ConversationsState
 
     public void Apply(IEnumerable<InboxConversationDto> summaries)
     {
-        var listed = summaries.Select(s => $"{s.ConnectionId}:{s.Sender}").ToHashSet();
+        HashSet<string> listed = summaries.Select(s => $"{s.ConnectionId}:{s.Sender}").ToHashSet();
         // The server lists every conversation with an open question or approval on its first page, so one it no longer
         // lists has none (a chat only an agent's question had brought in, since answered elsewhere).
-        foreach (var gone in Conversations.Where(c => !listed.Contains(c.Id)))
+        foreach (ConversationItem gone in Conversations.Where(c => !listed.Contains(c.Id)))
         {
             gone.NeedsAnswer = false;
             gone.PendingApproval = null;
@@ -91,7 +91,7 @@ public class ConversationsState
     {
         var unique = item.Messages.ToDictionary(m => m.Id);
         // A read that left before a question was closed here must not bring it back.
-        foreach (var message in messages.Where(m => m.Kind != "ai_question" || !item.ClosedQuestions.Contains(m.Id)))
+        foreach (InboxMessageDto message in messages.Where(m => m.Kind != "ai_question" || !item.ClosedQuestions.Contains(m.Id)))
             unique[message.Id] = new ConvMessage
             {
                 Id = message.Id, Text = message.Text, IsOutgoing = message.Outgoing,
@@ -128,12 +128,12 @@ public class ConversationsState
         item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
     }
 
-    /// <summary>A reply the team sent answers the agent's questions asked before it, as the server counts it:
-    /// one the channel took, not one still pending or failed.</summary>
+    /// <summary>A reply the team sent answers the agent's questions asked before it, as the AI service reads it when
+    /// Parrot announces the reply. Settled here once the channel has taken it; the next read follows the AI service.</summary>
     public static void SettleAgentQuestions(ConversationItem item, InboxMessageDto reply)
     {
         if (!reply.Outgoing || reply.Kind is not (null or "human") || reply.Status is not ("sent" or "accepted" or "delivered" or "read")) return;
-        foreach (var question in item.Messages.Where(m => m.Kind == MessageKind.AiQuestion && !m.Answered && m.ReceivedAt < reply.ReceivedAt))
+        foreach (ConvMessage question in item.Messages.Where(m => m.Kind == MessageKind.AiQuestion && !m.Answered && m.ReceivedAt < reply.ReceivedAt))
         {
             question.Answered = true;
             item.ClosedQuestions.Add(question.Id);

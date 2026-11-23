@@ -16,7 +16,7 @@ public static class InboxAttentionRules
         var responsible = conversation.Attention?.ResponsiblePersonId ?? conversation.Assignee?.Id;
         var mine = !string.IsNullOrWhiteSpace(responsible) && responsible == personId;
         // Nobody is named until conversations can be assigned: the agent's question waits for whoever can answer it.
-        var agentsAskMe = mine || (answersAgents && string.IsNullOrWhiteSpace(responsible));
+        bool agentsAskMe = mine || (answersAgents && string.IsNullOrWhiteSpace(responsible));
         if (agentsAskMe && conversation.NeedsAnswer) return InboxNeed.AgentAnswer;
         if (agentsAskMe && conversation.PendingApproval is not null) return InboxNeed.Approval;
         var question = questions.FirstOrDefault(q => q.ConversationId == conversation.Id && q.Waits(personId));
