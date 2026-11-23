@@ -38,9 +38,25 @@ public sealed record ApprovalDecisionRequest(string Decision, string? Instructio
 public sealed record ApprovalDecisionResponse(string ApprovalId, string Decision, string? TurnId, string? Status, string? Reply);
 
 /// <summary>
-/// The AI Operations figures and the owner's decisions, every one scoped to
-/// the owner: the activity is read for the owner alone, and an approval is
-/// only decided when it was asked of that owner.
+/// The statuses a decision can come back with besides the agent's own turn statuses. The first two are the AI
+/// service's words; <see cref="ConversationBusy"/> is this API's name for its 409 CONVERSATION_BUSY answer.
+/// </summary>
+public static class ApprovalDecisionStatus
+{
+    /// <summary>Someone decided it first. Nothing changed.</summary>
+    public const string AlreadyDecided = "already_decided";
+
+    /// <summary>The decision is recorded, but no turn of the agent's was waiting on it any more.</summary>
+    public const string NoTurn = "no_turn";
+
+    /// <summary>The decision is recorded; the agent is replying in that conversation and acts on it once it has.</summary>
+    public const string ConversationBusy = "conversation_busy";
+}
+
+/// <summary>
+/// The AI Operations figures and the team's decisions, every one scoped to
+/// the workspace: the activity is read for it alone, and an approval is only
+/// decided while it waits on the workspace's own waiting list.
 /// </summary>
 public interface IAiOperationsService
 {
@@ -78,6 +94,14 @@ public interface IAiOperationsService
         string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId, string closedBy,
         CancellationToken cancellationToken = default);
 
+    /// <summary>
+    /// Decides an approval as <paramref name="decidedBy"/>, the signed-in person. Only one still waiting on an open item
+    /// in the workspace, on a channel the caller reaches, can be decided; anything else is
+    /// <see cref="Domain.Exceptions.NotFoundException"/>, the same whatever the reason. The response's Status is one of
+    /// <see cref="ApprovalDecisionStatus"/> when someone decided it first, no turn was waiting on it, or the agent will
+    /// act on it shortly.
+    /// </summary>
     Task<ApprovalDecisionResponse> DecideApprovalAsync(
-        string ownerUserId, string approvalId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default);
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, string decidedBy, string approvalId, ApprovalDecisionRequest request,
+        CancellationToken cancellationToken = default);
 }

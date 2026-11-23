@@ -509,61 +509,166 @@ public class AiOperationsServiceTests
         _conversations.Verify(c => c.WriteSystemEventAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
-    [Fact]
-    public async Task DecideApprovalAsync_ForwardsTheDecisionAndRecordsIt()
+    // Bola's refund, waiting at the AI service, and Parrot's own record of the request (it feeds the day's figures).
+    private void BolaApproval()
     {
-        Approval("apr_1", "t1", Now.UtcDateTime.AddMinutes(-10));
-        Escalation("esc_2", "t1", Now.UtcDateTime.AddMinutes(-1), approval: "apr_1");
-        _orchestrator.Setup(o => o.DecideApprovalAsync(Owner, "apr_1", It.IsAny<ApprovalDecision>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new ApprovalDecisionResult("t1", "completed", "Your refund is on its way."));
+        Approval("apr_wait_bola", "t1", Now.UtcDateTime.AddMinutes(-10), conversation: BolaChat);
+        Waiting("wait_bola", BolaChat, kind: "approval", approval: "pending");
+    }
 
-        ApprovalDecisionResponse response = await _sut.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecisionRequest("Approved", "Refund in full"));
+    private void OrchestratorAnswers(string? status, string? reply = null) =>
+        _orchestrator.Setup(o => o.DecideApprovalAsync(Owner, "apr_wait_bola", It.IsAny<ApprovalDecision>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new ApprovalDecisionResult("t1", status, reply));
+
+    private Task<ApprovalDecisionResponse> Decide(string decision = "approved", string? instruction = null, IReadOnlySet<Guid>? reach = null, string approvalId = "apr_wait_bola") =>
+        _sut.DecideApprovalAsync(Owner, Token, reach, "user-ngozi", approvalId, new ApprovalDecisionRequest(decision, instruction));
+
+    [Fact]
+    public async Task DecideApprovalAsync_SendsTheDecisionAsThePersonAndRecordsIt()
+    {
+        BolaApproval();
+        OrchestratorAnswers("completed", "Your refund is on its way.");
+
+        ApprovalDecisionResponse response = await Decide("Approved", "  Refund in full ");
 
         Assert.Equal("approved", response.Decision);
+        Assert.Equal("completed", response.Status);
         Assert.Equal("Your refund is on its way.", response.Reply);
-        _orchestrator.Verify(o => o.DecideApprovalAsync(Owner, "apr_1",
-            It.Is<ApprovalDecision>(d => d.Decision == "approved" && d.DecidedBy == Owner && d.Instruction == "Refund in full"),
+        // The AI service records who decided as the item's resolved_by: the person, not the workspace.
+        _orchestrator.Verify(o => o.DecideApprovalAsync(Owner, "apr_wait_bola",
+            It.Is<ApprovalDecision>(d => d.Decision == "approved" && d.DecidedBy == "user-ngozi" && d.Instruction == "Refund in full"),
             It.IsAny<CancellationToken>()), Times.Once);
-        Assert.All(_activity.Records, r =>
-        {
-            Assert.Equal(Now.UtcDateTime, r.ResolvedAt);
-            Assert.Equal("approved", r.Resolution);
-            Assert.Equal(Owner, r.ResolvedBy);
-        });
+        AgentActivityRecord record = Assert.Single(_activity.Records);
+        Assert.Equal("approved", record.Resolution);
+        Assert.Equal("user-ngozi", record.ResolvedBy);
+        Assert.Equal(Now.UtcDateTime, record.ResolvedAt);
     }
 
     // Deciding closes the approval's waiting item at the AI service; the list isn't served from the copy read before.
     [Fact]
     public async Task DecideApprovalAsync_AfterTheDecision_ReadsTheWaitingListAfresh()
     {
-        Approval("apr_wait_bola", "t1", Now.UtcDateTime.AddMinutes(-10), conversation: BolaChat);
-        Waiting("wait_bola", BolaChat, kind: "approval", approval: "pending");
+        BolaApproval();
         Assert.Single(await _sut.WaitingAsync(Owner, Token, null));
         _orchestrator.Setup(o => o.DecideApprovalAsync(Owner, "apr_wait_bola", It.IsAny<ApprovalDecision>(), It.IsAny<CancellationToken>()))
             .Callback(() => _waiting.Close("wait_bola", "approved", "user-ngozi"))
             .ReturnsAsync(new ApprovalDecisionResult("t1", "completed", null));
 
-        await _sut.DecideApprovalAsync(Owner, "apr_wait_bola", new ApprovalDecisionRequest("approved", null));
+        await Decide();
 
         Assert.Empty(await _sut.WaitingAsync(Owner, Token, null));
     }
 
-    [Fact]
-    public async Task DecideApprovalAsync_ForAnApprovalThatIsNotTheOwners_ThrowsNotFoundWithoutCallingTheOrchestrator()
+    // Never asked here (or another workspace's), one whose item has closed, one that expired (the AI service then calls
+    // the item a hand-over) and one in a chat Parrot never stored all answer the same, and nothing is sent.
+    [Theory]
+    [InlineData("apr_never")]
+    [InlineData("apr_wait_closed")]
+    [InlineData("apr_wait_expired")]
+    [InlineData("apr_wait_unstored")]
+    public async Task DecideApprovalAsync_ForAnApprovalNotWaitingHere_ThrowsTheSameNotFoundAndSendsNothing(string approvalId)
     {
-        Approval("apr_theirs", "t9", Now.UtcDateTime, owner: "someone-else");
+        Waiting("wait_closed", BolaChat, kind: "approval", approval: "pending");
+        _waiting.Close("wait_closed", "handled", "user-tunde");
+        Waiting("wait_expired", KunleChat, kind: "handover", approval: "expired");
+        Waiting("wait_unstored", "whatsapp:2340000000000:2349011112222", kind: "approval", approval: "pending");
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.DecideApprovalAsync(Owner, "apr_theirs", new ApprovalDecisionRequest("approved", null)));
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() => Decide(approvalId: approvalId));
 
+        Assert.Equal("No approval with that id is waiting for a decision.", error.Message);
         _orchestrator.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task DecideApprovalAsync_AlreadyDecided_ThrowsNotFound()
+    public async Task DecideApprovalAsync_OnAChannelTheTeammateCannotOpen_ThrowsNotFoundAndSendsNothing()
     {
-        Approval("apr_1", "t1", Now.UtcDateTime.AddHours(-1), resolvedAt: Now.UtcDateTime.AddMinutes(-30));
+        BolaApproval();
 
-        await Assert.ThrowsAsync<NotFoundException>(() => _sut.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecisionRequest("denied", null)));
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() => Decide(reach: new HashSet<Guid> { Instagram }));
+
+        Assert.Equal("No approval with that id is waiting for a decision.", error.Message);
+        _orchestrator.VerifyNoOtherCalls();
+    }
+
+    // The chat can show an approval from the agent's live event a few seconds before the shared copy is read again.
+    [Fact]
+    public async Task DecideApprovalAsync_ForOneAskedSinceTheListWasRead_ReadsAfreshAndDecidesIt()
+    {
+        Assert.Empty(await _sut.WaitingAsync(Owner, Token, null));
+        BolaApproval();
+        OrchestratorAnswers("completed");
+
+        await Decide("denied");
+
+        Assert.Equal(2, _waiting.ListReads.Count);
+        _orchestrator.Verify(o => o.DecideApprovalAsync(Owner, "apr_wait_bola", It.Is<ApprovalDecision>(d => d.Decision == "denied"),
+            It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // An empty list may only mean the AI service didn't answer: the person is told to try again, not that it isn't waiting.
+    [Fact]
+    public async Task DecideApprovalAsync_WhenTheWaitingListCannotBeRead_FailsAndSendsNothing()
+    {
+        BolaApproval();
+        _waiting.Failure = new ServiceUnavailableException("The AI service could not be reached.", new TimeoutException());
+
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() => Decide());
+
+        _orchestrator.VerifyNoOtherCalls();
+    }
+
+    // Someone else's decision came first and stands.
+    [Fact]
+    public async Task DecideApprovalAsync_WhenSomeoneDecidedItFirst_SaysSoAndRecordsNothingOfThisPersons()
+    {
+        BolaApproval();
+        OrchestratorAnswers(ApprovalDecisionStatus.AlreadyDecided);
+
+        ApprovalDecisionResponse response = await Decide();
+
+        Assert.Equal("already_decided", response.Status);
+        Assert.Null(Assert.Single(_activity.Records).ResolvedAt);
+    }
+
+    // Recorded at the AI service either way: the agent acts on it once it has finished replying, or nothing was waiting on it.
+    [Theory]
+    [InlineData(ApprovalDecisionStatus.ConversationBusy)]
+    [InlineData(ApprovalDecisionStatus.NoTurn)]
+    public async Task DecideApprovalAsync_WhenTheDecisionIsRecordedButNotActedOnNow_SaysSoAndRecordsIt(string status)
+    {
+        BolaApproval();
+        OrchestratorAnswers(status);
+
+        ApprovalDecisionResponse response = await Decide();
+
+        Assert.Equal(status, response.Status);
+        Assert.Equal("approved", Assert.Single(_activity.Records).Resolution);
+    }
+
+    [Fact]
+    public async Task DecideApprovalAsync_WhenTheAiServiceHasNoSuchApproval_ThrowsTheSameNotFound()
+    {
+        BolaApproval();
+        _orchestrator.Setup(o => o.DecideApprovalAsync(Owner, "apr_wait_bola", It.IsAny<ApprovalDecision>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new NotFoundException("The AI service has no record of that."));
+
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() => Decide());
+
+        Assert.Equal("No approval with that id is waiting for a decision.", error.Message);
+        Assert.Null(Assert.Single(_activity.Records).ResolvedAt);
+    }
+
+    // The AI service has the decision, which is what the agent acts on; Parrot's copy only feeds the day's figures.
+    [Fact]
+    public async Task DecideApprovalAsync_WhenParrotsOwnRecordCannotBeWritten_StillSucceeds()
+    {
+        BolaApproval();
+        OrchestratorAnswers("completed", "Done.");
+        _activity.Failure = new TimeoutException("mongo");
+
+        ApprovalDecisionResponse response = await Decide();
+
+        Assert.Equal("Done.", response.Reply);
     }
 
     [Theory]
@@ -571,10 +676,21 @@ public class AiOperationsServiceTests
     [InlineData("")]
     public async Task DecideApprovalAsync_WithADecisionThatIsNeither_ThrowsValidation(string decision)
     {
-        Approval("apr_1", "t1", Now.UtcDateTime);
+        BolaApproval();
 
-        await Assert.ThrowsAsync<ValidationException>(() => _sut.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecisionRequest(decision, null)));
+        await Assert.ThrowsAsync<ValidationException>(() => Decide(decision));
 
+        _orchestrator.VerifyNoOtherCalls();
+    }
+
+    [Fact]
+    public async Task DecideApprovalAsync_WithAnInstructionOverTheAiServicesLimit_ThrowsValidationAndSendsNothing()
+    {
+        BolaApproval();
+
+        ValidationException error = await Assert.ThrowsAsync<ValidationException>(() => Decide(instruction: new string('a', 1001)));
+
+        Assert.Equal("Keep the instruction for the agent to 1,000 characters.", error.Message);
         _orchestrator.VerifyNoOtherCalls();
     }
 
@@ -582,12 +698,12 @@ public class AiOperationsServiceTests
     [Fact]
     public async Task DecideApprovalAsync_WhenTheOrchestratorIsDown_LeavesTheApprovalWaiting()
     {
-        Approval("apr_1", "t1", Now.UtcDateTime);
-        _orchestrator.Setup(o => o.DecideApprovalAsync(Owner, "apr_1", It.IsAny<ApprovalDecision>(), It.IsAny<CancellationToken>()))
+        BolaApproval();
+        _orchestrator.Setup(o => o.DecideApprovalAsync(Owner, "apr_wait_bola", It.IsAny<ApprovalDecision>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new ServiceUnavailableException("down", new TimeoutException()));
 
-        await Assert.ThrowsAsync<ServiceUnavailableException>(() => _sut.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecisionRequest("approved", null)));
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() => Decide());
 
-        Assert.Single(await _activity.ListPendingAsync(Owner));
+        Assert.Null(Assert.Single(_activity.Records).ResolvedAt);
     }
 }

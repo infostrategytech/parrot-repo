@@ -162,12 +162,9 @@
                             }
                             else
                             {
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">
-                                    @(_approvalDecision == "approved" ? "Approved" : "Denied")
-                                </Typography>
-                                <Typography TextStyle="TextStyle.Small12Regular" As="p">
-                                    Decision sent. Waiting for the AI agent to continue.
-                                </Typography>
+                                (string Title, string Note) outcome = ApprovalOutcome.Describe(_approvalDecision, _approvalStatus, Conversation.AiAgent?.Name);
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@outcome.Title</Typography>
+                                <Typography TextStyle="TextStyle.Small12Regular" As="p">@outcome.Note</Typography>
                             }
                         </div>
                     </div>
@@ -363,6 +360,7 @@
     // Approval card state: the approval id we last saw, the decision sent, and any send error.
     private string? _pendingApprovalId;
     private string? _approvalDecision;
+    private string? _approvalStatus;
     private string? _approvalError;
     private bool _deciding;
 
@@ -417,6 +415,7 @@
         {
             _pendingApprovalId = incomingApprovalId;
             _approvalDecision = null;
+            _approvalStatus = null;
             _approvalError = null;
             if (incomingApprovalId is not null) _scrollPending = true;
         }
@@ -499,6 +498,9 @@
             return;
         }
         if (!_scrollPending) return;
+        // The thread isn't on the page while it loads (an approval card can ask for the scroll then): scroll once it is.
+        // An empty reference reaches the script as a plain object, and the circuit fails.
+        if (string.IsNullOrEmpty(_scrollElement.Id)) return;
         _scrollPending = false;
         var force = _forceScrollPending;
         _forceScrollPending = false;
@@ -873,8 +875,14 @@
         _approvalError = null;
         try
         {
-            await Client.DecideApprovalAsync(approval.ApprovalId, decision, null, _lifetime.Token);
-            _approvalDecision = decision;
+            Parrot.Application.Agents.ApprovalDecisionResponse result = await Client.DecideApprovalAsync(approval.ApprovalId, decision, null, _lifetime.Token);
+            _approvalStatus = result.Status;
+            _approvalDecision = ApprovalOutcome.State(decision, result.Status);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Decided by someone else, or expired, since the card was shown: there is nothing left to decide here.
+            _approvalDecision = ApprovalOutcome.Gone;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException)
         { _approvalError = ex is HttpRequestException ? ex.Message : "Could not send the decision. Try again."; }

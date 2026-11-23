@@ -34,6 +34,9 @@ public sealed class AgentOrchestratorClient(
 
     private const string Unavailable = "The AI service could not be reached. Try again in a moment.";
 
+    // The orchestrator's 409 when the agent is mid-reply in the conversation: the request is recorded and applied after.
+    private const string ConversationBusyCode = "CONVERSATION_BUSY";
+
     private static readonly JsonSerializerOptions Wire = new(JsonSerializerDefaults.Web)
     {
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
@@ -43,9 +46,17 @@ public sealed class AgentOrchestratorClient(
         string ownerUserId, string approvalId, ApprovalDecision decision, CancellationToken cancellationToken = default)
     {
         ApprovalDecisionWire body = new(decision.Decision, decision.DecidedBy, decision.Instruction);
-        ApprovalDecisionResultWire result = await SendAsync<ApprovalDecisionResultWire>(
-            HttpMethod.Post, ApprovalsPath + Uri.EscapeDataString(approvalId), ownerUserId, body, cancellationToken);
-        return new ApprovalDecisionResult(result.TurnId, result.Status, result.Reply);
+        try
+        {
+            ApprovalDecisionResultWire result = await SendAsync<ApprovalDecisionResultWire>(
+                HttpMethod.Post, ApprovalsPath + Uri.EscapeDataString(approvalId), ownerUserId, body, cancellationToken);
+            return new ApprovalDecisionResult(result.TurnId, result.Status, result.Reply);
+        }
+        catch (ConversationBusyException)
+        {
+            // Not a refusal: the decision is recorded and the agent acts on it once it has finished replying.
+            return new ApprovalDecisionResult(null, ApprovalDecisionStatus.ConversationBusy, null);
+        }
     }
 
     public Task<JsonElement> GetTraceAsync(string ownerUserId, string traceId, CancellationToken cancellationToken = default) =>
@@ -123,7 +134,10 @@ public sealed class AgentOrchestratorClient(
                 throw new NotFoundException("The AI service has no record of that.");
 
             if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                if (await ErrorCodeAsync(response, cancellationToken) == ConversationBusyCode) throw new ConversationBusyException();
                 throw new ConflictException("That has already been decided.");
+            }
 
             if (!response.IsSuccessStatusCode)
             {
@@ -152,6 +166,28 @@ public sealed class AgentOrchestratorClient(
             }
         }
     }
+
+    // The orchestrator's error envelope ({errorCode, ...}, or the same under "detail"), when there is one.
+    private static async Task<string?> ErrorCodeAsync(HttpResponseMessage response, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using JsonDocument json = JsonDocument.Parse(await response.Content.ReadAsStringAsync(cancellationToken));
+            JsonElement root = json.RootElement;
+            if (root.ValueKind == JsonValueKind.Object && root.TryGetProperty("detail", out JsonElement detail) && detail.ValueKind == JsonValueKind.Object)
+                root = detail;
+            return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("errorCode", out JsonElement code) && code.ValueKind == JsonValueKind.String
+                ? code.GetString()
+                : null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>The agent is replying in that conversation; any other route that meets it says to try again.</summary>
+    private sealed class ConversationBusyException() : ConflictException("The agent is replying in that conversation. Try again in a moment.");
 
     private sealed record ApprovalDecisionWire(
         [property: JsonPropertyName("decision")] string Decision,

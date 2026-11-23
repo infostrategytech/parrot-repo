@@ -28,9 +28,6 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
 
     private static readonly TimeSpan ActivityLifetime = TimeSpan.FromDays(90);
 
-    // The inbox reads the open items on every list load; far more than anyone could work through.
-    private const int MaxPending = 1000;
-
     private readonly IMongoCollection<AgentActivityDocument> _activity;
     private readonly SemaphoreSlim _indexing = new(1, 1);
     private volatile bool _indexed;
@@ -93,19 +90,6 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
 
         List<AgentActivityDocument> documents = await _activity.Find(filter).SortBy(x => x.OccurredAt).ToListAsync(cancellationToken);
         return documents.Select(d => d.ToRecord()).ToList();
-    }
-
-    public async Task<IReadOnlyList<AgentActivityRecord>> ListPendingAsync(string ownerUserId, CancellationToken cancellationToken = default)
-    {
-        await EnsureIndexesAsync(cancellationToken);
-        FilterDefinition<AgentActivityDocument> filter =
-            Builders<AgentActivityDocument>.Filter.Eq(x => x.OwnerUserId, ownerUserId)
-            & Builders<AgentActivityDocument>.Filter.In(x => x.Type, [AgentActivityTypes.ApprovalRequested, AgentActivityTypes.EscalationOpened])
-            & Builders<AgentActivityDocument>.Filter.Eq(x => x.ResolvedAt, null);
-
-        // The newest are kept when there are more than the cap; the caller still gets them oldest first.
-        List<AgentActivityDocument> documents = await _activity.Find(filter).SortByDescending(x => x.OccurredAt).Limit(MaxPending).ToListAsync(cancellationToken);
-        return documents.Select(d => d.ToRecord()).Reverse().ToList();
     }
 
     public async Task<int> MarkApprovalDecidedAsync(

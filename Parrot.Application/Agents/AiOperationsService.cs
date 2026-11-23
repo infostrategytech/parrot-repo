@@ -38,7 +38,11 @@ public sealed class AiOperationsService(
     /// <summary>How long to wait before asking again when the AI service didn't answer.</summary>
     public static readonly TimeSpan WaitingRetryAfter = TimeSpan.FromSeconds(30);
 
+    /// <summary>The AI service's limit for what the person tells the agent with a decision.</summary>
+    public const int MaxInstruction = 1000;
+
     private const string QuestionNotFound = "Question not found.";
+    private const string ApprovalNotFound = "No approval with that id is waiting for a decision.";
 
     private static readonly string[] TurnTypes = [AgentActivityTypes.TurnCompleted];
     private static readonly string[] RequestTypes = [AgentActivityTypes.ApprovalRequested, AgentActivityTypes.EscalationOpened];
@@ -281,27 +285,69 @@ public sealed class AiOperationsService(
     private static string QuestionOf(WaitingListItem item) => string.IsNullOrWhiteSpace(item.Summary) ? "Needs a person." : item.Summary;
 
     public async Task<ApprovalDecisionResponse> DecideApprovalAsync(
-        string ownerUserId, string approvalId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default)
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, string decidedBy, string approvalId, ApprovalDecisionRequest request,
+        CancellationToken cancellationToken = default)
     {
         string decision = request.Decision?.Trim().ToLowerInvariant() ?? string.Empty;
         if (decision is not (AgentActivityTypes.Resolution.Approved or AgentActivityTypes.Resolution.Denied))
             throw new ValidationException("Decide the approval with \"approved\" or \"denied\".");
+        string? instruction = string.IsNullOrWhiteSpace(request.Instruction) ? null : request.Instruction.Trim();
+        if (instruction?.Length > MaxInstruction)
+            throw new ValidationException("Keep the instruction for the agent to 1,000 characters.");
 
-        // The id is the owner's only when it is among the approvals asked of them; the body never says whose it is.
-        IReadOnlyList<AgentActivityRecord> pending = await activity.ListPendingAsync(ownerUserId, cancellationToken);
-        if (!pending.Any(p => p.Type == AgentActivityTypes.ApprovalRequested && p.ApprovalId == approvalId))
-            throw new NotFoundException("No approval with that id is waiting for a decision.");
+        // Only an approval still waiting on an open item in this workspace, on a channel the person reaches. The body
+        // never says whose it is, or whether it exists elsewhere.
+        if (!await IsApprovalWaitingAsync(ownerUserId, userToken, reach, approvalId, cancellationToken))
+            throw new NotFoundException(ApprovalNotFound);
 
-        ApprovalDecisionResult result = await orchestrator.DecideApprovalAsync(
-            ownerUserId, approvalId, new ApprovalDecision(decision, ownerUserId, request.Instruction), cancellationToken);
+        ApprovalDecisionResult result;
+        try
+        {
+            result = await orchestrator.DecideApprovalAsync(
+                ownerUserId, approvalId, new ApprovalDecision(decision, decidedBy, instruction), cancellationToken);
+        }
+        catch (NotFoundException)
+        {
+            throw new NotFoundException(ApprovalNotFound);
+        }
 
-        // The decision closes the approval's waiting item; the next read shows that rather than the shared copy.
+        // The decision closes the approval's waiting item, or leaves it waiting on an answer when the customer has asked
+        // more since; the next read shows that rather than the shared copy.
         cache.Remove(WaitingKey(ownerUserId));
+        logger.LogInformation("ai_operations.approval_decided OwnerId={OwnerId} ApprovalId={ApprovalId} Decision={Decision} Status={Status}",
+            ownerUserId, approvalId, decision, result.Status);
 
-        await activity.MarkApprovalDecidedAsync(
-            ownerUserId, approvalId, decision, ownerUserId, request.Instruction, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        // Someone else's decision came first and stands: there is nothing of this person's to record.
+        if (result.Status != ApprovalDecisionStatus.AlreadyDecided)
+        {
+            try
+            {
+                await activity.MarkApprovalDecidedAsync(
+                    ownerUserId, approvalId, decision, decidedBy, instruction, clock.GetUtcNow().UtcDateTime, cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // Best effort: the AI service has the decision, and that is what the agent acts on. Parrot's copy only
+                // feeds the day's reply-time figure.
+                logger.LogWarning(exception, "ai_operations.approval_record_failed OwnerId={OwnerId} ApprovalId={ApprovalId}", ownerUserId, approvalId);
+            }
+        }
 
         return new ApprovalDecisionResponse(approvalId, decision, result.TurnId, result.Status, result.Reply);
+    }
+
+    // In the shared copy or, failing that, read afresh: the chat can show an approval from the agent's live event a few
+    // seconds before the copy is read again, and an empty copy may only mean the AI service didn't answer last time.
+    // A read that fails now says so, rather than reading as "not waiting".
+    private async Task<bool> IsApprovalWaitingAsync(
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, string approvalId, CancellationToken cancellationToken)
+    {
+        bool Waits(OpenItem open) => PendingApprovalOf(open.Item)?.ApprovalId == approvalId;
+        if ((await OpenItemsAsync(ownerUserId, userToken, reach, cancellationToken)).Any(Waits)) return true;
+
+        IReadOnlyList<OpenItem> fresh = await LinkAsync(ownerUserId, await waitingList.ListOpenAsync(userToken, cancellationToken), cancellationToken);
+        cache.Set(WaitingKey(ownerUserId), fresh, WaitingFreshFor);
+        return fresh.Any(o => (reach is null || reach.Contains(o.ConnectionId)) && Waits(o));
     }
 
     /// <summary>Today's figures from the day's turn reports and the requests decided in it.</summary>
