@@ -31,6 +31,18 @@ public static class OrientationProgressWords
         return null;
     }
 
+    /// <summary>Why it can't be turned on yet: how much is left to teach it.</summary>
+    public static string NotReady(OrientationProgress progress, string name)
+    {
+        int left = progress.RequiredCount - progress.ReviewedCount;
+        return left switch
+        {
+            <= 0 => $"Finish teaching {name} first.",
+            1 => $"Finish teaching {name} first: 1 topic left.",
+            _ => $"Finish teaching {name} first: {left} topics left.",
+        };
+    }
+
     /// <summary>A topic's state in the list: done, yours (a form to approve), preparing, now or later.</summary>
     public static string StateOf(string? status) => status switch
     {

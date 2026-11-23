@@ -76,13 +76,13 @@ public class OrientationApiTests
 
         Assert.Equal(2, snapshots.Count);
         OrientationProgress sample = snapshots[0];
-        Assert.Equal((42, false, 7, 2), (sample.Percent, sample.Ready, sample.RequiredCount, sample.ReviewedCount));
+        Assert.Equal((42, false, 7, 2, false), (sample.Percent, sample.Ready, sample.RequiredCount, sample.ReviewedCount, sample.CanActivate));
         Assert.Empty(sample.PendingReview!);
         Assert.Empty(sample.GeneratingReview!);
         Assert.Equal(new OrientationTopic("payment_methods", "Payment methods", true, null, 1, 2), sample.ActiveTopic);
         Assert.Equal(new OrientationTopic("products_services", "Products and services", true, "reviewed", 2, 2), Assert.Single(sample.Topics!));
         // A snapshot without the topic lists still reads.
-        Assert.Equal(new OrientationProgress(100, true, 7, 7), snapshots[1]);
+        Assert.Equal(new OrientationProgress(100, true, 7, 7, CanActivate: true), snapshots[1]);
         Assert.Equal("text/event-stream", routes.Single("GET", "api/v1/orientation/progress/stream/agt_1").Header("Accept"));
         Assert.Equal("Bearer session-token", routes.Single("GET", "api/v1/orientation/progress/stream/agt_1").Header("Authorization"));
     }

@@ -108,6 +108,16 @@ public class OrientationProgressWordsTests
         Assert.Equal("Done. Kemi knows enough to start.", OrientationProgressWords.Label(new OrientationProgress(100, true, 7, 7), "Kemi"));
     }
 
+    [Theory]
+    [InlineData(2, "Finish teaching Kemi first: 5 topics left.")]
+    [InlineData(6, "Finish teaching Kemi first: 1 topic left.")]
+    // Every topic reviewed but the service not letting it on yet: nothing made up about what's left.
+    [InlineData(7, "Finish teaching Kemi first.")]
+    public void NotReady_CountsTheRequiredTopicsLeft(int reviewed, string expected)
+    {
+        Assert.Equal(expected, OrientationProgressWords.NotReady(new OrientationProgress(42, false, 7, reviewed), "Kemi"));
+    }
+
     private static OrientationProgress Snapshot(string[]? pending = null, string[]? generating = null, OrientationTopic? active = null) =>
         new(42, false, 7, 2, pending ?? [], generating ?? [], active, [Prices, Delivery, Payment]);
 }

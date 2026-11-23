@@ -21,10 +21,11 @@ public sealed record OrientationForm(string EventId, string ReviewId, JsonElemen
 /// How far along an agent's orientation is. Percent (0 to 100) counts the topics it must know, and
 /// stays at 99 or below until Ready: every one of them reviewed and approved. PendingReview and
 /// GeneratingReview are topic keys whose review form waits for the owner or is being written.
+/// CanActivate: the service will let it be turned on (it refuses before).
 /// </summary>
 public sealed record OrientationProgress(int Percent, bool Ready, int RequiredCount, int ReviewedCount,
     IReadOnlyList<string>? PendingReview = null, IReadOnlyList<string>? GeneratingReview = null,
-    OrientationTopic? ActiveTopic = null, IReadOnlyList<OrientationTopic>? Topics = null);
+    OrientationTopic? ActiveTopic = null, IReadOnlyList<OrientationTopic>? Topics = null, bool CanActivate = false);
 
 /// <summary>
 /// One orientation topic. Status is not_started, in_progress, generating_review, pending_review or
