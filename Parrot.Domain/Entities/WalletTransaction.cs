@@ -1,6 +1,9 @@
+using System.Text.Json.Serialization;
+
 namespace Parrot.Domain.Entities;
 
-/// <summary>Which way money moved in a wallet.</summary>
+/// <summary>Which way money moved in a wallet. Sent as its name ("Credit"), as the dashboard reads it.</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<WalletDirection>))]
 public enum WalletDirection
 {
     /// <summary>Money in: the balance went up.</summary>
@@ -10,7 +13,8 @@ public enum WalletDirection
     Debit,
 }
 
-/// <summary>Why money moved.</summary>
+/// <summary>Why money moved. Sent as its name ("Payment").</summary>
+[JsonConverter(typeof(JsonStringEnumConverter<WalletTransactionKind>))]
 public enum WalletTransactionKind
 {
     /// <summary>A customer paid an order (a credit).</summary>

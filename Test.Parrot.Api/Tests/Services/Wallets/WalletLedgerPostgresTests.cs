@@ -217,4 +217,15 @@ public sealed class WalletLedgerPostgresTests : IAsyncLifetime
 
         Assert.Equal(9_999m, (await wallets.GetAsync("ws-2", default)).Balance);
     }
+
+    [Fact]
+    public void Directions_and_kinds_go_out_as_their_names_as_the_dashboard_reads_them()
+    {
+        WalletTransactionResponse entry = new(Guid.Empty, WalletDirection.Debit, WalletTransactionKind.Payout, 5m, 0m, "NGN", "x", "r", null, null, DateTime.UnixEpoch);
+
+        string json = System.Text.Json.JsonSerializer.Serialize(entry, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
+
+        Assert.Contains("\"direction\":\"Debit\"", json);
+        Assert.Contains("\"kind\":\"Payout\"", json);
+    }
 }
