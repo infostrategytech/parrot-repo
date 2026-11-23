@@ -33,6 +33,7 @@ public static class MessageReplies
             Outgoing = quoted.Outgoing,
             Text = string.IsNullOrWhiteSpace(quoted.TextBody) ? file?.Caption : quoted.TextBody,
             Type = file?.Kind ?? quoted.Type,
+            StorageKey = file?.StorageKey,
         };
     }
 }

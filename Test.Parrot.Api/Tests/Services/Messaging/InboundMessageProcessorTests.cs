@@ -226,13 +226,13 @@ public class InboundMessageProcessorTests
         IStoredMessageStore? store = null, ILogger<InboundMessageProcessor>? logger = null, IContactNameLookup? contactNames = null,
         IInboundMediaStore? media = null, IMediaJobPublisher? jobs = null, bool deferMedia = false,
         IAgentChannelLookup? agentChannelLookup = null, ITenantIdLookup? tenantIdLookup = null,
-        IHumanTakeoverStore? humanTakeover = null) => new(
+        IHumanTakeoverStore? humanTakeover = null, IMediaLinkSigner? mediaLinks = null) => new(
         new InboundMessageDecoders([new WhatsAppInboundDecoder(), new FacebookInboundDecoder()]),
         store ?? _store, _sequence,
         new MessageDocumentMapperFactory([new WhatsAppMessageDocumentMapper(), new FacebookMessageDocumentMapper(), new TikTokMessageDocumentMapper(), new InstagramMessageDocumentMapper()]),
         _receipts, _publisher, logger ?? NullLogger<InboundMessageProcessor>.Instance, contactNames, media, jobs, deferMedia,
         customerRepository: null, agentChannelLookup: agentChannelLookup, tenantIdLookup: tenantIdLookup,
-        humanTakeover: humanTakeover);
+        humanTakeover: humanTakeover, mediaLinks: mediaLinks);
 
     private const string Psid = "6215837091842310";
 
@@ -678,6 +678,50 @@ public class InboundMessageProcessorTests
         MessageReplyTo quote = _store.Documents.Single(d => d.MessageId == "whatsapp:wamid.A").ReplyTo!;
         Assert.Equal("wamid.UNKNOWN", quote.ProviderMessageId);
         Assert.Null(quote.MessageId);
+    }
+
+    // --- Download links for the AI team ---
+
+    [Fact]
+    public async Task ProcessAsync_APicture_IsAnnouncedWithADownloadLinkAndAName()
+    {
+        await Processor(media: new FakeMedia(), mediaLinks: new FakeMediaLinkSigner())
+            .ProcessAsync(Inbound("whatsapp:wamid.IMG", ImageBody), CancellationToken.None);
+
+        string name = $"image-{DateTimeOffset.FromUnixTimeSeconds(1790589123).UtcDateTime:yyyyMMdd-HHmmss}.jpg";
+        StoredAttachment announced = Assert.Single(Assert.Single(_publisher.Published).Data.Attachments!);
+        Assert.Equal(FakeMediaLinkSigner.LinkFor("customer-media/user-1/copy-0.jpg", name), announced.Url);
+        Assert.Equal(name, announced.FileName);
+        // The name is the event's: the stored copy, which the inbox reads, keeps what the platform sent.
+        Assert.Null(Assert.Single(Assert.Single(_store.Documents).Attachments!).FileName);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenNoLinkCanBeMade_StillStoresAndAnnouncesThePicture()
+    {
+        await Processor(media: new FakeMedia(), mediaLinks: new FakeMediaLinkSigner(isConfigured: false))
+            .ProcessAsync(Inbound("whatsapp:wamid.IMG", ImageBody), CancellationToken.None);
+
+        Assert.Single(_store.Documents);
+        StoredAttachment announced = Assert.Single(Assert.Single(_publisher.Published).Data.Attachments!);
+        Assert.Null(announced.Url);
+        Assert.True(announced.Available);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_ACustomerQuotingAPhoto_IsAnnouncedWithTheQuotedPhotosLink()
+    {
+        WhatsAppMessageDocument photo = Earlier("outgoing:user-1:abc", outgoing: true, "wamid.OURS", "Here are the bags we have in stock");
+        photo.Type = "image";
+        photo.Attachments = [new MessageAttachment { Kind = MediaKinds.Image, StorageKey = "business-media/user-1/abc.jpg", Status = MediaStatus.Ready }];
+        _store.Documents.Add(photo);
+
+        await Processor(mediaLinks: new FakeMediaLinkSigner()).ProcessAsync(Inbound(body: QuotingBody("wamid.OURS")), CancellationToken.None);
+
+        Assert.Equal("business-media/user-1/abc.jpg", _store.Documents.Single(d => d.MessageId == "whatsapp:wamid.A").ReplyTo!.StorageKey);
+        StoredQuote announced = Assert.Single(_publisher.Published).Data.ReplyTo!;
+        Assert.Equal("image", announced.Type);
+        Assert.Equal(FakeMediaLinkSigner.LinkFor("business-media/user-1/abc.jpg", "image.jpg"), announced.Url);
     }
 
     [Fact]

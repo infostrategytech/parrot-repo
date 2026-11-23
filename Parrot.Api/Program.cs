@@ -621,6 +621,8 @@ else
 
 builder.Services.AddScoped<IImageService, ImageService>();
 builder.Services.AddSingleton<Parrot.Api.Media.MediaLinks>();
+// The week-long links in the MessagePersisted a teammate's or the AI's reply publishes.
+builder.Services.AddSingleton<Parrot.Application.Messaging.IMediaLinkSigner, Parrot.Infrastructure.Storage.MediaLinkSigner>();
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<IFeatureFlagService, FeatureFlagService>();
 builder.Services.AddScoped<IEmailService, EmailService>();

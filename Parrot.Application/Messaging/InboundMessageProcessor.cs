@@ -43,7 +43,8 @@ public sealed class InboundMessageProcessor(
     ICustomerRepository? customerRepository = null,
     IAgentChannelLookup? agentChannelLookup = null,
     ITenantIdLookup? tenantIdLookup = null,
-    IHumanTakeoverStore? humanTakeover = null)
+    IHumanTakeoverStore? humanTakeover = null,
+    IMediaLinkSigner? mediaLinks = null)
 {
     public async Task ProcessAsync(InboundMessage inbound, CancellationToken cancellationToken)
     {
@@ -94,7 +95,7 @@ public sealed class InboundMessageProcessor(
             MessagePersisted persisted = new MessagePersisted
             {
                 Source = inbound.Source,
-                Data = stored.ToStoredMessage() with { CommsType = commsType, TenantId = tenantId },
+                Data = stored.ToStoredMessage(mediaLinks) with { CommsType = commsType, TenantId = tenantId },
                 CorrelationId = inbound.CorrelationId,
             };
             await TimedAsync("publish", () => publisher.PublishAsync(persisted, cancellationToken), "publish_failed");

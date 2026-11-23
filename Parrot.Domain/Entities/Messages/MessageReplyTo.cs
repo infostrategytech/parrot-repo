@@ -27,4 +27,8 @@ public sealed class MessageReplyTo
     /// <summary>The quoted message's type ("text", "image", "document", …), so a quote without text can say what it was.</summary>
     [BsonIgnoreIfNull]
     public string? Type { get; set; }
+
+    /// <summary>Where the quoted message's file is saved, so the persisted event can link to it. Null when it had none.</summary>
+    [BsonIgnoreIfNull]
+    public string? StorageKey { get; set; }
 }

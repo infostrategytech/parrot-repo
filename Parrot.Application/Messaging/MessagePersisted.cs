@@ -73,7 +73,10 @@ public sealed record StoredMessage
 
     public IReadOnlyList<string>? AttachmentUrls { get; init; }
 
-    /// <summary>The files the customer sent. Describes them only: the inbox reads each one through the API, which checks who is asking.</summary>
+    /// <summary>
+    /// The files the message carries. On the event each has a download link for readers outside the inbox (the AI
+    /// team); the inbox ignores it and reads each file through its own signed address.
+    /// </summary>
     public IReadOnlyList<StoredAttachment>? Attachments { get; init; }
 
     public DateTime? SentAt { get; init; }
@@ -81,17 +84,29 @@ public sealed record StoredMessage
     required public DateTime PersistedAt { get; init; }
 
     /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
-    public Parrot.Application.Conversations.MessageQuote? ReplyTo { get; init; }
+    public StoredQuote? ReplyTo { get; init; }
 
     /// <summary>The direction and intent of the message relative to the AI agent.</summary>
     public CommsType CommsType { get; init; } = CommsType.UserToTenant;
 }
 
 /// <param name="Kind">See <see cref="MediaKinds"/>.</param>
+/// <param name="Url">
+/// A link anyone can download the file from for a week, without signing in (a shared post's own address, for a link).
+/// Null when there is no saved file (pending, failed, too large), and in the history API, which makes no links.
+/// </param>
+/// <param name="FileName">The name the file came with, or one made from its kind and time (image-20261123-132153.jpg). Null only for a link.</param>
 /// <param name="Available">False when the file cannot be read now: still pending, too large, or the platform refused it.</param>
 /// <param name="Status">pending, ready, failed or too_large (see MediaStatus).</param>
-public sealed record StoredAttachment(string Kind, string? ContentType, string? FileName, long? SizeBytes, bool Available,
+public sealed record StoredAttachment(string Kind, string? Url, string? ContentType, string? FileName, long? SizeBytes, bool Available,
     string Status = Parrot.Domain.Entities.Messages.MediaStatus.Ready);
+
+/// <summary>
+/// The message a stored message quotes: the inbox's <see cref="Conversations.MessageQuote"/> fields, plus
+/// <see cref="Url"/>, a week-long download link to the quoted message's file (null when it had none, or in the
+/// history API). Kept apart from MessageQuote so the inbox's own replies do not change.
+/// </summary>
+public sealed record StoredQuote(string? Id, bool Outgoing, string? Text, string? Type, string? Url = null);
 
 /// <summary>
 /// Pushed to the owner's inbox when a channel reports receipts for replies in a conversation. It names the

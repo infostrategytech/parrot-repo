@@ -30,7 +30,7 @@ public class ReplyQuoteStateTests
         {
             MessageId = "whatsapp:wamid.B", ConversationKey = "k", Sequence = 2, Platform = MessagingPlatform.WhatsApp, Outgoing = false,
             Sender = "2348012345678", Receiver = "2349011112222", Type = "text", Text = "That one please", PersistedAt = DateTime.UtcNow,
-            ReplyTo = new MessageQuote("outgoing:u:1", true, "Jollof or fried rice?", "text"),
+            ReplyTo = new StoredQuote("outgoing:u:1", true, "Jollof or fried rice?", "text"),
         };
 
         ConversationsState.MergePushed(item, pushed);
