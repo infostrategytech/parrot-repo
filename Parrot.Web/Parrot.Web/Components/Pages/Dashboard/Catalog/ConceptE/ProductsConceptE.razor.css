@@ -97,7 +97,8 @@
    their own columns (OfferRow), so the head always lines up. */
 
 /* New posts to review: one quiet line on a white card, above the list. */
-.products-e__new {
+.products-e__new,
+.products-e__look {
   display: flex;
   flex-wrap: wrap;
   gap: var(--spacing-md);
@@ -107,8 +108,21 @@
   border: var(--ds-products-e-divider) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-2xl);
 }
-.products-e__new ::deep p { flex: 1 1 auto; margin: var(--spacing-none); }
+.products-e__new ::deep p,
+.products-e__look ::deep p { flex: 1 1 auto; margin: var(--spacing-none); }
 .products-e__new-actions { display: flex; gap: var(--spacing-xs); align-items: center; }
+
+/* Items the agent couldn't fully use: the new-posts card, with an amber mark (a look, not an error). */
+.products-e__look-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--icon-size-icon-lg);
+  height: var(--icon-size-icon-lg);
+  color: var(--colors-feedback-warning-text);
+  background: var(--colors-feedback-warning-subtle);
+  border-radius: var(--radius-radius-full);
+}
 
 /* By category: each section opens with its name and count, and can be chosen whole while choosing. */
 .products-e__section-head {

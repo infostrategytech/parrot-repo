@@ -160,6 +160,64 @@ public class ApiCatalogStoreTests
         Assert.Equal("Each variant needs an amount to make the item live.", error.UserMessage);
     }
 
+    // A photo never leaves a save quietly: refused, or one the catalog can't be given, the save stops and says
+    // which photo and why (designer, 23 November 2026).
+    [Fact]
+    public async Task A_refused_photo_stops_the_save_with_the_catalogs_reason_and_which_photo()
+    {
+        FakeCatalog catalog = new();
+        catalog.Respond("POST api/catalog/items/photos", """{"error_code":"VALIDATION","message":"A photo must be a JPEG, PNG or WebP image."}""", HttpStatusCode.BadRequest);
+        string photo = "data:image/gif;base64," + Convert.ToBase64String([1, 2, 3]);
+
+        var error = await Assert.ThrowsAsync<CatalogPhotoException>(() =>
+            Store(catalog).CreateAsync(new CatalogEntry { Name = "Dress", Price = 1000, Photos = [photo] }));
+
+        Assert.Equal((photo, 1, "A photo must be a JPEG, PNG or WebP image."), (error.Photo, error.Number, error.Reason));
+        Assert.DoesNotContain("POST api/catalog/items", catalog.Calls);
+    }
+
+    [Theory]
+    [InlineData(HttpStatusCode.RequestEntityTooLarge, "Photos can be up to 5 MB. Remove it, or choose a smaller one.")]
+    [InlineData(HttpStatusCode.ServiceUnavailable, "Photos can't be saved right now. Remove it to save the item without it, or try again later.")]
+    public async Task A_bare_refusal_gets_plain_words(HttpStatusCode status, string reason)
+    {
+        FakeCatalog catalog = new();
+        catalog.Respond("POST api/catalog/items/photos", "", status);
+
+        var error = await Assert.ThrowsAsync<CatalogPhotoException>(() => Store(catalog).CreateAsync(
+            new CatalogEntry { Name = "Dress", Price = 1000, Photos = ["data:image/jpeg;base64," + Convert.ToBase64String([1])] }));
+
+        Assert.Equal(reason, error.Reason);
+    }
+
+    [Fact]
+    public async Task A_photo_the_catalog_cant_be_given_stops_the_save_instead_of_being_dropped()
+    {
+        FakeCatalog catalog = new();
+        catalog.Respond("POST api/catalog/items/photos", """{"key":"tenants/t/items/a.jpg","url":"http://photos/a.jpg"}""");
+        const string fromPost = "https://scontent.cdninstagram.com/v/post.jpg";
+
+        var error = await Assert.ThrowsAsync<CatalogPhotoException>(() => Store(catalog).CreateAsync(new CatalogEntry
+        {
+            Name = "Dress", Price = 1000, Photos = ["data:image/jpeg;base64," + Convert.ToBase64String([1]), fromPost],
+        }));
+
+        Assert.Equal((fromPost, 2), (error.Photo, error.Number));
+        Assert.DoesNotContain("POST api/catalog/items", catalog.Calls);
+    }
+
+    [Fact]
+    public async Task A_server_failure_on_a_photo_is_not_blamed_on_the_photo()
+    {
+        FakeCatalog catalog = new();
+        catalog.Respond("POST api/catalog/items/photos", "", HttpStatusCode.InternalServerError);
+
+        var error = await Assert.ThrowsAsync<global::Parrot.Web.Services.ApiException>(() => Store(catalog).CreateAsync(
+            new CatalogEntry { Name = "Dress", Price = 1000, Photos = ["data:image/jpeg;base64," + Convert.ToBase64String([1])] }));
+
+        Assert.IsNotType<CatalogPhotoException>(error);
+    }
+
     private static string Item(string fields) =>
         $$"""{"id":"{{ItemId}}","name":"Ankara wrap dress","kind":"product","created_at":"2026-11-02T10:00:00Z","updated_at":"2026-11-02T10:00:00Z",{{fields}}}""";
 
