@@ -260,6 +260,8 @@ services:
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
       # Customers' pictures and files. Never public: with a real S3 bucket, block all public access on it.
       Storage__MediaBucket: ${STORAGE_MEDIA_BUCKET:-parrot-private}
+      # The start of the week-long download links in MessagePersisted (the AI team reads them): this API's address.
+      Storage__MediaLinkBaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys
     secrets:
@@ -347,6 +349,8 @@ services:
       Storage__ServiceUrl: ${STORAGE_SERVICE_URL-http://minio:9000}
       Storage__AccessKey: ${STORAGE_ACCESS_KEY:-${MINIO_ROOT_USER}}
       Storage__SecretKey: ${STORAGE_SECRET_KEY:-${MINIO_ROOT_PASSWORD}}
+      # The start of the week-long download links in MessagePersisted (the AI team reads them): the API's address.
+      Storage__MediaLinkBaseUrl: ${PUBLIC_SCHEME:-https}://${API_DOMAIN}
       # true: a picture or file an agent sends is queued for the message-processor's send worker and the request
       # answers "pending" at once. Leave false until that worker runs in this deployment.
       Outbound__DeferFileSends: ${DEFER_FILE_SENDS:-false}

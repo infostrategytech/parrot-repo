@@ -4,10 +4,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Parrot.Api.Controllers;
 using Parrot.Api.Media;
 using Parrot.Application.Conversations;
 using Parrot.Application.Storage;
+using Parrot.Infrastructure.Storage;
 
 namespace Test.Parrot.Api.Tests.Services.Messaging;
 
@@ -41,7 +44,10 @@ public class MediaControllerTests
         }
     }
 
-    private static readonly MediaLinks Links = new(new EphemeralDataProtectionProvider());
+    // One key ring, as the API and the message worker share one.
+    private static readonly EphemeralDataProtectionProvider KeyRing = new();
+
+    private static readonly MediaLinks Links = new(KeyRing);
 
     private static string Token(string key = Key) => Links.Sign(new MessageMedia("video", "video/mp4", "clip.mp4", 100, null) { StorageKey = key }).Url!["api/media/".Length..];
 
@@ -68,6 +74,21 @@ public class MediaControllerTests
         using MemoryStream copy = new();
         http.Response.Body.CopyTo(copy);
         return copy.ToArray();
+    }
+
+    // The link in MessagePersisted is the only credential the AI team has: no sign-in, just the address.
+    [Fact]
+    public async Task A_week_long_link_from_the_persisted_event_downloads_without_signing_in()
+    {
+        MediaLinkSigner signer = new(KeyRing, Options.Create(new StorageSettings { MediaLinkBaseUrl = "https://api.example.com" }),
+            NullLogger<MediaLinkSigner>.Instance);
+        string token = signer.Sign(Key, "clip.mp4")!["https://api.example.com/api/media/".Length..];
+
+        DefaultHttpContext http = await GetAsync(new Storage(), token, download: true);
+
+        Assert.Equal(200, http.Response.StatusCode);
+        Assert.Equal(Bytes, Body(http));
+        Assert.Contains("clip.mp4", http.Response.Headers.ContentDisposition.ToString());
     }
 
     [Fact]

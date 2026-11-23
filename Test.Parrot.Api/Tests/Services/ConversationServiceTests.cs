@@ -12,6 +12,7 @@ using Parrot.Domain.Entities;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
 using Parrot.Domain.Exceptions;
+using Test.Parrot.Api.Tests.Services.Messaging;
 
 namespace Test.Parrot.Api.Tests.Services;
 
@@ -1011,14 +1012,14 @@ public class ConversationServiceTests
             throw new InvalidOperationException("Kafka is down");
     }
 
-    private ConversationService CreateWithPublisher(IMessagePersistedPublisher publisher)
+    private ConversationService CreateWithPublisher(IMessagePersistedPublisher publisher, IMediaLinkSigner? mediaLinks = null)
     {
         _connections.Setup(x => x.GetByOwnerAndIdAsync(Owner, _connection.Id)).ReturnsAsync(_connection);
         return new ConversationService(_store, _connections.Object, _sender.Object,
             _protector, _sequence, _pages.Object, _facebookSender.Object, new PageProtector(),
             _instagramAccounts.Object, _instagramSender.Object, new AccountProtector(),
             receipts: _receipts.Object, mediaStorage: _media.Object, logger: new NullAppLogger(),
-            publisher: publisher, tenantLookup: new FakeTenantIdLookup("root-account-1"));
+            publisher: publisher, tenantLookup: new FakeTenantIdLookup("root-account-1"), mediaLinks: mediaLinks);
     }
 
     [Fact]
@@ -1095,5 +1096,21 @@ public class ConversationServiceTests
             Guid.NewGuid(), null, File("menu.png", Png), default);
 
         Assert.Equal(CommsType.AgentToUser, Assert.Single(publisher.Published).Data.CommsType);
+    }
+
+    [Fact]
+    public async Task SendAgentFileAsync_PublishesThePhotoWithADownloadLink()
+    {
+        _sender.Setup(x => x.SendMediaAsync(It.IsAny<string>(), It.IsAny<string>(), Recipient, "image", "image/png", "menu.png",
+            It.IsAny<Stream>(), It.IsAny<string?>(), It.IsAny<CancellationToken>())).ReturnsAsync("wamid.ai-file");
+        FakeMessagePersistedPublisher publisher = new();
+        Guid requestId = Guid.NewGuid();
+
+        await CreateWithPublisher(publisher, new FakeMediaLinkSigner()).SendAgentFileAsync(Owner, _connection.Id, Recipient,
+            requestId, null, File("menu.png", Png), default);
+
+        StoredAttachment photo = Assert.Single(Assert.Single(publisher.Published).Data.Attachments!);
+        Assert.Equal("menu.png", photo.FileName);
+        Assert.Equal(FakeMediaLinkSigner.LinkFor($"business-media/{Owner}/{requestId:N}.png", "menu.png"), photo.Url);
     }
 }
