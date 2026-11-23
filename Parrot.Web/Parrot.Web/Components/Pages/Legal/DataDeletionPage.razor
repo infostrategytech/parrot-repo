@@ -3,25 +3,46 @@
 @using Parrot.Web.Components.Layout.Landing
 @layout LandingPageLayout
 
-@* How to have your data deleted: Meta asks for this page for apps that use Facebook sign-in (designer,
-   17 November 2026). Starter text, to be replaced by the reviewed version. *@
-<LandingMetadata Title="Data deletion · yára" Description="Find out how to request deletion of your yára account and the information we hold about you." Path="/data-deletion" />
+@* The reviewed Data Deletion Policy (designer, 23 November 2026), effective 19 November 2026; Meta asks for this page
+   for apps that use Facebook sign-in. Changed from the document as received, as on the Privacy Policy: "yára" (it said
+   "YARA CRM"), TikTok named with the other platforms, and the email is LandingCompany.Email (it was blank). *@
+<LandingMetadata Title="Data Deletion Policy · yára" Description="How to ask yára to delete your personal data or your account, what can be deleted, and how we confirm it." Path="/data-deletion" />
 
-<LandingDocument Title="Delete your data"
-                 Intro="You can ask us to delete your yára account and the information we hold about you at any time.">
-    <LandingSection Title="How to ask">
+<LandingDocument Title="Data Deletion Policy" Effective="new DateOnly(2026, 11, 19)" Updated="new DateOnly(2026, 11, 19)">
+    <LandingSection Title="1. Introduction">
+        <p>yára is an AI-powered customer relationship management platform that helps businesses manage customer conversations, automate interactions, and streamline communication across supported messaging channels.</p>
+        <p>We respect your privacy and provide a process for requesting the deletion of personal information collected or processed through our platform.</p>
+    </LandingSection>
+    <LandingSection Title="2. How to request data deletion">
+        <p>Users and authorized business administrators may request the deletion of their personal data or yára account by:</p>
         <ul>
-            <li><strong>By email</strong>: write to <a href="mailto:@LandingCompany.Email?subject=Delete%20my%20data">@LandingCompany.Email</a> from the email address on your account, with the subject “Delete my data”.</li>
-            <li><strong>If you signed in with Facebook</strong>: you can also remove yára in Facebook under Settings &amp; privacy → Settings → Apps and websites. Then email us as above so we delete what we hold.</li>
+            <li>Sending an email to <a href="mailto:@(LandingCompany.Email)?subject=Data%20Deletion%20Request%20%E2%80%93%20y%C3%A1ra">@LandingCompany.Email</a> with the subject “Data Deletion Request – yára.”</li>
+            <li>Providing their registered email address and business or account name.</li>
+            <li>Specifying whether they want particular information deleted or their entire account removed.</li>
+        </ul>
+        <p>For security purposes, we may request additional verification before processing the request.</p>
+    </LandingSection>
+    <LandingSection Title="3. What data can be deleted?">
+        <p>Depending on the request and applicable legal requirements, eligible information may include:</p>
+        <ul>
+            <li>Personal profile and account information.</li>
+            <li>Customer contact records and conversation history.</li>
+            <li>AI agent configurations and automation records.</li>
+            <li>Connected third-party messaging account information.</li>
+            <li>Other personal data associated with the account.</li>
         </ul>
     </LandingSection>
-    <LandingSection Title="What we delete">
-        <p>Your account and profile, the conversations and customer details in your business's yára workspace (if you own it), your AI agent's knowledge, and your tasks and settings. Connected WhatsApp, Instagram, Facebook and TikTok accounts are disconnected.</p>
+    <LandingSection Title="4. Data from third-party platforms">
+        <p>yára supports integrations with third-party communication platforms, including Meta services such as WhatsApp, Facebook, and Instagram, and TikTok.</p>
+        <p>Users may revoke relevant permissions through the connected platform’s settings. To request deletion of information previously processed by yára, users should follow the deletion procedure above.</p>
+        <p>Individuals communicating with a business through yára may also contact that business directly to exercise their privacy rights.</p>
     </LandingSection>
-    <LandingSection Title="How long it takes">
-        <p>We confirm your request within 3 working days and complete the deletion within 30 days. Some records may be kept longer only where the law requires it, and then deleted.</p>
+    <LandingSection Title="5. Processing and retention">
+        <p>Once a valid request is verified, yára will delete or anonymize eligible information in accordance with applicable data protection requirements.</p>
+        <p>Certain records may be retained where necessary to satisfy legal obligations, prevent fraud, resolve disputes, or maintain platform security. Residual backup copies may remain temporarily until scheduled deletion.</p>
     </LandingSection>
-    <LandingSection Title="If you're a customer of a business on yára">
-        <p>Your messages belong to the business you talked to. Ask them first; if you can't reach them, email us and we'll help.</p>
+    <LandingSection Title="6. Confirmation">
+        <p>We will communicate the outcome of the deletion request, including any information that must be retained and the reasons for its retention.</p>
+        <p>How we handle personal information is set out in our <a href="/privacy">Privacy Policy</a>.</p>
     </LandingSection>
 </LandingDocument>

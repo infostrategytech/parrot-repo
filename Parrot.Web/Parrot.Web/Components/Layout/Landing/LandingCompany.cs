@@ -1,13 +1,15 @@
 namespace Parrot.Web.Components.Layout.Landing;
 
 /// <summary>Who owns yára, said the same way on the sign-in page, its footer and the public pages, so Meta's
-/// reviewers see one owner everywhere (designer, 17 November 2026). The owner is Infostrategy Technology Limited;
-/// the address is the one on its own site (istrategytech.com). The legal name and address must match the Meta
-/// Business account exactly. yára goes live on yarahq.com, at the same address as Infostrategy (designer, 18 November
-/// 2026). The phone number is a placeholder, to be replaced after review. Change them here only.</summary>
+/// reviewers see one owner everywhere (designer, 17 November 2026). The owner is Infostrategy Technology Nigeria, as
+/// the reviewed Privacy Policy and the company's own About page name it (designer, 23 November 2026; it was
+/// "Infostrategy Technology Limited", which neither source uses); the address is the one on its own site
+/// (istrategytech.com). The legal name and address must match the Meta Business account exactly. yára goes live on
+/// yarahq.com, at the same address as Infostrategy (designer, 18 November 2026). The phone number is a placeholder,
+/// to be replaced after review. Change them here only.</summary>
 public static class LandingCompany
 {
-    public const string Name = "Infostrategy Technology Limited";
+    public const string Name = "Infostrategy Technology Nigeria";
     public const string Website = "https://istrategytech.com";
     public const string Address = "4 Madiana Close, off Dar-Es-Salam Street, Wuse 2, Abuja, Nigeria";
     public const string City = "Abuja, Nigeria";

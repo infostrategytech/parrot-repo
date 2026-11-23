@@ -3,34 +3,71 @@
 @using Parrot.Web.Components.Layout.Landing
 @layout LandingPageLayout
 
-@* Starter text (designer, 17 November 2026): to be replaced by the reviewed terms. *@
-<LandingMetadata Title="Terms of Service · yára" Description="Terms covering your use of yára, your account, business content and AI teammates." Path="/terms" />
+@* The reviewed Terms and Conditions (designer, 23 November 2026), effective 19 November 2026. Changed from the document
+   as received, as on the Privacy Policy: "yára" (it said "YARA CRM"), TikTok named with the other platforms, the
+   company is LandingCompany.Name, and the email is LandingCompany.Email (it was blank). *@
+<LandingMetadata Title="Terms and Conditions · yára" Description="The terms that govern access to and use of yára: your account, customer data, AI features, integrations, subscriptions and termination." Path="/terms" />
 
-<LandingDocument Title="Terms of Service"
-                 Intro="@($"These terms cover your use of yára, a product of {LandingCompany.Name}. By creating an account, you agree to them.")">
-    <LandingSection Title="Using yára">
-        <p>yára lets your business manage customer conversations, use an AI agent to reply, and organise work for your team. You must be at least 18 and able to act for the business you sign up for.</p>
+<LandingDocument Title="Terms and Conditions" Effective="new DateOnly(2026, 11, 19)" Updated="new DateOnly(2026, 11, 19)">
+    <LandingSection Title="1. Introduction">
+        <p>Welcome to yára.</p>
+        <p>These Terms and Conditions govern access to and use of yára, an AI-powered customer relationship management and business communication platform associated with @LandingCompany.Name.</p>
+        <p>By registering for or using yára, you agree to comply with these Terms and our <a href="/privacy">Privacy Policy</a>.</p>
     </LandingSection>
-    <LandingSection Title="Your account">
-        <p>Keep your sign-in details safe and tell us straight away if you think someone else has used your account. You're responsible for what happens in your account, including what teammates you invite do there.</p>
-    </LandingSection>
-    <LandingSection Title="Your content and your customers">
-        <p>Your messages, customer information and business knowledge stay yours. You give us permission to process them only to provide yára. You're responsible for having the right to message your customers and for following the rules of each platform you connect.</p>
-    </LandingSection>
-    <LandingSection Title="Your AI agent">
-        <p>Your agent replies using the knowledge and instructions you give it. Check what it knows and review its answers; you remain responsible for the information your business gives customers.</p>
-    </LandingSection>
-    <LandingSection Title="Acceptable use">
+    <LandingSection Title="2. Our services">
+        <p>yára enables businesses to manage customer relationships and communication through capabilities such as:</p>
         <ul>
-            <li>No spam, unsolicited bulk messaging or misleading content.</li>
-            <li>Nothing illegal, harmful or that breaks the messaging platforms' policies.</li>
-            <li>No attempts to break, overload or get around the security of yára.</li>
+            <li>Centralized customer conversations across supported messaging channels.</li>
+            <li>AI-powered customer support and response automation.</li>
+            <li>Sales inquiries, order management, and customer engagement workflows.</li>
+            <li>Appointment scheduling and follow-up automation.</li>
+            <li>Customer records, team collaboration, and business insights.</li>
+            <li>Integration with supported third-party platforms and business tools.</li>
         </ul>
+        <p>Feature availability may depend on your subscription, account configuration, and supported integrations.</p>
     </LandingSection>
-    <LandingSection Title="Changes and ending">
-        <p>We may update yára and these terms; we'll tell you about important changes. You can stop using yára at any time, and we may suspend accounts that break these terms.</p>
+    <LandingSection Title="3. Account registration and responsibilities">
+        <p>Users must provide accurate registration information and maintain the confidentiality of their account credentials.</p>
+        <p>Business administrators are responsible for managing team access, authorized activities, and information processed through their accounts.</p>
+        <p>Users must not engage in fraudulent activities, unauthorized data collection, spam, harassment, or other unlawful practices.</p>
     </LandingSection>
-    <LandingSection Title="Contact us">
-        <p>Questions about these terms: <a href="mailto:@LandingCompany.Email">@LandingCompany.Email</a>.</p>
+    <LandingSection Title="4. Customer data and privacy">
+        <p>Businesses using yára are responsible for ensuring they have appropriate authorization and lawful grounds to collect, upload, and process customer information.</p>
+        <p>yára processes customer information to provide its services, subject to applicable data protection laws, our <a href="/privacy">Privacy Policy</a>, and relevant contractual arrangements.</p>
+    </LandingSection>
+    <LandingSection Title="5. AI-powered features">
+        <p>yára uses artificial intelligence to assist with customer communication, response generation, and workflow automation.</p>
+        <p>AI-generated responses may occasionally be inaccurate or incomplete. Businesses remain responsible for appropriately configuring, monitoring, and reviewing automated interactions, particularly where accuracy or customer safety is important.</p>
+    </LandingSection>
+    <LandingSection Title="6. Third-party integrations">
+        <p>yára may integrate with WhatsApp, Facebook, Instagram, TikTok, and other supported services.</p>
+        <p>Users must comply with the applicable policies and requirements of these third-party providers.</p>
+        <p>yára is not responsible for disruptions, restrictions, or service changes originating from independent third-party platforms.</p>
+    </LandingSection>
+    <LandingSection Title="7. Subscription and payments">
+        <p>Certain yára capabilities may require a paid subscription.</p>
+        <p>Applicable pricing, billing periods, and subscription conditions will be communicated before purchase. Any refunds or cancellations will be governed by the terms presented during subscription and applicable law.</p>
+    </LandingSection>
+    <LandingSection Title="8. Service availability and restrictions">
+        <p>We aim to provide reliable services but cannot guarantee uninterrupted availability.</p>
+        <p>We may restrict or suspend accounts involved in security violations, unlawful activities, or material breaches of these Terms, subject to applicable law and contractual commitments.</p>
+    </LandingSection>
+    <LandingSection Title="9. Intellectual property">
+        <p>yára’s software, branding, design, and proprietary technology remain the property of their respective owners and licensors.</p>
+        <p>Users retain applicable rights to their business and customer information.</p>
+    </LandingSection>
+    <LandingSection Title="10. Account termination">
+        <p>Users may request account closure by contacting yára support.</p>
+        <p>Account termination and the handling of associated information will follow our <a href="/data-deletion">Data Deletion Policy</a>, applicable retention obligations, and relevant subscription agreements.</p>
+    </LandingSection>
+    <LandingSection Title="11. Changes to these Terms">
+        <p>We may update these Terms to reflect changes in our services, legal requirements, or business operations. Material changes will be communicated through appropriate channels.</p>
+    </LandingSection>
+    <LandingSection Title="12. Contact">
+        <p>For questions about these Terms, contact:</p>
+        <ul>
+            <li><strong>Email</strong>: <a href="mailto:@LandingCompany.Email">@LandingCompany.Email</a></li>
+            <li><strong>Website</strong>: <a href="@LandingCompany.SiteUrl">yarahq.com</a></li>
+        </ul>
     </LandingSection>
 </LandingDocument>
