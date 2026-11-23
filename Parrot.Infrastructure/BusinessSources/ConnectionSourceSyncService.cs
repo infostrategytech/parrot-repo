@@ -207,32 +207,4 @@ public sealed class ConnectionSourceSyncService : IConnectionSourceSyncService
             throw;
         }
     }
-
-    public async Task RequestMetadataRefreshAsync(string workspaceId, Guid connectionId, CancellationToken ct = default)
-    {
-        BusinessSource? source = await _db.BusinessSources
-            .Where(s => s.WorkspaceId == workspaceId
-                     && s.AuthorizationConnectionId == connectionId
-                     && s.Kind == BusinessSourceKind.Profile
-                     && s.IsActive)
-            .FirstOrDefaultAsync(ct);
-
-        if (source is null)
-        {
-            // The usual cause: a connection made before business knowledge, whose source was never seeded.
-            _logger.LogWarning("knowledge.refresh.no_source WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}: no active profile source for this connection",
-                workspaceId, connectionId);
-            throw new NotFoundException("No knowledge source found for this connection.");
-        }
-
-        source.MetadataSyncStatus = MetadataSyncStatus.Pending;
-        source.MetadataSyncTrigger = SnapshotTrigger.ManualRefresh;
-        source.MetadataSyncAttemptCount = 0;
-        source.NextMetadataSyncAttemptAt = null;
-        source.UpdatedAt = DateTime.UtcNow;
-        await _db.SaveChangesAsync(ct);
-
-        _logger.LogInformation("knowledge.refresh.requested WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} SourceId={SourceId}",
-            workspaceId, connectionId, source.Id);
-    }
 }
