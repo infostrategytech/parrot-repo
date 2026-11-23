@@ -88,6 +88,8 @@ services:
         create messages.outbound 24
         create messages.outbound.dlq 3
         create agent.events 6
+        create ai.reply.requested 24
+        create ai.reply.requested.dlq 3
         create business.knowledge.sources 6
     restart: "no"
     networks: [parrot]
