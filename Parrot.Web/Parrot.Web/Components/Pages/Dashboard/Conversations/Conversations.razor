@@ -212,7 +212,8 @@
                                          OnSelect="() => SelectConversationAsync(conversation.Id)"
                                          OnTogglePin="() => TogglePinAsync(conversation)"
                                          OnToggleUnread="() => ToggleMarkedUnreadAsync(conversation)"
-                                         AgentLook="@AgentLookup.Look(conversation.AiAgent?.Id, conversation.AiAgent?.Name, AgentSetup.Agents)" />
+                                         AgentLook="@AgentLookup.Look(conversation.AiAgent?.Id, conversation.AiAgent?.Name, AgentSetup.Agents)"
+                                         ChannelLooks="@ChannelLooks(conversation)" />
                     }
 
                     @if (_more)
@@ -274,15 +275,8 @@
                     </ChildContent>
                 </Button>
                 <div class="inbox-conversation__actions">
-                    @if (_selected.HasAiAgent)
-                    {
-                        <span class="inbox-agent-presence is-@_selected.AiState.ToString()!.ToLowerInvariant()">
-                            <span class="agent-face-inline"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@SelectedLook" Paused="@(_selected.AiState != AiState.Active)" /></span>
-                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.AiAgent!.Name</Typography>
-                            <i aria-hidden="true"></i>
-                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(_selected.AiState == AiState.Active ? "Replying" : "Paused")</Typography>
-                        </span>
-                    }
+                    @* Who is replying is said once, on the takeover card above the reply box (designer, 23 November 2026): the
+                       header no longer repeats it. The escalation chip stays: only it says that. *@
                     @if (_selected.HasAiAgent && _selected.ActiveEscalation is { } esc)
                     {
                         <span class="inbox-escalation-chip" title="@(esc.Problem is { Length: > 0 } p ? p : null)">
@@ -293,7 +287,7 @@
                     <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
                         @if (_selected.HasChannelAgent && _selected.AiState != AiState.Active)
                         {
-                            <ActionMenuItem Label="@ResponseControl.ReturnWords(_selected, _selected.AiAgent?.Name ?? _selected.ChannelAgent!.Name)" Glyph="IconName.RiRobot3Fill"
+                            <ActionMenuItem Label="@ResponseControl.ReturnWords(_selected, _selected.AiAgent?.Name ?? _selected.ChannelAgent?.Name ?? "the AI agent")" Glyph="IconName.RiRobot3Fill"
                                             OnClick="() => ActAsync(conversation => Client.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender, _lifetime.Token))" />
                         }
                         <ActionMenuItem Label="@(_selected.Pinned ? "Unpin" : "Pin to top")" Glyph="IconName.RiPushpin2Fill"
@@ -394,7 +388,9 @@
     private ElementReference _customerPanel;
     private bool _customerFocusPending;
 
-    private string? SelectedLook => AgentLookup.Look(_selected?.AiAgent?.Id, _selected?.AiAgent?.Name, AgentSetup.Agents);
+    // The faces of the agents on a conversation's channel, in its order (several agents: the list and the chip).
+    private IReadOnlyList<string?> ChannelLooks(ConversationItem conversation) => conversation.ChannelAgents.Count < 2 ? []
+        : [.. conversation.ChannelAgents.Select(agent => AgentLookup.Look(agent.Id, agent.Name, AgentSetup.Agents))];
 
     private static readonly (InboxScope Value, string Label)[] ScopeOptions =
         [(InboxScope.All, "All"), (InboxScope.Unread, "Unread"), (InboxScope.NeedsYou, "Needs you")];

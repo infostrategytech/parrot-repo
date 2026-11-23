@@ -45,6 +45,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public InboxCustomerDto? Customer { get; init; }
     /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
     public InboxPersonDto? ChannelAgent { get; init; }
+    /// <summary>Agents eligible to reply on this channel. Null on older providers; keep the single-agent display.</summary>
+    public IReadOnlyList<InboxPersonDto>? ChannelAgents { get; init; }
 }
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>
@@ -83,6 +85,8 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
     /// <summary>customer, ai, human, note, system or ai_question. Null is read from Outgoing.</summary>
     public string? Kind { get; init; }
     public InboxPersonDto? Author { get; init; }
+    /// <summary>Agents actually called for this AI reply, not the channel roster or the service that sent it.</summary>
+    public IReadOnlyList<InboxPersonDto>? AgentsInvolved { get; init; }
     public InboxAttachmentDto? Attachment { get; init; }
     /// <summary>The files the customer sent with this message: pictures, stickers, GIFs, video, audio and documents.</summary>
     public IReadOnlyList<InboxMediaDto>? Attachments { get; init; }

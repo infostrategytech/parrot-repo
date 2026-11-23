@@ -1,0 +1,16 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* The agents on a conversation's channel, as a small overlapping strip in a line of text (designer, 23 November 2026):
+   the Inbox list's state line and the conversation's presence chip. Decorative: the words beside it name them. At
+   most three faces; the words say how many others. *@
+<span class="agent-faces" aria-hidden="true">
+    @foreach (var look in Looks.Take(3))
+    {
+        <span class="agent-faces__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" Paused="Paused" /></span>
+    }
+</span>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string?> Looks { get; set; } = [];
+    [Parameter] public bool Paused { get; set; }
+}
