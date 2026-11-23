@@ -172,7 +172,7 @@ else
             @if (agent.IsDraft)
             {
                 var told = Told(agent);
-                var taught = Taught(agent);
+                bool taught = Taught(agent);
                 var progress = Drafts.ProgressOf(agent.Id);
                 var onStep = Briefing.CanTry ? 3 : 2;
                 <section class="agent-detail__card agent-detail__ready" aria-labelledby="agent-ready-title">
@@ -184,8 +184,8 @@ else
                         {
                             @* Taught by the AI service (owner, 23 November 2026): how far along it is, and the way
                                back into its conversation, which stays open for more once it knows enough. *@
-                            var learned = _orientation;
-                            var done = learned?.Ready == true;
+                            OrientationProgress? learned = _orientation;
+                            bool done = learned?.Ready == true;
                             <li class="@($"agent-detail__ready-step {(done ? "is-done" : "is-now")}")">
                                 <span class="agent-detail__ready-mark" aria-hidden="true">
                                     @if (done) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> } else { <Typography TextStyle="TextStyle.Small12Semibold" As="span">1</Typography> }
@@ -239,7 +239,7 @@ else
                                 <Button Variant="@(told && !tested ? ButtonVariant.Primary : ButtonVariant.Ghost)" Size="ButtonSize.Small" disabled="@(!told)" @onclick="() => { _nextLit = false; _testing = true; }">@(tested ? "Test again" : "Try it")</Button>
                             </li>
                         }
-                        @{ var turnOnNow = taught && (!Briefing.CanTry || Readiness.Tested(agent.Id)); }
+                        @{ bool turnOnNow = taught && (!Briefing.CanTry || Readiness.Tested(agent.Id)); }
                         <li class="@($"agent-detail__ready-step {(turnOnNow ? "is-now" : "is-later")}")">
                             <span class="agent-detail__ready-mark" aria-hidden="true"><Typography TextStyle="TextStyle.Small12Semibold" As="span">@onStep</Typography></span>
                             <div class="agent-detail__ready-text">
