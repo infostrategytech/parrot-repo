@@ -15,7 +15,9 @@
    The forms the AI sends (its questions, e.g. how the agent should sound) come up where the box
    is, as the designed question card, and nothing else happens until they are approved; Approve
    hands the answers to the AI. What the AI learns it keeps itself. A bar across the top says how
-   far along it is, so teaching it has a visible end (owner, 23 November 2026). *@
+   far along it is, so teaching it has a visible end (owner, 23 November 2026): under it, what
+   happens next (the owner's turn first), the topics on request, and once it is done, the page's
+   way to turn it on. *@
 
 <div class="job-editor">
     <section class="@CardClass" aria-label="@($"Talk to {Name}")">
@@ -122,11 +124,15 @@
 
     [Parameter] public string Mascot { get; set; } = "Nova";
 
+    /// <summary>Shown under the bar once orientation is done: the page's own way to turn the agent on.</summary>
+    [Parameter] public RenderFragment? WhenReady { get; set; }
+
     private readonly List<Message> _messages = [];
     private readonly List<ArrivedForm> _forms = [];
     private readonly HashSet<string> _seenForms = [];
     // Unknown until the AI service says: no bar until then.
     private OrientationProgress? _progress;
+    private bool _showTopics;
     private Phase _phase = Phase.Idle;
     private bool _started;
     private bool _canTalk;
@@ -228,14 +234,62 @@
     private RenderFragment ProgressStrip => __builder =>
     {
         if (_progress is not { } progress) return;
+        IReadOnlyList<OrientationTopic> topics = progress.Topics ?? [];
+        bool turnOn = progress.Ready && WhenReady is not null;
+        string? next = OrientationProgressWords.NextStep(progress, formShown: Docked, inCall: InCall);
         <div class="job-editor__progress">
-            <ProgressBar Value="progress.Percent" Label="@ProgressLabel(progress)" />
+            <ProgressBar Value="progress.Percent" Label="@OrientationProgressWords.Label(progress, Name)" />
+            @if (turnOn || next is not null || topics.Count > 0)
+            {
+                <div class="job-editor__progress-row">
+                    @if (turnOn)
+                    {
+                        @WhenReady
+                    }
+                    else if (next is not null)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="job-editor__progress-next" role="status">@next</Typography>
+                    }
+                    @if (topics.Count > 0)
+                    {
+                        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="job-editor__progress-toggle"
+                                aria-expanded="@(_showTopics ? "true" : "false")" @onclick="() => _showTopics = !_showTopics">
+                            <IconRight><Icon Name="IconName.RiArrowDownSLine" Class="@(_showTopics ? "is-open" : null)" /></IconRight>
+                            <ChildContent>@(_showTopics ? "Hide topics" : "See topics")</ChildContent>
+                        </Button>
+                    }
+                </div>
+            }
+            @if (_showTopics && topics.Count > 0)
+            {
+                <ol class="job-editor__topic-list" aria-label="@($"What {Name} needs to know")">
+                    @foreach (OrientationTopic topic in topics)
+                    {
+                        string state = OrientationProgressWords.StateOf(topic.Status);
+                        <li class="@($"job-editor__topic is-{state}")">
+                            <span class="job-editor__topic-mark" aria-hidden="true">
+                                @if (TopicIcon(state) is { } icon)
+                                {
+                                    <Icon Name="icon" Size="IconSize.Sm" />
+                                }
+                            </span>
+                            <Typography TextStyle="TextStyle.Small12Semibold" As="span" Class="job-editor__topic-label">@topic.Label</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="job-editor__topic-status">@OrientationProgressWords.Status(topic)</Typography>
+                        </li>
+                    }
+                </ol>
+            }
         </div>
     };
 
-    private string ProgressLabel(OrientationProgress progress) => progress.Ready
-        ? $"Done. {Name} knows enough to start."
-        : $"{progress.ReviewedCount} of {progress.RequiredCount} topics done · {progress.Percent}%";
+    private static IconName? TopicIcon(string state) => state switch
+    {
+        "done" => IconName.RiCheckboxCircleFill,
+        "yours" => IconName.RiEditFill,
+        "preparing" => IconName.RiTimeFill,
+        "now" => IconName.RiChat3Fill,
+        _ => null,
+    };
 
     // ── The thread ──────────────────────────────────────────────────────────
 
@@ -704,7 +758,6 @@
 
     private void Progressed(OrientationProgress progress)
     {
-        if (progress == _progress) return;
         _progress = progress;
         StateHasChanged();
     }
