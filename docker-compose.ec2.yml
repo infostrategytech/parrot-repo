@@ -112,6 +112,8 @@ services:
         create messages.outbound 24
         create messages.outbound.dlq 3
         create agent.events 6
+        create ai.reply.requested 24
+        create ai.reply.requested.dlq 3
         create business.knowledge.sources 6
         create catalog.events 3
         create catalog.items 3
@@ -216,7 +218,7 @@ services:
       FacebookOAuth__AppId: ${FACEBOOK_APP_ID:-}
       FacebookOAuth__AppSecret: ${FACEBOOK_APP_SECRET:-}
       Anthropic__ApiKey: ${ANTHROPIC_API_KEY:-}
-      # Checkouts (create_checkout), paid through the platform's Accelerate account. Without
+      # Checkouts (create_cart), paid through the platform's Accelerate account. Without
       # the public and secret keys checkouts are still made but Pay is refused; without the
       # client secret (from Accelerate support) webhooks are refused and nothing is marked paid.
       FeatureFlags__PaymentLinks: ${PAYMENT_LINKS_ENABLED:-true}

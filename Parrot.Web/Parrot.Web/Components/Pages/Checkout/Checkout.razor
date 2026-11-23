@@ -85,7 +85,10 @@
                             <li class="checkout__line">
                                 <div class="checkout__item">
                                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" Prose>@line.Name</Typography>
-                                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="checkout__muted">@Detail(line)</Typography>
+                                    @if (Detail(view, line) is { } detail)
+                                    {
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="checkout__muted">@detail</Typography>
+                                    }
                                 </div>
                                 <div class="checkout__price">
                                     @if (line.UnitPrice is not { } price)
@@ -108,6 +111,31 @@
                                 @if (!string.IsNullOrWhiteSpace(line.Problem))
                                 {
                                     <div class="checkout__problem"><InlineError Message="@line.Problem" /></div>
+                                }
+                                @if (Editable(view, line))
+                                {
+                                    @* How many: down to one, up to what's left; out takes the item off. While a change is
+                                       saving, every control waits for it, Pay included. *@
+                                    <div class="checkout__qty" role="group" aria-label="@($"How many {line.Name}")">
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-label="@($"One fewer {line.Name}")"
+                                                disabled="@(_changing || line.Quantity <= 1)" @onclick="() => SetQuantityAsync(line, line.Quantity - 1)">
+                                            <IconLeft><Icon Name="IconName.RiSubtractFill" Size="IconSize.Sm" /></IconLeft>
+                                        </Button>
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="checkout__qty-count" aria-live="polite">@line.Quantity</Typography>
+                                        <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" aria-label="@($"One more {line.Name}")"
+                                                title="@(line.Quantity >= line.MaxQuantity ? "No more available" : null)"
+                                                disabled="@(_changing || line.Quantity >= line.MaxQuantity)" @onclick="() => SetQuantityAsync(line, line.Quantity + 1)">
+                                            <IconLeft><Icon Name="IconName.RiAddFill" Size="IconSize.Sm" /></IconLeft>
+                                        </Button>
+                                        @if (view.Lines.Count > 1)
+                                        {
+                                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="checkout__remove" aria-label="@($"Remove {line.Name}")"
+                                                    disabled="@_changing" @onclick="() => SetQuantityAsync(line, 0)">
+                                                <IconLeft><Icon Name="IconName.RiDeleteBin6Fill" Size="IconSize.Sm" /></IconLeft>
+                                                <ChildContent>Remove</ChildContent>
+                                            </Button>
+                                        }
+                                    </div>
                                 }
                             </li>
                         }
@@ -163,7 +191,7 @@
                     }
                     else
                     {
-                        <Button Size="ButtonSize.Large" FullWidth Busy="_paying" disabled="@(!view.CanPay || _paying)" @onclick="PayAsync">
+                        <Button Size="ButtonSize.Large" FullWidth Busy="_paying" disabled="@(!view.CanPay || _paying || _changing)" @onclick="PayAsync">
                             <IconLeft><Icon Name="IconName.RiLock2Fill" /></IconLeft>
                             <ChildContent>@($"Pay {Money(view.Total)}")</ChildContent>
                         </Button>
@@ -192,7 +220,7 @@
     private bool _waiting, _unconfirmed;
 
     private CheckoutView? _view;
-    private bool _invalid, _loading, _paying;
+    private bool _invalid, _loading, _paying, _changing;
     private string? _loadError, _payError, _notice;
 
     // Read after the first render, as the invite page does: the browser's time zone is known only then.
@@ -291,6 +319,33 @@
         _paying = false;
     }
 
+    // One item's new quantity (0 takes it out), sent with every other item as it is. The answer is the checkout as
+    // it is now, priced again; when the change can't be made (not enough left), the checkout stays as it was and says why.
+    private async Task SetQuantityAsync(CheckoutLine changed, int quantity)
+    {
+        if (_view is not { } view || _changing || _paying) return;
+        _changing = true; _payError = null; _notice = null;
+        try
+        {
+            var items = view.Lines.Where(l => l.ProductId is not null)
+                .Select(l => new CheckoutItemChange(l.ProductId!.Value, l.VariantId, ReferenceEquals(l, changed) ? quantity : l.Quantity))
+                .ToList();
+            var result = await Checkouts.ChangeAsync(Token, items);
+            _view = result.Checkout;
+            _notice = result.Message;
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.TooManyRequests) { _payError = "Too many changes. Wait a minute, then try again."; }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.NotFound) { _view = null; _invalid = true; }
+        catch (ApiException exception) when (exception.StatusCode == System.Net.HttpStatusCode.ServiceUnavailable) { _payError = exception.UserMessage; }
+        catch (HttpRequestException exception) when (exception.StatusCode is null) { _payError = "We couldn't reach the checkout. Check your internet connection and try again."; }
+        catch (HttpRequestException) { _payError = "Something went wrong on our side. Try again in a moment."; }
+        _changing = false;
+    }
+
+    // Open and not on its way to being paid: the customer can still change how many they want.
+    private bool Editable(CheckoutView view, CheckoutLine line) =>
+        view.State == "open" && !_waiting && line.ProductId is not null && line.MaxQuantity is not null;
+
     // A whole page load: the payment page is another site.
     private void Go(string? url)
     {
@@ -299,8 +354,10 @@
 
     private string Money(decimal amount) => CheckoutMoney.Format(amount, _view?.Currency);
 
-    private static string Detail(CheckoutLine line) =>
-        string.IsNullOrWhiteSpace(line.VariantName) ? $"Qty {line.Quantity}" : $"{line.VariantName} · Qty {line.Quantity}";
+    // The quantity is in the stepper while it can be changed; otherwise it's written here.
+    private string? Detail(CheckoutView view, CheckoutLine line) =>
+        Editable(view, line) ? (string.IsNullOrWhiteSpace(line.VariantName) ? null : line.VariantName)
+        : string.IsNullOrWhiteSpace(line.VariantName) ? $"Qty {line.Quantity}" : $"{line.VariantName} · Qty {line.Quantity}";
 
     private static bool Ended(string state) => state is "paid" or "expired" or "replaced" or "unavailable";
 

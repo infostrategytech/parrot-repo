@@ -39,6 +39,37 @@ public sealed record CheckoutResult(
     DateTime? ExpiresAt,
     [property: JsonPropertyName("for_the_agent")] string Guidance);
 
+/// <summary>One line of a cart as the agent sees it: the ids to pass create_cart again, and today's price.</summary>
+public sealed record CartLine(
+    Guid ProductId,
+    Guid? VariantId,
+    string Name,
+    string? VariantName,
+    int Quantity,
+    decimal QuotedUnitPrice,
+    decimal? UnitPrice,
+    decimal? LineTotal,
+    bool PriceChanged,
+    string? Problem);
+
+/// <summary>
+/// A cart as it stands, for the agent: its state (open, paying, paid, expired, replaced or unavailable),
+/// its items at today's prices while it's open, and whether the customer can pay it as it is.
+/// </summary>
+public sealed record CartStatus(
+    Guid OrderId,
+    string State,
+    IReadOnlyList<CartLine> Items,
+    decimal Total,
+    decimal QuotedTotal,
+    string Currency,
+    bool PriceChanged,
+    bool CanPay,
+    string? Problem,
+    string? CheckoutUrl,
+    DateTime? ExpiresAt,
+    [property: JsonPropertyName("for_the_agent")] string Guidance);
+
 /// <summary>Where a checkout is, for the customer's page.</summary>
 public static class CheckoutState
 {
@@ -62,6 +93,8 @@ public static class CheckoutState
 /// <summary>
 /// One line on the checkout page. quoted_unit_price is what the agent quoted; unit_price is the
 /// live price (null when it can't be had). problem says why it can't be paid as it stands.
+/// productId and variantId name it when the customer changes its quantity; maxQuantity is the most
+/// they can have while the checkout is open (null once it isn't).
 /// </summary>
 public sealed record CheckoutLineView(
     string Name,
@@ -71,7 +104,13 @@ public sealed record CheckoutLineView(
     decimal? UnitPrice,
     decimal? LineTotal,
     bool PriceChanged,
-    string? Problem);
+    string? Problem,
+    Guid? ProductId = null,
+    Guid? VariantId = null,
+    int? MaxQuantity = null);
+
+/// <summary>The customer's cart as they want it: every item they're keeping, with how many. Items left out are taken out.</summary>
+public sealed record ChangeCheckoutRequest(IReadOnlyList<CheckoutItem> Items);
 
 /// <summary>
 /// The customer's checkout page. total is what Pay will charge; quoted_total what the agent said.

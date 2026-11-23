@@ -87,6 +87,49 @@ public sealed class EfPaymentOrderRepository(IDbContextFactory<ApplicationDbCont
         return changed == 1;
     }
 
+    public async Task<PaymentOrder?> FindOpenCartAsync(string workspaceId, Guid connectionId, string sender, DateTime now, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        return await db.PaymentOrders.AsNoTracking()
+            .Where(o => o.WorkspaceId == workspaceId && o.ConnectionId == connectionId && o.CustomerSender == sender
+                && o.Status == PaymentOrderStatus.AwaitingCheckout && o.PaidAt == null && o.ExpiresAt > now)
+            .OrderByDescending(o => o.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<PaymentOrder?> FindLatestCartAsync(string workspaceId, Guid connectionId, string sender, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        return await db.PaymentOrders.AsNoTracking()
+            .Where(o => o.WorkspaceId == workspaceId && o.ConnectionId == connectionId && o.CustomerSender == sender)
+            .OrderByDescending(o => o.CreatedAt)
+            .FirstOrDefaultAsync(ct);
+    }
+
+    public async Task<bool> TryReplaceCartAsync(PaymentOrder order, DateTime readAt, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        List<PaymentOrderLine> lines = [.. order.Lines];
+        int changed = await db.PaymentOrders
+            .Where(o => o.Id == order.Id && o.WorkspaceId == order.WorkspaceId && o.Status == PaymentOrderStatus.AwaitingCheckout
+                && o.PaidAt == null && o.UpdatedAt == readAt)
+            .ExecuteUpdateAsync(set => set
+                .SetProperty(o => o.Lines, lines)
+                .SetProperty(o => o.TotalMinor, order.TotalMinor)
+                .SetProperty(o => o.QuotedTotalMinor, order.QuotedTotalMinor)
+                .SetProperty(o => o.Reference, order.Reference)
+                .SetProperty(o => o.HoldMode, order.HoldMode)
+                .SetProperty(o => o.AgentId, order.AgentId)
+                .SetProperty(o => o.CustomerName, order.CustomerName)
+                .SetProperty(o => o.CustomerEmail, order.CustomerEmail)
+                .SetProperty(o => o.CustomerPhone, order.CustomerPhone)
+                .SetProperty(o => o.Note, order.Note)
+                .SetProperty(o => o.CheckoutExpiresAt, order.CheckoutExpiresAt)
+                .SetProperty(o => o.ExpiresAt, order.ExpiresAt)
+                .SetProperty(o => o.UpdatedAt, order.UpdatedAt), ct);
+        return changed == 1;
+    }
+
     public async Task<IReadOnlyList<PaymentOrder>> CancelOpenAsync(string workspaceId, Guid connectionId, string sender, Guid keep, DateTime at, CancellationToken ct)
     {
         await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);

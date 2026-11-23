@@ -39,6 +39,33 @@ public sealed class CheckoutController(CheckoutService checkouts) : ControllerBa
         }
     }
 
+    [HttpPut("{token}/items")]
+    [EndpointSummary("Change the cart: a quantity up or down, or an item out")]
+    [EndpointDescription("Send every item being kept with how many ({ items: [{ productId, variantId, quantity }] }); an item left out, or with quantity 0, is taken out. Only items already in the checkout, each up to the line's maxQuantity, and at least one must stay. Prices are read live. Answers with the checkout as it is now; 409 with the checkout unchanged and a message when it can't be changed (paying already, not enough left, every item taken out).")]
+    [ProducesResponseType(typeof(CheckoutView), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(CheckoutChangedResponse), StatusCodes.Status409Conflict)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status503ServiceUnavailable)]
+    public async Task<IActionResult> Change(string token, [FromBody] ChangeCheckoutRequest request, CancellationToken ct)
+    {
+        try
+        {
+            return Ok(await checkouts.ChangeAsync(token, request, ct));
+        }
+        catch (CheckoutNotFoundException ex)
+        {
+            throw new NotFoundException(ex.Message);
+        }
+        catch (CheckoutChangedException ex)
+        {
+            return Conflict(new CheckoutChangedResponse("CHECKOUT_NOT_CHANGED", ex.Message, ex.View));
+        }
+        catch (CheckoutUnavailableException ex)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ErrorResponse { ErrorCode = "CHECKOUT_UNAVAILABLE", Message = ex.Message });
+        }
+    }
+
     [HttpPost("{token}/pay")]
     [EndpointSummary("Press Pay: make the payment link")]
     [EndpointDescription("Send the total the page showed (expectedTotal). If anything changed since (a price, an item sold out), the answer is 409 with the checkout as it is now, so the page can show it and ask again. Pressing Pay again while the payment link is open returns the same link.")]

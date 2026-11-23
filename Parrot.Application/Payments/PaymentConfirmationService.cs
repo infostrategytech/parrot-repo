@@ -287,7 +287,7 @@ public sealed partial class PaymentConfirmationService(
         }
 
         PaymentOrder order = found
-            ?? throw new CheckoutRefusedException("There's no such order for this business. Pass the order_id create_checkout returned (a UUID such as 70c1f69c-3815-40b6-ab11-2ce6b7eb6577).");
+            ?? throw new CheckoutRefusedException("There's no such order for this business. Pass the order_id create_cart returned (a UUID such as 70c1f69c-3815-40b6-ab11-2ce6b7eb6577).");
 
         // A checkout or link whose time is up reads as expired straight away, even before the sweep marks it.
         PaymentOrderStatus status = order.Status is PaymentOrderStatus.Pending or PaymentOrderStatus.AwaitingCheckout && order.ExpiresAt <= Now ? PaymentOrderStatus.Expired : order.Status;
@@ -300,8 +300,8 @@ public sealed partial class PaymentConfirmationService(
             PaymentOrderStatus.Paid => ("paid", "The payment arrived. Thank the customer; the business will be in touch about delivery."),
             PaymentOrderStatus.PaidOutOfStock => ("paid_needs_attention", "The payment arrived, but some items had sold out by then. Tell the customer the business will contact them to sort it out. Don't promise a refund or delivery."),
             PaymentOrderStatus.NeedsAttention => ("paid_needs_attention", "A payment arrived that doesn't match the order. Tell the customer the business will check it and get back to them."),
-            PaymentOrderStatus.Expired => ("expired", "The checkout's time ran out unpaid and the items were let go. If the customer still wants them, check get_prices and make a new checkout."),
-            PaymentOrderStatus.Cancelled => ("replaced", "A newer checkout replaced this one. Send the newer checkout link."),
+            PaymentOrderStatus.Expired => ("expired", "The checkout's time ran out unpaid and the items were let go. If the customer still wants them, check get_prices and call create_cart again."),
+            PaymentOrderStatus.Cancelled => ("replaced", "A newer cart replaced this one. Send the newer checkout link."),
             _ => ("not_sent", "This checkout couldn't be made or paid. Make a new one if the customer still wants the items."),
         };
 

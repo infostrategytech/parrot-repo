@@ -54,6 +54,11 @@
 .checkout__price { display: grid; gap: var(--spacing-2xs); justify-items: end; text-align: end; white-space: nowrap; }
 .checkout__problem { grid-column: 1 / -1; }
 
+/* How many: fewer, the count, more, and Remove at the far end. Under the item, across the row. */
+.checkout__qty { grid-column: 1 / -1; display: flex; align-items: center; gap: var(--spacing-sm); }
+.checkout__panel ::deep .checkout__qty-count { min-width: var(--spacing-2xl); text-align: center; font-variant-numeric: tabular-nums; }
+.checkout__panel ::deep .checkout__remove { margin-inline-start: auto; }
+
 .checkout__total {
   display: flex;
   align-items: center;
