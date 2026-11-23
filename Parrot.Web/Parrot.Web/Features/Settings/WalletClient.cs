@@ -10,12 +10,15 @@ namespace Parrot.Web.Features.Settings;
 public sealed record Wallet(decimal Balance, string Currency, decimal TotalIn, decimal TotalOut, DateTime? UpdatedAt);
 
 /// <summary>
-/// One movement in the wallet. Direction is "Credit" (money in) or "Debit" (money out); Kind is "Payment", "Fee",
-/// "Payout" or "Adjustment". BalanceAfter is the balance just after it.
+/// One movement in the wallet. Type is "Credit" (money in) or "Debit" (money out); Status is "Success", or "Failed"
+/// (on record, but the balance didn't move); Kind is "Payment", "Fee", "Payout" or "Adjustment". ActionBy is who made
+/// it happen (a user id, or a system actor such as "system:accelerate"), ByName the same in words. BalanceAfter is the
+/// balance just after it.
 /// </summary>
 public sealed record WalletEntry(
     Guid Id,
-    string Direction,
+    string Type,
+    string Status,
     string Kind,
     decimal Amount,
     decimal BalanceAfter,
@@ -24,9 +27,12 @@ public sealed record WalletEntry(
     string Reference,
     Guid? OrderId,
     string? ProviderTransactionId,
+    string ActionBy,
+    string ByName,
     DateTime CreatedAt)
 {
-    public bool IsCredit => string.Equals(Direction, "Credit", StringComparison.OrdinalIgnoreCase);
+    public bool IsCredit => string.Equals(Type, "Credit", StringComparison.OrdinalIgnoreCase);
+    public bool Failed => string.Equals(Status, "Failed", StringComparison.OrdinalIgnoreCase);
 }
 
 /// <summary>A page of the wallet's movements, newest first.</summary>
@@ -50,11 +56,13 @@ public sealed class WalletClient(HttpClient http, AuthState authState)
         return await ReadAsync<Wallet>(response);
     }
 
-    /// <summary>A page of movements; <paramref name="direction"/> "Credit" or "Debit" for one way only, null for both.</summary>
-    public async Task<WalletEntries> EntriesAsync(int page, string? direction = null)
+    /// <summary>A page of movements; <paramref name="type"/> "Credit" or "Debit" for one way only, <paramref name="status"/>
+    /// "Success" or "Failed" for one outcome only; null for all.</summary>
+    public async Task<WalletEntries> EntriesAsync(int page, string? type = null, string? status = null)
     {
         string path = $"api/payments/wallet/transactions?page={page.ToString(CultureInfo.InvariantCulture)}&pageSize={PageSize.ToString(CultureInfo.InvariantCulture)}";
-        if (!string.IsNullOrWhiteSpace(direction)) path += "&direction=" + Uri.EscapeDataString(direction);
+        if (!string.IsNullOrWhiteSpace(type)) path += "&type=" + Uri.EscapeDataString(type);
+        if (!string.IsNullOrWhiteSpace(status)) path += "&status=" + Uri.EscapeDataString(status);
         using HttpRequestMessage request = Authorized(path);
         using HttpResponseMessage response = await http.SendAsync(request);
         return await ReadAsync<WalletEntries>(response);

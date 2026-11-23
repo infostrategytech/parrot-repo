@@ -30,22 +30,27 @@ public sealed class EfWalletRepository(ApplicationDbContext db) : IWalletReposit
     public async Task<WalletTotals> TotalsAsync(string workspaceId, CancellationToken ct)
     {
         var sums = await db.WalletTransactions.AsNoTracking()
-            .Where(t => t.WorkspaceId == workspaceId)
-            .GroupBy(t => t.Direction)
-            .Select(g => new { Direction = g.Key, Sum = g.Sum(t => t.AmountMinor) })
+            .Where(t => t.WorkspaceId == workspaceId && t.Status == WalletTransactionStatus.Success)
+            .GroupBy(t => t.Type)
+            .Select(g => new { Type = g.Key, Sum = g.Sum(t => t.AmountMinor) })
             .ToListAsync(ct);
         return new WalletTotals(
-            sums.Where(s => s.Direction == WalletDirection.Credit).Sum(s => s.Sum),
-            sums.Where(s => s.Direction == WalletDirection.Debit).Sum(s => s.Sum));
+            sums.Where(s => s.Type == WalletTransactionType.Credit).Sum(s => s.Sum),
+            sums.Where(s => s.Type == WalletTransactionType.Debit).Sum(s => s.Sum));
     }
 
     public async Task<(IReadOnlyList<WalletTransaction> Items, int Total)> ListTransactionsAsync(
-        string workspaceId, WalletDirection? direction, int skip, int take, CancellationToken ct)
+        string workspaceId, WalletTransactionFilter filter, int skip, int take, CancellationToken ct)
     {
         IQueryable<WalletTransaction> query = db.WalletTransactions.AsNoTracking().Where(t => t.WorkspaceId == workspaceId);
-        if (direction is { } only)
+        if (filter.Type is { } type)
         {
-            query = query.Where(t => t.Direction == only);
+            query = query.Where(t => t.Type == type);
+        }
+
+        if (filter.Status is { } status)
+        {
+            query = query.Where(t => t.Status == status);
         }
 
         int total = await query.CountAsync(ct);

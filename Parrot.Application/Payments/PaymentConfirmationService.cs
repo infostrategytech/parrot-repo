@@ -351,8 +351,10 @@ public sealed partial class PaymentConfirmationService(
         return new WalletTransaction
         {
             WorkspaceId = order.WorkspaceId,
-            Direction = WalletDirection.Credit,
+            Type = WalletTransactionType.Credit,
+            Status = WalletTransactionStatus.Success,
             Kind = WalletTransactionKind.Payment,
+            ActionBy = WalletTransaction.AccelerateActor,
             AmountMinor = paidMinor,
             Currency = order.Currency,
             Reference = order.Reference,

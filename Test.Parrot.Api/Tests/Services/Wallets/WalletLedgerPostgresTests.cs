@@ -93,8 +93,9 @@ public sealed class WalletLedgerPostgresTests : IAsyncLifetime
     private static WalletTransaction Credit(PaymentOrder order, string? workspace = null) => new()
     {
         WorkspaceId = workspace ?? order.WorkspaceId,
-        Direction = WalletDirection.Credit,
+        Type = WalletTransactionType.Credit,
         Kind = WalletTransactionKind.Payment,
+        ActionBy = WalletTransaction.AccelerateActor,
         AmountMinor = order.TotalMinor,
         Reference = order.Reference,
         PaymentOrderId = order.Id,
@@ -123,8 +124,9 @@ public sealed class WalletLedgerPostgresTests : IAsyncLifetime
         (long balance, List<WalletTransaction> entries) = await WalletAsync("ws-1");
         Assert.Equal(800_000, balance);
         WalletTransaction saved = Assert.Single(entries);
-        Assert.Equal((WalletDirection.Credit, WalletTransactionKind.Payment, 800_000L, 800_000L, order.Reference, (Guid?)order.Id),
-            (saved.Direction, saved.Kind, saved.AmountMinor, saved.BalanceAfterMinor, saved.Reference, saved.PaymentOrderId));
+        Assert.Equal((WalletTransactionType.Credit, WalletTransactionStatus.Success, WalletTransactionKind.Payment, 800_000L, 800_000L),
+            (saved.Type, saved.Status, saved.Kind, saved.AmountMinor, saved.BalanceAfterMinor));
+        Assert.Equal((order.Reference, (Guid?)order.Id, WalletTransaction.AccelerateActor), (saved.Reference, saved.PaymentOrderId, saved.ActionBy));
     }
 
     [ConnectionMessageReceiptPostgresTests.PostgresFact]
@@ -163,6 +165,25 @@ public sealed class WalletLedgerPostgresTests : IAsyncLifetime
     }
 
     [ConnectionMessageReceiptPostgresTests.PostgresFact]
+    public async Task A_failed_entry_is_on_record_but_moves_nothing()
+    {
+        PaymentOrder paid = await PendingAsync(total: 300_000);
+        PaymentOrder failed = await PendingAsync(total: 500_000);
+        Assert.True(await Orders().TryRecordPaymentAsync(PaidCopy(paid), PaymentOrderStatus.Pending, Credit(paid), default));
+        WalletTransaction notThrough = Credit(failed);
+        notThrough.Status = WalletTransactionStatus.Failed;
+
+        Assert.True(await Orders().TryRecordPaymentAsync(PaidCopy(failed), PaymentOrderStatus.Pending, notThrough, default));
+
+        Assert.Equal(300_000, notThrough.BalanceAfterMinor);
+        (long balance, List<WalletTransaction> entries) = await WalletAsync("ws-1");
+        Assert.Equal((300_000L, 2), (balance, entries.Count));
+        await using ApplicationDbContext read = new(_options!);
+        WalletResponse wallet = await new WalletService(new EfWalletRepository(read)).GetAsync("ws-1", default);
+        Assert.Equal((3_000m, 3_000m), (wallet.Balance, wallet.TotalIn));
+    }
+
+    [ConnectionMessageReceiptPostgresTests.PostgresFact]
     public async Task When_the_credit_cant_be_saved_the_order_stays_unpaid()
     {
         PaymentOrder order = await PendingAsync();
@@ -193,8 +214,16 @@ public sealed class WalletLedgerPostgresTests : IAsyncLifetime
         {
             db.WalletTransactions.Add(new WalletTransaction
             {
-                WorkspaceId = "ws-1", Direction = WalletDirection.Debit, Kind = WalletTransactionKind.Payout, AmountMinor = 50_000,
-                BalanceAfterMinor = 300_050, Reference = "payout-1", Description = "Paid out to the business", CreatedAt = DateTime.UtcNow.AddSeconds(5),
+                WorkspaceId = "ws-1", Type = WalletTransactionType.Debit, Kind = WalletTransactionKind.Payout, AmountMinor = 50_000,
+                BalanceAfterMinor = 300_050, Reference = "payout-1", Description = "Paid out to the business", ActionBy = "owner",
+                CreatedAt = DateTime.UtcNow.AddSeconds(5),
+            });
+            // A payout that didn't go through: on record, counted nowhere.
+            db.WalletTransactions.Add(new WalletTransaction
+            {
+                WorkspaceId = "ws-1", Type = WalletTransactionType.Debit, Status = WalletTransactionStatus.Failed, Kind = WalletTransactionKind.Payout,
+                AmountMinor = 70_000, BalanceAfterMinor = 300_050, Reference = "payout-2", Description = "Payout refused by the bank", ActionBy = "owner",
+                CreatedAt = DateTime.UtcNow.AddSeconds(6),
             });
             await db.WorkspaceWallets.Where(w => w.WorkspaceId == "ws-1").ExecuteUpdateAsync(s => s.SetProperty(w => w.BalanceMinor, 300_050));
             await db.SaveChangesAsync();
@@ -206,26 +235,32 @@ public sealed class WalletLedgerPostgresTests : IAsyncLifetime
         WalletResponse wallet = await wallets.GetAsync("ws-1", default);
         Assert.Equal((3_000.50m, "NGN", 3_500.50m, 500m), (wallet.Balance, wallet.Currency, wallet.TotalIn, wallet.TotalOut));
 
-        WalletTransactionsPage page = await wallets.ListAsync("ws-1", null, 1, 2, default);
-        Assert.Equal((3, 2), (page.Total, page.Items.Count));
-        Assert.Equal([WalletDirection.Debit, WalletDirection.Credit], page.Items.Select(i => i.Direction));
-        Assert.Equal([500m, 2_500.50m], page.Items.Select(i => i.Amount));
+        WalletTransactionsPage page = await wallets.ListAsync("ws-1", new WalletTransactionFilter(), 1, 2, default);
+        Assert.Equal((4, 2), (page.Total, page.Items.Count));
+        Assert.Equal([WalletTransactionStatus.Failed, WalletTransactionStatus.Success], page.Items.Select(i => i.Status));
+        Assert.Equal([700m, 500m], page.Items.Select(i => i.Amount));
+        Assert.Equal(("owner", "A team member"), (page.Items[1].ActionBy, page.Items[1].ByName));
 
-        WalletTransactionsPage moneyIn = await wallets.ListAsync("ws-1", WalletDirection.Credit, 1, 20, default);
+        WalletTransactionsPage failed = await wallets.ListAsync("ws-1", new WalletTransactionFilter(Status: WalletTransactionStatus.Failed), 1, 20, default);
+        Assert.Equal("payout-2", Assert.Single(failed.Items).Reference);
+
+        WalletTransactionsPage moneyIn = await wallets.ListAsync("ws-1", new WalletTransactionFilter(WalletTransactionType.Credit), 1, 20, default);
         Assert.Equal([second.Reference, first.Reference], moneyIn.Items.Select(i => i.Reference));
-        Assert.All(moneyIn.Items, i => Assert.Equal(WalletTransactionKind.Payment, i.Kind));
+        Assert.All(moneyIn.Items, i => Assert.Equal((WalletTransactionKind.Payment, "Accelerate (payment received)"), (i.Kind, i.ByName)));
 
         Assert.Equal(9_999m, (await wallets.GetAsync("ws-2", default)).Balance);
     }
 
     [Fact]
-    public void Directions_and_kinds_go_out_as_their_names_as_the_dashboard_reads_them()
+    public void Types_statuses_and_kinds_go_out_as_their_names_as_the_dashboard_reads_them()
     {
-        WalletTransactionResponse entry = new(Guid.Empty, WalletDirection.Debit, WalletTransactionKind.Payout, 5m, 0m, "NGN", "x", "r", null, null, DateTime.UnixEpoch);
+        WalletTransactionResponse entry = new(Guid.Empty, WalletTransactionType.Debit, WalletTransactionStatus.Failed, WalletTransactionKind.Payout,
+            5m, 0m, "NGN", "x", "r", null, null, "owner", "A team member", DateTime.UnixEpoch);
 
         string json = System.Text.Json.JsonSerializer.Serialize(entry, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web));
 
-        Assert.Contains("\"direction\":\"Debit\"", json);
+        Assert.Contains("\"type\":\"Debit\"", json);
+        Assert.Contains("\"status\":\"Failed\"", json);
         Assert.Contains("\"kind\":\"Payout\"", json);
     }
 }

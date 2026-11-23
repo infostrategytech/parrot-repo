@@ -19,14 +19,16 @@ public class WalletTests
         {
             new
             {
-                id = Guid.NewGuid(), direction = "Debit", kind = "Payout", amount = 500m, balanceAfter = 3000.50m, currency = "NGN",
+                id = Guid.NewGuid(), type = "Debit", status = "Failed", kind = "Payout", amount = 500m, balanceAfter = 3000.50m, currency = "NGN",
                 description = "Paid out to the business", reference = "payout-1", orderId = (Guid?)null, providerTransactionId = (string?)null,
+                actionBy = "owner-id", byName = "A team member",
                 createdAt = "2026-11-23T10:00:00Z",
             },
             new
             {
-                id = Guid.NewGuid(), direction = "Credit", kind = "Payment", amount = 2500.50m, balanceAfter = 3500.50m, currency = "NGN",
+                id = Guid.NewGuid(), type = "Credit", status = "Success", kind = "Payment", amount = 2500.50m, balanceAfter = 3500.50m, currency = "NGN",
                 description = "Payment from Ada for 1 x Zobo (50cl)", reference = "prt_abc", orderId = (Guid?)Guid.NewGuid(), providerTransactionId = "txn-1",
+                actionBy = "system:accelerate", byName = "Accelerate (payment received)",
                 createdAt = "2026-11-23T09:00:00Z",
             },
         },
@@ -44,15 +46,17 @@ public class WalletTests
     }
 
     [Fact]
-    public async Task TransactionsAreAskedForAPageAndOneWayOnly()
+    public async Task TransactionsAreAskedForAPageAndOneTypeAndStatusOnly()
     {
         var (client, handler) = Client(Entries);
 
-        var page = await client.EntriesAsync(2, "Credit");
+        var page = await client.EntriesAsync(2, "Credit", "Success");
 
-        Assert.Equal("/api/payments/wallet/transactions?page=2&pageSize=20&direction=Credit", handler.Path);
+        Assert.Equal("/api/payments/wallet/transactions?page=2&pageSize=20&type=Credit&status=Success", handler.Path);
         Assert.Equal((41, 3), (page.Total, page.Pages));
         Assert.Equal([false, true], page.Items.Select(i => i.IsCredit));
+        Assert.Equal([true, false], page.Items.Select(i => i.Failed));
+        Assert.Equal("system:accelerate", page.Items[1].ActionBy);
 
         await client.EntriesAsync(1);
         Assert.Equal("/api/payments/wallet/transactions?page=1&pageSize=20", handler.Path);
@@ -70,8 +74,8 @@ public class WalletTests
     [Fact]
     public void MoneyReadsWithItsSignAndInNaira()
     {
-        WalletEntry payment = new(Guid.NewGuid(), "Credit", "Payment", 8000m, 8000m, "NGN", "x", "prt_1", null, null, DateTime.UtcNow);
-        WalletEntry payout = payment with { Direction = "Debit", Kind = "Payout", Amount = 1500.5m };
+        WalletEntry payment = new(Guid.NewGuid(), "Credit", "Success", "Payment", 8000m, 8000m, "NGN", "x", "prt_1", null, null, "system:accelerate", "Accelerate", DateTime.UtcNow);
+        WalletEntry payout = payment with { Type = "Debit", Kind = "Payout", Amount = 1500.5m };
 
         Assert.Equal("+₦8,000.00", WalletText.Signed(payment));
         Assert.Equal("−₦1,500.50", WalletText.Signed(payout));

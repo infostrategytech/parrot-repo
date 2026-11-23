@@ -33,10 +33,11 @@ public sealed class WalletController(WalletService wallets) : ControllerBase
     [HttpGet("transactions")]
     [RequirePermission(WorkspacePermissions.WorkspaceManage)]
     [EndpointSummary("This workspace's wallet ledger")]
-    [EndpointDescription("Every movement in and out, newest first. direction: Credit (money in) or Debit (money out), to show one way only. kind says why: Payment (a customer paid an order), Fee, Payout or Adjustment. balanceAfter is the balance just after each one. page starts at 1; pageSize up to 100 (default 20).")]
+    [EndpointDescription("Every movement in and out, newest first. Each has a type (Credit: money in; Debit: money out), a status (Success, or Failed: on record but the balance didn't move), a kind (Payment: a customer paid an order; Fee, Payout or Adjustment), who made it happen (actionBy: a user id, or a system actor such as system:accelerate; byName in words) and the balance just after it. Filter with type and status. page starts at 1; pageSize up to 100 (default 20).")]
     [ProducesResponseType(typeof(WalletTransactionsPage), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ErrorResponse), StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<WalletTransactionsPage>> Transactions(
-        [FromQuery] WalletDirection? direction, [FromQuery] int page = 1, [FromQuery] int pageSize = WalletService.DefaultPageSize, CancellationToken ct = default) =>
-        Ok(await wallets.ListAsync(WorkspaceId, direction, page, pageSize, ct));
+        [FromQuery] WalletTransactionType? type, [FromQuery] WalletTransactionStatus? status,
+        [FromQuery] int page = 1, [FromQuery] int pageSize = WalletService.DefaultPageSize, CancellationToken ct = default) =>
+        Ok(await wallets.ListAsync(WorkspaceId, new WalletTransactionFilter(type, status), page, pageSize, ct));
 }

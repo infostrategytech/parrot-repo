@@ -17,7 +17,9 @@ namespace Parrot.Infrastructure.Migrations
                 {
                     Id = table.Column<Guid>(type: "uuid", nullable: false),
                     WorkspaceId = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
-                    Direction = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Type = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    Status = table.Column<string>(type: "character varying(16)", maxLength: 16, nullable: false),
+                    ActionBy = table.Column<string>(type: "character varying(450)", maxLength: 450, nullable: false),
                     Kind = table.Column<string>(type: "character varying(32)", maxLength: 32, nullable: false),
                     AmountMinor = table.Column<long>(type: "bigint", nullable: false),
                     BalanceAfterMinor = table.Column<long>(type: "bigint", nullable: false),
@@ -52,8 +54,8 @@ namespace Parrot.Infrastructure.Migrations
                 column: "Reference",
                 unique: true);
 
-            // Orders paid before the ledger: each becomes a credit, in the order it was paid, and every wallet's
-            // balance becomes the sum of its credits. A workspace without a wallet yet gets one first.
+            // Orders paid before the ledger: each becomes a successful credit made by Accelerate, in the order it was
+            // paid, and every wallet's balance becomes the sum of its credits. A workspace without a wallet gets one.
             migrationBuilder.Sql(
                 """
                 INSERT INTO "WorkspaceWallets" ("WorkspaceId", "Currency", "BalanceMinor", "CreatedAt")
@@ -62,12 +64,13 @@ namespace Parrot.Infrastructure.Migrations
                 WHERE o."PaidAt" IS NOT NULL AND o."PaidMinor" > 0
                 ON CONFLICT ("WorkspaceId") DO NOTHING;
 
-                INSERT INTO "WalletTransactions" ("Id", "WorkspaceId", "Direction", "Kind", "AmountMinor", "BalanceAfterMinor", "Currency",
-                    "Reference", "PaymentOrderId", "ProviderTransactionId", "Description", "CreatedAt")
-                SELECT gen_random_uuid(), o."WorkspaceId", 'Credit', 'Payment', o."PaidMinor",
+                INSERT INTO "WalletTransactions" ("Id", "WorkspaceId", "Type", "Status", "Kind", "AmountMinor", "BalanceAfterMinor", "Currency",
+                    "Reference", "PaymentOrderId", "ProviderTransactionId", "Description", "ActionBy", "CreatedAt")
+                SELECT gen_random_uuid(), o."WorkspaceId", 'Credit', 'Success', 'Payment', o."PaidMinor",
                     SUM(o."PaidMinor") OVER (PARTITION BY o."WorkspaceId" ORDER BY o."PaidAt", o."Id"),
                     o."Currency", o."Reference", o."Id", o."ProviderTransactionId",
                     'Payment from ' || COALESCE(NULLIF(BTRIM(o."CustomerName"), ''), 'a customer'),
+                    'system:accelerate',
                     o."PaidAt"
                 FROM "PaymentOrders" o
                 WHERE o."PaidAt" IS NOT NULL AND o."PaidMinor" > 0
@@ -76,7 +79,7 @@ namespace Parrot.Infrastructure.Migrations
                 UPDATE "WorkspaceWallets" w
                 SET "BalanceMinor" = t.total, "UpdatedAt" = t.latest
                 FROM (SELECT "WorkspaceId", SUM("AmountMinor") AS total, MAX("CreatedAt") AS latest
-                      FROM "WalletTransactions" GROUP BY "WorkspaceId") t
+                      FROM "WalletTransactions" WHERE "Status" = 'Success' GROUP BY "WorkspaceId") t
                 WHERE w."WorkspaceId" = t."WorkspaceId";
                 """);
         }

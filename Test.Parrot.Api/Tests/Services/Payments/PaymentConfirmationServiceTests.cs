@@ -74,8 +74,9 @@ public sealed class PaymentConfirmationServiceTests
 
         // The money is in the business's wallet, once, against the order's reference.
         WalletTransaction credit = Assert.Single(_orders.Credits);
-        Assert.Equal((Ws, WalletDirection.Credit, WalletTransactionKind.Payment, 800_000L, 800_000L),
-            (credit.WorkspaceId, credit.Direction, credit.Kind, credit.AmountMinor, credit.BalanceAfterMinor));
+        Assert.Equal((Ws, WalletTransactionType.Credit, WalletTransactionStatus.Success, WalletTransactionKind.Payment, 800_000L, 800_000L),
+            (credit.WorkspaceId, credit.Type, credit.Status, credit.Kind, credit.AmountMinor, credit.BalanceAfterMinor));
+        Assert.Equal(WalletTransaction.AccelerateActor, credit.ActionBy);
         Assert.Equal((order.Reference, (Guid?)order.Id, "txn-1"), (credit.Reference, credit.PaymentOrderId, credit.ProviderTransactionId));
         Assert.Equal("Payment from a customer for 2 x Quilted bag", credit.Description);
     }

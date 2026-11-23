@@ -471,7 +471,9 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(t => t.WorkspaceId).IsRequired().HasMaxLength(450);
             entity.HasOne<WorkspaceWallet>().WithMany().HasForeignKey(t => t.WorkspaceId)
                 .OnDelete(DeleteBehavior.Cascade);
-            entity.Property(t => t.Direction).HasConversion<string>().HasMaxLength(16);
+            entity.Property(t => t.Type).HasConversion<string>().HasMaxLength(16);
+            entity.Property(t => t.Status).HasConversion<string>().HasMaxLength(16);
+            entity.Property(t => t.ActionBy).HasMaxLength(450).IsRequired();
             entity.Property(t => t.Kind).HasConversion<string>().HasMaxLength(32);
             entity.Property(t => t.Currency).HasMaxLength(3).IsRequired();
             entity.Property(t => t.Reference).HasMaxLength(128).IsRequired();

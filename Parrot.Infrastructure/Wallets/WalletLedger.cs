@@ -11,8 +11,8 @@ namespace Parrot.Infrastructure.Wallets;
 internal static class WalletLedger
 {
     /// <summary>
-    /// Adds <paramref name="entry"/> and moves its workspace's balance by its amount, filling in
-    /// BalanceAfterMinor. A workspace from before wallets gets one first. False when an entry with the
+    /// Adds <paramref name="entry"/> and, when it went through (Success), moves its workspace's balance by its
+    /// amount; a Failed one is recorded with the balance as it stands. Fills in BalanceAfterMinor. A workspace from before wallets gets one first. False when an entry with the
     /// same reference is already there: the event was counted before, and nothing changes.
     /// </summary>
     public static async Task<bool> PostAsync(ApplicationDbContext db, WalletTransaction entry, CancellationToken ct)
@@ -33,10 +33,10 @@ internal static class WalletLedger
         // The entry first, so a second go at the same event stops here; the balance only moves for an entry just added.
         int added = await db.Database.ExecuteSqlInterpolatedAsync(
             $"""
-            INSERT INTO "WalletTransactions" ("Id", "WorkspaceId", "Direction", "Kind", "AmountMinor", "BalanceAfterMinor", "Currency",
-                "Reference", "PaymentOrderId", "ProviderTransactionId", "Description", "CreatedAt")
-            VALUES ({entry.Id}, {entry.WorkspaceId}, {entry.Direction.ToString()}, {entry.Kind.ToString()}, {entry.AmountMinor}, 0, {entry.Currency},
-                {entry.Reference}, {entry.PaymentOrderId}, {entry.ProviderTransactionId}, {entry.Description}, {entry.CreatedAt})
+            INSERT INTO "WalletTransactions" ("Id", "WorkspaceId", "Type", "Status", "Kind", "AmountMinor", "BalanceAfterMinor", "Currency",
+                "Reference", "PaymentOrderId", "ProviderTransactionId", "Description", "ActionBy", "CreatedAt")
+            VALUES ({entry.Id}, {entry.WorkspaceId}, {entry.Type.ToString()}, {entry.Status.ToString()}, {entry.Kind.ToString()}, {entry.AmountMinor}, 0,
+                {entry.Currency}, {entry.Reference}, {entry.PaymentOrderId}, {entry.ProviderTransactionId}, {entry.Description}, {entry.ActionBy}, {entry.CreatedAt})
             ON CONFLICT ("Reference") DO NOTHING
             """,
             ct);
@@ -45,14 +45,17 @@ internal static class WalletLedger
             return false;
         }
 
-        long change = entry.Direction == WalletDirection.Credit ? entry.AmountMinor : -entry.AmountMinor;
+        // A failed one moves nothing: the update still takes the wallet's lock, so its balance-after is in line with the rest.
+        long change = entry.Status != WalletTransactionStatus.Success ? 0
+            : entry.Type == WalletTransactionType.Credit ? entry.AmountMinor : -entry.AmountMinor;
 
         // The update locks the wallet's row until the transaction ends, so entries for one wallet line up and
         // each one's balance-after is right. A debit past zero breaks the wallet's check and fails the lot.
         List<long> after = await db.Database
             .SqlQuery<long>(
                 $"""
-                UPDATE "WorkspaceWallets" SET "BalanceMinor" = "BalanceMinor" + {change}, "UpdatedAt" = {entry.CreatedAt}
+                UPDATE "WorkspaceWallets" SET "BalanceMinor" = "BalanceMinor" + {change},
+                    "UpdatedAt" = CASE WHEN {change} = 0 THEN "UpdatedAt" ELSE {entry.CreatedAt} END
                 WHERE "WorkspaceId" = {entry.WorkspaceId}
                 RETURNING "BalanceMinor" AS "Value"
                 """)
