@@ -1,0 +1,163 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Settings
+@using Parrot.Web.Features.Settings
+@inject WalletClient Wallets
+@inject UserClock Clock
+
+@* The business's wallet: what its customers have paid through checkout links, and every movement in and out, newest
+   first. Read only: money comes in when a payment arrives; payouts will be added here when they're built. *@
+@if (_forbidden)
+{
+    <InlineError Tone="InlineErrorTone.Info" Message="Only the business owner can see the wallet." />
+}
+else if (_wallet is null)
+{
+    @if (_loadError is null)
+    {
+        <Skeleton Shape="SkeletonShape.Block" />
+    }
+    else
+    {
+        <InlineError Message="@_loadError"><Action><Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="LoadAsync">Try again</Button></Action></InlineError>
+    }
+}
+else
+{
+    var wallet = _wallet;
+    <SettingsCard Title="Balance" Description="Paid by your customers through checkout links. Each payment is added as soon as it arrives.">
+        <ChildContent>
+            <div class="wallet__summary">
+                <div class="wallet__balance">
+                    <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="wallet__muted">Available</Typography>
+                    <Typography TextStyle="TextStyle.HeadingH1Bold" As="strong">@WalletText.Money(wallet.Balance, wallet.Currency)</Typography>
+                    @if (wallet.UpdatedAt is { } updated)
+                    {
+                        <Typography TextStyle="TextStyle.Small12Regular" As="small" Class="wallet__muted">Last moved @WalletText.When(updated, Clock.Zone)</Typography>
+                    }
+                </div>
+                <dl class="wallet__totals">
+                    <div class="wallet__total">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="dt" Class="wallet__muted">Money in</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="dd" Class="wallet__in">@WalletText.Money(wallet.TotalIn, wallet.Currency)</Typography>
+                    </div>
+                    <div class="wallet__total">
+                        <Typography TextStyle="TextStyle.Small12Medium" As="dt" Class="wallet__muted">Money out</Typography>
+                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="dd">@WalletText.Money(wallet.TotalOut, wallet.Currency)</Typography>
+                    </div>
+                </dl>
+            </div>
+        </ChildContent>
+    </SettingsCard>
+
+    <SettingsCard Title="Transactions" Description="Every payment in and every payout or fee out, with the balance after each.">
+        <HeaderAction>
+            <SegmentedControl TValue="string" Label="Show" Options="Directions" Value="_direction" ValueChanged="ShowAsync" Disabled="_refreshing" />
+        </HeaderAction>
+        <ChildContent>
+            @if (_entries is { Total: 0 } && _direction.Length == 0 && _entriesError is null)
+            {
+                <EmptyState Size="EmptyStateSize.Panel" Glyph="IconName.RiExchangeBoxFill" Title="No money has come in yet"
+                            Description="When a customer pays through a checkout link your agent sent, the payment shows here." />
+            }
+            else
+            {
+                <DataTable Label="Wallet transactions" Busy="_refreshing" Notice="@(_entriesError is null ? null : EntriesError)" Message="@(_entries is { Total: 0 } ? NoneThisWay : null)">
+                    <ChildContent>
+                        <div class="ds-table__row is-head wallet-row" role="row">
+                            <TableHeading>Date</TableHeading>
+                            <TableHeading>Details</TableHeading>
+                            <TableHeading End>Amount</TableHeading>
+                            <TableHeading End>Balance after</TableHeading>
+                        </div>
+                        @foreach (var entry in _entries?.Items ?? [])
+                        {
+                            <div @key="entry.Id" class="ds-table__row wallet-row" role="row">
+                                <div class="wallet-row__when" role="cell">
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="time" datetime="@entry.CreatedAt.ToString("o")">@WalletText.When(entry.CreatedAt, Clock.Zone)</Typography>
+                                </div>
+                                <div class="wallet-row__what" role="cell">
+                                    <span class="@(entry.IsCredit ? "wallet-row__mark is-in" : "wallet-row__mark is-out")" aria-hidden="true">
+                                        <Icon Name="@(entry.IsCredit ? IconName.RiAddFill : IconName.RiSubtractFill)" Size="IconSize.Sm" />
+                                    </span>
+                                    <span class="wallet-row__text">
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Prose>@entry.Description</Typography>
+                                        <Typography TextStyle="TextStyle.Small12Regular" As="small" Class="wallet__muted">@($"{(entry.IsCredit ? "Money in" : "Money out")} · {WalletText.KindLabel(entry.Kind)} · {entry.Reference}")</Typography>
+                                    </span>
+                                </div>
+                                <div class="wallet-row__amount" role="cell">
+                                    <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Class="@(entry.IsCredit ? "wallet__in" : null)">@WalletText.Signed(entry)</Typography>
+                                </div>
+                                <div class="wallet-row__after" role="cell">
+                                    <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@WalletText.Money(entry.BalanceAfter, entry.Currency)</Typography>
+                                </div>
+                            </div>
+                        }
+                    </ChildContent>
+                    <Footer>
+                        @if (_entries is { Total: > 0 } page)
+                        {
+                            <Pagination Page="_page" PageChanged="GoToPageAsync" Total="page.Total" PageSize="WalletClient.PageSize" AriaLabel="Pages of transactions" />
+                        }
+                    </Footer>
+                </DataTable>
+            }
+        </ChildContent>
+    </SettingsCard>
+}
+
+@code {
+    private static readonly IReadOnlyList<SegmentedOption<string>> Directions =
+    [
+        new("", "All"),
+        new("Credit", "Money in"),
+        new("Debit", "Money out"),
+    ];
+
+    private Wallet? _wallet;
+    private WalletEntries? _entries;
+    private string _direction = "";
+    private int _page = 1;
+    private string? _loadError, _entriesError;
+    private bool _forbidden, _refreshing;
+
+    private RenderFragment EntriesError => @<Typography TextStyle="TextStyle.BodySmallMedium" As="p">@_entriesError</Typography>;
+    private RenderFragment NoneThisWay => @<Typography TextStyle="TextStyle.BodySmallMedium" As="p">@(_direction == "Debit" ? "No money has gone out yet." : "No money has come in yet.")</Typography>;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await Clock.ReadAsync();
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loadError = null;
+        try
+        {
+            _wallet = await Wallets.ReadAsync();
+            await LoadEntriesAsync();
+        }
+        catch (HttpRequestException exception) when (exception.StatusCode == System.Net.HttpStatusCode.Forbidden) { _forbidden = true; }
+        catch (HttpRequestException) { _loadError = "Your wallet couldn't be loaded. Try again."; }
+    }
+
+    private async Task LoadEntriesAsync()
+    {
+        _refreshing = true; _entriesError = null;
+        try { _entries = await Wallets.EntriesAsync(_page, _direction.Length == 0 ? null : _direction); }
+        catch (HttpRequestException) { _entriesError = "Your transactions couldn't be loaded. Try again."; }
+        finally { _refreshing = false; }
+    }
+
+    private async Task ShowAsync(string direction)
+    {
+        _direction = direction ?? "";
+        _page = 1;
+        await LoadEntriesAsync();
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        _page = page;
+        await LoadEntriesAsync();
+    }
+}

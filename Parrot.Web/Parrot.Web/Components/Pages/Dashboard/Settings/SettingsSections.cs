@@ -28,6 +28,7 @@ public static class SettingsSections
         new("business", "Business profile", "What customers and your agents know about the business.", IconName.RiStore2Fill, AccessRules.Business),
         new("team", "Team", "The people who help run the business in yára.", IconName.RiTeamFill, AccessRules.Team),
         new("payments", "Checkout & payments", "How checkout links your agents send behave.", IconName.RiShoppingBag3Fill, AccessRules.Business),
+        new("wallet", "Wallet", "What your customers have paid, and every movement in and out.", IconName.RiExchangeBoxFill, AccessRules.Business),
         new("billing", "Plan & billing", "Your plan, usage and invoices.", IconName.RiBankCardFill, AccessRules.Business),
         new("activity", "Activity log", "Who changed what, and when.", IconName.RiFileList3Fill, AccessRules.Business),
     ];

@@ -24,6 +24,14 @@ public interface IPaymentOrderRepository
     Task<bool> TryUpdateFromAsync(PaymentOrder order, PaymentOrderStatus expected, CancellationToken ct);
 
     /// <summary>
+    /// As <see cref="TryUpdateFromAsync"/> for a payment, and credits the workspace's wallet with
+    /// <paramref name="credit"/> in the same transaction: the order is never paid without the money in
+    /// the wallet, nor the other way round. Fills in the credit's BalanceAfterMinor. False, with nothing
+    /// saved, when the order has moved on.
+    /// </summary>
+    Task<bool> TryRecordPaymentAsync(PaymentOrder order, PaymentOrderStatus expected, WalletTransaction credit, CancellationToken ct);
+
+    /// <summary>
     /// Moves an order from one status to another, with the fields given, only if it's still in
     /// <paramref name="expected"/> and unpaid. Two presses of Pay at once: only one starts the payment.
     /// </summary>

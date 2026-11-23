@@ -37,7 +37,7 @@ public sealed class AccelerateClientTests
     }
 
     [Fact]
-    public async Task It_logs_in_with_the_keys_and_creates_the_ticket_in_kobo()
+    public async Task It_logs_in_with_the_keys_and_creates_the_ticket_in_naira()
     {
         _accelerate.Answer("api/v1/auth/api-client/token", Login);
         _accelerate.Answer("api/merchant/create-ticket", Ticket);
@@ -53,10 +53,22 @@ public sealed class AccelerateClientTests
         (string path, JsonElement ticket, string? bearer) = _accelerate.Calls[1];
         Assert.Equal("api/merchant/create-ticket", path);
         Assert.Equal("Bearer token-1", bearer);
-        Assert.Equal(800_000, ticket.GetProperty("pay_amount").GetInt64());
+        // 800,000 kobo is ₦8,000: Accelerate takes naira, and showed 100 times the price when sent kobo.
+        Assert.Equal(8_000m, ticket.GetProperty("pay_amount").GetDecimal());
         Assert.Equal("prt_1", ticket.GetProperty("reference").GetString());
         Assert.Equal("https://app.example/paid", ticket.GetProperty("callback_url").GetString());
         Assert.Equal("Ada's Bags: 2 x Quilted bag", ticket.GetProperty("description").GetString());
+    }
+
+    [Fact]
+    public async Task Kobo_are_sent_as_naira_and_kobo()
+    {
+        _accelerate.Answer("api/v1/auth/api-client/token", Login);
+        _accelerate.Answer("api/merchant/create-ticket", Ticket);
+
+        await Client().CreateLinkAsync("prt_1", 80_050, "a", null, default);
+
+        Assert.Equal(800.50m, _accelerate.Calls[1].Body.GetProperty("pay_amount").GetDecimal());
     }
 
     [Fact]

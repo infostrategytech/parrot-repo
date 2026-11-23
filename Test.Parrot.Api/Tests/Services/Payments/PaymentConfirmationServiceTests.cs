@@ -71,6 +71,28 @@ public sealed class PaymentConfirmationServiceTests
         Assert.Null(saved.AttentionReason);
         Assert.Equal([order.Reference], _stock.Committed);
         Assert.Equal(order.Id, Assert.Single(_notifier.Told).Id);
+
+        // The money is in the business's wallet, once, against the order's reference.
+        WalletTransaction credit = Assert.Single(_orders.Credits);
+        Assert.Equal((Ws, WalletDirection.Credit, WalletTransactionKind.Payment, 800_000L, 800_000L),
+            (credit.WorkspaceId, credit.Direction, credit.Kind, credit.AmountMinor, credit.BalanceAfterMinor));
+        Assert.Equal((order.Reference, (Guid?)order.Id, "txn-1"), (credit.Reference, credit.PaymentOrderId, credit.ProviderTransactionId));
+        Assert.Equal("Payment from a customer for 2 x Quilted bag", credit.Description);
+    }
+
+    [Fact]
+    public async Task Each_payment_adds_to_the_wallet_and_says_who_paid_for_what()
+    {
+        PaymentOrder first = Order();
+        PaymentOrder second = Order(total: 150_050);
+        second.CustomerName = " Ada ";
+        second.Lines = [new PaymentOrderLine(Guid.NewGuid(), Guid.NewGuid(), "Zobo", "50cl", 1, 150_050, 150_050)];
+
+        await _service.HandleAsync(Paid(first.Reference), Sign(first.Reference), default);
+        await _service.HandleAsync(Paid(second.Reference, "1500.50"), Sign(second.Reference), default);
+
+        Assert.Equal([800_000L, 950_050L], _orders.Credits.Select(c => c.BalanceAfterMinor));
+        Assert.Equal("Payment from Ada for 1 x Zobo (50cl)", _orders.Credits[1].Description);
     }
 
     [Fact]
@@ -95,6 +117,7 @@ public sealed class PaymentConfirmationServiceTests
         Assert.Equal(WebhookOutcome.BadSignature, outcome);
         Assert.Equal(PaymentOrderStatus.Pending, _orders.Get(order.Id).Status);
         Assert.Empty(_stock.Committed);
+        Assert.Empty(_orders.Credits);
     }
 
     [Fact]
@@ -137,6 +160,8 @@ public sealed class PaymentConfirmationServiceTests
         Assert.Contains("but the order is NGN 8,000.00", saved.AttentionReason);
         Assert.Empty(_stock.Committed);
         Assert.Single(_notifier.Told);
+        // The money still arrived: the wallet gets what was paid, not what was asked.
+        Assert.Equal(saved.PaidMinor, Assert.Single(_orders.Credits).AmountMinor);
     }
 
     [Fact]
@@ -203,10 +228,12 @@ public sealed class PaymentConfirmationServiceTests
 
         Assert.Equal(WebhookOutcome.TryAgain, await _service.HandleAsync(Paid(order.Reference), Sign(order.Reference), default));
         Assert.Equal(PaymentOrderStatus.Pending, _orders.Get(order.Id).Status);
+        Assert.Empty(_orders.Credits);
 
         _stock.Down = false;
         Assert.Equal(WebhookOutcome.Recorded, await _service.HandleAsync(Paid(order.Reference), Sign(order.Reference), default));
         Assert.Equal(PaymentOrderStatus.Paid, _orders.Get(order.Id).Status);
+        Assert.Single(_orders.Credits);
     }
 
     [Fact]

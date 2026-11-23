@@ -1,0 +1,51 @@
+/* The balance with the totals beside it, then the ledger as a row of the shared table, as the activity log's are. */
+.wallet__summary {
+  /* Gap in the token set: no border-width scale. */
+  --ds-wallet-hairline: 1px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  align-items: end;
+  justify-content: space-between;
+  padding: var(--spacing-lg);
+  background: var(--colors-surface-muted);
+  border-radius: var(--radius-radius-lg);
+}
+
+.wallet__balance { display: grid; gap: var(--spacing-2xs); min-width: 0; color: var(--colors-text-primary); }
+
+.wallet__totals { display: flex; gap: var(--spacing-xl); margin: var(--spacing-none); }
+.wallet__total { display: grid; gap: var(--spacing-2xs); }
+.wallet__total ::deep dd { margin: var(--spacing-none); color: var(--colors-text-primary); }
+
+::deep .wallet__muted { color: var(--colors-text-muted); }
+::deep .wallet__in { color: var(--colors-text-success); }
+
+.wallet-row { --ds-table-columns: minmax(0, 1fr) minmax(0, 2.6fr) minmax(0, 1fr) minmax(0, 1fr); }
+
+.wallet-row__when, .wallet-row__after { display: flex; align-items: center; color: var(--colors-text-secondary); }
+.wallet-row__what { display: flex; gap: var(--spacing-sm); align-items: center; min-width: 0; color: var(--colors-text-primary); }
+.wallet-row__text { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.wallet-row__amount, .wallet-row__after { display: flex; align-items: center; justify-content: end; color: var(--colors-text-primary); }
+
+/* Which way the money went, besides the sign and the words: green for in, plain for out. */
+.wallet-row__mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: var(--spacing-2xs);
+  border-radius: var(--radius-radius-full);
+}
+.wallet-row__mark.is-in { color: var(--colors-feedback-success-text); background: var(--colors-feedback-success-subtle); }
+.wallet-row__mark.is-out { color: var(--colors-text-secondary); background: var(--colors-surface-muted); }
+
+@media (max-width: 1024px) {
+  .wallet-row { --ds-table-columns: minmax(0, 2fr) minmax(0, 1fr); }
+  .wallet-row__when { grid-column: 1 / -1; grid-row: 2; }
+  .wallet-row.is-head .wallet-row__when, .wallet-row__after { display: none; }
+}
+
+@media (max-width: 760px) {
+  .wallet__totals { gap: var(--spacing-lg); }
+}

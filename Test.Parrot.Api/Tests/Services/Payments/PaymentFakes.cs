@@ -48,6 +48,18 @@ public sealed class FakePaymentOrderRepository : IPaymentOrderRepository
         return Task.FromResult(true);
     }
 
+    /// <summary>Wallet credits recorded with payments, in order, each with its balance after.</summary>
+    public List<WalletTransaction> Credits { get; } = [];
+
+    public async Task<bool> TryRecordPaymentAsync(PaymentOrder order, PaymentOrderStatus expected, WalletTransaction credit, CancellationToken ct)
+    {
+        if (!await TryUpdateFromAsync(order, expected, ct)) return false;
+        if (Credits.Any(c => c.Reference == credit.Reference)) return true;
+        credit.BalanceAfterMinor = Credits.Where(c => c.WorkspaceId == credit.WorkspaceId).Sum(c => c.AmountMinor) + credit.AmountMinor;
+        Credits.Add(credit);
+        return true;
+    }
+
     public Task<bool> TryMoveAsync(PaymentOrder order, PaymentOrderStatus expected, CancellationToken ct)
     {
         PaymentOrder stored = Orders.Single(o => o.Id == order.Id && o.WorkspaceId == order.WorkspaceId);
