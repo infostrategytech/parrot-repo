@@ -535,7 +535,7 @@ builder.Services.AddHttpClient<ICatalogToolsClient, HttpCatalogToolsClient>((sp,
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 });
 builder.Services.AddAgentTools();
-// Checkouts (create_checkout) and their payment links: the platform's Accelerate account, whose keys
+// Checkouts (create_cart) and their payment links: the platform's Accelerate account, whose keys
 // come from the environment (Payments__Accelerate__PublicKey / SecretKey), never a committed file.
 builder.Services.AddOptions<PaymentSettings>().BindConfiguration(PaymentSettings.SectionName);
 builder.Services.AddSingleton<AccelerateSession>();

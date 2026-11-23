@@ -84,7 +84,7 @@ public sealed class CheckoutServiceTests
 
         CheckoutResult checkout = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2), Item(basket, 1, sizes[1])), default);
 
-        Assert.Equal(CheckoutService.CheckoutReady, checkout.Status);
+        Assert.Equal(CheckoutService.CartReady, checkout.Status);
         Assert.Equal(23000m, checkout.Total);
         Assert.StartsWith("https://app.example/checkout/", checkout.CheckoutUrl);
         Assert.Collection(checkout.Lines,
@@ -118,19 +118,353 @@ public sealed class CheckoutServiceTests
         Assert.Single(_orders.Orders);
     }
 
+    // ---- The conversation's cart -------------------------------------------------------
+
     [Fact]
-    public async Task A_new_checkout_replaces_the_conversations_earlier_one()
+    public async Task Calling_again_changes_the_open_cart_in_place_and_keeps_its_link()
     {
         Guid bag = _catalog.Product("Quilted bag", 4000m);
+        Guid purse = _catalog.Product("Beaded purse", 2500m);
+        CheckoutResult first = await _service.CreateAsync(Ws, Request("key-1", Item(bag), Item(purse)), default);
+        _clock.Advance(TimeSpan.FromMinutes(20));
 
+        // The complete new cart: three bags, and the purse left out.
+        CheckoutResult changed = await _service.CreateAsync(Ws, Request("key-2", Item(bag, 3)), default);
+
+        Assert.Equal(CheckoutService.CartUpdated, changed.Status);
+        Assert.Equal(first.OrderId, changed.OrderId);
+        Assert.Equal(_links.Read(TokenOf(first)), _links.Read(TokenOf(changed)));
+        Assert.Equal(12000m, changed.Total);
+        CheckoutLine line = Assert.Single(changed.Lines);
+        Assert.Equal(("Quilted bag", 3), (line.Name, line.Quantity));
+
+        PaymentOrder order = Assert.Single(_orders.Orders);
+        Assert.Equal((PaymentOrderStatus.AwaitingCheckout, 1_200_000L, 1_200_000L), (order.Status, order.TotalMinor, order.QuotedTotalMinor));
+        Assert.Equal(_clock.Now.UtcDateTime.AddMinutes(30), order.ExpiresAt);
+        Assert.Equal("key-1", order.IdempotencyKey);
+
+        // The link the customer already has shows the new cart, after its first time would have run out; and a late retry of the first call doesn't undo the change.
+        _clock.Advance(TimeSpan.FromMinutes(15));
+        CheckoutView page = await _service.GetAsync(TokenOf(first), default);
+        Assert.Equal((CheckoutState.Open, 12000m, 1), (page.State, page.Total, page.Lines.Count));
+        Assert.Equal(12000m, (await _service.CreateAsync(Ws, Request("key-1", Item(bag), Item(purse)), default)).Total);
+    }
+
+    [Fact]
+    public async Task A_change_keeps_the_customers_details_it_isnt_given()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+
+        await _service.CreateAsync(Ws, new CreateCheckoutRequest(_agent, _whatsApp, Sender, [Item(bag, 2)], "key-2", CustomerEmail: "kemi@example.com"), default);
+
+        PaymentOrder order = Assert.Single(_orders.Orders);
+        Assert.Equal(("Kemi", "kemi@example.com", "Deliver to Lekki"), (order.CustomerName, order.CustomerEmail, order.Note));
+    }
+
+    [Fact]
+    public async Task A_change_that_cant_be_bought_is_refused_and_the_cart_stays_as_it_was()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        Guid hat = _catalog.Product("Raffia hat", 3000m, available: false);
         CheckoutResult first = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+
+        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.CreateAsync(Ws, Request("key-2", Item(bag), Item(hat)), default));
+
+        PaymentOrder order = Assert.Single(_orders.Orders);
+        Assert.Equal((first.OrderId, 400_000L, 1), (order.Id, order.TotalMinor, order.Lines.Count));
+    }
+
+    [Fact]
+    public async Task Once_pay_is_pressed_a_new_cart_replaces_the_old_one_with_a_new_link()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult first = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+        await _service.PayAsync(TokenOf(first), new PayCheckoutRequest(4000m), default);
+
         CheckoutResult second = await _service.CreateAsync(Ws, Request("key-2", Item(bag, 3)), default);
 
+        Assert.Equal(CheckoutService.CartReady, second.Status);
+        Assert.NotEqual(first.OrderId, second.OrderId);
         Assert.Equal(PaymentOrderStatus.Cancelled, _orders.Get(first.OrderId).Status);
         Assert.Equal(PaymentOrderStatus.AwaitingCheckout, _orders.Get(second.OrderId).Status);
         Assert.Equal(CheckoutState.Replaced, (await _service.GetAsync(TokenOf(first), default)).State);
         var replaced = await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.CreateAsync(Ws, Request("key-1", Item(bag)), default));
         Assert.Contains("replaced by a newer one", replaced.Message);
+    }
+
+    [Fact]
+    public async Task A_cart_whose_time_ran_out_isnt_changed_a_new_one_is_made()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult first = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+        _clock.Advance(TimeSpan.FromMinutes(31));
+
+        CheckoutResult second = await _service.CreateAsync(Ws, Request("key-2", Item(bag, 2)), default);
+
+        Assert.Equal(CheckoutService.CartReady, second.Status);
+        Assert.NotEqual(first.OrderId, second.OrderId);
+        Assert.Equal(1, _orders.Get(first.OrderId).Lines.Single().Quantity);
+    }
+
+    [Fact]
+    public async Task Another_customers_cart_is_their_own()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult kemi = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+
+        CheckoutResult tunde = await _service.CreateAsync(Ws, new CreateCheckoutRequest(_agent, _whatsApp, "2348099999999", [Item(bag, 2)], "key-2"), default);
+
+        Assert.NotEqual(kemi.OrderId, tunde.OrderId);
+        Assert.Equal((PaymentOrderStatus.AwaitingCheckout, 1), (_orders.Get(kemi.OrderId).Status, _orders.Get(kemi.OrderId).Lines.Single().Quantity));
+    }
+
+    // ---- get_cart --------------------------------------------------------------------
+
+    [Fact]
+    public async Task The_conversations_cart_is_found_with_its_items_ids_and_link()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        (Guid basket, Guid[] sizes) = _catalog.WithOptions("Woven basket", ("Small", 9000m, true, 3), ("Large", 15000m, true, null));
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2), Item(basket, 1, sizes[1])), default);
+
+        CartStatus cart = await _service.GetCartAsync(Ws, null, _whatsApp, Sender, default);
+
+        Assert.Equal((made.OrderId, CheckoutState.Open, 23000m, true, (string?)null), (cart.OrderId, cart.State, cart.Total, cart.CanPay, cart.Problem));
+        Assert.Collection(cart.Items,
+            line => Assert.Equal((bag, (Guid?)null, "Quilted bag", 2, 4000m), (line.ProductId, line.VariantId, line.Name, line.Quantity, line.UnitPrice!.Value)),
+            line => Assert.Equal((basket, (Guid?)sizes[1], "Large", 1, 15000m), (line.ProductId, line.VariantId, line.VariantName!, line.Quantity, line.UnitPrice!.Value)));
+        string url = Assert.IsType<string>(cart.CheckoutUrl);
+        Assert.Equal(_links.Read(TokenOf(made)), _links.Read(url[(url.LastIndexOf('/') + 1)..]));
+        Assert.Contains("create_cart with the complete new list", cart.Guidance);
+    }
+
+    [Fact]
+    public async Task A_cart_is_priced_again_and_shows_what_moved_and_what_cant_be_had()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        Guid hat = _catalog.Product("Raffia hat", 3000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag), Item(hat)), default);
+
+        _catalog.Change(bag, price: 4500m);
+        CartStatus repriced = await _service.GetCartAsync(Ws, made.OrderId.ToString(), null, null, default);
+        Assert.Equal((true, true, 7500m, 7000m), (repriced.PriceChanged, repriced.CanPay, repriced.Total, repriced.QuotedTotal));
+        Assert.Equal((4000m, 4500m, true), (repriced.Items[0].QuotedUnitPrice, repriced.Items[0].UnitPrice!.Value, repriced.Items[0].PriceChanged));
+        Assert.Contains("new total", repriced.Guidance);
+
+        _catalog.Change(hat, available: false);
+        CartStatus blocked = await _service.GetCartAsync(Ws, made.OrderId.ToString(), null, null, default);
+        Assert.False(blocked.CanPay);
+        Assert.Equal("Raffia hat is sold out.", blocked.Items[1].Problem);
+        Assert.NotNull(blocked.Problem);
+        Assert.Contains("can't pay this cart", blocked.Guidance);
+    }
+
+    [Fact]
+    public async Task A_cart_being_paid_paid_for_replaced_or_run_out_says_so()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult first = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+        await _service.PayAsync(TokenOf(first), new PayCheckoutRequest(4000m), default);
+
+        CartStatus paying = await _service.GetCartAsync(Ws, first.OrderId.ToString(), null, null, default);
+        Assert.Equal((CheckoutState.Paying, false), (paying.State, paying.CanPay));
+        Assert.NotNull(paying.CheckoutUrl);
+
+        CheckoutResult second = await _service.CreateAsync(Ws, Request("key-2", Item(bag, 2)), default);
+        CartStatus replaced = await _service.GetCartAsync(Ws, first.OrderId.ToString(), null, null, default);
+        Assert.Equal((CheckoutState.Replaced, (string?)null), (replaced.State, replaced.CheckoutUrl));
+        Assert.Equal(second.OrderId, (await _service.GetCartAsync(Ws, null, _whatsApp, Sender, default)).OrderId);
+
+        _clock.Advance(TimeSpan.FromMinutes(31));
+        CartStatus lapsed = await _service.GetCartAsync(Ws, null, _whatsApp, Sender, default);
+        Assert.Equal((CheckoutState.Expired, (string?)null, 1), (lapsed.State, lapsed.CheckoutUrl, lapsed.Items.Count));
+    }
+
+    [Fact]
+    public async Task A_cart_is_found_by_its_id_in_quotes_or_its_reference_but_only_in_its_own_workspace()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+        string reference = _orders.Get(made.OrderId).Reference;
+
+        Assert.Equal(made.OrderId, (await _service.GetCartAsync(Ws, $"\"{made.OrderId}\"", null, null, default)).OrderId);
+        Assert.Equal(made.OrderId, (await _service.GetCartAsync(Ws, reference, null, null, default)).OrderId);
+        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.GetCartAsync("ws-2", made.OrderId.ToString(), null, null, default));
+        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.GetCartAsync("ws-2", reference, null, null, default));
+        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.GetCartAsync(Ws, "not an id", null, null, default));
+    }
+
+    [Fact]
+    public async Task Without_a_cart_or_a_way_to_find_one_the_agent_is_told_what_to_do()
+    {
+        var none = await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.GetCartAsync(Ws, null, _whatsApp, Sender, default));
+        Assert.Contains("no cart yet", none.Message);
+        var nothing = await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.GetCartAsync(Ws, null, null, null, default));
+        Assert.Contains("Pass order_id, or connection_id and sender", nothing.Message);
+    }
+
+    // ---- The customer changing their cart on the page -----------------------------------
+
+    private static ChangeCheckoutRequest Keep(params CheckoutItem[] items) => new(items);
+
+    [Fact]
+    public async Task The_customer_can_lower_a_quantity_and_take_an_item_out()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
+        Guid purse = _catalog.Product("Beaded purse", 2500m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 3), Item(purse)), default);
+        DateTime? expires = _orders.Get(made.OrderId).ExpiresAt;
+        _clock.Advance(TimeSpan.FromMinutes(5));
+
+        CheckoutView view = await _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 1), Item(purse, 0)), default);
+
+        CheckoutLineView line = Assert.Single(view.Lines);
+        Assert.Equal(("Quilted bag", 1, bag, 4000m), (line.Name, line.Quantity, line.ProductId!.Value, view.Total));
+        Assert.True(view.CanPay);
+        PaymentOrder order = Assert.Single(_orders.Orders);
+        Assert.Equal((400_000L, 400_000L, expires), (order.TotalMinor, order.QuotedTotalMinor, order.ExpiresAt));
+        Assert.Equal(PaymentOrderStatus.AwaitingCheckout, order.Status);
+    }
+
+    [Fact]
+    public async Task The_customer_can_raise_a_quantity_up_to_what_is_left_and_no_further()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 3);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+        Assert.Equal(3, (await _service.GetAsync(TokenOf(made), default)).Lines[0].MaxQuantity);
+
+        CheckoutView raised = await _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 3)), default);
+        Assert.Equal((3, 12000m), (raised.Lines[0].Quantity, raised.Total));
+
+        var refused = await Assert.ThrowsAsync<CheckoutChangedException>(() => _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 4)), default));
+        Assert.Equal("Only 3 Quilted bag left. Your order hasn't changed.", refused.Message);
+        Assert.Equal(3, refused.View.Lines[0].Quantity);
+        Assert.Equal(3, _orders.Get(made.OrderId).Lines.Single().Quantity);
+    }
+
+    [Fact]
+    public async Task Uncounted_stock_lets_the_customer_have_up_to_the_checkouts_limit()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+
+        Assert.Equal(CheckoutService.MaxQuantity, (await _service.GetAsync(TokenOf(made), default)).Lines[0].MaxQuantity);
+    }
+
+    [Fact]
+    public async Task The_customer_cant_add_an_item_take_everything_out_or_ask_for_less_than_none()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        Guid hat = _catalog.Product("Raffia hat", 3000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2)), default);
+
+        var added = await Assert.ThrowsAsync<CheckoutChangedException>(() => _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 2), Item(hat)), default));
+        Assert.Contains("Only items already in your order", added.Message);
+        var emptied = await Assert.ThrowsAsync<CheckoutChangedException>(() => _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 0)), default));
+        Assert.Contains("Keep at least one item", emptied.Message);
+        var negative = await Assert.ThrowsAsync<CheckoutChangedException>(() => _service.ChangeAsync(TokenOf(made), Keep(Item(bag, -1)), default));
+        Assert.Contains("Choose between 1 and", negative.Message);
+
+        Assert.Equal(2, _orders.Get(made.OrderId).Lines.Single().Quantity);
+    }
+
+    [Fact]
+    public async Task A_price_that_moved_still_shows_after_the_customer_changes_the_quantity()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2)), default);
+        _catalog.Change(bag, price: 4500m);
+
+        CheckoutView view = await _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 3)), default);
+
+        Assert.Equal((true, 13500m, 12000m), (view.PriceChanged, view.Total, view.QuotedTotal));
+        Assert.Equal((4000m, 4500m), (view.Lines[0].QuotedUnitPrice, view.Lines[0].UnitPrice!.Value));
+    }
+
+    [Fact]
+    public async Task Once_pay_is_pressed_the_customer_cant_change_the_cart()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2)), default);
+        await _service.PayAsync(TokenOf(made), new PayCheckoutRequest(8000m), default);
+
+        var refused = await Assert.ThrowsAsync<CheckoutChangedException>(() => _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 1)), default));
+
+        Assert.Contains("already started paying", refused.Message);
+        Assert.Equal(CheckoutState.Paying, refused.View.State);
+        Assert.Equal(2, _orders.Get(made.OrderId).Lines.Single().Quantity);
+    }
+
+    [Fact]
+    public async Task Held_at_checkout_the_customer_can_have_what_is_left_plus_their_own_and_the_hold_follows()
+    {
+        _rules.Set(Ws, hold: CheckoutHoldMode.AtCheckout);
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 3);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2)), default);
+        _catalog.Change(bag, left: 1);
+        Assert.Equal(3, (await _service.GetAsync(TokenOf(made), default)).Lines[0].MaxQuantity);
+
+        CheckoutView view = await _service.ChangeAsync(TokenOf(made), Keep(Item(bag, 1)), default);
+
+        PaymentOrder order = _orders.Get(made.OrderId);
+        Assert.Equal(1, view.Lines[0].Quantity);
+        var moved = _stock.Held.Last();
+        Assert.Equal((order.Reference, 1), (moved.Reference, moved.Lines.Single().Quantity));
+    }
+
+    [Fact]
+    public async Task Held_at_checkout_a_change_moves_the_kept_stock_to_the_new_items()
+    {
+        _rules.Set(Ws, hold: CheckoutHoldMode.AtCheckout);
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 3);
+        CheckoutResult first = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2)), default);
+        string before = _orders.Get(first.OrderId).Reference;
+
+        // Its own two count as free: three can be had.
+        _catalog.Change(bag, left: 1);
+        CheckoutResult changed = await _service.CreateAsync(Ws, Request("key-2", Item(bag, 3)), default);
+
+        PaymentOrder order = _orders.Get(changed.OrderId);
+        Assert.Equal(first.OrderId, changed.OrderId);
+        Assert.Contains(before, _stock.Released);
+        Assert.NotEqual(before, order.Reference);
+        var moved = _stock.Held.Last();
+        Assert.Equal((order.Reference, 3), (moved.Reference, moved.Lines.Single().Quantity));
+        Assert.True(moved.ExpiresAt > order.ExpiresAt);
+    }
+
+    [Fact]
+    public async Task Held_at_checkout_a_change_the_stock_cant_cover_leaves_the_cart_and_its_stock_as_they_were()
+    {
+        _rules.Set(Ws, hold: CheckoutHoldMode.AtCheckout);
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 3);
+        CheckoutResult first = await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2)), default);
+        _stock.ShortIf = lines => lines.Sum(l => l.Quantity) > 2 ? "Only 2 Quilted bag left." : null;
+
+        var refused = await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.CreateAsync(Ws, Request("key-2", Item(bag, 5)), default));
+
+        Assert.Contains("Only 2 Quilted bag left.", refused.Message);
+        Assert.Contains("wasn't changed", refused.Message);
+        PaymentOrder order = Assert.Single(_orders.Orders);
+        Assert.Equal((first.OrderId, 2, 800_000L, CheckoutHoldMode.AtCheckout), (order.Id, order.Lines.Single().Quantity, order.TotalMinor, order.HoldMode));
+        var again = _stock.Held.Last();
+        Assert.Equal((order.Reference, 2), (again.Reference, again.Lines.Single().Quantity));
+    }
+
+    [Fact]
+    public async Task Held_at_checkout_if_even_the_old_stock_cant_be_kept_again_pay_checks_it_instead()
+    {
+        _rules.Set(Ws, hold: CheckoutHoldMode.AtCheckout);
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 3);
+        await _service.CreateAsync(Ws, Request("key-1", Item(bag, 2)), default);
+        _stock.ShortWith = "Only 1 Quilted bag left.";
+
+        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.CreateAsync(Ws, Request("key-2", Item(bag, 3)), default));
+
+        PaymentOrder order = Assert.Single(_orders.Orders);
+        Assert.Equal((2, CheckoutHoldMode.AtPay), (order.Lines.Single().Quantity, order.HoldMode));
+        Assert.DoesNotContain(_stock.Held, h => h.Reference == order.Reference);
     }
 
     [Fact]
@@ -280,7 +614,9 @@ public sealed class CheckoutServiceTests
         Assert.Equal(CheckoutHoldMode.AtCheckout, _orders.Get(checkout.OrderId).HoldMode);
 
         _stock.ShortWith = "Only 1 Quilted bag left.";
-        var refused = await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.CreateAsync(Ws, Request("k2", Item(bag, 2)), default));
+        // Another customer's cart: a new one, which can't be made without its stock.
+        var refused = await Assert.ThrowsAsync<CheckoutRefusedException>(() =>
+            _service.CreateAsync(Ws, new CreateCheckoutRequest(_agent, _whatsApp, "2348099999999", [Item(bag, 2)], "k2"), default));
         Assert.Contains("Only 1 Quilted bag left.", refused.Message);
         Assert.Equal(PaymentOrderStatus.Failed, _orders.Orders.Single(o => o.IdempotencyKey == "k2").Status);
     }

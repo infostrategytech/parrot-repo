@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -19,7 +20,7 @@ namespace Parrot.Application.Payments;
 /// every lookup is by workspace. How long things stay open, when stock is kept aside and what
 /// a price change does are the workspace's own settings.
 /// </summary>
-public sealed class CheckoutService(
+public sealed partial class CheckoutService(
     IPaymentOrderRepository orders,
     IPaymentProvider provider,
     ICatalogToolsClient catalog,
@@ -36,7 +37,11 @@ public sealed class CheckoutService(
 {
     public const int MaxItems = 20;
     public const int MaxQuantity = 999;
-    public const string CheckoutReady = "checkout_ready";
+    /// <summary>A new cart: send the customer its link.</summary>
+    public const string CartReady = "cart_ready";
+
+    /// <summary>The conversation's open cart, changed: same link, new items.</summary>
+    public const string CartUpdated = "cart_updated";
 
     /// <summary>The only currency the payment account takes.</summary>
     public const string Currency = "NGN";
@@ -70,12 +75,28 @@ public sealed class CheckoutService(
 
         List<CheckoutItem> items = Merge(request.Items);
         await CheckConversationAsync(workspaceId, request.AgentId, request.ConnectionId);
+        WorkspacePaymentSettings rules = await workspaceSettings.ResolveAsync(workspaceId, ct);
+
+        // The conversation's cart, while the customer hasn't pressed Pay: changed in place, so the link
+        // they already have shows the new items. Read again if something changed it underneath.
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            PaymentOrder? cart = await orders.FindOpenCartAsync(workspaceId, request.ConnectionId, sender, Now, ct);
+            if (cart is null)
+            {
+                break;
+            }
+
+            if (await TryChangeCartAsync(cart, request, items, rules, ct) is { } changed)
+            {
+                return changed;
+            }
+        }
 
         List<PaymentOrderLine> lines = Agreed(await QuoteAsync(workspaceId, items, countStock: true, ct));
         long total = lines.Sum(l => l.LineTotalMinor);
         CheckLimit(total);
 
-        WorkspacePaymentSettings rules = await workspaceSettings.ResolveAsync(workspaceId, ct);
         DateTime checkoutExpires = Now.AddMinutes(rules.CheckoutMinutes);
         PaymentOrder order = new ()
         {
@@ -87,7 +108,7 @@ public sealed class CheckoutService(
             CustomerEmail = Optional(request.CustomerEmail, 254),
             CustomerPhone = Optional(request.CustomerPhone, 32),
             Note = Optional(request.Note, 500),
-            Reference = "prt_" + Guid.NewGuid().ToString("N"),
+            Reference = NewReference(),
             IdempotencyKey = key,
             Status = PaymentOrderStatus.AwaitingCheckout,
             Currency = Currency,
@@ -114,10 +135,9 @@ public sealed class CheckoutService(
         {
             // Kept from now until the latest a payment started at the last minute could run; the sweep
             // lets it go as soon as the checkout or its payment lapses, so it never outlives the order.
-            DateTime heldUntil = checkoutExpires.AddMinutes(WorkspacePaymentSettingsService.MaxPaymentMinutes);
             try
             {
-                await stock.HoldAsync(workspaceId, order.Reference, heldUntil, StockLines(lines), ct);
+                await stock.HoldAsync(workspaceId, order.Reference, HeldUntil(checkoutExpires), StockLines(lines), ct);
             }
             catch (StockShortException ex)
             {
@@ -138,10 +158,180 @@ public sealed class CheckoutService(
             await ReleaseQuietlyAsync(older);
         }
 
-        logger.LogInformation("Checkout made. Workspace={Workspace} Order={Order} Agent={Agent} TotalMinor={Total} Hold={Hold} Replaced={Replaced}",
+        logger.LogInformation("Cart made. Workspace={Workspace} Order={Order} Agent={Agent} TotalMinor={Total} Hold={Hold} Replaced={Replaced}",
             workspaceId, order.Id, order.AgentId, total, order.HoldMode, replaced.Count);
         return Result(order);
     }
+
+    /// <summary>
+    /// The open cart given the agent's new list: priced again, its time started again, and its stock moved
+    /// when it's kept aside. Null when the cart changed underneath (Pay pressed, another change saved).
+    /// </summary>
+    private async Task<CheckoutResult?> TryChangeCartAsync(PaymentOrder cart, CreateCheckoutRequest request, List<CheckoutItem> items, WorkspacePaymentSettings rules, CancellationToken ct)
+    {
+        // Stock the cart keeps aside is its own, so it isn't counted against it here; moving the hold checks what's left.
+        List<PaymentOrderLine> lines = Agreed(await QuoteAsync(cart.WorkspaceId, items, countStock: cart.HoldMode != CheckoutHoldMode.AtCheckout, ct));
+        long before = cart.TotalMinor;
+        bool saved = await SaveCartAsync(cart, lines, lines.Sum(l => l.LineTotalMinor), Now.AddMinutes(rules.CheckoutMinutes), order =>
+        {
+            order.AgentId = request.AgentId;
+            order.CustomerName = Optional(request.CustomerName, 120) ?? order.CustomerName;
+            order.CustomerEmail = Optional(request.CustomerEmail, 254) ?? order.CustomerEmail;
+            order.CustomerPhone = Optional(request.CustomerPhone, 32) ?? order.CustomerPhone;
+            order.Note = Optional(request.Note, 500) ?? order.Note;
+        }, ct);
+        if (!saved)
+        {
+            return null;
+        }
+
+        logger.LogInformation("Cart changed. Workspace={Workspace} Order={Order} Agent={Agent} TotalMinor={Total} WasMinor={Was} Hold={Hold}",
+            cart.WorkspaceId, cart.Id, cart.AgentId, cart.TotalMinor, before, cart.HoldMode);
+        return Result(cart, changed: true);
+    }
+
+    /// <summary>
+    /// Saves a cart's new lines over the cart as it was read: its stock moved first when it's kept aside, then
+    /// the lines, totals and time, with anything else <paramref name="alsoSet"/> changes. False when the cart
+    /// changed underneath (Pay pressed, another change saved), with any stock just kept for it let go again.
+    /// </summary>
+    private async Task<bool> SaveCartAsync(PaymentOrder cart, List<PaymentOrderLine> lines, long quotedTotal, DateTime expires, Action<PaymentOrder>? alsoSet, CancellationToken ct)
+    {
+        long total = lines.Sum(l => l.LineTotalMinor);
+        CheckLimit(total);
+
+        bool held = cart.HoldMode == CheckoutHoldMode.AtCheckout;
+        DateTime readAt = cart.UpdatedAt;
+        string reference = held ? await MoveHoldAsync(cart, lines, expires, readAt, ct) : cart.Reference;
+
+        cart.Lines = lines;
+        cart.TotalMinor = total;
+        cart.QuotedTotalMinor = quotedTotal;
+        cart.Reference = reference;
+        cart.CheckoutExpiresAt = expires;
+        cart.ExpiresAt = expires;
+        cart.UpdatedAt = Now;
+        alsoSet?.Invoke(cart);
+
+        if (await orders.TryReplaceCartAsync(cart, readAt, CancellationToken.None))
+        {
+            return true;
+        }
+
+        if (held)
+        {
+            await ReleaseQuietlyAsync(cart.WorkspaceId, reference);
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Moves a cart's kept-aside stock to its new lines, returning the reference it's now kept under. The catalog
+    /// keeps a reference's hold once and for all, so the new hold takes a new reference: the provider only
+    /// sees the reference once Pay is pressed, so it can still change. When the new lines can't be held the
+    /// cart is left as it was, its old lines held again under a reference of their own (or, if even that
+    /// can't be done, checked and held at Pay instead), and the change is refused.
+    /// </summary>
+    private async Task<string> MoveHoldAsync(PaymentOrder cart, List<PaymentOrderLine> lines, DateTime expires, DateTime readAt, CancellationToken ct)
+    {
+        // Let go first, so the cart's own stock counts as free for its new lines.
+        await ReleaseQuietlyAsync(cart.WorkspaceId, cart.Reference);
+        string moved = NewReference();
+        try
+        {
+            await stock.HoldAsync(cart.WorkspaceId, moved, HeldUntil(expires), StockLines(lines), ct);
+            return moved;
+        }
+        catch (Exception ex) when (ex is StockShortException or CatalogStockUnavailableException)
+        {
+            string back = NewReference();
+            cart.Reference = back;
+            try
+            {
+                await stock.HoldAsync(cart.WorkspaceId, back, HeldUntil(cart.ExpiresAt!.Value), StockLines(cart.Lines), CancellationToken.None);
+            }
+            catch (Exception again) when (again is StockShortException or CatalogStockUnavailableException)
+            {
+                cart.HoldMode = CheckoutHoldMode.AtPay;
+                logger.LogWarning("A cart's stock couldn't be kept aside again; it's checked at Pay instead. Order={Order} Reason={Reason}", cart.Id, again.Message);
+            }
+
+            cart.UpdatedAt = Now;
+            if (!await orders.TryReplaceCartAsync(cart, readAt, CancellationToken.None) && cart.HoldMode == CheckoutHoldMode.AtCheckout)
+            {
+                await ReleaseQuietlyAsync(cart.WorkspaceId, back);
+            }
+
+            throw ex is StockShortException
+                ? new CheckoutRefusedException($"{ex.Message} The cart wasn't changed: the customer's link still shows what it had. Check get_prices and agree the change with the customer.")
+                : new CheckoutUnavailableException("Stock can't be checked right now, so the cart wasn't changed. Tell the customer you'll update it shortly.");
+        }
+    }
+
+    private static string NewReference() => "prt_" + Guid.NewGuid().ToString("N");
+
+    /// <summary>Kept until the latest a payment started at the cart's last minute could run; the sweep lets it go as soon as the cart or its payment lapses.</summary>
+    private static DateTime HeldUntil(DateTime cartExpires) => cartExpires.AddMinutes(WorkspacePaymentSettingsService.MaxPaymentMinutes);
+
+    // ---- The agent: what's in the cart ---------------------------------------------------
+
+    /// <summary>
+    /// A cart as it stands: the one an order id (or prt_ reference) names, or else the conversation's newest.
+    /// While it's open each item is priced again from the catalog, exactly as the customer's page shows it.
+    /// </summary>
+    public async Task<CartStatus> GetCartAsync(string workspaceId, string? orderIdOrReference, Guid? connectionId, string? sender, CancellationToken ct)
+    {
+        PaymentOrder? order;
+        if (!string.IsNullOrWhiteSpace(orderIdOrReference))
+        {
+            Match key = OrderKey().Match(orderIdOrReference);
+            order = !key.Success ? null
+                : key.Groups["id"].Success ? await orders.FindAsync(workspaceId, Guid.Parse(key.Groups["id"].Value), ct)
+                : await orders.FindByReferenceAsync(key.Groups["ref"].Value, ct) is { } byReference && byReference.WorkspaceId == workspaceId ? byReference
+                : null;
+            if (order is null)
+            {
+                throw new CheckoutRefusedException("There's no such cart for this business. Pass the order_id create_cart returned, or leave it out and pass connection_id and sender for the conversation's cart.");
+            }
+        }
+        else if (connectionId is { } connection && connection != Guid.Empty && !string.IsNullOrWhiteSpace(sender))
+        {
+            order = await orders.FindLatestCartAsync(workspaceId, connection, sender.Trim(), ct)
+                ?? throw new CheckoutRefusedException("This conversation has no cart yet. Once the customer has agreed what they want, make one with create_cart.");
+        }
+        else
+        {
+            throw new CheckoutRefusedException("Pass order_id, or connection_id and sender for the conversation's cart.");
+        }
+
+        CheckoutView view = await ViewAsync(order, ct);
+
+        // The page lists the order's lines in order, so each one's ids are the order line's at the same place.
+        CartLine[] items = view.Lines.Select((l, i) => new CartLine(order.Lines[i].ProductId, order.Lines[i].VariantId, l.Name, l.VariantName,
+            l.Quantity, l.QuotedUnitPrice, l.UnitPrice, l.LineTotal, l.PriceChanged, l.Problem)).ToArray();
+        bool open = view.State == CheckoutState.Open;
+        string guidance = view.State switch
+        {
+            CheckoutState.Open when !view.CanPay => $"The customer can't pay this cart as it stands: {view.Message} Agree a change with them, then call create_cart with the complete new list.",
+            CheckoutState.Open when view.PriceChanged => "The cart is open, but some prices changed since it was made: tell the customer the new total before they pay. "
+                + "To change the cart, call create_cart with the complete new list; send checkout_url again only if they lost it.",
+            CheckoutState.Open => "The cart is open and can be paid. To change it, call create_cart with the complete new list; send checkout_url again only if they lost it.",
+            CheckoutState.Paying => "The customer pressed Pay and is paying. Don't change the cart unless they ask: a change now makes a new cart and link. Use get_payment_status to see whether it's paid.",
+            CheckoutState.Paid => "This cart has been paid. Use get_payment_status for where the order is.",
+            CheckoutState.Replaced => "A newer cart replaced this one. Call get_cart with connection_id and sender for the conversation's current cart.",
+            CheckoutState.Unavailable => "This cart couldn't be paid. If the customer still wants the items, call create_cart again.",
+            _ => "This cart's time ran out unpaid. If the customer still wants the items, check get_prices and call create_cart again.",
+        };
+
+        return new CartStatus(order.Id, view.State, items, view.Total, view.QuotedTotal, view.Currency, view.PriceChanged,
+            open && view.CanPay, open ? view.Message : null,
+            open || view.State == CheckoutState.Paying ? links.For(order) : null, view.ExpiresAt, guidance);
+    }
+
+    // An order id (UUID) or a reference (prt_ and 32 hex), anywhere in the text: agents wrap ids in quotes or JSON.
+    [GeneratedRegex(@"(?<id>\b[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\b)|(?<ref>\bprt_[0-9a-f]{32}\b)")]
+    private static partial Regex OrderKey();
 
     // ---- The customer: the checkout page ------------------------------------------------
 
@@ -150,6 +340,92 @@ public sealed class CheckoutService(
     {
         PaymentOrder order = await FindAsync(token, ct);
         return await ViewAsync(order, ct);
+    }
+
+    /// <summary>
+    /// The customer changed their cart on the page: a quantity up or down, or an item taken out. Only items already in
+    /// it, each up to what's left; whatever isn't listed is taken out, and at least one item stays. Each item is priced
+    /// again, keeping what the business quoted beside it, so a price that moved still shows. The cart's time isn't
+    /// restarted: that's the business's to give. Refused, with the checkout as it is now, if it can't be changed.
+    /// </summary>
+    public async Task<CheckoutView> ChangeAsync(string token, ChangeCheckoutRequest request, CancellationToken ct)
+    {
+        PaymentOrder order = await FindAsync(token, ct);
+        if (order.Status != PaymentOrderStatus.AwaitingCheckout || order.ExpiresAt <= Now)
+        {
+            CheckoutView closed = await ViewAsync(order, ct);
+            throw new CheckoutChangedException(closed.State == CheckoutState.Paying
+                ? "You've already started paying, so this order can't be changed. Message the business if it isn't right."
+                : closed.Message ?? "This checkout can't be changed any more.", closed);
+        }
+
+        await EnsureOnAsync(ct);
+        // A quantity of 0 takes the item out, as leaving it out does.
+        List<CheckoutItem> kept = (request.Items ?? []).Where(i => i.Quantity != 0).ToList();
+        if (kept.Count == 0)
+        {
+            throw new CheckoutChangedException("Keep at least one item. If you don't want the order any more, you don't need to pay.", await ViewAsync(order, ct));
+        }
+
+        List<CheckoutItem> wanted;
+        try
+        {
+            wanted = Merge(kept);
+        }
+        catch (CheckoutRefusedException)
+        {
+            throw new CheckoutChangedException($"Choose between 1 and {MaxQuantity} of each item.", await ViewAsync(order, ct));
+        }
+
+        if (wanted.Any(i => !order.Lines.Any(l => l.ProductId == i.ProductId && l.VariantId == i.VariantId)))
+        {
+            throw new CheckoutChangedException("Only items already in your order can be changed here. Message the business to add something.", await ViewAsync(order, ct));
+        }
+
+        List<LineQuote> quotes;
+        List<PaymentOrderLine> lines;
+        try
+        {
+            quotes = await QuoteAsync(order.WorkspaceId, wanted, countStock: order.HoldMode != CheckoutHoldMode.AtCheckout, ct);
+            lines = Agreed(quotes);
+        }
+        catch (CheckoutRefusedException ex)
+        {
+            throw new CheckoutChangedException(ForCustomer(ex.Message), await ViewAsync(order, ct));
+        }
+
+        // Each line keeps the business's quote, so what moved since still shows.
+        lines = lines.Select(l => l with { QuotedUnitPriceMinor = order.Lines.First(o => o.ProductId == l.ProductId && o.VariantId == l.VariantId).QuotedUnitMinor }).ToList();
+        long quotedTotal = lines.Sum(l => l.QuotedUnitMinor * l.Quantity);
+        bool saved;
+        try
+        {
+            saved = await SaveCartAsync(order, lines, quotedTotal, order.ExpiresAt!.Value, null, ct);
+        }
+        catch (CheckoutRefusedException ex)
+        {
+            throw new CheckoutChangedException(ForCustomer(ex.Message), await GetAsync(token, ct));
+        }
+
+        if (!saved)
+        {
+            throw new CheckoutChangedException("Your order changed while you were editing it. Check it, then try again.", await GetAsync(token, ct));
+        }
+
+        logger.LogInformation("Cart changed by the customer. Workspace={Workspace} Order={Order} TotalMinor={Total} Lines={Lines}",
+            order.WorkspaceId, order.Id, order.TotalMinor, order.Lines.Count);
+        return await ViewAsync(order, ct);
+    }
+
+    /// <summary>A refusal worded for the agent, without its advice to the agent, for the customer's page.</summary>
+    private static string ForCustomer(string message)
+    {
+        foreach (string agentOnly in new[] { " Sort these out with the customer, then try again.", " The cart wasn't changed: the customer's link still shows what it had. Check get_prices and agree the change with the customer." })
+        {
+            message = message.Replace(agentOnly, "", StringComparison.Ordinal);
+        }
+
+        return message.Trim() + " Your order hasn't changed.";
     }
 
     /// <summary>
@@ -349,7 +625,7 @@ public sealed class CheckoutService(
             total += (unit ?? line.QuotedUnitMinor) * line.Quantity;
             lines.Add(new CheckoutLineView(quote?.Name ?? line.Name, quote is null ? line.VariantName : quote.OptionName, line.Quantity,
                 FromMinor(line.QuotedUnitMinor), unit is null ? null : FromMinor(unit.Value), unit is null ? null : FromMinor(unit.Value * line.Quantity),
-                lineChanged, quote?.Problem));
+                lineChanged, quote?.Problem, line.ProductId, line.VariantId, MostFor(order, line, quote)));
         }
 
         string? message = problem
@@ -361,6 +637,15 @@ public sealed class CheckoutService(
         return new CheckoutView(CheckoutState.Open, business.Name, business.Logo, order.CustomerName, order.Currency, lines,
             FromMinor(order.QuotedTotalMinor), FromMinor(total), changed, rules.PriceChangeRule, canPay, message, order.ExpiresAt, null);
     }
+
+    /// <summary>
+    /// The most of a line the customer can have: what's left, plus what this cart already keeps aside of it. Uncounted
+    /// stock has no limit but the checkout's own; a line that can't be priced now can only go down.
+    /// </summary>
+    private static int MostFor(PaymentOrder order, PaymentOrderLine line, LineQuote? quote) =>
+        quote?.UnitMinor is null ? line.Quantity
+        : quote.Left is not int left ? MaxQuantity
+        : Math.Clamp(left + (order.HoldMode == CheckoutHoldMode.AtCheckout ? line.Quantity : 0), 0, MaxQuantity);
 
     private static (string Name, string? Logo) Business(Workspace? workspace)
         => (string.IsNullOrWhiteSpace(workspace?.Name) ? "Your order" : Plain(workspace!.Name!.Trim()), workspace?.LogoUrl);
@@ -428,18 +713,21 @@ public sealed class CheckoutService(
     /// <summary>Lets an order's stock go. If the catalog is down, the hold still runs out by itself at its time.</summary>
     private async Task ReleaseQuietlyAsync(PaymentOrder order)
     {
-        if (order.HoldMode == CheckoutHoldMode.Never)
+        if (order.HoldMode != CheckoutHoldMode.Never)
         {
-            return;
+            await ReleaseQuietlyAsync(order.WorkspaceId, order.Reference);
         }
+    }
 
+    private async Task ReleaseQuietlyAsync(string workspaceId, string reference)
+    {
         try
         {
-            await stock.ReleaseAsync(order.WorkspaceId, order.Reference, CancellationToken.None);
+            await stock.ReleaseAsync(workspaceId, reference, CancellationToken.None);
         }
         catch (CatalogStockUnavailableException ex)
         {
-            logger.LogWarning("Stock hold not released; it will run out at its time. Order={Order} Reason={Reason}", order.Id, ex.Message);
+            logger.LogWarning("Stock hold not released; it will run out at its time. Reference={Reference} Reason={Reason}", reference, ex.Message);
         }
     }
 
@@ -447,23 +735,28 @@ public sealed class CheckoutService(
     private CheckoutResult Again(PaymentOrder order) => order.Status switch
     {
         PaymentOrderStatus.AwaitingCheckout or PaymentOrderStatus.Pending or PaymentOrderStatus.Creating => Result(order),
-        PaymentOrderStatus.Failed => throw new CheckoutUnavailableException("That checkout couldn't be made. Try again with a new idempotency_key."),
-        PaymentOrderStatus.Expired => throw new CheckoutRefusedException("That checkout expired. If the customer still wants the items, check get_prices and make a new one with a new idempotency_key."),
-        PaymentOrderStatus.Cancelled => throw new CheckoutRefusedException("That checkout was replaced by a newer one for this conversation. Send the newer link."),
-        _ => throw new CheckoutRefusedException("That checkout has been paid. Use get_payment_status for where it is."),
+        PaymentOrderStatus.Failed => throw new CheckoutUnavailableException("That cart couldn't be made. Try again with a new idempotency_key."),
+        PaymentOrderStatus.Expired => throw new CheckoutRefusedException("That cart expired. If the customer still wants the items, check get_prices and call create_cart with a new idempotency_key."),
+        PaymentOrderStatus.Cancelled => throw new CheckoutRefusedException("That cart was replaced by a newer one for this conversation. Send the newer link."),
+        _ => throw new CheckoutRefusedException("That cart has been paid. Use get_payment_status for where it is."),
     };
 
-    private CheckoutResult Result(PaymentOrder order) => new (
+    private CheckoutResult Result(PaymentOrder order, bool changed = false) => new (
         order.Id,
-        CheckoutReady,
+        changed ? CartUpdated : CartReady,
         links.For(order),
         FromMinor(order.TotalMinor),
         order.Currency,
         order.Lines.Select(l => new CheckoutLine(l.ProductId, l.VariantId, l.Name, l.VariantName, l.Quantity, FromMinor(l.UnitPriceMinor), FromMinor(l.LineTotalMinor))).ToArray(),
         order.CheckoutExpiresAt,
-        "Send the customer checkout_url with the total and what it's for. On that page they see the latest prices and press Pay, which takes them to the payment page. "
-        + "It replaces any earlier checkout in this conversation. If a price changes before they pay, the page shows the old and the new price. "
-        + "Don't tell the customer the order is paid: use get_payment_status.");
+        changed
+            ? "The customer's cart now holds exactly these items, and checkout_url is the same link they already have. "
+              + "Tell them what changed and the new total; send the link again only if they've lost it. Its time started again (expires_at). "
+              + "Don't tell the customer the order is paid: use get_payment_status."
+            : "Send the customer checkout_url with the total and what it's for. On that page they see the latest prices and press Pay, which takes them to the payment page. "
+              + "This is the conversation's cart: to change it, call create_cart again with the complete new list, and the same link shows the change. "
+              + "If a price changes before they pay, the page shows the old and the new price. "
+              + "Don't tell the customer the order is paid: use get_payment_status.");
 
     /// <summary>The same product and option asked for twice is one line.</summary>
     private static List<CheckoutItem> Merge(IReadOnlyList<CheckoutItem>? items)
@@ -519,7 +812,7 @@ public sealed class CheckoutService(
     }
 
     /// <summary>A line priced from the live catalog. Problem is set when it can't be bought as asked.</summary>
-    private sealed record LineQuote(CheckoutItem Item, string Name, string? OptionName, long? UnitMinor, string? Problem);
+    private sealed record LineQuote(CheckoutItem Item, string Name, string? OptionName, long? UnitMinor, string? Problem, int? Left = null);
 
     /// <summary>The lines to save, when every one of them can be bought; otherwise every problem at once, so the agent can fix them all.</summary>
     private static List<PaymentOrderLine> Agreed(List<LineQuote> quotes)
@@ -615,7 +908,7 @@ public sealed class CheckoutService(
                 : price is null ? $"{label} is priced on request: the business has to quote it."
                 : countStock && left is { } count && item.Quantity > count ? $"Only {count} {label} left."
                 : null;
-            quotes.Add(new LineQuote(item, name, optionName, price is null ? null : ToMinor(price.Value), problem));
+            quotes.Add(new LineQuote(item, name, optionName, price is null ? null : ToMinor(price.Value), problem, available ? left : 0));
         }
 
         if (wrong.Count > 0)

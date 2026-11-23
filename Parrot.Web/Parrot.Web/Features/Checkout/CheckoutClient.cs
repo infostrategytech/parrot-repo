@@ -7,9 +7,16 @@ using Parrot.Web.Services;
 namespace Parrot.Web.Features.Checkout;
 
 /// <summary>One item on a checkout. UnitPrice and LineTotal are null when the item can't be priced now (gone, say);
-/// Problem says what's wrong with it, if anything.</summary>
+/// Problem says what's wrong with it, if anything. ProductId and VariantId name it when the customer changes how
+/// many they want, up to MaxQuantity (null once the checkout can't be changed).</summary>
 public sealed record CheckoutLine(string Name, string? VariantName, int Quantity, decimal QuotedUnitPrice, decimal? UnitPrice,
-    decimal? LineTotal, bool PriceChanged, string? Problem);
+    decimal? LineTotal, bool PriceChanged, string? Problem, Guid? ProductId = null, Guid? VariantId = null, int? MaxQuantity = null);
+
+/// <summary>How many of one item the customer wants: 0 takes it out.</summary>
+public sealed record CheckoutItemChange(Guid ProductId, Guid? VariantId, int Quantity);
+
+/// <summary>A change to the cart: the checkout as it is now, and why the change didn't go through when it didn't.</summary>
+public sealed record CheckoutChange(CheckoutView Checkout, string? Message = null);
 
 /// <summary>
 /// A checkout as its customer sees it, from GET api/checkout/{token}. State is "open", "paying", "paid", "expired",
@@ -50,6 +57,21 @@ public sealed class CheckoutClient(HttpClient http)
         await response.EnsureApiSuccessAsync();
         return await response.Content.ReadFromJsonAsync<CheckoutPayment>()
             ?? throw new HttpRequestException("The server returned an empty response.");
+    }
+
+    /// <summary>Sets how many of each item the customer wants (every item kept, 0 to take one out). A 409 is not
+    /// thrown: it hands back the checkout unchanged, with why.</summary>
+    public async Task<CheckoutChange> ChangeAsync(string token, IReadOnlyList<CheckoutItemChange> items)
+    {
+        using HttpResponseMessage response = await http.PutAsJsonAsync($"api/checkout/{Uri.EscapeDataString(token)}/items", new { items });
+        if (response.StatusCode == HttpStatusCode.Conflict && await ChangedAsync(response) is { Checkout: { } kept } refused)
+        {
+            return new CheckoutChange(kept, refused.Message);
+        }
+
+        await response.EnsureApiSuccessAsync();
+        return new CheckoutChange(await response.Content.ReadFromJsonAsync<CheckoutView>()
+            ?? throw new HttpRequestException("The server returned an empty response."));
     }
 
     // A conflict without the checkout in it (a proxy's page, say) is thrown as the error it is.

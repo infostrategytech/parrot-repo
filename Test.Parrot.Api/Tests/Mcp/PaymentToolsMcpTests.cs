@@ -31,7 +31,7 @@ using Test.Parrot.Api.Tests.Services.Workspaces;
 namespace Test.Parrot.Api.Tests.Mcp;
 
 /// <summary>
-/// create_checkout end to end: a real MCP client calls it over HTTP with the agent's service
+/// create_cart end to end: a real MCP client calls it over HTTP with the agent's service
 /// token, and gets a checkout link priced from the catalog for the token's workspace.
 /// </summary>
 public sealed class PaymentToolsMcpTests : IAsyncLifetime
@@ -102,11 +102,11 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
     public async Task DisposeAsync() => await _app.DisposeAsync();
 
     [Fact]
-    public async Task The_agent_sees_create_checkout_with_items_and_no_price_input()
+    public async Task The_agent_sees_create_cart_with_items_and_no_price_input()
     {
         await using McpClient client = await ConnectAsync();
 
-        McpClientTool tool = Assert.Single(await client.ListToolsAsync(), t => t.Name == "create_checkout");
+        McpClientTool tool = Assert.Single(await client.ListToolsAsync(), t => t.Name == "create_cart");
 
         Assert.Contains("never prices", tool.Description);
         JsonElement properties = tool.JsonSchema.GetProperty("properties");
@@ -124,12 +124,12 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
         Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
         await using McpClient client = await ConnectAsync();
 
-        CallToolResult result = await client.CallToolAsync("create_checkout", Arguments(new[] { new { product_id = bag, quantity = 2 } }));
+        CallToolResult result = await client.CallToolAsync("create_cart", Arguments(new[] { new { product_id = bag, quantity = 2 } }));
 
         Assert.NotEqual(true, result.IsError);
         using JsonDocument answer = JsonDocument.Parse(Text(result));
         JsonElement link = answer.RootElement;
-        Assert.Equal("checkout_ready", link.GetProperty("status").GetString());
+        Assert.Equal("cart_ready", link.GetProperty("status").GetString());
         Assert.Equal(8000m, link.GetProperty("total").GetDecimal());
         Assert.Equal("NGN", link.GetProperty("currency").GetString());
         Assert.StartsWith("https://app.example/checkout/", link.GetProperty("checkout_url").GetString());
@@ -145,7 +145,7 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
     {
         Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
         await using McpClient client = await ConnectAsync();
-        CallToolResult made = await client.CallToolAsync("create_checkout", Arguments(new[] { new { product_id = bag, quantity = 1 } }));
+        CallToolResult made = await client.CallToolAsync("create_cart", Arguments(new[] { new { product_id = bag, quantity = 1 } }));
         string orderId = JsonDocument.Parse(Text(made)).RootElement.GetProperty("order_id").GetString()!;
 
         CallToolResult status = await client.CallToolAsync("get_payment_status", new Dictionary<string, object?> { ["order_id"] = orderId });
@@ -166,7 +166,35 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
 
         CallToolResult garbled = await client.CallToolAsync("get_payment_status", new Dictionary<string, object?> { ["order_id"] = "{\"order_id\": \"x\"}" });
         Assert.True(garbled.IsError);
-        Assert.Contains("Pass the order_id create_checkout returned", Text(garbled));
+        Assert.Contains("Pass the order_id create_cart returned", Text(garbled));
+    }
+
+    [Fact]
+    public async Task The_agent_changes_the_cart_and_reads_it_back_by_the_conversation()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
+        await using McpClient client = await ConnectAsync();
+        CallToolResult made = await client.CallToolAsync("create_cart", Arguments(new[] { new { product_id = bag, quantity = 1 } }));
+        string orderId = JsonDocument.Parse(Text(made)).RootElement.GetProperty("order_id").GetString()!;
+
+        CallToolResult changed = await client.CallToolAsync("create_cart", Arguments(new[] { new { product_id = bag, quantity = 3 } }));
+        JsonElement change = JsonDocument.Parse(Text(changed)).RootElement;
+        Assert.Equal(("cart_updated", orderId), (change.GetProperty("status").GetString(), change.GetProperty("order_id").GetString()));
+
+        CallToolResult read = await client.CallToolAsync("get_cart", new Dictionary<string, object?> { ["connection_id"] = _connection, ["sender"] = "2348012345678" });
+
+        Assert.NotEqual(true, read.IsError);
+        JsonElement cart = JsonDocument.Parse(Text(read)).RootElement;
+        Assert.Equal((orderId, "open", true, 12000m), (cart.GetProperty("order_id").GetString(), cart.GetProperty("state").GetString(),
+            cart.GetProperty("can_pay").GetBoolean(), cart.GetProperty("total").GetDecimal()));
+        JsonElement item = cart.GetProperty("items")[0];
+        Assert.Equal((bag.ToString(), 3), (item.GetProperty("product_id").GetString(), item.GetProperty("quantity").GetInt32()));
+        Assert.StartsWith("https://app.example/checkout/", cart.GetProperty("checkout_url").GetString());
+        Assert.Single(_orders.Orders);
+
+        CallToolResult unknown = await client.CallToolAsync("get_cart", new Dictionary<string, object?> { ["order_id"] = Guid.NewGuid().ToString() });
+        Assert.True(unknown.IsError);
+        Assert.Contains("no such cart", Text(unknown));
     }
 
     [Fact]
@@ -175,7 +203,7 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
         Guid purse = _catalog.Product("Beaded purse", 3000m, left: 0, available: false);
         await using McpClient client = await ConnectAsync();
 
-        CallToolResult result = await client.CallToolAsync("create_checkout", Arguments(new[] { new { product_id = purse, quantity = 1 } }));
+        CallToolResult result = await client.CallToolAsync("create_cart", Arguments(new[] { new { product_id = purse, quantity = 1 } }));
 
         Assert.True(result.IsError);
         Assert.Contains("Beaded purse is sold out.", Text(result));
