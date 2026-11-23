@@ -69,31 +69,6 @@ public sealed class MongoConversationStore : IConversationStore
             StringComparer.Ordinal);
     }
 
-    // What counts as a reply the team sent: the channel took it (or has since said it arrived or was read).
-    private static readonly string[] SentStatuses = ["accepted", "sent", "delivered", "read"];
-
-    public async Task<IReadOnlyDictionary<(Guid Connection, string Sender), DateTime>> LastTeamRepliesAsync(
-        string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct)
-    {
-        if (conversations.Count == 0) return new Dictionary<(Guid, string), DateTime>();
-        FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.Outgoing && x.IsAiReply != true)
-            & Builders<MessageDocument>.Filter.In(x => x.SendStatus, SentStatuses)
-            & Builders<MessageDocument>.Filter.Ne(x => x.Type, "system")
-            & Builders<MessageDocument>.Filter.Or(conversations.Select(c =>
-                Builders<MessageDocument>.Filter.Where(x => x.ConnectionId == c.Connection && x.From == c.Sender)));
-        List<BsonDocument> rows = await _messages.Aggregate()
-            .Match(filter)
-            .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
-            {
-                { "_id", new BsonDocument { { "connection", "$ConnectionId" }, { "sender", "$From" } } },
-                { "at", new BsonDocument("$max", "$ReceivedAt") },
-            }))
-            .ToListAsync(ct);
-        return rows.ToDictionary(
-            row => (ConnectionOf(row["_id"]["connection"]), row["_id"]["sender"].AsString),
-            row => row["at"].ToUniversalTime());
-    }
-
     // MessageDocument keeps the connection id as a string.
     private static Guid ConnectionOf(BsonValue value) => Guid.Parse(value.AsString);
 

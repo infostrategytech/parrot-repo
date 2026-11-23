@@ -23,12 +23,6 @@ public static class AgentActivityTypes
     {
         public const string Approved = "approved";
         public const string Denied = "denied";
-
-        /// <summary>An escalation someone in the team closed without a reply from the inbox.</summary>
-        public const string Done = "done";
-
-        /// <summary>An escalation the team answered by replying to the customer from the inbox after it was opened.</summary>
-        public const string Replied = "replied";
     }
 }
 
@@ -120,14 +114,6 @@ public interface IAgentActivityStore
 
     /// <summary>The approvals and escalations nobody has decided yet, oldest first; the newest 1,000 when there are more.</summary>
     Task<IReadOnlyList<AgentActivityRecord>> ListPendingAsync(string ownerUserId, CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Closes the owner's open escalation: done by someone in the team, or answered by a reply (no one person, so
-    /// <paramref name="closedBy"/> is null). Returns how many records that touched: 0 when the owner has no such
-    /// escalation open.
-    /// </summary>
-    Task<int> CloseEscalationAsync(
-        string ownerUserId, string escalationId, string resolution, string? closedBy, DateTime closedAtUtc, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Marks the approval, and any escalation opened for it, decided. Returns

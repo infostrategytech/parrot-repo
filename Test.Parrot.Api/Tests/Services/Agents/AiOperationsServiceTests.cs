@@ -1,5 +1,7 @@
+using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using Parrot.Application.Agents;
+using Parrot.Application.Contracts.Conversations;
 using Parrot.Application.Conversations;
 using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
@@ -22,13 +24,28 @@ public class AiOperationsServiceTests
     private static readonly DateTimeOffset Now = new(2026, 10, 8, 15, 0, 0, TimeSpan.Zero);
     private static readonly DateTime Today = Now.UtcDateTime.Date;
 
+    // Other chats in the same workspace, on the same WhatsApp number unless said otherwise.
+    private const string BolaChat = "whatsapp:2348022222222:2349011112222";
+    private const string KunleChat = "whatsapp:2348033333333:2349011112222";
+    private const string TayoChat = "whatsapp:2348044444444:2349011112222";
+    private const string BayoChat = "instagram:17841400000000001:9876543210";
+
+    // The signed-in person's session token, as the AI service reads them from it.
+    private const string Token = "session-ngozi";
+
     private readonly FakeAgentActivityStore _activity = new();
+    private readonly FakeWaitingListClient _waiting = new() { People = { [Token] = "user-ngozi" } };
     private readonly Mock<IAgentRepository> _agents = new();
     private readonly Mock<IAgentOrchestratorClient> _orchestrator = new();
     private readonly Mock<IConversationStore> _conversations = new();
-    private readonly Dictionary<string, (Guid Connection, string Sender)> _inbox = new() { [AdaChat] = (WhatsApp, "2348012345678") };
-    // When the team last replied from the inbox, per chat.
-    private readonly Dictionary<(Guid Connection, string Sender), DateTime> _replies = [];
+    private readonly Dictionary<string, (Guid Connection, string Sender)> _inbox = new()
+    {
+        [AdaChat] = (WhatsApp, "2348012345678"),
+        [BolaChat] = (WhatsApp, "2348022222222"),
+        [KunleChat] = (WhatsApp, "2348033333333"),
+        [TayoChat] = (WhatsApp, "2348044444444"),
+        [BayoChat] = (Instagram, "9876543210"),
+    };
     private readonly AiOperationsService _sut;
 
     public AiOperationsServiceTests()
@@ -38,15 +55,38 @@ public class AiOperationsServiceTests
             new Agent { Id = Guid.Parse(Nova), WorkspaceId = Owner, Name = "Nova", Description = "", MascotUrl = "x" },
             new Agent { Id = Guid.Parse(Atlas), WorkspaceId = Owner, Name = "Atlas", Description = "", MascotUrl = "x" },
         ]);
-        // The owner's stored chats only: the store is asked for this owner, and answers for the keys it holds.
-        _conversations.Setup(c => c.FindByConversationKeysAsync(Owner, It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string _, IReadOnlyCollection<string> keys, CancellationToken _) =>
-                (IReadOnlyDictionary<string, (Guid Connection, string Sender)>)keys.Where(_inbox.ContainsKey).ToDictionary(k => k, k => _inbox[k]));
-        _conversations.Setup(c => c.LastTeamRepliesAsync(Owner, It.IsAny<IReadOnlyCollection<(Guid, string)>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync((string _, IReadOnlyCollection<(Guid Connection, string Sender)> wanted, CancellationToken _) =>
-                (IReadOnlyDictionary<(Guid Connection, string Sender), DateTime>)wanted.Where(_replies.ContainsKey).ToDictionary(k => k, k => _replies[k]));
-        _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, _conversations.Object, new FixedTimeProvider(Now),
-            Mock.Of<IAppLogger<AiOperationsService>>());
+        // The owner's stored chats only: another workspace holds none of these keys.
+        _conversations.Setup(c => c.FindByConversationKeysAsync(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string owner, IReadOnlyCollection<string> keys, CancellationToken _) =>
+                (IReadOnlyDictionary<string, (Guid Connection, string Sender)>)keys.Where(k => owner == Owner && _inbox.ContainsKey(k)).ToDictionary(k => k, k => _inbox[k]));
+        _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, _waiting, _conversations.Object,
+            new MemoryCache(new MemoryCacheOptions()), new FixedTimeProvider(Now), Mock.Of<IAppLogger<AiOperationsService>>());
+    }
+
+    // An open item on the AI service's waiting list: a hand-over unless it says otherwise.
+    private WaitingListItem Waiting(
+        string id, string? conversation = AdaChat, string kind = "handover", string? agent = Nova, int questions = 1,
+        string? approval = null, string? customerName = "Ada", int minutesAgo = 20)
+    {
+        WaitingListItem item = new()
+        {
+            Id = id,
+            Status = WaitingListItem.OpenStatus,
+            Kind = kind,
+            AgentId = agent,
+            CustomerRef = "2348012345678",
+            CustomerName = customerName,
+            ConversationKey = conversation,
+            Summary = $"Summary of {id}",
+            Priority = "P2",
+            QuestionCount = questions,
+            EscalationId = $"esc_{id}",
+            OpenedAt = Now.UtcDateTime.AddMinutes(-minutesAgo - 30),
+            LastAskedAt = Now.UtcDateTime.AddMinutes(-minutesAgo),
+            Approval = approval is null ? null : new WaitingListApproval($"apr_{id}", "payments.refund", "Refund above the limit", approval),
+        };
+        _waiting.Items.Add(item);
+        return item;
     }
 
     private AgentActivityRecord Turn(
@@ -234,233 +274,212 @@ public class AiOperationsServiceTests
     }
 
     [Fact]
-    public async Task WaitingAsync_ListsPendingApprovalsAndEscalationsNamedForTheAgentThatAsked()
+    public async Task WaitingAsync_ListsTheAiServicesOpenItemsWithTheAgentCustomerAndInboxConversation()
     {
-        Turn("t1", "awaiting_approval", Now.UtcDateTime.AddMinutes(-10), agent: Atlas, customerName: "Ada", approval: "apr_1");
-        Approval("apr_1", "t1", Now.UtcDateTime.AddMinutes(-10));
-        Approval("apr_old", "t0", Now.UtcDateTime.AddHours(-3), resolvedAt: Now.UtcDateTime.AddHours(-2));
-        Turn("t2", "escalated", Now.UtcDateTime.AddMinutes(-40), agent: Nova, customerName: null, escalation: "esc_1");
-        Escalation("esc_1", "t2", Now.UtcDateTime.AddMinutes(-40));
-        // Opened because apr_1 timed out: the same question as the approval, shown once.
-        Escalation("esc_2", "t1", Now.UtcDateTime.AddMinutes(-1), approval: "apr_1");
-        Approval("apr_theirs", "t9", Now.UtcDateTime, owner: "someone-else");
+        Waiting("wait_ada", agent: Nova, minutesAgo: 40);
+        Waiting("wait_bola", BolaChat, kind: "approval", agent: Atlas, approval: "pending", customerName: null, minutesAgo: 10);
+        Waiting("wait_kunle", KunleChat, agent: "an-agent-parrot-does-not-know", minutesAgo: 5);
 
-        IReadOnlyList<WaitingItemResponse> waiting = await _sut.WaitingAsync(Owner, null);
+        IReadOnlyList<WaitingItemResponse> waiting = await _sut.WaitingAsync(Owner, Token, null);
 
-        Assert.Equal(2, waiting.Count);
-        Assert.Equal("Nova", waiting[0].AgentName);
-        Assert.Equal("No policy for exchanges", waiting[0].Question);
-        Assert.Equal("esc_1", waiting[0].EscalationId);
-        Assert.Null(waiting[0].ApprovalId);
-        Assert.Equal("P2", waiting[0].Priority);
-        Assert.Equal("Atlas", waiting[1].AgentName);
-        Assert.Equal("Ada", waiting[1].Customer);
-        Assert.Equal("Refund above the limit", waiting[1].Question);
-        Assert.Equal("apr_1", waiting[1].ApprovalId);
-        Assert.Equal(Nova, waiting[0].AgentId);
-        Assert.Equal(Atlas, waiting[1].AgentId);
-        Assert.All(waiting, w => Assert.Equal($"{WhatsApp}:2348012345678", w.ConversationId));
+        Assert.Equal(["esc_wait_ada", "esc_wait_bola", "esc_wait_kunle"], waiting.Select(w => w.EscalationId));
+        WaitingItemResponse ada = waiting[0];
+        Assert.Equal("Nova", ada.AgentName);
+        Assert.Equal(Nova, ada.AgentId);
+        Assert.Equal("Ada", ada.Customer);
+        Assert.Equal("Summary of wait_ada", ada.Question);
+        Assert.Null(ada.ApprovalId);
+        Assert.Equal("P2", ada.Priority);
+        Assert.Equal(Now.UtcDateTime.AddMinutes(-70), ada.OccurredAt);
+        Assert.Equal($"{WhatsApp}:2348012345678", ada.ConversationId);
+        WaitingItemResponse bola = waiting[1];
+        Assert.Equal("Atlas", bola.AgentName);
+        Assert.Equal("2348012345678", bola.Customer);
+        Assert.Equal("apr_wait_bola", bola.ApprovalId);
+        Assert.Equal($"{WhatsApp}:2348022222222", bola.ConversationId);
+        Assert.Equal("Your agent", waiting[2].AgentName);
+        // Read as the signed-in person: the AI service takes the workspace from their token.
+        Assert.Equal([Token], _waiting.ListReads);
     }
 
-    // The escalation names no conversation itself here, so the key comes from the turn that asked it.
+    // Nothing in the inbox to answer it in (a chat Parrot never stored, or no key at all), so it can't be worked from here.
     [Fact]
-    public async Task WaitingAsync_WhenTheEscalationNamesNoConversation_UsesTheConversationOfTheTurnThatAsked()
+    public async Task WaitingAsync_WhenTheConversationIsNotInTheInbox_LeavesTheItemOut()
     {
-        Turn("t1", "escalated", Now.UtcDateTime.AddMinutes(-5), escalation: "esc_1");
-        Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-5));
+        Waiting("wait_test", "whatsapp:2340000000000:2349011112222");
+        Waiting("wait_nokey", conversation: null);
+        Waiting("wait_ada");
 
-        WaitingItemResponse item = Assert.Single(await _sut.WaitingAsync(Owner, null));
+        WaitingItemResponse item = Assert.Single(await _sut.WaitingAsync(Owner, Token, null));
 
-        Assert.Equal($"{WhatsApp}:2348012345678", item.ConversationId);
-    }
-
-    // Nothing in the inbox to answer it in, so it would sit in the count for ever.
-    [Fact]
-    public async Task WaitingAsync_WhenTheConversationIsNotInTheInbox_LeavesTheQuestionOut()
-    {
-        Escalation("esc_test", "t8", Now.UtcDateTime.AddMinutes(-3), conversation: "whatsapp:2340000000000:2349011112222");
-        Escalation("esc_nokey", "t9", Now.UtcDateTime.AddMinutes(-2));
-        Escalation("esc_ada", "t7", Now.UtcDateTime.AddMinutes(-1), conversation: AdaChat);
-
-        WaitingItemResponse item = Assert.Single(await _sut.WaitingAsync(Owner, null));
-
-        Assert.Equal("esc_ada", item.EscalationId);
+        Assert.Equal("esc_wait_ada", item.EscalationId);
     }
 
     [Fact]
-    public async Task WaitingAsync_ForATeammateLimitedToSomeChannels_LeavesOutQuestionsAskedOnTheOthers()
+    public async Task WaitingAsync_ForATeammateLimitedToSomeChannels_LeavesOutItemsOnTheOthers()
     {
-        const string bayoChat = "instagram:17841400000000001:9876543210";
-        _inbox[bayoChat] = (Instagram, "9876543210");
-        Escalation("esc_ada", "t1", Now.UtcDateTime.AddMinutes(-2), conversation: AdaChat);
-        Escalation("esc_bayo", "t2", Now.UtcDateTime.AddMinutes(-1), conversation: bayoChat);
+        Waiting("wait_ada");
+        Waiting("wait_bayo", BayoChat);
 
-        IReadOnlyList<WaitingItemResponse> everything = await _sut.WaitingAsync(Owner, null);
-        IReadOnlyList<WaitingItemResponse> whatsAppOnly = await _sut.WaitingAsync(Owner, new HashSet<Guid> { WhatsApp });
+        IReadOnlyList<WaitingItemResponse> everything = await _sut.WaitingAsync(Owner, Token, null);
+        IReadOnlyList<WaitingItemResponse> whatsAppOnly = await _sut.WaitingAsync(Owner, Token, new HashSet<Guid> { WhatsApp });
 
         Assert.Equal(2, everything.Count);
-        Assert.Equal("esc_ada", Assert.Single(whatsAppOnly).EscalationId);
+        Assert.Equal("esc_wait_ada", Assert.Single(whatsAppOnly).EscalationId);
     }
 
-    // Another workspace's question in a chat with the same key never reaches this owner, and their chats are never read.
+    // The inbox re-reads on a timer in every open tab; the AI service allows 120 reads a minute per workspace.
     [Fact]
-    public async Task WaitingAsync_NeverListsAnotherWorkspacesQuestions()
+    public async Task WaitingAsync_ReadsTheAiServiceOncePerWorkspaceWhileTheListIsFresh()
     {
-        Escalation("esc_theirs", "t9", Now.UtcDateTime.AddMinutes(-1), conversation: AdaChat, owner: "someone-else");
+        Waiting("wait_ada");
 
-        Assert.Empty(await _sut.WaitingAsync(Owner, null));
-        _conversations.Verify(c => c.FindByConversationKeysAsync("someone-else", It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+        await _sut.WaitingAsync(Owner, Token, null);
+        await _sut.WaitingAsync(Owner, "session-tunde", new HashSet<Guid> { WhatsApp });
+        await _sut.OpenByConversationAsync(Owner, Token, null);
+        await _sut.OpenQuestionsAsync(Owner, Token, null, WhatsApp, "2348012345678");
+
+        Assert.Single(_waiting.ListReads);
+
+        // Another workspace never shares this one's list, and its own read can't link this workspace's chats.
+        _agents.Setup(a => a.GetByWorkspaceAsync("someone-else")).ReturnsAsync([]);
+        Assert.Empty(await _sut.WaitingAsync("someone-else", "session-theirs", null));
+        Assert.Equal([Token, "session-theirs"], _waiting.ListReads);
     }
 
+    // The inbox and the Agents page still load; nothing shows as waiting, and the service isn't asked again straight away.
     [Fact]
-    public async Task OpenByConversationAsync_GivesEachConversationItsQuestionApprovalAndTheAgentThatAskedLast()
+    public async Task WaitingAsync_WhenTheAiServiceDoesNotAnswer_IsEmptyAndDoesNotAskAgainAtOnce()
     {
-        const string bayoChat = "whatsapp:2348099999999:2349011112222";
-        _inbox[bayoChat] = (WhatsApp, "2348099999999");
-        // Ada: Nova escalated, then Atlas asked for an approval.
-        Turn("t1", "escalated", Now.UtcDateTime.AddMinutes(-30), agent: Nova, escalation: "esc_1");
-        Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-30));
-        Turn("t2", "awaiting_approval", Now.UtcDateTime.AddMinutes(-10), agent: Atlas, approval: "apr_1");
-        Approval("apr_1", "t2", Now.UtcDateTime.AddMinutes(-10));
-        // Bayo: an approval, and the escalation opened when it timed out (the same question).
-        Turn("t3", "awaiting_approval", Now.UtcDateTime.AddMinutes(-20), conversation: bayoChat, agent: Nova, approval: "apr_2");
-        Approval("apr_2", "t3", Now.UtcDateTime.AddMinutes(-20), conversation: bayoChat);
-        Escalation("esc_2", "t3", Now.UtcDateTime.AddMinutes(-5), approval: "apr_2", conversation: bayoChat);
+        Waiting("wait_ada");
+        _waiting.Failure = new ServiceUnavailableException("The AI service could not be reached.", new TimeoutException());
 
-        IReadOnlyList<ConversationQuestions> open = await _sut.OpenByConversationAsync(Owner, null);
+        Assert.Empty(await _sut.WaitingAsync(Owner, Token, null));
+        Assert.Empty(await _sut.OpenByConversationAsync(Owner, Token, null));
+        Assert.Empty(await _sut.OpenQuestionsAsync(Owner, Token, null, WhatsApp, "2348012345678"));
 
-        Assert.Equal(2, open.Count);
-        ConversationQuestions ada = Assert.Single(open, q => q.Sender == "2348012345678");
-        Assert.Equal(WhatsApp, ada.ConnectionId);
-        Assert.True(ada.NeedsAnswer);
-        Assert.Equal("apr_1", ada.Approval?.ApprovalId);
-        Assert.Equal("payments.refund", ada.Approval?.Tool);
-        Assert.Equal(new ConversationAgentRef(Atlas, "Atlas"), ada.Agent);
-        ConversationQuestions bayo = Assert.Single(open, q => q.Sender == "2348099999999");
-        Assert.False(bayo.NeedsAnswer);
-        Assert.Equal("apr_2", bayo.Approval?.ApprovalId);
-        Assert.Equal(new ConversationAgentRef(Nova, "Nova"), bayo.Agent);
-    }
-
-    // The team answered the customer from the inbox after the agent asked: nothing is waiting any more.
-    [Fact]
-    public async Task WaitingAsync_AfterTheTeamRepliedInThatChat_NoLongerListsTheQuestionAndRecordsItClosed()
-    {
-        AgentActivityRecord question = Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-30), conversation: AdaChat);
-        _replies[(WhatsApp, "2348012345678")] = Now.UtcDateTime.AddMinutes(-10);
-
-        Assert.Empty(await _sut.WaitingAsync(Owner, null));
-        Assert.Empty(await _sut.OpenByConversationAsync(Owner, null));
-        // Closed when the reply went, by no one person; it no longer counts toward the open list's cap.
-        Assert.Equal(Now.UtcDateTime.AddMinutes(-10), question.ResolvedAt);
-        Assert.Equal("replied", question.Resolution);
-        Assert.Null(question.ResolvedBy);
-        Assert.Empty(await _activity.ListPendingAsync(Owner));
+        Assert.Single(_waiting.ListReads);
     }
 
     [Fact]
-    public async Task WaitingAsync_WhenTheLastReplyCameBeforeTheQuestion_StillListsIt()
+    public async Task OpenByConversationAsync_SaysWhatEachConversationWaitsOnAndWhichAgentAsked()
     {
-        Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-30), conversation: AdaChat);
-        _replies[(WhatsApp, "2348012345678")] = Now.UtcDateTime.AddMinutes(-60);
+        Waiting("wait_ada", agent: Nova);
+        Waiting("wait_bola", BolaChat, kind: "approval", agent: Atlas, approval: "pending");
+        // An approval the customer has asked more since: both a decision and an answer.
+        Waiting("wait_kunle", KunleChat, kind: "approval", approval: "pending", questions: 2);
+        // An approval that expired can't be decided any more; the customer still waits for a reply.
+        Waiting("wait_tayo", TayoChat, kind: "handover", approval: "expired", agent: null);
 
-        Assert.Equal("esc_1", Assert.Single(await _sut.WaitingAsync(Owner, null)).EscalationId);
+        Dictionary<string, ConversationQuestions> open = (await _sut.OpenByConversationAsync(Owner, Token, null)).ToDictionary(q => q.Sender);
+
+        Assert.Equal(4, open.Count);
+        Assert.True(open["2348012345678"].NeedsAnswer);
+        Assert.Null(open["2348012345678"].Approval);
+        Assert.Equal(new ConversationAgentRef(Nova, "Nova"), open["2348012345678"].Agent);
+        Assert.False(open["2348022222222"].NeedsAnswer);
+        Assert.Equal(new ConversationApproval("apr_wait_bola", "payments.refund", "Refund above the limit"), open["2348022222222"].Approval);
+        Assert.Equal(new ConversationAgentRef(Atlas, "Atlas"), open["2348022222222"].Agent);
+        Assert.True(open["2348033333333"].NeedsAnswer);
+        Assert.Equal("apr_wait_kunle", open["2348033333333"].Approval?.ApprovalId);
+        Assert.True(open["2348044444444"].NeedsAnswer);
+        Assert.Null(open["2348044444444"].Approval);
+        Assert.Null(open["2348044444444"].Agent);
+        Assert.All(open.Values, q => Assert.Equal(WhatsApp, q.ConnectionId));
     }
 
-    // A reply to the customer doesn't decide what the agent asked permission for.
     [Fact]
-    public async Task WaitingAsync_AfterTheTeamReplied_StillListsAnApproval()
+    public async Task OpenByConversationAsync_WithNothingWaiting_IsEmptyAndReadsNoConversations()
     {
-        Approval("apr_1", "t1", Now.UtcDateTime.AddMinutes(-30));
-        _replies[(WhatsApp, "2348012345678")] = Now.UtcDateTime.AddMinutes(-10);
-
-        Assert.Equal("apr_1", Assert.Single(await _sut.WaitingAsync(Owner, null)).ApprovalId);
+        Assert.Empty(await _sut.OpenByConversationAsync(Owner, Token, null));
+        _conversations.VerifyNoOtherCalls();
     }
 
     [Fact]
-    public async Task OpenQuestionsAsync_ReturnsThisChatsOpenQuestionsAsAgentQuestionMessages()
+    public async Task OpenQuestionsAsync_ShowsTheItemAsAnAgentQuestionAtItsNewestHandOver()
     {
-        const string bayoChat = "whatsapp:2348099999999:2349011112222";
-        _inbox[bayoChat] = (WhatsApp, "2348099999999");
-        Escalation("esc_ada", "t1", Now.UtcDateTime.AddMinutes(-20), conversation: AdaChat);
-        Approval("apr_ada", "t2", Now.UtcDateTime.AddMinutes(-15));
-        Escalation("esc_bayo", "t3", Now.UtcDateTime.AddMinutes(-10), conversation: bayoChat);
+        Waiting("wait_ada", questions: 3, minutesAgo: 12);
+        Waiting("wait_bola", BolaChat, kind: "approval", approval: "pending");
 
-        IReadOnlyList<ConversationMessage> questions = await _sut.OpenQuestionsAsync(Owner, null, WhatsApp, "2348012345678");
+        ConversationMessage question = Assert.Single(await _sut.OpenQuestionsAsync(Owner, Token, null, WhatsApp, "2348012345678"));
 
-        ConversationMessage question = Assert.Single(questions);
-        Assert.Equal("esc_ada", question.Id);
+        Assert.Equal("wait_ada", question.Id);
         Assert.Equal("ai_question", question.Kind);
-        Assert.Equal("No policy for exchanges", question.Text);
-        Assert.Equal(Now.UtcDateTime.AddMinutes(-20), question.ReceivedAt);
+        Assert.Equal("Summary of wait_ada", question.Text);
+        Assert.Equal(Now.UtcDateTime.AddMinutes(-12), question.ReceivedAt);
+        // An approval and nothing more is decided on its own card, not answered.
+        Assert.Empty(await _sut.OpenQuestionsAsync(Owner, Token, null, WhatsApp, "2348022222222"));
     }
 
     [Fact]
     public async Task OpenQuestionsAsync_ForATeammateWhoCannotOpenTheChannel_IsEmpty()
     {
-        Escalation("esc_ada", "t1", Now.UtcDateTime.AddMinutes(-20), conversation: AdaChat);
+        Waiting("wait_ada");
 
-        Assert.Empty(await _sut.OpenQuestionsAsync(Owner, new HashSet<Guid> { Instagram }, WhatsApp, "2348012345678"));
+        Assert.Empty(await _sut.OpenQuestionsAsync(Owner, Token, new HashSet<Guid> { Instagram }, WhatsApp, "2348012345678"));
     }
 
     [Fact]
-    public async Task CloseQuestionAsync_ClosesTheQuestionForWhoeverClosedItAndSaysSoInTheChat()
+    public async Task CloseQuestionAsync_MarksItHandledAsThePersonSaysSoInTheChatAndTheNextReadIsFresh()
     {
-        AgentActivityRecord question = Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-20), conversation: AdaChat);
+        Waiting("wait_ada");
+        Assert.Single(await _sut.WaitingAsync(Owner, Token, null));
 
-        await _sut.CloseQuestionAsync(Owner, null, WhatsApp, "2348012345678", "esc_1", "user-ngozi");
+        await _sut.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_ada", "user-ngozi");
 
-        Assert.Equal(Now.UtcDateTime, question.ResolvedAt);
-        Assert.Equal("done", question.Resolution);
-        Assert.Equal("user-ngozi", question.ResolvedBy);
-        Assert.Empty(await _sut.WaitingAsync(Owner, null));
+        Assert.Equal(["wait_ada"], _waiting.Resolved);
+        Assert.Equal("user-ngozi", _waiting.Items.Single().ResolvedBy);
         _conversations.Verify(c => c.WriteSystemEventAsync(Owner, WhatsApp, "2348012345678",
             "A team member marked the agent's question as done.", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Empty(await _sut.WaitingAsync(Owner, Token, null));
+        Assert.Equal(2, _waiting.ListReads.Count);
     }
 
-    // Another workspace's question, one in another chat, one already answered and one that never existed all answer
-    // the same, and nothing is changed or written.
+    // One in another chat, one already closed, an approval with nothing to answer, and one the AI service doesn't have
+    // in this workspace (another workspace's, or one that never existed) all answer the same, and nothing is closed.
     [Theory]
-    [InlineData("esc_theirs")]
-    [InlineData("esc_bayo")]
-    [InlineData("esc_closed")]
-    [InlineData("esc_never")]
-    public async Task CloseQuestionAsync_ForAQuestionNotOpenInThisChat_ThrowsTheSameNotFoundAndChangesNothing(string questionId)
+    [InlineData("wait_bola")]
+    [InlineData("wait_closed")]
+    [InlineData("wait_approval")]
+    [InlineData("wait_never")]
+    public async Task CloseQuestionAsync_ForAQuestionNotOpenInThisChat_ThrowsTheSameNotFoundAndClosesNothing(string questionId)
     {
-        const string bayoChat = "whatsapp:2348099999999:2349011112222";
-        _inbox[bayoChat] = (WhatsApp, "2348099999999");
-        Escalation("esc_theirs", "t9", Now.UtcDateTime.AddMinutes(-5), conversation: AdaChat, owner: "someone-else");
-        Escalation("esc_bayo", "t3", Now.UtcDateTime.AddMinutes(-5), conversation: bayoChat);
-        Escalation("esc_closed", "t4", Now.UtcDateTime.AddMinutes(-50), conversation: AdaChat, resolvedAt: Now.UtcDateTime.AddMinutes(-40));
+        Waiting("wait_bola", BolaChat);
+        Waiting("wait_closed");
+        _waiting.Close("wait_closed", "team_replied", null);
+        Waiting("wait_approval", kind: "approval", approval: "pending");
 
         NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() =>
-            _sut.CloseQuestionAsync(Owner, null, WhatsApp, "2348012345678", questionId, "user-ngozi"));
+            _sut.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", questionId, "user-ngozi"));
 
         Assert.Equal("Question not found.", error.Message);
-        Assert.Null(_activity.Records.Single(r => r.EscalationId == "esc_theirs").ResolvedAt);
-        Assert.Null(_activity.Records.Single(r => r.EscalationId == "esc_bayo").ResolvedAt);
+        Assert.Empty(_waiting.Resolved);
         _conversations.Verify(c => c.WriteSystemEventAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task CloseQuestionAsync_OnAChannelTheTeammateCannotOpen_ThrowsNotFound()
+    public async Task CloseQuestionAsync_OnAChannelTheTeammateCannotOpen_ThrowsNotFoundAndClosesNothing()
     {
-        AgentActivityRecord question = Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-20), conversation: AdaChat);
+        Waiting("wait_ada");
 
-        await Assert.ThrowsAsync<NotFoundException>(() =>
-            _sut.CloseQuestionAsync(Owner, new HashSet<Guid> { Instagram }, WhatsApp, "2348012345678", "esc_1", "user-ngozi"));
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() =>
+            _sut.CloseQuestionAsync(Owner, Token, new HashSet<Guid> { Instagram }, WhatsApp, "2348012345678", "wait_ada", "user-ngozi"));
 
-        Assert.Null(question.ResolvedAt);
+        Assert.Equal("Question not found.", error.Message);
+        Assert.Empty(_waiting.Resolved);
     }
 
-    // A teammate closed it in another tab between our read and our write: it is closed, and their line already says so.
-    [Fact]
-    public async Task CloseQuestionAsync_WhenSomeoneClosedItAtTheSameMoment_WritesNoSecondChatLine()
+    // A teammate in another tab, or a reply to the customer, closed it between the read and the resolve: the first close
+    // wins, and only the person whose close it was says so in the chat.
+    [Theory]
+    [InlineData("handled", "user-tunde")]
+    [InlineData("team_replied", null)]
+    public async Task CloseQuestionAsync_WhenSomethingElseClosedItFirst_WritesNoChatLine(string resolution, string? by)
     {
-        AgentActivityRecord question = Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-20), conversation: AdaChat);
-        _activity.BeforeClose = () => { question.ResolvedAt = Now.UtcDateTime; question.Resolution = "done"; };
+        Waiting("wait_ada");
+        _waiting.BeforeResolve = item => _waiting.Close(item.Id, resolution, by);
 
-        await _sut.CloseQuestionAsync(Owner, null, WhatsApp, "2348012345678", "esc_1", "user-ngozi");
+        await _sut.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_ada", "user-ngozi");
 
         _conversations.Verify(c => c.WriteSystemEventAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
@@ -468,22 +487,26 @@ public class AiOperationsServiceTests
     [Fact]
     public async Task CloseQuestionAsync_WhenTheChatLineCannotBeWritten_StillClosesTheQuestion()
     {
-        AgentActivityRecord question = Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-20), conversation: AdaChat);
+        Waiting("wait_ada");
         _conversations.Setup(c => c.WriteSystemEventAsync(Owner, WhatsApp, "2348012345678", It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new TimeoutException("mongo"));
 
-        await _sut.CloseQuestionAsync(Owner, null, WhatsApp, "2348012345678", "esc_1", "user-ngozi");
+        await _sut.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_ada", "user-ngozi");
 
-        Assert.Equal("done", question.Resolution);
+        Assert.Equal(["wait_ada"], _waiting.Resolved);
     }
 
+    // Nothing was closed, so the person is told to try again rather than that it is done.
     [Fact]
-    public async Task OpenByConversationAsync_WithNothingOpen_IsEmptyAndReadsNoConversations()
+    public async Task CloseQuestionAsync_WhenTheAiServiceDoesNotAnswer_FailsAndWritesNothing()
     {
-        Approval("apr_old", "t0", Now.UtcDateTime.AddHours(-3), resolvedAt: Now.UtcDateTime.AddHours(-2));
+        Waiting("wait_ada");
+        _waiting.Failure = new ServiceUnavailableException("The AI service could not be reached.", new TimeoutException());
 
-        Assert.Empty(await _sut.OpenByConversationAsync(Owner, null));
-        _conversations.VerifyNoOtherCalls();
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() =>
+            _sut.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_ada", "user-ngozi"));
+
+        _conversations.Verify(c => c.WriteSystemEventAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -507,7 +530,22 @@ public class AiOperationsServiceTests
             Assert.Equal("approved", r.Resolution);
             Assert.Equal(Owner, r.ResolvedBy);
         });
-        Assert.Empty(await _sut.WaitingAsync(Owner, null));
+    }
+
+    // Deciding closes the approval's waiting item at the AI service; the list isn't served from the copy read before.
+    [Fact]
+    public async Task DecideApprovalAsync_AfterTheDecision_ReadsTheWaitingListAfresh()
+    {
+        Approval("apr_wait_bola", "t1", Now.UtcDateTime.AddMinutes(-10), conversation: BolaChat);
+        Waiting("wait_bola", BolaChat, kind: "approval", approval: "pending");
+        Assert.Single(await _sut.WaitingAsync(Owner, Token, null));
+        _orchestrator.Setup(o => o.DecideApprovalAsync(Owner, "apr_wait_bola", It.IsAny<ApprovalDecision>(), It.IsAny<CancellationToken>()))
+            .Callback(() => _waiting.Close("wait_bola", "approved", "user-ngozi"))
+            .ReturnsAsync(new ApprovalDecisionResult("t1", "completed", null));
+
+        await _sut.DecideApprovalAsync(Owner, "apr_wait_bola", new ApprovalDecisionRequest("approved", null));
+
+        Assert.Empty(await _sut.WaitingAsync(Owner, Token, null));
     }
 
     [Fact]
@@ -550,6 +588,6 @@ public class AiOperationsServiceTests
 
         await Assert.ThrowsAsync<ServiceUnavailableException>(() => _sut.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecisionRequest("approved", null)));
 
-        Assert.Single(await _sut.WaitingAsync(Owner, null));
+        Assert.Single(await _activity.ListPendingAsync(Owner));
     }
 }

@@ -108,24 +108,6 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
         return documents.Select(d => d.ToRecord()).Reverse().ToList();
     }
 
-    public async Task<int> CloseEscalationAsync(
-        string ownerUserId, string escalationId, string resolution, string? closedBy, DateTime closedAtUtc, CancellationToken cancellationToken = default)
-    {
-        await EnsureIndexesAsync(cancellationToken);
-        FilterDefinition<AgentActivityDocument> filter =
-            Builders<AgentActivityDocument>.Filter.Eq(x => x.OwnerUserId, ownerUserId)
-            & Builders<AgentActivityDocument>.Filter.Eq(x => x.Type, AgentActivityTypes.EscalationOpened)
-            & Builders<AgentActivityDocument>.Filter.Eq(x => x.EscalationId, escalationId)
-            & Builders<AgentActivityDocument>.Filter.Eq(x => x.ResolvedAt, null);
-        UpdateDefinition<AgentActivityDocument> update = Builders<AgentActivityDocument>.Update
-            .Set(x => x.ResolvedAt, closedAtUtc)
-            .Set(x => x.Resolution, resolution)
-            .Set(x => x.ResolvedBy, closedBy);
-
-        UpdateResult result = await _activity.UpdateManyAsync(filter, update, cancellationToken: cancellationToken);
-        return (int)result.ModifiedCount;
-    }
-
     public async Task<int> MarkApprovalDecidedAsync(
         string ownerUserId,
         string approvalId,

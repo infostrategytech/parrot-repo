@@ -110,33 +110,6 @@ public class MongoAgentActivityStoreTests
     }
 
     [MongoFact]
-    public async Task CloseEscalationAsync_ClosesOnlyTheOwnersOpenEscalationAndOnlyOnce()
-    {
-        static AgentActivityRecord Escalation(string owner) => new()
-        {
-            OwnerUserId = owner, Type = AgentActivityTypes.EscalationOpened, EventKey = "esc_1", EscalationId = "esc_1",
-            TurnId = "turn_9", Problem = "No policy for exchanges", OccurredAt = T0, Payload = "{}",
-        };
-
-        await WithStore(async store =>
-        {
-            await store.InsertAsync(Escalation("owner-a"));
-            await store.InsertAsync(Escalation("owner-b"));
-
-            Assert.Equal(1, await store.CloseEscalationAsync("owner-a", "esc_1", AgentActivityTypes.Resolution.Done, "user-ngozi", T0.AddMinutes(5)));
-            Assert.Equal(0, await store.CloseEscalationAsync("owner-a", "esc_1", AgentActivityTypes.Resolution.Done, "user-ngozi", T0.AddMinutes(6)));
-            Assert.Equal(0, await store.CloseEscalationAsync("owner-a", "esc_unknown", AgentActivityTypes.Resolution.Done, "user-ngozi", T0.AddMinutes(6)));
-
-            Assert.Empty(await store.ListPendingAsync("owner-a"));
-            Assert.Single(await store.ListPendingAsync("owner-b"));
-            AgentActivityRecord closed = Assert.Single(await store.ListRecentAsync("owner-a", AgentActivityTypes.EscalationOpened, 5));
-            Assert.Equal("done", closed.Resolution);
-            Assert.Equal("user-ngozi", closed.ResolvedBy);
-            Assert.Equal(T0.AddMinutes(5), closed.ResolvedAt);
-        });
-    }
-
-    [MongoFact]
     public async Task AnApprovalLeavesTheWaitingListOnceDecidedAndOnlyOnce()
     {
         await WithStore(async store =>

@@ -51,7 +51,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
 
         // Open agent questions and approvals, for the people the waiting list is for.
         Dictionary<(Guid, string), ConversationQuestions> questions = HttpContext.WorkspaceAccess().Can(WorkspacePermissions.ConversationsTakeOver)
-            ? (await operations.OpenByConversationAsync(Owner, Reach, cancellationToken)).ToDictionary(q => (q.ConnectionId, q.Sender))
+            ? (await operations.OpenByConversationAsync(Owner, HttpContext.SessionToken(), Reach, cancellationToken)).ToDictionary(q => (q.ConnectionId, q.Sender))
             : [];
 
         // Pinned conversations, and those with an open question, lead the first page wherever they fall in the
@@ -88,7 +88,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             agentByChannel = new Dictionary<string, ConversationAgentRef>();
         }
 
-        // The orchestrator names its live agents; the activity store may know only the id of the one that asked.
+        // The orchestrator names its live agents; Parrot's own agent list may not know the one that asked.
         Dictionary<string, ConversationAgentRef> liveAgents = agentByChannel.Values
             .DistinctBy(a => a.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(a => a.Id, StringComparer.OrdinalIgnoreCase);
@@ -214,7 +214,8 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         // The newest page also carries the agents' open questions here, for the people who can answer them.
         if (before is null && HttpContext.WorkspaceAccess().Can(WorkspacePermissions.ConversationsTakeOver))
         {
-            IReadOnlyList<ConversationMessage> questions = await operations.OpenQuestionsAsync(Owner, Reach, connectionId, sender, cancellationToken);
+            IReadOnlyList<ConversationMessage> questions = await operations.OpenQuestionsAsync(
+                Owner, HttpContext.SessionToken(), Reach, connectionId, sender, cancellationToken);
             if (questions.Count > 0) page = page with { Messages = [.. page.Messages.Concat(questions).OrderBy(m => m.ReceivedAt)] };
         }
 
@@ -227,7 +228,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     public async Task<IActionResult> MarkQuestionDone(Guid connectionId, string questionId, [FromQuery] string sender, CancellationToken cancellationToken)
     {
         HttpContext.RequireReach(connectionId);
-        await operations.CloseQuestionAsync(Owner, Reach, connectionId, sender, questionId, Reader, cancellationToken);
+        await operations.CloseQuestionAsync(Owner, HttpContext.SessionToken(), Reach, connectionId, sender, questionId, Reader, cancellationToken);
         return NoContent();
     }
 

@@ -23,6 +23,9 @@ namespace Test.Parrot.Api.Tests.Controllers;
 public sealed class ConversationsControllerTests
 {
     private const string Owner = "workspace-1";
+
+    // The signed-in person's session token, passed on to the AI service's waiting list as it was sent.
+    private const string Token = "session-token-1";
     private static readonly Guid WhatsApp = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
     private readonly Mock<IConversationStore> _store = new();
@@ -37,7 +40,7 @@ public sealed class ConversationsControllerTests
         _store.Setup(s => s.FindAsync(Owner, It.IsAny<IReadOnlyCollection<(Guid, string)>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string _, IReadOnlyCollection<(Guid Connection, string Sender)> wanted, CancellationToken _) =>
                 wanted.Contains((_older.ConnectionId, _older.Sender)) ? [_older] : []);
-        _operations.Setup(o => o.OpenByConversationAsync(Owner, It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<CancellationToken>())).ReturnsAsync(
+        _operations.Setup(o => o.OpenByConversationAsync(Owner, Token, It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<CancellationToken>())).ReturnsAsync(
         [
             new ConversationQuestions(WhatsApp, "2348012345678", NeedsAnswer: true,
                 new ConversationApproval("apr_1", "payments.refund", "Refund above the limit"), new ConversationAgentRef("agent-nova", "Nova")),
@@ -76,6 +79,7 @@ public sealed class ConversationsControllerTests
         {
             User = new ClaimsPrincipal(new ClaimsIdentity([new Claim(WorkspaceClaims.WorkspaceId, Owner), new Claim(ClaimTypes.NameIdentifier, "user-1")], "test")),
         };
+        http.Request.Headers.Authorization = $"Bearer {Token}";
         http.Items[typeof(WorkspaceAccess)] = access;
         controller.ControllerContext = new ControllerContext { HttpContext = http };
         return controller;
@@ -133,7 +137,7 @@ public sealed class ConversationsControllerTests
 
         await Controller(Teammate(reach, WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver)).List();
 
-        _operations.Verify(o => o.OpenByConversationAsync(Owner, It.Is<IReadOnlySet<Guid>?>(r => r != null && r.SetEquals(reach)), It.IsAny<CancellationToken>()), Times.Once);
+        _operations.Verify(o => o.OpenByConversationAsync(Owner, Token, It.Is<IReadOnlySet<Guid>?>(r => r != null && r.SetEquals(reach)), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     private ConversationMessage Customer(string id, int minutesAgo) =>
@@ -150,7 +154,7 @@ public sealed class ConversationsControllerTests
     public async Task Messages_NewestPageForSomeoneWhoCanAnswer_CarriesTheChatsOpenQuestionsInTimeOrder()
     {
         ThreadHolds(Customer("m1", 30), Customer("m2", 5));
-        _operations.Setup(o => o.OpenQuestionsAsync(Owner, null, WhatsApp, "2348012345678", It.IsAny<CancellationToken>()))
+        _operations.Setup(o => o.OpenQuestionsAsync(Owner, Token, null, WhatsApp, "2348012345678", It.IsAny<CancellationToken>()))
             .ReturnsAsync([new ConversationMessage("esc_1", "Ada wants to know about Ibadan.", false, "open", DateTime.UtcNow.AddMinutes(-20)) { Kind = "ai_question" }]);
 
         List<ConversationMessage> thread = Thread(await Controller(OwnerAccess()).Messages(WhatsApp, "2348012345678", null, default));
@@ -167,7 +171,7 @@ public sealed class ConversationsControllerTests
         List<ConversationMessage> thread = Thread(await Controller(OwnerAccess()).Messages(WhatsApp, "2348012345678", "cursor", default));
 
         Assert.Equal("m1", Assert.Single(thread).Id);
-        _operations.Verify(o => o.OpenQuestionsAsync(It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _operations.Verify(o => o.OpenQuestionsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
@@ -178,16 +182,16 @@ public sealed class ConversationsControllerTests
         List<ConversationMessage> thread = Thread(await Controller(Teammate(null, WorkspacePermissions.ConversationsView)).Messages(WhatsApp, "2348012345678", null, default));
 
         Assert.Equal("m1", Assert.Single(thread).Id);
-        _operations.Verify(o => o.OpenQuestionsAsync(It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _operations.Verify(o => o.OpenQuestionsAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]
-    public async Task MarkQuestionDone_ClosesItInThisChatAsTheSignedInPerson()
+    public async Task MarkQuestionDone_ClosesItInThisChatAsTheSignedInPersonWithTheirOwnToken()
     {
-        IActionResult result = await Controller(OwnerAccess()).MarkQuestionDone(WhatsApp, "esc_1", "2348012345678", default);
+        IActionResult result = await Controller(OwnerAccess()).MarkQuestionDone(WhatsApp, "wait_1", "2348012345678", default);
 
         Assert.IsType<NoContentResult>(result);
-        _operations.Verify(o => o.CloseQuestionAsync(Owner, null, WhatsApp, "2348012345678", "esc_1", "user-1", It.IsAny<CancellationToken>()), Times.Once);
+        _operations.Verify(o => o.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_1", "user-1", It.IsAny<CancellationToken>()), Times.Once);
     }
 
     // A channel the teammate can't open answers as not found, like one that doesn't exist, and nothing is closed.
@@ -197,9 +201,9 @@ public sealed class ConversationsControllerTests
         ConversationsController controller = Controller(Teammate(new HashSet<Guid> { Guid.NewGuid() },
             WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver));
 
-        await Assert.ThrowsAsync<NotFoundException>(() => controller.MarkQuestionDone(WhatsApp, "esc_1", "2348012345678", default));
+        await Assert.ThrowsAsync<NotFoundException>(() => controller.MarkQuestionDone(WhatsApp, "wait_1", "2348012345678", default));
 
-        _operations.Verify(o => o.CloseQuestionAsync(It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(),
+        _operations.Verify(o => o.CloseQuestionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(),
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

@@ -53,25 +53,29 @@ public interface IAiOperationsService
         string ownerUserId, string? agentId, string? channel, int limit, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// The open approvals and escalations, oldest first, each with the inbox conversation it was asked in. One whose
-    /// conversation is not in the inbox is left out, since it can't be answered there. <paramref name="reach"/> is the
-    /// connections a channel-limited teammate can open (null for everyone else); questions on others are left out.
+    /// What is waiting for the team, longest-waiting first: the AI service's open items, one per conversation, each with
+    /// the inbox conversation it belongs to. One whose conversation is not in the inbox is left out, since it can't be
+    /// answered there. <paramref name="userToken"/> is the caller's own session token, which the AI service reads the
+    /// workspace from. <paramref name="reach"/> is the connections a channel-limited teammate can open (null for
+    /// everyone else); items on others are left out. When the AI service doesn't answer, nothing is waiting.
     /// </summary>
-    Task<IReadOnlyList<WaitingItemResponse>> WaitingAsync(string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<WaitingItemResponse>> WaitingAsync(
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default);
 
     /// <summary>The same open items as <see cref="WaitingAsync"/>, one entry per inbox conversation.</summary>
-    Task<IReadOnlyList<ConversationQuestions>> OpenByConversationAsync(string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<ConversationQuestions>> OpenByConversationAsync(
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default);
 
-    /// <summary>The agents' open questions in one conversation, oldest first, as the messages the inbox shows them as.</summary>
+    /// <summary>The agents' open questions in one conversation, as the messages the inbox shows them as.</summary>
     Task<IReadOnlyList<ConversationMessage>> OpenQuestionsAsync(
-        string ownerUserId, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, CancellationToken cancellationToken = default);
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Closes an agent's open question in this conversation without a reply, and says so in the chat. Throws
-    /// <see cref="Domain.Exceptions.NotFoundException"/> when no such question is open there.
+    /// Marks an agent's open question in this conversation handled, as the caller, without a reply, and says so in the
+    /// chat. Throws <see cref="Domain.Exceptions.NotFoundException"/> when no such question is open there.
     /// </summary>
     Task CloseQuestionAsync(
-        string ownerUserId, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId, string closedBy,
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId, string closedBy,
         CancellationToken cancellationToken = default);
 
     Task<ApprovalDecisionResponse> DecideApprovalAsync(

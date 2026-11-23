@@ -65,27 +65,6 @@ public sealed class FakeAgentActivityStore : IAgentActivityStore
         return Task.FromResult(list);
     }
 
-    /// <summary>Runs as a close begins: lets a test close the record first, as a teammate in another tab would.</summary>
-    public Action? BeforeClose { get; set; }
-
-    public Task<int> CloseEscalationAsync(
-        string ownerUserId, string escalationId, string resolution, string? closedBy, DateTime closedAtUtc, CancellationToken cancellationToken = default)
-    {
-        ThrowIfFailing();
-        BeforeClose?.Invoke();
-        int touched = 0;
-        foreach (AgentActivityRecord record in Records.Where(r => r.OwnerUserId == ownerUserId
-            && r.Type == AgentActivityTypes.EscalationOpened && r.EscalationId == escalationId && r.ResolvedAt is null))
-        {
-            record.ResolvedAt = closedAtUtc;
-            record.Resolution = resolution;
-            record.ResolvedBy = closedBy;
-            touched++;
-        }
-
-        return Task.FromResult(touched);
-    }
-
     public Task<int> MarkApprovalDecidedAsync(
         string ownerUserId,
         string approvalId,
