@@ -13,6 +13,9 @@ public interface IAgentCapabilities
     /// set up and saved as drafts, and nothing says one is replying.
     /// </summary>
     bool CanReply { get; }
+
+    /// <summary>Per-agent catalog access can be saved and enforced by the active provider.</summary>
+    bool CanManageCatalogAccess => false;
 }
 
 /// <summary>

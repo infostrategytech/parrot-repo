@@ -1,6 +1,6 @@
 /* Agent detail — one agent's page: the header, a tab tray, and on Overview
    its day (the figures, what needs you, the latest conversations it replied to, the week) above
-   how it is set up. The figures use AI Operations' colours, one per meaning. */
+   the channels it answers on. The figures use AI Operations' colours, one per meaning. */
 
 .agent-detail {
   min-width: 0;
@@ -519,21 +519,6 @@
    switching tabs never changes the page's width (and no second column to
    fold on a smaller screen). */
 .agent-detail__config { width: min(var(--ds-detail-max), 100%); }
-
-/* How it's set up: each line opens the tab where it is set. */
-.agent-detail ::deep .agent-detail__setup-row {
-  display: flex;
-  gap: var(--spacing-md);
-  align-items: center;
-  width: 100%;
-  min-height: var(--ds-detail-row-min);
-  padding: var(--spacing-md) var(--spacing-xl);
-  text-align: left;
-  border-top: var(--ds-detail-hairline) solid var(--colors-surface-border);
-}
-.agent-detail ::deep .agent-detail__setup-row:hover { background: var(--colors-interaction-hover); }
-.agent-detail ::deep .agent-detail__setup-go { flex: none; color: var(--colors-icon-secondary); }
-.agent-detail__setup { overflow: hidden; }
 
 /* What this job needs that the business hasn't said: knowledge's blue, one line, a way to add it. */
 .agent-detail__gaps {

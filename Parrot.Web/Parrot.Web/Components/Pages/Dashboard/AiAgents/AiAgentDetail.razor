@@ -26,8 +26,8 @@
 @implements IDisposable
 
 @* One agent: who it is and whether it is on, then its day (what it did,
-   what it needs from you, what it said), then how it is set up; the figures
-   link to where the work is. (Playbooks are parked: see the project's
+   what it needs from you, what it said); the figures link to where the work is.
+   (Playbooks are parked: see the project's
    playbooks research.)
 
    Concept B (demo, 13 October 2026): one row of tabs instead of Settings,
@@ -390,7 +390,6 @@ else
                 </div>
             }
 
-            @* Where it answers, then how it is set up: each row opens the tab where it is set. *@
                 <Parrot.Web.Components.Pages.Dashboard.Tools.AgentTools AgentId="@agent.Id" AgentName="@agent.Name" UseCase="@agent.Settings.UseCase" SummaryOnly />
                 @* Where it answers, here rather than a tab of its own: the thing to
                    check before turning it on. *@
@@ -399,23 +398,6 @@ else
                     <div class="agent-detail__config agent-detail__where">
                         <AgentBasics Form="_form" Others="OthersThan(agent)" Channels="_channels" Tried="_tried" OnChange="StateHasChanged" ShowIdentity="false" ShowSafety="false" />
                     </div>
-                }
-                @* One line per tab, each opening it: the page's index, not a copy. Not for a draft
-                   (designer, 20 October 2026): getting it ready is all there is to read; the tabs are above. *@
-                @if (!agent.IsDraft)
-                {
-                <section class="agent-detail__card agent-detail__setup" aria-labelledby="agent-setup-title">
-                    <header class="agent-detail__card-head">
-                        <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-setup-title">How it's set up</Typography>
-                    </header>
-                    @SetupRow(AgentUseCase.Of(agent.Settings.UseCase)?.Icon ?? AgentRole.Of(agent.Settings.Role).Icon, "Its job", "What it does for your customers, and what it can do.", "job", "Job")
-                    @if (Knowledge.Available && _form is not null)
-                    {
-                        @SetupRow(IconName.RiBookOpenFill, "What it knows", KnowsLine(_form), "knowledge", "Knowledge")
-                    }
-                    @SetupRow(IconName.RiChatSmile3Fill, "How it talks", $"{ToneWord(agent.Settings.Tone)} tone, {LengthWord(agent.Settings.Length)} replies.", "personality", "Personality")
-                    @SetupRow(IconName.RiUserSharedFill, "When it brings you in", $"When it can't help. {AgentBasics.MoneyRule(agent.Settings)}.", "handover", "Handover & safety")
-                </section>
                 }
         }
 
@@ -438,10 +420,6 @@ else
                                         <Button @onclick="OpenTelling">@(kept is null ? $"Tell {agent.Name} its job" : "Continue")</Button>
                                     </Action>
                                 </EmptyState>
-                            </section>
-                            <section class="agent-detail__group" aria-labelledby="agent-can-title">
-                                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
-                                <Parrot.Web.Components.Pages.Dashboard.Tools.AgentTools AgentId="@agent.Id" AgentName="@agent.Name" UseCase="@agent.Settings.UseCase" />
                             </section>
                         }
                         else
@@ -480,13 +458,12 @@ else
                                     }
                                 </div>
                             </section>
-                            <section class="agent-detail__group" aria-labelledby="agent-can-title">
-                                <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
-                                <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Actions" ShowAlways="false" />
-                                @* Its tools are things it can do too, so they're listed here, not as a section of their own (designer, 2 November 2026). *@
-                                <Parrot.Web.Components.Pages.Dashboard.Tools.AgentTools AgentId="@agent.Id" AgentName="@agent.Name" UseCase="@agent.Settings.UseCase" />
-                            </section>
                         }
+                        <section class="agent-detail__group" aria-labelledby="agent-can-title">
+                            <Typography TextStyle="TextStyle.HeadingH4Semibold" As="h2" id="agent-can-title">What it can do</Typography>
+                            <AgentAdvanced Form="_form" Cards="_cards" OnChange="StateHasChanged" Only="AgentTopic.Actions" ShowAlways="false" ShowOrderStatus="@toldJob" />
+                            <Parrot.Web.Components.Pages.Dashboard.Tools.AgentTools AgentId="@agent.Id" AgentName="@agent.Name" UseCase="@agent.Settings.UseCase" />
+                        </section>
                         break;
                     case "knowledge":
                         @* The business's knowledge, shared by every agent: what this one uses
@@ -654,6 +631,7 @@ else
     <AgentTestChat Open="_testing" OnClose="() => _testing = false"
                    Name="@_form.DisplayName" Mascot="@_form.Mascot" Business="@Business"
                    Brief="JobBrief" UseCase="@_form.Settings.UseCase" Industry="@(_form.Settings.Industry ?? Kind.Id)"
+                   CanAccessProductsAndServices="@_form.Settings.CanAccessProductsAndServices" CanRecommend="@_form.Settings.CanRecommend"
                    OnChangeLine="ChangeLine" OnReplied="() => Readiness.MarkTested(AgentId)" />
 }
 
@@ -1476,20 +1454,6 @@ else
         }
     }
 
-    private static string ToneWord(AgentVoicePreset tone) => tone switch
-    {
-        AgentVoicePreset.Professional => "Professional",
-        AgentVoicePreset.Upbeat => "Upbeat",
-        _ => "Warm",
-    };
-
-    private static string LengthWord(AgentResponseLength length) => length switch
-    {
-        AgentResponseLength.Concise => "short",
-        AgentResponseLength.Detailed => "detailed",
-        _ => "balanced",
-    };
-
     private static string StatusOf(AiAgent agent) => agent.IsDraft ? "Draft" : agent.IsActive ? "On" : "Off";
 
     private static StatusTone StatusToneOf(AiAgent agent) =>
@@ -1552,28 +1516,11 @@ else
     private static string DayName(int index, int count) =>
         index == count - 1 ? "Today" : DateTime.Today.AddDays(index - (count - 1)).ToString("ddd");
 
-    // One plain sentence about how the agent works, under its icon.
-    // A line of "How it's set up" that opens the tab where it is set (Concept B).
-    // One save bar for every tab with settings. A save that fails keeps every
-    // change, and says so in the bar, where the person is looking.
     // "Shared with all your agents.", then what this job still needs, if anything.
     private string KnowsLine(AgentForm form) =>
         Memory.Available && JobGaps(form) is { Count: > 0 } gaps
             ? $"Shared with all your agents. {GapLine(form, gaps)}"
             : "Shared with all your agents.";
-
-    private RenderFragment SetupRow(IconName icon, string title, string detail, string tab, string tabName) => __builder =>
-    {
-        <RowButton Class="agent-detail__setup-row" OnClick="@(() => _activeTab = tab)" aria-label="@($"{title}. Open {tabName}.")">
-            <span class="agent-detail__fact-icon"><Icon Name="@icon" Size="IconSize.Md" /></span>
-            <span class="agent-detail__row-text">
-                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@title</Typography>
-                <Typography TextStyle="TextStyle.Small12Regular" As="small" Prose>@detail</Typography>
-            </span>
-            <Icon Name="IconName.RiArrowRightSLine" Size="IconSize.Sm" Class="agent-detail__setup-go" />
-        </RowButton>
-    };
-
 
     private void BackToAgents() => Nav.NavigateTo("/dashboard/ai-operations");
 
