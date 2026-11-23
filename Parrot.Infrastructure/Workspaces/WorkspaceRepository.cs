@@ -19,7 +19,10 @@ public sealed class WorkspaceRepository(ApplicationDbContext db) : IWorkspaceRep
 
     public async Task<bool> TryAddAsync(Workspace workspace)
     {
+        // Its wallet is saved with it, so no workspace is ever without one.
+        WorkspaceWallet wallet = WorkspaceWallet.For(workspace.Id);
         db.Workspaces.Add(workspace);
+        db.WorkspaceWallets.Add(wallet);
         try
         {
             await db.SaveChangesAsync();
@@ -27,8 +30,9 @@ public sealed class WorkspaceRepository(ApplicationDbContext db) : IWorkspaceRep
         }
         catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.UniqueViolation })
         {
-            // Detached so the losing row is not retried by the next save on this context.
+            // Detached so the losing rows are not retried by the next save on this context.
             db.Entry(workspace).State = EntityState.Detached;
+            db.Entry(wallet).State = EntityState.Detached;
             return false;
         }
     }

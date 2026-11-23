@@ -35,6 +35,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<WorkspacePaymentSettings> WorkspacePaymentSettings => Set<WorkspacePaymentSettings>();
+    public DbSet<WorkspaceWallet> WorkspaceWallets => Set<WorkspaceWallet>();
 
     public DbSet<BusinessSource> BusinessSources => Set<BusinessSource>();
     public DbSet<WorkspaceSourceState> WorkspaceSourceStates => Set<WorkspaceSourceState>();
@@ -444,6 +445,19 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
         });
 
         // A workspace's checkout settings: one row per workspace, made when the business first saves.
+        // One wallet per workspace, keyed by it and gone with it. A balance below zero is refused here
+        // as well as in code, so no bug can leave a business owing money it never had.
+        builder.Entity<WorkspaceWallet>(entity =>
+        {
+            entity.HasKey(w => w.WorkspaceId);
+            entity.Property(w => w.WorkspaceId).HasMaxLength(450);
+            entity.HasOne<Workspace>().WithOne().HasForeignKey<WorkspaceWallet>(w => w.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(w => w.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(w => w.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.ToTable(t => t.HasCheckConstraint("CK_WorkspaceWallets_BalanceMinor", "\"BalanceMinor\" >= 0"));
+        });
+
         builder.Entity<WorkspacePaymentSettings>(entity =>
         {
             entity.HasKey(s => s.WorkspaceId);
