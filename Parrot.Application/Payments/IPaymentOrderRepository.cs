@@ -29,6 +29,22 @@ public interface IPaymentOrderRepository
     /// </summary>
     Task<bool> TryMoveAsync(PaymentOrder order, PaymentOrderStatus expected, CancellationToken ct);
 
+    /// <summary>
+    /// The conversation's cart the customer hasn't pressed Pay on yet and whose time isn't up: the one
+    /// create_cart changes rather than replaces. The newest, should there be more than one.
+    /// </summary>
+    Task<PaymentOrder?> FindOpenCartAsync(string workspaceId, Guid connectionId, string sender, DateTime now, CancellationToken ct);
+
+    /// <summary>The conversation's newest cart, whatever its state; null when it has never had one.</summary>
+    Task<PaymentOrder?> FindLatestCartAsync(string workspaceId, Guid connectionId, string sender, CancellationToken ct);
+
+    /// <summary>
+    /// Saves a cart's new contents (lines, totals, times, reference, hold, customer details) only if
+    /// it's still unpaid, Pay hasn't been pressed and nobody changed it since it was read
+    /// (<paramref name="readAt"/> is the UpdatedAt it was read with). False when any of that changed.
+    /// </summary>
+    Task<bool> TryReplaceCartAsync(PaymentOrder order, DateTime readAt, CancellationToken ct);
+
     /// <summary>Cancels the conversation's other open orders (awaiting checkout or payment). Returns them, to let their stock go.</summary>
     Task<IReadOnlyList<PaymentOrder>> CancelOpenAsync(string workspaceId, Guid connectionId, string sender, Guid keep, DateTime at, CancellationToken ct);
 

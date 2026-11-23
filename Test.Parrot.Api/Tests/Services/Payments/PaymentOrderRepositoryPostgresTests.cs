@@ -96,6 +96,64 @@ public sealed class PaymentOrderRepositoryPostgresTests : IAsyncLifetime
     }
 
     [ConnectionMessageReceiptPostgresTests.PostgresFact]
+    public async Task The_open_cart_is_the_conversations_unpaid_one_still_in_time()
+    {
+        EfPaymentOrderRepository repository = Repository();
+        Guid connection = Guid.NewGuid();
+        DateTime now = DateTime.UtcNow;
+        PaymentOrder open = Order("ws-1", "open", connection, status: PaymentOrderStatus.AwaitingCheckout);
+        open.ExpiresAt = now.AddMinutes(10);
+        PaymentOrder lapsed = Order("ws-1", "lapsed", connection, status: PaymentOrderStatus.AwaitingCheckout);
+        lapsed.ExpiresAt = now.AddMinutes(-1);
+        PaymentOrder paying = Order("ws-1", "paying", connection, status: PaymentOrderStatus.Pending);
+        paying.ExpiresAt = now.AddMinutes(10);
+        PaymentOrder someoneElse = Order("ws-1", "other", connection, sender: "234899", status: PaymentOrderStatus.AwaitingCheckout);
+        someoneElse.ExpiresAt = now.AddMinutes(10);
+        foreach (PaymentOrder order in new[] { open, lapsed, paying, someoneElse }) await repository.TryAddAsync(order, default);
+
+        Assert.Equal(open.Id, (await repository.FindOpenCartAsync("ws-1", connection, "234801", now, default))?.Id);
+        Assert.Null(await repository.FindOpenCartAsync("ws-2", connection, "234801", now, default));
+    }
+
+    [ConnectionMessageReceiptPostgresTests.PostgresFact]
+    public async Task A_cart_change_saves_only_over_the_cart_as_it_was_read()
+    {
+        EfPaymentOrderRepository repository = Repository();
+        Guid connection = Guid.NewGuid();
+        PaymentOrder cart = Order("ws-1", "key-1", connection, status: PaymentOrderStatus.AwaitingCheckout);
+        cart.ExpiresAt = DateTime.UtcNow.AddMinutes(10);
+        await repository.TryAddAsync(cart, default);
+
+        // Two changes from the same read, at once: the database's own timestamp is what they're checked against.
+        PaymentOrder read = (await repository.FindOpenCartAsync("ws-1", connection, "234801", DateTime.UtcNow, default))!;
+        async Task<PaymentOrder> Changed(int quantity, string reference)
+        {
+            PaymentOrder change = (await repository.FindAsync("ws-1", cart.Id, default))!;
+            change.Lines = [new PaymentOrderLine(Guid.NewGuid(), null, "Quilted bag", null, quantity, 400_000, 400_000L * quantity)];
+            change.TotalMinor = change.QuotedTotalMinor = 400_000L * quantity;
+            change.Reference = reference;
+            change.Note = "Deliver to Lekki";
+            change.UpdatedAt = DateTime.UtcNow.AddTicks(quantity);
+            return change;
+        }
+
+        bool[] saved = await Task.WhenAll(Changed(3, "prt_three"), Changed(5, "prt_five")).ContinueWith(t =>
+            Task.WhenAll(t.Result.Select(c => repository.TryReplaceCartAsync(c, read.UpdatedAt, default)))).Unwrap();
+
+        Assert.Equal(1, saved.Count(s => s));
+        PaymentOrder after = (await repository.FindAsync("ws-1", cart.Id, default))!;
+        Assert.Contains(after.Lines[0].Quantity, new[] { 3, 5 });
+        Assert.Equal((after.Lines[0].Quantity == 3 ? "prt_three" : "prt_five", "Deliver to Lekki"), (after.Reference, after.Note));
+
+        // Once Pay is pressed, it can't be changed.
+        after.Status = PaymentOrderStatus.Creating;
+        Assert.True(await repository.TryMoveAsync(after, PaymentOrderStatus.AwaitingCheckout, default));
+        PaymentOrder paying = (await repository.FindAsync("ws-1", cart.Id, default))!;
+        paying.Status = PaymentOrderStatus.AwaitingCheckout;
+        Assert.False(await repository.TryReplaceCartAsync(paying, paying.UpdatedAt, default));
+    }
+
+    [ConnectionMessageReceiptPostgresTests.PostgresFact]
     public async Task An_update_saves_the_link()
     {
         EfPaymentOrderRepository repository = Repository();

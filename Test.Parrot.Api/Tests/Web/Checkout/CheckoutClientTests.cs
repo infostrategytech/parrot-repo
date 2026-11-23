@@ -69,6 +69,35 @@ public class CheckoutClientTests
         Assert.Equal(24000m, result.Checkout!.Total);
     }
 
+    [Fact]
+    public async Task AChangeSendsEveryItemKeptAndReturnsTheCheckoutAsItIsNow()
+    {
+        Guid product = Guid.NewGuid(), option = Guid.NewGuid(), other = Guid.NewGuid();
+        var handler = new ControlledHandler(HttpStatusCode.OK, View(total: 32000m));
+        var result = await Client(handler).ChangeAsync("token", [new CheckoutItemChange(product, option, 2), new CheckoutItemChange(other, null, 0)]);
+
+        Assert.Equal("/api/checkout/token/items", handler.Path);
+        Assert.Equal(HttpMethod.Put, handler.Method);
+        Assert.Null(handler.Authorization);
+        JsonElement items = JsonDocument.Parse(handler.Body!).RootElement.GetProperty("items");
+        Assert.Equal((product, option, 2), (items[0].GetProperty("productId").GetGuid(), items[0].GetProperty("variantId").GetGuid(), items[0].GetProperty("quantity").GetInt32()));
+        Assert.Equal((JsonValueKind.Null, 0), (items[1].GetProperty("variantId").ValueKind, items[1].GetProperty("quantity").GetInt32()));
+        Assert.Equal(32000m, result.Checkout.Total);
+        Assert.Null(result.Message);
+    }
+
+    [Fact]
+    public async Task AChangeThatCantBeMadeComesBackUnchangedWithWhy()
+    {
+        var handler = new ControlledHandler(HttpStatusCode.Conflict, new
+        {
+            errorCode = "CHECKOUT_NOT_CHANGED", message = "Only 3 Example item left. Your order hasn't changed.", checkout = View(),
+        });
+        var result = await Client(handler).ChangeAsync("token", [new CheckoutItemChange(Guid.NewGuid(), null, 4)]);
+        Assert.Equal("Only 3 Example item left. Your order hasn't changed.", result.Message);
+        Assert.Equal(24000m, result.Checkout.Total);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.ServiceUnavailable)]
     [InlineData(HttpStatusCode.TooManyRequests)]

@@ -206,7 +206,7 @@ services:
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
       OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
-      # Checkouts (create_checkout): the customer pays from the checkout page, through the
+      # Checkouts (create_cart): the customer pays from the checkout page, through the
       # platform's Accelerate account (the sandbox unless ACCELERATE_BASE_URL says otherwise).
       # The keys come from the shell (ACCELERATE_PUBLIC_KEY / ACCELERATE_SECRET_KEY, and
       # ACCELERATE_CLIENT_SECRET for webhooks), never this file. Without them checkouts are

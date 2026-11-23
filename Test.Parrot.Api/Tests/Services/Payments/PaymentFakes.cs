@@ -59,6 +59,25 @@ public sealed class FakePaymentOrderRepository : IPaymentOrderRepository
         return Task.FromResult(true);
     }
 
+    public Task<PaymentOrder?> FindOpenCartAsync(string workspaceId, Guid connectionId, string sender, DateTime now, CancellationToken ct) =>
+        Task.FromResult(Copy(Orders.Where(o => o.WorkspaceId == workspaceId && o.ConnectionId == connectionId && o.CustomerSender == sender
+            && o.Status == PaymentOrderStatus.AwaitingCheckout && o.PaidAt is null && o.ExpiresAt > now).Reverse().OrderByDescending(o => o.CreatedAt).FirstOrDefault()));
+
+    public Task<PaymentOrder?> FindLatestCartAsync(string workspaceId, Guid connectionId, string sender, CancellationToken ct) =>
+        Task.FromResult(Copy(Orders.Where(o => o.WorkspaceId == workspaceId && o.ConnectionId == connectionId && o.CustomerSender == sender)
+            .Reverse().OrderByDescending(o => o.CreatedAt).FirstOrDefault()));
+
+    public Task<bool> TryReplaceCartAsync(PaymentOrder order, DateTime readAt, CancellationToken ct)
+    {
+        PaymentOrder stored = Orders.Single(o => o.Id == order.Id && o.WorkspaceId == order.WorkspaceId);
+        BeforeConditionalUpdate?.Invoke(stored);
+        BeforeConditionalUpdate = null;
+        stored = Orders.Single(o => o.Id == order.Id);
+        if (stored.Status != PaymentOrderStatus.AwaitingCheckout || stored.PaidAt is not null || stored.UpdatedAt != readAt) return Task.FromResult(false);
+        Orders[Orders.IndexOf(stored)] = Copy(order)!;
+        return Task.FromResult(true);
+    }
+
     public Task<IReadOnlyList<PaymentOrder>> CancelOpenAsync(string workspaceId, Guid connectionId, string sender, Guid keep, DateTime at, CancellationToken ct)
     {
         List<PaymentOrder> open = Orders.Where(o => o.WorkspaceId == workspaceId && o.ConnectionId == connectionId && o.CustomerSender == sender
@@ -99,6 +118,9 @@ public sealed class FakeStockClient : ICatalogStockClient
 
     public string? ShortWith { get; set; }
 
+    /// <summary>Short for some holds only: the message for the lines asked for, or null to hold them.</summary>
+    public Func<IReadOnlyList<StockLine>, string?>? ShortIf { get; set; }
+
     public bool Down { get; set; }
 
     public IReadOnlyList<StockLine> CommitShort { get; set; } = [];
@@ -107,6 +129,7 @@ public sealed class FakeStockClient : ICatalogStockClient
     {
         if (Down) throw new CatalogStockUnavailableException("The catalog can't be reached right now.");
         if (ShortWith is not null) throw new StockShortException(ShortWith);
+        if (ShortIf?.Invoke(lines) is { } shortMessage) throw new StockShortException(shortMessage);
         Held.Add((workspaceId, reference, expiresAt, lines));
         return Task.CompletedTask;
     }
