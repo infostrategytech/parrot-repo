@@ -37,6 +37,12 @@ public class StorageSettings
     public string MediaBucket { get; init; } = "parrot-private";
 
     /// <summary>
+    /// The API's public address, e.g. https://api.example.com. The download links in MessagePersisted start with it.
+    /// Empty: those links are left out (url is null) and everything else about the message is unchanged.
+    /// </summary>
+    public string MediaLinkBaseUrl { get; init; } = string.Empty;
+
+    /// <summary>
     /// True: the message is stored at once with its files pending and a job per file goes to the media topic.
     /// False (the default): the worker copies the files before it stores the message. Turn it on only when
     /// the media workers run and the inbox refreshes a thread when a file finishes.

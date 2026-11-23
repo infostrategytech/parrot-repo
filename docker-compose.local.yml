@@ -229,6 +229,8 @@ services:
       Storage__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
       Storage__MediaBucket: parrot-private
+      # The start of the download links in MessagePersisted: the API as this machine reaches it.
+      Storage__MediaLinkBaseUrl: http://localhost:5222
       # The verification code every sign-up on this stack accepts, so no
       # mailbox is needed to finish one; the API refuses to start with it set
       # outside Development. The breach lookup is off to keep the stack offline.
@@ -309,6 +311,8 @@ services:
       Storage__ServiceUrl: http://minio:9000
       Storage__AccessKey: ${MINIO_ROOT_USER:-parrot-local}
       Storage__SecretKey: ${MINIO_ROOT_PASSWORD:-parrot-local-secret}
+      # The start of the download links in MessagePersisted: the API as this machine reaches it.
+      Storage__MediaLinkBaseUrl: http://localhost:5222
       # The AI service: needed so inbound messages are tagged UserToAgent when an agent is live.
       JwtSettings__Secret: ${JWT_SECRET:-dev-secret-at-least-32-characters-long}
       JwtSettings__Issuer: ParrotApi

@@ -15,7 +15,7 @@ public sealed class MediaLinks(IDataProtectionProvider provider)
     public static readonly TimeSpan Lifetime = TimeSpan.FromHours(12);
 
     private readonly ITimeLimitedDataProtector _protector =
-        provider.CreateProtector("Parrot.CustomerMedia.v1").ToTimeLimitedDataProtector();
+        provider.CreateProtector(Parrot.Infrastructure.Storage.MediaLinkSigner.Purpose).ToTimeLimitedDataProtector();
 
     /// <summary>A copy of the media with Url set to its signed address, or unchanged when no copy was saved.</summary>
     public MessageMedia Sign(MessageMedia media) =>

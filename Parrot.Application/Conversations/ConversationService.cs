@@ -21,7 +21,8 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     IDeliveryReceipts? receipts = null, IPrivateObjectStorage? mediaStorage = null,
     IOutboundJobPublisher? outboundJobs = null, IOptions<OutboundSettings>? outboundSettings = null,
     IHumanTakeoverStore? humanTakeover = null, IAppLogger<ConversationService>? logger = null,
-    IMessagePersistedPublisher? publisher = null, ITenantIdLookup? tenantLookup = null)
+    IMessagePersistedPublisher? publisher = null, ITenantIdLookup? tenantLookup = null,
+    IMediaLinkSigner? mediaLinks = null)
 {
     // A picture or file is queued for the send worker instead of being sent before the request answers.
     private bool DeferFileSends => outboundJobs is not null && outboundSettings?.Value.DeferFileSends == true;
@@ -104,7 +105,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
                     MessagePersisted persisted = new MessagePersisted
                     {
                         Source = doc.Platform,
-                        Data = doc.ToStoredMessage() with { CommsType = commsType, TenantId = tenantId },
+                        Data = doc.ToStoredMessage(mediaLinks) with { CommsType = commsType, TenantId = tenantId },
                         CorrelationId = InboundMessagePublisher.CurrentCorrelationId(),
                     };
                     await publisher.PublishAsync(persisted, ct);
