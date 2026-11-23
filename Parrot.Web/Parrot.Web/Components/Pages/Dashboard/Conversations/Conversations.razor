@@ -819,7 +819,8 @@
         if (!older && item.HistoryLoaded && item.Messages.Count > 0)
         {
             var known = item.Messages.Select(m => m.Id).ToHashSet();
-            while (cursor is not null && !messages.Any(m => known.Contains(m.Id)))
+            // An agent's question rides on every newest page, so it never proves the pages meet.
+            while (cursor is not null && !messages.Any(m => m.Kind != "ai_question" && known.Contains(m.Id)))
             {
                 var previous = await Client.ReadAsync(item.ConnectionId, item.Sender, cursor, _lifetime.Token);
                 if (token != AuthState.CurrentUser?.Token || _disposed) return;
@@ -840,7 +841,8 @@
         if (!older) await LoadNotesAsync(item);
         if (!older) await ClearMarkedUnreadAsync(item);
         // Reading a thread reads its messages, up to the newest this read returned.
-        if (!older && item.UnreadCount > 0 && page.Messages.LastOrDefault() is { } newest)
+        // Up to the newest message, not an agent's question: the channel knows nothing of those.
+        if (!older && item.UnreadCount > 0 && page.Messages.LastOrDefault(m => m.Kind != "ai_question") is { } newest)
             await TryMarkReadAsync(item, newest.Id);
     }
 

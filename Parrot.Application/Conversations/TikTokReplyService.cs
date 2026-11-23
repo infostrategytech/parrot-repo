@@ -23,7 +23,7 @@ public sealed class TikTokReplyService(
     }
 
     public async Task<ConversationMessage> SendAsync(TikTokConnection connection, string recipient,
-        SendReplyRequest request, CancellationToken ct)
+        SendReplyRequest request, CancellationToken ct, bool isAiReply = false)
     {
         // The recipient is TikTok's open id for the customer: an opaque token, not a number.
         if (request.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 4096
@@ -58,7 +58,7 @@ public sealed class TikTokReplyService(
             // Outgoing replies never pass through a webhook, so SentAt is our own clock.
             From = recipient, Timestamp = new DateTimeOffset(now).ToUnixTimeMilliseconds().ToString(), SentAt = now,
             Type = "text", TextBody = request.Text, ReceivedAt = now, StoredAt = now,
-            Outgoing = true, SendStatus = "pending",
+            Outgoing = true, SendStatus = "pending", IsAiReply = isAiReply ? true : null,
             ConversationKey = conversationKey, Sequence = replySequence, Receiver = latest.Receiver,
         };
         if (!await store.ReserveAsync(doc, ct))

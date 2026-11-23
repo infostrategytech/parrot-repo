@@ -344,13 +344,18 @@ public class AiOperationsServiceTests
 
     // The team answered the customer from the inbox after the agent asked: nothing is waiting any more.
     [Fact]
-    public async Task WaitingAsync_AfterTheTeamRepliedInThatChat_NoLongerListsTheQuestion()
+    public async Task WaitingAsync_AfterTheTeamRepliedInThatChat_NoLongerListsTheQuestionAndRecordsItClosed()
     {
-        Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-30), conversation: AdaChat);
+        AgentActivityRecord question = Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-30), conversation: AdaChat);
         _replies[(WhatsApp, "2348012345678")] = Now.UtcDateTime.AddMinutes(-10);
 
         Assert.Empty(await _sut.WaitingAsync(Owner, null));
         Assert.Empty(await _sut.OpenByConversationAsync(Owner, null));
+        // Closed when the reply went, by no one person; it no longer counts toward the open list's cap.
+        Assert.Equal(Now.UtcDateTime.AddMinutes(-10), question.ResolvedAt);
+        Assert.Equal("replied", question.Resolution);
+        Assert.Null(question.ResolvedBy);
+        Assert.Empty(await _activity.ListPendingAsync(Owner));
     }
 
     [Fact]
@@ -446,6 +451,18 @@ public class AiOperationsServiceTests
             _sut.CloseQuestionAsync(Owner, new HashSet<Guid> { Instagram }, WhatsApp, "2348012345678", "esc_1", "user-ngozi"));
 
         Assert.Null(question.ResolvedAt);
+    }
+
+    // A teammate closed it in another tab between our read and our write: it is closed, and their line already says so.
+    [Fact]
+    public async Task CloseQuestionAsync_WhenSomeoneClosedItAtTheSameMoment_WritesNoSecondChatLine()
+    {
+        AgentActivityRecord question = Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-20), conversation: AdaChat);
+        _activity.BeforeClose = () => { question.ResolvedAt = Now.UtcDateTime; question.Resolution = "done"; };
+
+        await _sut.CloseQuestionAsync(Owner, null, WhatsApp, "2348012345678", "esc_1", "user-ngozi");
+
+        _conversations.Verify(c => c.WriteSystemEventAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Fact]

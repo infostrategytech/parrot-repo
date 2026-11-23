@@ -123,9 +123,9 @@ public class MongoAgentActivityStoreTests
             await store.InsertAsync(Escalation("owner-a"));
             await store.InsertAsync(Escalation("owner-b"));
 
-            Assert.Equal(1, await store.CloseEscalationAsync("owner-a", "esc_1", "user-ngozi", T0.AddMinutes(5)));
-            Assert.Equal(0, await store.CloseEscalationAsync("owner-a", "esc_1", "user-ngozi", T0.AddMinutes(6)));
-            Assert.Equal(0, await store.CloseEscalationAsync("owner-a", "esc_unknown", "user-ngozi", T0.AddMinutes(6)));
+            Assert.Equal(1, await store.CloseEscalationAsync("owner-a", "esc_1", AgentActivityTypes.Resolution.Done, "user-ngozi", T0.AddMinutes(5)));
+            Assert.Equal(0, await store.CloseEscalationAsync("owner-a", "esc_1", AgentActivityTypes.Resolution.Done, "user-ngozi", T0.AddMinutes(6)));
+            Assert.Equal(0, await store.CloseEscalationAsync("owner-a", "esc_unknown", AgentActivityTypes.Resolution.Done, "user-ngozi", T0.AddMinutes(6)));
 
             Assert.Empty(await store.ListPendingAsync("owner-a"));
             Assert.Single(await store.ListPendingAsync("owner-b"));

@@ -72,6 +72,10 @@ public class ConversationItem
     public InboxPersonDto? Assignee { get; set; }
     public DateTime? ControlUntil { get; set; }
     public bool NeedsAnswer { get; set; }
+
+    /// <summary>Agents' questions closed here this session (done, or answered by a reply): a read already on its way
+    /// when one was closed must not show it again.</summary>
+    public HashSet<string> ClosedQuestions { get; } = [];
     public InboxAttentionDto? Attention { get; set; }
     public InboxCustomerDto? Customer { get; set; }
 

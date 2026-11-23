@@ -109,7 +109,7 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
     }
 
     public async Task<int> CloseEscalationAsync(
-        string ownerUserId, string escalationId, string closedBy, DateTime closedAtUtc, CancellationToken cancellationToken = default)
+        string ownerUserId, string escalationId, string resolution, string? closedBy, DateTime closedAtUtc, CancellationToken cancellationToken = default)
     {
         await EnsureIndexesAsync(cancellationToken);
         FilterDefinition<AgentActivityDocument> filter =
@@ -119,7 +119,7 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
             & Builders<AgentActivityDocument>.Filter.Eq(x => x.ResolvedAt, null);
         UpdateDefinition<AgentActivityDocument> update = Builders<AgentActivityDocument>.Update
             .Set(x => x.ResolvedAt, closedAtUtc)
-            .Set(x => x.Resolution, AgentActivityTypes.Resolution.Done)
+            .Set(x => x.Resolution, resolution)
             .Set(x => x.ResolvedBy, closedBy);
 
         UpdateResult result = await _activity.UpdateManyAsync(filter, update, cancellationToken: cancellationToken);

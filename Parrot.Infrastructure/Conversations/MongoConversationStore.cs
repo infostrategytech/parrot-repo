@@ -59,16 +59,13 @@ public sealed class MongoConversationStore : IConversationStore
             .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
             {
                 { "_id", "$ConversationKey" },
-                { "latest", new BsonDocument("$first", "$$ROOT") },
+                { "connection", new BsonDocument("$first", "$ConnectionId") },
+                { "sender", new BsonDocument("$first", "$From") },
             }))
             .ToListAsync(ct);
         return rows.ToDictionary(
             row => row["_id"].AsString,
-            row =>
-            {
-                MessageDocument latest = BsonSerializer.Deserialize<MessageDocument>(row["latest"].AsBsonDocument);
-                return (latest.ConnectionId!.Value, latest.From);
-            },
+            row => (ConnectionOf(row["connection"]), row["sender"].AsString),
             StringComparer.Ordinal);
     }
 
@@ -86,17 +83,19 @@ public sealed class MongoConversationStore : IConversationStore
                 Builders<MessageDocument>.Filter.Where(x => x.ConnectionId == c.Connection && x.From == c.Sender)));
         List<BsonDocument> rows = await _messages.Aggregate()
             .Match(filter)
-            .SortByDescending(x => x.Id)
             .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
             {
                 { "_id", new BsonDocument { { "connection", "$ConnectionId" }, { "sender", "$From" } } },
-                { "latest", new BsonDocument("$first", "$$ROOT") },
+                { "at", new BsonDocument("$max", "$ReceivedAt") },
             }))
             .ToListAsync(ct);
-        return rows
-            .Select(row => BsonSerializer.Deserialize<MessageDocument>(row["latest"].AsBsonDocument))
-            .ToDictionary(d => (d.ConnectionId!.Value, d.From), d => d.ReceivedAt);
+        return rows.ToDictionary(
+            row => (ConnectionOf(row["_id"]["connection"]), row["_id"]["sender"].AsString),
+            row => row["at"].ToUniversalTime());
     }
+
+    // MessageDocument keeps the connection id as a string.
+    private static Guid ConnectionOf(BsonValue value) => Guid.Parse(value.AsString);
 
     private async Task<IReadOnlyList<ConversationSummary>> SummariesAsync(FilterDefinition<MessageDocument> match, int skip, int take, CancellationToken ct)
     {

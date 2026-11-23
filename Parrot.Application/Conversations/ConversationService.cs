@@ -130,7 +130,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             // TikTok's API has no way to quote a message, so the customer would not see what this answers.
             if (request.ReplyToMessageId is not null)
                 throw new ValidationException("TikTok can't show which message you're replying to. Send it without the quote.");
-            return await tikTok.SendAsync(tikTokConnection, recipient, request, ct);
+            return await tikTok.SendAsync(tikTokConnection, recipient, request, ct, isAiReply);
         }
 
         if (request.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 4096

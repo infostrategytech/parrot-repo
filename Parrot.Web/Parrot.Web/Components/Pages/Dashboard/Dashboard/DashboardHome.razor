@@ -544,7 +544,8 @@
 
     // Connecting a channel comes back here once it is connected.
     private void OpenChannels() => Nav.NavigateTo("/dashboard/channels?from=dashboard");
-    private void OpenInbox() => Nav.NavigateTo("/dashboard/inbox");
+    // With the agents' questions waiting, straight to them (Needs you, filtered to the questions); otherwise the inbox.
+    private void OpenInbox() => Nav.NavigateTo(Waiting ? InboxQuestionLinks.Review(Feed.Waiting(Agents)) : "/dashboard/inbox");
     // An agent needs a connected channel, then knowledge the business has
     // approved ("Teach your AI"); then setup opens.
     // Straight to the create page, not AI Operations on the way.

@@ -13,6 +13,14 @@ public class ConversationsState
 
     public void Apply(IEnumerable<InboxConversationDto> summaries)
     {
+        var listed = summaries.Select(s => $"{s.ConnectionId}:{s.Sender}").ToHashSet();
+        // The server lists every conversation with an open question or approval on its first page, so one it no longer
+        // lists has none (a chat only an agent's question had brought in, since answered elsewhere).
+        foreach (var gone in Conversations.Where(c => !listed.Contains(c.Id)))
+        {
+            gone.NeedsAnswer = false;
+            gone.PendingApproval = null;
+        }
         foreach (var summary in summaries)
         {
             string id = $"{summary.ConnectionId}:{summary.Sender}";
@@ -82,7 +90,8 @@ public class ConversationsState
     public static void Merge(ConversationItem item, IEnumerable<InboxMessageDto> messages)
     {
         var unique = item.Messages.ToDictionary(m => m.Id);
-        foreach (var message in messages)
+        // A read that left before a question was closed here must not bring it back.
+        foreach (var message in messages.Where(m => m.Kind != "ai_question" || !item.ClosedQuestions.Contains(m.Id)))
             unique[message.Id] = new ConvMessage
             {
                 Id = message.Id, Text = message.Text, IsOutgoing = message.Outgoing,
@@ -116,6 +125,7 @@ public class ConversationsState
     {
         HashSet<string> open = newestPage.Where(m => m.Kind == "ai_question").Select(m => m.Id).ToHashSet();
         item.Messages = item.Messages.Where(m => m.Kind != MessageKind.AiQuestion || open.Contains(m.Id)).ToList();
+        item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
     }
 
     /// <summary>A reply the team sent answers the agent's questions asked before it, as the server counts it:
@@ -124,7 +134,10 @@ public class ConversationsState
     {
         if (!reply.Outgoing || reply.Kind is not (null or "human") || reply.Status is not ("sent" or "accepted" or "delivered" or "read")) return;
         foreach (var question in item.Messages.Where(m => m.Kind == MessageKind.AiQuestion && !m.Answered && m.ReceivedAt < reply.ReceivedAt))
+        {
             question.Answered = true;
+            item.ClosedQuestions.Add(question.Id);
+        }
         item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
     }
 

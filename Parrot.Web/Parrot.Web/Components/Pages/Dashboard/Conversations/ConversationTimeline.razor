@@ -828,14 +828,16 @@
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException
             or Parrot.Web.Features.Dashboard.Knowledge.KnowledgeSaveRefusedException) { _learningError = ex.Message; }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !_lifetime.IsCancellationRequested))
         {
+            // Refused in a way the store has no words for, or the AI service took too long.
             _learningError = "We couldn't save it for next time. Try again, or untick Save for next time.";
         }
         finally { _savingLearning = false; }
     }
 
-    private string LearningAgent => Conversation.AiAgent?.Name ?? "the AI agent";
+    // The workspace's own name for the agent when its list has it: the API may only know the agent by id.
+    private string LearningAgent => (Conversation.AiAgent is { } agent ? AgentsState.GetAgent(agent.Id)?.Name ?? agent.Name : null) ?? "the AI agent";
     // The same, starting a sentence.
     private string CapitalisedAgent => LearningAgent.Length == 0 ? LearningAgent : char.ToUpperInvariant(LearningAgent[0]) + LearningAgent[1..];
     private string LearningTitle => _learningMode == LearningMode.Correction ? "Correct for next time" : $"Answer {LearningAgent}";
@@ -941,6 +943,7 @@
             await Client.MarkQuestionDoneAsync(conversation.ConnectionId, conversation.Sender, question.Id, _lifetime.Token);
             // The list row and Needs you follow straight away, without waiting for the next refresh.
             question.Answered = true;
+            conversation.ClosedQuestions.Add(question.Id);
             conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
             Toasts.Show("Marked as done.");
             await OnChanged.InvokeAsync();
@@ -949,6 +952,7 @@
         {
             // Someone else closed it, or a reply did, since this chat was read: it is no longer waiting either way.
             question.Answered = true;
+            conversation.ClosedQuestions.Add(question.Id);
             conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
             Toasts.Show("This question was already closed.");
             await OnChanged.InvokeAsync();

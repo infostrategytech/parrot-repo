@@ -111,4 +111,42 @@ public sealed class ConversationsStateTests
         Assert.False(item.Messages.Single(m => m.Id == "esc_1").Answered);
         Assert.True(item.NeedsAnswer);
     }
+
+    // A chat only an agent's question had brought onto the first page drops out once that question is answered elsewhere.
+    [Fact]
+    public void Apply_AConversationTheServerNoLongerLists_LosesItsQuestionAndApproval()
+    {
+        ConversationsState state = new();
+        ConversationSummary older = new(Connection, "2348099999999", "Kunle", "Hello", DateTime.UtcNow.AddDays(-3));
+        state.Apply([ThroughTheWire(Row()), ThroughTheWire(older with { NeedsAnswer = true, PendingApproval = new ConversationApproval("apr_1", null, null) })]);
+
+        state.Apply([ThroughTheWire(Row())]);
+
+        ConversationItem kunle = state.Conversations.Single(c => c.Sender == "2348099999999");
+        Assert.False(kunle.NeedsAnswer);
+        Assert.Null(kunle.PendingApproval);
+    }
+
+    [Fact]
+    public void DropClosedQuestions_WhenNoneIsLeftOpen_TheChatNoLongerNeedsAnAnswer()
+    {
+        ConversationItem item = ThreadWith(Question("esc_1", 0));
+
+        ConversationsState.DropClosedQuestions(item, []);
+
+        Assert.False(item.NeedsAnswer);
+    }
+
+    // A read already on its way when the question was answered here must not show it again.
+    [Fact]
+    public void Merge_AQuestionAnsweredHereThisSession_IsNotBroughtBackByALateRead()
+    {
+        ConversationItem item = ThreadWith(Question("esc_1", 0));
+        ConversationsState.SettleAgentQuestions(item, Reply("accepted", 5));
+        item.Messages.RemoveAll(m => m.Id == "esc_1");
+
+        ConversationsState.Merge(item, [Question("esc_1", 0)]);
+
+        Assert.DoesNotContain(item.Messages, m => m.Id == "esc_1");
+    }
 }

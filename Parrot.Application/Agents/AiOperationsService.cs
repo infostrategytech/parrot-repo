@@ -197,9 +197,29 @@ public sealed class AiOperationsService(
         if (asking.Count == 0) return open;
         IReadOnlyDictionary<(Guid Connection, string Sender), DateTime> replies =
             await conversations.LastTeamRepliesAsync(ownerUserId, asking, cancellationToken);
-        return open.Where(o => o.Record.Type != AgentActivityTypes.EscalationOpened
-            || !replies.TryGetValue((o.ConnectionId, o.Sender), out DateTime repliedAt)
-            || repliedAt <= o.Record.OccurredAt).ToList();
+        List<OpenItem> answered = open.Where(o => o.Record.Type == AgentActivityTypes.EscalationOpened
+            && replies.TryGetValue((o.ConnectionId, o.Sender), out DateTime repliedAt) && repliedAt > o.Record.OccurredAt).ToList();
+        if (answered.Count == 0) return open;
+
+        // Recorded as closed the first time it is seen, so the open list (and its cap) only ever holds what is really
+        // waiting, and a channel connected again later can't make an answered question look open.
+        foreach (OpenItem item in answered)
+        {
+            try
+            {
+                await activity.CloseEscalationAsync(ownerUserId, item.Record.EscalationId!, AgentActivityTypes.Resolution.Replied, null,
+                    replies[(item.ConnectionId, item.Sender)], cancellationToken);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // It is still left out of what is waiting; the next read records it again.
+                logger.LogWarning(exception, "ai_operations.question_reply_close_failed OwnerId={OwnerId} QuestionId={QuestionId}",
+                    ownerUserId, item.Record.EscalationId);
+            }
+        }
+
+        logger.LogInformation("ai_operations.questions_answered_by_reply OwnerId={OwnerId} Count={Count}", ownerUserId, answered.Count);
+        return open.Except(answered).ToList();
     }
 
     public async Task<IReadOnlyList<ConversationMessage>> OpenQuestionsAsync(
@@ -226,8 +246,12 @@ public sealed class AiOperationsService(
             && o.ConnectionId == connectionId && o.Sender == sender))
             throw new NotFoundException("Question not found.");
 
-        await activity.CloseEscalationAsync(ownerUserId, questionId, closedBy, clock.GetUtcNow().UtcDateTime, cancellationToken);
-        logger.LogInformation("ai_operations.question_done OwnerId={OwnerId} QuestionId={QuestionId}", ownerUserId, questionId);
+        int closed = await activity.CloseEscalationAsync(
+            ownerUserId, questionId, AgentActivityTypes.Resolution.Done, closedBy, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        logger.LogInformation("ai_operations.question_done OwnerId={OwnerId} QuestionId={QuestionId} Closed={Closed}", ownerUserId, questionId, closed);
+
+        // Someone closed it between the read and the write: it is closed either way, and their close said so.
+        if (closed == 0) return;
 
         // Best effort: the question is closed either way, and the line in the chat only says so.
         try
