@@ -831,6 +831,7 @@
         // own replies and a first load of the history do not.
         var seen = item.Messages.Select(m => m.Id).ToHashSet();
         var wasLoaded = item.HistoryLoaded;
+        if (!older) ConversationsState.DropClosedQuestions(item, page.Messages);
         ConversationsState.Merge(item, messages);
         if (!older && wasLoaded && item.Messages.Any(m => m.Kind == MessageKind.Customer && !seen.Contains(m.Id)))
             Feedback.Play(Parrot.Web.Services.FeedbackSound.Incoming);

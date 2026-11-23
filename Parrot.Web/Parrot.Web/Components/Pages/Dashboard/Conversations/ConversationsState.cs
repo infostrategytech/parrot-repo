@@ -110,6 +110,24 @@ public class ConversationsState
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
     }
 
+    /// <summary>The newest page carries every agent question still open here; one it no longer has was closed
+    /// elsewhere (done, or answered by a reply), so it leaves the thread.</summary>
+    public static void DropClosedQuestions(ConversationItem item, IEnumerable<InboxMessageDto> newestPage)
+    {
+        HashSet<string> open = newestPage.Where(m => m.Kind == "ai_question").Select(m => m.Id).ToHashSet();
+        item.Messages = item.Messages.Where(m => m.Kind != MessageKind.AiQuestion || open.Contains(m.Id)).ToList();
+    }
+
+    /// <summary>A reply the team sent answers the agent's questions asked before it, as the server counts it:
+    /// one the channel took, not one still pending or failed.</summary>
+    public static void SettleAgentQuestions(ConversationItem item, InboxMessageDto reply)
+    {
+        if (!reply.Outgoing || reply.Kind is not (null or "human") || reply.Status is not ("sent" or "accepted" or "delivered" or "read")) return;
+        foreach (var question in item.Messages.Where(m => m.Kind == MessageKind.AiQuestion && !m.Answered && m.ReceivedAt < reply.ReceivedAt))
+            question.Answered = true;
+        item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+    }
+
     /// <summary>Only a newly confirmed local send can settle the optimistic reply need. Reading an older
     /// reply from history must never override a newer canonical handoff/attention snapshot.</summary>
     public static void SettleReplyNeed(ConversationItem item, InboxMessageDto reply)

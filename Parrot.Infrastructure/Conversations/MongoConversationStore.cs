@@ -72,6 +72,32 @@ public sealed class MongoConversationStore : IConversationStore
             StringComparer.Ordinal);
     }
 
+    // What counts as a reply the team sent: the channel took it (or has since said it arrived or was read).
+    private static readonly string[] SentStatuses = ["accepted", "sent", "delivered", "read"];
+
+    public async Task<IReadOnlyDictionary<(Guid Connection, string Sender), DateTime>> LastTeamRepliesAsync(
+        string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct)
+    {
+        if (conversations.Count == 0) return new Dictionary<(Guid, string), DateTime>();
+        FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.Outgoing && x.IsAiReply != true)
+            & Builders<MessageDocument>.Filter.In(x => x.SendStatus, SentStatuses)
+            & Builders<MessageDocument>.Filter.Ne(x => x.Type, "system")
+            & Builders<MessageDocument>.Filter.Or(conversations.Select(c =>
+                Builders<MessageDocument>.Filter.Where(x => x.ConnectionId == c.Connection && x.From == c.Sender)));
+        List<BsonDocument> rows = await _messages.Aggregate()
+            .Match(filter)
+            .SortByDescending(x => x.Id)
+            .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
+            {
+                { "_id", new BsonDocument { { "connection", "$ConnectionId" }, { "sender", "$From" } } },
+                { "latest", new BsonDocument("$first", "$$ROOT") },
+            }))
+            .ToListAsync(ct);
+        return rows
+            .Select(row => BsonSerializer.Deserialize<MessageDocument>(row["latest"].AsBsonDocument))
+            .ToDictionary(d => (d.ConnectionId!.Value, d.From), d => d.ReceivedAt);
+    }
+
     private async Task<IReadOnlyList<ConversationSummary>> SummariesAsync(FilterDefinition<MessageDocument> match, int skip, int take, CancellationToken ct)
     {
         // System events are stored in the same collection but must not influence the preview text,

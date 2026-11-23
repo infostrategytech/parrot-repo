@@ -23,6 +23,9 @@ public static class AgentActivityTypes
     {
         public const string Approved = "approved";
         public const string Denied = "denied";
+
+        /// <summary>An escalation someone in the team closed without a reply from the inbox.</summary>
+        public const string Done = "done";
     }
 }
 
@@ -119,6 +122,12 @@ public interface IAgentActivityStore
     /// Marks the approval, and any escalation opened for it, decided. Returns
     /// how many records that touched: 0 when the owner has no such approval waiting.
     /// </summary>
+    /// <summary>
+    /// Marks the owner's escalation done by someone in the team. Returns how many records that touched: 0 when the
+    /// owner has no such escalation open.
+    /// </summary>
+    Task<int> CloseEscalationAsync(string ownerUserId, string escalationId, string closedBy, DateTime closedAtUtc, CancellationToken cancellationToken = default);
+
     Task<int> MarkApprovalDecidedAsync(
         string ownerUserId,
         string approvalId,

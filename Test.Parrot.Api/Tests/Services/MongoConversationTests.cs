@@ -115,6 +115,49 @@ public class MongoConversationTests
         finally { await client.DropDatabaseAsync(database); }
     }
 
+    // A reply the team sent answers the agents' questions; the agent's own replies and sends that didn't go out don't.
+    [MongoFact]
+    public async Task LastTeamRepliesAsync_ReturnsTheNewestSentTeamReplyPerConversationOnly()
+    {
+        MessageSerializationRegistry.Register();
+        var client = new MongoClient(Environment.GetEnvironmentVariable("PARROT_TEST_MONGO"));
+        string database = "parrot_test_" + Guid.NewGuid().ToString("N");
+        var settings = Options.Create(new MongoDbSettings { Database = database, Collection = "messages" });
+        try
+        {
+            var store = new MongoConversationStore(client, settings);
+            var messages = client.GetDatabase(database).GetCollection<MessageDocument>("messages");
+            Guid connection = Guid.NewGuid();
+            DateTime t0 = new(2026, 11, 23, 9, 0, 0, DateTimeKind.Utc);
+            WhatsAppMessageDocument Message(string id, string owner, string from, int minute, bool outgoing, string status, bool? ai = null) => new()
+            {
+                MessageId = id, OwnerUserId = owner, ConnectionId = connection, Platform = MessagingPlatform.WhatsApp,
+                ExternalAccountId = "2349011112222", ChannelId = "123", ChannelDisplayName = "123", From = from, Type = "text",
+                TextBody = "Hello", Timestamp = "0", ReceivedAt = t0.AddMinutes(minute), Outgoing = outgoing, SendStatus = status, IsAiReply = ai,
+            };
+            const string ada = "2348012345678", bayo = "2348099999999";
+            await messages.InsertManyAsync(
+            [
+                Message("ada.team", "owner", ada, 1, outgoing: true, "accepted"),
+                Message("ada.delivered", "owner", ada, 2, outgoing: true, "delivered"),
+                Message("ada.agent", "owner", ada, 3, outgoing: true, "accepted", ai: true),
+                Message("ada.failed", "owner", ada, 4, outgoing: true, "failed"),
+                Message("ada.pending", "owner", ada, 5, outgoing: true, "pending"),
+                Message("ada.customer", "owner", ada, 6, outgoing: false, "received"),
+                Message("ada.theirs", "other", ada, 7, outgoing: true, "accepted"),
+                Message("bayo.agent", "owner", bayo, 8, outgoing: true, "accepted", ai: true),
+            ]);
+
+            IReadOnlyDictionary<(Guid Connection, string Sender), DateTime> replies =
+                await store.LastTeamRepliesAsync("owner", [(connection, ada), (connection, bayo)], default);
+
+            Assert.Equal(t0.AddMinutes(2), Assert.Single(replies).Value);
+            Assert.Equal((connection, ada), replies.Keys.Single());
+            Assert.Empty(await store.LastTeamRepliesAsync("owner", [], default));
+        }
+        finally { await client.DropDatabaseAsync(database); }
+    }
+
     // The setup test finds a TikTok customer's message by the connection and its owner, whatever the platform's own
     // account id (here the business open id) is.
     [MongoFact]

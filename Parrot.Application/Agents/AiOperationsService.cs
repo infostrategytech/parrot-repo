@@ -23,6 +23,9 @@ public sealed class AiOperationsService(
     public const int DefaultRecent = 20;
     public const int MaxRecent = 100;
 
+    /// <summary>The message kind the inbox shows an agent's question as.</summary>
+    public const string AiQuestionKind = "ai_question";
+
     private static readonly string[] TurnTypes = [AgentActivityTypes.TurnCompleted];
     private static readonly string[] RequestTypes = [AgentActivityTypes.ApprovalRequested, AgentActivityTypes.EscalationOpened];
     private static readonly string[] EscalationTypes = [AgentActivityTypes.EscalationOpened];
@@ -187,7 +190,54 @@ public sealed class AiOperationsService(
 
         if (unlinked > 0)
             logger.LogDebug("ai_operations.questions_unlinked OwnerId={OwnerId} Count={Count}", ownerUserId, unlinked);
-        return open;
+
+        // A reply the team sent from the inbox after a question was asked answers it. An approval still needs its decision.
+        List<(Guid, string)> asking = open.Where(o => o.Record.Type == AgentActivityTypes.EscalationOpened)
+            .Select(o => (o.ConnectionId, o.Sender)).Distinct().ToList();
+        if (asking.Count == 0) return open;
+        IReadOnlyDictionary<(Guid Connection, string Sender), DateTime> replies =
+            await conversations.LastTeamRepliesAsync(ownerUserId, asking, cancellationToken);
+        return open.Where(o => o.Record.Type != AgentActivityTypes.EscalationOpened
+            || !replies.TryGetValue((o.ConnectionId, o.Sender), out DateTime repliedAt)
+            || repliedAt <= o.Record.OccurredAt).ToList();
+    }
+
+    public async Task<IReadOnlyList<ConversationMessage>> OpenQuestionsAsync(
+        string ownerUserId, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<OpenItem> open = await OpenItemsAsync(ownerUserId, reach, cancellationToken);
+        return open
+            .Where(o => o.Record.Type == AgentActivityTypes.EscalationOpened && o.ConnectionId == connectionId && o.Sender == sender)
+            .Select(o => new ConversationMessage(o.Record.EscalationId!, QuestionOf(o.Record), false, "open", o.Record.OccurredAt)
+            {
+                Kind = AiQuestionKind,
+            })
+            .ToList();
+    }
+
+    public async Task CloseQuestionAsync(
+        string ownerUserId, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId, string closedBy,
+        CancellationToken cancellationToken = default)
+    {
+        // Only a question still open in this very conversation: another workspace's, another chat's, or one already
+        // answered all read as not found, the same as an id that never existed.
+        IReadOnlyList<OpenItem> open = await OpenItemsAsync(ownerUserId, reach, cancellationToken);
+        if (!open.Any(o => o.Record.Type == AgentActivityTypes.EscalationOpened && o.Record.EscalationId == questionId
+            && o.ConnectionId == connectionId && o.Sender == sender))
+            throw new NotFoundException("Question not found.");
+
+        await activity.CloseEscalationAsync(ownerUserId, questionId, closedBy, clock.GetUtcNow().UtcDateTime, cancellationToken);
+        logger.LogInformation("ai_operations.question_done OwnerId={OwnerId} QuestionId={QuestionId}", ownerUserId, questionId);
+
+        // Best effort: the question is closed either way, and the line in the chat only says so.
+        try
+        {
+            await conversations.WriteSystemEventAsync(ownerUserId, connectionId, sender, "A team member marked the agent's question as done.", cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "system_event_write_failed ConnectionId={ConnectionId} Event=question_done", connectionId);
+        }
     }
 
     private static string QuestionOf(AgentActivityRecord item) =>

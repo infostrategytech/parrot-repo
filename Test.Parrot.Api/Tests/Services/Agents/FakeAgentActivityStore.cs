@@ -65,6 +65,23 @@ public sealed class FakeAgentActivityStore : IAgentActivityStore
         return Task.FromResult(list);
     }
 
+    public Task<int> CloseEscalationAsync(
+        string ownerUserId, string escalationId, string closedBy, DateTime closedAtUtc, CancellationToken cancellationToken = default)
+    {
+        ThrowIfFailing();
+        int touched = 0;
+        foreach (AgentActivityRecord record in Records.Where(r => r.OwnerUserId == ownerUserId
+            && r.Type == AgentActivityTypes.EscalationOpened && r.EscalationId == escalationId && r.ResolvedAt is null))
+        {
+            record.ResolvedAt = closedAtUtc;
+            record.Resolution = AgentActivityTypes.Resolution.Done;
+            record.ResolvedBy = closedBy;
+            touched++;
+        }
+
+        return Task.FromResult(touched);
+    }
+
     public Task<int> MarkApprovalDecidedAsync(
         string ownerUserId,
         string approvalId,

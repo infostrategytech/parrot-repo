@@ -199,15 +199,18 @@
                             <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="conversation-timeline__task-who">@LearningAgent needs your answer</Typography>
                             <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="conversation-timeline__agent-question-text">@question.Text</Typography>
                         </span>
-                        @if (Features.Available)
-                        {
-                            <span class="conversation-timeline__agent-actions">
+                        @* The API only sends questions to people who can answer them, so whoever sees one can act on it.
+                           Once the reply window has closed nothing can be sent from here: they answer on the customer's
+                           own app (the handoff below) and mark it done. *@
+                        <span class="conversation-timeline__agent-actions">
+                            @if (!Conversation.ReplyWindowClosed)
+                            {
                                 <Button Size="ButtonSize.Small" disabled="@(_savingLearning || _resolving)" aria-label="@($"Answer {LearningAgent}")"
                                         @onclick="() => OpenAnswer(question)">Answer</Button>
-                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_resolving" disabled="@_savingLearning"
-                                        @onclick="() => MarkAgentQuestionDoneAsync(question)">Done</Button>
-                            </span>
-                        }
+                            }
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_resolving" disabled="@_savingLearning"
+                                    @onclick="() => MarkAgentQuestionDoneAsync(question)">Done</Button>
+                        </span>
                     </div>
                 }
                 <Parrot.Web.Components.Pages.Dashboard.TaskRequests.TaskQuestions ConversationId="@Conversation.Id" Compact OnUseAnswer="UseAnswer"
@@ -621,6 +624,7 @@
                     new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft) { ReplyToMessageId = replyTo }, CancellationToken.None);
             ConversationsState.Merge(item, new[] { result });
             ConversationsState.SettleReplyNeed(item, result);
+            ConversationsState.SettleAgentQuestions(item, result);
             item.SendError = result.Status switch
             {
                 "failed" => "WhatsApp rejected this reply. Check the recipient and server credentials before sending a new message.",
@@ -766,19 +770,10 @@
             }
             else
             {
-                // The answer goes into the composer for review before it is sent.
-                var agentReplies = Conversation.ReplyLocked;
-                var reply = await Features.AnswerAsync(Conversation.ConnectionId, Conversation.Sender, _learningMessage.Id, _learningText);
-                _learningMessage.Answered = true;
-                SettleNeedsAnswer();
+                // The answer waits in the reply box to be checked; sending it is what closes the question (the server
+                // counts a sent reply as the answer). While the agent is replying, the take-over choice opens.
                 _view = ThreadView.Messages;
-                if (!agentReplies)
-                {
-                    // You're replying: the answer waits in the reply box. AI questions are not tasks.
-                    _composerMode = ComposerMode.Reply;
-                    Conversation.Draft = reply;
-                    _draftedBy = null;
-                }
+                UseAnswer(_learningText.Trim());
             }
             _learningMessage = null;
             _learningText = "";
@@ -795,15 +790,15 @@
         <Button Variant="ButtonVariant.Secondary" disabled="@_savingLearning" @onclick="CloseLearning">Cancel</Button>
         <Button Busy="@_savingLearning" disabled="@string.IsNullOrWhiteSpace(_learningText)" @onclick="SaveLearningAsync">@LearningConfirmLabel</Button>
     </div>;
-    private string LearningConfirmLabel => _learningMode == LearningMode.Correction ? "Save correction" : "Save answer";
+    private string LearningConfirmLabel => _learningMode == LearningMode.Correction ? "Save correction" : "Add to reply";
     private string LearningPrompt => _learningMode == LearningMode.Correction
         ? $"What should {LearningAgent} use next time?"
         : "Type the answer";
     private string LearningCommitment => _learningMode == LearningMode.Correction
         ? $"What was already sent stays as it is. {LearningAgent} will use this next time."
         : Conversation.ReplyLocked
-            ? $"{LearningAgent} will use this to answer {Conversation.CustomerName} in its own words, and remember it for next time."
-            : $"{LearningAgent} will remember this for next time. You'll check the reply before it goes to {Conversation.CustomerName}.";
+            ? $"It goes into your reply box. Take over to send it to {Conversation.CustomerName}. Sending it closes the question."
+            : $"It goes into your reply box, so you can check it before it goes to {Conversation.CustomerName}. Sending it closes the question.";
 
     private static string DateLabel(DateOnly date)
     {
@@ -882,24 +877,30 @@
 
     private void ChatTasksChanged() => _ = InvokeAsync(async () => { await LoadChatTasksAsync(); StateHasChanged(); });
 
-    // The list row and Needs you follow straight away, without waiting for the next refresh.
-    private void SettleNeedsAnswer() => Conversation.NeedsAnswer = Conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
-
     // Done clears this Inbox question only. It never creates/settles a task, learns or sends a customer reply.
     private async Task MarkAgentQuestionDoneAsync(ConvMessage question)
     {
-        if (_resolving || _savingLearning || !Features.Available || !IsPendingAgentQuestion(question)) return;
+        if (_resolving || _savingLearning || !IsPendingAgentQuestion(question)) return;
         _resolving = true;
         var conversation = Conversation;
         try
         {
-            await Features.ResolveQuestionAsync(conversation.ConnectionId, conversation.Sender, question.Id);
+            await Client.MarkQuestionDoneAsync(conversation.ConnectionId, conversation.Sender, question.Id, _lifetime.Token);
+            // The list row and Needs you follow straight away, without waiting for the next refresh.
             question.Answered = true;
             conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
             Toasts.Show("Marked as done.");
             await OnChanged.InvokeAsync();
         }
-        catch (Exception e) when (e is HttpRequestException or InvalidOperationException or NotSupportedException)
+        catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Someone else closed it, or a reply did, since this chat was read: it is no longer waiting either way.
+            question.Answered = true;
+            conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+            Toasts.Show("This question was already closed.");
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException)
         {
             _actionError = "Couldn't mark the question done. Try again.";
         }

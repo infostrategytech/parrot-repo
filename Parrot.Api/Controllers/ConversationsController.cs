@@ -209,7 +209,26 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromQuery] string? before, CancellationToken cancellationToken)
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
-        return Ok(mediaLinks.Sign(await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken)));
+        MessagePage page = await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken);
+
+        // The newest page also carries the agents' open questions here, for the people who can answer them.
+        if (before is null && HttpContext.WorkspaceAccess().Can(WorkspacePermissions.ConversationsTakeOver))
+        {
+            IReadOnlyList<ConversationMessage> questions = await operations.OpenQuestionsAsync(Owner, Reach, connectionId, sender, cancellationToken);
+            if (questions.Count > 0) page = page with { Messages = [.. page.Messages.Concat(questions).OrderBy(m => m.ReceivedAt)] };
+        }
+
+        return Ok(mediaLinks.Sign(page));
+    }
+
+    // Closes an agent's question without a reply from here: the person dealt with it another way.
+    [HttpPost("{connectionId:guid}/questions/{questionId}/done")]
+    [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
+    public async Task<IActionResult> MarkQuestionDone(Guid connectionId, string questionId, [FromQuery] string sender, CancellationToken cancellationToken)
+    {
+        HttpContext.RequireReach(connectionId);
+        await operations.CloseQuestionAsync(Owner, Reach, connectionId, sender, questionId, Reader, cancellationToken);
+        return NoContent();
     }
 
     // Every file this customer has sent, newest first, for the customer details panel.

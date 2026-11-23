@@ -62,6 +62,18 @@ public interface IAiOperationsService
     /// <summary>The same open items as <see cref="WaitingAsync"/>, one entry per inbox conversation.</summary>
     Task<IReadOnlyList<ConversationQuestions>> OpenByConversationAsync(string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default);
 
+    /// <summary>The agents' open questions in one conversation, oldest first, as the messages the inbox shows them as.</summary>
+    Task<IReadOnlyList<ConversationMessage>> OpenQuestionsAsync(
+        string ownerUserId, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Closes an agent's open question in this conversation without a reply, and says so in the chat. Throws
+    /// <see cref="Domain.Exceptions.NotFoundException"/> when no such question is open there.
+    /// </summary>
+    Task CloseQuestionAsync(
+        string ownerUserId, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId, string closedBy,
+        CancellationToken cancellationToken = default);
+
     Task<ApprovalDecisionResponse> DecideApprovalAsync(
         string ownerUserId, string approvalId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default);
 }

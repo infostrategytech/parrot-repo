@@ -1,16 +1,20 @@
 using System.Security.Claims;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using Parrot.Api.Controllers;
+using Parrot.Api.Media;
 using Parrot.Application.Agents;
 using Parrot.Application.Contracts.Conversations;
 using Parrot.Application.Conversations;
+using Parrot.Application.Integrations;
 using Parrot.Application.Logging;
 using Parrot.Application.Teams;
 using Parrot.Application.Workspaces;
 using Parrot.Domain.Entities;
+using Parrot.Domain.Exceptions;
 
 namespace Test.Parrot.Api.Tests.Controllers;
 
@@ -58,9 +62,15 @@ public sealed class ConversationsControllerTests
         orchestrator.Setup(o => o.GetChannelAgentMapAsync(Owner, It.IsAny<CancellationToken>()))
             .ReturnsAsync(_channelAgents);
 
-        // The list reads none of the send, media or connection services.
-        ConversationsController controller = new(_store.Object, reads.Object, flags.Object, null!, null!, null!, null!,
-            null!, null!, null!, null!, takeovers.Object, orchestrator.Object, new MemoryCache(new MemoryCacheOptions()),
+        // The workspace's WhatsApp number, so a thread on it can be read.
+        Mock<IWhatsAppConnectionRepository> connections = new();
+        connections.Setup(c => c.GetByOwnerAndIdAsync(Owner, WhatsApp))
+            .ReturnsAsync(new WhatsAppConnection { Id = WhatsApp, WorkspaceId = Owner, Name = "Shop", VerifyTokenEncrypted = "x" });
+
+        // None of these endpoints send, take notes or read the other channels.
+        ConversationsController controller = new(_store.Object, reads.Object, flags.Object, null!, null!,
+            new MediaLinks(new EphemeralDataProtectionProvider()), null!, connections.Object, null!, null!, null!,
+            takeovers.Object, orchestrator.Object, new MemoryCache(new MemoryCacheOptions()),
             _operations.Object, Mock.Of<IAppLogger<ConversationsController>>());
         DefaultHttpContext http = new()
         {
@@ -124,6 +134,73 @@ public sealed class ConversationsControllerTests
         await Controller(Teammate(reach, WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver)).List();
 
         _operations.Verify(o => o.OpenByConversationAsync(Owner, It.Is<IReadOnlySet<Guid>?>(r => r != null && r.SetEquals(reach)), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    private ConversationMessage Customer(string id, int minutesAgo) =>
+        new(id, "Do you deliver to Ibadan?", false, "received", DateTime.UtcNow.AddMinutes(-minutesAgo));
+
+    private void ThreadHolds(params ConversationMessage[] messages) =>
+        _store.Setup(s => s.ReadAsync(Owner, WhatsApp, "2348012345678", It.IsAny<string?>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new MessagePage(messages, null));
+
+    private static List<ConversationMessage> Thread(IActionResult result) =>
+        Assert.IsType<MessagePage>(Assert.IsType<OkObjectResult>(result).Value).Messages.ToList();
+
+    [Fact]
+    public async Task Messages_NewestPageForSomeoneWhoCanAnswer_CarriesTheChatsOpenQuestionsInTimeOrder()
+    {
+        ThreadHolds(Customer("m1", 30), Customer("m2", 5));
+        _operations.Setup(o => o.OpenQuestionsAsync(Owner, null, WhatsApp, "2348012345678", It.IsAny<CancellationToken>()))
+            .ReturnsAsync([new ConversationMessage("esc_1", "Ada wants to know about Ibadan.", false, "open", DateTime.UtcNow.AddMinutes(-20)) { Kind = "ai_question" }]);
+
+        List<ConversationMessage> thread = Thread(await Controller(OwnerAccess()).Messages(WhatsApp, "2348012345678", null, default));
+
+        Assert.Equal(["m1", "esc_1", "m2"], thread.Select(m => m.Id));
+        Assert.Equal("ai_question", thread[1].Kind);
+    }
+
+    [Fact]
+    public async Task Messages_OlderPage_DoesNotAskForQuestions()
+    {
+        ThreadHolds(Customer("m1", 300));
+
+        List<ConversationMessage> thread = Thread(await Controller(OwnerAccess()).Messages(WhatsApp, "2348012345678", "cursor", default));
+
+        Assert.Equal("m1", Assert.Single(thread).Id);
+        _operations.Verify(o => o.OpenQuestionsAsync(It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task Messages_ForSomeoneWhoCannotTakeOver_HasNoQuestions()
+    {
+        ThreadHolds(Customer("m1", 30));
+
+        List<ConversationMessage> thread = Thread(await Controller(Teammate(null, WorkspacePermissions.ConversationsView)).Messages(WhatsApp, "2348012345678", null, default));
+
+        Assert.Equal("m1", Assert.Single(thread).Id);
+        _operations.Verify(o => o.OpenQuestionsAsync(It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task MarkQuestionDone_ClosesItInThisChatAsTheSignedInPerson()
+    {
+        IActionResult result = await Controller(OwnerAccess()).MarkQuestionDone(WhatsApp, "esc_1", "2348012345678", default);
+
+        Assert.IsType<NoContentResult>(result);
+        _operations.Verify(o => o.CloseQuestionAsync(Owner, null, WhatsApp, "2348012345678", "esc_1", "user-1", It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    // A channel the teammate can't open answers as not found, like one that doesn't exist, and nothing is closed.
+    [Fact]
+    public async Task MarkQuestionDone_OnAChannelTheTeammateCannotOpen_IsNotFoundAndClosesNothing()
+    {
+        ConversationsController controller = Controller(Teammate(new HashSet<Guid> { Guid.NewGuid() },
+            WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver));
+
+        await Assert.ThrowsAsync<NotFoundException>(() => controller.MarkQuestionDone(WhatsApp, "esc_1", "2348012345678", default));
+
+        _operations.Verify(o => o.CloseQuestionAsync(It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     // Later pages are newest-first as they are; the first page already brought the question's conversation in.

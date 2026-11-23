@@ -55,4 +55,60 @@ public sealed class ConversationsStateTests
 
         Assert.False(Assert.Single(state.Conversations).NeedsAnswer);
     }
+
+    private static readonly DateTime At = new(2026, 11, 23, 12, 0, 0, DateTimeKind.Utc);
+
+    private static InboxMessageDto Question(string id, int minute) => new(id, "Ada wants to know about Ibadan.", false, "open", At.AddMinutes(minute)) { Kind = "ai_question" };
+
+    private static InboxMessageDto Reply(string status, int minute, string? kind = null) => new("reply", "We deliver to Ibadan.", true, status, At.AddMinutes(minute)) { Kind = kind };
+
+    private static ConversationItem ThreadWith(params InboxMessageDto[] messages)
+    {
+        ConversationItem item = new() { Id = "chat", NeedsAnswer = true };
+        ConversationsState.Merge(item, messages);
+        return item;
+    }
+
+    // The newest page lists every question still open; one missing from it was closed elsewhere.
+    [Fact]
+    public void DropClosedQuestions_AQuestionTheNewestPageNoLongerHas_LeavesTheThread()
+    {
+        ConversationItem item = ThreadWith(Question("esc_1", 0), Question("esc_2", 1), new InboxMessageDto("m1", "Hello", false, "received", At));
+
+        ConversationsState.DropClosedQuestions(item, [Question("esc_2", 1)]);
+
+        Assert.Equal(["esc_2", "m1"], item.Messages.Select(m => m.Id).Order());
+    }
+
+    [Fact]
+    public void SettleAgentQuestions_ASentTeamReply_AnswersTheQuestionsAskedBeforeIt()
+    {
+        ConversationItem item = ThreadWith(Question("esc_old", 0), Question("esc_new", 10));
+
+        ConversationsState.SettleAgentQuestions(item, Reply("accepted", 5));
+
+        Assert.True(item.Messages.Single(m => m.Id == "esc_old").Answered);
+        Assert.False(item.Messages.Single(m => m.Id == "esc_new").Answered);
+        Assert.True(item.NeedsAnswer);
+
+        ConversationsState.SettleAgentQuestions(item, Reply("delivered", 15));
+
+        Assert.False(item.NeedsAnswer);
+    }
+
+    // The server only counts a reply the channel took, and never an agent's own.
+    [Theory]
+    [InlineData("failed", null)]
+    [InlineData("pending", null)]
+    [InlineData("unknown", null)]
+    [InlineData("accepted", "ai")]
+    public void SettleAgentQuestions_AReplyThatDidNotGoOutOrIsTheAgents_LeavesTheQuestionOpen(string status, string? kind)
+    {
+        ConversationItem item = ThreadWith(Question("esc_1", 0));
+
+        ConversationsState.SettleAgentQuestions(item, Reply(status, 5, kind));
+
+        Assert.False(item.Messages.Single(m => m.Id == "esc_1").Answered);
+        Assert.True(item.NeedsAnswer);
+    }
 }

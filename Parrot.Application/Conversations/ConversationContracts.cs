@@ -188,6 +188,14 @@ public interface IConversationStore
     Task<IReadOnlyDictionary<string, (Guid Connection, string Sender)>> FindByConversationKeysAsync(
         string owner, IReadOnlyCollection<string> conversationKeys, CancellationToken ct) =>
         Task.FromResult<IReadOnlyDictionary<string, (Guid Connection, string Sender)>>(new Dictionary<string, (Guid, string)>());
+
+    /// <summary>
+    /// When the team last replied from the inbox in each of these conversations: a reply that was sent (not pending
+    /// or failed) and not an agent's. A conversation with no such reply is absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<(Guid Connection, string Sender), DateTime>> LastTeamRepliesAsync(
+        string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyDictionary<(Guid Connection, string Sender), DateTime>>(new Dictionary<(Guid, string), DateTime>());
     Task<MessagePage> ReadAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct);
 
     /// <summary>The files this customer sent, newest first, a page at a time. Pass the previous page's NextBefore for the next.</summary>
