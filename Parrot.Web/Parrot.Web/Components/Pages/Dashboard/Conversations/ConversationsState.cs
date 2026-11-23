@@ -39,6 +39,8 @@ public class ConversationsState
             // The server owns AiState. Clear derived state that only makes sense while the AI is active.
             if (item.AiState == AiState.Active) item.ActiveEscalation = null;
             if (item.AiState != AiState.Active) item.PendingApproval = null;
+            // An approval the server still holds open stays, whatever the AI state; one only pushed keeps the rule above.
+            if (summary.PendingApproval is { } approval) item.PendingApproval = new PendingApprovalInfo(approval.ApprovalId, approval.Tool, approval.Reason);
             item.AiAgent = summary.AiAgent ?? summary.ChannelAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;

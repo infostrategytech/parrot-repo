@@ -95,6 +95,20 @@ public class MongoAgentActivityStoreTests
         });
     }
 
+    // The waiting list and the inbox read the open items oldest first, whatever order they arrived in.
+    [MongoFact]
+    public async Task ListPendingAsync_ReturnsTheOpenItemsOldestFirst()
+    {
+        await WithStore(async store =>
+        {
+            await store.InsertAsync(Approval("owner-a", "apr_2", T0.AddMinutes(2)));
+            await store.InsertAsync(Approval("owner-a", "apr_0", T0));
+            await store.InsertAsync(Approval("owner-a", "apr_1", T0.AddMinutes(1)));
+
+            Assert.Equal(["apr_0", "apr_1", "apr_2"], (await store.ListPendingAsync("owner-a")).Select(r => r.ApprovalId));
+        });
+    }
+
     [MongoFact]
     public async Task AnApprovalLeavesTheWaitingListOnceDecidedAndOnlyOnce()
     {

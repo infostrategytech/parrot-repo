@@ -1,3 +1,6 @@
+using Parrot.Application.Contracts.Conversations;
+using Parrot.Application.Conversations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
@@ -13,7 +16,9 @@ public sealed class AiOperationsService(
     IAgentActivityStore activity,
     IAgentRepository agents,
     IAgentOrchestratorClient orchestrator,
-    TimeProvider clock) : IAiOperationsService
+    IConversationStore conversations,
+    TimeProvider clock,
+    IAppLogger<AiOperationsService> logger) : IAiOperationsService
 {
     public const int DefaultRecent = 20;
     public const int MaxRecent = 100;
@@ -79,7 +84,49 @@ public sealed class AiOperationsService(
             t.ConversationKey ?? string.Empty)).ToList();
     }
 
-    public async Task<IReadOnlyList<WaitingItemResponse>> WaitingAsync(string ownerUserId, CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<WaitingItemResponse>> WaitingAsync(
+        string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<OpenItem> open = await OpenItemsAsync(ownerUserId, reach, cancellationToken);
+        return open.Select(o => new WaitingItemResponse(
+            o.AgentName,
+            CustomerOf(o.Turn?.CustomerName ?? o.Record.CustomerName, o.Record.CustomerRef ?? o.Turn?.CustomerRef),
+            QuestionOf(o.Record),
+            o.Record.Type == AgentActivityTypes.ApprovalRequested ? o.Record.ApprovalId : null,
+            o.Record.EscalationId,
+            o.Record.Priority,
+            o.Record.OccurredAt)
+        {
+            AgentId = o.AgentId,
+            ConversationId = $"{o.ConnectionId}:{o.Sender}",
+        }).ToList();
+    }
+
+    public async Task<IReadOnlyList<ConversationQuestions>> OpenByConversationAsync(
+        string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default)
+    {
+        IReadOnlyList<OpenItem> open = await OpenItemsAsync(ownerUserId, reach, cancellationToken);
+        return open
+            .GroupBy(o => (o.ConnectionId, o.Sender))
+            .Select(conversation =>
+            {
+                // Oldest first, so the last is the newest: the agent that asked most recently is the one shown.
+                OpenItem newest = conversation.Last();
+                OpenItem? approval = conversation.LastOrDefault(o => o.Record.Type == AgentActivityTypes.ApprovalRequested);
+                return new ConversationQuestions(
+                    conversation.Key.ConnectionId,
+                    conversation.Key.Sender,
+                    conversation.Any(o => o.Record.Type == AgentActivityTypes.EscalationOpened),
+                    approval is null ? null : new ConversationApproval(approval.Record.ApprovalId!, approval.Record.Tool, approval.Record.Reason),
+                    newest.AgentId is { } agentId ? new ConversationAgentRef(agentId, newest.AgentName) : null);
+            })
+            .ToList();
+    }
+
+    /// <summary>An open approval or escalation, the turn that asked it, and the inbox conversation it belongs to.</summary>
+    private sealed record OpenItem(AgentActivityRecord Record, AgentActivityRecord? Turn, string? AgentId, string AgentName, Guid ConnectionId, string Sender);
+
+    private async Task<IReadOnlyList<OpenItem>> OpenItemsAsync(string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken)
     {
         IReadOnlyList<AgentActivityRecord> pending = await activity.ListPendingAsync(ownerUserId, cancellationToken);
         if (pending.Count == 0) return [];
@@ -104,27 +151,49 @@ public sealed class AiOperationsService(
         Dictionary<string, AgentActivityRecord> turns = LatestPerTurn(related.Where(r => r.Type == AgentActivityTypes.TurnCompleted))
             .Where(t => t.TurnId is not null)
             .ToDictionary(t => t.TurnId!, StringComparer.Ordinal);
+        // The conversation key names the conversation by its two participants; the stored messages say which inbox row that is.
+        List<(AgentActivityRecord Item, AgentActivityRecord? Turn, string? Key)> asked = items.Select(item =>
+        {
+            AgentActivityRecord? turn = item.TurnId is not null && turns.TryGetValue(item.TurnId, out AgentActivityRecord? t) ? t : null;
+            return (item, turn, item.ConversationKey ?? turn?.ConversationKey);
+        }).ToList();
+        List<string> keys = asked.Where(a => !string.IsNullOrWhiteSpace(a.Key)).Select(a => a.Key!).Distinct(StringComparer.Ordinal).ToList();
+        IReadOnlyDictionary<string, (Guid Connection, string Sender)> conversationsByKey = keys.Count == 0
+            ? new Dictionary<string, (Guid, string)>()
+            : await conversations.FindByConversationKeysAsync(ownerUserId, keys, cancellationToken);
+
         IReadOnlyList<Agent> owned = await agents.GetByWorkspaceAsync(ownerUserId);
         Dictionary<string, string> names = owned.ToDictionary(a => a.Id.ToString(), a => a.Name, StringComparer.OrdinalIgnoreCase);
         string fallbackName = owned.Count == 1 ? owned[0].Name : "Your agent";
 
-        return items.Select(item =>
+        List<OpenItem> open = [];
+        int unlinked = 0;
+        foreach ((AgentActivityRecord item, AgentActivityRecord? turn, string? key) in asked)
         {
-            AgentActivityRecord? turn = item.TurnId is not null && turns.TryGetValue(item.TurnId, out AgentActivityRecord? t) ? t : null;
-            string agentName = turn?.AgentId is { } agentId && names.TryGetValue(agentId, out string? name) ? name : fallbackName;
-            string question = item.Type == AgentActivityTypes.ApprovalRequested
-                ? (string.IsNullOrWhiteSpace(item.Reason) ? $"Approve {item.Tool ?? "this action"}?" : item.Reason)
-                : (string.IsNullOrWhiteSpace(item.Problem) ? "Needs a person." : item.Problem);
-            return new WaitingItemResponse(
-                agentName,
-                CustomerOf(turn?.CustomerName ?? item.CustomerName, item.CustomerRef ?? turn?.CustomerRef),
-                question,
-                item.Type == AgentActivityTypes.ApprovalRequested ? item.ApprovalId : null,
-                item.EscalationId,
-                item.Priority,
-                item.OccurredAt);
-        }).ToList();
+            // Nothing in the inbox to answer it in (no key, or a chat Parrot never stored, such as a test): it can't be worked from here.
+            if (key is null || !conversationsByKey.TryGetValue(key, out (Guid Connection, string Sender) conversation))
+            {
+                unlinked++;
+                continue;
+            }
+
+            // A teammate limited to some channels never sees what customers asked on the others.
+            if (reach is not null && !reach.Contains(conversation.Connection)) continue;
+
+            string? agentId = turn?.AgentId ?? item.AgentId;
+            string agentName = agentId is not null && names.TryGetValue(agentId, out string? name) ? name : fallbackName;
+            open.Add(new OpenItem(item, turn, agentId, agentName, conversation.Connection, conversation.Sender));
+        }
+
+        if (unlinked > 0)
+            logger.LogDebug("ai_operations.questions_unlinked OwnerId={OwnerId} Count={Count}", ownerUserId, unlinked);
+        return open;
     }
+
+    private static string QuestionOf(AgentActivityRecord item) =>
+        item.Type == AgentActivityTypes.ApprovalRequested
+            ? (string.IsNullOrWhiteSpace(item.Reason) ? $"Approve {item.Tool ?? "this action"}?" : item.Reason)
+            : (string.IsNullOrWhiteSpace(item.Problem) ? "Needs a person." : item.Problem);
 
     public async Task<ApprovalDecisionResponse> DecideApprovalAsync(
         string ownerUserId, string approvalId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default)

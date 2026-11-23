@@ -112,7 +112,7 @@ public interface IAgentActivityStore
     Task<IReadOnlyList<AgentActivityRecord>> ListByTurnIdsAsync(
         string ownerUserId, IReadOnlyCollection<string> turnIds, CancellationToken cancellationToken = default);
 
-    /// <summary>The approvals and escalations nobody has decided yet, oldest first.</summary>
+    /// <summary>The approvals and escalations nobody has decided yet, oldest first; the newest 1,000 when there are more.</summary>
     Task<IReadOnlyList<AgentActivityRecord>> ListPendingAsync(string ownerUserId, CancellationToken cancellationToken = default);
 
     /// <summary>

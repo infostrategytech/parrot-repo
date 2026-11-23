@@ -413,7 +413,11 @@
         _openTaskId = id;
     }
     private int _questionsGeneration;
-    private InboxNeed Need(ConversationItem conversation) => InboxAttentionRules.Reason(conversation, Tasks.Me.Id, _taskQuestions);
+    private InboxNeed Need(ConversationItem conversation) => InboxAttentionRules.Reason(conversation, Tasks.Me.Id, _taskQuestions, AnswersAgents);
+    // The people the agents' waiting questions are for; the API only flags questions for them, and a pushed approval is checked here too.
+    private bool AnswersAgents => AuthState.CurrentUser?.Can(Parrot.Application.Teams.WorkspacePermissions.ConversationsTakeOver) == true;
+    // What the banner's "questions need your answer" counts: agents' questions and the approvals they wait on.
+    private static bool HasAgentQuestion(ConversationItem item) => item.NeedsAnswer || item.PendingApproval is not null;
     private bool NeedsMe(ConversationItem conversation) => Need(conversation) != InboxNeed.None;
     private void QuestionsChanged() { if (!_disposed) _ = InvokeAsync(async () => { await LoadQuestionsAsync(); await RefreshAsync(); StateHasChanged(); }); }
     private async Task LoadQuestionsAsync()
@@ -505,7 +509,7 @@
                 InboxScope.NeedsYou => list.Where(NeedsMe),
                 _ => list
             };
-            if (_onlyAiQuestions) list = list.Where(item => item.NeedsAnswer);
+            if (_onlyAiQuestions) list = list.Where(HasAgentQuestion);
             if (_filters.Channel is { } channel) list = list.Where(item => item.Channel == channel);
             if (_filters.Status is { } status) list = list.Where(item => item.Status == status);
             if (_filters.AgentId is { } agent) list = list.Where(item => item.AiAgent?.Id == agent);

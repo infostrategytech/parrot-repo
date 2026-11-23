@@ -26,7 +26,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
     IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache,
-    IAppLogger<ConversationsController> logger) : ControllerBase
+    IAiOperationsService operations, IAppLogger<ConversationsController> logger) : ControllerBase
 {
     // The workspace owns the conversations; what has been read, what is pinned
     // or set aside, and who wrote a note, belong to the person signed in.
@@ -49,13 +49,19 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             : await store.ListAsync(Owner, skip, take, cancellationToken);
         IReadOnlyDictionary<(Guid Connection, string Sender), ConversationFlags> marks = await ReachableFlagsAsync(cancellationToken);
 
-        // Pinned conversations lead the first page wherever they fall in the newest-first order, so a pin older
-        // than the page is still there. A page that holds one already is not repeated by it.
+        // Open agent questions and approvals, for the people the waiting list is for.
+        Dictionary<(Guid, string), ConversationQuestions> questions = HttpContext.WorkspaceAccess().Can(WorkspacePermissions.ConversationsTakeOver)
+            ? (await operations.OpenByConversationAsync(Owner, Reach, cancellationToken)).ToDictionary(q => (q.ConnectionId, q.Sender))
+            : [];
+
+        // Pinned conversations, and those with an open question, lead the first page wherever they fall in the
+        // newest-first order, so an older one is still there. A page that holds one already is not repeated by it.
         List<ConversationSummary> rows = [.. page];
         if (skip == 0)
         {
             HashSet<(Guid, string)> listed = [.. page.Select(c => (c.ConnectionId, c.Sender))];
-            List<(Guid, string)> missing = [.. marks.Where(m => m.Value.Pinned).Select(m => m.Key).Where(k => !listed.Contains(k))];
+            List<(Guid, string)> missing = [.. marks.Where(m => m.Value.Pinned).Select(m => m.Key).Concat(questions.Keys)
+                .Where(k => !listed.Contains(k)).Distinct()];
             rows.AddRange(await store.FindAsync(Owner, missing, cancellationToken));
         }
 
@@ -82,6 +88,11 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             agentByChannel = new Dictionary<string, ConversationAgentRef>();
         }
 
+        // The orchestrator names its live agents; the activity store may know only the id of the one that asked.
+        Dictionary<string, ConversationAgentRef> liveAgents = agentByChannel.Values
+            .DistinctBy(a => a.Id, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(a => a.Id, StringComparer.OrdinalIgnoreCase);
+
         // One batch query for active human takeovers across the whole page.
         List<(Guid, string)> keys = [.. rows.Select(c => (c.ConnectionId, c.Sender))];
         IReadOnlyDictionary<(Guid, string), DateTime?> activeTakeovers =
@@ -91,6 +102,7 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             .Select(c =>
             {
                 marks.TryGetValue((c.ConnectionId, c.Sender), out ConversationFlags? mark);
+                questions.TryGetValue((c.ConnectionId, c.Sender), out ConversationQuestions? open);
                 bool hasActiveTakeover = activeTakeovers.ContainsKey((c.ConnectionId, c.Sender));
                 ConversationAgentRef? channelAgent = agentByChannel.GetValueOrDefault(c.Channel);
                 return c with
@@ -101,6 +113,9 @@ public sealed class ConversationsController(IConversationStore store, IConversat
                     ChannelAgent = channelAgent,
                     ControlUntil = activeTakeovers.TryGetValue((c.ConnectionId, c.Sender), out DateTime? until) ? until : null,
                     AiState = hasActiveTakeover ? "handoff" : channelAgent is not null ? "active" : null,
+                    NeedsAnswer = open?.NeedsAnswer ?? false,
+                    PendingApproval = open?.Approval,
+                    AiAgent = open?.Agent is { } asker ? liveAgents.GetValueOrDefault(asker.Id) ?? asker : null,
                 };
             })
             .OrderByDescending(c => c.Pinned).ThenByDescending(c => c.UpdatedAt));

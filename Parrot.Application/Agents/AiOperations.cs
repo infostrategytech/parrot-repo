@@ -1,3 +1,6 @@
+using Parrot.Application.Contracts.Conversations;
+using Parrot.Application.Conversations;
+
 namespace Parrot.Application.Agents;
 
 /// <summary>One agent's day, or every agent's added up: the AI Operations figures.</summary>
@@ -17,7 +20,18 @@ public sealed record RecentConversationResponse(
 
 /// <summary>Something an agent could not settle on its own, waiting for the owner.</summary>
 public sealed record WaitingItemResponse(
-    string AgentName, string Customer, string Question, string? ApprovalId, string? EscalationId, string? Priority, DateTime OccurredAt);
+    string AgentName, string Customer, string Question, string? ApprovalId, string? EscalationId, string? Priority, DateTime OccurredAt)
+{
+    /// <summary>The agent that asked, by the orchestrator's id; null when its turn was never reported.</summary>
+    public string? AgentId { get; init; }
+
+    /// <summary>The inbox conversation it was asked in, named as the inbox names its rows: "{connectionId}:{sender}".</summary>
+    required public string ConversationId { get; init; }
+}
+
+/// <summary>What is open in one inbox conversation: an agent's question, an approval, or both, and the agent that asked.</summary>
+public sealed record ConversationQuestions(
+    Guid ConnectionId, string Sender, bool NeedsAnswer, ConversationApproval? Approval, ConversationAgentRef? Agent);
 
 public sealed record ApprovalDecisionRequest(string Decision, string? Instruction);
 
@@ -38,7 +52,15 @@ public interface IAiOperationsService
     Task<IReadOnlyList<RecentConversationResponse>> RecentAsync(
         string ownerUserId, string? agentId, string? channel, int limit, CancellationToken cancellationToken = default);
 
-    Task<IReadOnlyList<WaitingItemResponse>> WaitingAsync(string ownerUserId, CancellationToken cancellationToken = default);
+    /// <summary>
+    /// The open approvals and escalations, oldest first, each with the inbox conversation it was asked in. One whose
+    /// conversation is not in the inbox is left out, since it can't be answered there. <paramref name="reach"/> is the
+    /// connections a channel-limited teammate can open (null for everyone else); questions on others are left out.
+    /// </summary>
+    Task<IReadOnlyList<WaitingItemResponse>> WaitingAsync(string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default);
+
+    /// <summary>The same open items as <see cref="WaitingAsync"/>, one entry per inbox conversation.</summary>
+    Task<IReadOnlyList<ConversationQuestions>> OpenByConversationAsync(string ownerUserId, IReadOnlySet<Guid>? reach, CancellationToken cancellationToken = default);
 
     Task<ApprovalDecisionResponse> DecideApprovalAsync(
         string ownerUserId, string approvalId, ApprovalDecisionRequest request, CancellationToken cancellationToken = default);

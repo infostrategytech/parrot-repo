@@ -45,11 +45,11 @@ public sealed class AiOperationsController(IAiOperationsService operations) : Co
         CancellationToken cancellationToken = default) =>
         Ok(await operations.RecentAsync(Owner, agentId, channel, limit, cancellationToken));
 
-    /// <summary>The approvals and escalations waiting for the owner.</summary>
+    /// <summary>The approvals and escalations waiting for the owner, on the channels the caller can open.</summary>
     [HttpGet("waiting")]
     [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
     public async Task<IActionResult> Waiting(CancellationToken cancellationToken) =>
-        Ok(await operations.WaitingAsync(Owner, cancellationToken));
+        Ok(await operations.WaitingAsync(Owner, HttpContext.WorkspaceAccess().AllowedConnections, cancellationToken));
 
     /// <summary>Decides an approval: the orchestrator resumes the turn, and the decision is kept here.</summary>
     [HttpPost("approvals/{id}")]

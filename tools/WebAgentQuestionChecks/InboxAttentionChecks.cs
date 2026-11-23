@@ -16,6 +16,7 @@ internal static class InboxAttentionChecks
         Check(Need()==InboxNeed.None,"Assigned, unread, urgent or paused alone is not a conversation-input obligation.");
         item.Assignee=null;Check(Need()==InboxNeed.None,"Unassigned conversations are not broadcast to every teammate.");
         item.NeedsAnswer=true;Check(Need()==InboxNeed.None,"Unknown recipient is not guessed from a legacy flag.");
+        Check(InboxAttentionRules.Reason(item,me,[],answersAgents:true)==InboxNeed.AgentAnswer,"Until chats can be assigned, an AI question waits for whoever can answer it.");
         item.Assignee=new(me,"Me");Check(Need()==InboxNeed.AgentAnswer,"Legacy explicitly assigned AI questions remain readable.");
         item.Attention=new(other);Check(Need()==InboxNeed.None,"Canonical recipient takes precedence over a stale assignee.");
         item.Attention=new(me);Check(Need()==InboxNeed.AgentAnswer&&Need(other)==InboxNeed.None,"AI questions belong only to their recipient.");

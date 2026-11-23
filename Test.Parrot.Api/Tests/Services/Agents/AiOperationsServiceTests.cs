@@ -1,5 +1,7 @@
 using Moq;
 using Parrot.Application.Agents;
+using Parrot.Application.Conversations;
+using Parrot.Application.Logging;
 using Parrot.Domain.Entities;
 using Parrot.Domain.Exceptions;
 
@@ -11,6 +13,11 @@ public class AiOperationsServiceTests
     private const string Nova = "11111111-1111-1111-1111-111111111111";
     private const string Atlas = "22222222-2222-2222-2222-222222222222";
 
+    // Ada's chat: the orchestrator names it by its key, the inbox by its connection and customer.
+    private const string AdaChat = "whatsapp:2348012345678:2349011112222";
+    private static readonly Guid WhatsApp = Guid.Parse("33333333-3333-3333-3333-333333333333");
+    private static readonly Guid Instagram = Guid.Parse("44444444-4444-4444-4444-444444444444");
+
     // Mid-afternoon on the 8th, UTC: "today" is the 8th, "yesterday" the 7th.
     private static readonly DateTimeOffset Now = new(2026, 10, 8, 15, 0, 0, TimeSpan.Zero);
     private static readonly DateTime Today = Now.UtcDateTime.Date;
@@ -18,6 +25,8 @@ public class AiOperationsServiceTests
     private readonly FakeAgentActivityStore _activity = new();
     private readonly Mock<IAgentRepository> _agents = new();
     private readonly Mock<IAgentOrchestratorClient> _orchestrator = new();
+    private readonly Mock<IConversationStore> _conversations = new();
+    private readonly Dictionary<string, (Guid Connection, string Sender)> _inbox = new() { [AdaChat] = (WhatsApp, "2348012345678") };
     private readonly AiOperationsService _sut;
 
     public AiOperationsServiceTests()
@@ -27,11 +36,16 @@ public class AiOperationsServiceTests
             new Agent { Id = Guid.Parse(Nova), WorkspaceId = Owner, Name = "Nova", Description = "", MascotUrl = "x" },
             new Agent { Id = Guid.Parse(Atlas), WorkspaceId = Owner, Name = "Atlas", Description = "", MascotUrl = "x" },
         ]);
-        _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, new FixedTimeProvider(Now));
+        // The owner's stored chats only: the store is asked for this owner, and answers for the keys it holds.
+        _conversations.Setup(c => c.FindByConversationKeysAsync(Owner, It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string _, IReadOnlyCollection<string> keys, CancellationToken _) =>
+                (IReadOnlyDictionary<string, (Guid Connection, string Sender)>)keys.Where(_inbox.ContainsKey).ToDictionary(k => k, k => _inbox[k]));
+        _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, _conversations.Object, new FixedTimeProvider(Now),
+            Mock.Of<IAppLogger<AiOperationsService>>());
     }
 
     private AgentActivityRecord Turn(
-        string turn, string status, DateTime at, string conversation = "whatsapp:2348012345678:2349011112222", string channel = "whatsapp",
+        string turn, string status, DateTime at, string conversation = AdaChat, string channel = "whatsapp",
         string agent = Nova, string? escalation = null, string? approval = null, string? customerName = "Ada", string owner = Owner)
     {
         AgentActivityRecord record = new()
@@ -55,13 +69,14 @@ public class AiOperationsServiceTests
         return record;
     }
 
-    private AgentActivityRecord Approval(string id, string turn, DateTime at, DateTime? resolvedAt = null, string owner = Owner)
+    private AgentActivityRecord Approval(string id, string turn, DateTime at, DateTime? resolvedAt = null, string owner = Owner, string? conversation = AdaChat)
     {
         AgentActivityRecord record = new()
         {
             OwnerUserId = owner,
             Type = AgentActivityTypes.ApprovalRequested,
             EventKey = id,
+            ConversationKey = conversation,
             ApprovalId = id,
             TurnId = turn,
             Tool = "payments.refund",
@@ -76,13 +91,15 @@ public class AiOperationsServiceTests
         return record;
     }
 
-    private AgentActivityRecord Escalation(string id, string turn, DateTime at, string? approval = null, DateTime? resolvedAt = null)
+    private AgentActivityRecord Escalation(
+        string id, string turn, DateTime at, string? approval = null, DateTime? resolvedAt = null, string? conversation = null, string owner = Owner)
     {
         AgentActivityRecord record = new()
         {
-            OwnerUserId = Owner,
+            OwnerUserId = owner,
             Type = AgentActivityTypes.EscalationOpened,
             EventKey = id,
+            ConversationKey = conversation,
             EscalationId = id,
             ApprovalId = approval,
             TurnId = turn,
@@ -223,7 +240,7 @@ public class AiOperationsServiceTests
         Escalation("esc_2", "t1", Now.UtcDateTime.AddMinutes(-1), approval: "apr_1");
         Approval("apr_theirs", "t9", Now.UtcDateTime, owner: "someone-else");
 
-        IReadOnlyList<WaitingItemResponse> waiting = await _sut.WaitingAsync(Owner);
+        IReadOnlyList<WaitingItemResponse> waiting = await _sut.WaitingAsync(Owner, null);
 
         Assert.Equal(2, waiting.Count);
         Assert.Equal("Nova", waiting[0].AgentName);
@@ -235,6 +252,98 @@ public class AiOperationsServiceTests
         Assert.Equal("Ada", waiting[1].Customer);
         Assert.Equal("Refund above the limit", waiting[1].Question);
         Assert.Equal("apr_1", waiting[1].ApprovalId);
+        Assert.Equal(Nova, waiting[0].AgentId);
+        Assert.Equal(Atlas, waiting[1].AgentId);
+        Assert.All(waiting, w => Assert.Equal($"{WhatsApp}:2348012345678", w.ConversationId));
+    }
+
+    // The escalation names no conversation itself here, so the key comes from the turn that asked it.
+    [Fact]
+    public async Task WaitingAsync_WhenTheEscalationNamesNoConversation_UsesTheConversationOfTheTurnThatAsked()
+    {
+        Turn("t1", "escalated", Now.UtcDateTime.AddMinutes(-5), escalation: "esc_1");
+        Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-5));
+
+        WaitingItemResponse item = Assert.Single(await _sut.WaitingAsync(Owner, null));
+
+        Assert.Equal($"{WhatsApp}:2348012345678", item.ConversationId);
+    }
+
+    // Nothing in the inbox to answer it in, so it would sit in the count for ever.
+    [Fact]
+    public async Task WaitingAsync_WhenTheConversationIsNotInTheInbox_LeavesTheQuestionOut()
+    {
+        Escalation("esc_test", "t8", Now.UtcDateTime.AddMinutes(-3), conversation: "whatsapp:2340000000000:2349011112222");
+        Escalation("esc_nokey", "t9", Now.UtcDateTime.AddMinutes(-2));
+        Escalation("esc_ada", "t7", Now.UtcDateTime.AddMinutes(-1), conversation: AdaChat);
+
+        WaitingItemResponse item = Assert.Single(await _sut.WaitingAsync(Owner, null));
+
+        Assert.Equal("esc_ada", item.EscalationId);
+    }
+
+    [Fact]
+    public async Task WaitingAsync_ForATeammateLimitedToSomeChannels_LeavesOutQuestionsAskedOnTheOthers()
+    {
+        const string bayoChat = "instagram:17841400000000001:9876543210";
+        _inbox[bayoChat] = (Instagram, "9876543210");
+        Escalation("esc_ada", "t1", Now.UtcDateTime.AddMinutes(-2), conversation: AdaChat);
+        Escalation("esc_bayo", "t2", Now.UtcDateTime.AddMinutes(-1), conversation: bayoChat);
+
+        IReadOnlyList<WaitingItemResponse> everything = await _sut.WaitingAsync(Owner, null);
+        IReadOnlyList<WaitingItemResponse> whatsAppOnly = await _sut.WaitingAsync(Owner, new HashSet<Guid> { WhatsApp });
+
+        Assert.Equal(2, everything.Count);
+        Assert.Equal("esc_ada", Assert.Single(whatsAppOnly).EscalationId);
+    }
+
+    // Another workspace's question in a chat with the same key never reaches this owner, and their chats are never read.
+    [Fact]
+    public async Task WaitingAsync_NeverListsAnotherWorkspacesQuestions()
+    {
+        Escalation("esc_theirs", "t9", Now.UtcDateTime.AddMinutes(-1), conversation: AdaChat, owner: "someone-else");
+
+        Assert.Empty(await _sut.WaitingAsync(Owner, null));
+        _conversations.Verify(c => c.FindByConversationKeysAsync("someone-else", It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task OpenByConversationAsync_GivesEachConversationItsQuestionApprovalAndTheAgentThatAskedLast()
+    {
+        const string bayoChat = "whatsapp:2348099999999:2349011112222";
+        _inbox[bayoChat] = (WhatsApp, "2348099999999");
+        // Ada: Nova escalated, then Atlas asked for an approval.
+        Turn("t1", "escalated", Now.UtcDateTime.AddMinutes(-30), agent: Nova, escalation: "esc_1");
+        Escalation("esc_1", "t1", Now.UtcDateTime.AddMinutes(-30));
+        Turn("t2", "awaiting_approval", Now.UtcDateTime.AddMinutes(-10), agent: Atlas, approval: "apr_1");
+        Approval("apr_1", "t2", Now.UtcDateTime.AddMinutes(-10));
+        // Bayo: an approval, and the escalation opened when it timed out (the same question).
+        Turn("t3", "awaiting_approval", Now.UtcDateTime.AddMinutes(-20), conversation: bayoChat, agent: Nova, approval: "apr_2");
+        Approval("apr_2", "t3", Now.UtcDateTime.AddMinutes(-20), conversation: bayoChat);
+        Escalation("esc_2", "t3", Now.UtcDateTime.AddMinutes(-5), approval: "apr_2", conversation: bayoChat);
+
+        IReadOnlyList<ConversationQuestions> open = await _sut.OpenByConversationAsync(Owner, null);
+
+        Assert.Equal(2, open.Count);
+        ConversationQuestions ada = Assert.Single(open, q => q.Sender == "2348012345678");
+        Assert.Equal(WhatsApp, ada.ConnectionId);
+        Assert.True(ada.NeedsAnswer);
+        Assert.Equal("apr_1", ada.Approval?.ApprovalId);
+        Assert.Equal("payments.refund", ada.Approval?.Tool);
+        Assert.Equal(new ConversationAgentRef(Atlas, "Atlas"), ada.Agent);
+        ConversationQuestions bayo = Assert.Single(open, q => q.Sender == "2348099999999");
+        Assert.False(bayo.NeedsAnswer);
+        Assert.Equal("apr_2", bayo.Approval?.ApprovalId);
+        Assert.Equal(new ConversationAgentRef(Nova, "Nova"), bayo.Agent);
+    }
+
+    [Fact]
+    public async Task OpenByConversationAsync_WithNothingOpen_IsEmptyAndReadsNoConversations()
+    {
+        Approval("apr_old", "t0", Now.UtcDateTime.AddHours(-3), resolvedAt: Now.UtcDateTime.AddHours(-2));
+
+        Assert.Empty(await _sut.OpenByConversationAsync(Owner, null));
+        _conversations.VerifyNoOtherCalls();
     }
 
     [Fact]
@@ -258,7 +367,7 @@ public class AiOperationsServiceTests
             Assert.Equal("approved", r.Resolution);
             Assert.Equal(Owner, r.ResolvedBy);
         });
-        Assert.Empty(await _sut.WaitingAsync(Owner));
+        Assert.Empty(await _sut.WaitingAsync(Owner, null));
     }
 
     [Fact]
@@ -301,6 +410,6 @@ public class AiOperationsServiceTests
 
         await Assert.ThrowsAsync<ServiceUnavailableException>(() => _sut.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecisionRequest("approved", null)));
 
-        Assert.Single(await _sut.WaitingAsync(Owner));
+        Assert.Single(await _sut.WaitingAsync(Owner, null));
     }
 }
