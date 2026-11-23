@@ -1464,6 +1464,36 @@ namespace Parrot.Infrastructure.Migrations
                     b.ToTable("WorkspaceSourceStates");
                 });
 
+            modelBuilder.Entity("Parrot.Domain.Entities.WorkspaceWallet", b =>
+                {
+                    b.Property<string>("WorkspaceId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.Property<long>("BalanceMinor")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasDefaultValueSql("CURRENT_TIMESTAMP");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)");
+
+                    b.Property<DateTime?>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("WorkspaceId");
+
+                    b.ToTable("WorkspaceWallets", t =>
+                        {
+                            t.HasCheckConstraint("CK_WorkspaceWallets_BalanceMinor", "\"BalanceMinor\" >= 0");
+                        });
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole", null)
@@ -1683,6 +1713,15 @@ namespace Parrot.Infrastructure.Migrations
                     b.HasOne("Parrot.Domain.Entities.Workspace", null)
                         .WithOne()
                         .HasForeignKey("Parrot.Domain.Entities.WorkspacePaymentSettings", "WorkspaceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Parrot.Domain.Entities.WorkspaceWallet", b =>
+                {
+                    b.HasOne("Parrot.Domain.Entities.Workspace", null)
+                        .WithOne()
+                        .HasForeignKey("Parrot.Domain.Entities.WorkspaceWallet", "WorkspaceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
