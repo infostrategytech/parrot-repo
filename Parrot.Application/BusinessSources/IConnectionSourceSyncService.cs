@@ -26,10 +26,4 @@ public interface IConnectionSourceSyncService
     /// so Omni can carry the owner's shared knowledge into it.
     /// </summary>
     Task PublishWorkspaceCreatedAsync(string workspaceId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Resets the metadata sync status of the Profile source owned by the connection back to Pending
-    /// so the metadata worker will re-fetch it. Throws NotFoundException when no active Profile source exists.
-    /// </summary>
-    Task RequestMetadataRefreshAsync(string workspaceId, Guid connectionId, CancellationToken ct = default);
 }

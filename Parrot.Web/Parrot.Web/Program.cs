@@ -87,6 +87,8 @@ builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.TeamClient>();
 builder.Services.AddScoped<Parrot.Web.Features.Dashboard.Team.PendingInvite>();
 // How checkout links behave (Settings > Payments), and the checkout page customers open without signing in.
 builder.Services.AddScoped<Parrot.Web.Features.Settings.PaymentSettingsClient>();
+// The workspace's wallet: what customers have paid it, and every movement in and out (Settings > Wallet).
+builder.Services.AddScoped<Parrot.Web.Features.Settings.WalletClient>();
 builder.Services.AddScoped<Parrot.Web.Features.Checkout.CheckoutClient>();
 
 builder.Services.AddGrpcClient<MessageVerificationService.MessageVerificationServiceClient>(o =>

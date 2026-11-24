@@ -92,18 +92,6 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
         return documents.Select(d => d.ToRecord()).ToList();
     }
 
-    public async Task<IReadOnlyList<AgentActivityRecord>> ListPendingAsync(string ownerUserId, CancellationToken cancellationToken = default)
-    {
-        await EnsureIndexesAsync(cancellationToken);
-        FilterDefinition<AgentActivityDocument> filter =
-            Builders<AgentActivityDocument>.Filter.Eq(x => x.OwnerUserId, ownerUserId)
-            & Builders<AgentActivityDocument>.Filter.In(x => x.Type, [AgentActivityTypes.ApprovalRequested, AgentActivityTypes.EscalationOpened])
-            & Builders<AgentActivityDocument>.Filter.Eq(x => x.ResolvedAt, null);
-
-        List<AgentActivityDocument> documents = await _activity.Find(filter).SortBy(x => x.OccurredAt).ToListAsync(cancellationToken);
-        return documents.Select(d => d.ToRecord()).ToList();
-    }
-
     public async Task<int> MarkApprovalDecidedAsync(
         string ownerUserId,
         string approvalId,

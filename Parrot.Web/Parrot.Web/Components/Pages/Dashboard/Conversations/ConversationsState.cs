@@ -13,6 +13,14 @@ public class ConversationsState
 
     public void Apply(IEnumerable<InboxConversationDto> summaries)
     {
+        HashSet<string> listed = summaries.Select(s => $"{s.ConnectionId}:{s.Sender}").ToHashSet();
+        // The server lists every conversation with an open question or approval on its first page, so one it no longer
+        // lists has none (a chat only an agent's question had brought in, since answered elsewhere).
+        foreach (ConversationItem gone in Conversations.Where(c => !listed.Contains(c.Id)))
+        {
+            gone.NeedsAnswer = false;
+            gone.PendingApproval = null;
+        }
         foreach (var summary in summaries)
         {
             string id = $"{summary.ConnectionId}:{summary.Sender}";
@@ -39,9 +47,9 @@ public class ConversationsState
             // The server owns AiState. Clear derived state that only makes sense while the AI is active.
             if (item.AiState == AiState.Active) item.ActiveEscalation = null;
             if (item.AiState != AiState.Active) item.PendingApproval = null;
-            item.ChannelAgents = KnownAgents(summary.ChannelAgents);
-            item.ChannelAgent = summary.ChannelAgent ?? (item.ChannelAgents.Count == 1 ? item.ChannelAgents[0] : null);
-            item.AiAgent = summary.AiAgent ?? (!item.HasSharedAgentCoverage ? item.ChannelAgent : null);
+            // An approval the server still holds open stays, whatever the AI state; one only pushed keeps the rule above.
+            if (summary.PendingApproval is { } approval) item.PendingApproval = new PendingApprovalInfo(approval.ApprovalId, approval.Tool, approval.Reason);
+            item.AiAgent = summary.AiAgent ?? summary.ChannelAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
@@ -85,7 +93,8 @@ public class ConversationsState
     public static void Merge(ConversationItem item, IEnumerable<InboxMessageDto> messages)
     {
         var unique = item.Messages.ToDictionary(m => m.Id);
-        foreach (var message in messages)
+        // A read that left before a question was closed here must not bring it back.
+        foreach (InboxMessageDto message in messages.Where(m => m.Kind != "ai_question" || !item.ClosedQuestions.Contains(m.Id)))
             unique[message.Id] = new ConvMessage
             {
                 Id = message.Id, Text = message.Text, IsOutgoing = message.Outgoing,
@@ -114,6 +123,28 @@ public class ConversationsState
                 ReplyTo = message.ReplyTo,
             };
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
+    }
+
+    /// <summary>The newest page carries every agent question still open here; one it no longer has was closed
+    /// elsewhere (done, or answered by a reply), so it leaves the thread.</summary>
+    public static void DropClosedQuestions(ConversationItem item, IEnumerable<InboxMessageDto> newestPage)
+    {
+        HashSet<string> open = newestPage.Where(m => m.Kind == "ai_question").Select(m => m.Id).ToHashSet();
+        item.Messages = item.Messages.Where(m => m.Kind != MessageKind.AiQuestion || open.Contains(m.Id)).ToList();
+        item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+    }
+
+    /// <summary>A reply the team sent answers the agent's questions asked before it, as the AI service reads it when
+    /// Parrot announces the reply. Settled here once the channel has taken it; the next read follows the AI service.</summary>
+    public static void SettleAgentQuestions(ConversationItem item, InboxMessageDto reply)
+    {
+        if (!reply.Outgoing || reply.Kind is not (null or "human") || reply.Status is not ("sent" or "accepted" or "delivered" or "read")) return;
+        foreach (ConvMessage question in item.Messages.Where(m => m.Kind == MessageKind.AiQuestion && !m.Answered && m.ReceivedAt < reply.ReceivedAt))
+        {
+            question.Answered = true;
+            item.ClosedQuestions.Add(question.Id);
+        }
+        item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
     }
 
     /// <summary>Only a newly confirmed local send can settle the optimistic reply need. Reading an older

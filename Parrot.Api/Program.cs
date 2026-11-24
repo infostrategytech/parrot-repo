@@ -572,6 +572,15 @@ builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient
     client.Timeout = TimeSpan.FromSeconds(Math.Max(1, omniAiSettings.TimeoutSeconds));
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 }).AddHttpMessageHandler(sp => new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()));
+// The AI service's waiting list, called as the signed-in person. An inbox list load can wait on it, so it gives up
+// sooner than the orchestrator's turns do; when it does, nothing shows as waiting.
+builder.Services.AddHttpClient<IWaitingListClient, OmniWaitingListClient>(client =>
+{
+    if (Uri.TryCreate(omniAiSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
+        client.BaseAddress = baseUrl;
+    client.Timeout = TimeSpan.FromSeconds(5);
+    client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
+}).AddHttpMessageHandler(sp => new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()));
 // The orientation service (voice, through ElevenLabs); a separate service from the orchestrator for now.
 builder.Services.AddHttpClient<IOrientationClient, OrientationClient>(client =>
 {
@@ -584,6 +593,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
 builder.Services.AddScoped<Parrot.Application.Wallets.IWalletRepository, Parrot.Infrastructure.Wallets.EfWalletRepository>();
+builder.Services.AddScoped<Parrot.Application.Wallets.WalletService>();
 builder.Services.AddScoped<IWorkspaceService, WorkspaceService>();
 builder.Services.AddScoped<Parrot.Application.Teams.ITeamRepository, Parrot.Infrastructure.Teams.TeamRepository>();
 builder.Services.AddScoped<Parrot.Application.Teams.IWorkspaceConnectionDirectory, Parrot.Infrastructure.Teams.WorkspaceConnectionDirectory>();

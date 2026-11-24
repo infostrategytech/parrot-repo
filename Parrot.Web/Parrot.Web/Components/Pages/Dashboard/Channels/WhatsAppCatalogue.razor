@@ -9,7 +9,6 @@
 @inject ChannelsState ChannelsState
 @inject IIntegrationsService IntegrationsService
 @inject AuthState AuthState
-@inject ToastService Toasts
 @inject NavigationManager Nav
 
 <PageTitle>WhatsApp Catalogue · yára</PageTitle>
@@ -27,17 +26,6 @@
             </Typography>
         </div>
 
-        @if (_connection is not null)
-        {
-            <div class="wac__actions">
-                <Button Variant="ButtonVariant.Secondary"
-                        disabled="@(_busy || _refreshingKnowledge)"
-                        @onclick="RefreshKnowledgeAsync">
-                    <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
-                    <ChildContent>@(_refreshingKnowledge ? "Queuing…" : "Refresh AI knowledge")</ChildContent>
-                </Button>
-            </div>
-        }
     </header>
 
     @if (_error is not null)
@@ -135,7 +123,6 @@
     private bool _disposed;
     private bool _loading = true;
     private bool _busy;
-    private bool _refreshingKnowledge;
     private string? _error;
 
     private WhatsAppConnectionInfo? _connection;
@@ -172,32 +159,6 @@
 
         _loading = false;
         if (!_disposed) StateHasChanged();
-    }
-
-    private async Task RefreshKnowledgeAsync()
-    {
-        if (_connection is null || _refreshingKnowledge) return;
-        _refreshingKnowledge = true;
-        _error = null;
-        try
-        {
-            await IntegrationsService.RefreshKnowledgeAsync(_connection.Id, Token, _lifetime.Token);
-            Toasts.Show("AI knowledge refresh queued. It may take a few minutes.");
-        }
-        catch (OperationCanceledException) when (_lifetime.IsCancellationRequested) { return; }
-        catch (HttpRequestException ex) when ((int?)ex.StatusCode == 404)
-        {
-            _error = "No AI knowledge source found for this connection. Connect WhatsApp first, or wait a moment and try again.";
-        }
-        catch (HttpRequestException)
-        {
-            _error = "Could not queue the AI knowledge refresh. Try again shortly.";
-        }
-        finally
-        {
-            _refreshingKnowledge = false;
-            if (!_disposed) await InvokeAsync(StateHasChanged);
-        }
     }
 
     private async Task LoadProductsAsync()

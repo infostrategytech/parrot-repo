@@ -81,6 +81,10 @@ public sealed class ConversationClient(HttpClient http, AuthState auth, IConfigu
         RequestAsync<Parrot.Application.Agents.ApprovalDecisionResponse>(
             HttpMethod.Post, $"api/ai-operations/approvals/{Uri.EscapeDataString(approvalId)}",
             new Parrot.Application.Agents.ApprovalDecisionRequest(decision, instruction), ct);
+    /// <summary>Closes an agent's question in this conversation without a reply. Not found when it is no longer open.</summary>
+    public async Task MarkQuestionDoneAsync(Guid connection, string sender, string questionId, CancellationToken ct) =>
+        await SendAsync(HttpMethod.Post,
+            $"api/conversations/{connection}/questions/{Uri.EscapeDataString(questionId)}/done?sender={Uri.EscapeDataString(sender)}", null, ct);
     private static string NotesPath(Guid connection, string sender) => $"api/conversations/{connection}/notes?sender={Uri.EscapeDataString(sender)}";
     private static string Path(Guid connection, string sender) => $"api/conversations/{connection}/messages?sender={Uri.EscapeDataString(sender)}";
     private static readonly JsonSerializerOptions WriteOptions = new(JsonSerializerDefaults.Web)

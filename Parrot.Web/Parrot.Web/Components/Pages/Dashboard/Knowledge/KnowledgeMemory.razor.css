@@ -166,7 +166,8 @@
 }
 .knowledge__section-body { display: grid; gap: var(--spacing-xs); min-width: 0; }
 .knowledge__section-body ::deep h3 { color: var(--colors-text-primary); }
-.knowledge__section-body ::deep .knowledge__summary { max-width: var(--ds-knowledge-measure); color: var(--colors-text-secondary); }
+/* The summary runs the width of its row, up to Edit (designer, 23 November 2026: no empty band on the right). */
+.knowledge__section-body ::deep .knowledge__summary { color: var(--colors-text-secondary); }
 .knowledge__section-body ::deep .knowledge__updated { margin-top: var(--spacing-2xs); color: var(--colors-text-subtle); }
 .knowledge__section-body ::deep textarea { margin-top: var(--spacing-xs); }
 .knowledge__edit-actions { display: flex; gap: var(--spacing-sm); justify-content: flex-end; }

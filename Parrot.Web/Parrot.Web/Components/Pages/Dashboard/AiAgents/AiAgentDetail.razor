@@ -23,6 +23,7 @@
 @inject AgentReadiness Readiness
 @inject VoiceInterop Voice
 @inject Parrot.Web.Features.Dashboard.Team.TeamClient TeamApi
+@inject OrientationApi Orientation
 @implements IDisposable
 
 @* One agent: who it is and whether it is on, then its day (what it did,
@@ -128,7 +129,7 @@ else
                     }
                     else if (Capabilities.CanReply)
                     {
-                        <Button disabled="@(agent.ChannelCount == 0 || !Told(agent))" Busy="_switching"
+                        <Button disabled="@(agent.ChannelCount == 0 || !Taught(agent))" Busy="_switching"
                                 title="@TurnOnTitle(agent)"
                                 @onclick="() => SetLiveAsync(agent, true)">Turn on</Button>
                     }
@@ -171,6 +172,7 @@ else
             @if (agent.IsDraft)
             {
                 var told = Told(agent);
+                bool taught = Taught(agent);
                 var progress = Drafts.ProgressOf(agent.Id);
                 var onStep = Briefing.CanTry ? 3 : 2;
                 <section class="agent-detail__card agent-detail__ready" aria-labelledby="agent-ready-title">
@@ -178,6 +180,34 @@ else
                         <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="agent-ready-title">@($"Get {agent.Name} ready")</Typography>
                     </header>
                     <ol class="agent-detail__ready-steps">
+                        @if (OnAiOrientation)
+                        {
+                            @* Taught by the AI service (owner, 23 November 2026): how far along it is, and the way
+                               back into its conversation, which stays open for more once it knows enough. *@
+                            OrientationProgress? learned = _orientation;
+                            bool done = learned?.Ready == true;
+                            <li class="@($"agent-detail__ready-step {(done ? "is-done" : "is-now")}")">
+                                <span class="agent-detail__ready-mark" aria-hidden="true">
+                                    @if (done) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> } else { <Typography TextStyle="TextStyle.Small12Semibold" As="span">1</Typography> }
+                                </span>
+                                <div class="agent-detail__ready-text">
+                                    <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="strong">@($"Tell {agent.Name} its job")</Typography>
+                                    @if (learned is not null)
+                                    {
+                                        <ProgressBar Value="learned.Percent" Label="@OrientationProgressWords.Label(learned, agent.Name)" />
+                                    }
+                                    else
+                                    {
+                                        <Typography TextStyle="TextStyle.BodySmallMedium" As="small" Prose>What it does, what it never does, and when it brings you in, one topic at a time.</Typography>
+                                    }
+                                </div>
+                                <Button Variant="@(done ? ButtonVariant.Ghost : ButtonVariant.Primary)" Size="ButtonSize.Small" @onclick="OpenTelling">
+                                    @(done ? "Teach more" : learned is { Percent: > 0 } ? "Continue" : "Start")
+                                </Button>
+                            </li>
+                        }
+                        else
+                        {
                         <li class="@($"agent-detail__ready-step {(told ? "is-done" : "is-now")}")">
                             <span class="agent-detail__ready-mark" aria-hidden="true">
                                 @if (told) { <Icon Name="IconName.RiCheckFill" Size="IconSize.Sm" /> } else { <Typography TextStyle="TextStyle.Small12Semibold" As="span">1</Typography> }
@@ -194,6 +224,7 @@ else
                                 @(told ? "Change" : progress is null ? "Start" : "Continue")
                             </Button>
                         </li>
+                        }
                         @if (Briefing.CanTry)
                         {
                             var tested = Readiness.Tested(agent.Id);
@@ -208,7 +239,7 @@ else
                                 <Button Variant="@(told && !tested ? ButtonVariant.Primary : ButtonVariant.Ghost)" Size="ButtonSize.Small" disabled="@(!told)" @onclick="() => { _nextLit = false; _testing = true; }">@(tested ? "Test again" : "Try it")</Button>
                             </li>
                         }
-                        @{ var turnOnNow = told && (!Briefing.CanTry || Readiness.Tested(agent.Id)); }
+                        @{ bool turnOnNow = taught && (!Briefing.CanTry || Readiness.Tested(agent.Id)); }
                         <li class="@($"agent-detail__ready-step {(turnOnNow ? "is-now" : "is-later")}")">
                             <span class="agent-detail__ready-mark" aria-hidden="true"><Typography TextStyle="TextStyle.Small12Semibold" As="span">@onStep</Typography></span>
                             <div class="agent-detail__ready-text">
@@ -217,7 +248,7 @@ else
                             </div>
                             @if (Capabilities.CanReply)
                             {
-                                <Button Variant="@(turnOnNow ? ButtonVariant.Primary : ButtonVariant.Secondary)" Size="ButtonSize.Small" Busy="_switching" disabled="@(agent.ChannelCount == 0 || !told || !KnowledgeReady)"
+                                <Button Variant="@(turnOnNow ? ButtonVariant.Primary : ButtonVariant.Secondary)" Size="ButtonSize.Small" Busy="_switching" disabled="@(agent.ChannelCount == 0 || !taught || !KnowledgeReady)"
                                         @onclick="() => SetLiveAsync(agent, true)">Turn on</Button>
                             }
                         </li>
@@ -251,7 +282,7 @@ else
                     <span class="agent-detail__fact-icon"><Icon Name="IconName.RiPauseCircleFill" Size="IconSize.Md" /></span>
                     <div class="agent-detail__row-text">
                         <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@agent.Name isn't answering customers</Typography>
-                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>Turn it on to see its day here: the conversations it replied to, what it passed to you and the tasks it created.</Typography>
+                        <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>@(OnAiOrientation && !Taught(agent) ? NotTaughtLine(agent) : "Turn it on to see its day here: the conversations it replied to, what it passed to you and the tasks it created.")</Typography>
                     </div>
                 </section>
             }
@@ -633,8 +664,22 @@ else
             @if (Knowledge is OrientationBusinessKnowledge && !newJob)
             {
                 @* With the AI service's orientation on, the same conversation runs on the AI itself:
-                   its ElevenLabs call, its typed answers and its question cards. *@
-                <OmniJobConversation @key="@($"omni-{telling.Id}")" AgentId="@telling.Id" Name="@_form.DisplayName" Mascot="@_form.Mascot" />
+                   its ElevenLabs call, its typed answers and its question cards. Once the AI says
+                   it knows enough, Turn on is right there; the AI being ready stands in for "told". *@
+                <OmniJobConversation @key="@($"omni-{telling.Id}")" AgentId="@telling.Id" Name="@_form.DisplayName" Mascot="@_form.Mascot">
+                    <WhenReady>
+                        @if (Capabilities.CanReply && !(telling.IsActive && !telling.IsDraft))
+                        {
+                            <Button Size="ButtonSize.Small" Busy="_switching" disabled="@(telling.ChannelCount == 0)"
+                                    @onclick="() => TurnOnFromTellingAsync(telling)">@($"Turn on {telling.Name}")</Button>
+                            @* Said, not only on hover: a phone has no hover. *@
+                            @if (telling.ChannelCount == 0)
+                            {
+                                <Typography TextStyle="TextStyle.Small12Medium" As="span">Choose where it answers first, on Overview.</Typography>
+                            }
+                        }
+                    </WhenReady>
+                </OmniJobConversation>
             }
             else
             {
@@ -897,6 +942,40 @@ else
     // Told its job: a job description, written and approved (an agent from before job descriptions has its description).
     private static bool Told(AiAgent agent) => agent.Settings.Brief is { IsEmpty: false } || (agent.Settings.Brief is null && !string.IsNullOrWhiteSpace(agent.Description));
 
+    // Orientation runs on the AI service: it keeps what it learns, so no job description is saved
+    // here, and it says when the agent knows enough to be turned on (owner, 23 November 2026).
+    private bool OnAiOrientation => Knowledge is OrientationBusinessKnowledge;
+
+    // The AI service's progress for the agent shown, read on opening it and when its conversation closes.
+    private OrientationProgress? _orientation;
+    private string? _orientationFor;
+
+    // Knows enough to be turned on. On the AI service, its word stands in for "told". Not known (not
+    // read yet, or the read failed) holds nothing back: the service refuses if it isn't ready, and says why.
+    private bool Taught(AiAgent agent) => OnAiOrientation ? _orientation?.CanActivate != false : Told(agent);
+
+    private string NotTaughtLine(AiAgent agent) => OnAiOrientation && _orientation is { } progress
+        ? OrientationProgressWords.NotReady(progress, agent.Name)
+        : $"After {agent.Name} knows its job, it can start answering customers.";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_orientationFor != AgentId) await LoadOrientationAsync(AgentId);
+    }
+
+    private async Task LoadOrientationAsync(string agentId)
+    {
+        // Another agent: the last one's progress is not shown for it while this one's is read.
+        if (_orientationFor != agentId) _orientation = null;
+        _orientationFor = agentId;
+        if (!OnAiOrientation) return;
+        OrientationProgress? progress;
+        try { progress = await Orientation.GetProgressAsync(agentId); }
+        catch (Exception exception) when (AiAgentsState.IsFailure(exception)) { progress = null; }
+        // Another agent opened meanwhile: this one's answer is not its.
+        if (_orientationFor == agentId) _orientation = progress;
+    }
+
     private static string LowerFirst(string text) => text.Length > 1 && char.IsUpper(text[0]) && !char.IsUpper(text[1]) ? char.ToLowerInvariant(text[0]) + text[1..] : text;
 
     private string ViewTitle(AiAgent agent) => _jobView switch
@@ -1042,6 +1121,8 @@ else
         _toldNow = false;
         if (!Told(agent) && Drafts.ProgressOf(agent.Id) is not null)
             Toasts.Show("Saved. It picks up where you left off.");
+        // What it learned in the conversation moves the bar and may unlock Turn on.
+        await LoadOrientationAsync(agent.Id);
     }
 
     // Its first job description, written and approved: kept at once, no Save changes for it; then the
@@ -1248,13 +1329,13 @@ else
     }
 
     private string TurnOnReadinessLine(AiAgent agent) =>
-        !Told(agent) ? $"After {agent.Name} knows its job, it can start answering customers."
+        !Taught(agent) ? NotTaughtLine(agent)
         : agent.ChannelCount == 0 ? "Choose where it should answer under Channels."
         : !KnowledgeReady ? "Review and approve your business knowledge first."
         : $"Ready for new matching conversations on {AgentBuilderCopy.ChannelList(agent)}.";
 
     private string? TurnOnTitle(AiAgent agent) =>
-        !Told(agent) ? $"Tell {agent.Name} its job first."
+        !Taught(agent) ? (OnAiOrientation ? NotTaughtLine(agent) : $"Tell {agent.Name} its job first.")
         : agent.ChannelCount == 0 ? "Choose where it answers first, on Overview."
         : null;
 
@@ -1454,6 +1535,13 @@ else
         foreach (var channel in agent.Channels.Where(c => c.IsEnabled)) _form.Channels.Add(channel.Key);
     }
 
+    // Turned on from the end of its orientation: back on its page, which then shows it on.
+    private async Task TurnOnFromTellingAsync(AiAgent agent)
+    {
+        await CloseTellingAsync(agent);
+        await SetLiveAsync(agent, true);
+    }
+
     private async Task SetLiveAsync(AiAgent agent, bool on)
     {
         if (_switching) return;
@@ -1465,6 +1553,14 @@ else
             agent = AiAgentsState.GetAgent(agent.Id) ?? agent;
             await AiAgentsState.SetLiveAsync(agent, on);
             Toasts.Show(on ? $"{agent.Name} is on." : $"{agent.Name} is off. It won't answer customers until you turn it on.");
+        }
+        // Refused with a reason (the AI service, while orientation isn't finished): its words rather than
+        // "Try again", and its progress read again so the page agrees. A 401 here is not the owner's to fix.
+        catch (ApiException exception) when (on && exception.ErrorCode is not null
+                                              && exception.StatusCode is { } status && (int)status is >= 400 and < 500 and not 401)
+        {
+            Toasts.ShowError(exception.UserMessage);
+            await LoadOrientationAsync(agent.Id);
         }
         catch (Exception exception) when (AiAgentsState.IsFailure(exception))
         {

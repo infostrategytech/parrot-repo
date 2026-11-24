@@ -73,6 +73,42 @@ public class AgentOrchestratorClientTests
         await Assert.ThrowsAsync<ConflictException>(() => client.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecision("approved", Owner, null)));
     }
 
+    // The agent is mid-reply in that conversation: the orchestrator has recorded the decision and applies it after.
+    [Fact]
+    public async Task DecideApprovalAsync_WhenTheAgentIsBusy_ReturnsTheDecisionAsRecorded()
+    {
+        (AgentOrchestratorClient client, _) = Create(HttpStatusCode.Conflict,
+            """{"success": false, "errorCode": "CONVERSATION_BUSY", "message": "agent is replying", "traceId": "t1"}""");
+
+        ApprovalDecisionResult result = await client.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecision("approved", "user-ngozi", null));
+
+        Assert.Equal(ApprovalDecisionStatus.ConversationBusy, result.Status);
+        Assert.Null(result.TurnId);
+    }
+
+    [Theory]
+    [InlineData("already_decided")]
+    [InlineData("no_turn")]
+    public async Task DecideApprovalAsync_TheOrchestratorsOwnStatuses_PassThrough(string status)
+    {
+        (AgentOrchestratorClient client, _) = Create(HttpStatusCode.OK, $$"""{"approval_id": "apr_1", "approval_status": "approved", "status": "{{status}}", "turn_id": null}""");
+
+        ApprovalDecisionResult result = await client.DecideApprovalAsync(Owner, "apr_1", new ApprovalDecision("approved", "user-ngozi", null));
+
+        Assert.Equal(status, result.Status);
+    }
+
+    // Anywhere else, a busy agent is a conflict to try again, never an unhandled error.
+    [Fact]
+    public async Task OtherCalls_WhenTheAgentIsBusy_ThrowConflictToTryAgain()
+    {
+        (AgentOrchestratorClient client, _) = Create(HttpStatusCode.Conflict, """{"errorCode": "CONVERSATION_BUSY"}""");
+
+        ConflictException error = await Assert.ThrowsAnyAsync<ConflictException>(() => client.GetRegistryAsync(Owner));
+
+        Assert.Contains("Try again", error.Message);
+    }
+
     [Fact]
     public async Task DecideApprovalAsync_UnreadableAnswer_ThrowsServiceUnavailable()
     {

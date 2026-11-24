@@ -49,7 +49,14 @@ namespace Parrot.Web.Features.Dashboard.AiAgents.State
 
         public async Task LoadAsync(bool again = false)
         {
-            if ((IsLoaded && !again) || IsLoading) return;
+            if (IsLoading) return;
+            if (IsLoaded && !again)
+            {
+                // Listed earlier in this session, but the waiting questions may have changed since (answered or
+                // marked done in the inbox, which no agent reports): a screen that shows them reads them again.
+                await _feed.RefreshAsync();
+                return;
+            }
             IsLoading = true;
             LoadFailed = false;
             Changed?.Invoke();
@@ -68,9 +75,10 @@ namespace Parrot.Web.Features.Dashboard.AiAgents.State
                 Changed?.Invoke();
             }
 
-            if (!IsLoaded) return;
-            // The figures, and the pushes that keep them fresh. Neither throws.
+            // The figures, and the pushes that keep them fresh. Neither throws. The waiting questions are read even
+            // when the agents couldn't be: the pages keep them reachable then.
             await _feed.RefreshAsync();
+            if (!IsLoaded) return;
             await _realtime.StartAsync();
         }
 
