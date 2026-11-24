@@ -146,6 +146,7 @@ public sealed class EfPaymentOrderRepository(IDbContextFactory<ApplicationDbCont
                 .SetProperty(o => o.CustomerEmail, order.CustomerEmail)
                 .SetProperty(o => o.CustomerPhone, order.CustomerPhone)
                 .SetProperty(o => o.Note, order.Note)
+                .SetProperty(o => o.LastChangeKey, order.LastChangeKey)
                 .SetProperty(o => o.CheckoutExpiresAt, order.CheckoutExpiresAt)
                 .SetProperty(o => o.ExpiresAt, order.ExpiresAt)
                 .SetProperty(o => o.UpdatedAt, order.UpdatedAt), ct);

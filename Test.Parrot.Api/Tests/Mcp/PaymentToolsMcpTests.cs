@@ -198,6 +198,54 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task The_agent_sees_add_to_cart_and_remove_from_cart_with_no_price_input()
+    {
+        await using McpClient client = await ConnectAsync();
+        IList<McpClientTool> tools = await client.ListToolsAsync();
+
+        McpClientTool add = Assert.Single(tools, t => t.Name == "add_to_cart");
+        McpClientTool remove = Assert.Single(tools, t => t.Name == "remove_from_cart");
+
+        JsonElement addItem = add.JsonSchema.GetProperty("properties").GetProperty("items").GetProperty("items");
+        Assert.Equal(["product_id", "quantity", "variant_id"], addItem.GetProperty("properties").EnumerateObject().Select(p => p.Name).Order());
+        Assert.Equal(
+            ["agent_id", "connection_id", "idempotency_key", "items", "sender"],
+            remove.JsonSchema.GetProperty("properties").EnumerateObject().Select(p => p.Name).Order());
+        JsonElement removeItem = remove.JsonSchema.GetProperty("properties").GetProperty("items").GetProperty("items");
+        Assert.Equal(["product_id"], removeItem.GetProperty("required").EnumerateArray().Select(p => p.GetString()));
+        foreach (McpClientTool tool in new[] { add, remove })
+        {
+            Assert.DoesNotContain("price", tool.JsonSchema.GetRawText().Replace("prices", "").Replace("priced", ""));
+        }
+    }
+
+    [Fact]
+    public async Task The_agent_adds_to_and_takes_out_of_the_cart_and_the_link_stays_the_same()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
+        Guid purse = _catalog.Product("Beaded purse", 2500m, left: 5);
+        await using McpClient client = await ConnectAsync();
+
+        CallToolResult made = await client.CallToolAsync("add_to_cart", Arguments(new[] { new { product_id = bag, quantity = 2 } }));
+        JsonElement first = JsonDocument.Parse(Text(made)).RootElement;
+        Assert.Equal("cart_ready", first.GetProperty("status").GetString());
+
+        CallToolResult added = await client.CallToolAsync("add_to_cart", Arguments(new[] { new { product_id = purse, quantity = 1 } }));
+        JsonElement more = JsonDocument.Parse(Text(added)).RootElement;
+        Assert.Equal(("cart_updated", first.GetProperty("checkout_url").GetString(), 10500m),
+            (more.GetProperty("status").GetString(), more.GetProperty("checkout_url").GetString(), more.GetProperty("total").GetDecimal()));
+
+        CallToolResult removed = await client.CallToolAsync("remove_from_cart", Arguments(new[] { new { product_id = bag, quantity = 1 } }));
+        Assert.NotEqual(true, removed.IsError);
+        Assert.Equal(6500m, JsonDocument.Parse(Text(removed)).RootElement.GetProperty("total").GetDecimal());
+
+        CallToolResult refused = await client.CallToolAsync("remove_from_cart", Arguments(new[] { new { product_id = Guid.NewGuid() } }));
+        Assert.True(refused.IsError);
+        Assert.Contains("isn't in the cart", Text(refused));
+        Assert.Single(_orders.Orders);
+    }
+
+    [Fact]
     public async Task A_refusal_reaches_the_agent_in_words_it_can_act_on()
     {
         Guid purse = _catalog.Product("Beaded purse", 3000m, left: 0, available: false);

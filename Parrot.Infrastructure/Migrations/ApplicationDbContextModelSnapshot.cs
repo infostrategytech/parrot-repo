@@ -863,6 +863,10 @@ namespace Parrot.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<string>("LastChangeKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<string>("Lines")
                         .IsRequired()
                         .HasColumnType("jsonb");
