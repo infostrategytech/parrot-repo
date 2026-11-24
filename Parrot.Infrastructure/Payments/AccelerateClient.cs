@@ -50,7 +50,8 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
             throw new PaymentProviderException("There's no page to send the customer back to after paying.");
         }
 
-        object body = new { PayAmount = amountMinor, Reference = reference, CallbackUrl = callback, Description = description };
+        // Accelerate takes the amount in naira ("pay_amount": 800 is ₦800), not kobo.
+        object body = new { PayAmount = amountMinor / 100m, Reference = reference, CallbackUrl = callback, Description = description };
 
         // A token the account no longer accepts is replaced once.
         HttpResponseMessage response = await SendAsync(body, await session.TokenAsync(LoginAsync, ct), ct);

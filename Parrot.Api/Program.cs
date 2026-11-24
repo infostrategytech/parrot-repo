@@ -593,6 +593,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IProfileService, ProfileService>();
 builder.Services.AddScoped<IWorkspaceRepository, WorkspaceRepository>();
 builder.Services.AddScoped<Parrot.Application.Wallets.IWalletRepository, Parrot.Infrastructure.Wallets.EfWalletRepository>();
+builder.Services.AddScoped<Parrot.Application.Wallets.WalletService>();
 builder.Services.AddScoped<IWorkspaceService, WorkspaceService>();
 builder.Services.AddScoped<Parrot.Application.Teams.ITeamRepository, Parrot.Infrastructure.Teams.TeamRepository>();
 builder.Services.AddScoped<Parrot.Application.Teams.IWorkspaceConnectionDirectory, Parrot.Infrastructure.Teams.WorkspaceConnectionDirectory>();

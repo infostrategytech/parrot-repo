@@ -1,8 +1,10 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Storage;
 using Npgsql;
 using Parrot.Application.Payments;
 using Parrot.Domain.Entities;
 using Parrot.Infrastructure.Data;
+using Parrot.Infrastructure.Wallets;
 
 namespace Parrot.Infrastructure.Payments;
 
@@ -55,6 +57,26 @@ public sealed class EfPaymentOrderRepository(IDbContextFactory<ApplicationDbCont
     public async Task<bool> TryUpdateFromAsync(PaymentOrder order, PaymentOrderStatus expected, CancellationToken ct)
     {
         await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        return await UpdateFromAsync(db, order, expected, ct);
+    }
+
+    public async Task<bool> TryRecordPaymentAsync(PaymentOrder order, PaymentOrderStatus expected, WalletTransaction credit, CancellationToken ct)
+    {
+        await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
+        await using IDbContextTransaction transaction = await db.Database.BeginTransactionAsync(ct);
+        if (!await UpdateFromAsync(db, order, expected, ct))
+        {
+            return false;
+        }
+
+        // Only one webhook can get past the order's update, so this credit is new; its reference stops a second one regardless.
+        await WalletLedger.PostAsync(db, credit, ct);
+        await transaction.CommitAsync(ct);
+        return true;
+    }
+
+    private static async Task<bool> UpdateFromAsync(ApplicationDbContext db, PaymentOrder order, PaymentOrderStatus expected, CancellationToken ct)
+    {
         int changed = await db.PaymentOrders
             .Where(o => o.Id == order.Id && o.Status == expected && o.PaidAt == null)
             .ExecuteUpdateAsync(set => set
