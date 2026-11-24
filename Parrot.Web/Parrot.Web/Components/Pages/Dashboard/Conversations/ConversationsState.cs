@@ -49,7 +49,10 @@ public class ConversationsState
             if (item.AiState != AiState.Active) item.PendingApproval = null;
             // An approval the server still holds open stays, whatever the AI state; one only pushed keeps the rule above.
             if (summary.PendingApproval is { } approval) item.PendingApproval = new PendingApprovalInfo(approval.ApprovalId, approval.Tool, approval.Reason);
-            item.AiAgent = summary.AiAgent ?? summary.ChannelAgent;
+            // The agents on the number are what let the team take over and hand back.
+            item.ChannelAgents = KnownAgents(summary.ChannelAgents);
+            item.ChannelAgent = summary.ChannelAgent ?? (item.ChannelAgents.Count == 1 ? item.ChannelAgents[0] : null);
+            item.AiAgent = summary.AiAgent ?? (!item.HasSharedAgentCoverage ? item.ChannelAgent : null);
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
             item.NeedsAnswer = summary.NeedsAnswer ?? false;

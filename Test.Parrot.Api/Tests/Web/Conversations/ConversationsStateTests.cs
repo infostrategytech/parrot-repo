@@ -44,6 +44,42 @@ public sealed class ConversationsStateTests
         Assert.Equal(new PendingApprovalInfo("apr_1", "payments.refund", "Refund above the limit"), item.PendingApproval);
     }
 
+    // The agent on the number is what offers Take over (active) and Return (handoff); without it the bar only says
+    // "You're replying" while the reply box stays locked for the agent.
+    [Theory]
+    [InlineData("active")]
+    [InlineData("handoff")]
+    public void Apply_ARowWhoseNumberHasAnAgent_KeepsTheAgentSoTheTeamCanTakeOverAndReturn(string aiState)
+    {
+        ConversationsState state = new();
+
+        state.Apply([ThroughTheWire(Row() with { AiState = aiState, ChannelAgent = new ConversationAgentRef("agent-cunha", "Cunha") })]);
+
+        ConversationItem item = Assert.Single(state.Conversations);
+        Assert.True(item.HasChannelAgent);
+        Assert.Equal("Cunha", item.ChannelAgent?.Name);
+        Assert.Equal("Cunha", item.AiAgent?.Name);
+    }
+
+    // Several agents on one number are named together; none of them is "the" agent of the chat.
+    [Fact]
+    public void Apply_ARowWithSeveralAgentsOnItsNumber_ShowsThemTogether()
+    {
+        ConversationsState state = new();
+        InboxConversationDto row = ThroughTheWire(Row() with { AiState = "active" }) with
+        {
+            ChannelAgents = [new InboxPersonDto("agent-cunha", "Cunha"), new InboxPersonDto("agent-tolu", "Tolu")],
+        };
+
+        state.Apply([row]);
+
+        ConversationItem item = Assert.Single(state.Conversations);
+        Assert.True(item.HasChannelAgent);
+        Assert.True(item.HasSharedAgentCoverage);
+        Assert.Equal("Cunha and Tolu", item.AgentNames);
+        Assert.Null(item.AiAgent);
+    }
+
     // Once the question closes, the next list read takes the flag away.
     [Fact]
     public void Apply_ARowWhoseQuestionClosed_ClearsTheFlag()
