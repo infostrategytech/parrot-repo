@@ -55,7 +55,6 @@ public class ConversationsState
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
             item.Attention = summary.Attention;
             item.Customer = summary.Customer;
-            item.ChannelAgent = summary.ChannelAgent;
         }
         Resort();
     }
@@ -72,6 +71,10 @@ public class ConversationsState
     /// <summary>Pinned conversations first, then newest first within each group, so new messages land below the pins.</summary>
     public void Resort() => Conversations.Sort((a, b) =>
         a.Pinned != b.Pinned ? (a.Pinned ? -1 : 1) : b.UpdatedAt.CompareTo(a.UpdatedAt));
+
+    private static IReadOnlyList<InboxPersonDto> KnownAgents(IReadOnlyList<InboxPersonDto>? agents) => agents is null ? [] :
+        [.. agents.Where(agent => !string.IsNullOrWhiteSpace(agent.Id) && !string.IsNullOrWhiteSpace(agent.Name))
+            .DistinctBy(agent => agent.Id, StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>Puts the conversation's notes (as the server has them) among its messages, replacing any it held, so a note deleted elsewhere goes too.</summary>
     public static void ApplyNotes(ConversationItem item, IEnumerable<InboxNoteDto> notes)
@@ -109,6 +112,9 @@ public class ConversationsState
                     _ => message.Outgoing ? MessageKind.Human : MessageKind.Customer,
                 },
                 Author = message.Author,
+                AgentsInvolved = message.Kind != "ai" ? [] : message.AgentsInvolved is { } involved
+                    ? KnownAgents(involved)
+                    : unique.GetValueOrDefault(message.Id)?.AgentsInvolved ?? [],
                 Attachment = message.Attachment,
                 Attachments = message.Attachments ?? [],
                 KnowledgeUpdated = message.LearningStatus == "knowledge_updated",

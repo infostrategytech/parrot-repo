@@ -1,0 +1,19 @@
+.agent-faces {
+  /* Gap in the token set: no inline avatar size (the state line's 16px face, as a single agent's). */
+  --ds-agent-faces-size: 16px;
+  /* Gap in the token set: no border-width scale (the ring that separates overlapping faces). */
+  --ds-agent-faces-ring: 1px;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+.agent-faces__face {
+  display: inline-grid;
+  flex: none;
+  width: var(--ds-agent-faces-size);
+  height: var(--ds-agent-faces-size);
+  border-radius: var(--radius-radius-full);
+  background: var(--colors-surface-card);
+  box-shadow: 0 0 0 var(--ds-agent-faces-ring) var(--colors-surface-card);
+}
+.agent-faces__face + .agent-faces__face { margin-inline-start: calc(var(--spacing-xs) * -1); }

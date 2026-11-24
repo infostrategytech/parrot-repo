@@ -1,0 +1,74 @@
+@namespace Parrot.SharedComponents.DesignSystem
+
+<div class="agent-avatar-stack" @ondblclick:stopPropagation>
+    <Popover Title="Agents involved" ShowHeading AlignEnd="AlignEnd" @bind-Open="_open">
+        <Anchor>
+            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="@(Group ? "agent-avatar-stack__trigger is-group" : "agent-avatar-stack__trigger")"
+                    aria-label="@($"Agents involved: {string.Join(", ", Items.Select(item => item.Name))}")"
+                    aria-expanded="@(_open ? "true" : "false")" aria-haspopup="dialog" @onclick="() => _open = !_open">
+                <ChildContent>
+                    @if (Group)
+                    {
+                        @* One avatar's footprint (designer, 23 November 2026: a wider strip pushed the message along). Two
+                           agents: two smaller faces, the second over the first's corner, as a group chat's avatar. Three
+                           or more: the first face and how many others. *@
+                        <span class="agent-avatar-stack__group" aria-hidden="true">
+                            @if (Items.FirstOrDefault() is { } first)
+                            {
+                                <span class="agent-avatar-stack__face is-back"><PresenceAvatar Direction="first.Appearance.Direction" Tone="first.Appearance.Tone" Size="PresenceAvatarSize.Fill" Decorative /></span>
+                            }
+                            @if (Items.Count == 2)
+                            {
+                                <span class="agent-avatar-stack__face is-front"><PresenceAvatar Direction="Items[1].Appearance.Direction" Tone="Items[1].Appearance.Tone" Size="PresenceAvatarSize.Fill" Decorative /></span>
+                            }
+                            else if (Items.Count > 2)
+                            {
+                                <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="agent-avatar-stack__more is-front">+@(Items.Count - 1)</Typography>
+                            }
+                        </span>
+                    }
+                    else
+                    {
+                    <span class="agent-avatar-stack__faces" aria-hidden="true">
+                        @foreach (var item in Items.Take(VisibleCount))
+                        {
+                            <span class="agent-avatar-stack__face">
+                                <PresenceAvatar Direction="item.Appearance.Direction" Tone="item.Appearance.Tone" Size="PresenceAvatarSize.Fill" Decorative />
+                            </span>
+                        }
+                        @if (Items.Count > VisibleCount)
+                        {
+                            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="agent-avatar-stack__more">+@(Items.Count - VisibleCount)</Typography>
+                        }
+                    </span>
+                    }
+                </ChildContent>
+            </Button>
+        </Anchor>
+        <ChildContent>
+            <ul class="agent-avatar-stack__list">
+                @foreach (var item in Items)
+                {
+                    <li class="agent-avatar-stack__person">
+                        <span class="agent-avatar-stack__face">
+                            <PresenceAvatar Direction="item.Appearance.Direction" Tone="item.Appearance.Tone" Size="PresenceAvatarSize.Fill" Decorative />
+                        </span>
+                        <Typography TextStyle="TextStyle.BodySmallMedium" As="span">@item.Name</Typography>
+                    </li>
+                }
+            </ul>
+        </ChildContent>
+    </Popover>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<AgentAvatarStackItem> Items { get; set; } = [];
+    /// <summary>Fit the group in one avatar's square, where avatars line up in a column (a conversation's messages).
+    /// Without it, the faces overlap in a row, for a line of text (the Inbox list, the takeover card).</summary>
+    [Parameter] public bool Group { get; set; }
+    /// <summary>The panel lines up with the faces' trailing edge (a message on the right); false for faces at the start of a line.</summary>
+    [Parameter] public bool AlignEnd { get; set; } = true;
+
+    private const int VisibleCount = 3;
+    private bool _open;
+}

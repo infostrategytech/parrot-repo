@@ -25,9 +25,14 @@
         </Typography>
 
         <span class="conversation-row__meta @StateClass">
-            @if (Conversation.HasAiAgent && AgentLook is { } look)
+            @if (Conversation.HasAiAgent && (!Conversation.HasSharedAgentCoverage || Conversation.NeedsAnswer) && AgentLook is { } look)
             {
                 <span class="conversation-row__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" Paused="@(Conversation.AiState != AiState.Active)" /></span>
+            }
+            else if (Conversation.HasAiAgent && Conversation.HasSharedAgentCoverage && !Conversation.NeedsAnswer && ChannelLooks.Count > 1)
+            {
+                @* Several agents on the channel: their faces, as one agent's face (designer, 23 November 2026). *@
+                <AgentFaces Looks="ChannelLooks" Paused="@(!Conversation.ReplyLocked)" />
             }
             else
             {
@@ -81,6 +86,8 @@
     [Parameter] public bool Selected { get; set; }
     /// <summary>The agent's saved look: its face shows instead of an icon.</summary>
     [Parameter] public string? AgentLook { get; set; }
+    /// <summary>The looks of the agents on the conversation's channel, in its order, when there are several.</summary>
+    [Parameter] public IReadOnlyList<string?> ChannelLooks { get; set; } = [];
     /// <summary>In Needs you, explain the personal action instead of repeating a paused-agent label.</summary>
     [Parameter] public string? AttentionLabel { get; set; }
     [Parameter] public EventCallback OnSelect { get; set; }
@@ -117,13 +124,14 @@
             {
                 AiState.Paused => IconName.RiPauseCircleFill,
                 AiState.Handoff => IconName.RiUserReceived2Fill,
-                _ => IconName.RiRobot3Fill
+                _ => Conversation.HasSharedAgentCoverage ? IconName.RiGroupFill : IconName.RiRobot3Fill
             };
 
     private string StateLabel => AttentionLabel ?? (!Conversation.HasAiAgent
         ? "Manual replies"
         : Conversation.NeedsAnswer
-            ? $"{Conversation.AiAgent!.Name} · Needs your answer"
+            ? Conversation.AiAgent is { } agent ? $"{agent.Name} · Needs your answer" : "Needs your answer"
+            : Conversation.HasSharedAgentCoverage ? Conversation.SharedAgentLine
             : $"{Conversation.AiAgent!.Name} · {(Conversation.AiState == AiState.Active ? "Replying" : "Paused")}");
 
     private string StateClass => !Conversation.HasAiAgent

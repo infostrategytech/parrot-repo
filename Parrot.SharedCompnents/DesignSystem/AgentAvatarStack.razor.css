@@ -1,0 +1,50 @@
+.agent-avatar-stack { flex: none; }
+
+.agent-avatar-stack ::deep .ds-button.agent-avatar-stack__trigger {
+  min-width: 0;
+  min-height: var(--spacing-3xl);
+  padding: 0 var(--spacing-2xs);
+  border-radius: var(--radius-radius-full);
+}
+
+.agent-avatar-stack__faces { display: flex; align-items: center; }
+.agent-avatar-stack__face, .agent-avatar-stack ::deep .agent-avatar-stack__more {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--spacing-2xl);
+  block-size: var(--spacing-2xl);
+  border-radius: var(--radius-radius-full);
+  background: var(--colors-surface-card);
+}
+
+.agent-avatar-stack__faces > * + * { margin-inline-start: calc(-1 * var(--spacing-xs)); }
+.agent-avatar-stack ::deep .agent-avatar-stack__more { color: var(--colors-text-secondary); }
+/* Group: the whole group in one avatar's square, so a message with several agents lines up with one that has one. */
+.agent-avatar-stack ::deep .ds-button.agent-avatar-stack__trigger.is-group {
+  /* Gap in the token set: no border-width scale (the ring that separates the front face from the back one). */
+  --ds-agent-avatar-stack-ring: 2px;
+  inline-size: var(--spacing-3xl);
+  min-height: var(--spacing-3xl);
+  padding: 0;
+}
+.agent-avatar-stack__group { position: relative; display: block; inline-size: var(--spacing-3xl); block-size: var(--spacing-3xl); }
+.agent-avatar-stack__group .agent-avatar-stack__face,
+.agent-avatar-stack__group ::deep .agent-avatar-stack__more { position: absolute; inline-size: var(--spacing-xl); block-size: var(--spacing-xl); }
+.agent-avatar-stack__group .agent-avatar-stack__face.is-back { inset-block-start: 0; inset-inline-start: 0; }
+.agent-avatar-stack__group .agent-avatar-stack__face.is-front,
+.agent-avatar-stack__group ::deep .agent-avatar-stack__more.is-front {
+  inset-block-end: 0;
+  inset-inline-end: 0;
+  box-shadow: 0 0 0 var(--ds-agent-avatar-stack-ring) var(--colors-surface-card);
+}
+.agent-avatar-stack__group ::deep .agent-avatar-stack__more.is-front { background: var(--colors-surface-muted); }
+
+.agent-avatar-stack__list { margin: 0; padding: 0; list-style: none; }
+.agent-avatar-stack__person {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  overflow-wrap: anywhere;
+}

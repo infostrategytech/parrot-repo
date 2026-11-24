@@ -86,9 +86,8 @@
                     <ConversationMessageItem @key="message.Id" @ref="_items[message.Id]" Message="message"
                                              CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
                                              CustomerInitials="@Conversation.CustomerInitials"
-                                             AuthorName="@(message.Kind == MessageKind.Ai && Conversation.AiAgent?.Name is { } agentLabel ? agentLabel : AuthorName)" AuthorSeed="@AuthorSeed"
-                                             AgentMascot="@AiAgentMascot"
-                                             CanTeach="@Features.Available" AgentLook="@AgentLook"
+                                             AuthorName="@(message.Kind == MessageKind.Ai ? LegacyAiReplyName : AuthorName)" AuthorSeed="@AuthorSeed"
+                                             CanTeach="@Features.Available" AgentLook="@MessageAgentLook(message)" AgentAvatars="@MessageAgentAvatars(message)"
                                              OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection"
                                              OnCustomerDetails="OnCustomerDetails"
@@ -107,9 +106,13 @@
                      && Conversation.AiState == AiState.Active && Conversation.PendingApproval is null)
                 {
                     <div class="ai-typing-indicator" role="status"
-                         aria-label="@($"{Conversation.AiAgent?.Name ?? "AI agent"} is replying")">
+                         aria-label="@(Conversation.HasSharedAgentCoverage ? Conversation.SharedAgentStatus : $"{Conversation.AiAgent?.Name ?? "AI agent"} is replying")">
                         <span class="ai-typing-indicator__avatar" aria-hidden="true">
-                            @if (AiAgentMascot is not null)
+                            @if (Conversation.HasSharedAgentCoverage)
+                            {
+                                <Icon Name="IconName.RiGroupFill" Size="IconSize.Sm" />
+                            }
+                            else if (AiAgentMascot is not null)
                             {
                                 <AgentFace Look="@AiAgentMascot" Size="Parrot.SharedComponents.DesignSystem.PresenceAvatarSize.Small" />
                             }
@@ -192,10 +195,11 @@
                 }
                 @if (Slot < TeamQuestionStart && PendingAgentQuestions.ElementAtOrDefault(Slot) is { } question)
                 {
+                    var questionAgent = question.Author?.Name ?? Conversation.AiAgent?.Name ?? "An agent";
                     <div class="conversation-timeline__task conversation-timeline__agent-question" data-agent-question-prompt="@question.Id"
-                         role="region" aria-label="@($"{LearningAgent} needs your answer")">
+                         role="region" aria-label="@($"{questionAgent} needs your answer")">
                         <span class="conversation-timeline__task-copy">
-                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="conversation-timeline__task-who">@LearningAgent needs your answer</Typography>
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="conversation-timeline__task-who">@questionAgent needs your answer</Typography>
                             <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="conversation-timeline__agent-question-text">@question.Text</Typography>
                         </span>
                         @* The API only sends questions to people who can answer them, so whoever sees one can act on it.
@@ -244,7 +248,7 @@
             }
             else
             {
-                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Conversation.HasChannelAgent" AgentLook="@AgentLook" Countdown="@CountdownLabel"
+                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Conversation.HasChannelAgent" AgentLook="@AgentLook" ChannelAvatars="@ChannelAgentAvatars" Countdown="@CountdownLabel"
                                  Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" OnDismiss="() => _quoteOnTakeOver = null" />
             }
 
@@ -278,11 +282,12 @@
                 @* On the agent's side, as its messages are in the chat. *@
                 <div class="learning-dialog__bubble">
                     <span class="learning-dialog__avatar" aria-hidden="true">
-                        @if (AgentLook is { } look) { <Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /> }
+                        @if (IsSharedCorrection) { <Icon Name="IconName.RiGroupFill" Size="IconSize.Sm" /> }
+                        else if ((MessageAgentLook(learningMessage) ?? AgentLook) is { } look) { <Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /> }
                         else { <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /> }
                     </span>
                     <div class="learning-dialog__said">
-                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@(_learningMode == LearningMode.Correction ? $"{LearningAgent} said" : $"{LearningAgent} asked")</Typography>
+                        <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@(IsSharedCorrection ? "Reply from your agents" : _learningMode == LearningMode.Correction ? $"{LearningAgent} said" : $"{LearningAgent} asked")</Typography>
                         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>@learningMessage.Text</Typography>
                     </div>
                 </div>
@@ -339,6 +344,25 @@
         Conversation.AiAgent?.Id is { } agentId
             ? AgentsState.Agents.FirstOrDefault(a => a.Id == agentId)?.Mascot
             : null;
+
+    private string LegacyAiReplyName => Conversation.HasSharedAgentCoverage ? "AI reply" : Conversation.AiAgent?.Name ?? AuthorName;
+
+    private string? MessageAgentLook(ConvMessage message)
+    {
+        if (message.Kind != MessageKind.Ai) return null;
+        var agent = message.AgentsInvolved.Count == 1 ? message.AgentsInvolved[0] : message.Author;
+        return AgentLookup.Look(agent?.Id, agent?.Name, AgentsState.Agents)
+            ?? (Conversation.HasSharedAgentCoverage ? null : AgentLook ?? AiAgentMascot);
+    }
+
+    // The agents on the conversation's channel, for the takeover card (several agents only).
+    private IReadOnlyList<AgentAvatarStackItem> ChannelAgentAvatars => Conversation.ChannelAgents.Count < 2 ? [] :
+        [.. Conversation.ChannelAgents.Select(agent => new AgentAvatarStackItem(agent.Name,
+            AgentLooks.Of(AgentLookup.Look(agent.Id, agent.Name, AgentsState.Agents))))];
+
+    private IReadOnlyList<AgentAvatarStackItem> MessageAgentAvatars(ConvMessage message) => message.AgentsInvolved.Count < 2 ? [] :
+        [.. message.AgentsInvolved.Select(agent => new AgentAvatarStackItem(agent.Name,
+            AgentLooks.Of(AgentLookup.Look(agent.Id, agent.Name, AgentsState.Agents))))];
 
     private readonly CancellationTokenSource _lifetime = new();
     private ElementReference _scrollElement;
@@ -851,7 +875,8 @@
     private string LearningPrompt => _learningMode == LearningMode.Correction
         ? $"What should {LearningAgent} use next time?"
         : "Type the answer";
-    private string LearningCommitment => _learningMode == LearningMode.Correction
+    private string LearningCommitment => IsSharedCorrection ? "What was already sent stays as it is. Your agents will use this next time."
+        : _learningMode == LearningMode.Correction
         ? $"What was already sent stays as it is. {LearningAgent} will use this next time."
         : Conversation.ReplyLocked
             ? $"It goes into your reply box. Take over to send it to {Conversation.CustomerName}. Sending it closes the question."
