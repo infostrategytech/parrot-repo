@@ -1,24 +1,112 @@
 @page "/contact"
 @namespace Parrot.Web.Components.Pages.Contact
 @using Parrot.Web.Components.Layout.Landing
+@using Parrot.Web.Services
+@inject IContactMessages Messages
+
 @layout LandingPageLayout
 
-@* Who to reach and where (designer, 18 November 2026): the business details Meta's verification checks against
-   the Business account, in one place. The phone is a placeholder until the real line is confirmed. *@
-<LandingMetadata Title="Contact · yára" Description="Get in touch with the yára team for help with your account, your business or your data." Path="/contact" />
+@* The reviewed Contact text (designer, 23 November 2026), with "yára" for "YARA CRM" and the email filled in, and its
+   "Send us a message" form. The backend can't receive website messages yet (IContactMessages is unavailable), so on
+   the live site the form says so and offers the email. The office address and phone stay below, as the business details Meta's
+   verification checks against the Business account (the phone is a placeholder until the real line is confirmed). *@
+<LandingMetadata Title="Contact · yára" Description="Questions about yára, support, partnerships, sales or your data? Email us or send us a message." Path="/contact" />
 
-<LandingDocument Title="Contact us" ShowUpdated="false"
-                 Intro="Questions about yára, your account or your data? We're happy to help.">
-    <LandingSection Title="Email">
-        <p><a href="mailto:@LandingCompany.Email">@LandingCompany.Email</a></p>
+<LandingDocument Title="Contact yára" ShowUpdated="false" Intro="Have questions or need assistance? We’re here to help.">
+    <LandingSection Title="Get in touch">
+        <p>Whether you need information about yára, technical support, business partnerships, sales inquiries, or assistance with privacy and data protection, our team is available to assist you.</p>
+        <p><strong>Email</strong>: <a href="mailto:@LandingCompany.Email">@LandingCompany.Email</a></p>
+        <p>We aim to respond to all inquiries promptly and provide the support you need.</p>
     </LandingSection>
-    <LandingSection Title="Phone">
-        <p><a href="@LandingCompany.PhoneLink">@LandingCompany.Phone</a></p>
+
+    <LandingSection Title="Send us a message">
+        @if (_sentTo is { } sentTo)
+        {
+            @* Sent: the form gives way to what happens next, and can be used again. *@
+            <div class="contact-sent" role="status">
+                <span class="contact-sent__icon" aria-hidden="true"><Icon Name="IconName.RiCheckboxCircleFill" /></span>
+                <div class="contact-sent__copy">
+                    <Typography TextStyle="TextStyle.BodyLargeSemibold" As="p" Prose>Message sent</Typography>
+                    <Typography TextStyle="TextStyle.BodyDefaultRegular" As="p" Prose>Thanks for getting in touch. We’ll reply to @sentTo.</Typography>
+                </div>
+                <Button Variant="ButtonVariant.Secondary" @onclick="StartAgain">Send another message</Button>
+            </div>
+        }
+        else
+        {
+            <p>You can also contact us using the form below.</p>
+            <form class="contact-form" novalidate @onsubmit="SendAsync" @onsubmit:preventDefault="true">
+                <div class="contact-form__pair">
+                    <Parrot.SharedComponents.DesignSystem.Input FloatingLabel="Full name" Id="contact-name" @bind-Value="_name"
+                           Error="@(_tried && NameError is not null)" HelperText="@(_tried ? NameError : null)" autocomplete="name" maxlength="@ContactMessage.MaxNameLength" />
+                    <Parrot.SharedComponents.DesignSystem.Input FloatingLabel="Business name (optional)" Id="contact-business" @bind-Value="_business"
+                           autocomplete="organization" maxlength="@ContactMessage.MaxNameLength" />
+                </div>
+                <Parrot.SharedComponents.DesignSystem.Input FloatingLabel="Email address" Id="contact-email" Type="email" @bind-Value="_email"
+                       Error="@(_tried && EmailError is not null)" HelperText="@(_tried ? EmailError : null)" autocomplete="email" inputmode="email" />
+                <Parrot.SharedComponents.DesignSystem.Input FloatingLabel="Subject" Id="contact-subject" @bind-Value="_subject"
+                       Error="@(_tried && SubjectError is not null)" HelperText="@(_tried ? SubjectError : null)" maxlength="@ContactMessage.MaxSubjectLength" />
+                @* The label is the placeholder, as the other long fields' are (Settings' business description). *@
+                <div class="contact-form__message">
+                    <TextArea Id="contact-message" Value="@_message" ValueChanged="@((string? value) => _message = value)" AriaLabel="Message" Placeholder="Message"
+                              Rows="6" AutoGrow MaxLength="ContactMessage.MaxMessageLength" TextStyle="TextStyle.BodyDefaultMedium" />
+                    @if (_tried && MessageError is { } messageError)
+                    { <Typography TextStyle="TextStyle.Small12Regular" As="p" Class="contact-form__error" role="alert">@messageError</Typography> }
+                </div>
+                @if (_error)
+                {
+                    <InlineError Message="@($"We couldn’t send your message. Please email us at {LandingCompany.Email} instead.")" />
+                }
+                <div class="contact-form__actions">
+                    <Button Type="ButtonType.Submit" Size="ButtonSize.Large" Busy="_sending" disabled="@_sending">Send message</Button>
+                </div>
+            </form>
+        }
     </LandingSection>
-    <LandingSection Title="Address">
+
+    <LandingSection Title="Our office">
         <p><strong>@LandingCompany.Name</strong><br />@LandingCompany.Address</p>
+        <p><strong>Phone</strong>: <a href="@LandingCompany.PhoneLink">@LandingCompany.Phone</a></p>
     </LandingSection>
+
     <LandingSection Title="Your data">
-        <p>To have your account and information deleted, see <a href="/data-deletion">Data deletion</a>. How we handle your information is in our <a href="/privacy">Privacy Policy</a>.</p>
+        <p>To have your account and information deleted, see our <a href="/data-deletion">Data Deletion Policy</a>. How we handle your information is in our <a href="/privacy">Privacy Policy</a>.</p>
     </LandingSection>
 </LandingDocument>
+
+@code {
+    private string? _name, _business, _email, _subject, _message;
+    private bool _tried, _sending, _error;
+    private string? _sentTo;
+
+    private string? NameError => string.IsNullOrWhiteSpace(_name) ? "Enter your name." : null;
+    private string? EmailError => string.IsNullOrWhiteSpace(_email) ? "Enter your email address."
+        : !System.Net.Mail.MailAddress.TryCreate(_email.Trim(), out var address) || !address.Host.Contains('.') ? "Enter a valid email address." : null;
+    private string? SubjectError => string.IsNullOrWhiteSpace(_subject) ? "Add a subject." : null;
+    private string? MessageError => string.IsNullOrWhiteSpace(_message) ? "Write your message." : null;
+
+    private async Task SendAsync()
+    {
+        if (_sending) return;
+        _tried = true;
+        _error = false;
+        if (NameError is not null || EmailError is not null || SubjectError is not null || MessageError is not null) return;
+        _sending = true;
+        try
+        {
+            var email = _email!.Trim();
+            await Messages.SendAsync(new ContactMessage(_name!.Trim(), string.IsNullOrWhiteSpace(_business) ? null : _business.Trim(),
+                email, _subject!.Trim(), _message!.Trim()), CancellationToken.None);
+            _sentTo = email;
+        }
+        catch (Exception) { _error = true; }
+        finally { _sending = false; }
+    }
+
+    private void StartAgain()
+    {
+        _sentTo = null;
+        _tried = false;
+        _subject = _message = null;
+    }
+}

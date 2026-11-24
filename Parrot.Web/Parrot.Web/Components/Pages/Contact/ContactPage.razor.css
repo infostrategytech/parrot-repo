@@ -1,0 +1,26 @@
+/* The form on the document's column: fields full width, name and business side by side where there's room. */
+.contact-form { display: grid; gap: var(--spacing-lg); margin-top: var(--spacing-xs); }
+.contact-form__pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--spacing-lg); }
+@media (max-width: 760px) { .contact-form__pair { grid-template-columns: minmax(0, 1fr); } }
+.contact-form__message { display: grid; gap: var(--spacing-xs); }
+.contact-form ::deep .contact-form__error { margin: 0; color: var(--colors-text-destructive); }
+.contact-form__actions { display: flex; }
+
+/* Sent: a quiet card in place of the form. */
+.contact-sent {
+  /* Gap in the token set: no border-width scale (the card's hairline). */
+  --ds-contact-sent-hairline: 1px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--spacing-md) var(--spacing-lg);
+  align-items: start;
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-radius-xl);
+  background: var(--colors-surface-card);
+  box-shadow: inset 0 0 0 var(--ds-contact-sent-hairline) var(--colors-surface-border);
+}
+.contact-sent__icon { display: flex; color: var(--colors-text-success); }
+.contact-sent__copy { display: grid; gap: var(--spacing-xs); color: var(--colors-text-secondary); }
+.contact-sent__copy ::deep p { margin: 0; }
+.contact-sent__copy ::deep p:first-child { color: var(--colors-text-primary); }
+.contact-sent ::deep .ds-button { grid-column: 2; justify-self: start; }

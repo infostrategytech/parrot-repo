@@ -235,6 +235,8 @@ builder.Services.AddScoped<Parrot.Web.Features.Settings.WorkspaceCurrency>();
 builder.Services.AddScoped<Parrot.Web.Features.Auth.ResetPassword.State.PasswordResetHandoff>();
 builder.Services.AddScoped<Parrot.Web.Features.Auth.ResetPassword.State.PasswordResetSignOut>();
 builder.Services.AddScoped<Parrot.Web.Features.Auth.ResetPassword.Services.IPasswordResetPreview, Parrot.Web.Features.Auth.ResetPassword.Services.UnavailablePasswordResetPreview>();
+// The Contact page's form: the backend can't receive website messages yet, so the page offers the email instead.
+builder.Services.AddScoped<Parrot.Web.Services.IContactMessages, Parrot.Web.Services.UnavailableContactMessages>();
 // The sign-in waiting for its two-factor code, and the browser's "don't ask again on this device".
 builder.Services.AddScoped<Parrot.Web.Features.Auth.TwoFactor.TwoFactorSignInState>();
 builder.Services.AddScoped<Parrot.Web.Features.Auth.TwoFactor.RememberedDeviceStorage>();

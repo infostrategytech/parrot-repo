@@ -6,7 +6,8 @@
         <Typography TextStyle="TextStyle.DisplayBold" As="h1" Id="landing-document-title" Prose>@Title</Typography>
         @if (ShowUpdated)
         {
-            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="landing-document__muted">Last updated @LandingCompany.DocumentsUpdated.ToString("d MMMM yyyy")</Typography>
+            @* A reviewed document can carry its own dates, and the day it takes effect (the Privacy Policy). *@
+            <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="landing-document__muted">@(Effective is { } effective ? $"Effective {effective:d MMMM yyyy} · " : null)Last updated @((Updated ?? LandingCompany.DocumentsUpdated).ToString("d MMMM yyyy"))</Typography>
         }
         @if (Intro is not null)
         {
@@ -20,5 +21,9 @@
     [Parameter, EditorRequired] public string Title { get; set; } = "";
     [Parameter] public string? Intro { get; set; }
     [Parameter] public bool ShowUpdated { get; set; } = true;
+    /// <summary>This document's own last change, when it differs from the other public documents'.</summary>
+    [Parameter] public DateOnly? Updated { get; set; }
+    /// <summary>When the document takes effect, for a reviewed legal document that states it.</summary>
+    [Parameter] public DateOnly? Effective { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 }
