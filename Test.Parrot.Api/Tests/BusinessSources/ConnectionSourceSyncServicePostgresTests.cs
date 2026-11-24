@@ -100,39 +100,6 @@ public sealed class ConnectionSourceSyncServicePostgresTests : IAsyncLifetime
     }
 
     [PostgresFact]
-    public async Task RequestMetadataRefreshAsync_LeavesManualRefreshForTheWorkersSnapshot()
-    {
-        Guid connectionId = await SeedCompletedWhatsAppSourceAsync("ws-a");
-
-        await using (ApplicationDbContext db = new(_options!))
-        {
-            await Service(db).RequestMetadataRefreshAsync("ws-a", connectionId);
-        }
-
-        BusinessSource source = await SourceAsync(connectionId);
-        Assert.Equal(SnapshotTrigger.ManualRefresh, source.MetadataSyncTrigger);
-        Assert.Equal(MetadataSyncStatus.Pending, source.MetadataSyncStatus);
-        // Nothing is queued yet: the worker sends the snapshot once it has read the channel again.
-        await using ApplicationDbContext read = new(_options!);
-        Assert.Empty(await read.OutboxEvents.ToListAsync());
-    }
-
-    [PostgresFact]
-    public async Task RequestMetadataRefreshAsync_WithAnotherWorkspacesConnection_IsTheSameNotFoundAsARandomId_AndChangesNothing()
-    {
-        Guid theirs = await SeedCompletedWhatsAppSourceAsync("ws-b");
-
-        await using ApplicationDbContext db = new(_options!);
-        NotFoundException foreign = await Assert.ThrowsAsync<NotFoundException>(() => Service(db).RequestMetadataRefreshAsync("ws-a", theirs));
-        NotFoundException random = await Assert.ThrowsAsync<NotFoundException>(() => Service(db).RequestMetadataRefreshAsync("ws-a", Guid.NewGuid()));
-
-        Assert.Equal(random.Message, foreign.Message);
-        BusinessSource untouched = await SourceAsync(theirs);
-        Assert.Null(untouched.MetadataSyncTrigger);
-        Assert.Equal(MetadataSyncStatus.Completed, untouched.MetadataSyncStatus);
-    }
-
-    [PostgresFact]
     // Not ManualRefresh: that makes Omni pay to re-read every channel on each catalogue sync.
     public async Task SyncWhatsAppCatalogAsync_QueuesCatalogSynced()
     {

@@ -33,13 +33,6 @@
   max-width: var(--ds-wac-measure);
 }
 
-.wac__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xl);
-  flex-shrink: 0;
-}
-
 .wac__sync-summary {
   color: var(--colors-text-secondary);
 }

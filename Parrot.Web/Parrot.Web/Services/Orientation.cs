@@ -18,10 +18,26 @@ public sealed class OmniAiStreams(HttpClient http)
 public sealed record OrientationForm(string EventId, string ReviewId, JsonElement Form);
 
 /// <summary>
+/// How far along an agent's orientation is. Percent (0 to 100) counts the topics it must know, and
+/// stays at 99 or below until Ready: every one of them reviewed and approved. PendingReview and
+/// GeneratingReview are topic keys whose review form waits for the owner or is being written.
+/// CanActivate: the service will let it be turned on (it refuses before).
+/// </summary>
+public sealed record OrientationProgress(int Percent, bool Ready, int RequiredCount, int ReviewedCount,
+    IReadOnlyList<string>? PendingReview = null, IReadOnlyList<string>? GeneratingReview = null,
+    OrientationTopic? ActiveTopic = null, IReadOnlyList<OrientationTopic>? Topics = null, bool CanActivate = false);
+
+/// <summary>
+/// One orientation topic. Status is not_started, in_progress, generating_review, pending_review or
+/// reviewed; the active topic has none (the service calls it stage there, and it isn't needed).
+/// </summary>
+public sealed record OrientationTopic(string Key, string Label, bool Required, string? Status = null,
+    int DetailsCovered = 0, int DetailsTotal = 0);
+
+/// <summary>
 /// Teaching one agent about the business (/api/v1/orientation, on the AI service, as the signed-in
-/// owner): a live voice call, a typed or recorded turn whose answer streams back, and the forms the
-/// AI sends meanwhile. Answering a form only tells the service it was delivered: it does not save
-/// the answers or approve anything, so the screens must not say so.
+/// owner): a live voice call, a typed or recorded turn whose answer streams back, the forms the AI
+/// sends meanwhile, and how far along it is. Submitting a form approves that topic's review.
 /// </summary>
 public sealed class OrientationApi(OmniAiClient omni, OmniAiStreams streams)
 {
@@ -73,45 +89,36 @@ public sealed class OrientationApi(OmniAiClient omni, OmniAiStreams streams)
     public async IAsyncEnumerable<OrientationForm> ReadFormsAsync(string agentId,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        using var request = omni.Request(HttpMethod.Get, $"api/v1/orientation/forms/stream/{Uri.EscapeDataString(agentId)}");
-        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
-        using var response = await streams.Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
-        await response.EnsureApiSuccessAsync();
-        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var reader = new StreamReader(stream, Encoding.UTF8);
-
-        var expected = $"orientation.form.{agentId}";
-        string? id = null, name = null;
-        var data = new List<string>();
-        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        await foreach (ServerEvent serverEvent in ReadEventsAsync($"api/v1/orientation/forms/stream/{Uri.EscapeDataString(agentId)}",
+                           $"orientation.form.{agentId}", cancellationToken))
         {
-            if (line.Length == 0)
-            {
-                // A blank line ends an event; comments (": keep-alive") never start one.
-                if (data.Count > 0 && name == expected && !string.IsNullOrWhiteSpace(id)
-                    && Parse(id, string.Join("\n", data)) is { } form)
-                    yield return form;
-                id = name = null;
-                data.Clear();
-                continue;
-            }
-            if (line.StartsWith(':')) continue;
-            var colon = line.IndexOf(':');
-            var field = colon < 0 ? line : line[..colon];
-            var value = colon < 0 ? "" : line[(colon + 1)..];
-            if (value.StartsWith(' ')) value = value[1..];
-            switch (field)
-            {
-                case "id": id = value; break;
-                case "event": name = value; break;
-                case "data": data.Add(value); break;
-            }
+            if (!string.IsNullOrWhiteSpace(serverEvent.Id) && Parse(serverEvent.Id, serverEvent.Data) is { } form)
+                yield return form;
+        }
+    }
+
+    /// <summary>The agent's orientation progress as it is now.</summary>
+    public Task<OrientationProgress> GetProgressAsync(string agentId, CancellationToken cancellationToken = default) =>
+        omni.GetAsync<OrientationProgress>($"api/v1/orientation/progress/{Uri.EscapeDataString(agentId)}/detail", cancellationToken);
+
+    /// <summary>
+    /// The agent's orientation progress as it is on connecting, then again each time it changes, until
+    /// cancelled or the stream ends (the token expired, the connection dropped, it fell behind): the
+    /// caller reconnects. The first one can fail to come, so read <see cref="GetProgressAsync"/> as well.
+    /// </summary>
+    public async IAsyncEnumerable<OrientationProgress> ReadProgressAsync(string agentId,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        await foreach (ServerEvent serverEvent in ReadEventsAsync($"api/v1/orientation/progress/stream/{Uri.EscapeDataString(agentId)}",
+                           $"orientation.progress.{agentId}", cancellationToken))
+        {
+            if (ParseProgress(serverEvent.Data) is { } progress) yield return progress;
         }
     }
 
     /// <summary>
-    /// Tells the service this form was answered, so it stops sending it. The answers go with it but
-    /// are not saved yet: success means delivered, not saved or approved.
+    /// Tells the service this form was answered, so it stops sending it. The answers go with it, and
+    /// submitting them approves that topic's review.
     /// </summary>
     public Task AnswerFormAsync(string agentId, OrientationForm form, IReadOnlyDictionary<string, object?> answers,
         CancellationToken cancellationToken = default) =>
@@ -132,6 +139,57 @@ public sealed class OrientationApi(OmniAiClient omni, OmniAiStreams streams)
         int count;
         while ((count = await reader.ReadAsync(buffer.AsMemory(), cancellationToken)) > 0)
             yield return new string(buffer, 0, count);
+    }
+
+    // The events with this name in a server-sent event stream; comments (": keep-alive") and other
+    // events are left out.
+    private async IAsyncEnumerable<ServerEvent> ReadEventsAsync(string path, string eventName,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        using HttpRequestMessage request = omni.Request(HttpMethod.Get, path);
+        request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("text/event-stream"));
+        using HttpResponseMessage response = await streams.Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
+        await response.EnsureApiSuccessAsync();
+        await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+        using StreamReader reader = new(stream, Encoding.UTF8);
+
+        string? id = null, name = null;
+        List<string> data = [];
+        while (await reader.ReadLineAsync(cancellationToken) is { } line)
+        {
+            if (line.Length == 0)
+            {
+                // A blank line ends an event; comments never start one.
+                if (data.Count > 0 && name == eventName) yield return new ServerEvent(id, string.Join("\n", data));
+                id = name = null;
+                data.Clear();
+                continue;
+            }
+            if (line.StartsWith(':')) continue;
+            int colon = line.IndexOf(':');
+            string field = colon < 0 ? line : line[..colon];
+            string value = colon < 0 ? "" : line[(colon + 1)..];
+            if (value.StartsWith(' ')) value = value[1..];
+            switch (field)
+            {
+                case "id": id = value; break;
+                case "event": name = value; break;
+                case "data": data.Add(value); break;
+            }
+        }
+    }
+
+    // A snapshot that does not read is skipped rather than ending the stream.
+    private static OrientationProgress? ParseProgress(string json)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize<OrientationProgress>(json, OmniAiClient.Json);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
     }
 
     // The data is { review_id, form }, form being the form's own JSON as a string. One that does not
@@ -156,6 +214,8 @@ public sealed class OrientationApi(OmniAiClient omni, OmniAiStreams streams)
         [property: JsonPropertyName("form")] string Form);
 
     private sealed record FormAnswer(string EventId, string ReviewId, string Answer);
+
+    private sealed record ServerEvent(string? Id, string Data);
 }
 
 /// <summary>

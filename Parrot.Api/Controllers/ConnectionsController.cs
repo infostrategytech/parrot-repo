@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
-using Parrot.Application.BusinessSources;
 using Parrot.Application.DTOs.Integrations;
 using Parrot.Application.Teams;
 using Parrot.Domain.Enums;
@@ -15,9 +14,7 @@ namespace Parrot.Api.Controllers;
 [Route("api/connections")]
 [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
 [Monitor(Area = "connections")]
-public sealed class ConnectionsController(
-    IWorkspaceConnectionDirectory directory,
-    IConnectionSourceSyncService sourceSyncService) : ControllerBase
+public sealed class ConnectionsController(IWorkspaceConnectionDirectory directory) : ControllerBase
 {
     [HttpGet]
     [EndpointSummary("The connection ids in this workspace")]
@@ -31,14 +28,5 @@ public sealed class ConnectionsController(
             .Where(c => access.CanReach(c.Id))
             .Select(c => new WorkspaceConnectionResponse(c.Id, WorkspaceChannels.KeyOf(c.Platform)))
             .ToList());
-    }
-
-    // POST /api/connections/{id}/refresh-knowledge — re-queues the profile metadata fetch for any channel.
-    [HttpPost("{id:guid}/refresh-knowledge")]
-    [RequirePermission(WorkspacePermissions.ChannelsConnect)]
-    public async Task<IActionResult> RefreshKnowledge(Guid id, CancellationToken cancellationToken)
-    {
-        await sourceSyncService.RequestMetadataRefreshAsync(User.WorkspaceId()!, id, cancellationToken);
-        return NoContent();
     }
 }

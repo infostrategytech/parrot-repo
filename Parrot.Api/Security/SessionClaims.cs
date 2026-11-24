@@ -1,5 +1,7 @@
+using System.Net.Http.Headers;
 using System.Security.Claims;
 using Parrot.Application.Workspaces;
+using Parrot.Domain.Exceptions;
 
 namespace Parrot.Api.Security;
 
@@ -21,4 +23,15 @@ public static class SessionClaims
     /// </summary>
     public static string? WorkspaceId(this ClaimsPrincipal principal) =>
         principal.FindFirstValue(WorkspaceClaims.WorkspaceId) ?? principal.UserId();
+
+    /// <summary>
+    /// The session token exactly as the person sent it, for a service that acts as them (the AI service's waiting
+    /// list records who closed an item). Passed on to that service only, never logged or returned.
+    /// </summary>
+    public static string SessionToken(this HttpContext context) =>
+        AuthenticationHeaderValue.TryParse(context.Request.Headers.Authorization, out AuthenticationHeaderValue? header)
+            && header.Scheme.Equals("Bearer", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(header.Parameter)
+            ? header.Parameter
+            : throw new UnauthorizedException("Sign in to continue.");
 }

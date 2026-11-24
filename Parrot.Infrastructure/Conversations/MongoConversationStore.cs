@@ -45,6 +45,33 @@ public sealed class MongoConversationStore : IConversationStore
         return await SummariesAsync(filter, 0, conversations.Count, ct);
     }
 
+    public async Task<IReadOnlyDictionary<string, (Guid Connection, string Sender)>> FindByConversationKeysAsync(
+        string owner, IReadOnlyCollection<string> conversationKeys, CancellationToken ct)
+    {
+        if (conversationKeys.Count == 0) return new Dictionary<string, (Guid, string)>();
+        FilterDefinition<MessageDocument> filter = Builders<MessageDocument>.Filter.Where(x => x.OwnerUserId == owner && x.ConnectionId != null)
+            & Builders<MessageDocument>.Filter.In(x => x.ConversationKey, conversationKeys);
+
+        // A channel connected again gets a new connection under the same key; the newest message says which one the inbox lists.
+        List<BsonDocument> rows = await _messages.Aggregate()
+            .Match(filter)
+            .SortByDescending(x => x.Id)
+            .AppendStage<BsonDocument>(new BsonDocument("$group", new BsonDocument
+            {
+                { "_id", "$ConversationKey" },
+                { "connection", new BsonDocument("$first", "$ConnectionId") },
+                { "sender", new BsonDocument("$first", "$From") },
+            }))
+            .ToListAsync(ct);
+        return rows.ToDictionary(
+            row => row["_id"].AsString,
+            row => (ConnectionOf(row["connection"]), row["sender"].AsString),
+            StringComparer.Ordinal);
+    }
+
+    // MessageDocument keeps the connection id as a string.
+    private static Guid ConnectionOf(BsonValue value) => Guid.Parse(value.AsString);
+
     private async Task<IReadOnlyList<ConversationSummary>> SummariesAsync(FilterDefinition<MessageDocument> match, int skip, int take, CancellationToken ct)
     {
         // System events are stored in the same collection but must not influence the preview text,

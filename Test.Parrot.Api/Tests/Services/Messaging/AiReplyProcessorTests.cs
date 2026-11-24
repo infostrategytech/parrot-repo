@@ -67,7 +67,8 @@ public class AiReplyProcessorTests
     private static ConversationService ServiceThatSucceeds() => WhatsAppService(out _, out _, out _);
 
     // A WhatsApp conversation whose sends are recorded: text, pictures, the stored copies.
-    private static ConversationService WhatsAppService(out Mock<IWhatsAppSender> sender, out FakeStore store, out MemoryStorage storage)
+    private static ConversationService WhatsAppService(out Mock<IWhatsAppSender> sender, out FakeStore store, out MemoryStorage storage,
+        IMessagePersistedPublisher? publisher = null)
     {
         WhatsAppConnection connection = new()
         {
@@ -121,7 +122,19 @@ public class AiReplyProcessorTests
         return new ConversationService(
             store, connections.Object, sender.Object, protector,
             new FakeSequence(), pages.Object, facebookSender.Object, new FakePageProtector(),
-            instagramAccounts.Object, instagramSender.Object, new FakeAccountProtector(), mediaStorage: storage);
+            instagramAccounts.Object, instagramSender.Object, new FakeAccountProtector(), mediaStorage: storage, publisher: publisher);
+    }
+
+    /// <summary>What was announced on messages.persisted.</summary>
+    private sealed class RecordingPublisher : IMessagePersistedPublisher
+    {
+        public List<MessagePersisted> Published { get; } = [];
+
+        public Task PublishAsync(MessagePersisted message, CancellationToken cancellationToken)
+        {
+            Published.Add(message);
+            return Task.CompletedTask;
+        }
     }
 
     private static AiReplyProcessor MakeProcessor(IServiceScopeFactory factory) =>
@@ -181,6 +194,77 @@ public class AiReplyProcessorTests
 
         Assert.Equal("validation_failed", ex.Reason);
         Assert.IsType<ValidationException>(ex.InnerException);
+    }
+
+    // A send the channel set-up refuses (disconnected, no token, a request id reused for other text) never succeeds on
+    // a retry: it is dead-lettered, not read again for ever while it holds up the other replies in its batch.
+    [Fact]
+    public async Task ProcessAsync_WhenTheSendIsRefused_ThrowsUnprocessableSoItIsDeadLetteredNotRetried()
+    {
+        AiReplyProcessor processor = MakeProcessor(new ScopeFactory(ServiceThatThrows(new ConflictException("This connection is disabled or unverified."))));
+        AiReplyRequested request = new()
+        {
+            WorkspaceId = ValidWorkspace, ConnectionId = ValidConnection,
+            Recipient = ValidRecipient, RequestId = ValidRequest, Text = ValidText,
+        };
+
+        UnprocessableMessageException ex = await Assert.ThrowsAsync<UnprocessableMessageException>(
+            () => processor.ProcessAsync(request, default));
+
+        Assert.Equal("send_refused", ex.Reason);
+        Assert.IsType<ConflictException>(ex.InnerException);
+    }
+
+    // The common case: the agent answers after the customer's 24 hours have passed. WhatsApp would refuse it today and
+    // every day after, so it goes to the dead-letter topic, and nothing is stored or sent.
+    [Fact]
+    public async Task ProcessAsync_WhenTheCustomersReplyWindowHasClosed_ThrowsUnprocessableAndSendsNothing()
+    {
+        ConversationService service = WhatsAppService(out Mock<IWhatsAppSender> sender, out FakeStore store, out _);
+        DateTime lastWrote = DateTime.UtcNow.AddHours(-25);
+        store.SetLatestIncoming(new WhatsAppMessageDocument
+        {
+            MessageId = "whatsapp:incoming-old", OwnerUserId = ValidWorkspace, Platform = MessagingPlatform.WhatsApp,
+            ExternalAccountId = "456", ChannelId = "123", ChannelDisplayName = "", From = ValidRecipient,
+            Timestamp = new DateTimeOffset(lastWrote).ToUnixTimeSeconds().ToString(), Type = "text",
+            SentAt = lastWrote, ReceivedAt = lastWrote, ConversationKey = $"whatsapp:123:{ValidRecipient}", Sequence = 1,
+            Receiver = ValidRecipient, ConnectionId = ValidConnection,
+        });
+        AiReplyRequested request = new()
+        {
+            WorkspaceId = ValidWorkspace, ConnectionId = ValidConnection,
+            Recipient = ValidRecipient, RequestId = ValidRequest, Text = ValidText,
+        };
+
+        UnprocessableMessageException ex = await Assert.ThrowsAsync<UnprocessableMessageException>(
+            () => MakeProcessor(new ScopeFactory(service)).ProcessAsync(request, default));
+
+        Assert.Equal("send_refused", ex.Reason);
+        sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // A batch read again (one bad reply in it rewinds the lot) hands every reply in it over again. One already sent is
+    // not sent again, and must not be announced to Omni again either: that repeat was the endless stream of AgentToUser.
+    [Fact]
+    public async Task ProcessAsync_WhenTheSameReplyIsDeliveredAgain_AnnouncesItOnlyOnce()
+    {
+        RecordingPublisher published = new();
+        ConversationService service = WhatsAppService(out Mock<IWhatsAppSender> sender, out _, out _, published);
+        AiReplyProcessor processor = MakeProcessor(new ScopeFactory(service));
+        AiReplyRequested request = new()
+        {
+            WorkspaceId = ValidWorkspace, ConnectionId = ValidConnection,
+            Recipient = ValidRecipient, RequestId = ValidRequest, Text = ValidText,
+        };
+
+        await processor.ProcessAsync(request, default);
+        await processor.ProcessAsync(request, default);
+        await processor.ProcessAsync(request, default);
+
+        MessagePersisted announced = Assert.Single(published.Published);
+        Assert.Equal(CommsType.AgentToUser, announced.Data.CommsType);
+        Assert.True(announced.Data.Outgoing);
+        sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]

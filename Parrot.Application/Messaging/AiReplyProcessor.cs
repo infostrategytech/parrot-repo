@@ -18,7 +18,7 @@ namespace Parrot.Application.Messaging;
 /// twice). A photo that fails is logged and skipped: it never fails or retries the text. When the
 /// text itself wasn't sent, no photos are.
 ///
-/// Permanent failures (missing connection, invalid payload) throw
+/// Permanent failures (missing connection, invalid payload, a send the channel set-up refuses) throw
 /// <see cref="UnprocessableMessageException"/> so the event goes to the dead-letter topic
 /// rather than being retried indefinitely.
 /// </summary>
@@ -66,6 +66,16 @@ public sealed class AiReplyProcessor(IServiceScopeFactory scopeFactory, ILogger<
                 "ai_reply_validation_failed WorkspaceId={WorkspaceId} ConnectionId={ConnectionId}: {Message}",
                 request.WorkspaceId, request.ConnectionId, ex.Message);
             throw new UnprocessableMessageException("validation_failed", ex);
+        }
+        catch (ConflictException ex)
+        {
+            // The reply window has closed, the connection is off or has no token, or the request id was used for other
+            // text: none of these changes on a retry. Retried, it failed its batch, which was read again for ever and
+            // held up every other reply in it. (One "being processed" by another delivery is sent by that one.)
+            logger.LogWarning(
+                "ai_reply_refused WorkspaceId={WorkspaceId} ConnectionId={ConnectionId} RequestId={RequestId}: {Message}",
+                request.WorkspaceId, request.ConnectionId, request.RequestId, ex.Message);
+            throw new UnprocessableMessageException("send_refused", ex);
         }
 
         if (request.Attachments is { Count: > 0 })

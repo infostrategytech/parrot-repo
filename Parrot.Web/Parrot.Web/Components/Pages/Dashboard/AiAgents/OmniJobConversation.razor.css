@@ -131,6 +131,50 @@
   border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
 }
 
+/* How far along orientation is: above the start's orb, then a strip across the top of the chat,
+   where the topics would be. */
+.job-editor__progress { justify-self: stretch; margin-bottom: var(--spacing-xl); text-align: start; }
+.job-editor__voice.is-talking > .job-editor__progress {
+  flex: none;
+  margin-bottom: var(--spacing-none);
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-bottom: var(--ds-hairline) solid var(--colors-surface-border);
+}
+/* Under the bar: what happens next (or Turn on, once done) and the way to the topics. */
+.job-editor__progress-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-sm);
+  align-items: center;
+  margin-top: var(--spacing-sm);
+}
+.job-editor__progress-row ::deep .job-editor__progress-next { flex: 1; min-width: 0; margin: var(--spacing-none); color: var(--colors-text-secondary); }
+.job-editor__progress-row ::deep .job-editor__progress-toggle { margin-inline-start: auto; }
+.job-editor__progress-row ::deep .job-editor__progress-toggle .is-open { transform: rotate(180deg); }
+/* The topics, in the service's order. Long, it scrolls inside itself so the chat keeps its room. */
+.job-editor__topic-list {
+  display: grid;
+  gap: var(--spacing-xs);
+  max-height: 40vh;
+  margin: var(--spacing-sm) var(--spacing-none) var(--spacing-none);
+  padding: var(--spacing-none);
+  overflow-y: auto;
+  list-style: none;
+}
+.job-editor__topic { display: flex; flex-wrap: wrap; gap: var(--spacing-none) var(--spacing-sm); align-items: center; }
+.job-editor__topic ::deep .job-editor__topic-status { margin-inline-start: auto; color: var(--colors-text-secondary); }
+.job-editor__topic-mark { display: grid; place-items: center; width: var(--spacing-lg); height: var(--spacing-lg); color: var(--colors-icon-muted); }
+.job-editor__topic.is-later .job-editor__topic-mark::before {
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  content: "";
+  background: var(--colors-surface-border);
+  border-radius: var(--radius-radius-full);
+}
+.job-editor__topic.is-done .job-editor__topic-mark { color: var(--colors-feedback-success); }
+.job-editor__topic.is-yours .job-editor__topic-mark,
+.job-editor__topic.is-now .job-editor__topic-mark { color: var(--colors-icon-brand); }
+
 .job-editor__log {
   flex: 1;
   min-height: 0;

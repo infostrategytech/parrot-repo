@@ -39,6 +39,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public DateTime? ControlUntil { get; init; }
     /// <summary>The AI agent has asked the team a question it could not answer.</summary>
     public bool? NeedsAnswer { get; init; }
+    /// <summary>An action the AI agent is waiting for the team to approve. Only sent to people who can decide it.</summary>
+    public InboxApprovalDto? PendingApproval { get; init; }
     /// <summary>Canonical conversation input/recipient state, not a projection of open or urgent tasks.
     /// Null on older APIs: do not guess a reply obligation from unread counts or partial history.</summary>
     public InboxAttentionDto? Attention { get; init; }
@@ -54,6 +56,9 @@ public sealed record InboxUnreadDto(int Total);
 /// after a confirmed customer-facing reply or return to AI, independently of the task's lifecycle.
 /// HandoverTaskId links the actual handoff work; an ordinary linked order is not a handoff.</summary>
 public sealed record InboxAttentionDto(string ResponsiblePersonId, bool ReplyNeeded = false, string? HandoverTaskId = null);
+
+/// <summary>An approval the AI agent is waiting on. Tool and Reason may be absent.</summary>
+public sealed record InboxApprovalDto(string ApprovalId, string? Tool, string? Reason);
 
 public sealed record InboxPinDto(bool Pinned);
 

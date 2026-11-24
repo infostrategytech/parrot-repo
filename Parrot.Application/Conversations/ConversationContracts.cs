@@ -1,3 +1,4 @@
+using Parrot.Application.Contracts.Conversations;
 using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Enums;
 
@@ -40,6 +41,15 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>active when an AI agent covers this channel and no human has taken over; handoff when a human is in control; null when no agent is connected.</summary>
     public string? AiState { get; init; }
+
+    /// <summary>An agent asked the team something here that is still open. Only sent to people who can answer it.</summary>
+    public bool NeedsAnswer { get; init; }
+
+    /// <summary>An action an agent is waiting for the team to approve here, or null. Only sent to people who can decide it.</summary>
+    public ConversationApproval? PendingApproval { get; init; }
+
+    /// <summary>The agent that asked the open question or approval; null when nothing is open.</summary>
+    public ConversationAgentRef? AiAgent { get; init; }
 }
 public record ConversationMessage(string Id, string Text, bool Outgoing, string Status, DateTime ReceivedAt)
 {
@@ -170,6 +180,14 @@ public interface IConversationStore
 
     /// <summary>The summaries of just these conversations (those with no messages are absent), newest first.</summary>
     Task<IReadOnlyList<ConversationSummary>> FindAsync(string owner, IReadOnlyCollection<(Guid Connection, string Sender)> conversations, CancellationToken ct);
+
+    /// <summary>
+    /// The inbox conversation each conversation key names (see <see cref="Messaging.ConversationKey"/>), from the
+    /// newest message stored under it. A key with no message here is absent.
+    /// </summary>
+    Task<IReadOnlyDictionary<string, (Guid Connection, string Sender)>> FindByConversationKeysAsync(
+        string owner, IReadOnlyCollection<string> conversationKeys, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyDictionary<string, (Guid Connection, string Sender)>>(new Dictionary<string, (Guid, string)>());
     Task<MessagePage> ReadAsync(string owner, Guid connection, string sender, string? before, CancellationToken ct);
 
     /// <summary>The files this customer sent, newest first, a page at a time. Pass the previous page's NextBefore for the next.</summary>
