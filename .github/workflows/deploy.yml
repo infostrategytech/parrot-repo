@@ -60,27 +60,36 @@ jobs:
           - name: whatsapp-ingestor
             dockerfile: MessageProcessor/Dockerfile
             context: .
+          - name: parrot-web
+            dockerfile: Parrot.Web/Dockerfile
+            context: .
+          - name: parrot-catalog-api
+            dockerfile: Parrot.Catalog.Api/Dockerfile
+            context: .
+          - name: parrot-catalog-relay
+            dockerfile: Parrot.Catalog.Relay/Dockerfile
+            context: .
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: Login to ECR and build/push Docker image
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          IMAGE_REPOSITORY: ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}
+          SERVICE: ${{ matrix.service.name }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
-          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
-          aws configure set default.region ${{ env.AWS_DEFAULT_REGION }}
-
-      - name: Login to ECR and Build/Push Docker Image
-        run: |
+          : "${AWS_ACCESS_KEY_ID:?AWS_ACCESS_KEY_ID secret is required}"
+          : "${AWS_SECRET_ACCESS_KEY:?AWS_SECRET_ACCESS_KEY secret is required}"
           aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} \
             | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com
 
-          docker build -f ${{ matrix.service.dockerfile }} -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:${{ github.sha }} -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:latest ${{ matrix.service.context }}
-
-          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:${{ github.sha }}
-          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:latest
+          docker build -f ${{ matrix.service.dockerfile }} \
+            -t "${IMAGE_REPOSITORY}:${SERVICE}-${IMAGE_TAG}" \
+            -t "${IMAGE_REPOSITORY}:${SERVICE}-latest" ${{ matrix.service.context }}
+          docker push "${IMAGE_REPOSITORY}:${SERVICE}-${IMAGE_TAG}"
+          docker push "${IMAGE_REPOSITORY}:${SERVICE}-latest"
 
   deploy:
     needs: build
@@ -94,12 +103,21 @@ jobs:
           username: ${{ secrets.SERVER_USER || 'ubuntu' }}
           key: ${{ secrets.PARROT_PRIVATE_KEY }}
           script: |
-            cd ${{ vars.SERVER_APP_DIR || '/home/ubuntu/Parrot' }}
+            set -euo pipefail
+            cd "${{ vars.SERVER_APP_DIR || '/home/ubuntu/Parrot' }}"
+            IMAGE_TAG="${{ github.sha }}"
+            IMAGE_REPOSITORY="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}"
+
+            images=$(sudo env IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env.prod -f docker-compose.yaml config --images)
+            for service in parrot-api parrot-grpc whatsapp-ingestor parrot-web parrot-catalog-api parrot-catalog-relay; do
+              if ! printf '%s\n' "$images" | grep -Fxq "${IMAGE_REPOSITORY}:${service}-${IMAGE_TAG}"; then
+                echo "Server Compose is missing expected image for ${service}; update docker-compose.yaml before deploying." >&2
+                exit 1
+              fi
+            done
+
             aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} \
-              | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com
-
-            docker compose -f infra/docker-compose.prod.yml pull
-            docker compose -f infra/docker-compose.prod.yml down
-            docker compose -f infra/docker-compose.prod.yml up -d
-
-            echo "✅ Parrot deployed successfully"
+              | sudo docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com
+            sudo env IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env.prod -f docker-compose.yaml pull
+            sudo env IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env.prod -f docker-compose.yaml up -d
+            sudo env IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env.prod -f docker-compose.yaml exec -T nginx nginx -s reload || sudo env IMAGE_TAG="$IMAGE_TAG" docker compose --env-file .env.prod -f docker-compose.yaml restart nginx
