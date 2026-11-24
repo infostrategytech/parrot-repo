@@ -862,8 +862,12 @@
         finally { _savingLearning = false; }
     }
 
-    // The workspace's own name for the agent when its list has it: the API may only know the agent by id.
-    private string LearningAgent => (Conversation.AiAgent is { } agent ? AgentsState.GetAgent(agent.Id)?.Name ?? agent.Name : null) ?? "the AI agent";
+    // A reply several agents wrote together is corrected for all of them.
+    private bool IsSharedCorrection => _learningMode == LearningMode.Correction && _learningMessage?.AgentsInvolved.Count > 1;
+    // The agent that wrote the message; else the conversation's, by the workspace's own name for it when its list has it (the API may only know it by id).
+    private string LearningAgent => IsSharedCorrection ? "your agents"
+        : _learningMessage?.AgentsInvolved.FirstOrDefault()?.Name ?? _learningMessage?.Author?.Name
+        ?? (Conversation.AiAgent is { } agent ? AgentsState.GetAgent(agent.Id)?.Name ?? agent.Name : null) ?? "the AI agent";
     // The same, starting a sentence.
     private string CapitalisedAgent => LearningAgent.Length == 0 ? LearningAgent : char.ToUpperInvariant(LearningAgent[0]) + LearningAgent[1..];
     private string LearningTitle => _learningMode == LearningMode.Correction ? "Correct for next time" : $"Answer {LearningAgent}";
