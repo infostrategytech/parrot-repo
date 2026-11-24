@@ -18,6 +18,24 @@ public sealed record CreateCheckoutRequest(
     string? CustomerPhone = null,
     string? Note = null);
 
+/// <summary>
+/// One item to add to or take out of a cart. Adding: Quantity is how many more (at least 1). Taking out:
+/// Quantity is how many fewer, or null for all of it; VariantId can be left out when the cart has only one of the product's options.
+/// </summary>
+public sealed record CartItemChange(Guid ProductId, Guid? VariantId, int? Quantity);
+
+/// <summary>A change to the conversation's cart: some items added, or some taken out. The rest of the cart stays as it is.</summary>
+public sealed record ChangeCartRequest(
+    Guid AgentId,
+    Guid ConnectionId,
+    string Sender,
+    IReadOnlyList<CartItemChange> Items,
+    string IdempotencyKey,
+    string? CustomerName = null,
+    string? CustomerEmail = null,
+    string? CustomerPhone = null,
+    string? Note = null);
+
 /// <summary>A line as priced, in the currency's main unit (naira).</summary>
 public sealed record CheckoutLine(
     Guid ProductId,
