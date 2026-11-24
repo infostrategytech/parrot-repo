@@ -346,9 +346,10 @@
             ? AgentsState.Agents.FirstOrDefault(a => a.Id == agentId)?.Mascot
             : null;
 
-    // The looks of the agents whose answers made an AI reply, as the Inbox shows each agent.
+    // The look of each agent asked for an AI reply, in its order, as the Inbox shows each agent. Every helper has a name,
+    // so every one has a look.
     private IReadOnlyList<string> ReplyLooks(ConvMessage message) =>
-        message.AnsweredBy.Select(a => AgentLookup.Look(a.Id, a.Name, AgentsState.Agents, a.Avatar)).OfType<string>().ToList();
+        message.Agents.Select(a => AgentLookup.Look(a.Id, a.Name, AgentsState.Agents, a.Avatar) ?? AgentBuilderCopy.Mascots[0]).ToList();
 
     private readonly CancellationTokenSource _lifetime = new();
     private ElementReference _scrollElement;

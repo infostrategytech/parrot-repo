@@ -1,0 +1,36 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* How an AI reply was made: every agent the AI service asked, in its order, with what each was asked and what it
+   answered. One that didn't answer says so; its words didn't go into the reply. *@
+<ul class="reply-agents__list">
+    @for (int index = 0; index < Agents.Count; index++)
+    {
+        InboxReplyAgentDto agent = Agents[index];
+        <li class="reply-agents__agent">
+            <span class="reply-agents__face" aria-hidden="true">
+                <Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@(index < Looks.Count ? Looks[index] : null)" />
+            </span>
+            <div class="reply-agents__words">
+                <Typography TextStyle="TextStyle.Small12Semibold" As="strong">@agent.Name</Typography>
+                @if (agent.Question.Length > 0)
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose><span class="reply-agents__label">Asked:</span> @agent.Question</Typography>
+                }
+                @if (agent.Status == "answered")
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose><span class="reply-agents__label">Answered:</span> @agent.Answer</Typography>
+                }
+                else
+                {
+                    <Typography TextStyle="TextStyle.Small12Medium" As="p" Class="reply-agents__missing">@(agent.Status == "timed_out" ? "Didn't answer in time." : "Didn't answer.")</Typography>
+                }
+            </div>
+        </li>
+    }
+</ul>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<InboxReplyAgentDto> Agents { get; set; } = [];
+    /// <summary>Each agent's look, in the same order.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<string> Looks { get; set; } = [];
+}

@@ -56,6 +56,42 @@ public sealed class AgentTeamTests
     }
 
     [Fact]
+    public async Task AgentsInvolved_ListsEveryAgentAskedWithWhatItWasAskedAndAnswered()
+    {
+        IReadOnlyList<InboxReplyAgentDto> agents =
+        [
+            new("agt_tobi", "Tobi", "Nova", "Where is order OM-9821?", "OM-9821 left Ikeja this morning.", "answered"),
+            new("agt_ada", "Ada", null, "Any discount on the next order?", "", "timed_out"),
+            new("agt_ife", "Ife", null, "Is it insured?", "", "failed"),
+        ];
+
+        string html = await RenderList(agents, ["Nova", "Buzz", "Luna"]);
+
+        Assert.Equal(3, CountOf(html, "reply-agents__agent\""));
+        Assert.Contains("Where is order OM-9821?", html);
+        Assert.Contains("OM-9821 left Ikeja this morning.", html);
+        Assert.Contains("Didn't answer in time.", html);
+        Assert.Contains("Didn't answer.", html);
+        Assert.True(html.IndexOf("Tobi", StringComparison.Ordinal) < html.IndexOf("Ada", StringComparison.Ordinal), "the AI service's order");
+    }
+
+    private static async Task<string> RenderList(IReadOnlyList<InboxReplyAgentDto> agents, IReadOnlyList<string> looks)
+    {
+        await using ServiceProvider services = new ServiceCollection().AddLogging().AddSingleton<IJSRuntime>(new NoJs())
+            .AddSingleton<AuroraInterop>().BuildServiceProvider();
+        await using HtmlRenderer renderer = new(services, services.GetRequiredService<ILoggerFactory>());
+        return await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            HtmlRootComponent root = await renderer.RenderComponentAsync<ReplyAgentsList>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                ["Agents"] = agents,
+                ["Looks"] = looks,
+            }));
+            return System.Net.WebUtility.HtmlDecode(root.ToHtmlString());
+        });
+    }
+
+    [Fact]
     public void Look_ForAnAgentNotSetUpHere_IsTheLookTheAiServiceNamed()
     {
         Assert.Equal("Bolt", AgentLookup.Look("agt_gone", "Kora", [], "bolt"));
@@ -71,10 +107,13 @@ public sealed class AgentTeamTests
             new InboxReplyAgentDto("agt_kora", "Kora", "Bolt", "How much?", "N21,000.", "answered"),
             new InboxReplyAgentDto("agt_ada", "Ada", null, "Any discount?", "", "failed"));
 
-        string html = await RenderReply(reply, ["Nova", "Bolt"]);
+        // One look per agent asked, in order: Ada's is for the list of who was asked.
+        string html = await RenderReply(reply, ["Nova", "Bolt", "Buzz"]);
 
         Assert.Contains(">Tobi and Kora<", html);
         Assert.Equal(2, CountOf(html, "agent-faces__face"));
+        Assert.Contains("aria-haspopup=\"dialog\"", html);
+        Assert.Contains("Agents involved in this reply: Tobi, Kora and Ada", html);
     }
 
     [Fact]
@@ -84,7 +123,7 @@ public sealed class AgentTeamTests
             new InboxReplyAgentDto("agt_kora", "Kora", "Bolt", "How much?", "N21,000.", "answered"),
             new InboxReplyAgentDto("agt_ada", "Ada", null, "Any discount?", "", "timed_out"));
 
-        string html = await RenderReply(reply, ["Bolt"]);
+        string html = await RenderReply(reply, ["Bolt", "Buzz"]);
 
         Assert.Contains(">Kora<", html);
         Assert.DoesNotContain(">Tolu<", html);
@@ -98,6 +137,7 @@ public sealed class AgentTeamTests
 
         Assert.Contains(">Tolu<", html);
         Assert.DoesNotContain("agent-faces__face", html);
+        Assert.DoesNotContain("Agents involved", html);
     }
 
     private static ConvMessage AiReply(params InboxReplyAgentDto[] agents) => new()

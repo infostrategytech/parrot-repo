@@ -1,0 +1,46 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* The faces of the agents whose answers made an AI reply, opening "Agents involved" (the AI service's "How this
+   reply was made"): every agent it asked, with what each was asked and answered. *@
+<Popover Title="Agents involved" ShowHeading Open="_open" OpenChanged="open => _open = open" Class="reply-agents">
+    <Anchor>
+        <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Class="reply-agents__trigger"
+                aria-haspopup="dialog" aria-expanded="@(_open ? "true" : "false")"
+                aria-label="@($"Agents involved in this reply: {AgentTeam.Every(Agents.Select(a => a.Name).ToList())}")"
+                title="Agents involved"
+                @onclick="() => _open = !_open">
+            <ChildContent>
+                @if (AnsweredLooks.Count > 1)
+                {
+                    <AgentFaces Looks="AnsweredLooks" Size="24" />
+                }
+                else if (AnsweredLooks.Count == 1)
+                {
+                    <span class="reply-agents__trigger-face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@AnsweredLooks[0]" /></span>
+                }
+                else
+                {
+                    <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" />
+                }
+            </ChildContent>
+        </Button>
+    </Anchor>
+    <ChildContent>
+        <ReplyAgentsList Agents="Agents" Looks="Looks" />
+    </ChildContent>
+</Popover>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<InboxReplyAgentDto> Agents { get; set; } = [];
+    /// <summary>Each agent's look, in the same order.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<string> Looks { get; set; } = [];
+
+    private bool _open;
+
+    // The faces shown on the reply are those whose answers made it.
+    private IReadOnlyList<string> AnsweredLooks => Agents
+        .Select((agent, index) => (agent, look: index < Looks.Count ? Looks[index] : null))
+        .Where(pair => pair.agent.Status == "answered" && pair.look is not null)
+        .Select(pair => pair.look!)
+        .ToList();
+}

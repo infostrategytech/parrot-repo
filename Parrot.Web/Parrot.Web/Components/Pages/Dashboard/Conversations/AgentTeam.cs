@@ -13,4 +13,8 @@ public static class AgentTeam
         2 => $"{names[0]} and {names[1]}",
         _ => $"{names[0]} and {names.Count - 1} others",
     };
+
+    /// <summary>Every one of them, for words read out rather than glanced at: "Tobi, Kora and Ada".</summary>
+    public static string Every(IReadOnlyList<string> names) =>
+        names.Count <= 2 ? Names(names) : $"{string.Join(", ", names.Take(names.Count - 1))} and {names[^1]}";
 }
