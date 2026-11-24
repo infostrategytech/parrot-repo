@@ -212,19 +212,31 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth, ILogger<Api
                 ModeOf(entry) == "in_stock" && entry.TracksStock && !entry.HasOptions ? entry.Stock : null,
                 null);
 
+        // Every photo goes with the save, or the save stops and says which one and why: a photo is never left out
+        // quietly (one from a post, say, that was never uploaded), and a refused one isn't "check your connection".
         List<string> photos = [];
-        foreach (string photo in entry.Photos)
+        for (int index = 0; index < entry.Photos.Count; index++)
         {
-            if (await PhotoKeyAsync(photo, ct) is { } key)
+            string photo = entry.Photos[index];
+            string? key;
+            try
             {
-                photos.Add(key);
+                key = await PhotoKeyAsync(photo, ct);
             }
-            else
+            catch (ApiException refused) when (PhotoRefusal(refused) is { } reason)
             {
-                // Not one this page uploaded or loaded: it can't be named to the service, so saving drops it.
-                _log.LogWarning("A photo was left out of the save: its address isn't one the catalog gave this page. Item={Item} Photo={Photo}",
+                throw new CatalogPhotoException(photo, index + 1, reason, refused);
+            }
+
+            if (key is null)
+            {
+                // Not one this page uploaded or loaded: it can't be named to the service, so the save stops and says so.
+                _log.LogWarning("A photo couldn't go with the save: its address isn't one the catalog gave this page. Item={Item} Photo={Photo}",
                     entry.Id, photo.Length > 200 ? photo[..200] + "…" : photo);
+                throw new CatalogPhotoException(photo, index + 1, "Remove it, then add it again from your phone or computer.");
             }
+
+            photos.Add(key);
         }
 
         return new SaveItem(
@@ -259,6 +271,21 @@ public sealed class ApiCatalogStore(HttpClient http, AuthState auth, ILogger<Api
         if (word.StartsWith("per ", StringComparison.OrdinalIgnoreCase)) word = word[4..].Trim();
         return word.Length > 0 ? word : null;
     }
+
+    // Why the catalog didn't take a photo, for the owner; null when it wasn't the photo (a dropped connection).
+    // Its own words when it gave some ("A photo must be at most 5 MB."); a bare status has ours.
+    private static string? PhotoRefusal(ApiException refused) => refused.StatusCode switch
+    {
+        System.Net.HttpStatusCode.RequestEntityTooLarge => "Photos can be up to 5 MB. Remove it, or choose a smaller one.",
+        System.Net.HttpStatusCode.UnsupportedMediaType => "Use a JPEG, PNG or WebP photo. Remove it, or choose another.",
+        System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.UnprocessableEntity =>
+            refused.UserMessage.StartsWith("The request failed", StringComparison.Ordinal)
+                ? "Use a JPEG, PNG or WebP photo up to 5 MB. Remove it, or choose another."
+                : refused.UserMessage,
+        System.Net.HttpStatusCode.ServiceUnavailable =>
+            "Photos can't be saved right now. Remove it to save the item without it, or try again later.",
+        _ => null,
+    };
 
     /// <summary>A photo as the service keeps it: one just picked (a data: address) is uploaded first.</summary>
     private async Task<string?> PhotoKeyAsync(string photo, CancellationToken ct)

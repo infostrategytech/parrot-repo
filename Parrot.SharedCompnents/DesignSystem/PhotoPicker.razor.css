@@ -19,6 +19,8 @@
   --ds-photo-picker-hairline: 1px;
   --ds-photo-picker-motion: 150ms;
   --ds-photo-picker-hidden: 1px;
+  /* A marked photo's amber edge. */
+  --ds-photo-picker-flag-edge: 2px;
 }
 
 .ds-photo-picker__photo,
@@ -43,6 +45,20 @@
   left: var(--spacing-xs);
   padding: var(--spacing-2xs) var(--spacing-sm);
   color: var(--colors-text-primary);
+  background: var(--colors-surface-card);
+  border-radius: var(--radius-radius-full);
+}
+
+/* A photo marked for a look (the agent didn't use it): an amber mark on its top corner, and an amber edge. */
+.ds-photo-picker__photo.is-flagged { outline: var(--ds-photo-picker-flag-edge) solid var(--colors-feedback-warning-border); outline-offset: calc(var(--ds-photo-picker-flag-edge) * -1); }
+.ds-photo-picker__flag {
+  position: absolute;
+  top: var(--spacing-xs);
+  left: var(--spacing-xs);
+  display: grid;
+  place-items: center;
+  padding: var(--spacing-2xs);
+  color: var(--colors-feedback-warning-text);
   background: var(--colors-surface-card);
   border-radius: var(--radius-radius-full);
 }

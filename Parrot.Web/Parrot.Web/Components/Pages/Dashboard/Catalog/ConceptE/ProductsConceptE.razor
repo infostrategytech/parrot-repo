@@ -9,6 +9,7 @@
 @inject Parrot.Web.Features.Dashboard.Channels.State.ChannelsState ChannelState
 @inject Parrot.Web.Features.Dashboard.Channels.Services.ChannelStatusLoader ChannelStatus
 @inject AuthState AuthState
+@implements IDisposable
 
 @* Products & Services, Concept E (designer, 25–26 October 2026), kept clean and simple. It's what the agent
    knows about what the business sells and for how much, so it can answer, suggest and take payment; not a
@@ -138,6 +139,19 @@ else
                     <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" @onclick="() => _seen.UnionWith(fresh.Select(post => post.Id))">Dismiss</Button>
                     <Button Size="ButtonSize.Small" @onclick="BringPosts">Review posts</Button>
                 </div>
+            </section>
+        }
+
+        @if (_selected.Count == 0 && NeedingLook is { Count: > 0 } needing)
+        {
+            @* Items the agent couldn't fully use (designer, 23 November 2026): said once, above the list, with one
+               way to see just them. Rows that are fine say nothing. *@
+            <section class="products-e__look" aria-label="Items that need a look">
+                <span class="products-e__look-mark" aria-hidden="true"><Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Sm" /></span>
+                <Typography TextStyle="TextStyle.BodySmallSemibold" As="p" role="status">@AgentKnowledge.NeedsLookLine(needing)</Typography>
+                <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" @onclick="ToggleNeedsLook">
+                    @(_needsLook ? "Show all items" : needing.Count == 1 ? "Show it" : "Show them")
+                </Button>
             </section>
         }
 
@@ -349,7 +363,7 @@ else
     private List<string> _categories = [];
     private Mode _mode = Mode.List;
     private ItemView _view = ItemView.All;
-    private bool _byCategory;
+    private bool _byCategory, _needsLook;
     private string? _search, _category;
     private int _page = 1;
     private readonly HashSet<string> _selected = [];
@@ -473,6 +487,7 @@ else
             _categories = [.. await Store.ListCategoriesAsync()];
             _selected.IntersectWith(_items.Select(item => item.Id));
             if (_category is not null && !_categories.Contains(_category)) _category = null;
+            WatchAgent();
         }
         catch (Exception exception) when (exception is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException)
         {
@@ -521,6 +536,7 @@ else
             var query = (_search ?? string.Empty).Trim();
             var items = _items
                 .Where(item => Matches(item, _view))
+                .Where(item => !NeedsLookOn || AgentKnowledge.NeedsLook(item))
                 .Where(item => _category is null || InCategory(item, _category))
                 .Where(item => query.Length == 0 || $"{item.Name} {item.Description} {item.Group} {string.Join(" ", item.OtherNames)}".Contains(query, StringComparison.CurrentCultureIgnoreCase));
             return [.. items.OrderBy(item => _justAdded.Contains(item.Id) || _justUpdated.Contains(item.Id) ? 0 : 1).ThenBy(item => item.Status == CatalogStatus.Draft ? 0 : 1).ThenBy(item => item.Name, StringComparer.CurrentCultureIgnoreCase)];
@@ -549,6 +565,7 @@ else
 
     private void ChangeView(ItemView view)
     {
+        _needsLook = false;
         _view = view;
         _page = 1;
         _selected.Clear();
@@ -575,8 +592,71 @@ else
         _markOpen = _moveOpen = false;
     }
 
+    // ── Where the agent is ─────────────────────────────────────────────────
+
+    // Live items the agent couldn't fully use. Drafts and hidden items are out of its search anyway.
+    private List<CatalogEntry> NeedingLook => [.. _items.Where(item => Live(item) && !item.IsHidden && AgentKnowledge.NeedsLook(item))];
+
+    // Showing only those; it lets go by itself once none are left.
+    private bool NeedsLookOn => _needsLook && NeedingLook.Count > 0;
+
+    private void ToggleNeedsLook()
+    {
+        _needsLook = !NeedsLookOn;
+        if (_needsLook)
+        {
+            _view = ItemView.All;
+            _search = null;
+            _category = null;
+        }
+        _page = 1;
+        _selected.Clear();
+    }
+
+    // While the agent is catching up on a save, the list reads its report again now and then, so "Updating your
+    // agent…" goes (or turns into what needs a look) without a reload. Only the agent's part of each item is
+    // taken, so nothing being edited on the page moves. It stops when nothing is updating, or after two minutes.
+    private CancellationTokenSource? _watch;
+    private static readonly TimeSpan WatchEvery = TimeSpan.FromSeconds(4), WatchFor = TimeSpan.FromMinutes(2);
+
+    private void WatchAgent()
+    {
+        if (_watch is not null || !_items.Any(item => item.Ai == AiProgress.Updating)) return;
+        var watch = _watch = new CancellationTokenSource(WatchFor);
+        _ = WatchAgentAsync(watch);
+    }
+
+    private async Task WatchAgentAsync(CancellationTokenSource watch)
+    {
+        try
+        {
+            while (_items.Any(item => item.Ai == AiProgress.Updating))
+            {
+                await Task.Delay(WatchEvery, watch.Token);
+                var fresh = (await Store.ListAsync(watch.Token)).ToDictionary(item => item.Id);
+                foreach (var item in _items)
+                {
+                    if (fresh.TryGetValue(item.Id, out var latest)) AgentKnowledge.TakeReport(item, latest);
+                }
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (Exception exception) when (exception is OperationCanceledException or HttpRequestException or System.Text.Json.JsonException)
+        {
+            // Stopped, or the read failed: the next save or visit picks it up.
+        }
+        finally
+        {
+            if (ReferenceEquals(_watch, watch)) _watch = null;
+            watch.Dispose();
+        }
+    }
+
+    public void Dispose() => _watch?.Cancel();
+
     private void ShowAll()
     {
+        _needsLook = false;
         _view = ItemView.All;
         _search = null;
         _category = null;
@@ -960,6 +1040,11 @@ else
             await AddCategoryAsync(entry.Group);
             await LoadAsync();
         }
+        catch (CatalogPhotoException)
+        {
+            // A photo that couldn't go with it: the form says which, and marks it.
+            throw;
+        }
         catch (ApiException exception) when (exception.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict or System.Net.HttpStatusCode.Forbidden)
         {
             // The service's own reason (a price missing, no permission to make it live) says what to fix.
@@ -995,6 +1080,11 @@ else
             else _justUpdated.Add(entry.Id);
             await AddCategoryAsync(entry.Group);
             await LoadAsync();
+        }
+        catch (CatalogPhotoException photo)
+        {
+            // Said on the review queue, by item and photo, so it can be opened and the photo removed.
+            return $"{entry.Name}: photo {photo.Number} couldn't be saved. {photo.Reason}";
         }
         catch (ApiException exception) when (exception.StatusCode is System.Net.HttpStatusCode.BadRequest or System.Net.HttpStatusCode.Conflict or System.Net.HttpStatusCode.Forbidden)
         {

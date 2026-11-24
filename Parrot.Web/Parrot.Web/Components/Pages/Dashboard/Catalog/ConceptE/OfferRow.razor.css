@@ -28,12 +28,13 @@
 .offer-row__item { display: flex; gap: var(--spacing-md); align-items: center; min-width: 0; }
 .offer-row__select { position: relative; z-index: 1; display: grid; flex: none; place-items: center; }
 
+/* The photo lies over the initials with no fill of its own, so one that can't load shows the initials. */
 .offer-row__thumb {
-  flex: none;
+  position: absolute;
+  inset: 0;
   width: var(--ds-offer-row-thumb);
   height: var(--ds-offer-row-thumb);
   object-fit: cover;
-  background: var(--colors-surface-muted);
   border: var(--ds-offer-row-divider) solid var(--colors-surface-border);
   border-radius: var(--radius-radius-lg);
 }
@@ -55,7 +56,7 @@
   box-shadow: 0 var(--spacing-2xs) var(--spacing-sm) var(--colors-surface-shadow-diffuse);
 }
 
-/* No photo: the item's initials, the size and corners of a photo. */
+/* The item's initials, the size and corners of a photo: seen when there's no photo, or it can't load. */
 .offer-row__monogram { display: grid; flex: none; }
 .offer-row__monogram ::deep .petal-avatar { width: var(--ds-offer-row-thumb); height: var(--ds-offer-row-thumb); border-radius: var(--radius-radius-lg); }
 
@@ -83,8 +84,9 @@
 .offer-row__meta { display: flex; flex-wrap: wrap; gap: var(--spacing-xs); align-items: center; color: var(--colors-text-muted); }
 /* The note sits above the name's cover, as the tick box does, so a badge can be read without opening. */
 .offer-row__note { position: relative; display: flex; flex-wrap: wrap; gap: var(--spacing-xs); pointer-events: none; }
-/* The AI badge sits above the cover too, so hovering it shows why (a rejected photo's reason). */
-.offer-row__ai { position: relative; display: inline-flex; }
+/* The agent catching up: quiet, as it passes by itself, after a dot so it doesn't read as part of the type. */
+.offer-row__meta ::deep .offer-row__updating { color: var(--colors-text-muted); }
+.offer-row__meta ::deep .offer-row__updating::before { content: "·"; margin-inline-end: var(--spacing-xs); }
 
 /* The price and availability panels open above the name's cover, so they can be used on their own. */
 .offer-row__price,
@@ -92,14 +94,12 @@
 .offer-row__available { position: relative; z-index: 1; }
 
 /* A hidden item stays on the list, quieter: it's kept for later. Its availability keeps full contrast. */
-.offer-row.is-hidden .offer-row__thumb,
-.offer-row.is-hidden .offer-row__monogram,
+.offer-row.is-hidden .offer-row__picture,
 .offer-row.is-hidden .offer-row__words,
 .offer-row.is-hidden > .offer-row__category,
 .offer-row.is-hidden > .offer-row__price { opacity: var(--ds-offer-row-hidden); }
 /* Reviewing: an unticked row is left out, so it fades as a hidden one does. */
-.offer-row.is-left-out .offer-row__thumb,
-.offer-row.is-left-out .offer-row__monogram,
+.offer-row.is-left-out .offer-row__picture,
 .offer-row.is-left-out .offer-row__words,
 .offer-row.is-left-out > .offer-row__price,
 .offer-row.is-left-out > .offer-row__available { opacity: var(--ds-offer-row-hidden); }
