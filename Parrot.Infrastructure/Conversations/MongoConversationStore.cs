@@ -173,6 +173,11 @@ public sealed class MongoConversationStore : IConversationStore
         (await _messages.UpdateOneAsync(x => x.MessageId == id && x.SendStatus == "pending",
             Builders<MessageDocument>.Update.Set(x => x.SendStatus, "failed"), cancellationToken: ct)).ModifiedCount > 0;
 
+    // The request key names the owner, and the filter does too: another workspace's request id can't reach this reply.
+    public async Task SetContributorsAsync(string owner, Guid request, IReadOnlyList<ReplyContributor> contributors, CancellationToken ct) =>
+        await _messages.UpdateOneAsync(x => x.OwnerUserId == owner && x.MessageId == ConversationService.RequestKey(owner, request),
+            Builders<MessageDocument>.Update.Set(x => x.Contributors, [.. contributors]), cancellationToken: ct);
+
     public async Task WriteSystemEventAsync(string owner, Guid connection, string sender, string text, CancellationToken ct)
     {
         // Borrow context from the most recent message so the event sits in the same channel.

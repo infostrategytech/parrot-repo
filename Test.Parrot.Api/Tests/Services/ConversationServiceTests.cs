@@ -122,6 +122,35 @@ public class ConversationServiceTests
     }
 
     [Fact]
+    public void AnAiReplyNamesTheAgentsThatHelpedWithIt()
+    {
+        MessageDocument doc = PageIncoming(DateTime.UtcNow);
+        doc.Outgoing = true;
+        doc.IsAiReply = true;
+        doc.Contributors =
+        [
+            new ReplyContributor { AgentId = "agt_1", Name = "Tobi", Avatar = "Nova", Question = "Where is OM-9821?", Answer = "It left Ikeja.", Status = "answered" },
+            new ReplyContributor { AgentId = "agt_2", Name = "Kora", Question = "How much?", Answer = "", Status = "failed" },
+        ];
+
+        ConversationMessage message = ConversationService.ToMessage(doc);
+
+        Assert.Equal(
+            [new ReplyAgent("agt_1", "Tobi", "Nova", "Where is OM-9821?", "It left Ikeja.", "answered"), new ReplyAgent("agt_2", "Kora", null, "How much?", "", "failed")],
+            message.Agents);
+    }
+
+    [Fact]
+    public void AReplyFromBeforeHelpersWereKeptNamesNoAgents()
+    {
+        MessageDocument doc = PageIncoming(DateTime.UtcNow);
+        doc.Outgoing = true;
+        doc.IsAiReply = true;
+
+        Assert.Null(ConversationService.ToMessage(doc).Agents);
+    }
+
+    [Fact]
     public void ACustomersMessageNeverShowsAReceipt()
     {
         MessageDocument doc = PageIncoming(DateTime.UtcNow);

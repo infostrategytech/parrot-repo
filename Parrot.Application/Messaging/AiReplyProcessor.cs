@@ -3,6 +3,7 @@ using System.Text;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Parrot.Application.Conversations;
+using Parrot.Domain.Entities.Messages;
 using Parrot.Domain.Exceptions;
 
 namespace Parrot.Application.Messaging;
@@ -78,6 +79,9 @@ public sealed class AiReplyProcessor(IServiceScopeFactory scopeFactory, ILogger<
             throw new UnprocessableMessageException("send_refused", ex);
         }
 
+        List<ReplyContributor> contributors = ReplyContributors.Read(request.Contributors);
+        if (contributors.Count > 0) await KeepContributorsAsync(service, request, contributors, ct);
+
         if (request.Attachments is { Count: > 0 })
         {
             if (sent.Status == "failed")
@@ -89,6 +93,22 @@ public sealed class AiReplyProcessor(IServiceScopeFactory scopeFactory, ILogger<
             }
 
             await SendPhotosAsync(scope.ServiceProvider, service, request, ct);
+        }
+    }
+
+    // Display data: the reply has gone, so not keeping who helped write it is logged and the reply still counts as sent.
+    // A retry would resend nothing and only hold the batch up. What they were asked and answered is never logged.
+    private async Task KeepContributorsAsync(ConversationService service, AiReplyRequested request, IReadOnlyList<ReplyContributor> contributors, CancellationToken ct)
+    {
+        try
+        {
+            await service.KeepContributorsAsync(request.WorkspaceId, request.RequestId, contributors, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex,
+                "ai_reply_contributors_not_kept WorkspaceId={WorkspaceId} RequestId={RequestId} Contributors={Contributors}: the reply was sent and shows without them",
+                request.WorkspaceId, request.RequestId, contributors.Count);
         }
     }
 

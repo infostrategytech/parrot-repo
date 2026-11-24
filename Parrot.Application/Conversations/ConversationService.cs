@@ -77,6 +77,10 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
         return result;
     }
 
+    /// <summary>The agents that helped write an AI reply already sent under this request id, kept with it for the inbox.</summary>
+    public Task KeepContributorsAsync(string owner, Guid requestId, IReadOnlyList<ReplyContributor> contributors, CancellationToken ct) =>
+        store.SetContributorsAsync(owner, requestId, contributors, ct);
+
     /// <summary>
     /// A photo the AI sends after its text: stored and sent like a teammate's picture, marked as the
     /// AI's, and published as MessagePersisted(AgentToUser) so history has it. Messenger takes no
@@ -707,6 +711,9 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             Kind = doc.IsAiReply == true ? "ai" : null,
             Attachments = doc.Attachments is { Count: > 0 } attachments ? [.. attachments.Select(ToMedia)] : null,
             ReplyTo = ToQuote(doc.ReplyTo),
+            Agents = doc.Contributors is { Count: > 0 } contributors
+                ? [.. contributors.Select(c => new ReplyAgent(c.AgentId, c.Name, c.Avatar, c.Question, c.Answer, c.Status))]
+                : null,
         };
     }
 

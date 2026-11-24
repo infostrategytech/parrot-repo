@@ -1,3 +1,5 @@
+using System.Text.Json;
+
 namespace Parrot.Application.Messaging;
 
 /// <summary>
@@ -28,6 +30,13 @@ public sealed record AiReplyRequested
     /// photo with a one-line caption (possibly empty). Null or empty for a text-only reply.
     /// </summary>
     public IReadOnlyList<AiReplyAttachment>? Attachments { get; init; }
+
+    /// <summary>
+    /// The agents the AI service's super agent asked for this reply (at most three): agentId, name, avatar, input,
+    /// output and status. Present only when the super agent replied. Display data, read by
+    /// <see cref="ReplyContributors"/>: kept as it came, so a list Parrot can't read never stops the reply.
+    /// </summary>
+    public JsonElement? Contributors { get; init; }
 }
 
 /// <summary>A photo for <see cref="AiReplyRequested.Attachments"/>: where it is, and its caption.</summary>
