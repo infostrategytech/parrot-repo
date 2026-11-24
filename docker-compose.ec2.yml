@@ -233,6 +233,8 @@ services:
       # and the AI Operations figures show. OMNI_AI_ENABLED=false runs without one.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
+      # Several agents per channel: on only once the AI service has OMNI_MULTI_AGENT_ENABLED on too.
+      OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-false}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
       OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
       BrightData__ApiKey: ${BRIGHTDATA_API_KEY:-}
@@ -367,6 +369,8 @@ services:
       JwtSettings__Audience: ParrotApp
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
+      # Several agents per channel: on only once the AI service has OMNI_MULTI_AGENT_ENABLED on too.
+      OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-false}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     secrets:

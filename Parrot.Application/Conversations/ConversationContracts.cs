@@ -4,8 +4,8 @@ using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Conversations;
 
-/// <summary>An agent that covers this conversation's channel (id and display name).</summary>
-public sealed record ConversationAgentRef(string Id, string Name);
+/// <summary>An agent that covers this conversation's channel: id, display name and, when the AI service gave one, its avatar key.</summary>
+public sealed record ConversationAgentRef(string Id, string Name, string? Avatar = null);
 
 public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
 {
@@ -14,6 +14,12 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>The live agent covering this conversation's channel, or null when no agent is connected to it.</summary>
     public ConversationAgentRef? ChannelAgent { get; init; }
+
+    /// <summary>
+    /// Every live agent switched on for this conversation's number, in the AI service's order; empty when none is.
+    /// One at most until several agents can share a channel (OmniAi:MultiAgentEnabled).
+    /// </summary>
+    public IReadOnlyList<ConversationAgentRef> Agents { get; init; } = [];
 
     /// <summary>Customer messages the signed-in user has not read. Zero for a read conversation.</summary>
     public int UnreadCount { get; init; }

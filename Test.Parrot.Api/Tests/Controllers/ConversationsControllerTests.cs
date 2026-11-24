@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Options;
 using Moq;
 using Parrot.Api.Controllers;
 using Parrot.Api.Media;
@@ -50,6 +51,10 @@ public sealed class ConversationsControllerTests
     // Live agents by channel, as the orchestrator names them.
     private readonly Dictionary<string, ConversationAgentRef> _channelAgents = [];
 
+    // Live agents switched on for each number, when several agents can share one (OmniAi:MultiAgentEnabled).
+    private readonly Dictionary<Guid, IReadOnlyList<ConversationAgentRef>> _connectionAgents = [];
+    private bool _sharesChannels;
+
     private ConversationsController Controller(WorkspaceAccess access)
     {
         Mock<IConversationReadStore> reads = new();
@@ -64,6 +69,8 @@ public sealed class ConversationsControllerTests
         Mock<IAgentOrchestratorClient> orchestrator = new();
         orchestrator.Setup(o => o.GetChannelAgentMapAsync(Owner, It.IsAny<CancellationToken>()))
             .ReturnsAsync(_channelAgents);
+        orchestrator.Setup(o => o.GetConnectionAgentsAsync(Owner, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(_connectionAgents);
 
         // The workspace's WhatsApp number, so a thread on it can be read.
         Mock<IWhatsAppConnectionRepository> connections = new();
@@ -74,6 +81,7 @@ public sealed class ConversationsControllerTests
         ConversationsController controller = new(_store.Object, reads.Object, flags.Object, null!, null!,
             new MediaLinks(new EphemeralDataProtectionProvider()), null!, connections.Object, null!, null!, null!,
             takeovers.Object, orchestrator.Object, new MemoryCache(new MemoryCacheOptions()),
+            Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = _sharesChannels }),
             _operations.Object, Mock.Of<IAppLogger<ConversationsController>>());
         DefaultHttpContext http = new()
         {
@@ -114,6 +122,59 @@ public sealed class ConversationsControllerTests
     public async Task List_WhenTheAgentThatAskedIsLive_ShowsTheOrchestratorsNameForIt()
     {
         _channelAgents["instagram"] = new ConversationAgentRef("AGENT-NOVA", "Nova (live)");
+
+        List<ConversationSummary> rows = Rows(await Controller(OwnerAccess()).List());
+
+        Assert.Equal("Nova (live)", Assert.Single(rows, r => r.Sender == "2348012345678").AiAgent?.Name);
+    }
+
+    [Fact]
+    public async Task List_WithSharedChannels_ListsEveryAgentOnTheConversationsNumber()
+    {
+        _sharesChannels = true;
+        ConversationAgentRef nia = new("agt_nia", "Nia", "Ember"), tolu = new("agt_tolu", "Tolu", "Nova"), kora = new("agt_kora", "Kora", "Coral");
+        _connectionAgents[WhatsApp] = [nia, tolu, kora];
+
+        List<ConversationSummary> rows = Rows(await Controller(OwnerAccess()).List());
+
+        ConversationSummary bisi = Assert.Single(rows, r => r.Sender == "2348011111111");
+        Assert.Equal([nia, tolu, kora], bisi.Agents);
+        // A web app from before shared channels still finds one agent there.
+        Assert.Equal(nia, bisi.ChannelAgent);
+    }
+
+    [Fact]
+    public async Task List_WithSharedChannels_ANumberNoAgentAnswersOnHasNone()
+    {
+        _sharesChannels = true;
+        _connectionAgents[Guid.NewGuid()] = [new ConversationAgentRef("agt_tolu", "Tolu")];
+        _channelAgents["whatsapp"] = new ConversationAgentRef("agt_tolu", "Tolu");
+
+        List<ConversationSummary> rows = Rows(await Controller(OwnerAccess()).List());
+
+        ConversationSummary bisi = Assert.Single(rows, r => r.Sender == "2348011111111");
+        Assert.Empty(bisi.Agents);
+        Assert.Null(bisi.ChannelAgent);
+    }
+
+    [Fact]
+    public async Task List_WithoutSharedChannels_ListsTheChannelsOneAgentAsBefore()
+    {
+        ConversationAgentRef tolu = new("agt_tolu", "Tolu");
+        _channelAgents["whatsapp"] = tolu;
+
+        List<ConversationSummary> rows = Rows(await Controller(OwnerAccess()).List());
+
+        ConversationSummary bisi = Assert.Single(rows, r => r.Sender == "2348011111111");
+        Assert.Equal([tolu], bisi.Agents);
+        Assert.Equal(tolu, bisi.ChannelAgent);
+    }
+
+    [Fact]
+    public async Task List_WithSharedChannels_ShowsTheAiServicesNameForTheAgentThatAsked()
+    {
+        _sharesChannels = true;
+        _connectionAgents[Guid.NewGuid()] = [new ConversationAgentRef("AGENT-NOVA", "Nova (live)")];
 
         List<ConversationSummary> rows = Rows(await Controller(OwnerAccess()).List());
 

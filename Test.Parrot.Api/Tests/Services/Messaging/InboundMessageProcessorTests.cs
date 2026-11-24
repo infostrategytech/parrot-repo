@@ -179,8 +179,13 @@ public class InboundMessageProcessorTests
 
     private sealed class FakeAgentChannelLookup(bool isLive) : IAgentChannelLookup
     {
-        public Task<bool> IsAgentLiveAsync(string workspaceId, string channel, CancellationToken ct) =>
-            Task.FromResult(isLive);
+        public List<(string Channel, Guid? ConnectionId)> Asked { get; } = [];
+
+        public Task<bool> IsAgentLiveAsync(string workspaceId, string channel, Guid? connectionId, CancellationToken ct)
+        {
+            Asked.Add((channel, connectionId));
+            return Task.FromResult(isLive);
+        }
     }
 
     private sealed class FakeTenantIdLookup(string? ownerId) : ITenantIdLookup
@@ -731,6 +736,16 @@ public class InboundMessageProcessorTests
             .ProcessAsync(Inbound(), CancellationToken.None);
 
         Assert.Equal(CommsType.UserToAgent, _publisher.Published.Single().Data.CommsType);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_AsksWhetherAnAgentAnswersOnTheNumberTheMessageCameIn()
+    {
+        FakeAgentChannelLookup lookup = new(isLive: true);
+
+        await Processor(agentChannelLookup: lookup).ProcessAsync(Inbound(), CancellationToken.None);
+
+        Assert.Equal([("whatsapp", (Guid?)Connection)], lookup.Asked);
     }
 
     [Fact]

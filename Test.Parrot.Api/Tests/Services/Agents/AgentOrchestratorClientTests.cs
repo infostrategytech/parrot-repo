@@ -6,6 +6,7 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Parrot.Application.Agents;
 using Parrot.Application.Auth;
+using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Domain.Exceptions;
 using Parrot.Infrastructure.Agents;
@@ -154,6 +155,66 @@ public class AgentOrchestratorClientTests
         Assert.Equal(Owner, json.RootElement.GetProperty("tenant_id").GetString());
         Assert.Equal("Do you deliver?", json.RootElement.GetProperty("text").GetString());
         Assert.StartsWith("web:", json.RootElement.GetProperty("message_id").GetString());
+    }
+
+    [Fact]
+    public async Task GetConnectionAgentsAsync_ListsEveryLiveSwitchedOnAgentPerNumberAcrossPages()
+    {
+        Guid shared = Guid.NewGuid(), quiet = Guid.NewGuid(), single = Guid.NewGuid();
+        PagedHandler handler = new(new Dictionary<string, string>
+        {
+            ["/api/v1/agents?limit=100"] = """
+                {"items":[{"agent_id":"agt_1","name":"Tolu","avatar":"Nova","is_live":true},
+                          {"agent_id":"agt_2","name":"Kora","avatar":"Ember","is_live":true},
+                          {"agent_id":"agt_3","name":"Ada","avatar":null,"is_live":false}],"next_cursor":null}
+                """,
+            ["/api/v1/channels?limit=100"] = $$"""
+                {"items":[{"connection_id":"{{shared}}","agent_id":"agt_1","platform":"whatsapp","enabled":true},
+                          {"connection_id":"{{shared}}","agent_id":"agt_2","platform":"whatsapp","enabled":true}],"next_cursor":"page 2"}
+                """,
+            ["/api/v1/channels?limit=100&cursor=page%202"] = $$"""
+                {"items":[{"connection_id":"{{quiet}}","agent_id":"agt_2","platform":"whatsapp","enabled":false},
+                          {"connection_id":"{{quiet}}","agent_id":"agt_3","platform":"whatsapp","enabled":true},
+                          {"connection_id":"{{single}}","agent_id":"agt_1","platform":"instagram","enabled":true}],"next_cursor":null}
+                """,
+        });
+        Mock<IServiceTokenFactory> tokens = new();
+        tokens.Setup(t => t.MintForAiService(Owner)).Returns("service-token");
+        AgentOrchestratorClient client = new(new HttpClient(handler) { BaseAddress = new Uri("http://omni-ai:8000/") }, tokens.Object,
+            Options.Create(new OmniAiSettings { Enabled = true, BaseUrl = "http://omni-ai:8000" }), NullLogger<AgentOrchestratorClient>.Instance);
+
+        IReadOnlyDictionary<Guid, IReadOnlyList<ConversationAgentRef>> agents = await client.GetConnectionAgentsAsync(Owner);
+
+        Assert.Equal([new ConversationAgentRef("agt_1", "Tolu", "Nova"), new ConversationAgentRef("agt_2", "Kora", "Ember")], agents[shared]);
+        Assert.Equal([new ConversationAgentRef("agt_1", "Tolu", "Nova")], agents[single]);
+        // Kora is switched off there and Ada isn't live: no agent answers on that number.
+        Assert.False(agents.ContainsKey(quiet));
+        Assert.All(handler.Authorizations, a => Assert.Equal("Bearer service-token", a));
+    }
+
+    [Fact]
+    public async Task GetConnectionAgentsAsync_WhenTheOrchestratorIsOff_IsEmptyWithoutCalling()
+    {
+        (AgentOrchestratorClient client, FakeHandler handler) = Create(HttpStatusCode.OK, "{}", enabled: false);
+
+        IReadOnlyDictionary<Guid, IReadOnlyList<ConversationAgentRef>> agents = await client.GetConnectionAgentsAsync(Owner);
+
+        Assert.Empty(agents);
+        Assert.Equal(0, handler.Calls);
+    }
+
+    /// <summary>Answers by path and query; anything else is a 404.</summary>
+    private sealed class PagedHandler(Dictionary<string, string> pages) : HttpMessageHandler
+    {
+        public List<string?> Authorizations { get; } = [];
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Authorizations.Add(request.Headers.Authorization?.ToString());
+            return Task.FromResult(pages.TryGetValue(request.RequestUri!.PathAndQuery, out string? body)
+                ? new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") }
+                : new HttpResponseMessage(HttpStatusCode.NotFound) { Content = new StringContent("{}") });
+        }
     }
 
     private sealed class FakeHandler(HttpStatusCode status, string body) : HttpMessageHandler

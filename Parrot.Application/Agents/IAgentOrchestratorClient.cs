@@ -37,4 +37,11 @@ public interface IAgentOrchestratorClient
     /// Keyed by platform (lowercase). Returns an empty dictionary when OmniAi is not enabled.
     /// </summary>
     Task<IReadOnlyDictionary<string, ConversationAgentRef>> GetChannelAgentMapAsync(string ownerUserId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// The live agents switched on for each of the workspace's connections, read in full: several can share one.
+    /// A connection no live agent answers on is left out. The AI service's hidden super agent is never among them:
+    /// the service leaves it out of its agent list, and it has no channel links. Empty when OmniAi is not enabled.
+    /// </summary>
+    Task<IReadOnlyDictionary<Guid, IReadOnlyList<ConversationAgentRef>>> GetConnectionAgentsAsync(string ownerUserId, CancellationToken cancellationToken = default);
 }
