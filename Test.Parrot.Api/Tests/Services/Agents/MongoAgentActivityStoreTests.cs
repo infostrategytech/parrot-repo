@@ -95,22 +95,22 @@ public class MongoAgentActivityStoreTests
         });
     }
 
+    // The decision feeds the day's reply-time figure: recorded once, and only on the workspace's own approval.
     [MongoFact]
-    public async Task AnApprovalLeavesTheWaitingListOnceDecidedAndOnlyOnce()
+    public async Task MarkApprovalDecidedAsync_RecordsTheWorkspacesDecisionOnceAndOnlyOnce()
     {
         await WithStore(async store =>
         {
             await store.InsertAsync(Approval("owner-a", "apr_1", T0));
-            Assert.Single(await store.ListPendingAsync("owner-a"));
-            Assert.Empty(await store.ListPendingAsync("owner-b"));
 
             Assert.Equal(0, await store.MarkApprovalDecidedAsync("owner-b", "apr_1", "approved", "mallory", null, T0.AddMinutes(1)));
-            Assert.Equal(1, await store.MarkApprovalDecidedAsync("owner-a", "apr_1", "approved", "manager:ngozi", "refund in full", T0.AddMinutes(2)));
-            Assert.Equal(0, await store.MarkApprovalDecidedAsync("owner-a", "apr_1", "denied", "manager:ngozi", null, T0.AddMinutes(3)));
+            Assert.Equal(1, await store.MarkApprovalDecidedAsync("owner-a", "apr_1", "approved", "user-ngozi", "refund in full", T0.AddMinutes(2)));
+            Assert.Equal(0, await store.MarkApprovalDecidedAsync("owner-a", "apr_1", "denied", "user-ngozi", null, T0.AddMinutes(3)));
 
-            Assert.Empty(await store.ListPendingAsync("owner-a"));
             var decided = Assert.Single(await store.ListRecentAsync("owner-a", AgentActivityTypes.ApprovalRequested, 5));
             Assert.Equal("approved", decided.Resolution);
+            Assert.Equal("user-ngozi", decided.ResolvedBy);
+            Assert.Equal(T0.AddMinutes(2), decided.ResolvedAt);
             Assert.Equal("refund in full", decided.Instruction);
         });
     }

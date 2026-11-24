@@ -9,9 +9,9 @@ using Parrot.Domain.Exceptions;
 namespace Parrot.Api.Controllers;
 
 /// <summary>
-/// The AI Operations screens' figures and the owner's decisions. Everything
-/// is scoped to the signed-in owner by the token; an approval id in the path
-/// is only acted on when it was asked of that owner.
+/// The AI Operations screens' figures and the team's decisions. Everything
+/// is scoped to the token's workspace; an approval id in the path is only
+/// acted on while it waits on that workspace's list, on a channel the caller can open.
 /// </summary>
 [ApiController]
 [Route("api/ai-operations")]
@@ -21,6 +21,9 @@ namespace Parrot.Api.Controllers;
 public sealed class AiOperationsController(IAiOperationsService operations) : ControllerBase
 {
     private string Owner => User.WorkspaceId()
+        ?? throw new UnauthorizedException("Sign in to continue.");
+
+    private string Reader => User.UserId()
         ?? throw new UnauthorizedException("Sign in to continue.");
 
     /// <summary>Today's figures, for every agent and channel or for one of each.</summary>
@@ -45,13 +48,13 @@ public sealed class AiOperationsController(IAiOperationsService operations) : Co
         CancellationToken cancellationToken = default) =>
         Ok(await operations.RecentAsync(Owner, agentId, channel, limit, cancellationToken));
 
-    /// <summary>The approvals and escalations waiting for the owner.</summary>
+    /// <summary>What the agents handed to the team and is still waiting (the AI service's list), on the channels the caller can open.</summary>
     [HttpGet("waiting")]
     [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
     public async Task<IActionResult> Waiting(CancellationToken cancellationToken) =>
-        Ok(await operations.WaitingAsync(Owner, cancellationToken));
+        Ok(await operations.WaitingAsync(Owner, HttpContext.SessionToken(), HttpContext.WorkspaceAccess().AllowedConnections, cancellationToken));
 
-    /// <summary>Decides an approval: the orchestrator resumes the turn, and the decision is kept here.</summary>
+    /// <summary>Decides an approval as the signed-in person, on the channels they can open: the agent resumes its turn.</summary>
     [HttpPost("approvals/{id}")]
     [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
     public async Task<IActionResult> Decide(string id, [FromBody] ApprovalDecisionRequest request, CancellationToken cancellationToken)
@@ -59,6 +62,7 @@ public sealed class AiOperationsController(IAiOperationsService operations) : Co
         if (string.IsNullOrWhiteSpace(id))
             throw new ValidationException("Supply the approval to decide.");
 
-        return Ok(await operations.DecideApprovalAsync(Owner, id.Trim(), request, cancellationToken));
+        return Ok(await operations.DecideApprovalAsync(
+            Owner, HttpContext.SessionToken(), HttpContext.WorkspaceAccess().AllowedConnections, Reader, id.Trim(), request, cancellationToken));
     }
 }

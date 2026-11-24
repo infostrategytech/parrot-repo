@@ -375,7 +375,34 @@ else
 </div>
     </text>;
 
-    private RenderFragment PhotosField => @<PhotoPicker Label="Photos" Optional Photos="_photos" PhotosChanged="photos => _photos = [.. photos]" Max="4" />;
+    private RenderFragment PhotosField => @<PhotoPicker Label="Photos" Optional Photos="_photos" PhotosChanged="PhotosChanged" Max="4"
+                                                       Flagged="FlaggedPhotos"
+                                                       FlagLabel="@(_photoProblem is null ? "Not used" : "Couldn't be saved")" />;
+
+    // A photo the last save couldn't take, marked until it's removed (the message sits by the Save button).
+    private string? _photoProblem;
+
+    private IReadOnlyCollection<string> FlaggedPhotos => _photoProblem is { } problem ? [problem] : UnusedPhotos;
+
+    private void PhotosChanged(IReadOnlyList<string> photos)
+    {
+        _photos = [.. photos];
+        if (_photoProblem is not null && !_photos.Contains(_photoProblem))
+        {
+            _photoProblem = null;
+            _error = null;
+        }
+    }
+
+    private void ShowPhotoProblem(CatalogPhotoException photo)
+    {
+        _photoProblem = photo.Photo;
+        _error = $"Photo {photo.Number} couldn't be saved. {photo.Reason}";
+    }
+
+    // Photos the agent didn't use in its latest report, marked where they can be replaced or removed.
+    private IReadOnlyCollection<string> UnusedPhotos => Reviewing || IsNew || Item is null ? []
+        : [.. Item.AiPhotos.Where(photo => photo.Rejected && photo.PhotoUrl is { Length: > 0 }).Select(photo => photo.PhotoUrl!)];
 
     private RenderFragment DescriptionField => @<text>
         <TextArea Value="@_description" ValueChanged="value => _description = value ?? string.Empty" AriaLabel="Description"
@@ -638,6 +665,7 @@ else
         if (!CurrencyReady) { _error = Currency.Problem ?? "Wait for the business currency to load before saving."; return; }
         _tried = true;
         _error = null;
+        _photoProblem = null;
         if (_name.Trim().Length == 0) { _error = "Give it a name."; if (_nameField is not null) await _nameField.FocusAsync(); return; }
         if (Pricing == PriceSingle && (PriceInvalid || RequiredPriceMissing))
         {
@@ -669,6 +697,7 @@ else
             if (error is not null) _error = error;
             else _allowNavigation = true;
         }
+        catch (CatalogPhotoException photo) { ShowPhotoProblem(photo); }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
         { _error = "We couldn't save this item. Check your connection and try again."; }
         finally { _saving = false; }
@@ -678,7 +707,7 @@ else
     {
         if (!CurrencyReady) { _error = Currency.Problem ?? "Wait for the business currency to load before saving."; return; }
         if (_saving || !CanSaveDraft) return;
-        _draftTried = true; _tried = false; _error = null;
+        _draftTried = true; _tried = false; _error = null; _photoProblem = null;
         if (_name.Trim().Length is 0 or > 80)
         {
             _error = "Give your draft a name of 80 characters or fewer.";
@@ -694,6 +723,7 @@ else
         };
         _saving = _savingDraft = true;
         try { _error = await Save(entry, true); if (_error is null) _allowNavigation = true; }
+        catch (CatalogPhotoException photo) { ShowPhotoProblem(photo); }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
         { _error = "We couldn't save this draft. Check your connection and try again."; }
         finally { _saving = _savingDraft = false; }

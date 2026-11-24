@@ -66,11 +66,14 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
 
     // Called by the AI orchestrator. Sends as a human reply would, but does not set the human takeover
     // flag and explicitly publishes MessagePersisted with AgentToUser so Omni-AI sees its own send.
+    // Announced once: a request handled before (a redelivery) was sent, stored and announced then, and
+    // announcing it on every redelivery fed Omni an endless stream of the same AgentToUser events.
     public async Task<ConversationMessage> SendAgentReplyAsync(string owner, Guid connectionId, string recipient,
         SendReplyRequest request, CancellationToken ct)
     {
+        bool first = await store.FindRequestAsync(owner, request.RequestId, ct) is null;
         ConversationMessage result = await SendCoreAsync(owner, connectionId, recipient, request, ct, isAiReply: true);
-        await PublishSentAsync(owner, connectionId, request.RequestId, CommsType.AgentToUser, ct);
+        if (first) await PublishSentAsync(owner, connectionId, request.RequestId, CommsType.AgentToUser, ct);
         return result;
     }
 
@@ -83,8 +86,10 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
     public async Task<ConversationMessage> SendAgentFileAsync(string owner, Guid connectionId, string recipient,
         Guid requestId, string? caption, OutgoingFile file, CancellationToken ct)
     {
+        // Announced once, as the text is.
+        bool first = await store.FindRequestAsync(owner, requestId, ct) is null;
         ConversationMessage result = await SendFileCoreAsync(owner, connectionId, recipient, requestId, caption, file, ct, isAiReply: true);
-        await PublishSentAsync(owner, connectionId, requestId, CommsType.AgentToUser, ct);
+        if (first) await PublishSentAsync(owner, connectionId, requestId, CommsType.AgentToUser, ct);
         return result;
     }
 
@@ -131,7 +136,7 @@ public sealed class ConversationService(IConversationStore store, IWhatsAppConne
             // TikTok's API has no way to quote a message, so the customer would not see what this answers.
             if (request.ReplyToMessageId is not null)
                 throw new ValidationException("TikTok can't show which message you're replying to. Send it without the quote.");
-            return await tikTok.SendAsync(tikTokConnection, recipient, request, ct);
+            return await tikTok.SendAsync(tikTokConnection, recipient, request, ct, isAiReply);
         }
 
         if (request.RequestId == Guid.Empty || string.IsNullOrWhiteSpace(request.Text) || request.Text.Length > 4096

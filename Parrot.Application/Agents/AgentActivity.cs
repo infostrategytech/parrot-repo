@@ -112,9 +112,6 @@ public interface IAgentActivityStore
     Task<IReadOnlyList<AgentActivityRecord>> ListByTurnIdsAsync(
         string ownerUserId, IReadOnlyCollection<string> turnIds, CancellationToken cancellationToken = default);
 
-    /// <summary>The approvals and escalations nobody has decided yet, oldest first.</summary>
-    Task<IReadOnlyList<AgentActivityRecord>> ListPendingAsync(string ownerUserId, CancellationToken cancellationToken = default);
-
     /// <summary>
     /// Marks the approval, and any escalation opened for it, decided. Returns
     /// how many records that touched: 0 when the owner has no such approval waiting.

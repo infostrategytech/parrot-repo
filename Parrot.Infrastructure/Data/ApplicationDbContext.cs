@@ -36,6 +36,10 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
     public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
     public DbSet<WorkspacePaymentSettings> WorkspacePaymentSettings => Set<WorkspacePaymentSettings>();
     public DbSet<WorkspaceWallet> WorkspaceWallets => Set<WorkspaceWallet>();
+    public DbSet<WalletTransaction> WalletTransactions => Set<WalletTransaction>();
+
+    /// <summary>The unique index on a ledger entry's reference: one entry per event.</summary>
+    public const string WalletTransactionReferenceIndex = "UQ_WalletTransactions_Reference";
 
     public DbSet<BusinessSource> BusinessSources => Set<BusinessSource>();
     public DbSet<WorkspaceSourceState> WorkspaceSourceStates => Set<WorkspaceSourceState>();
@@ -410,6 +414,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(o => o.Note).HasMaxLength(500);
             entity.Property(o => o.Reference).HasMaxLength(64).IsRequired();
             entity.Property(o => o.IdempotencyKey).HasMaxLength(100).IsRequired();
+            entity.Property(o => o.LastChangeKey).HasMaxLength(100);
             entity.Property(o => o.Status).HasConversion<string>().HasMaxLength(32);
             entity.Property(o => o.Currency).HasMaxLength(3).IsRequired();
             entity.Property(o => o.Provider).HasMaxLength(32).IsRequired();
@@ -456,6 +461,33 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(w => w.Currency).HasMaxLength(3).IsRequired();
             entity.Property(w => w.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
             entity.ToTable(t => t.HasCheckConstraint("CK_WorkspaceWallets_BalanceMinor", "\"BalanceMinor\" >= 0"));
+        });
+
+        // A wallet's ledger: added to, never changed. The reference is unique across every wallet, so one event
+        // (an order's payment) is only ever counted once.
+        builder.Entity<WalletTransaction>(entity =>
+        {
+            entity.HasKey(t => t.Id);
+            entity.Property(t => t.Id).ValueGeneratedNever();
+            entity.Property(t => t.WorkspaceId).IsRequired().HasMaxLength(450);
+            entity.HasOne<WorkspaceWallet>().WithMany().HasForeignKey(t => t.WorkspaceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(t => t.Type).HasConversion<string>().HasMaxLength(16);
+            entity.Property(t => t.Status).HasConversion<string>().HasMaxLength(16);
+            entity.Property(t => t.ActionBy).HasMaxLength(450).IsRequired();
+            entity.Property(t => t.Kind).HasConversion<string>().HasMaxLength(32);
+            entity.Property(t => t.Currency).HasMaxLength(3).IsRequired();
+            entity.Property(t => t.Reference).HasMaxLength(128).IsRequired();
+            entity.Property(t => t.ProviderTransactionId).HasMaxLength(256);
+            entity.Property(t => t.Description).HasMaxLength(500).IsRequired();
+            entity.Property(t => t.CreatedAt).HasDefaultValueSql("CURRENT_TIMESTAMP");
+            entity.HasIndex(t => t.Reference).IsUnique().HasDatabaseName(WalletTransactionReferenceIndex);
+            entity.HasIndex(t => new { t.WorkspaceId, t.CreatedAt }).HasDatabaseName("IX_WalletTransactions_Workspace_CreatedAt");
+            entity.ToTable(t =>
+            {
+                t.HasCheckConstraint("CK_WalletTransactions_AmountMinor", "\"AmountMinor\" > 0");
+                t.HasCheckConstraint("CK_WalletTransactions_BalanceAfterMinor", "\"BalanceAfterMinor\" >= 0");
+            });
         });
 
         builder.Entity<WorkspacePaymentSettings>(entity =>

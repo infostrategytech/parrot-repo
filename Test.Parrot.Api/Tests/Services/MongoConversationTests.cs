@@ -76,6 +76,45 @@ public class MongoConversationTests
         finally { await client.DropDatabaseAsync(database); }
     }
 
+    // An agent's question names its chat by conversation key; the inbox names it by connection and customer.
+    [MongoFact]
+    public async Task FindByConversationKeysAsync_ReturnsTheOwnersInboxConversationForEachKeyAndNothingOfAnotherOwners()
+    {
+        MessageSerializationRegistry.Register();
+        var client = new MongoClient(Environment.GetEnvironmentVariable("PARROT_TEST_MONGO"));
+        string database = "parrot_test_" + Guid.NewGuid().ToString("N");
+        var settings = Options.Create(new MongoDbSettings { Database = database, Collection = "messages" });
+        try
+        {
+            var store = new MongoConversationStore(client, settings);
+            var messages = client.GetDatabase(database).GetCollection<MessageDocument>("messages");
+            const string ada = "whatsapp:2348012345678:2349011112222", bayo = "whatsapp:2348099999999:2349011112222";
+            Guid oldConnection = Guid.NewGuid(), newConnection = Guid.NewGuid(), theirs = Guid.NewGuid();
+            WhatsAppMessageDocument Message(string id, string owner, Guid connection, string from, string key, bool outgoing = false) => new()
+            {
+                MessageId = id, OwnerUserId = owner, ConnectionId = connection, Platform = MessagingPlatform.WhatsApp,
+                ExternalAccountId = "2349011112222", ChannelId = "123", ChannelDisplayName = "123", From = from, Type = "text",
+                TextBody = "Hello", Timestamp = "0", ReceivedAt = DateTime.UtcNow, Outgoing = outgoing, ConversationKey = key,
+            };
+            // Ada wrote before the channel was connected again, and after; the reply is stored under her too.
+            await messages.InsertOneAsync(Message("wamid.1", "owner", oldConnection, "2348012345678", ada));
+            await messages.InsertOneAsync(Message("wamid.2", "owner", newConnection, "2348012345678", ada));
+            await messages.InsertOneAsync(Message("outgoing:3", "owner", newConnection, "2348012345678", ada, outgoing: true));
+            // Another workspace's chat that happens to have the same key, and a key only they have.
+            await messages.InsertOneAsync(Message("wamid.4", "other", theirs, "2348012345678", ada));
+            await messages.InsertOneAsync(Message("wamid.5", "other", theirs, "2348099999999", bayo));
+
+            IReadOnlyDictionary<string, (Guid Connection, string Sender)> found =
+                await store.FindByConversationKeysAsync("owner", [ada, bayo, "whatsapp:unknown:2349011112222"], default);
+
+            Assert.Equal((newConnection, "2348012345678"), Assert.Single(found).Value);
+            Assert.Equal(ada, found.Keys.Single());
+            Assert.Empty(await store.FindByConversationKeysAsync("owner", [], default));
+            Assert.Equal((theirs, "2348099999999"), (await store.FindByConversationKeysAsync("other", [bayo], default))[bayo]);
+        }
+        finally { await client.DropDatabaseAsync(database); }
+    }
+
     // The setup test finds a TikTok customer's message by the connection and its owner, whatever the platform's own
     // account id (here the business open id) is.
     [MongoFact]

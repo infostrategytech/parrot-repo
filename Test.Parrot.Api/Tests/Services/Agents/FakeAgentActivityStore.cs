@@ -55,16 +55,6 @@ public sealed class FakeAgentActivityStore : IAgentActivityStore
         return Task.FromResult(list);
     }
 
-    public Task<IReadOnlyList<AgentActivityRecord>> ListPendingAsync(string ownerUserId, CancellationToken cancellationToken = default)
-    {
-        ThrowIfFailing();
-        IReadOnlyList<AgentActivityRecord> list = Records
-            .Where(r => r.OwnerUserId == ownerUserId && PendingTypes.Contains(r.Type) && r.ResolvedAt is null)
-            .OrderBy(r => r.OccurredAt)
-            .ToList();
-        return Task.FromResult(list);
-    }
-
     public Task<int> MarkApprovalDecidedAsync(
         string ownerUserId,
         string approvalId,

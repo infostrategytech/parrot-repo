@@ -87,12 +87,20 @@ public sealed partial class CheckoutService(
                 break;
             }
 
-            if (await TryChangeCartAsync(cart, request, items, rules, ct) is { } changed)
+            if (await TryChangeCartAsync(cart, request, items, rules, key, ct) is { } changed)
             {
                 return changed;
             }
         }
 
+        return await NewCartAsync(workspaceId, request with { Sender = sender, IdempotencyKey = key }, items, rules, ct);
+    }
+
+    /// <summary>A new cart for the conversation, with its stock kept aside when the business asks; any older open cart is replaced.</summary>
+    private async Task<CheckoutResult> NewCartAsync(string workspaceId, CreateCheckoutRequest request, List<CheckoutItem> items, WorkspacePaymentSettings rules, CancellationToken ct)
+    {
+        string key = request.IdempotencyKey;
+        string sender = request.Sender;
         List<PaymentOrderLine> lines = Agreed(await QuoteAsync(workspaceId, items, countStock: true, ct));
         long total = lines.Sum(l => l.LineTotalMinor);
         CheckLimit(total);
@@ -167,7 +175,7 @@ public sealed partial class CheckoutService(
     /// The open cart given the agent's new list: priced again, its time started again, and its stock moved
     /// when it's kept aside. Null when the cart changed underneath (Pay pressed, another change saved).
     /// </summary>
-    private async Task<CheckoutResult?> TryChangeCartAsync(PaymentOrder cart, CreateCheckoutRequest request, List<CheckoutItem> items, WorkspacePaymentSettings rules, CancellationToken ct)
+    private async Task<CheckoutResult?> TryChangeCartAsync(PaymentOrder cart, CreateCheckoutRequest request, List<CheckoutItem> items, WorkspacePaymentSettings rules, string key, CancellationToken ct)
     {
         // Stock the cart keeps aside is its own, so it isn't counted against it here; moving the hold checks what's left.
         List<PaymentOrderLine> lines = Agreed(await QuoteAsync(cart.WorkspaceId, items, countStock: cart.HoldMode != CheckoutHoldMode.AtCheckout, ct));
@@ -179,6 +187,7 @@ public sealed partial class CheckoutService(
             order.CustomerEmail = Optional(request.CustomerEmail, 254) ?? order.CustomerEmail;
             order.CustomerPhone = Optional(request.CustomerPhone, 32) ?? order.CustomerPhone;
             order.Note = Optional(request.Note, 500) ?? order.Note;
+            order.LastChangeKey = key;
         }, ct);
         if (!saved)
         {
@@ -274,6 +283,180 @@ public sealed partial class CheckoutService(
     /// <summary>Kept until the latest a payment started at the cart's last minute could run; the sweep lets it go as soon as the cart or its payment lapses.</summary>
     private static DateTime HeldUntil(DateTime cartExpires) => cartExpires.AddMinutes(WorkspacePaymentSettingsService.MaxPaymentMinutes);
 
+    // ---- The agent: adding to and taking out of the cart --------------------------------
+
+    /// <summary>
+    /// Adds items to the conversation's open cart (more of one already in it goes on its line), keeping its link; with no
+    /// open cart, makes one of just these. Priced from the live catalog like create_cart. Refused, the cart unchanged,
+    /// while the customer is paying: a change then needs a new cart with the complete list.
+    /// </summary>
+    public Task<CheckoutResult> AddToCartAsync(string workspaceId, ChangeCartRequest request, CancellationToken ct) =>
+        ChangeCartAsync(workspaceId, request, adding: true, ct);
+
+    /// <summary>
+    /// Takes items out of the conversation's open cart, or lowers how many, keeping its link. Refused when there's no
+    /// open cart, an item isn't in it, or it would leave the cart empty.
+    /// </summary>
+    public Task<CheckoutResult> RemoveFromCartAsync(string workspaceId, ChangeCartRequest request, CancellationToken ct) =>
+        ChangeCartAsync(workspaceId, request, adding: false, ct);
+
+    private async Task<CheckoutResult> ChangeCartAsync(string workspaceId, ChangeCartRequest request, bool adding, CancellationToken ct)
+    {
+        await EnsureOnAsync(ct);
+        string key = Required(request.IdempotencyKey, MaxKey, "idempotency_key");
+        string sender = Required(request.Sender, MaxSender, "sender");
+
+        // The same add that made a new cart, sent again.
+        if (await orders.FindByIdempotencyKeyAsync(workspaceId, key, ct) is { } earlier)
+        {
+            return Again(earlier);
+        }
+
+        List<CartItemChange> changes = Changes(request.Items, adding);
+        await CheckConversationAsync(workspaceId, request.AgentId, request.ConnectionId);
+        WorkspacePaymentSettings rules = await workspaceSettings.ResolveAsync(workspaceId, ct);
+        CreateCheckoutRequest asCart = new (request.AgentId, request.ConnectionId, sender, [], key,
+            request.CustomerName, request.CustomerEmail, request.CustomerPhone, request.Note);
+
+        // Each go reads the cart afresh and makes the change to what it holds now, so two changes at once both land.
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            PaymentOrder? cart = await orders.FindOpenCartAsync(workspaceId, request.ConnectionId, sender, Now, ct);
+            if (cart is null)
+            {
+                return adding
+                    ? await FirstCartAsync(workspaceId, asCart, changes, rules, ct)
+                    : throw new CheckoutRefusedException(await NoOpenCartAsync(workspaceId, request.ConnectionId, sender, "there's nothing to take out", ct));
+            }
+
+            // The same change, sent again: it's already in the cart.
+            if (cart.LastChangeKey == key)
+            {
+                return Result(cart, changed: true);
+            }
+
+            List<CheckoutItem> next = adding ? Added(cart, changes) : Removed(cart, changes);
+            if (await TryChangeCartAsync(cart, asCart, next, rules, key, ct) is { } changed)
+            {
+                return changed;
+            }
+        }
+
+        throw new CheckoutUnavailableException("The cart kept changing while this was being saved. Call get_cart to see what's in it now, then try again with a new idempotency_key.");
+    }
+
+    /// <summary>add_to_cart with no open cart: a new one of just these items, unless the customer is paying the last one.</summary>
+    private async Task<CheckoutResult> FirstCartAsync(string workspaceId, CreateCheckoutRequest request, List<CartItemChange> changes, WorkspacePaymentSettings rules, CancellationToken ct)
+    {
+        if (await orders.FindLatestCartAsync(workspaceId, request.ConnectionId, request.Sender, ct) is { } latest && Paying(latest))
+        {
+            throw new CheckoutRefusedException(PayingNow("add to it"));
+        }
+
+        return await NewCartAsync(workspaceId, request, Merge(changes.Select(c => new CheckoutItem(c.ProductId, c.VariantId, c.Quantity!.Value)).ToList()), rules, ct);
+    }
+
+    /// <summary>Why remove_from_cart found no open cart, worded for the agent.</summary>
+    private async Task<string> NoOpenCartAsync(string workspaceId, Guid connectionId, string sender, string so, CancellationToken ct) =>
+        await orders.FindLatestCartAsync(workspaceId, connectionId, sender, ct) is { } latest && Paying(latest)
+            ? PayingNow("take anything out")
+            : $"This conversation has no open cart, so {so}. Call get_cart to see where the customer's last cart got to.";
+
+    /// <summary>The customer pressed Pay and the payment can still arrive: the cart is theirs now and can't change.</summary>
+    private bool Paying(PaymentOrder order) =>
+        order.PaidAt is null && (order.Status == PaymentOrderStatus.Creating || (order.Status == PaymentOrderStatus.Pending && order.ExpiresAt > Now));
+
+    private static string PayingNow(string what) =>
+        $"The customer has already pressed Pay on their cart, so you can't {what} now. If they want a different order, agree the complete list with them "
+        + "and call create_cart, which makes a new cart and link in place of the one being paid.";
+
+    /// <summary>What add_to_cart or remove_from_cart was asked, checked: real ids, and quantities that make sense for the change.</summary>
+    private static List<CartItemChange> Changes(IReadOnlyList<CartItemChange>? items, bool adding)
+    {
+        if (items is not { Count: > 0 })
+        {
+            throw new CheckoutRefusedException(adding
+                ? "Pass at least one item to add: each with product_id, variant_id when the product has options, and quantity."
+                : "Pass at least one item to take out: each with product_id, and quantity to take out only some of it.");
+        }
+
+        if (items.Count > MaxItems)
+        {
+            throw new CheckoutRefusedException($"A cart can have at most {MaxItems} different items.");
+        }
+
+        foreach (CartItemChange item in items)
+        {
+            if (item.ProductId == Guid.Empty || item.VariantId == Guid.Empty)
+            {
+                throw new CheckoutRefusedException("Each item needs a real product_id (and variant_id, when given).");
+            }
+
+            if (adding && item.Quantity is null)
+            {
+                throw new CheckoutRefusedException("Say how many to add (quantity, at least 1) for each item.");
+            }
+
+            if (item.Quantity is < 1 or > MaxQuantity)
+            {
+                throw new CheckoutRefusedException($"Each quantity must be between 1 and {MaxQuantity}.");
+            }
+        }
+
+        return [.. items];
+    }
+
+    /// <summary>The cart with the items added: more of one already in it goes on its line.</summary>
+    private static List<CheckoutItem> Added(PaymentOrder cart, List<CartItemChange> changes) =>
+        Merge([.. Items(cart), .. changes.Select(c => new CheckoutItem(c.ProductId, c.VariantId, c.Quantity!.Value))]);
+
+    /// <summary>The cart with the items taken out or lowered. Every item named must be in it, and something must be left.</summary>
+    private static List<CheckoutItem> Removed(PaymentOrder cart, List<CartItemChange> changes)
+    {
+        List<CheckoutItem> items = Items(cart);
+        List<string> wrong = [];
+        foreach (CartItemChange change in changes)
+        {
+            List<CheckoutItem> matches = items.Where(i => i.ProductId == change.ProductId && (change.VariantId is null || i.VariantId == change.VariantId)).ToList();
+            if (matches.Count == 0)
+            {
+                wrong.Add(change.VariantId is null ? $"{change.ProductId} isn't in the cart." : $"{change.ProductId} with option {change.VariantId} isn't in the cart.");
+                continue;
+            }
+
+            if (matches.Count > 1)
+            {
+                string name = cart.Lines.First(l => l.ProductId == change.ProductId).Name;
+                wrong.Add($"The cart has {name} in more than one option ({string.Join(", ", cart.Lines.Where(l => l.ProductId == change.ProductId).Select(l => $"{l.VariantName}: {l.VariantId}"))}): pass the variant_id of the one to take out.");
+                continue;
+            }
+
+            CheckoutItem line = matches[0];
+            int index = items.IndexOf(line);
+            if (change.Quantity is int fewer && fewer < line.Quantity)
+            {
+                items[index] = line with { Quantity = line.Quantity - fewer };
+            }
+            else
+            {
+                items.RemoveAt(index);
+            }
+        }
+
+        if (wrong.Count > 0)
+        {
+            throw new CheckoutRefusedException(string.Join(" ", wrong) + " The cart wasn't changed. Call get_cart to see what's in it.");
+        }
+
+        if (items.Count == 0)
+        {
+            throw new CheckoutRefusedException("That would leave the cart empty, so it wasn't changed. If the customer doesn't want anything any more, tell them "
+                + "there's nothing to pay: the cart runs out unpaid at expires_at. To swap what's in it, call create_cart with the complete new list.");
+        }
+
+        return items;
+    }
+
     // ---- The agent: what's in the cart ---------------------------------------------------
 
     /// <summary>
@@ -313,10 +496,10 @@ public sealed partial class CheckoutService(
         bool open = view.State == CheckoutState.Open;
         string guidance = view.State switch
         {
-            CheckoutState.Open when !view.CanPay => $"The customer can't pay this cart as it stands: {view.Message} Agree a change with them, then call create_cart with the complete new list.",
+            CheckoutState.Open when !view.CanPay => $"The customer can't pay this cart as it stands: {view.Message} Agree a change with them, then call add_to_cart or remove_from_cart, or create_cart with the complete new list.",
             CheckoutState.Open when view.PriceChanged => "The cart is open, but some prices changed since it was made: tell the customer the new total before they pay. "
-                + "To change the cart, call create_cart with the complete new list; send checkout_url again only if they lost it.",
-            CheckoutState.Open => "The cart is open and can be paid. To change it, call create_cart with the complete new list; send checkout_url again only if they lost it.",
+                + "To change the cart, call add_to_cart or remove_from_cart, or create_cart with the complete new list; send checkout_url again only if they lost it.",
+            CheckoutState.Open => "The cart is open and can be paid. To change it, call add_to_cart or remove_from_cart, or create_cart with the complete new list; send checkout_url again only if they lost it.",
             CheckoutState.Paying => "The customer pressed Pay and is paying. Don't change the cart unless they ask: a change now makes a new cart and link. Use get_payment_status to see whether it's paid.",
             CheckoutState.Paid => "This cart has been paid. Use get_payment_status for where the order is.",
             CheckoutState.Replaced => "A newer cart replaced this one. Call get_cart with connection_id and sender for the conversation's current cart.",
@@ -754,7 +937,7 @@ public sealed partial class CheckoutService(
               + "Tell them what changed and the new total; send the link again only if they've lost it. Its time started again (expires_at). "
               + "Don't tell the customer the order is paid: use get_payment_status."
             : "Send the customer checkout_url with the total and what it's for. On that page they see the latest prices and press Pay, which takes them to the payment page. "
-              + "This is the conversation's cart: to change it, call create_cart again with the complete new list, and the same link shows the change. "
+              + "This is the conversation's cart: to change it, call add_to_cart or remove_from_cart, or create_cart with the complete new list, and the same link shows the change. "
               + "If a price changes before they pay, the page shows the old and the new price. "
               + "Don't tell the customer the order is paid: use get_payment_status.");
 

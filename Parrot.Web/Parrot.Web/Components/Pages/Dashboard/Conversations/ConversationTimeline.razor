@@ -10,6 +10,8 @@
 @inject Parrot.Web.Features.Dashboard.TaskRequests.TaskReplyDraft ReplyDraft
 @inject Parrot.Web.Features.Dashboard.TaskRequests.ITaskStore Tasks
 @inject ToastService Toasts
+@inject AuthState Auth
+@inject Parrot.Web.Features.Dashboard.Knowledge.OmniKnowledgeMemory Knowledge
 
 
 @* The page owns the conversation data (it polls the list and reads the
@@ -160,12 +162,9 @@
                             }
                             else
                             {
-                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">
-                                    @(_approvalDecision == "approved" ? "Approved" : "Denied")
-                                </Typography>
-                                <Typography TextStyle="TextStyle.Small12Regular" As="p">
-                                    Decision sent. Waiting for the AI agent to continue.
-                                </Typography>
+                                (string Title, string Note) outcome = ApprovalOutcome.Describe(_approvalDecision, _approvalStatus, Conversation.AiAgent?.Name);
+                                <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@outcome.Title</Typography>
+                                <Typography TextStyle="TextStyle.Small12Regular" As="p">@outcome.Note</Typography>
                             }
                         </div>
                     </div>
@@ -199,15 +198,18 @@
                             <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="conversation-timeline__task-who">@LearningAgent needs your answer</Typography>
                             <Typography TextStyle="TextStyle.BodySmallMedium" As="span" Class="conversation-timeline__agent-question-text">@question.Text</Typography>
                         </span>
-                        @if (Features.Available)
-                        {
-                            <span class="conversation-timeline__agent-actions">
+                        @* The API only sends questions to people who can answer them, so whoever sees one can act on it.
+                           Once the reply window has closed nothing can be sent from here: they answer on the customer's
+                           own app (the handoff below) and mark it done. *@
+                        <span class="conversation-timeline__agent-actions">
+                            @if (!Conversation.ReplyWindowClosed)
+                            {
                                 <Button Size="ButtonSize.Small" disabled="@(_savingLearning || _resolving)" aria-label="@($"Answer {LearningAgent}")"
                                         @onclick="() => OpenAnswer(question)">Answer</Button>
-                                <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_resolving" disabled="@_savingLearning"
-                                        @onclick="() => MarkAgentQuestionDoneAsync(question)">Done</Button>
-                            </span>
-                        }
+                            }
+                            <Button Variant="ButtonVariant.Ghost" Size="ButtonSize.Small" Busy="_resolving" disabled="@_savingLearning"
+                                    @onclick="() => MarkAgentQuestionDoneAsync(question)">Done</Button>
+                        </span>
                     </div>
                 }
                 <Parrot.Web.Components.Pages.Dashboard.TaskRequests.TaskQuestions ConversationId="@Conversation.Id" Compact OnUseAnswer="UseAnswer"
@@ -287,9 +289,25 @@
                 <TextArea Value="@_learningText" ValueChanged="value => _learningText = value ?? string.Empty"
                           AriaLabel="@LearningPrompt" Rows="4" AutoGrow Placeholder="@LearningPrompt" />
                 <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="learning-dialog__note">@LearningCommitment</Typography>
+                @* Above the save option, so a refusal is in view without scrolling the dialog. *@
                 @if (_learningError is not null)
                 {
                     <InlineError Message="@_learningError" OnDismiss="() => _learningError = null" />
+                }
+                @if (_learningMode == LearningMode.Answer && CanSaveForNextTime)
+                {
+                    @* Off unless chosen: many answers are about this customer only (an order, a delivery date), and what is
+                       saved is used with every customer from the next message. *@
+                    <Checkbox State="@(_saveForNextTime ? CheckboxState.Checked : CheckboxState.Unchecked)" StateChanged="SetSaveForNextTime"
+                              Label="Save for next time"
+                              Description="@($"{CapitalisedAgent} will use it with every customer. Leave it off for an answer about this customer only, like their order.")" />
+                    @if (_saveForNextTime)
+                    {
+                        <TextArea Value="@RememberText" ValueChanged="value => _rememberText = value ?? string.Empty"
+                                  AriaLabel="@($"What {LearningAgent} should know")" Rows="3" AutoGrow
+                                  Placeholder="For example: We deliver to Ibadan for 3,500 naira, in 2 days." />
+                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="learning-dialog__note">Write it so it makes sense without the question.</Typography>
+                    }
                 }
             </div>
         }
@@ -342,6 +360,7 @@
     // Approval card state: the approval id we last saw, the decision sent, and any send error.
     private string? _pendingApprovalId;
     private string? _approvalDecision;
+    private string? _approvalStatus;
     private string? _approvalError;
     private bool _deciding;
 
@@ -349,6 +368,20 @@
     private LearningMode _learningMode;
     private string _learningText = "";
     private string? _learningError;
+    private bool _saveForNextTime;
+    // Null until the person edits what to remember: until then it is the answer, as it is typed.
+    private string? _rememberText;
+    private string RememberText => _rememberText ?? _learningText.Trim();
+
+    // Saving an answer as knowledge: when the AI service keeps it, and for people who may change it (as on the Knowledge page).
+    private bool CanSaveForNextTime => Knowledge.Enabled
+        && Auth.CurrentUser?.Allows(Parrot.SharedComponents.Layout.AccessRules.Knowledge) == true;
+
+    private void SetSaveForNextTime(CheckboxState state)
+    {
+        _saveForNextTime = state == CheckboxState.Checked;
+        _learningError = null;
+    }
     private bool _savingLearning;
 
     // Questions stay as state for the attention strip; their completion is a real conversation event,
@@ -382,6 +415,7 @@
         {
             _pendingApprovalId = incomingApprovalId;
             _approvalDecision = null;
+            _approvalStatus = null;
             _approvalError = null;
             if (incomingApprovalId is not null) _scrollPending = true;
         }
@@ -464,6 +498,9 @@
             return;
         }
         if (!_scrollPending) return;
+        // The thread isn't on the page while it loads (an approval card can ask for the scroll then): scroll once it is.
+        // An empty reference reaches the script as a plain object, and the circuit fails.
+        if (string.IsNullOrEmpty(_scrollElement.Id)) return;
         _scrollPending = false;
         var force = _forceScrollPending;
         _forceScrollPending = false;
@@ -621,6 +658,7 @@
                     new Parrot.Web.Services.InboxReplyDto(item.DraftRequestId.Value, item.Draft) { ReplyToMessageId = replyTo }, CancellationToken.None);
             ConversationsState.Merge(item, new[] { result });
             ConversationsState.SettleReplyNeed(item, result);
+            ConversationsState.SettleAgentQuestions(item, result);
             item.SendError = result.Status switch
             {
                 "failed" => "WhatsApp rejected this reply. Check the recipient and server credentials before sending a new message.",
@@ -743,6 +781,8 @@
         _learningMessage = message;
         _learningText = "";
         _learningError = null;
+        _saveForNextTime = false;
+        _rememberText = null;
     }
 
     private void CloseLearning()
@@ -766,44 +806,56 @@
             }
             else
             {
-                // The answer goes into the composer for review before it is sent.
-                var agentReplies = Conversation.ReplyLocked;
-                var reply = await Features.AnswerAsync(Conversation.ConnectionId, Conversation.Sender, _learningMessage.Id, _learningText);
-                _learningMessage.Answered = true;
-                SettleNeedsAnswer();
-                _view = ThreadView.Messages;
-                if (!agentReplies)
+                // Saved first: if the AI service refuses it, the dialog stays open with the reason and nothing has moved.
+                if (_saveForNextTime && CanSaveForNextTime && string.IsNullOrWhiteSpace(RememberText))
                 {
-                    // You're replying: the answer waits in the reply box. AI questions are not tasks.
-                    _composerMode = ComposerMode.Reply;
-                    Conversation.Draft = reply;
-                    _draftedBy = null;
+                    _learningError = $"Write what {LearningAgent} should know, or untick Save for next time.";
+                    return;
                 }
+                if (_saveForNextTime && CanSaveForNextTime)
+                {
+                    await Knowledge.AddStatementAsync(RememberText, _lifetime.Token);
+                    Toasts.Show("Saved for next time.", description: $"{CapitalisedAgent} will use it from the next customer message.");
+                }
+
+                // The answer waits in the reply box to be checked; sending it is what closes the question (the AI
+                // service takes a team reply as the answer). While the agent is replying, the take-over choice opens.
+                _view = ThreadView.Messages;
+                UseAnswer(_learningText.Trim());
             }
             _learningMessage = null;
             _learningText = "";
             _scrollPending = true;
             await OnChanged.InvokeAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _learningError = ex.Message; }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException
+            or Parrot.Web.Features.Dashboard.Knowledge.KnowledgeSaveRefusedException) { _learningError = ex.Message; }
+        catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !_lifetime.IsCancellationRequested))
+        {
+            // Refused in a way the store has no words for, or the AI service took too long.
+            _learningError = "We couldn't save it for next time. Try again, or untick Save for next time.";
+        }
         finally { _savingLearning = false; }
     }
 
-    private string LearningAgent => Conversation.AiAgent?.Name ?? "the AI agent";
+    // The workspace's own name for the agent when its list has it: the API may only know the agent by id.
+    private string LearningAgent => (Conversation.AiAgent is { } agent ? AgentsState.GetAgent(agent.Id)?.Name ?? agent.Name : null) ?? "the AI agent";
+    // The same, starting a sentence.
+    private string CapitalisedAgent => LearningAgent.Length == 0 ? LearningAgent : char.ToUpperInvariant(LearningAgent[0]) + LearningAgent[1..];
     private string LearningTitle => _learningMode == LearningMode.Correction ? "Correct for next time" : $"Answer {LearningAgent}";
     private RenderFragment<string> LearningFooter => _ => @<div class="learning-dialog__footer">
         <Button Variant="ButtonVariant.Secondary" disabled="@_savingLearning" @onclick="CloseLearning">Cancel</Button>
         <Button Busy="@_savingLearning" disabled="@string.IsNullOrWhiteSpace(_learningText)" @onclick="SaveLearningAsync">@LearningConfirmLabel</Button>
     </div>;
-    private string LearningConfirmLabel => _learningMode == LearningMode.Correction ? "Save correction" : "Save answer";
+    private string LearningConfirmLabel => _learningMode == LearningMode.Correction ? "Save correction" : "Add to reply";
     private string LearningPrompt => _learningMode == LearningMode.Correction
         ? $"What should {LearningAgent} use next time?"
         : "Type the answer";
     private string LearningCommitment => _learningMode == LearningMode.Correction
         ? $"What was already sent stays as it is. {LearningAgent} will use this next time."
         : Conversation.ReplyLocked
-            ? $"{LearningAgent} will use this to answer {Conversation.CustomerName} in its own words, and remember it for next time."
-            : $"{LearningAgent} will remember this for next time. You'll check the reply before it goes to {Conversation.CustomerName}.";
+            ? $"It goes into your reply box. Take over to send it to {Conversation.CustomerName}. Sending it closes the question."
+            : $"It goes into your reply box, so you can check it before it goes to {Conversation.CustomerName}. Sending it closes the question.";
 
     private static string DateLabel(DateOnly date)
     {
@@ -823,8 +875,14 @@
         _approvalError = null;
         try
         {
-            await Client.DecideApprovalAsync(approval.ApprovalId, decision, null, _lifetime.Token);
-            _approvalDecision = decision;
+            Parrot.Application.Agents.ApprovalDecisionResponse result = await Client.DecideApprovalAsync(approval.ApprovalId, decision, null, _lifetime.Token);
+            _approvalStatus = result.Status;
+            _approvalDecision = ApprovalOutcome.State(decision, result.Status);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Decided by someone else, or expired, since the card was shown: there is nothing left to decide here.
+            _approvalDecision = ApprovalOutcome.Gone;
         }
         catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException or OperationCanceledException)
         { _approvalError = ex is HttpRequestException ? ex.Message : "Could not send the decision. Try again."; }
@@ -882,24 +940,32 @@
 
     private void ChatTasksChanged() => _ = InvokeAsync(async () => { await LoadChatTasksAsync(); StateHasChanged(); });
 
-    // The list row and Needs you follow straight away, without waiting for the next refresh.
-    private void SettleNeedsAnswer() => Conversation.NeedsAnswer = Conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
-
     // Done clears this Inbox question only. It never creates/settles a task, learns or sends a customer reply.
     private async Task MarkAgentQuestionDoneAsync(ConvMessage question)
     {
-        if (_resolving || _savingLearning || !Features.Available || !IsPendingAgentQuestion(question)) return;
+        if (_resolving || _savingLearning || !IsPendingAgentQuestion(question)) return;
         _resolving = true;
         var conversation = Conversation;
         try
         {
-            await Features.ResolveQuestionAsync(conversation.ConnectionId, conversation.Sender, question.Id);
+            await Client.MarkQuestionDoneAsync(conversation.ConnectionId, conversation.Sender, question.Id, _lifetime.Token);
+            // The list row and Needs you follow straight away, without waiting for the next refresh.
             question.Answered = true;
+            conversation.ClosedQuestions.Add(question.Id);
             conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
             Toasts.Show("Marked as done.");
             await OnChanged.InvokeAsync();
         }
-        catch (Exception e) when (e is HttpRequestException or InvalidOperationException or NotSupportedException)
+        catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Someone else closed it, or a reply did, since this chat was read: it is no longer waiting either way.
+            question.Answered = true;
+            conversation.ClosedQuestions.Add(question.Id);
+            conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+            Toasts.Show("This question was already closed.");
+            await OnChanged.InvokeAsync();
+        }
+        catch (Exception e) when (e is HttpRequestException or InvalidOperationException)
         {
             _actionError = "Couldn't mark the question done. Try again.";
         }

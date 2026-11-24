@@ -196,6 +196,24 @@ public class TikTokReplyTests
         Assert.Single(_tikTok.Sent);
     }
 
+    // The agent's own reply must not look like the team's: a team reply answers the agent's open questions.
+    [Fact]
+    public async Task TheAgentsReply_IsStoredAsTheAgents_AndAPersonsReplyIsNot()
+    {
+        ConversationService service = new(_store, Mock.Of<IWhatsAppConnectionRepository>(), Mock.Of<IWhatsAppSender>(),
+            new WhatsAppTokenProtector(new EphemeralDataProtectionProvider()), _sequence.Object,
+            Mock.Of<IFacebookConnectionRepository>(), Mock.Of<IFacebookSender>(), Mock.Of<IFacebookCredentialProtector>(),
+            Mock.Of<IInstagramConnectionRepository>(), Mock.Of<IInstagramSender>(), Mock.Of<IInstagramCredentialProtector>(), Service());
+
+        ConversationMessage agents = await service.SendAgentReplyAsync(Owner, _connection.Id, Customer, Request("I've passed this to the team."), default);
+        ConversationMessage persons = await service.SendAsync(Owner, _connection.Id, Customer, Request("We deliver on Sundays."), default);
+
+        Assert.True(_store.Messages.Values.Single(m => m.TextBody == "I've passed this to the team.").IsAiReply);
+        Assert.Null(_store.Messages.Values.Single(m => m.TextBody == "We deliver on Sundays.").IsAiReply);
+        Assert.Equal("ai", agents.Kind);
+        Assert.Null(persons.Kind);
+    }
+
     // ---- access tokens -------------------------------------------------------
 
     [Fact]

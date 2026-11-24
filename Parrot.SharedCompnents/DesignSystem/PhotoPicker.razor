@@ -21,8 +21,17 @@
         @for (var index = 0; index < Photos.Count; index++)
         {
             var current = index;
-            <li class="ds-photo-picker__photo">
-                <img src="@Photos[current]" alt="@($"{Label}, photo {current + 1} of {Photos.Count}")" />
+            var flagged = Flagged?.Contains(Photos[current]) == true;
+            <li class="@(flagged ? "ds-photo-picker__photo is-flagged" : "ds-photo-picker__photo")">
+                <img src="@Photos[current]" alt="@($"{Label}, photo {current + 1} of {Photos.Count}{(flagged ? $", {FlagLabel.ToLowerInvariant()}" : null)}")" />
+                @if (flagged)
+                {
+                    @* The mark only: a tile has room for the cover label and the menu, not a word. FlagLabel is
+                       read with the photo, and shown on hover. *@
+                    <span class="ds-photo-picker__flag" title="@FlagLabel" aria-hidden="true">
+                        <Icon Name="IconName.RiErrorWarningFill" Size="IconSize.Sm" />
+                    </span>
+                }
                 @if (current == 0)
                 {
                     <span class="ds-photo-picker__cover"><Typography TextStyle="TextStyle.Small10Semibold" As="span">Cover</Typography></span>
@@ -77,6 +86,11 @@
     [Parameter] public int Max { get; set; } = 4;
 
     [Parameter] public string? HelperText { get; set; }
+
+    /// <summary>Photos to mark for a look, such as ones the agent didn't use: an amber edge and mark, and FlagLabel read with the photo.</summary>
+    [Parameter] public IReadOnlyCollection<string>? Flagged { get; set; }
+
+    [Parameter] public string FlagLabel { get; set; } = "Not used";
 
     [Parameter] public string? Class { get; set; }
 

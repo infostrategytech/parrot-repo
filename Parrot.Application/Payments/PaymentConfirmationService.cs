@@ -214,10 +214,12 @@ public sealed partial class PaymentConfirmationService(
                 }
             }
 
-            if (await orders.TryUpdateFromAsync(order, before, ct))
+            // Whatever the order's state, the money arrived: the business's wallet gets what was paid.
+            WalletTransaction credit = CreditFor(order, paid);
+            if (await orders.TryRecordPaymentAsync(order, before, credit, ct))
             {
-                logger.LogInformation("Payment recorded. Workspace={Workspace} Order={Order} Status={Status} PaidMinor={Paid} Transaction={Transaction}",
-                    order.WorkspaceId, order.Id, order.Status, paid, order.ProviderTransactionId);
+                logger.LogInformation("Payment recorded. Workspace={Workspace} Order={Order} Status={Status} PaidMinor={Paid} Transaction={Transaction} WalletBalanceMinor={Balance}",
+                    order.WorkspaceId, order.Id, order.Status, paid, order.ProviderTransactionId, credit.BalanceAfterMinor);
                 await NotifyQuietlyAsync(order);
                 return WebhookOutcome.Recorded;
             }
@@ -338,6 +340,29 @@ public sealed partial class PaymentConfirmationService(
 
         kobo = CheckoutService.ToMinor(naira);
         return true;
+    }
+
+    /// <summary>The wallet credit for a payment: what was paid, against the order's reference, so it's only ever counted once.</summary>
+    internal WalletTransaction CreditFor(PaymentOrder order, long paidMinor)
+    {
+        string items = string.Join(", ", order.Lines.Select(l => $"{l.Quantity} x {(l.VariantName is null ? l.Name : $"{l.Name} ({l.VariantName})")}"));
+        string from = string.IsNullOrWhiteSpace(order.CustomerName) ? "a customer" : order.CustomerName.Trim();
+        string description = items.Length == 0 ? $"Payment from {from}" : $"Payment from {from} for {items}";
+        return new WalletTransaction
+        {
+            WorkspaceId = order.WorkspaceId,
+            Type = WalletTransactionType.Credit,
+            Status = WalletTransactionStatus.Success,
+            Kind = WalletTransactionKind.Payment,
+            ActionBy = WalletTransaction.AccelerateActor,
+            AmountMinor = paidMinor,
+            Currency = order.Currency,
+            Reference = order.Reference,
+            PaymentOrderId = order.Id,
+            ProviderTransactionId = order.ProviderTransactionId,
+            Description = description.Length > 500 ? description[..497] + "..." : description,
+            CreatedAt = Now,
+        };
     }
 
     private static string Naira(long kobo) => $"NGN {CheckoutService.FromMinor(kobo):N2}";
