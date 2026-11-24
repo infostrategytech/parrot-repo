@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  AWS_ACCOUNT_ID: 433132207341
+  AWS_DEFAULT_REGION: us-west-1
+  ECR_REPOSITORY: parrot-app
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -39,39 +44,62 @@ jobs:
       - run: dotnet build Backend.slnx --configuration Release --no-restore
       - run: dotnet test Backend.slnx --configuration Release --no-build
 
-  deploy:
+  build:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        service:
+          - name: parrot-api
+            dockerfile: Parrot.Api/Dockerfile
+            context: .
+          - name: parrot-grpc
+            dockerfile: Parrot.APi.Grpc/Dockerfile
+            context: .
+          - name: whatsapp-ingestor
+            dockerfile: MessageProcessor/Dockerfile
+            context: .
     steps:
-      # No registry involved: SSH to the AWS server, pull the new commit, and
-      # let docker compose build the images and start the stack in place.
-      - name: Build & deploy on server
-        uses: appleboy/ssh-action@v1.2.0
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
         env:
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_TOKEN: ${{ github.token }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        run: |
+          aws configure set aws_access_key_id $AWS_ACCESS_KEY_ID
+          aws configure set aws_secret_access_key $AWS_SECRET_ACCESS_KEY
+          aws configure set default.region ${{ env.AWS_DEFAULT_REGION }}
+
+      - name: Login to ECR and Build/Push Docker Image
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} \
+            | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com
+
+          docker build -f ${{ matrix.service.dockerfile }} -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:${{ github.sha }} -t ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:latest ${{ matrix.service.context }}
+
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:${{ github.sha }}
+          docker push ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com/${{ env.ECR_REPOSITORY }}/${{ matrix.service.name }}:latest
+
+  deploy:
+    needs: build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to Server
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER || 'ubuntu' }}
           key: ${{ secrets.PARROT_PRIVATE_KEY }}
-          envs: GITHUB_REPOSITORY,GITHUB_TOKEN
           script: |
-            set -euo pipefail
             cd ${{ vars.SERVER_APP_DIR || '/home/ubuntu/Parrot' }}
-            # certbot/nginx containers write into this tree as root, and .git
-            # ownership can drift after manual sudo commands; reclaim both
-            # before touching anything or git refuses to write/overwrite files.
-            sudo chown -R "$(id -un)":"$(id -gn)" .
-            git fetch https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git main
-            git reset --hard FETCH_HEAD
-            sudo docker compose --env-file .env.prod build
-            sudo docker compose --env-file .env.prod up -d --remove-orphans
-            # nginx resolves upstream container names once, when it starts, and
-            # keeps the addresses. Recreated containers can come back on each
-            # other's old IPs (parrot-api and parrot-grpc swapped once, and every
-            # API request landed on gRPC as a 404), so make it look them up
-            # again; fall back to a restart if a reload is refused.
-            sudo docker compose --env-file .env.prod exec -T nginx nginx -s reload || sudo docker compose --env-file .env.prod restart nginx
-            sudo docker system prune -af --volumes=false
-            sudo docker builder prune -af
+            aws ecr get-login-password --region ${{ env.AWS_DEFAULT_REGION }} \
+              | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_DEFAULT_REGION }}.amazonaws.com
+
+            docker compose -f infra/docker-compose.prod.yml pull
+            docker compose -f infra/docker-compose.prod.yml down
+            docker compose -f infra/docker-compose.prod.yml up -d
+
+            echo "✅ Parrot deployed successfully"
