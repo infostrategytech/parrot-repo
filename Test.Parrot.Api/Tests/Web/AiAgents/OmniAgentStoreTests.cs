@@ -1,6 +1,8 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.Options;
+using Parrot.Application.Integrations;
 using Parrot.Web.Components.Pages.Dashboard.AiAgents;
 using Parrot.Web.Features.Auth.Models;
 using Parrot.Web.Features.Auth.State;
@@ -36,9 +38,138 @@ public class OmniAgentStoreTests
     }
 
     [Fact]
-    public async Task SaveRefusesAKindAnotherAgentAnswersOnBeforeWritingAnything()
+    public async Task CreateAssignsANumberAnotherAgentAlreadyAnswersOn()
     {
         Fixture f = new();
+        f.Omni.On("GET", "api/v1/channels", Page(Channel(WhatsApp, "agt_2", "whatsapp", version: 1)));
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"}]""");
+        f.Omni.On("POST", "api/v1/agents", Agent("agt_1", version: 1), HttpStatusCode.Created);
+
+        AiAgent created = await f.Store.CreateAsync(NewAgent("whatsapp"));
+
+        using JsonDocument body = JsonDocument.Parse(f.Omni.Single("POST", "api/v1/agents").Body!);
+        Assert.Equal([WhatsApp.ToString()], body.RootElement.GetProperty("connection_ids").EnumerateArray().Select(e => e.GetString()));
+        Assert.Equal(["whatsapp"], created.Channels.Where(c => c.IsEnabled).Select(c => c.Key));
+    }
+
+    [Fact]
+    public async Task SaveAddsTheAgentToANumberAnotherAgentAlreadyAnswersOn()
+    {
+        Fixture f = new();
+        f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3), Agent("agt_2", name: "Bola", version: 1)));
+        f.Omni.On("GET", "api/v1/channels", Page(Channel(WhatsApp, "agt_2", "whatsapp", version: 1)));
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"}]""");
+        f.Omni.On("PATCH", "api/v1/agents/agt_1", Agent("agt_1", version: 4));
+        f.Omni.On("POST", "api/v1/channels", Channel(WhatsApp, "agt_1", "whatsapp", version: 1), HttpStatusCode.Created);
+        AiAgent agent = (await f.Store.ListAsync()).Single(a => a.Id == "agt_1");
+        agent.Channels = AgentBuilderCopy.DefaultChannels(["whatsapp"]);
+
+        await f.Store.SaveAsync(agent);
+
+        using JsonDocument body = JsonDocument.Parse(f.Omni.Single("POST", "api/v1/channels").Body!);
+        Assert.Equal("agt_1", body.RootElement.GetProperty("agent_id").GetString());
+        Assert.Equal(WhatsApp.ToString(), body.RootElement.GetProperty("connection_id").GetString());
+        Assert.DoesNotContain(f.Omni.Requests, r => r.Path.Contains("agt_2"));
+    }
+
+    [Fact]
+    public async Task SaveSendsTheListedVersionAndMovesItsChannelsToTheKindsSwitchedOn()
+    {
+        Fixture f = new();
+        f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3)));
+        f.Omni.On("GET", "api/v1/channels", Page(Channel(WhatsApp, "agt_1", "whatsapp", version: 2)));
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"},{"id":"{{Instagram}}","channel":"instagram"}]""");
+        f.Omni.On("PATCH", "api/v1/agents/agt_1", Agent("agt_1", version: 4));
+        f.Omni.On("POST", "api/v1/channels", Channel(Instagram, "agt_1", "instagram", version: 1), HttpStatusCode.Created);
+        f.Omni.On("DELETE", $"api/v1/channels/{WhatsApp}/agents/agt_1", $$"""{"connection_id":"{{WhatsApp}}","agent_id":"agt_1","deleted":true,"version":3}""");
+        AiAgent agent = (await f.Store.ListAsync()).Single();
+        agent.Channels = AgentBuilderCopy.DefaultChannels(["instagram"]);
+
+        await f.Store.SaveAsync(agent);
+
+        Assert.Equal("3", f.Omni.Single("PATCH", "api/v1/agents/agt_1").Header("If-Match"));
+        Assert.Contains(Instagram.ToString(), f.Omni.Single("POST", "api/v1/channels").Body);
+        Assert.Equal("2", f.Omni.Single("DELETE", $"api/v1/channels/{WhatsApp}/agents/agt_1").Header("If-Match"));
+    }
+
+    [Fact]
+    public async Task SaveOnSharedNumbersChangesOnlyTheAgentsOwnLinks()
+    {
+        Fixture f = new();
+        f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3), Agent("agt_2", name: "Bola", version: 1)));
+        f.Omni.On("GET", "api/v1/channels", Page(
+            Channel(WhatsApp, "agt_1", "whatsapp", version: 2, enabled: false),
+            Channel(WhatsApp, "agt_2", "whatsapp", version: 5),
+            Channel(Instagram, "agt_1", "instagram", version: 3),
+            Channel(Instagram, "agt_2", "instagram", version: 6)));
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"},{"id":"{{Instagram}}","channel":"instagram"}]""");
+        f.Omni.On("PATCH", "api/v1/agents/agt_1", Agent("agt_1", version: 4));
+        f.Omni.On("PATCH", $"api/v1/channels/{WhatsApp}/agents/agt_1", Channel(WhatsApp, "agt_1", "whatsapp", version: 3));
+        f.Omni.On("DELETE", $"api/v1/channels/{Instagram}/agents/agt_1", $$"""{"connection_id":"{{Instagram}}","agent_id":"agt_1","deleted":true,"version":4}""");
+        AiAgent agent = (await f.Store.ListAsync()).Single(a => a.Id == "agt_1");
+        agent.Channels = AgentBuilderCopy.DefaultChannels(["whatsapp"]);
+
+        await f.Store.SaveAsync(agent);
+
+        Recorded resumed = f.Omni.Single("PATCH", $"api/v1/channels/{WhatsApp}/agents/agt_1");
+        Assert.Equal("""{"enabled":true}""", resumed.Body);
+        Assert.Equal("2", resumed.Header("If-Match"));
+        Assert.Equal("3", f.Omni.Single("DELETE", $"api/v1/channels/{Instagram}/agents/agt_1").Header("If-Match"));
+        Assert.DoesNotContain(f.Omni.Requests, r => r.Method == "POST");
+        Assert.DoesNotContain(f.Omni.Requests, r => r.Path.Contains("agt_2"));
+    }
+
+    [Fact]
+    public async Task ListShowsEachAgentOnlyTheNumbersItIsSwitchedOnFor()
+    {
+        Fixture f = new();
+        f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1"), Agent("agt_2", name: "Bola")));
+        f.Omni.On("GET", "api/v1/channels", Page(
+            Channel(WhatsApp, "agt_1", "whatsapp", version: 1),
+            Channel(WhatsApp, "agt_2", "whatsapp", version: 1, enabled: false),
+            Channel(Instagram, "agt_2", "instagram", version: 1)));
+
+        IReadOnlyList<AiAgent> agents = await f.Store.ListAsync();
+
+        Assert.Equal(["whatsapp"], agents.Single(a => a.Id == "agt_1").Channels.Where(c => c.IsEnabled).Select(c => c.Key));
+        Assert.Equal(["instagram"], agents.Single(a => a.Id == "agt_2").Channels.Where(c => c.IsEnabled).Select(c => c.Key));
+    }
+
+    [Fact]
+    public async Task SaveNeverSaysAChannelAnswersElsewhereWhenTheAiServiceRefusesIt()
+    {
+        Fixture f = new();
+        f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3)));
+        f.Omni.On("GET", "api/v1/channels", Page());
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"}]""");
+        f.Omni.On("PATCH", "api/v1/agents/agt_1", Agent("agt_1", version: 4));
+        f.Omni.On("POST", "api/v1/channels", Refused("CHANNEL_TAKEN", "This channel answers in another workspace."), HttpStatusCode.Conflict);
+        AiAgent agent = (await f.Store.ListAsync()).Single();
+        agent.Channels = AgentBuilderCopy.DefaultChannels(["whatsapp"]);
+
+        ApiException error = await Assert.ThrowsAsync<ApiException>(() => f.Store.SaveAsync(agent));
+
+        Assert.Equal(OmniAgentStore.ChannelUnavailable, error.UserMessage);
+        Assert.Equal(HttpStatusCode.Conflict, error.StatusCode);
+        Assert.DoesNotContain("workspace", error.UserMessage, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task CreateNeverSaysAChannelAnswersElsewhereWhenTheAiServiceRefusesIt()
+    {
+        Fixture f = new();
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"}]""");
+        f.Omni.On("POST", "api/v1/agents", Refused("CHANNEL_TAKEN", "This channel answers in another workspace."), HttpStatusCode.Conflict);
+
+        ApiException error = await Assert.ThrowsAsync<ApiException>(() => f.Store.CreateAsync(NewAgent("whatsapp")));
+
+        Assert.Equal(OmniAgentStore.ChannelUnavailable, error.UserMessage);
+    }
+
+    [Fact]
+    public async Task WhileAgentsCantShareChannelsSaveRefusesAKindAnotherAgentAnswersOnBeforeWritingAnything()
+    {
+        Fixture f = new(sharesChannels: false);
         f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3), Agent("agt_2", name: "Bola", version: 1)));
         f.Omni.On("GET", "api/v1/channels", Page(Channel(WhatsApp, "agt_2", "whatsapp", version: 1)));
         f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"}]""");
@@ -53,23 +184,43 @@ public class OmniAgentStoreTests
     }
 
     [Fact]
-    public async Task SaveSendsTheListedVersionAndMovesItsChannelsToTheKindsSwitchedOn()
+    public async Task WhileAgentsCantShareChannelsSaveChangesLinksByConnectionAlone()
     {
-        Fixture f = new();
+        Fixture f = new(sharesChannels: false);
         f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3)));
-        f.Omni.On("GET", "api/v1/channels", Page(Channel(WhatsApp, "agt_1", "whatsapp", version: 2)));
+        f.Omni.On("GET", "api/v1/channels", Page(
+            Channel(WhatsApp, "agt_1", "whatsapp", version: 2, enabled: false), Channel(Instagram, "agt_1", "instagram", version: 3)));
         f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"},{"id":"{{Instagram}}","channel":"instagram"}]""");
         f.Omni.On("PATCH", "api/v1/agents/agt_1", Agent("agt_1", version: 4));
-        f.Omni.On("POST", "api/v1/channels", Channel(Instagram, "agt_1", "instagram", version: 1), HttpStatusCode.Created);
-        f.Omni.On("DELETE", $"api/v1/channels/{WhatsApp}", $$"""{"connection_id":"{{WhatsApp}}","agent_id":"agt_1","deleted":true,"version":3}""");
+        f.Omni.On("PATCH", $"api/v1/channels/{WhatsApp}", Channel(WhatsApp, "agt_1", "whatsapp", version: 3));
+        f.Omni.On("DELETE", $"api/v1/channels/{Instagram}", $$"""{"connection_id":"{{Instagram}}","agent_id":"agt_1","deleted":true,"version":4}""");
         AiAgent agent = (await f.Store.ListAsync()).Single();
-        agent.Channels = AgentBuilderCopy.DefaultChannels(["instagram"]);
+        agent.Channels = AgentBuilderCopy.DefaultChannels(["whatsapp"]);
 
         await f.Store.SaveAsync(agent);
 
-        Assert.Equal("3", f.Omni.Single("PATCH", "api/v1/agents/agt_1").Header("If-Match"));
-        Assert.Contains(Instagram.ToString(), f.Omni.Single("POST", "api/v1/channels").Body);
-        Assert.Equal("2", f.Omni.Single("DELETE", $"api/v1/channels/{WhatsApp}").Header("If-Match"));
+        Assert.Equal("2", f.Omni.Single("PATCH", $"api/v1/channels/{WhatsApp}").Header("If-Match"));
+        Assert.Equal("3", f.Omni.Single("DELETE", $"api/v1/channels/{Instagram}").Header("If-Match"));
+    }
+
+    [Theory]
+    [InlineData("CHANNEL_ALREADY_ASSIGNED", "This agent is already on this channel.")]
+    [InlineData("AGENT_REQUIRED", "Several agents are on this channel. Say which one.")]
+    public async Task SaveShowsTheAiServicesOwnWordsWhenItRefusesAChannel(string errorCode, string message)
+    {
+        Fixture f = new();
+        f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3)));
+        f.Omni.On("GET", "api/v1/channels", Page());
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"}]""");
+        f.Omni.On("PATCH", "api/v1/agents/agt_1", Agent("agt_1", version: 4));
+        f.Omni.On("POST", "api/v1/channels", Refused(errorCode, message), HttpStatusCode.Conflict);
+        AiAgent agent = (await f.Store.ListAsync()).Single();
+        agent.Channels = AgentBuilderCopy.DefaultChannels(["whatsapp"]);
+
+        ApiException error = await Assert.ThrowsAsync<ApiException>(() => f.Store.SaveAsync(agent));
+
+        Assert.Equal(errorCode, error.ErrorCode);
+        Assert.Equal(message, error.UserMessage);
     }
 
     [Fact]
@@ -127,8 +278,11 @@ public class OmniAgentStoreTests
 
     private static string Page(params string[] items) => $$"""{"items":[{{string.Join(",", items)}}],"next_cursor":null}""";
 
-    private static string Channel(Guid id, string agentId, string platform, int version) =>
-        $$"""{"connection_id":"{{id}}","agent_id":"{{agentId}}","platform":"{{platform}}","enabled":true,"version":{{version}}}""";
+    private static string Refused(string errorCode, string message) =>
+        $$"""{"success":false,"errorCode":"{{errorCode}}","message":"{{message}}","traceId":"t-1"}""";
+
+    private static string Channel(Guid id, string agentId, string platform, int version, bool enabled = true) =>
+        $$"""{"connection_id":"{{id}}","agent_id":"{{agentId}}","platform":"{{platform}}","enabled":{{(enabled ? "true" : "false")}},"version":{{version}}}""";
 
     private static string Agent(string id, string name = "Ada", int version = 1, bool live = false, string useCase = "support") => $$"""
         {"agent_id":"{{id}}","name":"{{name}}","use_case":"{{useCase}}","role":null,"description":"","avatar":"Nova",
@@ -145,14 +299,15 @@ public class OmniAgentStoreTests
         public Routes Parrot { get; } = new();
         public OmniAgentStore Store { get; }
 
-        public Fixture()
+        public Fixture(bool sharesChannels = true)
         {
             AuthState auth = new();
             auth.SetUser(new AuthResponse { Token = "session-token", ExpiresAt = DateTime.UtcNow.AddHours(1) });
             Store = new OmniAgentStore(
                 new OmniAiClient(new HttpClient(Omni) { BaseAddress = new Uri("http://omni.test/") }, auth),
                 new HttpClient(Parrot) { BaseAddress = new Uri("http://parrot.test/") },
-                auth);
+                auth,
+                Options.Create(new OmniAiSettings { MultiAgentEnabled = sharesChannels }));
         }
     }
 }

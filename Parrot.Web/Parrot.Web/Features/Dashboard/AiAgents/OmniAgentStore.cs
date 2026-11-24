@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using Microsoft.Extensions.Options;
+using Parrot.Application.Integrations;
 using Parrot.Web.Components.Pages.Dashboard.AiAgents;
 using Parrot.Web.Features.Auth.State;
 using Parrot.Web.Services;
@@ -11,14 +13,28 @@ namespace Parrot.Web.Features.Dashboard.AiAgents;
 /// The agents as the AI service keeps them (/api/v1/agents), with the channels they answer on
 /// (/api/v1/channels). The screens switch channels on by kind (WhatsApp, Instagram); the service
 /// assigns connections, so a kind switched on assigns every connection of that kind the workspace
-/// has (Parrot's /api/connections), and switched off unlinks them. A connection answers for one
-/// agent only: one already taken by another agent is refused before anything is saved.
+/// has (Parrot's /api/connections), and switched off unlinks them.
+/// With OmniAi:MultiAgentEnabled, several agents can answer on one connection, so a link is named by both
+/// the connection and the agent, and only this agent's own links are changed. Off, a connection answers
+/// for one agent only: one another agent has is refused before anything is saved, and a link is named by
+/// its connection alone, as the AI service had it before.
+/// A refusal is the service's ApiException, with its own words for the owner, except a channel held
+/// elsewhere: that never says where.
 /// </summary>
-public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthState auth) : IAgentStore
+public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthState auth, IOptions<OmniAiSettings> settings) : IAgentStore
 {
+    /// <summary>What the owner is told when the service won't link a channel it says is held elsewhere.</summary>
+    public const string ChannelUnavailable = "That channel can't take this agent right now. Try again, and contact support if it keeps happening.";
+
+    // The service's code for a channel held elsewhere (another workspace; before agents could share, another agent).
+    private const string ChannelTakenCode = "CHANNEL_TAKEN";
+
     // The version each agent was last read or saved at, sent back as If-Match.
     private readonly Dictionary<string, int> _versions = [];
+    // Names for the refusal while agents can't share a channel.
     private readonly Dictionary<string, string> _names = [];
+
+    private bool SharesChannels => settings.Value.MultiAgentEnabled;
 
     public async Task<IReadOnlyList<AiAgent>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -34,9 +50,9 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
     public async Task<AiAgent> CreateAsync(AiAgent agent, CancellationToken cancellationToken = default)
     {
         var plan = await PlanChannelsAsync(null, agent, cancellationToken);
-        var saved = await omni.SendAsync<OmniAgent>(HttpMethod.Post, "api/v1/agents",
+        var saved = await WithoutSayingWhereAsync(() => omni.SendAsync<OmniAgent>(HttpMethod.Post, "api/v1/agents",
             OmniAgentMapping.ToCreate(agent, plan.ToAssign.Select(c => c.Id)), idempotencyKey: Guid.NewGuid().ToString("N"),
-            cancellationToken: cancellationToken);
+            cancellationToken: cancellationToken));
         Remember(saved);
         var result = OmniAgentMapping.ToAgent(saved, plan.ToAssign.Select(c => c.Channel));
         // What the service does not keep stays as it was entered.
@@ -54,13 +70,13 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
             cancellationToken: cancellationToken));
 
         foreach (var connection in plan.ToAssign)
-            await omni.SendAsync<OmniChannel>(HttpMethod.Post, "api/v1/channels",
-                new AssignChannel(agent.Id, connection.Id), cancellationToken: cancellationToken);
-        foreach (var channel in plan.ToResume)
-            await omni.SendAsync<OmniChannel>(HttpMethod.Patch, ChannelPath(channel.ConnectionId),
+            await WithoutSayingWhereAsync(() => omni.SendAsync<OmniChannel>(HttpMethod.Post, "api/v1/channels",
+                new AssignChannel(agent.Id, connection.Id), cancellationToken: cancellationToken));
+        foreach (OmniChannel channel in plan.ToResume)
+            await omni.SendAsync<OmniChannel>(HttpMethod.Patch, ChannelPath(channel.ConnectionId, agent.Id),
                 new ResumeChannel(true), channel.Version, cancellationToken: cancellationToken);
-        foreach (var channel in plan.ToUnlink)
-            await omni.SendAsync<ChannelDeleted>(HttpMethod.Delete, ChannelPath(channel.ConnectionId), null,
+        foreach (OmniChannel channel in plan.ToUnlink)
+            await omni.SendAsync<ChannelDeleted>(HttpMethod.Delete, ChannelPath(channel.ConnectionId, agent.Id), null,
                 channel.Version, cancellationToken: cancellationToken);
     }
 
@@ -78,36 +94,55 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
         _names.Remove(agentId);
     }
 
-    // What has to change for the agent to answer on exactly the kinds switched on. Read in full
-    // before anything is written, so a kind another agent has stops the save, not half of it.
+    // What has to change for the agent to answer on exactly the kinds switched on. Other agents on the same
+    // connections are left as they are when agents can share them; otherwise one there stops the save before
+    // anything is written, not half of it.
     private async Task<ChannelPlan> PlanChannelsAsync(string? agentId, AiAgent agent, CancellationToken cancellationToken)
     {
-        var wanted = agent.Channels.Where(c => c.IsEnabled).Select(c => c.Key.ToLowerInvariant()).ToHashSet();
-        var assigned = await omni.ListAllAsync<OmniChannel>("api/v1/channels", cancellationToken);
-        var connections = wanted.Count == 0 ? [] : await ConnectionsAsync(cancellationToken);
-        var byConnection = assigned.ToDictionary(c => c.ConnectionId);
+        HashSet<string> wanted = agent.Channels.Where(c => c.IsEnabled).Select(c => c.Key.ToLowerInvariant()).ToHashSet();
+        // A new agent has no links yet, and only another agent's links can stop it.
+        List<OmniChannel> assigned = agentId is null && SharesChannels ? [] : await omni.ListAllAsync<OmniChannel>("api/v1/channels", cancellationToken);
+        List<OmniChannel> own = assigned.Where(c => agentId is not null && c.AgentId == agentId).ToList();
+        List<ParrotConnection> connections = wanted.Count == 0 ? [] : await ConnectionsAsync(cancellationToken);
+        // The service refuses a second link for the same agent and connection, so there is one at most.
+        Dictionary<Guid, OmniChannel> byConnection = own.ToDictionary(c => c.ConnectionId);
 
-        var plan = new ChannelPlan();
-        foreach (var connection in connections.Where(c => wanted.Contains(c.Channel)))
+        ChannelPlan plan = new();
+        foreach (ParrotConnection connection in connections.Where(c => wanted.Contains(c.Channel)))
         {
-            if (!byConnection.TryGetValue(connection.Id, out var channel))
+            if (!SharesChannels && assigned.FirstOrDefault(c => c.ConnectionId == connection.Id && c.AgentId != agentId) is { } other)
+                throw Taken(connection.Channel, other.AgentId);
+            if (!byConnection.TryGetValue(connection.Id, out OmniChannel? channel))
                 plan.ToAssign.Add(connection);
-            else if (channel.AgentId != agentId)
-                throw Taken(connection.Channel, channel.AgentId);
             else if (!channel.Enabled)
                 plan.ToResume.Add(channel);
         }
 
-        plan.ToUnlink.AddRange(assigned.Where(c => agentId is not null && c.AgentId == agentId && !wanted.Contains(c.Platform)));
+        plan.ToUnlink.AddRange(own.Where(c => !wanted.Contains(c.Platform)));
         return plan;
     }
 
+    // Another agent of this workspace answers there, so naming it tells the owner nothing new.
     private ApiException Taken(string kind, string otherAgentId)
     {
-        var name = AgentBuilderCopy.DefaultChannels([]).FirstOrDefault(c => c.Key == kind)?.Name ?? kind;
-        var other = _names.TryGetValue(otherAgentId, out var n) ? n : "another agent";
+        string name = AgentBuilderCopy.DefaultChannels([]).FirstOrDefault(c => c.Key == kind)?.Name ?? kind;
+        string other = _names.TryGetValue(otherAgentId, out string? known) ? known : "another agent";
         return new ApiException(HttpStatusCode.Conflict,
-            $"{other} already answers on {name}. Switch it off there first, then try again.", "CHANNEL_TAKEN", []);
+            $"{other} already answers on {name}. Switch it off there first, then try again.", ChannelTakenCode, []);
+    }
+
+    // The service says a channel is held elsewhere (in another workspace): the owner is told it can't be used,
+    // never that it exists somewhere else. The service keeps the detail under its trace id.
+    private static async Task<T> WithoutSayingWhereAsync<T>(Func<Task<T>> send)
+    {
+        try
+        {
+            return await send();
+        }
+        catch (ApiException exception) when (exception.ErrorCode == ChannelTakenCode)
+        {
+            throw new ApiException(exception.StatusCode ?? HttpStatusCode.Conflict, ChannelUnavailable, ChannelTakenCode, []);
+        }
     }
 
     // The workspace's connections, from Parrot (the AI service only knows assigned ones).
@@ -137,7 +172,10 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
 
     private static string AgentPath(string agentId) => $"api/v1/agents/{Uri.EscapeDataString(agentId)}";
 
-    private static string ChannelPath(Guid connectionId) => $"api/v1/channels/{connectionId}";
+    // One agent's link on one connection; the connection alone is refused once several agents share it.
+    private string ChannelPath(Guid connectionId, string agentId) => SharesChannels
+        ? $"api/v1/channels/{connectionId}/agents/{Uri.EscapeDataString(agentId)}"
+        : $"api/v1/channels/{connectionId}";
 
     private sealed class ChannelPlan
     {

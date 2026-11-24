@@ -20,4 +20,10 @@ public class OmniAiSettings
 
     /// <summary>How long one call may take. An approval decision resumes a whole turn, so this is longer than a webhook's budget.</summary>
     public int TimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Several agents per channel, answered through the AI service's super agent. Turn on together with the
+    /// service's own switch (OMNI_MULTI_AGENT_ENABLED); off, Parrot works as it did with one agent per channel.
+    /// </summary>
+    public bool MultiAgentEnabled { get; set; }
 }

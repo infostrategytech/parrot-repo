@@ -167,7 +167,13 @@ if (builder.Configuration.GetValue<bool>("OmniAi:Enabled"))
     // OmniAi:AgentSetup: agents and their channels kept by the AI service itself (/api/v1/agents),
     // instead of Parrot's api/agent. Needs OmniAi:BaseUrl and the service on the same signing key.
     if (builder.Configuration.GetValue<bool>("OmniAi:AgentSetup"))
+    {
+        // OmniAi:MultiAgentEnabled: several agents per channel, once the AI service has it on too.
+        builder.Services.AddOptions<Parrot.Application.Integrations.OmniAiSettings>()
+            .Bind(builder.Configuration.GetSection(Parrot.Application.Integrations.OmniAiSettings.SectionName))
+            .ValidateOnStart();
         builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.OmniAgentStore>();
+    }
     else
         builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.ApiAgentStore>();
     builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAiOperationsFeed, Parrot.Web.Features.Dashboard.AiAgents.ApiAiOperationsFeed>();
