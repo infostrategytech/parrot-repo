@@ -56,6 +56,7 @@ public class ConversationsState
             item.Attention = summary.Attention;
             item.Customer = summary.Customer;
             item.ChannelAgent = summary.ChannelAgent;
+            item.Agents = summary.Agents is { Count: > 0 } agents ? agents : summary.ChannelAgent is { } only ? [only] : [];
         }
         Resort();
     }

@@ -107,9 +107,13 @@
                      && Conversation.AiState == AiState.Active && Conversation.PendingApproval is null)
                 {
                     <div class="ai-typing-indicator" role="status"
-                         aria-label="@($"{Conversation.AiAgent?.Name ?? "AI agent"} is replying")">
+                         aria-label="@($"{Conversation.ReplyingName} {(Conversation.RepliesAsTeam ? "are" : "is")} replying")">
                         <span class="ai-typing-indicator__avatar" aria-hidden="true">
-                            @if (AiAgentMascot is not null)
+                            @if (Conversation.RepliesAsTeam && TeamLooks.Count > 1)
+                            {
+                                <AgentFaces Looks="TeamLooks" Size="20" />
+                            }
+                            else if (AiAgentMascot is not null)
                             {
                                 <AgentFace Look="@AiAgentMascot" Size="Parrot.SharedComponents.DesignSystem.PresenceAvatarSize.Small" />
                             }
@@ -244,7 +248,7 @@
             }
             else
             {
-                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Conversation.HasChannelAgent" AgentLook="@AgentLook" Countdown="@CountdownLabel"
+                <ResponseControl @ref="_control" Conversation="@Conversation" CanAct="@Conversation.HasChannelAgent" AgentLook="@AgentLook" TeamLooks="@TeamLooks" Countdown="@CountdownLabel"
                                  Busy="@_acting" OnTakeOver="TakeOverAsync" OnReturn="ReturnToAiAsync" OnDismiss="() => _quoteOnTakeOver = null" />
             }
 
@@ -318,6 +322,8 @@
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
     /// <summary>The conversation agent's saved look, for its face on its bubbles.</summary>
     [Parameter] public string? AgentLook { get; set; }
+    /// <summary>The looks of every agent on the conversation's number: shown together where it says who is replying.</summary>
+    [Parameter] public IReadOnlyList<string> TeamLooks { get; set; } = [];
     /// <summary>Open one of this chat's tasks over the chat.</summary>
     [Parameter] public EventCallback<string> OnOpenTask { get; set; }
     /// <summary>Who outbound replies are shown as when the API does not name a teammate: the business.</summary>

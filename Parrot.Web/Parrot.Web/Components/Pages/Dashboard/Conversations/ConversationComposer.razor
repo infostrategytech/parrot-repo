@@ -204,7 +204,9 @@
         : WindowClosed
             ? "Reply window closed"
             : ReplyLocked
-                ? $"{Conversation.AiAgent?.Name ?? "The AI agent"} currently controls customer replies"
+                ? Conversation.RepliesAsTeam
+                    ? $"{Conversation.TeamName} currently control customer replies"
+                    : $"{Conversation.AiAgent?.Name ?? "The AI agent"} currently controls customer replies"
                 : $"Reply to {Conversation.CustomerName}...";
     // "Send" holds while a send is in flight: the button's Busy state draws the
     // brand's relay dots in the icon slot rather than swapping the label.

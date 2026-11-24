@@ -47,6 +47,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public InboxCustomerDto? Customer { get; init; }
     /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
     public InboxPersonDto? ChannelAgent { get; init; }
+    /// <summary>Every live agent switched on for this conversation's number. Empty or missing on older APIs: ChannelAgent then.</summary>
+    public List<InboxPersonDto>? Agents { get; init; }
 }
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>

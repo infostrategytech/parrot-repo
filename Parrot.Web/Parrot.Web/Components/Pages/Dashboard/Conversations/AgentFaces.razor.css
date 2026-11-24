@@ -1,0 +1,10 @@
+/* No token for the thin ring that parts overlapping faces. */
+.agent-faces { --ds-face-ring: 1.5px; display: inline-flex; align-items: center; flex: none; }
+.agent-faces__face {
+    display: inline-grid;
+    width: var(--agent-faces-size);
+    height: var(--agent-faces-size);
+    border-radius: 50%;
+    box-shadow: 0 0 0 var(--ds-face-ring) var(--colors-surface-card);
+}
+.agent-faces__face + .agent-faces__face { margin-left: calc(var(--agent-faces-size) * -0.3); }

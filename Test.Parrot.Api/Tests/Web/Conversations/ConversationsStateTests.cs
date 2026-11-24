@@ -18,6 +18,27 @@ public sealed class ConversationsStateTests
     private static ConversationSummary Row() => new(Connection, "2348012345678", "Ada", "Do you deliver to Ibadan?", DateTime.UtcNow);
 
     [Fact]
+    public void Apply_ARowWithSeveralAgentsOnItsNumber_KeepsThemAllInOrder()
+    {
+        ConversationsState state = new();
+        ConversationAgentRef nia = new("agt_nia", "Nia", "Ember"), tobi = new("agt_tobi", "Tobi");
+
+        state.Apply([ThroughTheWire(Row() with { ChannelAgent = nia, Agents = [nia, tobi] })]);
+
+        Assert.Equal(["Nia", "Tobi"], Assert.Single(state.Conversations).Agents.Select(a => a.Name));
+    }
+
+    [Fact]
+    public void Apply_ARowFromAnApiBeforeSharedChannels_HasItsOneChannelAgent()
+    {
+        ConversationsState state = new();
+
+        state.Apply([ThroughTheWire(Row() with { ChannelAgent = new ConversationAgentRef("agt_tolu", "Tolu"), Agents = [] })]);
+
+        Assert.Equal(["Tolu"], Assert.Single(state.Conversations).Agents.Select(a => a.Name));
+    }
+
+    [Fact]
     public void Apply_ARowWithAnOpenQuestion_ShowsItNeedsAnAnswerAndWhichAgentAsked()
     {
         ConversationsState state = new();

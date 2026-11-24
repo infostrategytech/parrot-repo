@@ -1,0 +1,19 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Conversations
+
+@* The agents answering on one number, as overlapping faces (the designer's stacked avatar). Three at most: the AI
+   service asks no more than three agents for one reply. The words beside it name them. *@
+<span class="agent-faces" style="--agent-faces-size: @(Size)px" aria-hidden="true">
+    @foreach (string look in Looks.Take(MaxFaces))
+    {
+        <span class="agent-faces__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" Paused="@Paused" /></span>
+    }
+</span>
+
+@code {
+    private const int MaxFaces = 3;
+
+    [Parameter, EditorRequired] public IReadOnlyList<string> Looks { get; set; } = [];
+    [Parameter] public bool Paused { get; set; }
+    /// <summary>Each face's width and height, in pixels.</summary>
+    [Parameter] public int Size { get; set; } = 16;
+}

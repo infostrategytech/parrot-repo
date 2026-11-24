@@ -25,7 +25,11 @@
         </Typography>
 
         <span class="conversation-row__meta @StateClass">
-            @if (Conversation.HasAiAgent && AgentLook is { } look)
+            @if (ShowsTeam)
+            {
+                <AgentFaces Looks="TeamLooks" Paused="@(Conversation.AiState != AiState.Active)" />
+            }
+            else if (Conversation.HasAiAgent && AgentLook is { } look)
             {
                 <span class="conversation-row__face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" Paused="@(Conversation.AiState != AiState.Active)" /></span>
             }
@@ -81,6 +85,8 @@
     [Parameter] public bool Selected { get; set; }
     /// <summary>The agent's saved look: its face shows instead of an icon.</summary>
     [Parameter] public string? AgentLook { get; set; }
+    /// <summary>The looks of every agent on the conversation's number, in its order: shown together when there are several.</summary>
+    [Parameter] public IReadOnlyList<string> TeamLooks { get; set; } = [];
     /// <summary>In Needs you, explain the personal action instead of repeating a paused-agent label.</summary>
     [Parameter] public string? AttentionLabel { get; set; }
     [Parameter] public EventCallback OnSelect { get; set; }
@@ -120,11 +126,15 @@
                 _ => IconName.RiRobot3Fill
             };
 
+    // Several agents answer here and none is waiting on the team: they are named, and shown, together. One that asked
+    // is the one named, as the waiting list names it.
+    private bool ShowsTeam => Conversation.HasAiAgent && Conversation.RepliesAsTeam && TeamLooks.Count > 1;
+
     private string StateLabel => AttentionLabel ?? (!Conversation.HasAiAgent
         ? "Manual replies"
         : Conversation.NeedsAnswer
             ? $"{Conversation.AiAgent!.Name} · Needs your answer"
-            : $"{Conversation.AiAgent!.Name} · {(Conversation.AiState == AiState.Active ? "Replying" : "Paused")}");
+            : $"{Conversation.ReplyingName} · {(Conversation.AiState == AiState.Active ? "Replying" : "Paused")}");
 
     private string StateClass => !Conversation.HasAiAgent
         ? "state-handoff"

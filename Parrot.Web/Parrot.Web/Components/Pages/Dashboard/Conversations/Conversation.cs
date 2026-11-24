@@ -82,6 +82,21 @@ public class ConversationItem
     /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
     public InboxPersonDto? ChannelAgent { get; set; }
 
+    /// <summary>Every live agent switched on for this conversation's number, in the AI service's order.</summary>
+    public IReadOnlyList<InboxPersonDto> Agents { get; set; } = [];
+
+    /// <summary>Several agents answer here, through the AI service's super agent: the screens name them together.</summary>
+    public bool HasAgentTeam => Agents.Count > 1;
+
+    /// <summary>"Nia and 2 others", or the one agent's name.</summary>
+    public string TeamName => AgentTeam.Names(Agents.Select(a => a.Name).ToList());
+
+    /// <summary>The agents are named together, unless one of them is waiting on the team: then that one is.</summary>
+    public bool RepliesAsTeam => HasAgentTeam && !NeedsAnswer;
+
+    /// <summary>Who the screens say is replying here: "Nia and 2 others", or one agent's name.</summary>
+    public string ReplyingName => RepliesAsTeam ? TeamName : AiAgent?.Name ?? ChannelAgent?.Name ?? "the AI agent";
+
     /// <summary>An AI agent owns this conversation, so the AI controls apply.</summary>
     public bool HasAiAgent => AiAgent is not null && AiState is not null;
 

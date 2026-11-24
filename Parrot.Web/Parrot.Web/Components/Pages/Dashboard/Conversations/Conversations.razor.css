@@ -179,7 +179,6 @@
   padding: 0 var(--spacing-sm);
   color: var(--colors-brand-primary);
   white-space: nowrap;
-  text-transform: capitalize;
   background: var(--colors-accent-brand-subtle);
   border-radius: var(--radius-radius-full);
 }

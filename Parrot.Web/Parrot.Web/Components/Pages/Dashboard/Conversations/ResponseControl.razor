@@ -26,7 +26,8 @@ else
             <span class="response-control__copy">
                 @if (Conversation.AiState == AiState.Active)
                 {
-                    @if (AgentLook is { } look) { <span class="agent-face-inline"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span> }
+                    @if (ShowsTeam) { <AgentFaces Looks="TeamLooks" Size="28" /> }
+                    else if (AgentLook is { } look) { <span class="agent-face-inline"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span> }
                     else { <Icon Name="IconName.RiRobot3Fill" Size="IconSize.Sm" /> }
                 }
                 <span>
@@ -34,7 +35,7 @@ else
                     <Typography TextStyle="TextStyle.Small12Medium" As="small" Prose>
                         @if (Conversation.AiState != AiState.Active && Countdown is not null)
                         {
-                            <b class="response-control__countdown">@Countdown</b> @($" until {Agent} resumes")
+                            <b class="response-control__countdown">@Countdown</b> @($" until {Agent} {(Plural ? "resume" : "resumes")}")
                         }
                         else
                         {
@@ -88,6 +89,8 @@ else
     [Parameter] public bool CanAct { get; set; }
     /// <summary>The agent's saved look: its face, not a robot icon.</summary>
     [Parameter] public string? AgentLook { get; set; }
+    /// <summary>The looks of every agent on the conversation's number: shown together when there are several.</summary>
+    [Parameter] public IReadOnlyList<string> TeamLooks { get; set; } = [];
     [Parameter] public string? Countdown { get; set; }
     [Parameter] public bool Busy { get; set; }
     /// <summary>Minutes to take over for; null means until the person hands it back.</summary>
@@ -110,15 +113,18 @@ else
     private string? _shownId;
     private AiState? _shownState;
     private string? _settle;
-    private string Agent => Conversation.AiAgent?.Name ?? Conversation.ChannelAgent?.Name ?? "the AI agent";
+    private string Agent => Conversation.ReplyingName;
+    // Several agents together are "they".
+    private bool Plural => Conversation.RepliesAsTeam;
+    private bool ShowsTeam => Plural && TeamLooks.Count > 1;
     private string ControlClass => Conversation.AiState == AiState.Active ? "ai-has-control" : "human-has-control";
     // The mobile app's words (designer, 15 November 2026).
-    private string Title => Conversation.AiState == AiState.Active ? $"{Agent} is handling replies" : "You’re replying";
+    private string Title => Conversation.AiState == AiState.Active ? $"{Agent} {(Plural ? "are" : "is")} handling replies" : "You’re replying";
     private string Description => Conversation.AiState == AiState.Active
         ? "Take over to reply yourself."
         : Conversation.HasAiAgent
-            ? $"{Agent} is paused."
-            : $"{Agent} isn't replying to this customer.";
+            ? $"{Agent} {(Plural ? "are" : "is")} paused."
+            : $"{Agent} {(Plural ? "aren't" : "isn't")} replying to this customer.";
 
     // Our words, not "Handover": in yára a handover is the agent bringing a
     // person in. Giving the conversation back is a return; an agent that never
