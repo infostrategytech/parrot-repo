@@ -55,6 +55,79 @@ public sealed class AgentTeamTests
         Assert.DoesNotContain("agent-faces__face", html);
     }
 
+    [Fact]
+    public void Look_ForAnAgentNotSetUpHere_IsTheLookTheAiServiceNamed()
+    {
+        Assert.Equal("Bolt", AgentLookup.Look("agt_gone", "Kora", [], "bolt"));
+        // Not one of ours: the agent's own look from its name, as before.
+        Assert.Equal(AgentLookup.Look("agt_gone", "Kora", []), AgentLookup.Look("agt_gone", "Kora", [], "super"));
+    }
+
+    [Fact]
+    public async Task Reply_WrittenFromSeveralAgents_NamesThoseThatAnsweredAndShowsTheirFaces()
+    {
+        ConvMessage reply = AiReply(
+            new InboxReplyAgentDto("agt_tobi", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered"),
+            new InboxReplyAgentDto("agt_kora", "Kora", "Bolt", "How much?", "N21,000.", "answered"),
+            new InboxReplyAgentDto("agt_ada", "Ada", null, "Any discount?", "", "failed"));
+
+        string html = await RenderReply(reply, ["Nova", "Bolt"]);
+
+        Assert.Contains(">Tobi and Kora<", html);
+        Assert.Equal(2, CountOf(html, "agent-faces__face"));
+    }
+
+    [Fact]
+    public async Task Reply_OneAgentAnswered_NamesThatAgentEvenIfTheChatsAgentIsAnother()
+    {
+        ConvMessage reply = AiReply(
+            new InboxReplyAgentDto("agt_kora", "Kora", "Bolt", "How much?", "N21,000.", "answered"),
+            new InboxReplyAgentDto("agt_ada", "Ada", null, "Any discount?", "", "timed_out"));
+
+        string html = await RenderReply(reply, ["Bolt"]);
+
+        Assert.Contains(">Kora<", html);
+        Assert.DoesNotContain(">Tolu<", html);
+        Assert.DoesNotContain("agent-faces__face", html);
+    }
+
+    [Fact]
+    public async Task Reply_WithoutHelpers_IsTheChatsAgentAsBefore()
+    {
+        string html = await RenderReply(AiReply(), []);
+
+        Assert.Contains(">Tolu<", html);
+        Assert.DoesNotContain("agent-faces__face", html);
+    }
+
+    private static ConvMessage AiReply(params InboxReplyAgentDto[] agents) => new()
+    {
+        Id = "outgoing:w:r1", Text = "It left Ikeja, and the sneakers are N21,000.", IsOutgoing = true, Status = "read",
+        Kind = MessageKind.Ai, Agents = agents,
+    };
+
+    private static async Task<string> RenderReply(ConvMessage reply, IReadOnlyList<string> looks)
+    {
+        await using ServiceProvider services = new ServiceCollection().AddLogging().AddSingleton<IJSRuntime>(new NoJs())
+            .AddSingleton<AuroraInterop>().AddSingleton<ToastService>().BuildServiceProvider();
+        await using HtmlRenderer renderer = new(services, services.GetRequiredService<ILoggerFactory>());
+        return await renderer.Dispatcher.InvokeAsync(async () =>
+        {
+            HtmlRootComponent root = await renderer.RenderComponentAsync<ConversationMessageItem>(ParameterView.FromDictionary(new Dictionary<string, object?>
+            {
+                ["Message"] = reply,
+                ["CustomerName"] = "Lebo Mokoena",
+                ["CustomerSeed"] = "c1",
+                // The chat's agent, as the timeline names AI replies today.
+                ["AuthorName"] = "Tolu",
+                ["AuthorSeed"] = "business",
+                ["AgentLook"] = "Nova",
+                ["ReplyLooks"] = looks,
+            }));
+            return System.Net.WebUtility.HtmlDecode(root.ToHtmlString());
+        });
+    }
+
     private static readonly InboxPersonDto Nia = new("agt_nia", "Nia");
     private static readonly InboxPersonDto Tobi = new("agt_tobi", "Tobi");
     private static readonly InboxPersonDto Kora = new("agt_kora", "Kora");

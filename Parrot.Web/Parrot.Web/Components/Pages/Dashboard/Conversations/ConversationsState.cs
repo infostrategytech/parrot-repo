@@ -116,6 +116,7 @@ public class ConversationsState
                 Answered = message.RequestStatus == "answered",
                 Answer = message.Answer,
                 ReplyTo = message.ReplyTo,
+                Agents = message.Agents ?? [],
             };
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
     }

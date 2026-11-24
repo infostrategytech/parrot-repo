@@ -66,7 +66,11 @@ else
     <article class="message-bubble @DirectionClass @KindClass @(_highlighted ? "is-highlighted" : null)" @ref="_element" @ondblclick:stopPropagation>
         @if (Message.Kind == MessageKind.Ai)
         {
-            @if ((AgentLook ?? AgentMascot) is { } look)
+            @if (ReplyLooks.Count > 1)
+            {
+                <span class="message-bubble__ai-faces"><AgentFaces Looks="ReplyLooks" Size="24" /></span>
+            }
+            else if ((ReplyLooks.Count == 1 ? ReplyLooks[0] : AgentLook ?? AgentMascot) is { } look)
             {
                 <span class="message-bubble__ai-face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span>
             }
@@ -268,6 +272,8 @@ else
     [Parameter] public bool CanTeach { get; set; }
     /// <summary>The conversation agent's saved look, for its bubbles.</summary>
     [Parameter] public string? AgentLook { get; set; }
+    /// <summary>The looks of the agents whose answers made this AI reply, in order: shown in place of the chat agent's.</summary>
+    [Parameter] public IReadOnlyList<string> ReplyLooks { get; set; } = [];
     [Parameter] public EventCallback<ConvMessage> OnCorrect { get; set; }
     [Parameter] public EventCallback<ConvMessage> OnDeleteNote { get; set; }
     [Parameter] public EventCallback OnCustomerDetails { get; set; }
@@ -333,9 +339,12 @@ else
         _ => "is-customer"
     };
 
+    // An AI reply several agents helped write is theirs: "Tobi and Kora", or the one that answered.
     private string AuthorLabel => Message.Kind == MessageKind.Customer
         ? CustomerName
-        : Message.Author?.Name ?? AuthorName;
+        : Message.Kind == MessageKind.Ai && Message.AnsweredBy is { Count: > 0 } answered
+            ? AgentTeam.Names(answered.Select(a => a.Name).ToList())
+            : Message.Author?.Name ?? AuthorName;
     private string AvatarSeed => Message.Kind == MessageKind.Customer
         ? CustomerSeed
         : Message.Author?.Id ?? AuthorSeed;

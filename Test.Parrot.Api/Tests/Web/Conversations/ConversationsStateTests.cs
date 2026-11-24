@@ -18,6 +18,26 @@ public sealed class ConversationsStateTests
     private static ConversationSummary Row() => new(Connection, "2348012345678", "Ada", "Do you deliver to Ibadan?", DateTime.UtcNow);
 
     [Fact]
+    public void Merge_AnAiReplySeveralAgentsHelpedWith_KeepsThemAndWhichOnesAnswered()
+    {
+        ConversationItem item = new() { Id = "c1" };
+        ConversationMessage reply = new("outgoing:w:r1", "It left Ikeja, and the sneakers are N21,000.", true, "read", At)
+        {
+            Kind = "ai",
+            Agents = [new ReplyAgent("agt_tobi", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered"),
+                      new ReplyAgent("agt_kora", "Kora", null, "How much?", "N21,000.", "answered"),
+                      new ReplyAgent("agt_ada", "Ada", null, "Any discount?", "", "timed_out")],
+        };
+
+        ConversationsState.Merge(item, [JsonSerializer.Deserialize<InboxMessageDto>(JsonSerializer.Serialize(reply, Web), Web)!]);
+
+        ConvMessage message = Assert.Single(item.Messages);
+        Assert.Equal(["Tobi", "Kora", "Ada"], message.Agents.Select(a => a.Name));
+        Assert.Equal(["Tobi", "Kora"], message.AnsweredBy.Select(a => a.Name));
+        Assert.Equal(("Any discount?", "", "timed_out"), (message.Agents[2].Question, message.Agents[2].Answer, message.Agents[2].Status));
+    }
+
+    [Fact]
     public void Apply_ARowWithSeveralAgentsOnItsNumber_KeepsThemAllInOrder()
     {
         ConversationsState state = new();

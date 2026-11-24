@@ -100,7 +100,15 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
     public string? Answer { get; init; }
     /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
     public InboxQuoteDto? ReplyTo { get; init; }
+    /// <summary>The agents the AI service asked for this AI reply, when several helped write it. Null otherwise and on older APIs.</summary>
+    public List<InboxReplyAgentDto>? Agents { get; init; }
 }
+
+/// <summary>
+/// An agent asked for one AI reply: what it was asked, what it answered (empty when it didn't), and its status
+/// (answered, failed or timed_out). Avatar is the AI service's look key, when it gave one.
+/// </summary>
+public sealed record InboxReplyAgentDto(string Id, string Name, string? Avatar, string Question, string Answer, string Status);
 
 /// <summary>
 /// A quoted message, shown above a reply. Id is the quoted message's InboxMessageDto.Id, null when it is not

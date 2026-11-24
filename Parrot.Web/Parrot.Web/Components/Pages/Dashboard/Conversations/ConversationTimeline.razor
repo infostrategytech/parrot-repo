@@ -88,7 +88,7 @@
                                              CustomerInitials="@Conversation.CustomerInitials"
                                              AuthorName="@(message.Kind == MessageKind.Ai && Conversation.AiAgent?.Name is { } agentLabel ? agentLabel : AuthorName)" AuthorSeed="@AuthorSeed"
                                              AgentMascot="@AiAgentMascot"
-                                             CanTeach="@Features.Available" AgentLook="@AgentLook"
+                                             CanTeach="@Features.Available" AgentLook="@AgentLook" ReplyLooks="@ReplyLooks(message)"
                                              OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection"
                                              OnCustomerDetails="OnCustomerDetails"
@@ -345,6 +345,10 @@
         Conversation.AiAgent?.Id is { } agentId
             ? AgentsState.Agents.FirstOrDefault(a => a.Id == agentId)?.Mascot
             : null;
+
+    // The looks of the agents whose answers made an AI reply, as the Inbox shows each agent.
+    private IReadOnlyList<string> ReplyLooks(ConvMessage message) =>
+        message.AnsweredBy.Select(a => AgentLookup.Look(a.Id, a.Name, AgentsState.Agents, a.Avatar)).OfType<string>().ToList();
 
     private readonly CancellationTokenSource _lifetime = new();
     private ElementReference _scrollElement;

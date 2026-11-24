@@ -145,4 +145,10 @@ public class ConvMessage
     public string? Answer { get; set; }
     /// <summary>The message this one replies to (quotes), or null.</summary>
     public InboxQuoteDto? ReplyTo { get; set; }
+
+    /// <summary>The agents the AI service asked for this AI reply, when several helped write it, in its order.</summary>
+    public IReadOnlyList<InboxReplyAgentDto> Agents { get; set; } = [];
+
+    /// <summary>Those whose answers made the reply: the reply is theirs.</summary>
+    public IReadOnlyList<InboxReplyAgentDto> AnsweredBy => Agents.Where(a => a.Status == "answered").ToList();
 }
