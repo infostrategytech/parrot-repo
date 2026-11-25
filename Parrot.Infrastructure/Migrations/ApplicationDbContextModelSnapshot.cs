@@ -808,8 +808,9 @@ namespace Parrot.Infrastructure.Migrations
                     b.Property<Guid>("Id")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("AgentId")
-                        .HasColumnType("uuid");
+                    b.Property<string>("AgentId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
 
                     b.Property<string>("AttentionReason")
                         .HasMaxLength(1000)
