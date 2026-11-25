@@ -72,11 +72,12 @@ public sealed record SaveTaskRequest(
 
 /// <summary>
 /// A task an agent raises from a conversation it is answering. The customer's
-/// name and contact are as the agent knows them; the agent is named by id and
-/// must belong to the workspace.
+/// name and contact are as the agent knows them. The agent is named as Omni
+/// names it (agt_…) and, if it says, by its name; neither is looked up, as
+/// agents live in Omni. The conversation must be the workspace's.
 /// </summary>
 public sealed record RaiseTaskRequest(
-    Guid AgentId,
+    string? AgentId,
     string Kind,
     string Title,
     Guid ConnectionId,
@@ -90,7 +91,8 @@ public sealed record RaiseTaskRequest(
     decimal? Total = null,
     bool Urgent = false,
     DateTime? DueAt = null,
-    bool DueHasTime = false);
+    bool DueHasTime = false,
+    string? AgentName = null);
 
 public sealed record SetTaskStateRequest(string State);
 

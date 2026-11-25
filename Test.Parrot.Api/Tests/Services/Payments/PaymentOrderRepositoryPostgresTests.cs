@@ -46,7 +46,7 @@ public sealed class PaymentOrderRepositoryPostgresTests : IAsyncLifetime
     private static PaymentOrder Order(string workspace, string key, Guid connection, string sender = "234801", PaymentOrderStatus status = PaymentOrderStatus.Pending) => new()
     {
         WorkspaceId = workspace,
-        AgentId = Guid.NewGuid(),
+        AgentId = "agt_test",
         ConnectionId = connection,
         CustomerSender = sender,
         Reference = "prt_" + Guid.NewGuid().ToString("N"),

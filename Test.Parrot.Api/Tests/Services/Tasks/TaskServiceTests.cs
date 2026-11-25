@@ -23,7 +23,6 @@ public sealed class TaskServiceTests
     private readonly FakeTeamRepository _team = new();
     private readonly FakeConnectionDirectory _connections = new();
     private readonly FakeWorkTaskRepository _tasks = new();
-    private readonly Mock<IAgentRepository> _agents = new();
     private readonly Mock<UserManager<ApplicationUser>> _users =
         new(Mock.Of<IUserStore<ApplicationUser>>(), null!, null!, null!, null!, null!, null!, null!, null!);
     private readonly TaskService _service;
@@ -40,7 +39,7 @@ public sealed class TaskServiceTests
         _users.Setup(u => u.FindByIdAsync(It.IsAny<string>())).ReturnsAsync((string id) => _people.GetValueOrDefault(id));
 
         _service = new TaskService(_tasks, _workspaces, _team, TeamFixture.Access(_workspaces, _team, _connections),
-            _connections, _agents.Object, _users.Object, TimeProvider.System);
+            _connections, _users.Object, TimeProvider.System);
     }
 
     private readonly Dictionary<string, ApplicationUser> _people = [];
@@ -250,17 +249,14 @@ public sealed class TaskServiceTests
     }
 
     [Fact]
-    public async Task Raise_ByAnAgentOfTheWorkspace_SaysWhoRaisedItAndForWhom()
+    public async Task Raise_ByAnOmniAgent_SaysWhoRaisedItAndForWhom()
     {
-        Agent kora = new() { WorkspaceId = Ws, Name = "Kora", Description = "", MascotUrl = "" };
-        _agents.Setup(a => a.GetByIdAsync(kora.Id)).ReturnsAsync(kora);
-
-        TaskResponse task = await _service.RaiseAsync(Ws, new RaiseTaskRequest(kora.Id, "Order", "Confirm Kemi's order", _whatsApp, "234",
-            CustomerName: "Kemi's Kitchen", RaisedInMessageId: "wamid.1"), default);
+        TaskResponse task = await _service.RaiseAsync(Ws, new RaiseTaskRequest("agt_kora", "Order", "Confirm Kemi's order", _whatsApp, "234",
+            CustomerName: "Kemi's Kitchen", RaisedInMessageId: "wamid.1", AgentName: "Kora"), default);
 
         Assert.True(task.RaisedByAgent);
         Assert.Equal("Kora", task.RaisedBy);
-        Assert.Equal(kora.Id.ToString(), task.RaisedById);
+        Assert.Equal("agt_kora", task.RaisedById);
         Assert.Equal("wamid.1", task.RaisedInMessageId);
         TaskEventResponse raised = Assert.Single(task.History);
         Assert.Equal(WorkTaskActions.Raised, raised.Action);
@@ -268,13 +264,23 @@ public sealed class TaskServiceTests
     }
 
     [Fact]
-    public async Task Raise_ByAnotherWorkspacesAgent_IsRefused()
+    public async Task Raise_WithNoAgentName_IsRaisedByTheAiAgent()
     {
-        Agent stranger = new() { WorkspaceId = "ws-2", Name = "Tolu", Description = "", MascotUrl = "" };
-        _agents.Setup(a => a.GetByIdAsync(stranger.Id)).ReturnsAsync(stranger);
+        TaskResponse task = await _service.RaiseAsync(Ws, new RaiseTaskRequest(null, "Order", "Confirm", _whatsApp, "234"), default);
 
-        await Assert.ThrowsAsync<ValidationException>(() =>
-            _service.RaiseAsync(Ws, new RaiseTaskRequest(stranger.Id, "Order", "Confirm", _whatsApp, "234"), default));
+        Assert.True(task.RaisedByAgent);
+        Assert.Equal(TaskService.AgentFallbackName, task.RaisedBy);
+        Assert.Null(task.RaisedById);
+    }
+
+    [Fact]
+    public async Task Raise_FromAnotherWorkspacesConversation_IsRefused()
+    {
+        Guid theirs = _connections.Add("ws-2", MessagingPlatform.WhatsApp);
+
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            _service.RaiseAsync(Ws, new RaiseTaskRequest("agt_kora", "Order", "Confirm", theirs, "234"), default));
+        Assert.Empty(await _tasks.ListAsync(Ws, null, TaskService.ClosedShown, default));
     }
 }
 

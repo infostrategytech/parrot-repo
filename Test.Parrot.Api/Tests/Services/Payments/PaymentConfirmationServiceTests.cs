@@ -32,7 +32,7 @@ public sealed class PaymentConfirmationServiceTests
         PaymentOrder order = new()
         {
             WorkspaceId = Ws,
-            AgentId = Guid.NewGuid(),
+            AgentId = "agt_test",
             ConnectionId = Guid.NewGuid(),
             CustomerSender = "234801",
             Reference = "prt_" + Guid.NewGuid().ToString("N"),

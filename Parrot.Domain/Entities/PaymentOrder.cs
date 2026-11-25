@@ -45,8 +45,8 @@ public class PaymentOrder
     /// <summary>The workspace it belongs to. Every lookup is scoped by it.</summary>
     public required string WorkspaceId { get; set; }
 
-    /// <summary>The agent that made the link.</summary>
-    public Guid AgentId { get; set; }
+    /// <summary>The agent that made the link, as Omni names it (agt_…); null when the agent didn't say. A note only: agents live in Omni, not here.</summary>
+    public string? AgentId { get; set; }
 
     /// <summary>The conversation it was made in: the connection and the customer's sender id.</summary>
     public Guid ConnectionId { get; set; }

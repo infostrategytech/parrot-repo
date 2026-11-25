@@ -407,6 +407,7 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
             entity.Property(o => o.WorkspaceId).IsRequired().HasMaxLength(450);
             entity.HasOne<Workspace>().WithMany().HasForeignKey(o => o.WorkspaceId)
                 .OnDelete(DeleteBehavior.Restrict);
+            entity.Property(o => o.AgentId).HasMaxLength(64);
             entity.Property(o => o.CustomerSender).HasMaxLength(256).IsRequired();
             entity.Property(o => o.CustomerName).HasMaxLength(120);
             entity.Property(o => o.CustomerEmail).HasMaxLength(254);

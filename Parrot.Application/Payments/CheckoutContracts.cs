@@ -6,9 +6,12 @@ namespace Parrot.Application.Payments;
 /// <summary>One thing the customer is buying.</summary>
 public sealed record CheckoutItem(Guid ProductId, Guid? VariantId, int Quantity);
 
-/// <summary>What the agent asks for. There are no prices in it: they come from the catalog.</summary>
+/// <summary>
+/// What the agent asks for. There are no prices in it: they come from the catalog. AgentId is the agent as Omni
+/// names it (agt_…), kept on the order as a note; it isn't looked up, as agents live in Omni.
+/// </summary>
 public sealed record CreateCheckoutRequest(
-    Guid AgentId,
+    string? AgentId,
     Guid ConnectionId,
     string Sender,
     IReadOnlyList<CheckoutItem> Items,
@@ -26,7 +29,7 @@ public sealed record CartItemChange(Guid ProductId, Guid? VariantId, int? Quanti
 
 /// <summary>A change to the conversation's cart: some items added, or some taken out. The rest of the cart stays as it is.</summary>
 public sealed record ChangeCartRequest(
-    Guid AgentId,
+    string? AgentId,
     Guid ConnectionId,
     string Sender,
     IReadOnlyList<CartItemChange> Items,
