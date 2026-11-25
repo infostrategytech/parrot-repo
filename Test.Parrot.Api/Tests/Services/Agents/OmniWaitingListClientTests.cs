@@ -28,16 +28,18 @@ public class OmniWaitingListClientTests
          "resolution": null, "resolved_by": null, "resolved_at": null}
         """;
 
-    private static (OmniWaitingListClient Client, FakeHandler Handler) Create(bool enabled = true, params (HttpStatusCode Status, string Body)[] answers)
+    private readonly Mock<IAppLogger<OmniWaitingListClient>> _logger = new();
+
+    private (OmniWaitingListClient Client, FakeHandler Handler) Create(bool enabled = true, params (HttpStatusCode Status, string Body)[] answers)
     {
         FakeHandler handler = new(answers);
         HttpClient http = new(handler) { BaseAddress = new Uri("http://omni-ai:8000/") };
         OmniWaitingListClient client = new(
-            http, Options.Create(new OmniAiSettings { Enabled = enabled, BaseUrl = "http://omni-ai:8000" }), Mock.Of<IAppLogger<OmniWaitingListClient>>());
+            http, Options.Create(new OmniAiSettings { Enabled = enabled, BaseUrl = "http://omni-ai:8000" }), _logger.Object);
         return (client, handler);
     }
 
-    private static (OmniWaitingListClient Client, FakeHandler Handler) Create(params (HttpStatusCode Status, string Body)[] answers) => Create(true, answers);
+    private (OmniWaitingListClient Client, FakeHandler Handler) Create(params (HttpStatusCode Status, string Body)[] answers) => Create(true, answers);
 
     [Fact]
     public async Task ListOpenAsync_ReadsEveryPageAsThePerson()
@@ -163,6 +165,34 @@ public class OmniWaitingListClientTests
 
         Assert.DoesNotContain("secret internals", error.Message);
         Assert.DoesNotContain("secret internals", error.InnerException?.Message);
+    }
+
+    // A live failure names the call (which item, which action) and the service's own trace id, to look up on its side.
+    [Fact]
+    public async Task AnswerAsync_WhenTheServiceRefuses_LogsTheItemTheActionAndTheServicesTraceId()
+    {
+        (OmniWaitingListClient client, _) = Create((HttpStatusCode.Conflict,
+            """{"success": false, "errorCode": "CONVERSATION_BUSY", "message": "secret internals", "traceId": "omni-trace-7"}"""));
+
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() =>
+            client.AnswerAsync(Token, "wait_ada", new WaitingListAnswer("Yes", ReplyToCustomer: true, SaveForNextTime: false)));
+
+        _logger.Verify(l => l.LogWarning(
+            It.Is<string>(m => m.StartsWith("waiting_list.failed ")),
+            It.Is<object?[]>(args => args.Contains("api/v1/ai-operations/waiting/wait_ada/answer") && args.Contains(409)
+                && args.Contains("CONVERSATION_BUSY") && args.Contains("omni-trace-7"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task ListOpenAsync_WhenTheServiceRefuses_LogsThePathWithoutItsQuery()
+    {
+        (OmniWaitingListClient client, _) = Create((HttpStatusCode.BadGateway, ""));
+
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() => client.ListOpenAsync(Token));
+
+        _logger.Verify(l => l.LogWarning(
+            It.Is<string>(m => m.StartsWith("waiting_list.failed ")),
+            It.Is<object?[]>(args => args.Contains("api/v1/ai-operations/waiting") && args.Contains(502))), Times.Once);
     }
 
     [Theory]

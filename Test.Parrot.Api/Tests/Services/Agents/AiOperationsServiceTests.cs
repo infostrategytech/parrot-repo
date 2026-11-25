@@ -40,6 +40,7 @@ public class AiOperationsServiceTests
     private readonly Mock<IConversationStore> _conversations = new();
     // Nobody has taken over a chat unless a test says so.
     private readonly Mock<IHumanTakeoverStore> _takeovers = new();
+    private readonly Mock<IAppLogger<AiOperationsService>> _logger = new();
     private readonly Dictionary<string, (Guid Connection, string Sender)> _inbox = new()
     {
         [AdaChat] = (WhatsApp, "2348012345678"),
@@ -62,7 +63,7 @@ public class AiOperationsServiceTests
             .ReturnsAsync((string owner, IReadOnlyCollection<string> keys, CancellationToken _) =>
                 (IReadOnlyDictionary<string, (Guid Connection, string Sender)>)keys.Where(k => owner == Owner && _inbox.ContainsKey(k)).ToDictionary(k => k, k => _inbox[k]));
         _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, _waiting, _conversations.Object, _takeovers.Object,
-            new MemoryCache(new MemoryCacheOptions()), new FixedTimeProvider(Now), Mock.Of<IAppLogger<AiOperationsService>>());
+            new MemoryCache(new MemoryCacheOptions()), new FixedTimeProvider(Now), _logger.Object);
     }
 
     // An open item on the AI service's waiting list: a hand-over unless it says otherwise.
@@ -655,6 +656,92 @@ public class AiOperationsServiceTests
 
         NoChatLineWritten();
     }
+
+    // ── What the logs say, so a live test can be traced ──
+
+    private void Logged(string eventName, params object[] values) =>
+        _logger.Verify(l => l.LogInformation(
+            It.Is<string>(m => m.StartsWith(eventName + " ")),
+            It.Is<object?[]>(args => values.All(v => args.Contains(v)))), Times.Once);
+
+    // The person always reads "Question not found."; the log says which check it failed, and for which button.
+    [Theory]
+    [InlineData("wait_never", "unknown_at_ai_service")]
+    [InlineData("wait_closed", "closed_team_replied")]
+    [InlineData("wait_approval", "waiting_on_approval")]
+    [InlineData("wait_bola", "another_chat")]
+    [InlineData("wait_unstored", "chat_not_in_inbox")]
+    public async Task AnswerQuestionAsync_ForAQuestionNotOpenInThisChat_LogsWhichCheckItFailed(string questionId, string reason)
+    {
+        Waiting("wait_bola", BolaChat);
+        Waiting("wait_closed");
+        _waiting.Close("wait_closed", "team_replied", null);
+        Waiting("wait_approval", kind: "approval", approval: "pending");
+        Waiting("wait_unstored", "whatsapp:2348099999999:2349011112222");
+
+        await Assert.ThrowsAsync<NotFoundException>(() => Answer(questionId: questionId));
+
+        Logged("ai_operations.question_not_open", Owner, questionId, WhatsApp, "answer", reason);
+    }
+
+    [Fact]
+    public async Task AnswerQuestionAsync_OnAChannelTheTeammateCannotOpen_LogsItWasOutsideTheirReach()
+    {
+        Waiting("wait_ada");
+
+        await Assert.ThrowsAsync<NotFoundException>(() => Answer(reach: new HashSet<Guid> { Instagram }));
+
+        Logged("ai_operations.question_not_open", "wait_ada", "answer", "outside_reach");
+    }
+
+    [Fact]
+    public async Task AnswerQuestionAsync_WhenTheAiServiceNoLongerHasIt_LogsItWentAtTheAiService()
+    {
+        Waiting("wait_ada");
+        _waiting.BeforeAnswer = item => _waiting.Items.Remove(item);
+
+        await Assert.ThrowsAsync<NotFoundException>(() => Answer());
+
+        Logged("ai_operations.question_not_open", "wait_ada", "answer", "gone_at_ai_service");
+    }
+
+    [Fact]
+    public async Task CloseQuestionAsync_ForAQuestionNotOpen_LogsItWasDone()
+    {
+        Waiting("wait_closed");
+        _waiting.Close("wait_closed", "answered", "user-tunde");
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            _sut.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_closed", "user-ngozi"));
+
+        Logged("ai_operations.question_not_open", "wait_closed", "done", "closed_answered");
+    }
+
+    [Fact]
+    public async Task AnswerQuestionAsync_LogsTheAnswerWithItsChatButNotItsWords()
+    {
+        Waiting("wait_ada");
+
+        await Answer();
+
+        Logged("ai_operations.question_answered", Owner, "wait_ada", WhatsApp, true, true);
+        _logger.Verify(l => l.LogInformation(It.IsAny<string>(), It.Is<object?[]>(args => Mentions(args, "10%"))), Times.Never);
+    }
+
+    // The AI service can hold more than the inbox shows: the log names the items left out, never their chats' keys.
+    [Fact]
+    public async Task WaitingAsync_WithItemsInChatsTheInboxDoesntHold_LogsTheirIdsWithoutTheirKeys()
+    {
+        Waiting("wait_ada");
+        Waiting("wait_unstored", "whatsapp:2348099999999:2349011112222");
+
+        await _sut.WaitingAsync(Owner, Token, null);
+
+        Logged("ai_operations.questions_unlinked", Owner, 1, "wait_unstored");
+        _logger.Verify(l => l.LogInformation(It.IsAny<string>(), It.Is<object?[]>(args => Mentions(args, "2348099999999"))), Times.Never);
+    }
+
+    private static bool Mentions(object?[] args, string text) => args.OfType<string>().Any(s => s.Contains(text));
 
     // Bola's refund, waiting at the AI service, and Parrot's own record of the request (it feeds the day's figures).
     private void BolaApproval()

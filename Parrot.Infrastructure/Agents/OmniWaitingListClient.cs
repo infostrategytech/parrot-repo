@@ -81,7 +81,7 @@ public sealed class OmniWaitingListClient(
         }
         catch (JsonException ex)
         {
-            logger.LogWarning(ex, "waiting_list.unreadable Method={Method} Path={Path}", method, WaitingPath);
+            logger.LogWarning(ex, "waiting_list.unreadable Method={Method} Path={Path}", method, Logged(path));
             throw new ServiceUnavailableException(Unavailable, ex);
         }
     }
@@ -111,7 +111,8 @@ public sealed class OmniWaitingListClient(
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "waiting_list.unreachable Method={Method} Path={Path}", method, WaitingPath);
+            logger.LogWarning(ex, "waiting_list.unreachable Method={Method} Path={Path} TimedOut={TimedOut} LimitSeconds={LimitSeconds}",
+                method, Logged(path), ex is TaskCanceledException, (timeout ?? http.Timeout).TotalSeconds);
             throw new ServiceUnavailableException(Unavailable, ex);
         }
 
@@ -127,11 +128,14 @@ public sealed class OmniWaitingListClient(
 
             logger.LogWarning(
                 "waiting_list.failed Method={Method} Path={Path} Status={Status} ErrorCode={ErrorCode} TraceId={TraceId}",
-                method, WaitingPath, (int)response.StatusCode, error?.ErrorCode, error?.TraceId);
+                method, Logged(path), (int)response.StatusCode, error?.ErrorCode, error?.TraceId);
             throw new ServiceUnavailableException(Unavailable, new HttpRequestException(
                 $"The waiting list answered {(int)response.StatusCode} {error?.ErrorCode}.", null, response.StatusCode));
         }
     }
+
+    // Which call it was (the item and the action), without the query: a list's cursor says nothing useful.
+    private static string Logged(string path) => path.Split('?')[0];
 
     // The service's error envelope, when there is one: only its code and trace id are kept, for the log.
     private static async Task<ErrorWire?> ReadErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)

@@ -46,6 +46,8 @@ public sealed class AiOperationsService(
     public const int MaxAnswer = 1000;
 
     private const string QuestionNotFound = "Question not found.";
+    private const string DoneAction = "done";
+    private const string AnswerAction = "answer";
     private const string ApprovalNotFound = "No approval with that id is waiting for a decision.";
 
     private static readonly string[] TurnTypes = [AgentActivityTypes.TurnCompleted];
@@ -167,7 +169,7 @@ public sealed class AiOperationsService(
         string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId, string closedBy,
         CancellationToken cancellationToken = default)
     {
-        await RequireOpenQuestionAsync(ownerUserId, userToken, reach, connectionId, sender, questionId, cancellationToken);
+        await RequireOpenQuestionAsync(ownerUserId, userToken, reach, connectionId, sender, questionId, DoneAction, cancellationToken);
 
         WaitingListItem closed;
         try
@@ -176,7 +178,7 @@ public sealed class AiOperationsService(
         }
         catch (NotFoundException)
         {
-            throw new NotFoundException(QuestionNotFound);
+            throw QuestionNotOpen(ownerUserId, questionId, connectionId, DoneAction, "gone_at_ai_service");
         }
 
         cache.Remove(WaitingKey(ownerUserId));
@@ -208,7 +210,7 @@ public sealed class AiOperationsService(
         if (answer.Length > MaxAnswer)
             throw new ValidationException("Keep your answer to 1,000 characters.");
 
-        await RequireOpenQuestionAsync(ownerUserId, userToken, reach, connectionId, sender, questionId, cancellationToken);
+        await RequireOpenQuestionAsync(ownerUserId, userToken, reach, connectionId, sender, questionId, AnswerAction, cancellationToken);
 
         // With a person in the chat, the agent learns the answer but leaves the reply to them.
         bool agentReplies = !await humanTakeover.IsActiveAsync(ownerUserId, connectionId, sender, cancellationToken);
@@ -218,13 +220,13 @@ public sealed class AiOperationsService(
         }
         catch (NotFoundException)
         {
-            throw new NotFoundException(QuestionNotFound);
+            throw QuestionNotOpen(ownerUserId, questionId, connectionId, AnswerAction, "gone_at_ai_service");
         }
 
         cache.Remove(WaitingKey(ownerUserId));
         logger.LogInformation(
-            "ai_operations.question_answered OwnerId={OwnerId} QuestionId={QuestionId} AgentReplies={AgentReplies} SaveForNextTime={SaveForNextTime}",
-            ownerUserId, questionId, agentReplies, request.SaveForNextTime);
+            "ai_operations.question_answered OwnerId={OwnerId} QuestionId={QuestionId} ConnectionId={ConnectionId} AgentReplies={AgentReplies} SaveForNextTime={SaveForNextTime}",
+            ownerUserId, questionId, connectionId, agentReplies, request.SaveForNextTime);
 
         // Best effort: the agent has the answer either way, and the line in the chat only says so.
         try
@@ -244,7 +246,7 @@ public sealed class AiOperationsService(
     // not found, the same.
     private async Task RequireOpenQuestionAsync(
         string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId,
-        CancellationToken cancellationToken)
+        string action, CancellationToken cancellationToken)
     {
         WaitingListItem item;
         try
@@ -253,14 +255,31 @@ public sealed class AiOperationsService(
         }
         catch (NotFoundException)
         {
-            throw new NotFoundException(QuestionNotFound);
+            throw QuestionNotOpen(ownerUserId, questionId, connectionId, action, "unknown_at_ai_service");
         }
 
-        if (item.Status != WaitingListItem.OpenStatus || !NeedsAnswer(item) || (reach is not null && !reach.Contains(connectionId)))
-            throw new NotFoundException(QuestionNotFound);
-        IReadOnlyList<OpenItem> linked = await LinkAsync(ownerUserId, [item], cancellationToken);
-        if (!linked.Any(o => o.ConnectionId == connectionId && o.Sender == sender))
-            throw new NotFoundException(QuestionNotFound);
+        string? reason = item.Status != WaitingListItem.OpenStatus ? $"closed_{item.Resolution ?? "unknown"}"
+            : !NeedsAnswer(item) ? "waiting_on_approval"
+            : reach is not null && !reach.Contains(connectionId) ? "outside_reach"
+            : null;
+        if (reason is null)
+        {
+            IReadOnlyList<OpenItem> linked = await LinkAsync(ownerUserId, [item], cancellationToken);
+            if (!linked.Any(o => o.ConnectionId == connectionId && o.Sender == sender))
+                reason = linked.Count == 0 ? "chat_not_in_inbox" : "another_chat";
+        }
+
+        if (reason is not null)
+            throw QuestionNotOpen(ownerUserId, questionId, connectionId, action, reason);
+    }
+
+    // The person is told the same whatever the reason; only the log says which, so a live test can be traced.
+    private NotFoundException QuestionNotOpen(string ownerUserId, string questionId, Guid connectionId, string action, string reason)
+    {
+        logger.LogInformation(
+            "ai_operations.question_not_open OwnerId={OwnerId} QuestionId={QuestionId} ConnectionId={ConnectionId} Action={Action} Reason={Reason}",
+            ownerUserId, questionId, connectionId, action, reason);
+        return new NotFoundException(QuestionNotFound);
     }
 
     /// <summary>An open item on the AI service's waiting list, the inbox conversation it belongs to, and the agent that asked.</summary>
@@ -316,8 +335,17 @@ public sealed class AiOperationsService(
             open.Add(new OpenItem(item, conversation.Connection, conversation.Sender, agentName));
         }
 
+        // At Information, not Debug: "the AI service has more waiting than the inbox shows" is otherwise untraceable live.
+        // Item ids only; the conversation keys hold phone numbers.
         if (open.Count < items.Count)
-            logger.LogDebug("ai_operations.questions_unlinked OwnerId={OwnerId} Count={Count}", ownerUserId, items.Count - open.Count);
+        {
+            HashSet<string> shown = open.Select(o => o.Item.Id).ToHashSet(StringComparer.Ordinal);
+            List<string> left = items.Where(i => !shown.Contains(i.Id)).Select(i => i.Id).Take(10).ToList();
+            logger.LogInformation(
+                "ai_operations.questions_unlinked OwnerId={OwnerId} Count={Count} ItemIds={ItemIds}: in chats this inbox doesn't hold, so not shown",
+                ownerUserId, items.Count - open.Count, string.Join(",", left));
+        }
+
         return open;
     }
 
