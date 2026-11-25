@@ -58,6 +58,12 @@ public sealed record WaitingListItem
     public string? ResolvedBy { get; init; }
 }
 
+/// <summary>
+/// A person's answer for the agent that asked. ReplyToCustomer: the agent carries on and answers the customer; false
+/// leaves the reply to the person. SaveForNextTime: the AI service keeps it as business knowledge.
+/// </summary>
+public sealed record WaitingListAnswer(string Answer, bool ReplyToCustomer, bool SaveForNextTime);
+
 /// <summary>The action an item's agent asked permission for.</summary>
 public sealed record WaitingListApproval(string Id, string? Tool, string? Reason, string Status)
 {
@@ -86,4 +92,10 @@ public interface IWaitingListClient
     /// closed, comes back unchanged. Throws <see cref="Domain.Exceptions.NotFoundException"/> as <see cref="GetAsync"/> does.
     /// </summary>
     Task<WaitingListItem> ResolveAsync(string userToken, string itemId, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gives the agent that asked the person's answer, as the token's person, which closes the item. Throws
+    /// <see cref="Domain.Exceptions.NotFoundException"/> as <see cref="GetAsync"/> does.
+    /// </summary>
+    Task AnswerAsync(string userToken, string itemId, WaitingListAnswer answer, CancellationToken cancellationToken = default);
 }

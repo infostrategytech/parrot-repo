@@ -207,6 +207,32 @@ public sealed class ConversationsControllerTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task AnswerQuestion_HandsTheAnswerOnInThisChatWithTheirOwnTokenAndSaysWhetherTheAgentReplies()
+    {
+        QuestionAnswerRequest request = new("Yes, students get 10% off their first purchase.", SaveForNextTime: true);
+        _operations.Setup(o => o.AnswerQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_1", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuestionAnswerResponse(AgentReplies: true));
+
+        IActionResult result = await Controller(OwnerAccess()).AnswerQuestion(WhatsApp, "wait_1", "2348012345678", request, default);
+
+        Assert.Equal(new QuestionAnswerResponse(AgentReplies: true), Assert.IsType<OkObjectResult>(result).Value);
+    }
+
+    // A channel the teammate can't open answers as not found, like one that doesn't exist, and nothing reaches the agent.
+    [Fact]
+    public async Task AnswerQuestion_OnAChannelTheTeammateCannotOpen_IsNotFoundAndSendsNothing()
+    {
+        ConversationsController controller = Controller(Teammate(new HashSet<Guid> { Guid.NewGuid() },
+            WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver));
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            controller.AnswerQuestion(WhatsApp, "wait_1", "2348012345678", new QuestionAnswerRequest("Yes", SaveForNextTime: true), default));
+
+        _operations.Verify(o => o.AnswerQuestionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<QuestionAnswerRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
     // Later pages are newest-first as they are; the first page already brought the question's conversation in.
     [Fact]
     public async Task List_OnALaterPage_DoesNotAddTheQuestionsConversationAgain()

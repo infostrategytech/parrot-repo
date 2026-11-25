@@ -8,6 +8,7 @@ using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
 using Parrot.Api.Utils;
 using Parrot.Application.Agents;
+using Parrot.Application.Contracts.Conversations;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Logging;
@@ -230,6 +231,17 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         HttpContext.RequireReach(connectionId);
         await operations.CloseQuestionAsync(Owner, HttpContext.SessionToken(), Reach, connectionId, sender, questionId, Reader, cancellationToken);
         return NoContent();
+    }
+
+    // Gives the agent that asked the person's answer; it replies to the customer unless someone has taken over.
+    [Monitor("conversations.answer_question", SlowMs = 5000)] // waits on the AI service, which may reply before it answers
+    [HttpPost("{connectionId:guid}/questions/{questionId}/answer")]
+    [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
+    public async Task<IActionResult> AnswerQuestion(Guid connectionId, string questionId, [FromQuery] string sender,
+        [FromBody] QuestionAnswerRequest request, CancellationToken cancellationToken)
+    {
+        HttpContext.RequireReach(connectionId);
+        return Ok(await operations.AnswerQuestionAsync(Owner, HttpContext.SessionToken(), Reach, connectionId, sender, questionId, request, cancellationToken));
     }
 
     // Every file this customer has sent, newest first, for the customer details panel.

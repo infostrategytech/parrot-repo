@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Extensions.Options;
 using Moq;
 using Parrot.Application.Agents;
@@ -119,6 +120,51 @@ public class OmniWaitingListClientTests
         Assert.Equal(read.Message, resolve.Message);
     }
 
+    // The shape the AI team agreed: the person's own words, whether the agent replies, and whether it keeps them.
+    [Fact]
+    public async Task AnswerAsync_PostsTheAnswerToTheItemAsThePersonInTheServicesShape()
+    {
+        (OmniWaitingListClient client, FakeHandler handler) = Create((HttpStatusCode.OK, """{"status": "accepted"}"""));
+
+        await client.AnswerAsync(Token, "wait/ada", new WaitingListAnswer("Yes, students get 10% off their first purchase.", ReplyToCustomer: false, SaveForNextTime: true));
+
+        Assert.Equal(HttpMethod.Post, handler.Methods.Single());
+        Assert.Equal("http://omni-ai:8000/api/v1/ai-operations/waiting/wait%2Fada/answer", handler.Urls.Single());
+        Assert.Equal($"Bearer {Token}", handler.Authorizations.Single());
+        using JsonDocument body = JsonDocument.Parse(handler.Bodies.Single()!);
+        Assert.Equal(
+            ["answer", "reply_to_customer", "save_for_next_time"],
+            body.RootElement.EnumerateObject().Select(p => p.Name));
+        Assert.Equal("Yes, students get 10% off their first purchase.", body.RootElement.GetProperty("answer").GetString());
+        Assert.False(body.RootElement.GetProperty("reply_to_customer").GetBoolean());
+        Assert.True(body.RootElement.GetProperty("save_for_next_time").GetBoolean());
+    }
+
+    [Fact]
+    public async Task AnswerAsync_WhenTheServiceHasNoSuchItem_ThrowsTheSameNotFound()
+    {
+        (OmniWaitingListClient client, _) = Create((HttpStatusCode.NotFound,
+            """{"success": false, "errorCode": "WAITING_ITEM_NOT_FOUND", "message": "nothing with this id is waiting in this workspace", "traceId": "t1"}"""));
+
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() =>
+            client.AnswerAsync(Token, "wait_theirs", new WaitingListAnswer("Yes", ReplyToCustomer: true, SaveForNextTime: false)));
+
+        Assert.Equal("Question not found.", error.Message);
+    }
+
+    [Fact]
+    public async Task AnswerAsync_WhenTheServiceRefuses_ThrowsServiceUnavailableWithoutItsBody()
+    {
+        (OmniWaitingListClient client, _) = Create((HttpStatusCode.Conflict,
+            """{"success": false, "errorCode": "CONVERSATION_BUSY", "message": "secret internals", "traceId": "t5"}"""));
+
+        ServiceUnavailableException error = await Assert.ThrowsAsync<ServiceUnavailableException>(() =>
+            client.AnswerAsync(Token, "wait_ada", new WaitingListAnswer("Yes", ReplyToCustomer: true, SaveForNextTime: false)));
+
+        Assert.DoesNotContain("secret internals", error.Message);
+        Assert.DoesNotContain("secret internals", error.InnerException?.Message);
+    }
+
     [Theory]
     [InlineData(HttpStatusCode.TooManyRequests, """{"success": false, "errorCode": "RATE_LIMITED", "message": "secret internals", "traceId": "t2"}""")]
     [InlineData(HttpStatusCode.ServiceUnavailable, """{"success": false, "errorCode": "AI_OPERATIONS_UNAVAILABLE", "message": "secret internals", "traceId": "t3"}""")]
@@ -150,15 +196,17 @@ public class OmniWaitingListClientTests
         public List<string> Urls { get; } = [];
         public List<HttpMethod> Methods { get; } = [];
         public List<string?> Authorizations { get; } = [];
+        public List<string?> Bodies { get; } = [];
 
-        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             // AbsoluteUri keeps the escaping the service will see; ToString() would undo it.
             Urls.Add(request.RequestUri!.AbsoluteUri);
             Methods.Add(request.Method);
             Authorizations.Add(request.Headers.Authorization?.ToString());
+            Bodies.Add(request.Content is null ? null : await request.Content.ReadAsStringAsync(cancellationToken));
             (HttpStatusCode status, string body) = answers[Urls.Count - 1];
-            return Task.FromResult(new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") });
+            return new HttpResponseMessage(status) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
         }
     }
 }

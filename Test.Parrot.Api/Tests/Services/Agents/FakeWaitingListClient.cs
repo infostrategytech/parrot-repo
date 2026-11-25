@@ -19,11 +19,17 @@ public sealed class FakeWaitingListClient : IWaitingListClient
 
     public List<string> Resolved { get; } = [];
 
+    /// <summary>Every answer the service took, with the item it closed.</summary>
+    public List<(string ItemId, WaitingListAnswer Answer)> Answers { get; } = [];
+
     /// <summary>Thrown by every call when set: the service down, refusing or over its limit.</summary>
     public Exception? Failure { get; set; }
 
     /// <summary>Runs as a resolve begins: lets a test close the item first, as a teammate or a team reply would.</summary>
     public Action<WaitingListItem>? BeforeResolve { get; set; }
+
+    /// <summary>Runs as an answer begins: lets a test take the item away first, as the service forgetting it would.</summary>
+    public Action<WaitingListItem>? BeforeAnswer { get; set; }
 
     public Task<IReadOnlyList<WaitingListItem>> ListOpenAsync(string userToken, CancellationToken cancellationToken = default)
     {
@@ -50,6 +56,17 @@ public sealed class FakeWaitingListClient : IWaitingListClient
         WaitingListItem closed = item with { Status = "resolved", Resolution = WaitingListItem.Handled, ResolvedBy = People[userToken] };
         Items[Items.IndexOf(item)] = closed;
         return Task.FromResult(closed);
+    }
+
+    public Task AnswerAsync(string userToken, string itemId, WaitingListAnswer answer, CancellationToken cancellationToken = default)
+    {
+        ThrowIfFailing();
+        BeforeAnswer?.Invoke(Find(itemId));
+        WaitingListItem item = Find(itemId);
+
+        Answers.Add((itemId, answer));
+        Items[Items.IndexOf(item)] = item with { Status = "resolved", Resolution = "answered", ResolvedBy = People[userToken] };
+        return Task.CompletedTask;
     }
 
     /// <summary>Closes the item as something else would (a team reply, another person), without going through this client's resolve.</summary>

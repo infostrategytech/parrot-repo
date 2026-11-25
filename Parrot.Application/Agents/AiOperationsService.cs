@@ -22,6 +22,7 @@ public sealed class AiOperationsService(
     IAgentOrchestratorClient orchestrator,
     IWaitingListClient waitingList,
     IConversationStore conversations,
+    IHumanTakeoverStore humanTakeover,
     IMemoryCache cache,
     TimeProvider clock,
     IAppLogger<AiOperationsService> logger) : IAiOperationsService
@@ -40,6 +41,9 @@ public sealed class AiOperationsService(
 
     /// <summary>The AI service's limit for what the person tells the agent with a decision.</summary>
     public const int MaxInstruction = 1000;
+
+    /// <summary>The longest answer to an agent's question, the same as a decision's instruction.</summary>
+    public const int MaxAnswer = 1000;
 
     private const string QuestionNotFound = "Question not found.";
     private const string ApprovalNotFound = "No approval with that id is waiting for a decision.";
@@ -163,24 +167,7 @@ public sealed class AiOperationsService(
         string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId, string closedBy,
         CancellationToken cancellationToken = default)
     {
-        // Read afresh, not from the cache: only a question still open in this very conversation, on a channel the person
-        // reaches. One in another chat, one already closed, another workspace's and one that never existed all read as
-        // not found, the same.
-        WaitingListItem item;
-        try
-        {
-            item = await waitingList.GetAsync(userToken, questionId, cancellationToken);
-        }
-        catch (NotFoundException)
-        {
-            throw new NotFoundException(QuestionNotFound);
-        }
-
-        if (item.Status != WaitingListItem.OpenStatus || !NeedsAnswer(item) || (reach is not null && !reach.Contains(connectionId)))
-            throw new NotFoundException(QuestionNotFound);
-        IReadOnlyList<OpenItem> linked = await LinkAsync(ownerUserId, [item], cancellationToken);
-        if (!linked.Any(o => o.ConnectionId == connectionId && o.Sender == sender))
-            throw new NotFoundException(QuestionNotFound);
+        await RequireOpenQuestionAsync(ownerUserId, userToken, reach, connectionId, sender, questionId, cancellationToken);
 
         WaitingListItem closed;
         try
@@ -209,6 +196,71 @@ public sealed class AiOperationsService(
         {
             logger.LogWarning(exception, "system_event_write_failed ConnectionId={ConnectionId} Event=question_done", connectionId);
         }
+    }
+
+    public async Task<QuestionAnswerResponse> AnswerQuestionAsync(
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId,
+        QuestionAnswerRequest request, CancellationToken cancellationToken = default)
+    {
+        string answer = request.Answer?.Trim() ?? string.Empty;
+        if (answer.Length == 0)
+            throw new ValidationException("Write your answer for the agent.");
+        if (answer.Length > MaxAnswer)
+            throw new ValidationException("Keep your answer to 1,000 characters.");
+
+        await RequireOpenQuestionAsync(ownerUserId, userToken, reach, connectionId, sender, questionId, cancellationToken);
+
+        // With a person in the chat, the agent learns the answer but leaves the reply to them.
+        bool agentReplies = !await humanTakeover.IsActiveAsync(ownerUserId, connectionId, sender, cancellationToken);
+        try
+        {
+            await waitingList.AnswerAsync(userToken, questionId, new WaitingListAnswer(answer, agentReplies, request.SaveForNextTime), cancellationToken);
+        }
+        catch (NotFoundException)
+        {
+            throw new NotFoundException(QuestionNotFound);
+        }
+
+        cache.Remove(WaitingKey(ownerUserId));
+        logger.LogInformation(
+            "ai_operations.question_answered OwnerId={OwnerId} QuestionId={QuestionId} AgentReplies={AgentReplies} SaveForNextTime={SaveForNextTime}",
+            ownerUserId, questionId, agentReplies, request.SaveForNextTime);
+
+        // Best effort: the agent has the answer either way, and the line in the chat only says so.
+        try
+        {
+            await conversations.WriteSystemEventAsync(ownerUserId, connectionId, sender, "A team member answered the agent's question.", cancellationToken);
+        }
+        catch (Exception exception) when (exception is not OperationCanceledException)
+        {
+            logger.LogWarning(exception, "system_event_write_failed ConnectionId={ConnectionId} Event=question_answered", connectionId);
+        }
+
+        return new QuestionAnswerResponse(agentReplies);
+    }
+
+    // Read afresh, not from the cache: only a question still open in this very conversation, on a channel the person
+    // reaches. One in another chat, one already closed, another workspace's and one that never existed all read as
+    // not found, the same.
+    private async Task RequireOpenQuestionAsync(
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId,
+        CancellationToken cancellationToken)
+    {
+        WaitingListItem item;
+        try
+        {
+            item = await waitingList.GetAsync(userToken, questionId, cancellationToken);
+        }
+        catch (NotFoundException)
+        {
+            throw new NotFoundException(QuestionNotFound);
+        }
+
+        if (item.Status != WaitingListItem.OpenStatus || !NeedsAnswer(item) || (reach is not null && !reach.Contains(connectionId)))
+            throw new NotFoundException(QuestionNotFound);
+        IReadOnlyList<OpenItem> linked = await LinkAsync(ownerUserId, [item], cancellationToken);
+        if (!linked.Any(o => o.ConnectionId == connectionId && o.Sender == sender))
+            throw new NotFoundException(QuestionNotFound);
     }
 
     /// <summary>An open item on the AI service's waiting list, the inbox conversation it belongs to, and the agent that asked.</summary>

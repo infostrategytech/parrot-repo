@@ -572,13 +572,13 @@ builder.Services.AddHttpClient<IAgentOrchestratorClient, AgentOrchestratorClient
     client.Timeout = TimeSpan.FromSeconds(Math.Max(1, omniAiSettings.TimeoutSeconds));
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 }).AddHttpMessageHandler(sp => new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()));
-// The AI service's waiting list, called as the signed-in person. An inbox list load can wait on it, so it gives up
-// sooner than the orchestrator's turns do; when it does, nothing shows as waiting.
+// The AI service's waiting list, called as the signed-in person. An inbox list load can wait on it, so its reads give
+// up after OmniWaitingListClient.ShortTimeout and nothing shows as waiting; an answer may take as long as a turn.
 builder.Services.AddHttpClient<IWaitingListClient, OmniWaitingListClient>(client =>
 {
     if (Uri.TryCreate(omniAiSettings.BaseUrl?.TrimEnd('/') + "/", UriKind.Absolute, out Uri? baseUrl))
         client.BaseAddress = baseUrl;
-    client.Timeout = TimeSpan.FromSeconds(5);
+    client.Timeout = TimeSpan.FromSeconds(Math.Max(1, omniAiSettings.TimeoutSeconds));
     client.DefaultRequestHeaders.UserAgent.ParseAdd("Parrot-CRM");
 }).AddHttpMessageHandler(sp => new ThirdPartyCallLogger("Omni-AI", sp.GetRequiredService<ILogger<ThirdPartyCallLogger>>()));
 // The orientation service (voice, through ElevenLabs); a separate service from the orchestrator for now.

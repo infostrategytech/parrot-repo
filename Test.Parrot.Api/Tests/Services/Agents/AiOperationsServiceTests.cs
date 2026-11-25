@@ -38,6 +38,8 @@ public class AiOperationsServiceTests
     private readonly Mock<IAgentRepository> _agents = new();
     private readonly Mock<IAgentOrchestratorClient> _orchestrator = new();
     private readonly Mock<IConversationStore> _conversations = new();
+    // Nobody has taken over a chat unless a test says so.
+    private readonly Mock<IHumanTakeoverStore> _takeovers = new();
     private readonly Dictionary<string, (Guid Connection, string Sender)> _inbox = new()
     {
         [AdaChat] = (WhatsApp, "2348012345678"),
@@ -59,7 +61,7 @@ public class AiOperationsServiceTests
         _conversations.Setup(c => c.FindByConversationKeysAsync(It.IsAny<string>(), It.IsAny<IReadOnlyCollection<string>>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((string owner, IReadOnlyCollection<string> keys, CancellationToken _) =>
                 (IReadOnlyDictionary<string, (Guid Connection, string Sender)>)keys.Where(k => owner == Owner && _inbox.ContainsKey(k)).ToDictionary(k => k, k => _inbox[k]));
-        _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, _waiting, _conversations.Object,
+        _sut = new AiOperationsService(_activity, _agents.Object, _orchestrator.Object, _waiting, _conversations.Object, _takeovers.Object,
             new MemoryCache(new MemoryCacheOptions()), new FixedTimeProvider(Now), Mock.Of<IAppLogger<AiOperationsService>>());
     }
 
@@ -507,6 +509,151 @@ public class AiOperationsServiceTests
             _sut.CloseQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_ada", "user-ngozi"));
 
         _conversations.Verify(c => c.WriteSystemEventAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    private Task<QuestionAnswerResponse> Answer(
+        string? answer = "Yes, students get 10% off their first purchase.", bool saveForNextTime = true, string questionId = "wait_ada",
+        IReadOnlySet<Guid>? reach = null) =>
+        _sut.AnswerQuestionAsync(Owner, Token, reach, WhatsApp, "2348012345678", questionId, new QuestionAnswerRequest(answer, saveForNextTime));
+
+    private void NoChatLineWritten() =>
+        _conversations.Verify(c => c.WriteSystemEventAsync(It.IsAny<string>(), It.IsAny<Guid>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+
+    [Fact]
+    public async Task AnswerQuestionAsync_HandsTheAnswerToTheAgentWhichRepliesToTheCustomerAndTheNextReadIsFresh()
+    {
+        Waiting("wait_ada");
+        Assert.Single(await _sut.WaitingAsync(Owner, Token, null));
+
+        QuestionAnswerResponse response = await Answer("  Yes, students get 10% off their first purchase.  ");
+
+        Assert.True(response.AgentReplies);
+        (string itemId, WaitingListAnswer sent) = Assert.Single(_waiting.Answers);
+        Assert.Equal("wait_ada", itemId);
+        Assert.Equal(new WaitingListAnswer("Yes, students get 10% off their first purchase.", ReplyToCustomer: true, SaveForNextTime: true), sent);
+        Assert.Equal("user-ngozi", _waiting.Items.Single().ResolvedBy);
+        _conversations.Verify(c => c.WriteSystemEventAsync(Owner, WhatsApp, "2348012345678",
+            "A team member answered the agent's question.", It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Empty(await _sut.WaitingAsync(Owner, Token, null));
+        Assert.Equal(2, _waiting.ListReads.Count);
+    }
+
+    [Fact]
+    public async Task AnswerQuestionAsync_WithSaveForNextTimeOff_SaysSoToTheAiService()
+    {
+        Waiting("wait_ada");
+
+        await Answer(saveForNextTime: false);
+
+        Assert.False(Assert.Single(_waiting.Answers).Answer.SaveForNextTime);
+    }
+
+    // Someone is replying in the chat themselves: the agent takes the answer, but the customer hears it from them.
+    [Fact]
+    public async Task AnswerQuestionAsync_WhenAPersonHasTakenOver_TheAgentSendsTheCustomerNothing()
+    {
+        Waiting("wait_ada");
+        _takeovers.Setup(t => t.IsActiveAsync(Owner, WhatsApp, "2348012345678", It.IsAny<CancellationToken>())).ReturnsAsync(true);
+
+        QuestionAnswerResponse response = await Answer();
+
+        Assert.False(response.AgentReplies);
+        Assert.False(Assert.Single(_waiting.Answers).Answer.ReplyToCustomer);
+    }
+
+    // One in another chat, one already closed, an approval with nothing to answer, and one the AI service doesn't have
+    // in this workspace (another workspace's, or one that never existed) all answer the same, and nothing is sent.
+    [Theory]
+    [InlineData("wait_bola")]
+    [InlineData("wait_closed")]
+    [InlineData("wait_approval")]
+    [InlineData("wait_never")]
+    public async Task AnswerQuestionAsync_ForAQuestionNotOpenInThisChat_ThrowsTheSameNotFoundAndSendsNothing(string questionId)
+    {
+        Waiting("wait_bola", BolaChat);
+        Waiting("wait_closed");
+        _waiting.Close("wait_closed", "team_replied", null);
+        Waiting("wait_approval", kind: "approval", approval: "pending");
+
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() => Answer(questionId: questionId));
+
+        Assert.Equal("Question not found.", error.Message);
+        Assert.Empty(_waiting.Answers);
+        NoChatLineWritten();
+    }
+
+    [Fact]
+    public async Task AnswerQuestionAsync_OnAChannelTheTeammateCannotOpen_ThrowsNotFoundAndSendsNothing()
+    {
+        Waiting("wait_ada");
+
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() => Answer(reach: new HashSet<Guid> { Instagram }));
+
+        Assert.Equal("Question not found.", error.Message);
+        Assert.Empty(_waiting.Answers);
+    }
+
+    // Read as open, then gone by the time the answer arrives: the same not found, and no line in the chat.
+    [Fact]
+    public async Task AnswerQuestionAsync_WhenTheAiServiceNoLongerHasIt_ThrowsTheSameNotFound()
+    {
+        Waiting("wait_ada");
+        _waiting.BeforeAnswer = item => _waiting.Items.Remove(item);
+
+        NotFoundException error = await Assert.ThrowsAsync<NotFoundException>(() => Answer());
+
+        Assert.Equal("Question not found.", error.Message);
+        NoChatLineWritten();
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task AnswerQuestionAsync_WithNoAnswer_ThrowsValidationAndSendsNothing(string? answer)
+    {
+        Waiting("wait_ada");
+
+        ValidationException error = await Assert.ThrowsAsync<ValidationException>(() => Answer(answer));
+
+        Assert.Equal("Write your answer for the agent.", error.Message);
+        Assert.Empty(_waiting.Answers);
+    }
+
+    [Fact]
+    public async Task AnswerQuestionAsync_WithAnAnswerOverTheLimit_ThrowsValidationAndSendsNothing()
+    {
+        Waiting("wait_ada");
+
+        ValidationException error = await Assert.ThrowsAsync<ValidationException>(() => Answer(new string('a', AiOperationsService.MaxAnswer + 1)));
+
+        Assert.Equal("Keep your answer to 1,000 characters.", error.Message);
+        Assert.Empty(_waiting.Answers);
+    }
+
+    [Fact]
+    public async Task AnswerQuestionAsync_WhenTheChatLineCannotBeWritten_StillAnswers()
+    {
+        Waiting("wait_ada");
+        _conversations.Setup(c => c.WriteSystemEventAsync(Owner, WhatsApp, "2348012345678", It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ThrowsAsync(new TimeoutException("mongo"));
+
+        QuestionAnswerResponse response = await Answer();
+
+        Assert.True(response.AgentReplies);
+        Assert.Single(_waiting.Answers);
+    }
+
+    // Nothing reached the agent, so the person is told to try again rather than that it is answered.
+    [Fact]
+    public async Task AnswerQuestionAsync_WhenTheAiServiceDoesNotAnswer_FailsAndWritesNothing()
+    {
+        Waiting("wait_ada");
+        _waiting.Failure = new ServiceUnavailableException("The AI service could not be reached.", new TimeoutException());
+
+        await Assert.ThrowsAsync<ServiceUnavailableException>(() => Answer());
+
+        NoChatLineWritten();
     }
 
     // Bola's refund, waiting at the AI service, and Parrot's own record of the request (it feeds the day's figures).
