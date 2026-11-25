@@ -60,6 +60,12 @@ public interface IAiOperationsFeed
     /// <summary>Today, on every channel it answers, or on one (a channel key such as "instagram").</summary>
     AgentToday Today(AiAgent agent, string? channel = null);
 
+    /// <summary>
+    /// Today for the whole workspace, each turn counted once. Adding agents up counts a reply twice when two agents
+    /// answered in it.
+    /// </summary>
+    AgentToday WorkspaceToday();
+
     /// <summary>Conversations per day for the last seven days, oldest first, today last.</summary>
     IReadOnlyList<int> Week(AiAgent agent, string? channel = null);
 
@@ -83,6 +89,8 @@ public sealed class UnavailableAiOperationsFeed : IAiOperationsFeed
     public Task RefreshAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public AgentToday Today(AiAgent agent, string? channel = null) => new(agent.MessagesToday, 0, 0);
+
+    public AgentToday WorkspaceToday() => AgentToday.None;
 
     public IReadOnlyList<int> Week(AiAgent agent, string? channel = null) => [];
 

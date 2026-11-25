@@ -7,6 +7,7 @@
 @inject ToastService Toasts
 @inject AgentGate AgentGate
 @inject IAiOperationsFeed Feed
+@inject Microsoft.Extensions.Options.IOptions<Parrot.Application.Integrations.OmniAiSettings> OmniAi
 @inject IBusinessKnowledge Knowledge
 @inject IAgentCapabilities AgentCapabilities
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
@@ -252,7 +253,11 @@
 
     private List<AiAgent> LiveAgents => AiAgentsState.Agents.Where(a => a.IsActive && !a.IsDraft).ToList();
 
-    private AgentToday Totals => AgentToday.Sum(LiveAgents.Select(agent => Feed.Today(agent)));
+    // With agents sharing numbers, one reply counts for each agent that answered in it, so adding agents up would count
+    // it more than once.
+    private AgentToday Totals => OmniAi.Value.MultiAgentEnabled
+        ? Feed.WorkspaceToday()
+        : AgentToday.Sum(LiveAgents.Select(agent => Feed.Today(agent)));
 
     private IReadOnlyList<WaitingQuestion> Waiting => Feed.Waiting(AiAgentsState.Agents);
 
