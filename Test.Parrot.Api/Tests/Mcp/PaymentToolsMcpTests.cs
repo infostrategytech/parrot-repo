@@ -44,7 +44,8 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
     private readonly FakePaymentOrderRepository _orders = new();
     private readonly FakeConnectionDirectory _connections = new();
     private readonly FakeWorkspaceRepository _workspaces = new();
-    private readonly Guid _agent = Guid.NewGuid();
+    // As Omni sends it: Omni's own agent id, not a UUID.
+    private const string OmniAgent = "agt_01M6QZQW8DFM3PARMN5SXEZSE7";
     private Guid _connection;
     private WebApplication _app = null!;
     private Uri _endpoint = null!;
@@ -53,8 +54,6 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
     {
         _workspaces.Seed(Workspace, "owner", name: "Ada's Bags");
         _connection = _connections.Add(Workspace, MessagingPlatform.WhatsApp);
-        Mock<IAgentRepository> agents = new();
-        agents.Setup(a => a.GetByIdAsync(_agent)).ReturnsAsync(new Agent { Id = _agent, WorkspaceId = Workspace, Name = "Ngozi", Description = "", MascotUrl = "" });
 
         WebApplicationBuilder builder = WebApplication.CreateSlimBuilder();
         builder.WebHost.UseUrls("http://127.0.0.1:0");
@@ -75,7 +74,6 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
         builder.Services.AddSingleton<IPaymentOrderRepository>(_orders);
         builder.Services.AddSingleton<IWorkspaceConnectionDirectory>(_connections);
         builder.Services.AddSingleton<IWorkspaceRepository>(_workspaces);
-        builder.Services.AddSingleton(agents.Object);
         builder.Services.AddSingleton<IFeatureFlagService>(new FakeFlags());
         PaymentSettings settings = new() { CallbackUrl = "https://app.example/paid" };
         builder.Services.AddSingleton(Options.Create(settings));
@@ -258,9 +256,36 @@ public sealed class PaymentToolsMcpTests : IAsyncLifetime
         Assert.Empty(_provider.Calls);
     }
 
+    [Fact]
+    public async Task An_omni_agent_id_makes_a_cart_and_is_kept_on_the_order()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
+        await using McpClient client = await ConnectAsync();
+
+        CallToolResult result = await client.CallToolAsync("create_cart", Arguments(new[] { new { product_id = bag, quantity = 1 } }));
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.Equal("cart_ready", JsonDocument.Parse(Text(result)).RootElement.GetProperty("status").GetString());
+        Assert.Equal(OmniAgent, Assert.Single(_orders.Orders).AgentId);
+    }
+
+    [Fact]
+    public async Task A_cart_needs_no_agent_id()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
+        await using McpClient client = await ConnectAsync();
+        Dictionary<string, object?> arguments = Arguments(new[] { new { product_id = bag, quantity = 1 } });
+        arguments.Remove("agent_id");
+
+        CallToolResult result = await client.CallToolAsync("create_cart", arguments);
+
+        Assert.NotEqual(true, result.IsError);
+        Assert.Null(Assert.Single(_orders.Orders).AgentId);
+    }
+
     private Dictionary<string, object?> Arguments(object items) => new()
     {
-        ["agent_id"] = _agent,
+        ["agent_id"] = OmniAgent,
         ["connection_id"] = _connection,
         ["sender"] = "2348012345678",
         ["items"] = items,

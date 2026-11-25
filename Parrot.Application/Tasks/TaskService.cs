@@ -21,12 +21,14 @@ public sealed class TaskService(
     ITeamRepository team,
     IWorkspaceAccessService access,
     IWorkspaceConnectionDirectory connections,
-    IAgentRepository agents,
     UserManager<ApplicationUser> users,
     TimeProvider clock)
 {
     /// <summary>How many closed tasks the list carries: the latest, for the Closed view.</summary>
     public const int ClosedShown = 200;
+
+    /// <summary>Who raised a task, when the agent that raised it didn't give its name.</summary>
+    public const string AgentFallbackName = "AI agent";
 
     public const int MaxTitle = 200;
     public const int MaxSummary = 2000;
@@ -93,9 +95,10 @@ public sealed class TaskService(
     /// <summary>A task an agent raised from a conversation in the workspace.</summary>
     public async Task<TaskResponse> RaiseAsync(string workspaceId, RaiseTaskRequest request, CancellationToken ct)
     {
-        Agent? agent = await agents.GetByIdAsync(request.AgentId);
-        if (agent is null || agent.WorkspaceId != workspaceId)
-            throw new ValidationException("The agent raising the task is not one of the workspace's.");
+        // Agents live in Omni, so the agent is taken as named; the service token already names the workspace,
+        // and the conversation is checked to be the workspace's below.
+        string agentName = Trimmed(request.AgentName) is { } name ? name[..Math.Min(name.Length, 256)] : AgentFallbackName;
+        string? agentId = Trimmed(request.AgentId) is { } id ? id[..Math.Min(id.Length, 64)] : null;
 
         TaskCustomerDto customer = new(
             string.IsNullOrWhiteSpace(request.CustomerName) ? request.Sender : request.CustomerName,
@@ -108,8 +111,8 @@ public sealed class TaskService(
         {
             WorkspaceId = workspaceId,
             Title = "",
-            RaisedBy = agent.Name,
-            RaisedById = agent.Id.ToString(),
+            RaisedBy = agentName,
+            RaisedById = agentId,
             RaisedByAgent = true,
             RaisedAt = Now,
             RaisedInMessageId = Trimmed(request.RaisedInMessageId),
@@ -123,8 +126,8 @@ public sealed class TaskService(
         task.History.Add(new WorkTaskEvent
         {
             Action = WorkTaskActions.Raised,
-            Who = agent.Name,
-            WhoId = agent.Id.ToString(),
+            Who = agentName,
+            WhoId = agentId,
             At = Now,
             Value = task.CustomerName,
         });

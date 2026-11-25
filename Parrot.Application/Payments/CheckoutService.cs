@@ -25,7 +25,6 @@ public sealed partial class CheckoutService(
     IPaymentProvider provider,
     ICatalogToolsClient catalog,
     ICatalogStockClient stock,
-    IAgentRepository agents,
     IWorkspaceConnectionDirectory connections,
     IWorkspaceRepository workspaces,
     IFeatureFlagService flags,
@@ -48,6 +47,7 @@ public sealed partial class CheckoutService(
 
     private const int MaxKey = 100;
     private const int MaxSender = 256;
+    private const int MaxAgentId = 64;
     private const int MaxDescription = 500;
 
     private static readonly JsonSerializerOptions CatalogJson = new () { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, PropertyNameCaseInsensitive = true };
@@ -74,7 +74,8 @@ public sealed partial class CheckoutService(
         }
 
         List<CheckoutItem> items = Merge(request.Items);
-        await CheckConversationAsync(workspaceId, request.AgentId, request.ConnectionId);
+        AgentOf(request.AgentId); // Refused here, before anything is read, when it can't be an id.
+        await CheckConversationAsync(workspaceId, request.ConnectionId);
         WorkspacePaymentSettings rules = await workspaceSettings.ResolveAsync(workspaceId, ct);
 
         // The conversation's cart, while the customer hasn't pressed Pay: changed in place, so the link
@@ -109,7 +110,7 @@ public sealed partial class CheckoutService(
         PaymentOrder order = new ()
         {
             WorkspaceId = workspaceId,
-            AgentId = request.AgentId,
+            AgentId = AgentOf(request.AgentId),
             ConnectionId = request.ConnectionId,
             CustomerSender = sender,
             CustomerName = Optional(request.CustomerName, 120),
@@ -182,7 +183,7 @@ public sealed partial class CheckoutService(
         long before = cart.TotalMinor;
         bool saved = await SaveCartAsync(cart, lines, lines.Sum(l => l.LineTotalMinor), Now.AddMinutes(rules.CheckoutMinutes), order =>
         {
-            order.AgentId = request.AgentId;
+            order.AgentId = AgentOf(request.AgentId) ?? order.AgentId;
             order.CustomerName = Optional(request.CustomerName, 120) ?? order.CustomerName;
             order.CustomerEmail = Optional(request.CustomerEmail, 254) ?? order.CustomerEmail;
             order.CustomerPhone = Optional(request.CustomerPhone, 32) ?? order.CustomerPhone;
@@ -313,9 +314,10 @@ public sealed partial class CheckoutService(
         }
 
         List<CartItemChange> changes = Changes(request.Items, adding);
-        await CheckConversationAsync(workspaceId, request.AgentId, request.ConnectionId);
+        string? agent = AgentOf(request.AgentId);
+        await CheckConversationAsync(workspaceId, request.ConnectionId);
         WorkspacePaymentSettings rules = await workspaceSettings.ResolveAsync(workspaceId, ct);
-        CreateCheckoutRequest asCart = new (request.AgentId, request.ConnectionId, sender, [], key,
+        CreateCheckoutRequest asCart = new (agent, request.ConnectionId, sender, [], key,
             request.CustomerName, request.CustomerEmail, request.CustomerPhone, request.Note);
 
         // Each go reads the cart afresh and makes the change to what it holds now, so two changes at once both land.
@@ -979,14 +981,20 @@ public sealed partial class CheckoutService(
         return merged;
     }
 
-    private async Task CheckConversationAsync(string workspaceId, Guid agentId, Guid connectionId)
+    /// <summary>
+    /// The agent as Omni names it, kept on the order as a note of who made it. It isn't looked up: agents live in
+    /// Omni, and the service token already names the workspace. Null when the agent didn't say.
+    /// </summary>
+    private static string? AgentOf(string? agentId)
     {
-        Agent? agent = await agents.GetByIdAsync(agentId);
-        if (agent is null || agent.WorkspaceId != workspaceId)
-        {
-            throw new CheckoutRefusedException("agent_id isn't one of this business's agents.");
-        }
+        string? trimmed = string.IsNullOrWhiteSpace(agentId) ? null : agentId.Trim();
+        return trimmed is { Length: > MaxAgentId }
+            ? throw new CheckoutRefusedException($"agent_id is too long: pass your agent id as you know it (up to {MaxAgentId} characters), or leave it out.")
+            : trimmed;
+    }
 
+    private async Task CheckConversationAsync(string workspaceId, Guid connectionId)
+    {
         IReadOnlyList<(Guid Id, Domain.Enums.MessagingPlatform Platform)> workspaceConnections = await connections.ListAsync(workspaceId);
         if (!workspaceConnections.Any(c => c.Id == connectionId))
         {

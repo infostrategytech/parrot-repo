@@ -38,11 +38,9 @@ public sealed class CheckoutServiceTests
     private readonly FakeWorkspaceRepository _workspaces = new();
     private readonly FakeFlags _flags = new();
     private readonly FakeWorkspacePaymentSettingsRepository _rules = new();
-    private readonly Mock<IAgentRepository> _agents = new();
     private readonly PaymentSettings _settings = new() { CallbackUrl = "https://app.example/paid", MaxLinkAmount = 100_000m, CheckoutMinutes = 30, LinkMinutes = 15 };
     private readonly TestClock _clock = new();
-    private readonly Guid _agent = Guid.NewGuid();
-    private readonly Guid _otherAgent = Guid.NewGuid();
+    private const string OmniAgent = "agt_01M6QZQW8DFM3PARMN5SXEZSE7";
     private readonly Guid _whatsApp;
     private readonly CheckoutLinks _links;
     private readonly CheckoutService _service;
@@ -52,13 +50,9 @@ public sealed class CheckoutServiceTests
         _workspaces.Seed(Ws, "owner", name: "Ada's Bags");
         _workspaces.Seed("ws-2", "owner");
         _whatsApp = _connections.Add(Ws, MessagingPlatform.WhatsApp);
-        _agents.Setup(a => a.GetByIdAsync(It.IsAny<Guid>())).ReturnsAsync((Guid id) =>
-            id == _agent ? new Agent { Id = id, WorkspaceId = Ws, Name = "Ngozi", Description = "", MascotUrl = "" }
-            : id == _otherAgent ? new Agent { Id = id, WorkspaceId = "ws-2", Name = "Other", Description = "", MascotUrl = "" }
-            : null);
         _links = Links(_settings, "a-secret-long-enough-for-hmac-sha256-signing!!");
         WorkspacePaymentSettingsService rules = new (_rules, Options.Create(_settings), _clock);
-        _service = new CheckoutService(_orders, _provider, _catalog, _stock, _agents.Object, _connections, _workspaces, _flags,
+        _service = new CheckoutService(_orders, _provider, _catalog, _stock, _connections, _workspaces, _flags,
             rules, _links, Options.Create(_settings), _clock, NullLogger<CheckoutService>.Instance);
     }
 
@@ -68,7 +62,7 @@ public sealed class CheckoutServiceTests
         Options.Create(new EmailSettings { SmtpHost = "smtp", SmtpUser = "u", SmtpPassword = "p", FromAddress = "a@b.c", FromName = "yára", BaseUrl = "https://app.example/" }));
 
     private CreateCheckoutRequest Request(string key = "key-1", params CheckoutItem[] items) =>
-        new(_agent, _whatsApp, Sender, items, key, CustomerName: "Kemi", Note: "Deliver to Lekki");
+        new(OmniAgent, _whatsApp, Sender, items, key, CustomerName: "Kemi", Note: "Deliver to Lekki");
 
     private static CheckoutItem Item(Guid product, int quantity = 1, Guid? option = null) => new(product, option, quantity);
 
@@ -156,7 +150,7 @@ public sealed class CheckoutServiceTests
         Guid bag = _catalog.Product("Quilted bag", 4000m);
         await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
 
-        await _service.CreateAsync(Ws, new CreateCheckoutRequest(_agent, _whatsApp, Sender, [Item(bag, 2)], "key-2", CustomerEmail: "kemi@example.com"), default);
+        await _service.CreateAsync(Ws, new CreateCheckoutRequest(OmniAgent, _whatsApp, Sender, [Item(bag, 2)], "key-2", CustomerEmail: "kemi@example.com"), default);
 
         PaymentOrder order = Assert.Single(_orders.Orders);
         Assert.Equal(("Kemi", "kemi@example.com", "Deliver to Lekki"), (order.CustomerName, order.CustomerEmail, order.Note));
@@ -213,7 +207,7 @@ public sealed class CheckoutServiceTests
         Guid bag = _catalog.Product("Quilted bag", 4000m);
         CheckoutResult kemi = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
 
-        CheckoutResult tunde = await _service.CreateAsync(Ws, new CreateCheckoutRequest(_agent, _whatsApp, "2348099999999", [Item(bag, 2)], "key-2"), default);
+        CheckoutResult tunde = await _service.CreateAsync(Ws, new CreateCheckoutRequest(OmniAgent, _whatsApp, "2348099999999", [Item(bag, 2)], "key-2"), default);
 
         Assert.NotEqual(kemi.OrderId, tunde.OrderId);
         Assert.Equal((PaymentOrderStatus.AwaitingCheckout, 1), (_orders.Get(kemi.OrderId).Status, _orders.Get(kemi.OrderId).Lines.Single().Quantity));
@@ -221,7 +215,7 @@ public sealed class CheckoutServiceTests
 
     // ---- add_to_cart and remove_from_cart ---------------------------------------------
 
-    private ChangeCartRequest Change(string key, params CartItemChange[] items) => new(_agent, _whatsApp, Sender, items, key);
+    private ChangeCartRequest Change(string key, params CartItemChange[] items) => new(OmniAgent, _whatsApp, Sender, items, key);
 
     private static CartItemChange More(Guid product, int quantity = 1, Guid? option = null) => new(product, option, quantity);
 
@@ -410,12 +404,13 @@ public sealed class CheckoutServiceTests
     }
 
     [Fact]
-    public async Task Another_workspaces_agent_or_checkouts_off_changes_nothing()
+    public async Task Another_workspaces_conversation_or_checkouts_off_changes_nothing()
     {
         Guid bag = _catalog.Product("Quilted bag", 4000m);
+        Guid theirConnection = _connections.Add("ws-2", MessagingPlatform.WhatsApp);
         await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
 
-        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.AddToCartAsync(Ws, Change("key-2", More(bag)) with { AgentId = _otherAgent }, default));
+        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.AddToCartAsync(Ws, Change("key-2", More(bag)) with { ConnectionId = theirConnection }, default));
         _flags.On = false;
         await Assert.ThrowsAsync<CheckoutUnavailableException>(() => _service.RemoveFromCartAsync(Ws, Change("key-3", Less(bag)), default));
 
@@ -734,14 +729,43 @@ public sealed class CheckoutServiceTests
     }
 
     [Fact]
-    public async Task Another_workspaces_agent_or_conversation_is_refused()
+    public async Task Another_workspaces_conversation_is_refused()
     {
         Guid bag = _catalog.Product("Quilted bag", 4000m);
         Guid theirConnection = _connections.Add("ws-2", MessagingPlatform.WhatsApp);
 
-        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.CreateAsync(Ws, Request("k", Item(bag)) with { AgentId = _otherAgent }, default));
-        await Assert.ThrowsAsync<CheckoutRefusedException>(() => _service.CreateAsync(Ws, Request("k", Item(bag)) with { ConnectionId = theirConnection }, default));
+        CheckoutRefusedException refused = await Assert.ThrowsAsync<CheckoutRefusedException>(() =>
+            _service.CreateAsync(Ws, Request("k", Item(bag)) with { ConnectionId = theirConnection }, default));
+        Assert.Contains("connection_id", refused.Message);
         Assert.Empty(_orders.Orders);
+    }
+
+    [Fact]
+    public async Task The_agent_is_kept_as_omni_names_it_and_isnt_looked_up()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
+
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("k1", Item(bag)) with { AgentId = "  " + OmniAgent + " " }, default);
+        Assert.Equal(CheckoutService.CartReady, made.Status);
+        Assert.Equal(OmniAgent, Assert.Single(_orders.Orders).AgentId);
+
+        // Left out on a change: the cart keeps the agent that made it.
+        await _service.AddToCartAsync(Ws, Change("k2", More(bag)) with { AgentId = null }, default);
+        Assert.Equal(OmniAgent, Assert.Single(_orders.Orders).AgentId);
+    }
+
+    [Fact]
+    public async Task A_cart_needs_no_agent_id_but_refuses_one_too_long_to_be_an_id()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m, left: 5);
+
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("k1", Item(bag)) with { AgentId = null }, default);
+        Assert.Equal(CheckoutService.CartReady, made.Status);
+        Assert.Null(Assert.Single(_orders.Orders).AgentId);
+
+        CheckoutRefusedException refused = await Assert.ThrowsAsync<CheckoutRefusedException>(() =>
+            _service.CreateAsync(Ws, Request("k2", Item(bag)) with { AgentId = new string('a', 65) }, default));
+        Assert.Contains("agent_id", refused.Message);
     }
 
     [Fact]
@@ -819,7 +843,7 @@ public sealed class CheckoutServiceTests
         _stock.ShortWith = "Only 1 Quilted bag left.";
         // Another customer's cart: a new one, which can't be made without its stock.
         var refused = await Assert.ThrowsAsync<CheckoutRefusedException>(() =>
-            _service.CreateAsync(Ws, new CreateCheckoutRequest(_agent, _whatsApp, "2348099999999", [Item(bag, 2)], "k2"), default));
+            _service.CreateAsync(Ws, new CreateCheckoutRequest(OmniAgent, _whatsApp, "2348099999999", [Item(bag, 2)], "k2"), default));
         Assert.Contains("Only 1 Quilted bag left.", refused.Message);
         Assert.Equal(PaymentOrderStatus.Failed, _orders.Orders.Single(o => o.IdempotencyKey == "k2").Status);
     }
