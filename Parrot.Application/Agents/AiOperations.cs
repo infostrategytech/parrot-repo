@@ -95,6 +95,16 @@ public interface IAiOperationsService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gives the agent that asked an open question in this conversation the person's answer, which closes it, and says so
+    /// in the chat. The agent replies to the customer unless a person has taken over the conversation. Throws
+    /// <see cref="Domain.Exceptions.NotFoundException"/> when no such question is open there, and
+    /// <see cref="Domain.Exceptions.ValidationException"/> for an empty or overlong answer.
+    /// </summary>
+    Task<QuestionAnswerResponse> AnswerQuestionAsync(
+        string ownerUserId, string userToken, IReadOnlySet<Guid>? reach, Guid connectionId, string sender, string questionId,
+        QuestionAnswerRequest request, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Decides an approval as <paramref name="decidedBy"/>, the signed-in person. Only one still waiting on an open item
     /// in the workspace, on a channel the caller reaches, can be decided; anything else is
     /// <see cref="Domain.Exceptions.NotFoundException"/>, the same whatever the reason. The response's Status is one of

@@ -173,6 +173,26 @@ public sealed class ConversationsStateTests
         Assert.False(item.NeedsAnswer);
     }
 
+    // Answered or marked done here: only that question closes, and a read already on its way can't bring it back.
+    [Fact]
+    public void CloseAgentQuestion_ClosesThatQuestionOnlyAndKeepsItClosed()
+    {
+        ConversationItem item = ThreadWith(Question("esc_1", 0), Question("esc_2", 1));
+
+        ConversationsState.CloseAgentQuestion(item, "esc_1");
+
+        Assert.True(item.Messages.Single(m => m.Id == "esc_1").Answered);
+        Assert.False(item.Messages.Single(m => m.Id == "esc_2").Answered);
+        Assert.True(item.NeedsAnswer);
+
+        ConversationsState.CloseAgentQuestion(item, "esc_2");
+        item.Messages.RemoveAll(m => m.Id == "esc_1");
+        ConversationsState.Merge(item, [Question("esc_1", 0)]);
+
+        Assert.False(item.NeedsAnswer);
+        Assert.DoesNotContain(item.Messages, m => m.Id == "esc_1");
+    }
+
     // A read already on its way when the question was answered here must not show it again.
     [Fact]
     public void Merge_AQuestionAnsweredHereThisSession_IsNotBroughtBackByALateRead()
