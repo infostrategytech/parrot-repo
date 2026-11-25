@@ -137,6 +137,16 @@ public class ConversationsState
         item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
     }
 
+    /// <summary>An agent's question closed from here (answered, done, or found closed already): it leaves the attention strip,
+    /// the list row and Needs you follow at once, and a read already on its way can't bring it back.</summary>
+    public static void CloseAgentQuestion(ConversationItem item, string questionId)
+    {
+        foreach (ConvMessage question in item.Messages.Where(m => m.Kind == MessageKind.AiQuestion && m.Id == questionId))
+            question.Answered = true;
+        item.ClosedQuestions.Add(questionId);
+        item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+    }
+
     /// <summary>A reply the team sent answers the agent's questions asked before it, as the AI service reads it when
     /// Parrot announces the reply. Settled here once the channel has taken it; the next read follows the AI service.</summary>
     public static void SettleAgentQuestions(ConversationItem item, InboxMessageDto reply)

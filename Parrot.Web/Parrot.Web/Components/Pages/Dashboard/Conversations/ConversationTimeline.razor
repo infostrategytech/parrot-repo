@@ -299,20 +299,20 @@
                 {
                     <InlineError Message="@_learningError" OnDismiss="() => _learningError = null" />
                 }
-                @if (_learningMode == LearningMode.Answer && CanSaveForNextTime)
+                @if (_learningMode == LearningMode.Answer)
                 {
-                    @* Off unless chosen: many answers are about this customer only (an order, a delivery date), and what is
-                       saved is used with every customer from the next message. *@
-                    <Checkbox State="@(_saveForNextTime ? CheckboxState.Checked : CheckboxState.Unchecked)" StateChanged="SetSaveForNextTime"
-                              Label="Save for next time"
-                              Description="@($"{CapitalisedAgent} will use it with every customer. Leave it off for an answer about this customer only, like their order.")" />
-                    @if (_saveForNextTime)
+                    @* The answer goes to the agent, which replies to the customer. Saving is on unless unticked (owner,
+                       25 November 2026): the AI service writes it up from the question, so one box is enough. *@
+                    @if (CanSaveForNextTime)
                     {
-                        <TextArea Value="@RememberText" ValueChanged="value => _rememberText = value ?? string.Empty"
-                                  AriaLabel="@($"What {LearningAgent} should know")" Rows="3" AutoGrow
-                                  Placeholder="For example: We deliver to Ibadan for 3,500 naira, in 2 days." />
-                        <Typography TextStyle="TextStyle.Small12Medium" As="p" Prose Class="learning-dialog__note">Write it so it makes sense without the question.</Typography>
+                        <Checkbox State="@(_saveForNextTime ? CheckboxState.Checked : CheckboxState.Unchecked)" StateChanged="SetSaveForNextTime"
+                                  Label="Save for next time"
+                                  Description="@($"{CapitalisedAgent} will use it with every customer. Untick it for an answer about this customer only, like their order.")" />
                     }
+                    @* Off unless the person is replying here themselves: most answers are only for the agent to work with. *@
+                    <Checkbox State="@(_addToReply ? CheckboxState.Checked : CheckboxState.Unchecked)" StateChanged="SetAddToReply"
+                              Label="Also put it in my reply box"
+                              Description="@($"Ready to check and send to {Conversation.CustomerName} yourself.")" />
                 }
             </div>
         }
@@ -393,9 +393,7 @@
     private string _learningText = "";
     private string? _learningError;
     private bool _saveForNextTime;
-    // Null until the person edits what to remember: until then it is the answer, as it is typed.
-    private string? _rememberText;
-    private string RememberText => _rememberText ?? _learningText.Trim();
+    private bool _addToReply;
 
     // Saving an answer as knowledge: when the AI service keeps it, and for people who may change it (as on the Knowledge page).
     private bool CanSaveForNextTime => Knowledge.Enabled
@@ -406,6 +404,8 @@
         _saveForNextTime = state == CheckboxState.Checked;
         _learningError = null;
     }
+
+    private void SetAddToReply(CheckboxState state) => _addToReply = state == CheckboxState.Checked;
     private bool _savingLearning;
 
     // Questions stay as state for the attention strip; their completion is a real conversation event,
@@ -636,12 +636,16 @@
         _composer?.Focus();
     }
 
-    // A teammate's answer, into the reply box to read over and send (after anything already typed). While the agent is
-    // replying, the take-over choice opens, as Reply does; the words wait in the box.
-    private void UseAnswer(string text)
+    // A teammate's answer, into the reply box to read over and send (after anything already typed).
+    private void UseAnswer(string text) =>
+        PutInReplyBox(string.IsNullOrWhiteSpace(Conversation.Draft) ? text : $"{Conversation.Draft.TrimEnd()}\n{text}");
+
+    // The reply box holds this draft, to read over and send. While the agent is replying, the take-over choice opens, as
+    // Reply does; the words wait in the box.
+    private void PutInReplyBox(string draft)
     {
         if (_composerMode != ComposerMode.Reply) ChangeComposerMode(ComposerMode.Reply);
-        Conversation.Draft = string.IsNullOrWhiteSpace(Conversation.Draft) ? text : $"{Conversation.Draft.TrimEnd()}\n{text}";
+        Conversation.Draft = draft;
         Conversation.DraftRequestId = null;
         Conversation.SendError = null;
         _draftedBy = null;
@@ -805,8 +809,9 @@
         _learningMessage = message;
         _learningText = "";
         _learningError = null;
-        _saveForNextTime = false;
-        _rememberText = null;
+        _saveForNextTime = true;
+        // Ticked while a person is replying here: the agent won't message the customer, so the reply is theirs to send.
+        _addToReply = !Conversation.ReplyLocked;
     }
 
     private void CloseLearning()
@@ -820,46 +825,77 @@
     private async Task SaveLearningAsync()
     {
         if (_learningMessage is null || string.IsNullOrWhiteSpace(_learningText) || _savingLearning) return;
+        if (_learningMode == LearningMode.Answer)
+        {
+            await SendAnswerAsync(_learningMessage, _learningText.Trim());
+            return;
+        }
+
         _savingLearning = true;
         _learningError = null;
         try
         {
-            if (_learningMode == LearningMode.Correction)
-            {
-                await Features.CorrectAsync(Conversation.ConnectionId, Conversation.Sender, _learningMessage.Id, _learningText);
-            }
-            else
-            {
-                // Saved first: if the AI service refuses it, the dialog stays open with the reason and nothing has moved.
-                if (_saveForNextTime && CanSaveForNextTime && string.IsNullOrWhiteSpace(RememberText))
-                {
-                    _learningError = $"Write what {LearningAgent} should know, or untick Save for next time.";
-                    return;
-                }
-                if (_saveForNextTime && CanSaveForNextTime)
-                {
-                    await Knowledge.AddStatementAsync(RememberText, _lifetime.Token);
-                    Toasts.Show("Saved for next time.", description: $"{CapitalisedAgent} will use it from the next customer message.");
-                }
-
-                // The answer waits in the reply box to be checked; sending it is what closes the question (the AI
-                // service takes a team reply as the answer). While the agent is replying, the take-over choice opens.
-                _view = ThreadView.Messages;
-                UseAnswer(_learningText.Trim());
-            }
+            await Features.CorrectAsync(Conversation.ConnectionId, Conversation.Sender, _learningMessage.Id, _learningText);
             _learningMessage = null;
             _learningText = "";
             _scrollPending = true;
             await OnChanged.InvokeAsync();
         }
-        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException
-            or Parrot.Web.Features.Dashboard.Knowledge.KnowledgeSaveRefusedException) { _learningError = ex.Message; }
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException) { _learningError = ex.Message; }
         catch (Exception ex) when (ex is HttpRequestException || (ex is OperationCanceledException && !_lifetime.IsCancellationRequested))
         {
             // Refused in a way the store has no words for, or the AI service took too long.
             _learningError = "We couldn't save it for next time. Try again, or untick Save for next time.";
         }
         finally { _savingLearning = false; }
+    }
+
+    // The answer goes to the agent that asked, which closes the question (and saves it, when ticked, on the AI service's
+    // side). A refusal keeps the dialog open with the API's reason; a question closed elsewhere since keeps the words.
+    private async Task SendAnswerAsync(ConvMessage question, string answer)
+    {
+        _savingLearning = true;
+        _learningError = null;
+        ConversationItem conversation = Conversation;
+        string agent = LearningAgent;
+        bool save = _saveForNextTime && CanSaveForNextTime;
+        try
+        {
+            Parrot.Application.Contracts.Conversations.QuestionAnswerResponse sent =
+                await Client.AnswerQuestionAsync(conversation.ConnectionId, conversation.Sender, question.Id, answer, save, _lifetime.Token);
+            ConversationsState.CloseAgentQuestion(conversation, question.Id);
+            if (_addToReply)
+            {
+                _view = ThreadView.Messages;
+                PutInReplyBox(answer);
+            }
+            (string title, string description) = AgentAnswerOutcome.Sent(agent, conversation.CustomerName, sent.AgentReplies, save);
+            Toasts.Show(title, description: description);
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Done, answered or replied to since this chat was read: nothing went to the agent, so the words wait in the reply box.
+            ConversationsState.CloseAgentQuestion(conversation, question.Id);
+            _view = ThreadView.Messages;
+            PutInReplyBox(answer);
+            Toasts.Show("This question was already closed.", description: "Your answer is in the reply box.");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or InvalidOperationException)
+        {
+            _learningError = ex.Message;
+            return;
+        }
+        catch (OperationCanceledException) when (!_lifetime.IsCancellationRequested)
+        {
+            _learningError = $"Couldn't reach {agent}. Try again in a moment.";
+            return;
+        }
+        finally { _savingLearning = false; }
+
+        _learningMessage = null;
+        _learningText = "";
+        _scrollPending = true;
+        await OnChanged.InvokeAsync();
     }
 
     // A reply several agents wrote together is corrected for all of them.
@@ -875,16 +911,14 @@
         <Button Variant="ButtonVariant.Secondary" disabled="@_savingLearning" @onclick="CloseLearning">Cancel</Button>
         <Button Busy="@_savingLearning" disabled="@string.IsNullOrWhiteSpace(_learningText)" @onclick="SaveLearningAsync">@LearningConfirmLabel</Button>
     </div>;
-    private string LearningConfirmLabel => _learningMode == LearningMode.Correction ? "Save correction" : "Add to reply";
+    private string LearningConfirmLabel => _learningMode == LearningMode.Correction ? "Save correction" : $"Send to {LearningAgent}";
     private string LearningPrompt => _learningMode == LearningMode.Correction
         ? $"What should {LearningAgent} use next time?"
-        : "Type the answer";
+        : $"Your answer for {LearningAgent}";
     private string LearningCommitment => IsSharedCorrection ? "What was already sent stays as it is. Your agents will use this next time."
         : _learningMode == LearningMode.Correction
         ? $"What was already sent stays as it is. {LearningAgent} will use this next time."
-        : Conversation.ReplyLocked
-            ? $"It goes into your reply box. Take over to send it to {Conversation.CustomerName}. Sending it closes the question."
-            : $"It goes into your reply box, so you can check it before it goes to {Conversation.CustomerName}. Sending it closes the question.";
+        : AgentAnswerOutcome.Commitment(LearningAgent, Conversation.CustomerName, personReplying: !Conversation.ReplyLocked);
 
     private static string DateLabel(DateOnly date)
     {
@@ -978,19 +1012,14 @@
         try
         {
             await Client.MarkQuestionDoneAsync(conversation.ConnectionId, conversation.Sender, question.Id, _lifetime.Token);
-            // The list row and Needs you follow straight away, without waiting for the next refresh.
-            question.Answered = true;
-            conversation.ClosedQuestions.Add(question.Id);
-            conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+            ConversationsState.CloseAgentQuestion(conversation, question.Id);
             Toasts.Show("Marked as done.");
             await OnChanged.InvokeAsync();
         }
         catch (HttpRequestException e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
         {
             // Someone else closed it, or a reply did, since this chat was read: it is no longer waiting either way.
-            question.Answered = true;
-            conversation.ClosedQuestions.Add(question.Id);
-            conversation.NeedsAnswer = conversation.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+            ConversationsState.CloseAgentQuestion(conversation, question.Id);
             Toasts.Show("This question was already closed.");
             await OnChanged.InvokeAsync();
         }
