@@ -91,7 +91,8 @@ public class AiOperationsServiceTests
 
     private AgentActivityRecord Turn(
         string turn, string status, DateTime at, string conversation = AdaChat, string channel = "whatsapp",
-        string agent = Nova, string? escalation = null, string? approval = null, string? customerName = "Ada", string owner = Owner)
+        string agent = Nova, string? escalation = null, string? approval = null, string? customerName = "Ada", string owner = Owner,
+        IReadOnlyList<TurnContributor>? contributors = null)
     {
         AgentActivityRecord record = new()
         {
@@ -103,6 +104,7 @@ public class AiOperationsServiceTests
             Status = status,
             Channel = channel,
             AgentId = agent,
+            Contributors = contributors,
             EscalationId = escalation,
             ApprovalId = approval,
             CustomerRef = "2348012345678",
@@ -218,6 +220,45 @@ public class AiOperationsServiceTests
         Assert.Equal(1, novaOnInstagram.Conversations);
         Assert.Equal(2, whatsapp.Conversations);
         Assert.Equal(1, whatsapp.PassedToTeam);
+    }
+
+    // The AI service's hidden super agent sends a team's reply under its own id, never one of the owner's agents.
+    private const string SuperAgent = "agt_super";
+
+    private static TurnContributor Asked(string agent, string status) => new(agent, status);
+
+    [Fact]
+    public async Task TodayAsync_ATeamReply_CountsForEachAgentThatAnsweredInItAndOnceInTheTotals()
+    {
+        Turn("t1", "completed", Today.AddHours(9), conversation: "whatsapp:a:b", agent: SuperAgent,
+            contributors: [Asked(Nova, "answered"), Asked(Atlas, "answered")]);
+        Turn("t2", "escalated", Today.AddHours(10), conversation: "whatsapp:c:b", agent: SuperAgent, escalation: "esc_1",
+            contributors: [Asked(Nova, "answered"), Asked(Atlas, "timed_out")]);
+        Turn("t3", "failed", Today.AddHours(11), conversation: "whatsapp:d:b", agent: SuperAgent,
+            contributors: [Asked(Atlas, "failed")]);
+        Approval("apr_1", "t2", Today.AddHours(10), resolvedAt: Today.AddHours(10).AddMinutes(20));
+
+        AgentTodayResponse nova = await _sut.TodayAsync(Owner, Nova, null);
+        AgentTodayResponse atlas = await _sut.TodayAsync(Owner, Atlas, null);
+        AgentTodayResponse everyone = await _sut.TodayAsync(Owner, null, null);
+
+        Assert.Equal(new AgentTodayResponse(2, 1, 1, 1, 20), nova);
+        Assert.Equal(new AgentTodayResponse(1, 1, 0, 0, null), atlas);
+        Assert.Equal(new AgentTodayResponse(3, 1, 2, 1, 20), everyone);
+    }
+
+    [Fact]
+    public async Task WeekAndRecentAsync_ForAnAgentThatAnsweredInATeamReply_IncludeIt()
+    {
+        Turn("t1", "completed", Now.UtcDateTime.AddMinutes(-30), agent: SuperAgent, contributors: [Asked(Atlas, "answered")]);
+        Turn("t2", "completed", Now.UtcDateTime.AddMinutes(-10), conversation: "whatsapp:c:b", agent: SuperAgent,
+            contributors: [Asked(Nova, "answered"), Asked(Atlas, "timed_out")]);
+
+        IReadOnlyList<int> week = await _sut.WeekAsync(Owner, Atlas, null);
+        IReadOnlyList<RecentConversationResponse> recent = await _sut.RecentAsync(Owner, Atlas, null, 20);
+
+        Assert.Equal([0, 0, 0, 0, 0, 0, 1], week);
+        Assert.Equal(["t1"], recent.Select(r => r.TurnId));
     }
 
     [Fact]

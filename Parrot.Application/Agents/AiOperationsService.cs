@@ -404,8 +404,14 @@ public sealed class AiOperationsService(
             .ToList();
 
     private static bool Matches(AgentActivityRecord turn, string? agentId, string? channel) =>
-        (string.IsNullOrWhiteSpace(agentId) || string.Equals(turn.AgentId, agentId, StringComparison.OrdinalIgnoreCase))
+        (string.IsNullOrWhiteSpace(agentId) || IsByAgent(turn, agentId))
         && (string.IsNullOrWhiteSpace(channel) || string.Equals(turn.Channel, channel, StringComparison.OrdinalIgnoreCase));
+
+    // A reply from the AI service's hidden super agent names the super agent; it counts for each agent that answered in
+    // it, never for one that was asked and didn't answer. With no agent asked, the turn counts only in the totals.
+    private static bool IsByAgent(AgentActivityRecord turn, string agentId) =>
+        string.Equals(turn.AgentId, agentId, StringComparison.OrdinalIgnoreCase)
+        || (turn.Contributors?.Any(c => c.Status == TurnContributor.Answered && string.Equals(c.AgentId, agentId, StringComparison.OrdinalIgnoreCase)) ?? false);
 
     // A request names its channel but not its agent; the turn it belongs to names both.
     private static bool MatchesRequest(AgentActivityRecord request, Dictionary<string, AgentActivityRecord> turns, string? agentId, string? channel)
@@ -413,8 +419,7 @@ public sealed class AiOperationsService(
         AgentActivityRecord? turn = request.TurnId is not null && turns.TryGetValue(request.TurnId, out AgentActivityRecord? t) ? t : null;
         bool channelOk = string.IsNullOrWhiteSpace(channel)
             || string.Equals(request.Channel ?? turn?.Channel, channel, StringComparison.OrdinalIgnoreCase);
-        bool agentOk = string.IsNullOrWhiteSpace(agentId)
-            || (turn is not null && string.Equals(turn.AgentId, agentId, StringComparison.OrdinalIgnoreCase));
+        bool agentOk = string.IsNullOrWhiteSpace(agentId) || (turn is not null && IsByAgent(turn, agentId));
         return channelOk && agentOk;
     }
 

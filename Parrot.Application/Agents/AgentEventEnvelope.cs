@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Parrot.Application.Messaging;
 
 namespace Parrot.Application.Agents;
 
@@ -91,6 +92,7 @@ public static class AgentActivityMapper
             ConversationKey = envelope.ConversationKey,
             TurnId = turnId,
             AgentId = Text(payload, "agent_id"),
+            Contributors = Contributors(payload),
             Decision = Text(payload, "decision"),
             Confidence = Number(payload, "confidence"),
             Status = status,
@@ -113,6 +115,25 @@ public static class AgentActivityMapper
     }
 
     private static string Cap(string raw) => raw.Length <= MaxPayloadBytes ? raw : "{}";
+
+    // Read on arrival, not from the stored payload: that is dropped when the reply makes it too big. Ids and status only,
+    // as many as the AI service asks at most; an entry without an id is left out.
+    private static List<TurnContributor>? Contributors(JsonElement payload)
+    {
+        if (payload.ValueKind != JsonValueKind.Object
+            || !payload.TryGetProperty("contributors", out JsonElement list)
+            || list.ValueKind != JsonValueKind.Array) return null;
+
+        List<TurnContributor> read = [];
+        foreach (JsonElement entry in list.EnumerateArray())
+        {
+            if (read.Count == ReplyContributors.MaxContributors) break;
+            if (Text(entry, "agent_id") is not { Length: > 0 } agentId) continue;
+            read.Add(new TurnContributor(agentId, Text(entry, "status")?.ToLowerInvariant() ?? "unknown"));
+        }
+
+        return read.Count == 0 ? null : read;
+    }
 
     /// <summary>The instant the orchestrator wrote, in UTC; null when it is missing or not a date.</summary>
     public static DateTime? Instant(string? text) =>
