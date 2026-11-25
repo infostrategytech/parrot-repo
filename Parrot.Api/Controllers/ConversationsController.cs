@@ -40,6 +40,10 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     // The connections a channel-limited team member reaches; null for everyone else.
     private IReadOnlySet<Guid>? Reach => HttpContext.WorkspaceAccess().AllowedConnections;
 
+    // Who may change what the agents know, as the web's Knowledge access rule names them; the owner always may.
+    private static readonly string[] KnowledgeEditors =
+        [WorkspacePermissions.AgentsCreate, WorkspacePermissions.AgentsEdit, WorkspacePermissions.WorkspaceManage];
+
     [HttpGet]
     public async Task<IActionResult> List(int skip = 0, int take = 50, CancellationToken cancellationToken = default)
     {
@@ -241,6 +245,9 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         [FromBody] QuestionAnswerRequest request, CancellationToken cancellationToken)
     {
         HttpContext.RequireReach(connectionId);
+        // Saving it changes what the agents know for every customer: for the people who may change that on the Knowledge page.
+        if (request.SaveForNextTime && !KnowledgeEditors.Any(HttpContext.WorkspaceAccess().Can))
+            throw new ForbiddenException("Your role in this workspace does not allow saving answers for next time. Untick Save for next time, or ask the owner for access.");
         return Ok(await operations.AnswerQuestionAsync(Owner, HttpContext.SessionToken(), Reach, connectionId, sender, questionId, request, cancellationToken));
     }
 
