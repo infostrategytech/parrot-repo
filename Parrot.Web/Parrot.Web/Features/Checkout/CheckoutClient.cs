@@ -20,11 +20,12 @@ public sealed record CheckoutChange(CheckoutView Checkout, string? Message = nul
 
 /// <summary>
 /// A checkout as its customer sees it, from GET api/checkout/{token}. State is "open", "paying", "paid", "expired",
-/// "replaced" or "unavailable". QuotedTotal is what the business sent; Total is what it costs now.
+/// "replaced" or "unavailable". QuotedTotal is what the business sent; Total is what it costs now. ChatUrl opens the
+/// chat the checkout came from (wa.me, ig.me, m.me), when its channel has such a link.
 /// </summary>
 public sealed record CheckoutView(string State, string Business, string? LogoUrl, string? CustomerName, string Currency,
     IReadOnlyList<CheckoutLine> Lines, decimal QuotedTotal, decimal Total, bool PriceChanged, string PriceChangeRule,
-    bool CanPay, string? Message, DateTime? ExpiresAt, string? PaymentUrl);
+    bool CanPay, string? Message, DateTime? ExpiresAt, string? PaymentUrl, string? ChatUrl = null);
 
 /// <summary>
 /// What pressing Pay led to: a payment page to go to (PaymentUrl), or the checkout as it is now (Checkout) with why

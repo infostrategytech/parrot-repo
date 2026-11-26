@@ -202,6 +202,18 @@
                     }
                 </div>
             }
+
+            @* Back to the chat the link came in: to add something while it's open, or to ask for help or a new
+               link once it isn't. The agent changes this same checkout, so the link stays the one to pay. *@
+            @if (!_waiting && !string.IsNullOrWhiteSpace(view.ChatUrl))
+            {
+                <div class="checkout__actions">
+                    <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Large" FullWidth @onclick="() => Go(view.ChatUrl)">
+                        <IconLeft><Icon Name="@ChatGlyph(view.ChatUrl)" /></IconLeft>
+                        <ChildContent>@(view.State == "open" ? "Back to chat to add more" : $"Message {view.Business}")</ChildContent>
+                    </Button>
+                </div>
+            }
         }
     </div>
 </main>
@@ -358,6 +370,12 @@
     private string? Detail(CheckoutView view, CheckoutLine line) =>
         Editable(view, line) ? (string.IsNullOrWhiteSpace(line.VariantName) ? null : line.VariantName)
         : string.IsNullOrWhiteSpace(line.VariantName) ? $"Qty {line.Quantity}" : $"{line.VariantName} · Qty {line.Quantity}";
+
+    private static IconName ChatGlyph(string url) =>
+        url.StartsWith("https://wa.me/", StringComparison.OrdinalIgnoreCase) ? IconName.RiWhatsappFill
+        : url.StartsWith("https://ig.me/", StringComparison.OrdinalIgnoreCase) ? IconName.RiInstagramFill
+        : url.StartsWith("https://m.me/", StringComparison.OrdinalIgnoreCase) ? IconName.RiFacebookCircleFill
+        : IconName.RiChat3Fill;
 
     private static bool Ended(string state) => state is "paid" or "expired" or "replaced" or "unavailable";
 

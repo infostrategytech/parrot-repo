@@ -53,4 +53,10 @@ public interface ITeamRepository
 public interface IWorkspaceConnectionDirectory
 {
     Task<IReadOnlyList<(Guid Id, MessagingPlatform Platform)>> ListAsync(string workspaceId);
+
+    /// <summary>
+    /// A link that opens a chat with the business on the connection's channel (<see cref="ChatLink"/>), or null when
+    /// the channel has none, the connection is off, or it isn't the workspace's.
+    /// </summary>
+    Task<string?> ChatLinkAsync(string workspaceId, Guid connectionId, CancellationToken ct = default);
 }

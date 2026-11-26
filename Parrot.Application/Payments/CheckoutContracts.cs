@@ -137,6 +137,8 @@ public sealed record ChangeCheckoutRequest(IReadOnlyList<CheckoutItem> Items);
 /// The customer's checkout page. total is what Pay will charge; quoted_total what the agent said.
 /// can_pay is false when an item can't be had, a price changed and the business doesn't allow
 /// that, or the checkout is no longer open; message says why, in words for the customer.
+/// chat_url opens the chat the checkout was sent in (wa.me, ig.me, m.me), so the customer can go back and ask for
+/// something else; null when the channel has no such link.
 /// </summary>
 public sealed record CheckoutView(
     string State,
@@ -152,7 +154,8 @@ public sealed record CheckoutView(
     bool CanPay,
     string? Message,
     DateTime? ExpiresAt,
-    string? PaymentUrl);
+    string? PaymentUrl,
+    string? ChatUrl = null);
 
 /// <summary>Pressing Pay: the total the customer was shown, so a price that changed since isn't charged unseen.</summary>
 public sealed record PayCheckoutRequest(decimal ExpectedTotal);

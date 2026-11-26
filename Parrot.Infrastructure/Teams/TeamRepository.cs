@@ -126,4 +126,20 @@ public sealed class WorkspaceConnectionDirectory(ApplicationDbContext db) : IWor
             .Select(id => (id, MessagingPlatform.TikTok)));
         return connections;
     }
+
+    // A connection that's been turned off has no one answering it, so it gets no link.
+    public async Task<string?> ChatLinkAsync(string workspaceId, Guid connectionId, CancellationToken ct = default)
+    {
+        string? phone = await db.WhatsAppConnections.AsNoTracking()
+            .Where(c => c.Id == connectionId && c.WorkspaceId == workspaceId && c.DisabledAt == null).Select(c => c.DisplayPhoneNumber).FirstOrDefaultAsync(ct);
+        if (phone is not null) return ChatLink.For(MessagingPlatform.WhatsApp, phone);
+
+        string? username = await db.InstagramConnections.AsNoTracking()
+            .Where(c => c.Id == connectionId && c.WorkspaceId == workspaceId && c.DisabledAt == null).Select(c => c.Username).FirstOrDefaultAsync(ct);
+        if (username is not null) return ChatLink.For(MessagingPlatform.Instagram, username);
+
+        string? page = await db.FacebookConnections.AsNoTracking()
+            .Where(c => c.Id == connectionId && c.WorkspaceId == workspaceId && c.DisabledAt == null).Select(c => c.PageId).FirstOrDefaultAsync(ct);
+        return ChatLink.For(MessagingPlatform.Facebook, page);
+    }
 }
