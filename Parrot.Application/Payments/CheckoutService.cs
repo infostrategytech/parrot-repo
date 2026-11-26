@@ -642,11 +642,11 @@ public sealed partial class CheckoutService(
         }
         catch (CheckoutRefusedException ex)
         {
-            throw new CheckoutChangedException(ex.Message, Open(order, Business(await workspaces.GetByIdAsync(order.WorkspaceId)), null, rules, ex.Message));
+            throw new CheckoutChangedException(ex.Message, Open(order, await SellerAsync(order, await workspaces.GetByIdAsync(order.WorkspaceId), ct), null, rules, ex.Message));
         }
 
         Workspace? workspace = await workspaces.GetByIdAsync(order.WorkspaceId);
-        CheckoutView now = Open(order, Business(workspace), quotes, rules, null);
+        CheckoutView now = Open(order, await SellerAsync(order, workspace, ct), quotes, rules, null);
         if (!now.CanPay)
         {
             throw new CheckoutChangedException(now.Message ?? "This checkout can't be paid as it stands.", now);
@@ -743,7 +743,7 @@ public sealed partial class CheckoutService(
     private async Task<CheckoutView> ViewAsync(PaymentOrder order, CancellationToken ct)
     {
         Workspace? workspace = await workspaces.GetByIdAsync(order.WorkspaceId);
-        (string name, string? logo) = Business(workspace);
+        Seller seller = await SellerAsync(order, workspace, ct);
         bool lapsed = order.ExpiresAt <= Now;
         string state = order.Status switch
         {
@@ -762,15 +762,15 @@ public sealed partial class CheckoutService(
             try
             {
                 List<LineQuote> quotes = await QuoteAsync(order.WorkspaceId, Items(order), countStock: order.HoldMode != CheckoutHoldMode.AtCheckout, ct);
-                return Open(order, (name, logo), quotes, rules, null);
+                return Open(order, seller, quotes, rules, null);
             }
             catch (CheckoutRefusedException ex)
             {
-                return Open(order, (name, logo), null, rules, ex.Message);
+                return Open(order, seller, null, rules, ex.Message);
             }
             catch (CheckoutUnavailableException)
             {
-                return Open(order, (name, logo), null, rules, "We can't check prices right now. Try again in a few minutes.");
+                return Open(order, seller, null, rules, "We can't check prices right now. Try again in a few minutes.");
             }
         }
 
@@ -786,14 +786,14 @@ public sealed partial class CheckoutService(
         CheckoutLineView[] stored = order.Lines.Select(l => new CheckoutLineView(l.Name, l.VariantName, l.Quantity,
             FromMinor(l.QuotedUnitMinor), FromMinor(l.UnitPriceMinor), FromMinor(l.LineTotalMinor), l.UnitPriceMinor != l.QuotedUnitMinor, null)).ToArray();
         WorkspacePaymentSettings shownRules = await workspaceSettings.ResolveAsync(order.WorkspaceId, ct);
-        return new CheckoutView(state, name, logo, order.CustomerName, order.Currency, stored,
+        return new CheckoutView(state, seller.Name, seller.Logo, order.CustomerName, order.Currency, stored,
             FromMinor(order.QuotedTotalMinor == 0 ? order.TotalMinor : order.QuotedTotalMinor), FromMinor(order.TotalMinor),
             order.QuotedTotalMinor != 0 && order.TotalMinor != order.QuotedTotalMinor, shownRules.PriceChangeRule, false, message,
-            order.ExpiresAt, state == CheckoutState.Paying ? order.PaymentUrl : null);
+            order.ExpiresAt, state == CheckoutState.Paying ? order.PaymentUrl : null, seller.ChatUrl);
     }
 
     /// <summary>An open checkout as the customer sees it: each line at today's price, with what changed.</summary>
-    private CheckoutView Open(PaymentOrder order, (string Name, string? Logo) business, List<LineQuote>? quotes, WorkspacePaymentSettings rules, string? problem)
+    private CheckoutView Open(PaymentOrder order, Seller business, List<LineQuote>? quotes, WorkspacePaymentSettings rules, string? problem)
     {
         List<CheckoutLineView> lines = [];
         bool changed = false;
@@ -820,7 +820,7 @@ public sealed partial class CheckoutService(
             : null);
         bool canPay = !blocked && !(changed && rules.PriceChangeRule == PriceChangeRule.Block);
         return new CheckoutView(CheckoutState.Open, business.Name, business.Logo, order.CustomerName, order.Currency, lines,
-            FromMinor(order.QuotedTotalMinor), FromMinor(total), changed, rules.PriceChangeRule, canPay, message, order.ExpiresAt, null);
+            FromMinor(order.QuotedTotalMinor), FromMinor(total), changed, rules.PriceChangeRule, canPay, message, order.ExpiresAt, null, business.ChatUrl);
     }
 
     /// <summary>
@@ -832,8 +832,13 @@ public sealed partial class CheckoutService(
         : quote.Left is not int left ? MaxQuantity
         : Math.Clamp(left + (order.HoldMode == CheckoutHoldMode.AtCheckout ? line.Quantity : 0), 0, MaxQuantity);
 
-    private static (string Name, string? Logo) Business(Workspace? workspace)
-        => (string.IsNullOrWhiteSpace(workspace?.Name) ? "Your order" : Plain(workspace!.Name!.Trim()), workspace?.LogoUrl);
+    /// <summary>Who the customer is buying from, as the checkout shows them, and the chat to go back to.</summary>
+    private sealed record Seller(string Name, string? Logo, string? ChatUrl);
+
+    private async Task<Seller> SellerAsync(PaymentOrder order, Workspace? workspace, CancellationToken ct) => new (
+        string.IsNullOrWhiteSpace(workspace?.Name) ? "Your order" : Plain(workspace!.Name!.Trim()),
+        workspace?.LogoUrl,
+        await connections.ChatLinkAsync(order.WorkspaceId, order.ConnectionId, ct));
 
     /// <summary>Pay couldn't go ahead: the checkout is open again, as the customer last saw it.</summary>
     private async Task BackToCheckoutAsync(PaymentOrder order, List<PaymentOrderLine> lines, long total)

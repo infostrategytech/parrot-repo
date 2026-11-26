@@ -145,6 +145,29 @@ public sealed class CheckoutServiceTests
     }
 
     [Fact]
+    public async Task The_checkout_page_leads_back_to_the_chat_it_was_sent_in_open_or_not()
+    {
+        _connections.ChatLinks[_whatsApp] = "https://wa.me/2348000000000";
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+
+        Assert.Equal("https://wa.me/2348000000000", (await _service.GetAsync(TokenOf(made), default)).ChatUrl);
+
+        _clock.Advance(TimeSpan.FromHours(2));
+        CheckoutView expired = await _service.GetAsync(TokenOf(made), default);
+        Assert.Equal((CheckoutState.Expired, "https://wa.me/2348000000000"), (expired.State, expired.ChatUrl));
+    }
+
+    [Fact]
+    public async Task A_channel_without_a_chat_link_leaves_it_off()
+    {
+        Guid bag = _catalog.Product("Quilted bag", 4000m);
+        CheckoutResult made = await _service.CreateAsync(Ws, Request("key-1", Item(bag)), default);
+
+        Assert.Null((await _service.GetAsync(TokenOf(made), default)).ChatUrl);
+    }
+
+    [Fact]
     public async Task A_change_keeps_the_customers_details_it_isnt_given()
     {
         Guid bag = _catalog.Product("Quilted bag", 4000m);
