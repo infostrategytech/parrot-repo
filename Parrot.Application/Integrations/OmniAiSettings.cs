@@ -22,15 +22,9 @@ public class OmniAiSettings
     public int TimeoutSeconds { get; set; } = 30;
 
     /// <summary>
-    /// Several agents per channel, answered through the AI service's super agent. Turn on together with the
-    /// service's own switch (OMNI_MULTI_AGENT_ENABLED); off, Parrot works as it did with one agent per channel.
+    /// Every workspace gets a switch for several agents sharing a number (on its Overview), off until it turns it on.
+    /// On by default, so no server setting is needed; false takes the switch away and every workspace answers with one
+    /// agent per number.
     /// </summary>
-    public bool MultiAgentEnabled { get; set; }
-
-    /// <summary>
-    /// Temporary, for the live test of agents sharing a number: the workspaces (ids, comma-separated) that get a switch
-    /// for it on their Overview. Each turns it on and off for itself; every other workspace stays on one agent per
-    /// number. Empty: none. Needs MultiAgentEnabled.
-    /// </summary>
-    public string MultiAgentTestWorkspaceIds { get; set; } = "";
+    public bool MultiAgentEnabled { get; set; } = true;
 }

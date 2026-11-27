@@ -53,7 +53,7 @@ public sealed class ConversationsControllerTests
 
     // Live agents switched on for each number, when several agents can share one.
     private readonly Dictionary<Guid, IReadOnlyList<ConversationAgentRef>> _connectionAgents = [];
-    // The workspace is in the live test of agents sharing a number; this is whether its switch is on.
+    // Whether the workspace's switch for agents sharing a number is on.
     private bool _sharesChannels;
 
     private ConversationsController Controller(WorkspaceAccess access)
@@ -81,7 +81,7 @@ public sealed class ConversationsControllerTests
         Mock<IMultiAgentSwitchStore> switches = new();
         switches.Setup(s => s.IsOnAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(() => _sharesChannels);
         MultiAgentSwitch multiAgent = new(switches.Object,
-            Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = true, MultiAgentTestWorkspaceIds = Owner }),
+            Options.Create(new OmniAiSettings { Enabled = true }),
             Mock.Of<IAppLogger<MultiAgentSwitch>>());
 
         // None of these endpoints send, take notes or read the other channels.

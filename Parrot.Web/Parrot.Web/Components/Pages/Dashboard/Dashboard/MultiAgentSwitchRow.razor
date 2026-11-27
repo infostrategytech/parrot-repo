@@ -6,9 +6,9 @@
 @inject ToastService Toasts
 @inject ILogger<MultiAgentSwitchRow> Logger
 
-@* Temporary, for the live test of agents sharing a number (owner, 27 November 2026): a test workspace's own switch,
-   to turn it off at once if something breaks there and back on once it is fixed. Only the workspaces the server lists
-   for the test have it, and only people who may edit agents see it. Removed with the switch after the test. *@
+@* Temporary, for the live test of agents sharing a number (owner, 27 November 2026): the workspace's own switch, off
+   until turned on, to turn it off at once if something breaks and back on once it is fixed. Only people who may edit
+   agents see it. Removed with the switch after the test. *@
 @if (_switch is { IsOffered: true } current && CanChange)
 {
     <article class="multi-agent-switch" aria-labelledby="multi-agent-switch-title">

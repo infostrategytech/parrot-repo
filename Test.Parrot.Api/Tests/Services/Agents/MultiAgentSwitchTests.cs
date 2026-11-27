@@ -8,12 +8,11 @@ using Parrot.Domain.Exceptions;
 
 namespace Test.Parrot.Api.Tests.Services.Agents;
 
-// The temporary switch for the live test of agents sharing a number: only the listed workspaces have it, each for itself.
+// The temporary switch for the live test of agents sharing a number: every workspace has it, each for itself, off until turned on.
 public sealed class MultiAgentSwitchTests
 {
-    private const string Tested = "workspace-test";
-    private const string OtherTested = "workspace-test-2";
-    private const string Customer = "workspace-customer";
+    private const string WorkspaceA = "workspace-a";
+    private const string WorkspaceB = "workspace-b";
 
     private sealed class InMemoryStore : IMultiAgentSwitchStore
     {
@@ -31,14 +30,20 @@ public sealed class MultiAgentSwitchTests
 
     private readonly InMemoryStore _store = new();
 
-    private MultiAgentSwitch Switch(bool serverAllows = true, string testWorkspaces = $"{Tested}, {OtherTested}") => new(_store,
-        Options.Create(new OmniAiSettings { MultiAgentEnabled = serverAllows, MultiAgentTestWorkspaceIds = testWorkspaces }),
-        Mock.Of<IAppLogger<MultiAgentSwitch>>());
+    private MultiAgentSwitch Switch(bool serverAllows = true) => new(_store,
+        Options.Create(new OmniAiSettings { MultiAgentEnabled = serverAllows }), Mock.Of<IAppLogger<MultiAgentSwitch>>());
+
+    // Live needs no setting from DevOps: the switch is there unless the server takes it away.
+    [Fact]
+    public void Settings_ByDefault_GiveEveryWorkspaceTheSwitch()
+    {
+        Assert.True(new OmniAiSettings().MultiAgentEnabled);
+    }
 
     [Fact]
-    public async Task GetAsync_ForATestWorkspaceNeverSwitched_IsOfferedAndOff()
+    public async Task GetAsync_ForAWorkspaceNeverSwitched_IsOfferedAndOff()
     {
-        Assert.Equal(new MultiAgentSwitchResponse(true, false), await Switch().GetAsync(Tested, default));
+        Assert.Equal(new MultiAgentSwitchResponse(true, false), await Switch().GetAsync(WorkspaceA, default));
     }
 
     [Fact]
@@ -46,48 +51,34 @@ public sealed class MultiAgentSwitchTests
     {
         MultiAgentSwitch multiAgent = Switch();
 
-        Assert.Equal(new MultiAgentSwitchResponse(true, true), await multiAgent.SetAsync(Tested, "user-ngozi", new SetMultiAgentSwitchRequest(true), default));
-        Assert.True(await multiAgent.IsOnAsync(Tested, default));
-        Assert.False(await multiAgent.IsOnAsync(OtherTested, default));
-        Assert.Equal("user-ngozi", _store.Switches[Tested].ChangedBy);
+        Assert.Equal(new MultiAgentSwitchResponse(true, true), await multiAgent.SetAsync(WorkspaceA, "user-ngozi", new SetMultiAgentSwitchRequest(true), default));
+        Assert.True(await multiAgent.IsOnAsync(WorkspaceA, default));
+        Assert.False(await multiAgent.IsOnAsync(WorkspaceB, default));
+        Assert.Equal("user-ngozi", _store.Switches[WorkspaceA].ChangedBy);
 
-        await multiAgent.SetAsync(Tested, "user-ngozi", new SetMultiAgentSwitchRequest(false), default);
-        Assert.False(await multiAgent.IsOnAsync(Tested, default));
+        await multiAgent.SetAsync(WorkspaceA, "user-ngozi", new SetMultiAgentSwitchRequest(false), default);
+        Assert.False(await multiAgent.IsOnAsync(WorkspaceA, default));
     }
 
     [Fact]
-    public async Task SetAsync_ForAWorkspaceNotInTheTest_RefusesAndChangesNothing()
+    public async Task SetAsync_WhenTheServerTakesTheSwitchAway_RefusesAndChangesNothing()
     {
         ValidationException refused = await Assert.ThrowsAsync<ValidationException>(() =>
-            Switch().SetAsync(Customer, "user-1", new SetMultiAgentSwitchRequest(true), default));
+            Switch(serverAllows: false).SetAsync(WorkspaceA, "user-1", new SetMultiAgentSwitchRequest(true), default));
 
-        Assert.Equal("Agents sharing a number isn't available for this workspace.", refused.Message);
+        Assert.Equal("Agents sharing a number isn't available right now.", refused.Message);
         Assert.Empty(_store.Switches);
     }
 
-    // A workspace taken out of the list, or the server setting turned off, is off at once whatever it saved.
-    [Theory]
-    [InlineData(false, $"{Tested}")]
-    [InlineData(true, "")]
-    [InlineData(true, OtherTested)]
-    public async Task IsOnAsync_WhenTheServerNoLongerOffersIt_IsOffAndSaysSo(bool serverAllows, string testWorkspaces)
-    {
-        await Switch().SetAsync(Tested, "user-ngozi", new SetMultiAgentSwitchRequest(true), default);
-
-        MultiAgentSwitch now = Switch(serverAllows, testWorkspaces);
-
-        Assert.False(await now.IsOnAsync(Tested, default));
-        Assert.Equal(new MultiAgentSwitchResponse(false, false), await now.GetAsync(Tested, default));
-    }
-
+    // The server setting turned off is off at once for every workspace, whatever each saved.
     [Fact]
-    public void IsOffered_ReadsTheListLeniently()
+    public async Task IsOnAsync_WhenTheServerTakesTheSwitchAway_IsOffAndSaysSo()
     {
-        OmniAiSettings settings = new() { MultiAgentEnabled = true, MultiAgentTestWorkspaceIds = " ,WORKSPACE-TEST ,, workspace-test-2 " };
+        await Switch().SetAsync(WorkspaceA, "user-ngozi", new SetMultiAgentSwitchRequest(true), default);
 
-        Assert.True(MultiAgentSwitch.IsOffered(settings, Tested));
-        Assert.True(MultiAgentSwitch.IsOffered(settings, OtherTested));
-        Assert.False(MultiAgentSwitch.IsOffered(settings, Customer));
-        Assert.False(MultiAgentSwitch.IsOffered(settings, ""));
+        MultiAgentSwitch now = Switch(serverAllows: false);
+
+        Assert.False(await now.IsOnAsync(WorkspaceA, default));
+        Assert.Equal(new MultiAgentSwitchResponse(false, false), await now.GetAsync(WorkspaceA, default));
     }
 }

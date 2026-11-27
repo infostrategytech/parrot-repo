@@ -9,7 +9,7 @@ using Parrot.Domain.Exceptions;
 namespace Parrot.Api.Controllers;
 
 /// <summary>
-/// Temporary: the switch for agents sharing a number, for the workspaces in the live test (see MultiAgentSwitch).
+/// Temporary: each workspace's switch for agents sharing a number, for the live test (see MultiAgentSwitch).
 /// It is always the token's workspace; there is no id to give.
 /// </summary>
 [ApiController]

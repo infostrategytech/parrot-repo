@@ -58,7 +58,7 @@ public sealed class OmniAiAgentChannelLookup(
     // channel kind still works for one agent per number.
     private async Task<bool> SharesNumbersAsync(string workspaceId, CancellationToken ct)
     {
-        if (!MultiAgentSwitch.IsOffered(settings.Value, workspaceId)) return false;
+        if (!MultiAgentSwitch.IsOffered(settings.Value)) return false;
         try
         {
             return await switches.IsOnAsync(workspaceId, ct);

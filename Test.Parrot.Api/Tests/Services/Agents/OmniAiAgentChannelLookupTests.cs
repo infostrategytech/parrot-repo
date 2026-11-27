@@ -77,14 +77,13 @@ public class OmniAiAgentChannelLookupTests
         _orchestrator.Verify(o => o.GetConnectionAgentsAsync(Workspace, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    // Only workspaces in the live test have the switch; another's is never read.
+    // With the server setting off, no workspace's switch is read: every one routes by channel kind.
     [Fact]
-    public async Task IsAgentLiveAsync_ForAWorkspaceNotInTheTest_AnswersForTheChannelKindWhateverItsSwitchSays()
+    public async Task IsAgentLiveAsync_WhenTheServerTakesTheSwitchAway_AnswersForTheChannelKindWhateverItsSwitchSays()
     {
         _orchestrator.Setup(o => o.GetChannelAgentMapAsync(Workspace, It.IsAny<CancellationToken>()))
             .ReturnsAsync(new Dictionary<string, ConversationAgentRef> { ["whatsapp"] = Tolu });
-        _switches.Setup(s => s.IsOnAsync(Workspace, It.IsAny<CancellationToken>())).ReturnsAsync(true);
-        OmniAiAgentChannelLookup lookup = Lookup(sharesChannels: true, testWorkspaces: "workspace-2");
+        OmniAiAgentChannelLookup lookup = Lookup(sharesChannels: true, serverAllows: false);
 
         Assert.True(await lookup.IsAgentLiveAsync(Workspace, "whatsapp", Unanswered, CancellationToken.None));
         _orchestrator.Verify(o => o.GetConnectionAgentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
@@ -106,15 +105,15 @@ public class OmniAiAgentChannelLookupTests
 
     private readonly Mock<IMultiAgentSwitchStore> _switches = new();
 
-    // The workspace is in the live test; sharesChannels is whether its switch is on.
-    private OmniAiAgentChannelLookup Lookup(bool sharesChannels, string testWorkspaces = Workspace)
+    // sharesChannels is whether the workspace's switch is on.
+    private OmniAiAgentChannelLookup Lookup(bool sharesChannels, bool serverAllows = true)
     {
         _switches.Setup(s => s.IsOnAsync(Workspace, It.IsAny<CancellationToken>())).ReturnsAsync(sharesChannels);
         return new OmniAiAgentChannelLookup(
             _orchestrator.Object,
             _switches.Object,
             new MemoryCache(new MemoryCacheOptions()),
-            Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = true, MultiAgentTestWorkspaceIds = testWorkspaces }),
+            Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = serverAllows }),
             NullLogger<OmniAiAgentChannelLookup>.Instance);
     }
 }

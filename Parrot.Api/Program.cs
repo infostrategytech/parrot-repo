@@ -720,7 +720,7 @@ builder.Services.AddSingleton<ITenantIdLookup, EfTenantIdLookup>();
 // What the orchestrator's agents did, kept per event in MongoDB and pushed
 // to the owner's connections as it arrives; the AI Operations screens read it.
 builder.Services.AddSingleton<IAgentActivityStore, MongoAgentActivityStore>();
-// Temporary: each test workspace's switch for agents sharing a number (OmniAi:MultiAgentTestWorkspaceIds).
+// Temporary: each workspace's switch for agents sharing a number, for the live test (OmniAi:MultiAgentEnabled).
 builder.Services.AddSingleton<IMultiAgentSwitchStore, MongoMultiAgentSwitchStore>();
 builder.Services.AddScoped<MultiAgentSwitch>();
 // Narrows every push to the people allowed to see it.
