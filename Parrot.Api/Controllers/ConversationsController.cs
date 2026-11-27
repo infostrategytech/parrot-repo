@@ -9,6 +9,7 @@ using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
 using Parrot.Api.Utils;
 using Parrot.Application.Agents;
+using Parrot.Application.Contracts.Conversations;
 using Parrot.Application.Conversations;
 using Parrot.Application.Integrations;
 using Parrot.Application.Logging;
@@ -48,6 +49,10 @@ public sealed class ConversationsController(IConversationStore store, IConversat
 
     // The connections a channel-limited team member reaches; null for everyone else.
     private IReadOnlySet<Guid>? Reach => HttpContext.WorkspaceAccess().AllowedConnections;
+
+    // Who may change what the agents know, as the web's Knowledge access rule names them; the owner always may.
+    private static readonly string[] KnowledgeEditors =
+        [WorkspacePermissions.AgentsCreate, WorkspacePermissions.AgentsEdit, WorkspacePermissions.WorkspaceManage];
 
     [HttpGet]
     public async Task<IActionResult> List(int skip = 0, int take = 50, CancellationToken cancellationToken = default)
@@ -245,6 +250,20 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         HttpContext.RequireReach(connectionId);
         await operations.CloseQuestionAsync(Owner, HttpContext.SessionToken(), Reach, connectionId, sender, questionId, Reader, cancellationToken);
         return NoContent();
+    }
+
+    // Gives the agent that asked the person's answer; it replies to the customer unless someone has taken over.
+    [Monitor("conversations.answer_question", SlowMs = 5000)] // waits on the AI service, which may reply before it answers
+    [HttpPost("{connectionId:guid}/questions/{questionId}/answer")]
+    [RequirePermission(WorkspacePermissions.ConversationsTakeOver)]
+    public async Task<IActionResult> AnswerQuestion(Guid connectionId, string questionId, [FromQuery] string sender,
+        [FromBody] QuestionAnswerRequest request, CancellationToken cancellationToken)
+    {
+        HttpContext.RequireReach(connectionId);
+        // Saving it changes what the agents know for every customer: for the people who may change that on the Knowledge page.
+        if (request.SaveForNextTime && !KnowledgeEditors.Any(HttpContext.WorkspaceAccess().Can))
+            throw new ForbiddenException("Your role in this workspace does not allow saving answers for next time. Untick Save for next time, or ask the owner for access.");
+        return Ok(await operations.AnswerQuestionAsync(Owner, HttpContext.SessionToken(), Reach, connectionId, sender, questionId, request, cancellationToken));
     }
 
     // Every file this customer has sent, newest first, for the customer details panel.

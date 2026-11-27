@@ -6,12 +6,33 @@ namespace Parrot.Application.Payments;
 /// <summary>One thing the customer is buying.</summary>
 public sealed record CheckoutItem(Guid ProductId, Guid? VariantId, int Quantity);
 
-/// <summary>What the agent asks for. There are no prices in it: they come from the catalog.</summary>
+/// <summary>
+/// What the agent asks for. There are no prices in it: they come from the catalog. AgentId is the agent as Omni
+/// names it (agt_…), kept on the order as a note; it isn't looked up, as agents live in Omni.
+/// </summary>
 public sealed record CreateCheckoutRequest(
-    Guid AgentId,
+    string? AgentId,
     Guid ConnectionId,
     string Sender,
     IReadOnlyList<CheckoutItem> Items,
+    string IdempotencyKey,
+    string? CustomerName = null,
+    string? CustomerEmail = null,
+    string? CustomerPhone = null,
+    string? Note = null);
+
+/// <summary>
+/// One item to add to or take out of a cart. Adding: Quantity is how many more (at least 1). Taking out:
+/// Quantity is how many fewer, or null for all of it; VariantId can be left out when the cart has only one of the product's options.
+/// </summary>
+public sealed record CartItemChange(Guid ProductId, Guid? VariantId, int? Quantity);
+
+/// <summary>A change to the conversation's cart: some items added, or some taken out. The rest of the cart stays as it is.</summary>
+public sealed record ChangeCartRequest(
+    string? AgentId,
+    Guid ConnectionId,
+    string Sender,
+    IReadOnlyList<CartItemChange> Items,
     string IdempotencyKey,
     string? CustomerName = null,
     string? CustomerEmail = null,
@@ -116,6 +137,8 @@ public sealed record ChangeCheckoutRequest(IReadOnlyList<CheckoutItem> Items);
 /// The customer's checkout page. total is what Pay will charge; quoted_total what the agent said.
 /// can_pay is false when an item can't be had, a price changed and the business doesn't allow
 /// that, or the checkout is no longer open; message says why, in words for the customer.
+/// chat_url opens the chat the checkout was sent in (wa.me, ig.me, m.me), so the customer can go back and ask for
+/// something else; null when the channel has no such link.
 /// </summary>
 public sealed record CheckoutView(
     string State,
@@ -131,7 +154,8 @@ public sealed record CheckoutView(
     bool CanPay,
     string? Message,
     DateTime? ExpiresAt,
-    string? PaymentUrl);
+    string? PaymentUrl,
+    string? ChatUrl = null);
 
 /// <summary>Pressing Pay: the total the customer was shown, so a price that changed since isn't charged unseen.</summary>
 public sealed record PayCheckoutRequest(decimal ExpectedTotal);

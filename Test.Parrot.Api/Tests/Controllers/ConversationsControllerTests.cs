@@ -268,6 +268,75 @@ public sealed class ConversationsControllerTests
             It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
+    [Fact]
+    public async Task AnswerQuestion_HandsTheAnswerOnInThisChatWithTheirOwnTokenAndSaysWhetherTheAgentReplies()
+    {
+        QuestionAnswerRequest request = new("Yes, students get 10% off their first purchase.", SaveForNextTime: true);
+        _operations.Setup(o => o.AnswerQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_1", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuestionAnswerResponse(AgentReplies: true));
+
+        IActionResult result = await Controller(OwnerAccess()).AnswerQuestion(WhatsApp, "wait_1", "2348012345678", request, default);
+
+        Assert.Equal(new QuestionAnswerResponse(AgentReplies: true), Assert.IsType<OkObjectResult>(result).Value);
+    }
+
+    // A channel the teammate can't open answers as not found, like one that doesn't exist, and nothing reaches the agent.
+    [Fact]
+    public async Task AnswerQuestion_OnAChannelTheTeammateCannotOpen_IsNotFoundAndSendsNothing()
+    {
+        ConversationsController controller = Controller(Teammate(new HashSet<Guid> { Guid.NewGuid() },
+            WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver));
+
+        await Assert.ThrowsAsync<NotFoundException>(() =>
+            controller.AnswerQuestion(WhatsApp, "wait_1", "2348012345678", new QuestionAnswerRequest("Yes", SaveForNextTime: true), default));
+
+        _operations.Verify(o => o.AnswerQuestionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<QuestionAnswerRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // Saving changes what the agents know for every customer, so only people who may change knowledge can ask for it.
+    [Fact]
+    public async Task AnswerQuestion_SavingForNextTimeWithoutKnowledgeAccess_IsForbiddenAndSendsNothing()
+    {
+        ConversationsController controller = Controller(Teammate(null, WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver));
+
+        ForbiddenException error = await Assert.ThrowsAsync<ForbiddenException>(() =>
+            controller.AnswerQuestion(WhatsApp, "wait_1", "2348012345678", new QuestionAnswerRequest("Yes", SaveForNextTime: true), default));
+
+        Assert.Contains("Untick Save for next time", error.Message);
+        _operations.Verify(o => o.AnswerQuestionAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<IReadOnlySet<Guid>?>(), It.IsAny<Guid>(), It.IsAny<string>(),
+            It.IsAny<string>(), It.IsAny<QuestionAnswerRequest>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task AnswerQuestion_WithoutSavingForNextTime_NeedsNoKnowledgeAccess()
+    {
+        QuestionAnswerRequest request = new("Yes", SaveForNextTime: false);
+        _operations.Setup(o => o.AnswerQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_1", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuestionAnswerResponse(AgentReplies: true));
+        ConversationsController controller = Controller(Teammate(null, WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver));
+
+        IActionResult result = await controller.AnswerQuestion(WhatsApp, "wait_1", "2348012345678", request, default);
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
+    [Theory]
+    [InlineData(WorkspacePermissions.AgentsCreate)]
+    [InlineData(WorkspacePermissions.AgentsEdit)]
+    [InlineData(WorkspacePermissions.WorkspaceManage)]
+    public async Task AnswerQuestion_SavingForNextTimeWithKnowledgeAccess_HandsItOn(string permission)
+    {
+        QuestionAnswerRequest request = new("Yes", SaveForNextTime: true);
+        _operations.Setup(o => o.AnswerQuestionAsync(Owner, Token, null, WhatsApp, "2348012345678", "wait_1", request, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new QuestionAnswerResponse(AgentReplies: true));
+        ConversationsController controller = Controller(Teammate(null, WorkspacePermissions.ConversationsView, WorkspacePermissions.ConversationsTakeOver, permission));
+
+        IActionResult result = await controller.AnswerQuestion(WhatsApp, "wait_1", "2348012345678", request, default);
+
+        Assert.IsType<OkObjectResult>(result);
+    }
+
     // Later pages are newest-first as they are; the first page already brought the question's conversation in.
     [Fact]
     public async Task List_OnALaterPage_DoesNotAddTheQuestionsConversationAgain()

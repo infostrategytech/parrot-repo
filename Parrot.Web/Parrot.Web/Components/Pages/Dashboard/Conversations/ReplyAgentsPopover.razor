@@ -12,7 +12,19 @@
             <ChildContent>
                 @if (AnsweredLooks.Count > 1)
                 {
-                    <AgentFaces Looks="AnsweredLooks" Size="24" />
+                    @* In one avatar's square, as the design system's group avatar (designer, 23 November 2026: a wider strip
+                       pushed the message along). Two: the second face over the first's corner. More: the first and how many others. *@
+                    <span class="reply-agents__group" aria-hidden="true">
+                        <span class="reply-agents__group-face is-back"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@AnsweredLooks[0]" /></span>
+                        @if (AnsweredLooks.Count == 2)
+                        {
+                            <span class="reply-agents__group-face is-front"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@AnsweredLooks[1]" /></span>
+                        }
+                        else
+                        {
+                            <Typography TextStyle="TextStyle.Small10Semibold" As="span" Class="reply-agents__group-more is-front">+@(AnsweredLooks.Count - 1)</Typography>
+                        }
+                    </span>
                 }
                 else if (AnsweredLooks.Count == 1)
                 {

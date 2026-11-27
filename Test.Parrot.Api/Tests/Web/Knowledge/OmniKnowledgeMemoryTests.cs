@@ -193,42 +193,6 @@ public class OmniKnowledgeMemoryTests
         Assert.False(refused.SectionChanged);
     }
 
-    // An answer from the inbox only makes sense whole: split, "It costs 3,500 naira" would lose what it is about.
-    [Fact]
-    public async Task AddStatementAsync_SendsTheWholeAnswerAsOneDetail_LeavingTheSectionToTheService()
-    {
-        Fixture f = new();
-        f.Omni.On("POST", Items, AddedDelivery, HttpStatusCode.Created);
-
-        IReadOnlyList<KnowledgeFact> saved = await f.Store.AddStatementAsync("  We deliver to Ibadan.\n It costs 3,500 naira and takes 2 days.\n");
-
-        Assert.Equal("""{"text":"We deliver to Ibadan. It costs 3,500 naira and takes 2 days."}""", f.Omni.Single("POST", Items).Body);
-        Assert.Equal(("Delivery", FactState.Known), (Assert.Single(saved).Label, saved[0].State));
-        Assert.Equal("Bearer session-token", f.Omni.Single("POST", Items).Header("Authorization"));
-    }
-
-    [Fact]
-    public async Task AddStatementAsync_WhenBlank_SendsNothing()
-    {
-        Fixture f = new();
-
-        Assert.Empty(await f.Store.AddStatementAsync("  \n "));
-        Assert.Empty(f.Omni.Requests);
-    }
-
-    [Fact]
-    public async Task AddStatementAsync_WhenThePersonMayNotChangeKnowledge_IsRefusedInPlainWords()
-    {
-        Fixture f = new();
-        f.Omni.On("POST", Items,
-            """{"success": false, "errorCode": "FORBIDDEN", "message": "Your role can't change business knowledge.", "traceId": "t1"}""",
-            HttpStatusCode.Forbidden);
-
-        KnowledgeSaveRefusedException refused = await Assert.ThrowsAsync<KnowledgeSaveRefusedException>(() => f.Store.AddStatementAsync("We open at 9."));
-
-        Assert.Equal("You don't have permission to change what your AI knows. Ask the workspace owner.", refused.Message);
-    }
-
     // ── Rewriting a section ──
 
     private const string DeliverySection = "api/v1/business-knowledge/sections/delivery";

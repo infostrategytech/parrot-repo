@@ -4,6 +4,7 @@
 @using Parrot.Web.Features.Dashboard.AiAgents
 @inject AuroraInterop Interop
 @inject VoiceInterop Voice
+@inject IAgentCapabilities Capabilities
 @implements IAsyncDisposable
 
 @* Optional controls for power users, closed until someone opens them on
@@ -134,8 +135,29 @@
                                 <StatusBadge Tone="StatusTone.Neutral">Always</StatusBadge>
                             </div>
                             }
-                            @Switch("Recommends products", "Suggests what to buy, from what you sell.", Form.Settings.CanRecommend, v => Form.Settings.CanRecommend = v)
-                            @Switch("Checks order status", "Tells customers where their order is.", Form.Settings.CanCheckOrders, v => Form.Settings.CanCheckOrders = v)
+                            @if (Capabilities.CanManageCatalogAccess)
+                            {
+                                @Switch("Use Products & Services", "Look up items, prices and availability in your catalog.", Form.Settings.CanAccessProductsAndServices, v => Form.Settings.CanAccessProductsAndServices = v)
+                            }
+                            else
+                            {
+                                <div class="agent-advanced__row">
+                                    <span class="agent-advanced__text">
+                                        <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">Use Products &amp; Services</Typography>
+                                        <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">Catalog access can't be changed for individual agents yet.</Typography>
+                                    </span>
+                                    <StatusBadge Tone="StatusTone.Neutral">Unavailable</StatusBadge>
+                                </div>
+                            }
+                            @if (ShowOrderStatus || Capabilities.CanManageCatalogAccess)
+                            {
+                                var locked = Capabilities.CanManageCatalogAccess && !Form.Settings.CanAccessProductsAndServices;
+                                @Switch("Recommend products", locked ? "Turn on Products & Services to allow recommendations." : "Suggest products to customers.", Form.Settings.CanRecommend, v => Form.Settings.CanRecommend = v, disabled: locked)
+                            }
+                            @if (ShowOrderStatus)
+                            {
+                                @Switch("Checks order status", "Tells customers where their order is.", Form.Settings.CanCheckOrders, v => Form.Settings.CanCheckOrders = v)
+                            }
                             @* No switch for taking customer details (designer, 3 November 2026): every agent asks when it needs them, for an
                                order, a booking or a hand-over, and saves them to Customers. Not wanting it is said in the job. *@
                         </div>
@@ -357,6 +379,8 @@
     /// </summary>
     [Parameter] public bool ShowAlways { get; set; } = true;
 
+    [Parameter] public bool ShowOrderStatus { get; set; } = true;
+
     /// <summary>What a topic the business hasn't covered says: "Not taught yet" by
     /// Teach your AI, "Not added yet" beside "Add to business knowledge" (Concept B).</summary>
     [Parameter] public string Missing { get; set; } = "Not taught yet";
@@ -561,14 +585,15 @@
         if (_recording is not null) await _recording.CancelAsync();
     }
 
-    private RenderFragment Switch(string label, string detail, bool on, Action<bool> set) => __builder =>
+    private RenderFragment Switch(string label, string detail, bool on, Action<bool> set, bool disabled = false) => __builder =>
     {
+        var detailId = $"{_id}-{label.Replace(' ', '-')}-hint";
         <div class="agent-advanced__row">
             <span class="agent-advanced__text">
                 <Typography TextStyle="TextStyle.BodySmallSemibold" As="strong">@label</Typography>
-                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted">@detail</Typography>
+                <Typography TextStyle="TextStyle.Small12Medium" As="span" Prose Class="agent-advanced__muted" id="@detailId">@detail</Typography>
             </span>
-            <Toggle Checked="@on" CheckedChanged="v => SetAsync(() => set(v))" AriaLabel="@label" />
+            <Toggle Checked="@on" CheckedChanged="v => SetAsync(() => set(v))" Disabled="@disabled" AriaLabel="@label" aria-describedby="@detailId" />
         </div>
     };
 

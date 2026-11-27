@@ -111,7 +111,7 @@ public sealed class FakePaymentOrderRepository : IPaymentOrderRepository
     {
         Id = order.Id, WorkspaceId = order.WorkspaceId, AgentId = order.AgentId, ConnectionId = order.ConnectionId, CustomerSender = order.CustomerSender,
         CustomerName = order.CustomerName, CustomerEmail = order.CustomerEmail, CustomerPhone = order.CustomerPhone, Note = order.Note,
-        Reference = order.Reference, IdempotencyKey = order.IdempotencyKey, Status = order.Status, Currency = order.Currency, TotalMinor = order.TotalMinor,
+        Reference = order.Reference, IdempotencyKey = order.IdempotencyKey, LastChangeKey = order.LastChangeKey, Status = order.Status, Currency = order.Currency, TotalMinor = order.TotalMinor,
         Lines = [.. order.Lines], Provider = order.Provider, ProviderSessionId = order.ProviderSessionId, PaymentUrl = order.PaymentUrl,
         FailureReason = order.FailureReason, CreatedAt = order.CreatedAt, UpdatedAt = order.UpdatedAt, ExpiresAt = order.ExpiresAt, PaidAt = order.PaidAt,
         PaidMinor = order.PaidMinor, ProviderTransactionId = order.ProviderTransactionId, AttentionReason = order.AttentionReason,

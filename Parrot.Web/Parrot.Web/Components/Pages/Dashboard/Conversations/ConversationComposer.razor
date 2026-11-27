@@ -122,7 +122,7 @@
             {
                 <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="@Drafting" disabled="@Drafting" @onclick="OnDraft">
                     <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
-                    <ChildContent>@(Drafting ? "Drafting" : $"Draft with {Conversation.AiAgent!.Name}")</ChildContent>
+                    <ChildContent>@(Drafting ? "Drafting" : Conversation.HasAgentTeam ? "Draft a reply" : $"Draft with {Conversation.AiAgent!.Name}")</ChildContent>
                 </Button>
             }
 
@@ -197,16 +197,14 @@
     private bool CanAttach => Conversation.Channel is "whatsapp" or "facebook";
     private string AttachTitle => CanAttach ? "Attach a picture or file" : "Files cannot be sent on this channel yet";
     private const string Accept = ".jpg,.jpeg,.png,.pdf,.txt,.doc,.docx,.xls,.xlsx,.ppt,.pptx";
-    private bool CanDraft => CanUseFeatures && Mode == ComposerMode.Reply && Conversation.HasAiAgent && !ReplyLocked && !WindowClosed;
+    private bool CanDraft => CanUseFeatures && Mode == ComposerMode.Reply && Conversation.HasAiAgent && Conversation.AiAgent is not null && !ReplyLocked && !WindowClosed;
     private string ModeClass => Mode == ComposerMode.Note ? "is-note" : "is-reply";
     private string Placeholder => Mode == ComposerMode.Note
         ? "Leave private context for your team..."
         : WindowClosed
             ? "Reply window closed"
             : ReplyLocked
-                ? Conversation.RepliesAsTeam
-                    ? $"{Conversation.TeamName} currently control customer replies"
-                    : $"{Conversation.AiAgent?.Name ?? "The AI agent"} currently controls customer replies"
+                ? "Take over to reply"   // who is replying is on the takeover card just above (said once)
                 : $"Reply to {Conversation.CustomerName}...";
     // "Send" holds while a send is in flight: the button's Busy state draws the
     // brand's relay dots in the icon slot rather than swapping the label.

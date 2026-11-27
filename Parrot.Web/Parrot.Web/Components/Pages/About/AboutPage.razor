@@ -3,18 +3,26 @@
 @using Parrot.Web.Components.Layout.Landing
 @layout LandingPageLayout
 
-@* About yára and who makes it (designer, 17 November 2026). Starter text, to be replaced. *@
-<LandingMetadata Title="About · yára" Description="Meet yára, an AI-powered shared inbox built for businesses that sell through social media and messaging. A product of Infostrategy Technology Limited." Path="/about" />
+@* The reviewed About text (designer, 23 November 2026), with "yára" for "YARA CRM". The document stopped at "What we
+   do … through:"; the list under it was drafted from the product at the designer's request, to be checked. *@
+<LandingMetadata Title="About · yára" Description="@($"yára is an AI-powered customer relationship management platform that helps businesses communicate efficiently, automate customer engagement and build lasting customer relationships. Developed by {LandingCompany.Name}.")" Path="/about" />
 
-<LandingDocument Title="Helping businesses answer every customer" ShowUpdated="false"
-                 Intro="Most of our customers sell on Instagram, TikTok and WhatsApp. Their customers ask the same questions all day, and the ones that matter get lost. yára is built to change that.">
-    <LandingSection Title="What yára does">
-        <p>yára brings a business's customer conversations from WhatsApp, Instagram, Facebook and TikTok into one inbox. An AI agent, taught by the business, answers everyday questions in the business's voice. When something needs a person, like a payment to confirm or a price to agree, yára hands it to the right teammate as a clear task.</p>
+<LandingDocument Title="About yára" ShowUpdated="false" Intro="Smarter conversations. Stronger customer relationships.">
+    <LandingSection Title="Who we are">
+        <p>yára is an AI-powered customer relationship management platform designed to help businesses communicate efficiently, automate customer engagement, and build lasting customer relationships.</p>
+        <p>Developed by <strong>@LandingCompany.Name</strong>, yára brings together customer conversations, intelligent automation, and business management tools in one centralized platform.</p>
     </LandingSection>
-    <LandingSection Title="Who makes it">
-        <p>yára is made by <strong>@LandingCompany.Name</strong>, in @LandingCompany.City. We build for small and growing businesses that sell through social media and messaging.</p>
+    <LandingSection Title="What we do">
+        <p>We help businesses simplify customer interactions and improve operational efficiency through:</p>
+        <ul>
+            <li><strong>One inbox</strong> for customer conversations from WhatsApp, Instagram, Facebook Messenger and TikTok.</li>
+            <li><strong>AI agents</strong> that answer everyday questions in the business’s own voice, using what the business teaches them.</li>
+            <li><strong>People in control</strong>: the team can take over any conversation, and the agents bring them in when something needs a person.</li>
+            <li><strong>Tasks</strong> for the orders, payments, bookings and follow-ups that come out of conversations.</li>
+            <li><strong>Products and services</strong>, prices and business information kept in one place, so every answer is accurate.</li>
+        </ul>
     </LandingSection>
     <LandingSection Title="Get in touch">
-        <p>We'd love to hear from you. See <a href="/contact">Contact</a> for our email, phone and address.</p>
+        <p>We’d love to hear from you. See <a href="/contact">Contact</a> to send us a message.</p>
     </LandingSection>
 </LandingDocument>

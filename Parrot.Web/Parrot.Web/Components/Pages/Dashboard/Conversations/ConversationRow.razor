@@ -123,7 +123,7 @@
             {
                 AiState.Paused => IconName.RiPauseCircleFill,
                 AiState.Handoff => IconName.RiUserReceived2Fill,
-                _ => IconName.RiRobot3Fill
+                _ => Conversation.RepliesAsTeam ? IconName.RiGroupFill : IconName.RiRobot3Fill
             };
 
     // Several agents answer here and none is waiting on the team: they are named, and shown, together. One that asked

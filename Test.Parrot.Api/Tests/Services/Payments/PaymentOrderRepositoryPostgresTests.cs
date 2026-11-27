@@ -46,7 +46,7 @@ public sealed class PaymentOrderRepositoryPostgresTests : IAsyncLifetime
     private static PaymentOrder Order(string workspace, string key, Guid connection, string sender = "234801", PaymentOrderStatus status = PaymentOrderStatus.Pending) => new()
     {
         WorkspaceId = workspace,
-        AgentId = Guid.NewGuid(),
+        AgentId = "agt_test",
         ConnectionId = connection,
         CustomerSender = sender,
         Reference = "prt_" + Guid.NewGuid().ToString("N"),
@@ -133,6 +133,7 @@ public sealed class PaymentOrderRepositoryPostgresTests : IAsyncLifetime
             change.TotalMinor = change.QuotedTotalMinor = 400_000L * quantity;
             change.Reference = reference;
             change.Note = "Deliver to Lekki";
+            change.LastChangeKey = $"change-{quantity}";
             change.UpdatedAt = DateTime.UtcNow.AddTicks(quantity);
             return change;
         }
@@ -143,7 +144,7 @@ public sealed class PaymentOrderRepositoryPostgresTests : IAsyncLifetime
         Assert.Equal(1, saved.Count(s => s));
         PaymentOrder after = (await repository.FindAsync("ws-1", cart.Id, default))!;
         Assert.Contains(after.Lines[0].Quantity, new[] { 3, 5 });
-        Assert.Equal((after.Lines[0].Quantity == 3 ? "prt_three" : "prt_five", "Deliver to Lekki"), (after.Reference, after.Note));
+        Assert.Equal((after.Lines[0].Quantity == 3 ? "prt_three" : "prt_five", "Deliver to Lekki", $"change-{after.Lines[0].Quantity}"), (after.Reference, after.Note, after.LastChangeKey));
 
         // Once Pay is pressed, it can't be changed.
         after.Status = PaymentOrderStatus.Creating;

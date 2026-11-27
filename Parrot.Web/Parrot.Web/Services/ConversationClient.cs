@@ -85,6 +85,15 @@ public sealed class ConversationClient(HttpClient http, AuthState auth, IConfigu
     public async Task MarkQuestionDoneAsync(Guid connection, string sender, string questionId, CancellationToken ct) =>
         await SendAsync(HttpMethod.Post,
             $"api/conversations/{connection}/questions/{Uri.EscapeDataString(questionId)}/done?sender={Uri.EscapeDataString(sender)}", null, ct);
+    /// <summary>
+    /// Gives the agent that asked the person's answer, which closes the question; the result says whether the agent replies
+    /// to the customer. Not found when it is no longer open.
+    /// </summary>
+    public Task<Parrot.Application.Contracts.Conversations.QuestionAnswerResponse> AnswerQuestionAsync(
+        Guid connection, string sender, string questionId, string answer, bool saveForNextTime, CancellationToken ct) =>
+        RequestAsync<Parrot.Application.Contracts.Conversations.QuestionAnswerResponse>(HttpMethod.Post,
+            $"api/conversations/{connection}/questions/{Uri.EscapeDataString(questionId)}/answer?sender={Uri.EscapeDataString(sender)}",
+            new Parrot.Application.Contracts.Conversations.QuestionAnswerRequest(answer, saveForNextTime), ct);
     private static string NotesPath(Guid connection, string sender) => $"api/conversations/{connection}/notes?sender={Uri.EscapeDataString(sender)}";
     private static string Path(Guid connection, string sender) => $"api/conversations/{connection}/messages?sender={Uri.EscapeDataString(sender)}";
     private static readonly JsonSerializerOptions WriteOptions = new(JsonSerializerDefaults.Web)

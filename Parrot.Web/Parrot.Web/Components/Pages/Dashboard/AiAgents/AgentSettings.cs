@@ -75,7 +75,25 @@ public sealed class AgentSettings
 
     // ── What it can do ──────────────────────────────────────────────────────
 
-    public bool CanRecommend { get; set; } = true;
+    private bool _canAccessProductsAndServices = true;
+    private bool _canRecommend = true;
+
+    // Keep existing demo agents' access until changed. Turning access back on does not grant recommendations.
+    public bool CanAccessProductsAndServices
+    {
+        get => _canAccessProductsAndServices;
+        set
+        {
+            _canAccessProductsAndServices = value;
+            if (!value) _canRecommend = false;
+        }
+    }
+
+    public bool CanRecommend
+    {
+        get => _canRecommend;
+        set => _canRecommend = CanAccessProductsAndServices && value;
+    }
     public bool CanCheckOrders { get; set; }
 
     /// <summary>Asks for a name and phone number before handing over, so the team can follow up.</summary>

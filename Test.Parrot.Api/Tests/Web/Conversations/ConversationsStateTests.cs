@@ -85,6 +85,60 @@ public sealed class ConversationsStateTests
         Assert.Equal(new PendingApprovalInfo("apr_1", "payments.refund", "Refund above the limit"), item.PendingApproval);
     }
 
+    // The agent on the number is what offers Take over (active) and Return (handoff); without it the bar only says
+    // "You're replying" while the reply box stays locked for the agent.
+    [Theory]
+    [InlineData("active")]
+    [InlineData("handoff")]
+    public void Apply_ARowWhoseNumberHasAnAgent_KeepsTheAgentSoTheTeamCanTakeOverAndReturn(string aiState)
+    {
+        ConversationsState state = new();
+
+        state.Apply([ThroughTheWire(Row() with { AiState = aiState, ChannelAgent = new ConversationAgentRef("agent-cunha", "Cunha") })]);
+
+        ConversationItem item = Assert.Single(state.Conversations);
+        Assert.True(item.HasChannelAgent);
+        Assert.Equal("Cunha", item.ChannelAgent?.Name);
+        Assert.Equal("Cunha", item.AiAgent?.Name);
+    }
+
+    // Several agents on one number are named together, and the team can still take over from them, even from a row
+    // that names no single channel agent.
+    [Fact]
+    public void Apply_ARowWithSeveralAgentsOnItsNumber_ShowsThemTogether()
+    {
+        ConversationsState state = new();
+
+        state.Apply([ThroughTheWire(Row() with
+        {
+            AiState = "active", Agents = [new ConversationAgentRef("agent-cunha", "Cunha"), new ConversationAgentRef("agent-tolu", "Tolu")],
+        })]);
+
+        ConversationItem item = Assert.Single(state.Conversations);
+        Assert.True(item.HasChannelAgent);
+        Assert.True(item.HasAiAgent);
+        Assert.True(item.RepliesAsTeam);
+        Assert.Equal("Cunha and Tolu", item.ReplyingName);
+    }
+
+    // A pushed copy of a reply carries no agents; the ones an earlier read gave it stay.
+    [Fact]
+    public void Merge_ALaterCopyOfAReplyWithoutItsAgents_KeepsTheAgentsAlreadyKnown()
+    {
+        ConversationItem item = new() { Id = "c1" };
+        ConversationMessage reply = new("outgoing:w:r1", "It left Ikeja.", true, "sent", At)
+        {
+            Kind = "ai", Agents = [new ReplyAgent("agt_tobi", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered")],
+        };
+        ConversationsState.Merge(item, [JsonSerializer.Deserialize<InboxMessageDto>(JsonSerializer.Serialize(reply, Web), Web)!]);
+
+        ConversationsState.Merge(item, [new InboxMessageDto("outgoing:w:r1", "It left Ikeja.", true, "read", At) { Kind = "ai" }]);
+
+        ConvMessage message = Assert.Single(item.Messages);
+        Assert.Equal("read", message.Status);
+        Assert.Equal(["Tobi"], message.Agents.Select(a => a.Name));
+    }
+
     // Once the question closes, the next list read takes the flag away.
     [Fact]
     public void Apply_ARowWhoseQuestionClosed_ClearsTheFlag()
@@ -176,6 +230,26 @@ public sealed class ConversationsStateTests
         ConversationsState.DropClosedQuestions(item, []);
 
         Assert.False(item.NeedsAnswer);
+    }
+
+    // Answered or marked done here: only that question closes, and a read already on its way can't bring it back.
+    [Fact]
+    public void CloseAgentQuestion_ClosesThatQuestionOnlyAndKeepsItClosed()
+    {
+        ConversationItem item = ThreadWith(Question("esc_1", 0), Question("esc_2", 1));
+
+        ConversationsState.CloseAgentQuestion(item, "esc_1");
+
+        Assert.True(item.Messages.Single(m => m.Id == "esc_1").Answered);
+        Assert.False(item.Messages.Single(m => m.Id == "esc_2").Answered);
+        Assert.True(item.NeedsAnswer);
+
+        ConversationsState.CloseAgentQuestion(item, "esc_2");
+        item.Messages.RemoveAll(m => m.Id == "esc_1");
+        ConversationsState.Merge(item, [Question("esc_1", 0)]);
+
+        Assert.False(item.NeedsAnswer);
+        Assert.DoesNotContain(item.Messages, m => m.Id == "esc_1");
     }
 
     // A read already on its way when the question was answered here must not show it again.

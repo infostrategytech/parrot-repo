@@ -111,9 +111,26 @@ public sealed class AgentTeamTests
         string html = await RenderReply(reply, ["Nova", "Bolt", "Buzz"]);
 
         Assert.Contains(">Tobi and Kora<", html);
-        Assert.Equal(2, CountOf(html, "agent-faces__face"));
+        // Both faces in one avatar's square, so the bubble lines up with a one-agent reply.
+        Assert.Equal(1, CountOf(html, "reply-agents__group\""));
+        Assert.Equal(2, CountOf(html, "reply-agents__group-face"));
         Assert.Contains("aria-haspopup=\"dialog\"", html);
         Assert.Contains("Agents involved in this reply: Tobi, Kora and Ada", html);
+    }
+
+    [Fact]
+    public async Task Reply_ThreeAgentsAnswered_ShowsTheFirstFaceAndHowManyOthers()
+    {
+        ConvMessage reply = AiReply(
+            new InboxReplyAgentDto("agt_tobi", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered"),
+            new InboxReplyAgentDto("agt_kora", "Kora", "Bolt", "How much?", "N21,000.", "answered"),
+            new InboxReplyAgentDto("agt_ada", "Ada", null, "Any discount?", "5% off.", "answered"));
+
+        string html = await RenderReply(reply, ["Nova", "Bolt", "Buzz"]);
+
+        Assert.Contains(">Tobi and 2 others<", html);
+        Assert.Equal(1, CountOf(html, "reply-agents__group-face"));
+        Assert.Contains(">+2<", html);
     }
 
     [Fact]
@@ -127,7 +144,7 @@ public sealed class AgentTeamTests
 
         Assert.Contains(">Kora<", html);
         Assert.DoesNotContain(">Tolu<", html);
-        Assert.DoesNotContain("agent-faces__face", html);
+        Assert.DoesNotContain("reply-agents__group", html);
     }
 
     [Fact]

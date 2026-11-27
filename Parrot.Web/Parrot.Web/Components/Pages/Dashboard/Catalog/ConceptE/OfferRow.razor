@@ -43,15 +43,15 @@ else
             </span>
 
             <span class="offer-row__picture">
-                @if (Item.Photos.Count > 0)
+                @* The initials always sit underneath: a photo covers them once it loads, and one that can't load
+                   (an expired or broken link) is taken away, leaving the initials, never an empty grey square. *@
+                <span class="offer-row__monogram">
+                    <PetalAvatar Seed="@Item.Id" Initials="@Initials.From(Item.Name)" Size="AvatarSize.Lg" />
+                </span>
+                @if (Item.Photos.Count > 0 && Item.Photos[0] != _brokenPhoto)
                 {
-                    <img class="offer-row__thumb" src="@Item.Photos[0]" alt="" loading="lazy" />
-                }
-                else
-                {
-                    <span class="offer-row__monogram">
-                        <PetalAvatar Seed="@Item.Id" Initials="@Initials.From(Item.Name)" Size="AvatarSize.Lg" />
-                    </span>
+                    var photo = Item.Photos[0];
+                    <img class="offer-row__thumb" src="@photo" alt="" loading="lazy" @onerror="() => _brokenPhoto = photo" />
                 }
                 @if (Channel is { Length: > 0 } channel)
                 {
@@ -60,16 +60,21 @@ else
             </span>
 
             <span class="offer-row__words">
-                <RowButton Class="offer-row__name" OnClick="OnOpen" Disabled="Disabled" title="@Item.Name" aria-label="@($"Open {Item.Name}")">
+                <RowButton Class="offer-row__name" OnClick="OnOpen" Disabled="Disabled" title="@Item.Name" aria-label="@OpenLabel">
                     <Typography TextStyle="TextStyle.BodySmallSemibold" As="span" Prose Class="offer-row__name-text">@Item.Name</Typography>
                 </RowButton>
                 <span class="offer-row__meta">
                     <Typography TextStyle="TextStyle.Small12Medium" As="span">@ItemType</Typography>
-                    @if (!ReviewOnly && AiBadge is { } badge)
+                    @if (!ReviewOnly && AgentMark is { } mark)
                     {
-                        <span class="offer-row__ai" title="@badge.Hint">
-                            <StatusBadge Tone="badge.Tone">@badge.Label</StatusBadge>
-                        </span>
+                        @if (mark.Badge)
+                        {
+                            <StatusBadge Tone="mark.Tone">@mark.Label</StatusBadge>
+                        }
+                        else
+                        {
+                            <Typography TextStyle="TextStyle.Small12Medium" As="span" Class="offer-row__updating">@mark.Label</Typography>
+                        }
                     }
                 </span>
                 @if (Note is not null)
@@ -182,18 +187,27 @@ else
         _ => "Product",
     };
 
-    // Where the AI assistant is with the latest save. A draft or hidden item shows nothing:
-    // its own label already says customers can't see it, and the AI keeps it out too.
-    private (string Label, StatusTone Tone, string Hint)? AiBadge => Item.Ai switch
+    // Where the agent is with the latest save, said only when it matters (designer, 23 November 2026: a mark on
+    // every row is noise). Knowing it is the normal case and shows nothing. Catching up is a quiet grey line that
+    // goes once it's learned. Something the owner can fix gets an amber badge; the row opens the item, whose
+    // "What your agent knows" box at the top says which photo or detail and why. A failure on the agent's side
+    // retries by itself, so it shows only once it has lasted a day. Drafts and hidden items show nothing.
+    private (string Label, StatusTone Tone, bool Badge, string Why)? AgentMark => Item.Ai switch
     {
-        AiProgress.Updating => ("AI syncing", StatusTone.Info, "Your change is saved. The AI assistant is catching up."),
-        AiProgress.Ready => ("AI synced", StatusTone.Success, "The AI assistant has the latest version of this item and can find it for customers."),
-        AiProgress.NeedsAttention when Item.AiPhotos.Any(p => p.Rejected) => ("Check photos", StatusTone.Warning,
-            string.Join(" ", Item.AiPhotos.Where(p => p.Rejected).Select(p => p.Reason).OfType<string>().DefaultIfEmpty("The AI assistant rejected a photo."))),
-        AiProgress.NeedsAttention => ("Check details", StatusTone.Warning, Item.AiTextReason ?? "The AI assistant couldn't use this item's details."),
-        AiProgress.Failed => ("AI couldn't check", StatusTone.Neutral, "The AI assistant couldn't check part of this item, such as a photo it couldn't download. Open the item to see which."),
+        AiProgress.Updating => ("Updating your agent…", StatusTone.Neutral, false, "Your change is saved. Your agent is learning it."),
+        AiProgress.NeedsAttention when AgentKnowledge.RejectedPhotos(Item) is var rejected && rejected > 0 =>
+            (rejected == 1 ? "Photo not used" : "Photos not used", StatusTone.Warning, true, AgentKnowledge.PhotoWhy(Item)),
+        AiProgress.NeedsAttention => ("Check details", StatusTone.Warning, true, Item.AiTextReason ?? "Your agent couldn't use this item's details."),
+        AiProgress.Failed when AgentKnowledge.StuckFailing(Item) =>
+            ("Agent couldn't check", StatusTone.Neutral, true, "Your agent couldn't check part of this item, and is still trying."),
         _ => null,
     };
+
+    // The badge's reason is read out with the name, as it can't be hovered on a phone or with a keyboard.
+    private string OpenLabel => AgentMark is { Badge: true } mark ? $"Open {Item.Name}. {mark.Label}: {mark.Why}" : $"Open {Item.Name}";
+
+    // The cover photo that couldn't load; a different photo gets its own try.
+    private string? _brokenPhoto;
 
     private bool DraftRow => !Head && !ReviewOnly && CatalogReadiness.IsDraft(Item);
 

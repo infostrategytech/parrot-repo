@@ -1,7 +1,7 @@
 @namespace Parrot.Web.Components.Pages.Dashboard.Catalog.ConceptE
 @using Parrot.Web.Features.Dashboard.Catalog
 
-@* What the AI assistant knows about one item, from the AI team's latest report on its
+@* What the agent knows about one item (designer, 23 November 2026: "your agent", as the rest of yára says it), from the AI team's latest report on its
    latest save: whether it has learned it, and for each photo whether it was learned (with
    what the AI saw in it), rejected (with why), or couldn't be checked. Shows nothing for
    an item the catalog hasn't tracked yet. *@
@@ -9,7 +9,7 @@
 {
     <section class="ai-knowledge" aria-labelledby="ai-knowledge-title">
         <div class="ai-knowledge__head">
-            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="ai-knowledge-title">What the AI knows</Typography>
+            <Typography TextStyle="TextStyle.BodyDefaultSemibold" As="h2" id="ai-knowledge-title">What your agent knows</Typography>
             <StatusBadge Tone="@Tone(state)">@Label(state)</StatusBadge>
         </div>
         <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose Class="ai-knowledge__summary">@Summary(state)</Typography>
@@ -44,8 +44,8 @@
 
     private static string Label(AiProgress state) => state switch
     {
-        AiProgress.Updating => "Syncing",
-        AiProgress.Ready => "Synced",
+        AiProgress.Updating => "Updating",
+        AiProgress.Ready => "Up to date",
         AiProgress.NeedsAttention => "Needs a look",
         AiProgress.Failed => "Couldn't check all of it",
         _ => "Not in search",
@@ -61,16 +61,18 @@
 
     private string Summary(AiProgress state) => state switch
     {
-        AiProgress.Updating => "Your latest change is saved. The AI assistant is still learning it.",
-        AiProgress.Ready => $"The AI assistant has learned this item and can find it for customers.{Ago()}",
+        AiProgress.Updating => "Your latest change is saved. Your agent is still learning it.",
+        AiProgress.Ready => $"Your agent knows this item and can find it for customers.{Ago()}",
         AiProgress.NeedsAttention when Item.AiPhotos.Any(p => p.Rejected) =>
-            "The AI assistant learned this item's details, but didn't use a photo because it doesn't seem to show the item. Replace it with a photo of the item.",
+            AgentKnowledge.RejectedPhotos(Item) == 1
+                ? "Your agent knows this item's details, but didn't use the photo marked below. Replace it with a clear photo of the item."
+                : "Your agent knows this item's details, but didn't use the photos marked below. Replace them with clear photos of the item.",
         AiProgress.NeedsAttention => Item.AiTextReason is { Length: > 0 } reason
-            ? $"The AI assistant couldn't use this item's details: {reason}"
-            : "The AI assistant couldn't use this item's details. Check them and save again.",
+            ? $"Your agent couldn't use this item's details: {reason}"
+            : "Your agent couldn't use this item's details. Check them and save again.",
         AiProgress.Failed =>
-            "The AI assistant couldn't check part of this item on its side. It tries again on its own. If a photo keeps failing, upload it again.",
-        _ => "This item is a draft or hidden, so the AI assistant keeps it out of search.",
+            "Your agent couldn't check part of this item. It tries again by itself. If a photo keeps failing, add it again.",
+        _ => "This item is a draft or hidden, so your agent leaves it out.",
     };
 
     private string Ago()
@@ -85,7 +87,7 @@
             : age.TotalHours < 1 ? $"{(int)age.TotalMinutes} min ago"
             : age.TotalDays < 1 ? $"{(int)age.TotalHours} h ago"
             : at.ToLocalTime().ToString("d MMM yyyy");
-        return $" Synced {when}.";
+        return $" Updated {when}.";
     }
 
     private static string PhotoLabel(AiPhoto photo) => photo.Learned ? "Learned" : photo.Rejected ? "Not used" : "Couldn't check";
@@ -94,9 +96,9 @@
 
     private static string PhotoDetail(AiPhoto photo) => photo switch
     {
-        { Learned: true, Caption: { Length: > 0 } caption } => $"The AI sees: {caption}",
-        { Learned: true } => "The AI can find this item by this photo.",
+        { Learned: true, Caption: { Length: > 0 } caption } => $"Your agent sees: {caption}",
+        { Learned: true } => "Your agent can find this item by this photo.",
         { Rejected: true } => photo.Reason ?? "It doesn't seem to show the item.",
-        _ => photo.Reason is { Length: > 0 } reason ? $"{reason}. The AI will try again." : "The AI will try again.",
+        _ => photo.Reason is { Length: > 0 } reason ? $"{reason}. Your agent will try again." : "Your agent will try again.",
     };
 }

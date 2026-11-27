@@ -1,2 +1,20 @@
 .reply-agents ::deep .reply-agents__trigger { padding: 0; min-height: 0; border-radius: var(--radius-radius-full); }
 .reply-agents__trigger-face { display: grid; width: var(--spacing-3xl); height: var(--spacing-3xl); }
+/* Gap in the token set: no border-width scale (the ring that parts the front face from the back one). */
+.reply-agents__group { --ds-reply-agents-ring: 2px; position: relative; display: block; inline-size: var(--spacing-3xl); block-size: var(--spacing-3xl); }
+.reply-agents__group-face, .reply-agents__group ::deep .reply-agents__group-more {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    inline-size: var(--spacing-xl);
+    block-size: var(--spacing-xl);
+    border-radius: var(--radius-radius-full);
+    background: var(--colors-surface-card);
+}
+.reply-agents__group-face.is-back { inset-block-start: 0; inset-inline-start: 0; }
+.reply-agents__group-face.is-front, .reply-agents__group ::deep .reply-agents__group-more.is-front {
+    inset-block-end: 0;
+    inset-inline-end: 0;
+    box-shadow: 0 0 0 var(--ds-reply-agents-ring) var(--colors-surface-card);
+}
+.reply-agents__group ::deep .reply-agents__group-more { color: var(--colors-text-secondary); background: var(--colors-surface-muted); }

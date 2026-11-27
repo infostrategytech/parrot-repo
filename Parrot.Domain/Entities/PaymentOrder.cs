@@ -45,8 +45,8 @@ public class PaymentOrder
     /// <summary>The workspace it belongs to. Every lookup is scoped by it.</summary>
     public required string WorkspaceId { get; set; }
 
-    /// <summary>The agent that made the link.</summary>
-    public Guid AgentId { get; set; }
+    /// <summary>The agent that made the link, as Omni names it (agt_…); null when the agent didn't say. A note only: agents live in Omni, not here.</summary>
+    public string? AgentId { get; set; }
 
     /// <summary>The conversation it was made in: the connection and the customer's sender id.</summary>
     public Guid ConnectionId { get; set; }
@@ -70,6 +70,12 @@ public class PaymentOrder
 
     /// <summary>The agent's key for this request: the same key returns this order rather than a second one.</summary>
     public required string IdempotencyKey { get; set; }
+
+    /// <summary>
+    /// The agent's key for the last change made to the cart (add_to_cart, remove_from_cart, create_cart on an open cart):
+    /// the same change sent again finds it here and changes nothing more, so a retried "add 2" never adds 4.
+    /// </summary>
+    public string? LastChangeKey { get; set; }
 
     public PaymentOrderStatus Status { get; set; } = PaymentOrderStatus.Creating;
 

@@ -275,22 +275,8 @@
                     </ChildContent>
                 </Button>
                 <div class="inbox-conversation__actions">
-                    @if (_selected.HasAiAgent)
-                    {
-                        <span class="inbox-agent-presence is-@_selected.AiState.ToString()!.ToLowerInvariant()">
-                            @if (_selected.RepliesAsTeam && TeamLooks(_selected) is { Count: > 1 } looks)
-                            {
-                                <AgentFaces Looks="looks" Size="20" Paused="@(_selected.AiState != AiState.Active)" />
-                            }
-                            else
-                            {
-                                <span class="agent-face-inline"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@SelectedLook" Paused="@(_selected.AiState != AiState.Active)" /></span>
-                            }
-                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@_selected.ReplyingName</Typography>
-                            <i aria-hidden="true"></i>
-                            <Typography TextStyle="TextStyle.Small12Semibold" As="span">@(_selected.AiState == AiState.Active ? "Replying" : "Paused")</Typography>
-                        </span>
-                    }
+                    @* Who is replying is said once, on the takeover card above the reply box (designer, 23 November 2026): the
+                       header no longer repeats it. The escalation chip stays: only it says that. *@
                     @if (_selected.HasAiAgent && _selected.ActiveEscalation is { } esc)
                     {
                         <span class="inbox-escalation-chip" title="@(esc.Problem is { Length: > 0 } p ? p : null)">
@@ -402,8 +388,6 @@
     private IAsyncDisposable? _customerFocus;
     private ElementReference _customerPanel;
     private bool _customerFocusPending;
-
-    private string? SelectedLook => AgentLookup.Look(_selected?.AiAgent?.Id, _selected?.AiAgent?.Name, AgentSetup.Agents);
 
     // Every agent on the conversation's number, by its look in the Inbox.
     private IReadOnlyList<string> TeamLooks(ConversationItem conversation) =>

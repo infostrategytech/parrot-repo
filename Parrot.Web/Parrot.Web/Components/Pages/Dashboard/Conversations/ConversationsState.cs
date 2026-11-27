@@ -49,14 +49,15 @@ public class ConversationsState
             if (item.AiState != AiState.Active) item.PendingApproval = null;
             // An approval the server still holds open stays, whatever the AI state; one only pushed keeps the rule above.
             if (summary.PendingApproval is { } approval) item.PendingApproval = new PendingApprovalInfo(approval.ApprovalId, approval.Tool, approval.Reason);
-            item.AiAgent = summary.AiAgent ?? summary.ChannelAgent;
+            // The agents on the number are what let the team take over and hand back.
+            item.Agents = KnownAgents(summary.Agents) is { Count: > 0 } agents ? agents : summary.ChannelAgent is { } only ? [only] : [];
+            item.ChannelAgent = summary.ChannelAgent ?? item.Agents.FirstOrDefault();
+            item.AiAgent = summary.AiAgent ?? item.ChannelAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
             item.Attention = summary.Attention;
             item.Customer = summary.Customer;
-            item.ChannelAgent = summary.ChannelAgent;
-            item.Agents = summary.Agents is { Count: > 0 } agents ? agents : summary.ChannelAgent is { } only ? [only] : [];
         }
         Resort();
     }
@@ -73,6 +74,10 @@ public class ConversationsState
     /// <summary>Pinned conversations first, then newest first within each group, so new messages land below the pins.</summary>
     public void Resort() => Conversations.Sort((a, b) =>
         a.Pinned != b.Pinned ? (a.Pinned ? -1 : 1) : b.UpdatedAt.CompareTo(a.UpdatedAt));
+
+    private static IReadOnlyList<InboxPersonDto> KnownAgents(IReadOnlyList<InboxPersonDto>? agents) => agents is null ? [] :
+        [.. agents.Where(agent => !string.IsNullOrWhiteSpace(agent.Id) && !string.IsNullOrWhiteSpace(agent.Name))
+            .DistinctBy(agent => agent.Id, StringComparer.OrdinalIgnoreCase)];
 
     /// <summary>Puts the conversation's notes (as the server has them) among its messages, replacing any it held, so a note deleted elsewhere goes too.</summary>
     public static void ApplyNotes(ConversationItem item, IEnumerable<InboxNoteDto> notes)
@@ -116,7 +121,8 @@ public class ConversationsState
                 Answered = message.RequestStatus == "answered",
                 Answer = message.Answer,
                 ReplyTo = message.ReplyTo,
-                Agents = message.Agents ?? [],
+                // A push that carries no agents keeps those an earlier read gave the reply.
+                Agents = message.Kind != "ai" ? [] : message.Agents ?? unique.GetValueOrDefault(message.Id)?.Agents ?? [],
             };
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
     }
@@ -127,6 +133,16 @@ public class ConversationsState
     {
         HashSet<string> open = newestPage.Where(m => m.Kind == "ai_question").Select(m => m.Id).ToHashSet();
         item.Messages = item.Messages.Where(m => m.Kind != MessageKind.AiQuestion || open.Contains(m.Id)).ToList();
+        item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
+    }
+
+    /// <summary>An agent's question closed from here (answered, done, or found closed already): it leaves the attention strip,
+    /// the list row and Needs you follow at once, and a read already on its way can't bring it back.</summary>
+    public static void CloseAgentQuestion(ConversationItem item, string questionId)
+    {
+        foreach (ConvMessage question in item.Messages.Where(m => m.Kind == MessageKind.AiQuestion && m.Id == questionId))
+            question.Answered = true;
+        item.ClosedQuestions.Add(questionId);
         item.NeedsAnswer = item.Messages.Any(m => m.Kind == MessageKind.AiQuestion && !m.Answered);
     }
 

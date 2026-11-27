@@ -4,6 +4,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Parrot.Application.Payments;
@@ -16,7 +17,7 @@ namespace Parrot.Infrastructure.Payments;
 /// <see cref="AccelerateSession"/>, and logs in again when it's refused.
 /// Docs: https://istrategytech.gitbook.io/accelerate-1/api-documentation/payments/payment-links
 /// </summary>
-public sealed class AccelerateClient(HttpClient http, AccelerateSession session, IOptions<PaymentSettings> settings, ILogger<AccelerateClient> logger) : IPaymentProvider
+public sealed partial class AccelerateClient(HttpClient http, AccelerateSession session, IOptions<PaymentSettings> settings, ILogger<AccelerateClient> logger) : IPaymentProvider
 {
     public const string ProviderName = "accelerate";
 
@@ -51,7 +52,8 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
         }
 
         // Accelerate takes the amount in naira ("pay_amount": 800 is ₦800), not kobo.
-        object body = new { PayAmount = amountMinor / 100m, Reference = reference, CallbackUrl = callback, Description = description };
+        decimal payAmount = amountMinor / 100m;
+        object body = new { PayAmount = payAmount, Reference = reference, CallbackUrl = callback, Description = description };
 
         // A token the account no longer accepts is replaced once.
         HttpResponseMessage response = await SendAsync(body, await session.TokenAsync(LoginAsync, ct), ct);
@@ -64,14 +66,21 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
 
         using (response)
         {
-            Answer<TicketData>? answer = await ReadAsync<Answer<TicketData>>(response, ct);
+            string raw = await response.Content.ReadAsStringAsync(ct);
+            Answer<TicketData>? answer = Parse<Answer<TicketData>>(raw);
             if (response.IsSuccessStatusCode && answer is { Success: true, OperationCode: Success, Data: { SessionToken.Length: > 0, RedirectUrl.Length: > 0 } data })
             {
                 return new PaymentLink(data.SessionToken, PayPage(data.RedirectUrl, reference));
             }
 
             string code = answer?.OperationCode ?? ((int)response.StatusCode).ToString();
-            logger.LogWarning("Accelerate refused the payment link. Status={Status} Code={Code} Message={Message}", (int)response.StatusCode, code, answer?.Message);
+            // Everything that went, but the keys, the bearer token and the checkout token in the callback, and everything
+            // that came back: Accelerate's message is often only "Unknown Error", so the request is what tells why.
+            logger.LogWarning(
+                "Accelerate refused the payment link. Status={Status} Code={Code} Message={Message} Host={Host} PayAmount={PayAmount} Reference={Reference} "
+                + "Description={Description} Callback={Callback} CallbackLength={CallbackLength} Body={Body}",
+                (int)response.StatusCode, code, answer?.Message, http.BaseAddress?.Host, payAmount, reference,
+                description, Shape(callback), callback.Length, ForLog(raw));
             throw new PaymentProviderException(response.StatusCode == HttpStatusCode.TooManyRequests
                 ? "Accelerate's rate limit was reached."
                 : answer?.Message ?? $"Accelerate answered {(int)response.StatusCode}.", code);
@@ -104,13 +113,15 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
         using HttpRequestMessage request = new (HttpMethod.Get, new Uri(new Uri(Keys.AuthBaseUrl.TrimEnd('/') + "/"), "auth/api-client/token"));
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{Keys.PublicKey}:{Keys.SecretKey}")));
         using HttpResponseMessage response = await Guard(() => http.SendAsync(request, ct), ct);
-        LoginAnswer? answer = await ReadAsync<LoginAnswer>(response, ct);
+        string raw = await response.Content.ReadAsStringAsync(ct);
+        LoginAnswer? answer = Parse<LoginAnswer>(raw);
         if (response.IsSuccessStatusCode && answer?.Data?.Token is { Length: > 0 } token)
         {
             return token;
         }
 
-        logger.LogError("Accelerate login failed. Status={Status} GotToken={GotToken} Message={Message}", (int)response.StatusCode, answer?.Data?.Token is { Length: > 0 }, answer?.Message);
+        logger.LogError("Accelerate login failed. Status={Status} GotToken={GotToken} Message={Message} Url={Url} Body={Body}",
+            (int)response.StatusCode, answer?.Data?.Token is { Length: > 0 }, answer?.Message, request.RequestUri, ForLog(raw));
         throw new PaymentProviderException("Accelerate wouldn't log in with the configured keys.", ((int)response.StatusCode).ToString());
     }
 
@@ -130,18 +141,47 @@ public sealed class AccelerateClient(HttpClient http, AccelerateSession session,
         }
     }
 
-    private static async Task<T?> ReadAsync<T>(HttpResponseMessage response, CancellationToken ct)
+    private static T? Parse<T>(string raw)
         where T : class
     {
         try
         {
-            return await response.Content.ReadFromJsonAsync<T>(Json, ct);
+            return string.IsNullOrWhiteSpace(raw) ? null : JsonSerializer.Deserialize<T>(raw, Json);
         }
         catch (Exception ex) when (ex is JsonException or NotSupportedException)
         {
             return null;
         }
     }
+
+    private const int MaxLoggedBody = 2000;
+
+    /// <summary>An answer for the log: any token in it hidden, and cut short.</summary>
+    public static string ForLog(string raw)
+    {
+        string hidden = TokenValue().Replace(raw, m => $"\"{m.Groups["name"].Value}\":\"(hidden)\"");
+        return hidden.Length <= MaxLoggedBody ? hidden : hidden[..MaxLoggedBody] + "…";
+    }
+
+    /// <summary>
+    /// A callback for the log without what can open the checkout: its site and the first part of its path
+    /// ("https://app.example/checkout/…"), and whether it has a query.
+    /// </summary>
+    public static string Shape(string callback)
+    {
+        if (!Uri.TryCreate(callback, UriKind.Absolute, out Uri? uri))
+        {
+            return "(not an absolute URL)";
+        }
+
+        string[] path = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        string first = path.Length == 0 ? "/" : $"/{path[0]}" + (path.Length > 1 ? "/…" : "");
+        return $"{uri.Scheme}://{uri.Authority}{first}" + (uri.Query.Length > 1 ? " (with a query)" : "");
+    }
+
+    // "token": "…", "session_token": "…", "access_token": "…" and the like.
+    [GeneratedRegex(@"""(?<name>[A-Za-z_]*token)""\s*:\s*""[^""]*""", RegexOptions.IgnoreCase)]
+    private static partial Regex TokenValue();
 
     // Only the fields used are read, so a field we ignore (login's status, the token's
     // expires_in) can't fail the parse by arriving in a different type.

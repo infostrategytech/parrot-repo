@@ -25,6 +25,7 @@ public sealed class PaymentTools(CheckoutService checkouts, PaymentConfirmationS
         "Sets the customer's cart to exactly the items you pass, priced from the live catalog, and returns checkout_url to send them. "
         + "On that page the customer sees the items and the latest prices and presses Pay, which opens the payment page. "
         + "Always pass the COMPLETE cart: every item the customer wants with its full quantity, not only what changed. Anything you leave out is taken out. "
+        + "To add or take out a few items, add_to_cart and remove_from_cart are simpler; use this to set the whole cart at once. "
         + "Each conversation has one cart. While the customer hasn't pressed Pay, calling again changes that cart and keeps the same checkout_url (status cart_updated), "
         + "so tell them what changed rather than sending a new link. Once they've pressed Pay, calling again makes a new cart and link (status cart_ready) that replaces the old one. "
         + "Only call it once the customer has confirmed the items, options and quantities, and you've checked them with get_prices. "
@@ -34,7 +35,6 @@ public sealed class PaymentTools(CheckoutService checkouts, PaymentConfirmationS
         + "If it's refused, the reason says what to fix (an item sold out, not enough left, an option to choose), and the cart stays as it was: sort it out with the customer, then call again. "
         + "Never tell the customer an order is paid; use get_payment_status.")]
     public async Task<JsonElement> CreateCart(
-        [Description("Your agent id: the one you raise tasks with.")] Guid agent_id,
         [Description("The conversation's connection id.")] Guid connection_id,
         [Description("The customer's sender id in this conversation.")] string sender,
         [Description("Everything in the cart, complete: 1 to 20 items, each with its full quantity.")] PaymentItemArgument[] items,
@@ -43,6 +43,7 @@ public sealed class PaymentTools(CheckoutService checkouts, PaymentConfirmationS
         [Description("The customer's email, if they gave it.")] string? customer_email = null,
         [Description("The customer's phone number, if they gave it.")] string? customer_phone = null,
         [Description("A note for the business about the order, such as where to deliver. Not shown to the customer.")] string? note = null,
+        [Description("Your agent id as you know it, such as agt_…. Kept on the order as a note of who made it. Leave out if you don't have one.")] string? agent_id = null,
         CancellationToken ct = default)
     {
         string workspace = Workspace();
@@ -69,6 +70,69 @@ public sealed class PaymentTools(CheckoutService checkouts, PaymentConfirmationS
         catch (CheckoutUnavailableException ex)
         {
             logger.LogWarning("Cart unavailable. Workspace={Workspace} Reason={Reason}", workspace, ex.Message);
+            throw new McpException(ex.Message);
+        }
+    }
+
+    [McpServerTool(Name = "add_to_cart", Title = "Add to cart", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description(
+        "Adds items to the customer's cart, priced from the live catalog, and returns the whole cart as it is now. "
+        + "Use it when the customer asks for something more (\"add 2 meat pies\"): pass only what's being added. Adding more of an item already in the cart raises its quantity. "
+        + "Each conversation has one cart: this changes it and keeps the same checkout_url (status cart_updated), so tell the customer what changed and the new total rather than sending a new link. "
+        + "If the conversation has no open cart yet, it makes one of just these items (status cart_ready): send the customer checkout_url. "
+        + "Check the items with get_prices first. Pass product ids and quantities, never prices. For a product with options (sizes, colours), pass the chosen option's variant_id. "
+        + "If it's refused, the reason says what to fix (sold out, not enough left, an option to choose), and the cart stays as it was. "
+        + "Once the customer has pressed Pay, the cart can't be added to: agree the complete order and call create_cart for a new one. "
+        + "Never tell the customer an order is paid; use get_payment_status.")]
+    public Task<JsonElement> AddToCart(
+        [Description("The conversation's connection id.")] Guid connection_id,
+        [Description("The customer's sender id in this conversation.")] string sender,
+        [Description("What to add: 1 to 20 items, each with how many more.")] PaymentItemArgument[] items,
+        [Description("A key you make up for this change, such as a UUID. Sending the same call again with the same key changes nothing more, so a retry never adds twice. Use a new key for each change.")] string idempotency_key,
+        [Description("The customer's name, if you know it.")] string? customer_name = null,
+        [Description("The customer's email, if they gave it.")] string? customer_email = null,
+        [Description("The customer's phone number, if they gave it.")] string? customer_phone = null,
+        [Description("A note for the business about the order, such as where to deliver. Not shown to the customer.")] string? note = null,
+        [Description("Your agent id as you know it, such as agt_…. Kept on the order as a note of who made it. Leave out if you don't have one.")] string? agent_id = null,
+        CancellationToken ct = default)
+        => ChangeAsync("add", connection_id, w => checkouts.AddToCartAsync(w, new ChangeCartRequest(agent_id, connection_id, sender,
+            (items ?? []).Select(i => new CartItemChange(i.ProductId, i.VariantId, i.Quantity)).ToArray(),
+            idempotency_key, customer_name, customer_email, customer_phone, note), ct));
+
+    [McpServerTool(Name = "remove_from_cart", Title = "Remove from cart", ReadOnly = false, Destructive = false, Idempotent = true, OpenWorld = true)]
+    [Description(
+        "Takes items out of the customer's cart, or lowers how many, and returns the whole cart as it is now. "
+        + "Use it when the customer says to take something out (\"remove the zobo\", \"make it one pie, not two\"): pass only what's being taken out. "
+        + "Leave quantity out to take the item out completely, or pass how many fewer. variant_id is only needed when the cart has the product in more than one option. "
+        + "It keeps the same checkout_url (status cart_updated): tell the customer what changed and the new total. "
+        + "It's refused, with the cart unchanged, when an item isn't in the cart (use get_cart to see what is), when it would leave the cart empty, "
+        + "or when there's no open cart (the customer pressed Pay, or it ran out).")]
+    public Task<JsonElement> RemoveFromCart(
+        [Description("The conversation's connection id.")] Guid connection_id,
+        [Description("The customer's sender id in this conversation.")] string sender,
+        [Description("What to take out: 1 to 20 items.")] RemoveItemArgument[] items,
+        [Description("A key you make up for this change, such as a UUID. Sending the same call again with the same key changes nothing more, so a retry never takes out twice. Use a new key for each change.")] string idempotency_key,
+        [Description("Your agent id as you know it, such as agt_…. Kept on the order as a note of who made it. Leave out if you don't have one.")] string? agent_id = null,
+        CancellationToken ct = default)
+        => ChangeAsync("remove", connection_id, w => checkouts.RemoveFromCartAsync(w, new ChangeCartRequest(agent_id, connection_id, sender,
+            (items ?? []).Select(i => new CartItemChange(i.ProductId, i.VariantId, i.Quantity)).ToArray(), idempotency_key), ct));
+
+    /// <summary>A cart change, answered as JSON; a refusal or outage goes back to the agent as the tool's error, with what to do.</summary>
+    private async Task<JsonElement> ChangeAsync(string change, Guid connection, Func<string, Task<CheckoutResult>> run)
+    {
+        string workspace = Workspace();
+        try
+        {
+            return JsonSerializer.SerializeToElement(await run(workspace), Json);
+        }
+        catch (CheckoutRefusedException ex)
+        {
+            logger.LogInformation("Cart {Change} refused. Workspace={Workspace} Connection={Connection} Reason={Reason}", change, workspace, connection, ex.Message);
+            throw new McpException(ex.Message);
+        }
+        catch (CheckoutUnavailableException ex)
+        {
+            logger.LogWarning("Cart {Change} unavailable. Workspace={Workspace} Connection={Connection} Reason={Reason}", change, workspace, connection, ex.Message);
             throw new McpException(ex.Message);
         }
     }
@@ -129,8 +193,14 @@ public sealed class PaymentTools(CheckoutService checkouts, PaymentConfirmationS
     }
 }
 
-/// <summary>One item in create_cart.</summary>
+/// <summary>One item in create_cart or add_to_cart.</summary>
 public sealed record PaymentItemArgument(
     [property: JsonPropertyName("product_id"), Description("The product's id.")] Guid ProductId,
     [property: JsonPropertyName("quantity"), Description("How many, 1 to 999.")] int Quantity,
     [property: JsonPropertyName("variant_id"), Description("The chosen option's id, for a product with options. Leave out otherwise.")] Guid? VariantId = null);
+
+/// <summary>One item in remove_from_cart.</summary>
+public sealed record RemoveItemArgument(
+    [property: JsonPropertyName("product_id"), Description("The product's id, as get_cart shows it.")] Guid ProductId,
+    [property: JsonPropertyName("variant_id"), Description("The option's id, only when the cart has the product in more than one option.")] Guid? VariantId = null,
+    [property: JsonPropertyName("quantity"), Description("How many fewer. Leave out to take the item out completely.")] int? Quantity = null);

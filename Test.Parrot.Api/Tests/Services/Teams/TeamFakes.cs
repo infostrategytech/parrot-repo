@@ -131,6 +131,12 @@ public sealed class FakeConnectionDirectory : IWorkspaceConnectionDirectory
 
     public Task<IReadOnlyList<(Guid Id, MessagingPlatform Platform)>> ListAsync(string workspaceId) =>
         Task.FromResult<IReadOnlyList<(Guid, MessagingPlatform)>>(ByWorkspace.GetValueOrDefault(workspaceId) ?? []);
+
+    /// <summary>Each connection's chat link, set by the test.</summary>
+    public Dictionary<Guid, string> ChatLinks { get; } = [];
+
+    public Task<string?> ChatLinkAsync(string workspaceId, Guid connectionId, CancellationToken ct = default) =>
+        Task.FromResult(ByWorkspace.GetValueOrDefault(workspaceId)?.Any(c => c.Id == connectionId) == true ? ChatLinks.GetValueOrDefault(connectionId) : null);
 }
 
 /// <summary>Every connection hears every push: for tests about the push itself, not who may hear it.</summary>

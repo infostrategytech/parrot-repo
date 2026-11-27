@@ -29,6 +29,12 @@ public sealed class OmniWaitingListClient(
     /// <summary>Pages read at most: 1,000 items, far more than anyone works through, and a bound on one read.</summary>
     public const int MaxPages = 10;
 
+    /// <summary>
+    /// How long any call but an answer may take: an inbox list load waits on the list, and when it gives up nothing
+    /// shows as waiting. An answer has the client's whole timeout, since the agent may reply before the service answers.
+    /// </summary>
+    public static readonly TimeSpan ShortTimeout = TimeSpan.FromSeconds(5);
+
     private const string Unavailable = "The AI service could not be reached. Try again in a moment.";
     private const string NotFound = "Question not found.";
 
@@ -57,7 +63,32 @@ public sealed class OmniWaitingListClient(
     public async Task<WaitingListItem> ResolveAsync(string userToken, string itemId, CancellationToken cancellationToken = default) =>
         ToItem(await SendAsync<ItemWire>(HttpMethod.Post, $"{WaitingPath}/{Uri.EscapeDataString(itemId)}/resolve", userToken, cancellationToken));
 
+    // Only that the service took the answer matters here, so its body is not read.
+    public async Task AnswerAsync(string userToken, string itemId, WaitingListAnswer answer, CancellationToken cancellationToken = default)
+    {
+        AnswerWire body = new(answer.Answer, answer.ReplyToCustomer, answer.SaveForNextTime);
+        using HttpResponseMessage response = await SendAsync(
+            HttpMethod.Post, $"{WaitingPath}/{Uri.EscapeDataString(itemId)}/answer", userToken, body, timeout: null, cancellationToken);
+    }
+
     private async Task<T> SendAsync<T>(HttpMethod method, string path, string userToken, CancellationToken cancellationToken)
+    {
+        using HttpResponseMessage response = await SendAsync(method, path, userToken, body: null, ShortTimeout, cancellationToken);
+        try
+        {
+            return await response.Content.ReadFromJsonAsync<T>(Wire, cancellationToken)
+                ?? throw new ServiceUnavailableException(Unavailable, new InvalidOperationException("The waiting list answered with an empty body."));
+        }
+        catch (JsonException ex)
+        {
+            logger.LogWarning(ex, "waiting_list.unreadable Method={Method} Path={Path}", method, Logged(path));
+            throw new ServiceUnavailableException(Unavailable, ex);
+        }
+    }
+
+    // A successful response, for the caller to read and dispose; anything else is the exception the caller sees.
+    private async Task<HttpResponseMessage> SendAsync(
+        HttpMethod method, string path, string userToken, object? body, TimeSpan? timeout, CancellationToken cancellationToken)
     {
         if (!settings.Value.Enabled || http.BaseAddress is null)
         {
@@ -68,47 +99,43 @@ public sealed class OmniWaitingListClient(
 
         using HttpRequestMessage request = new(method, path);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", userToken);
+        if (body is not null) request.Content = JsonContent.Create(body, body.GetType(), options: Wire);
+
+        using CancellationTokenSource limit = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        if (timeout is { } within) limit.CancelAfter(within);
 
         HttpResponseMessage response;
         try
         {
-            response = await http.SendAsync(request, cancellationToken);
+            response = await http.SendAsync(request, limit.Token);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "waiting_list.unreachable Method={Method} Path={Path}", method, WaitingPath);
+            logger.LogWarning(ex, "waiting_list.unreachable Method={Method} Path={Path} TimedOut={TimedOut} LimitSeconds={LimitSeconds}",
+                method, Logged(path), ex is TaskCanceledException, (timeout ?? http.Timeout).TotalSeconds);
             throw new ServiceUnavailableException(Unavailable, ex);
         }
 
+        if (response.IsSuccessStatusCode) return response;
+
         using (response)
         {
-            if (!response.IsSuccessStatusCode)
-            {
-                ErrorWire? error = await ReadErrorAsync(response, cancellationToken);
+            ErrorWire? error = await ReadErrorAsync(response, cancellationToken);
 
-                // No such item in the token's workspace: the same answer for another workspace's.
-                if (response.StatusCode == HttpStatusCode.NotFound && error?.ErrorCode == "WAITING_ITEM_NOT_FOUND")
-                    throw new NotFoundException(NotFound);
+            // No such item in the token's workspace: the same answer for another workspace's.
+            if (response.StatusCode == HttpStatusCode.NotFound && error?.ErrorCode == "WAITING_ITEM_NOT_FOUND")
+                throw new NotFoundException(NotFound);
 
-                logger.LogWarning(
-                    "waiting_list.failed Method={Method} Path={Path} Status={Status} ErrorCode={ErrorCode} TraceId={TraceId}",
-                    method, WaitingPath, (int)response.StatusCode, error?.ErrorCode, error?.TraceId);
-                throw new ServiceUnavailableException(Unavailable, new HttpRequestException(
-                    $"The waiting list answered {(int)response.StatusCode} {error?.ErrorCode}.", null, response.StatusCode));
-            }
-
-            try
-            {
-                return await response.Content.ReadFromJsonAsync<T>(Wire, cancellationToken)
-                    ?? throw new ServiceUnavailableException(Unavailable, new InvalidOperationException("The waiting list answered with an empty body."));
-            }
-            catch (JsonException ex)
-            {
-                logger.LogWarning(ex, "waiting_list.unreadable Method={Method} Path={Path}", method, WaitingPath);
-                throw new ServiceUnavailableException(Unavailable, ex);
-            }
+            logger.LogWarning(
+                "waiting_list.failed Method={Method} Path={Path} Status={Status} ErrorCode={ErrorCode} TraceId={TraceId}",
+                method, Logged(path), (int)response.StatusCode, error?.ErrorCode, error?.TraceId);
+            throw new ServiceUnavailableException(Unavailable, new HttpRequestException(
+                $"The waiting list answered {(int)response.StatusCode} {error?.ErrorCode}.", null, response.StatusCode));
         }
     }
+
+    // Which call it was (the item and the action), without the query: a list's cursor says nothing useful.
+    private static string Logged(string path) => path.Split('?')[0];
 
     // The service's error envelope, when there is one: only its code and trace id are kept, for the log.
     private static async Task<ErrorWire?> ReadErrorAsync(HttpResponseMessage response, CancellationToken cancellationToken)
@@ -142,6 +169,11 @@ public sealed class OmniWaitingListClient(
         Resolution = wire.Resolution,
         ResolvedBy = wire.ResolvedBy,
     };
+
+    private sealed record AnswerWire(
+        [property: JsonPropertyName("answer")] string Answer,
+        [property: JsonPropertyName("reply_to_customer")] bool ReplyToCustomer,
+        [property: JsonPropertyName("save_for_next_time")] bool SaveForNextTime);
 
     private sealed record PageWire(
         [property: JsonPropertyName("items")] List<ItemWire> Items,

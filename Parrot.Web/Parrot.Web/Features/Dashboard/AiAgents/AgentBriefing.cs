@@ -50,7 +50,8 @@ public sealed record AgentDraftRequest(string UseCase, string? CustomJob, string
 public sealed record AgentTryTurn(bool FromCustomer, string Text);
 
 /// <summary>A test message, sent as a customer, to an agent with this job description.</summary>
-public sealed record AgentTryRequest(AgentBrief Brief, string AgentName, string? UseCase, string? Industry, string Business, IReadOnlyList<AgentTryTurn> History, string Message);
+public sealed record AgentTryRequest(AgentBrief Brief, string AgentName, string? UseCase, string? Industry, string Business, IReadOnlyList<AgentTryTurn> History, string Message,
+    bool CanAccessProductsAndServices = true, bool CanRecommend = true);
 
 /// <summary>What a reply came from: a sentence of its job summary, the business's knowledge, its products, orders or calendar, or nothing it knows.</summary>
 public enum AgentTryBasis { Brief, Knowledge, Products, Orders, Calendar, Unknown }

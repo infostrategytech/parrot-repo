@@ -19,11 +19,76 @@ public sealed class AccelerateClientTests
     private readonly FakeAccelerate _accelerate = new();
     private readonly AccelerateSession _session = new(TimeProvider.System);
 
+    private readonly LogLines _log = new();
+
     private AccelerateClient Client(string? publicKey = "pk_test", string? secretKey = "sk_test") => new(
         new HttpClient(_accelerate) { BaseAddress = new Uri("https://staging.payment.example/") },
         _session,
         Options.Create(new PaymentSettings { CallbackUrl = "https://app.example/paid", Accelerate = new AccelerateSettings { PublicKey = publicKey, SecretKey = secretKey, AuthBaseUrl = "https://auth.accelerate.example/api/v1" } }),
-        NullLogger<AccelerateClient>.Instance);
+        _log);
+
+    [Fact]
+    public async Task A_refusal_logs_what_was_sent_and_everything_that_came_back_but_no_secret()
+    {
+        _accelerate.Answer("api/v1/auth/api-client/token", Login);
+        _accelerate.Answer("api/merchant/create-ticket",
+            """{"success":false,"message":"Unknown Error","operation_code":"XXXX","data":{"session_token":"leaked-session","errors":{"callback_url":["too long"]}}}""",
+            HttpStatusCode.BadRequest);
+
+        await Assert.ThrowsAsync<PaymentProviderException>(() => Client("pk_live_key", "sk_live_secret").CreateLinkAsync(
+            "prt_1", 80_050, "Ada's Bags: 2 x Quilted bag", "https://app.example/checkout/eyJ.checkout-token.sig?paid=1", default));
+
+        string line = Assert.Single(_log.Lines, l => l.Contains("refused the payment link"));
+        foreach (string part in new[] { "Status=400", "Code=XXXX", "Message=Unknown Error", "Host=staging.payment.example", "PayAmount=800.5", "Reference=prt_1",
+            "Description=Ada's Bags: 2 x Quilted bag", "Callback=https://app.example/checkout/… (with a query)", "CallbackLength=58", "\"callback_url\":[\"too long\"]", "\"session_token\":\"(hidden)\"" })
+        {
+            Assert.Contains(part, line);
+        }
+
+        foreach (string secret in new[] { "pk_live_key", "sk_live_secret", "token-1", "checkout-token", "leaked-session" })
+        {
+            Assert.DoesNotContain(secret, string.Join("\n", _log.Lines));
+        }
+    }
+
+    [Fact]
+    public async Task A_failed_login_logs_where_it_went_and_what_came_back()
+    {
+        _accelerate.Answer("api/v1/auth/api-client/token", """{"status":"error","message":"Invalid credentials","token":"never-logged"}""", HttpStatusCode.Unauthorized);
+
+        await Assert.ThrowsAsync<PaymentProviderException>(() => Client("pk_live_key", "sk_live_secret").CreateLinkAsync("prt_1", 100, "a", null, default));
+
+        string line = Assert.Single(_log.Lines, l => l.Contains("login failed"));
+        Assert.Contains("Url=https://auth.accelerate.example/api/v1/auth/api-client/token", line);
+        Assert.Contains("\"message\":\"Invalid credentials\"", line);
+        Assert.DoesNotContain("never-logged", line);
+        Assert.DoesNotContain("sk_live_secret", line);
+    }
+
+    [Theory]
+    [InlineData("https://app.example/payment/complete", "https://app.example/payment/…")]
+    [InlineData("https://app.example/paid", "https://app.example/paid")]
+    [InlineData("https://app.example", "https://app.example/")]
+    [InlineData("not a url", "(not an absolute URL)")]
+    public void A_callback_is_logged_by_its_site_and_first_step_only(string callback, string logged) =>
+        Assert.Equal(logged, AccelerateClient.Shape(callback));
+
+    [Fact]
+    public void A_long_answer_is_cut_short_for_the_log() =>
+        Assert.Equal(2001, AccelerateClient.ForLog(new string('x', 5000)).Length);
+
+    /// <summary>The client's log, as the lines it would write.</summary>
+    private sealed class LogLines : Microsoft.Extensions.Logging.ILogger<AccelerateClient>
+    {
+        public List<string> Lines { get; } = [];
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+            Lines.Add(formatter(state, exception));
+    }
 
     [Fact]
     public async Task The_pay_page_is_given_the_reference_Accelerate_leaves_off()
