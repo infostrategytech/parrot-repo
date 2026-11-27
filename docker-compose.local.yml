@@ -206,6 +206,8 @@ services:
       # and the AI Operations figures show. OMNI_AI_ENABLED=false runs without one.
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
+      # Every workspace gets a switch for agents sharing a number on its Overview, off until turned on; false takes it away.
+      OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-true}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
       OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
       # Checkouts (create_cart): the customer pays from the checkout page, through the
@@ -321,6 +323,8 @@ services:
       JwtSettings__Audience: ParrotApp
       OmniAi__Enabled: ${OMNI_AI_ENABLED:-true}
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
+      # Every workspace gets a switch for agents sharing a number on its Overview, off until turned on; false takes it away.
+      OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-true}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     depends_on:

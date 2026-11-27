@@ -51,6 +51,12 @@ public sealed class AgentActivityRecord
 
     public string? AgentId { get; init; }
 
+    /// <summary>
+    /// On a reply from the AI service's hidden super agent (then <see cref="AgentId"/>), the agents it asked and how
+    /// each did. Null on a turn one agent answered alone.
+    /// </summary>
+    public IReadOnlyList<TurnContributor>? Contributors { get; init; }
+
     public string? Decision { get; init; }
 
     public double? Confidence { get; init; }
@@ -93,6 +99,12 @@ public sealed class AgentActivityRecord
     public string? ResolvedBy { get; set; }
 
     public string? Instruction { get; set; }
+}
+
+/// <summary>An agent the super agent asked during a turn, and its status as sent: answered, failed or timed_out.</summary>
+public sealed record TurnContributor(string AgentId, string Status)
+{
+    public const string Answered = "answered";
 }
 
 /// <summary>Where the agents' activity is kept, one document per event, inserted once.</summary>

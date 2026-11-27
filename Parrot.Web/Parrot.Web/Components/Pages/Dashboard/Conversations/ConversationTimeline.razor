@@ -87,7 +87,8 @@
                                              CustomerName="@Conversation.CustomerName" CustomerSeed="@Conversation.Id"
                                              CustomerInitials="@Conversation.CustomerInitials"
                                              AuthorName="@(message.Kind == MessageKind.Ai ? LegacyAiReplyName : AuthorName)" AuthorSeed="@AuthorSeed"
-                                             CanTeach="@Features.Available" AgentLook="@MessageAgentLook(message)" AgentAvatars="@MessageAgentAvatars(message)"
+                                             AgentMascot="@AiAgentMascot"
+                                             CanTeach="@Features.Available" AgentLook="@AgentLook" ReplyLooks="@ReplyLooks(message)"
                                              OnDeleteNote="DeleteNoteAsync"
                                              OnCorrect="OpenCorrection"
                                              OnCustomerDetails="OnCustomerDetails"
@@ -106,11 +107,11 @@
                      && Conversation.AiState == AiState.Active && Conversation.PendingApproval is null)
                 {
                     <div class="ai-typing-indicator" role="status"
-                         aria-label="@(Conversation.HasSharedAgentCoverage ? Conversation.SharedAgentStatus : $"{Conversation.AiAgent?.Name ?? "AI agent"} is replying")">
+                         aria-label="@($"{Conversation.ReplyingName} {(Conversation.RepliesAsTeam ? "are" : "is")} replying")">
                         <span class="ai-typing-indicator__avatar" aria-hidden="true">
-                            @if (Conversation.HasSharedAgentCoverage)
+                            @if (Conversation.RepliesAsTeam && TeamLooks.Count > 1)
                             {
-                                <Icon Name="IconName.RiGroupFill" Size="IconSize.Sm" />
+                                <AgentFaces Looks="TeamLooks" Size="20" />
                             }
                             else if (AiAgentMascot is not null)
                             {
@@ -323,6 +324,8 @@
     [Parameter, EditorRequired] public ConversationItem Conversation { get; set; } = default!;
     /// <summary>The conversation agent's saved look, for its face on its bubbles.</summary>
     [Parameter] public string? AgentLook { get; set; }
+    /// <summary>The looks of every agent on the conversation's number: shown together where it says who is replying.</summary>
+    [Parameter] public IReadOnlyList<string> TeamLooks { get; set; } = [];
     /// <summary>Open one of this chat's tasks over the chat.</summary>
     [Parameter] public EventCallback<string> OnOpenTask { get; set; }
     /// <summary>Who outbound replies are shown as when the API does not name a teammate: the business.</summary>
@@ -345,23 +348,23 @@
             ? AgentsState.Agents.FirstOrDefault(a => a.Id == agentId)?.Mascot
             : null;
 
-    private string LegacyAiReplyName => Conversation.HasSharedAgentCoverage ? "AI reply" : Conversation.AiAgent?.Name ?? AuthorName;
+    // The look of each agent asked for an AI reply, in its order, as the Inbox shows each agent. Every helper has a name,
+    // so every one has a look.
+    private IReadOnlyList<string> ReplyLooks(ConvMessage message) =>
+        message.Agents.Select(a => AgentLookup.Look(a.Id, a.Name, AgentsState.Agents, a.Avatar) ?? AgentBuilderCopy.Mascots[0]).ToList();
 
-    private string? MessageAgentLook(ConvMessage message)
-    {
-        if (message.Kind != MessageKind.Ai) return null;
-        var agent = message.AgentsInvolved.Count == 1 ? message.AgentsInvolved[0] : message.Author;
-        return AgentLookup.Look(agent?.Id, agent?.Name, AgentsState.Agents)
-            ?? (Conversation.HasSharedAgentCoverage ? null : AgentLook ?? AiAgentMascot);
-    }
+    // A reply from before agents' answers were kept, where several agents answer: not put on one of them.
+    private string LegacyAiReplyName => Conversation.HasAgentTeam ? "AI reply" : Conversation.AiAgent?.Name ?? AuthorName;
 
-    // The agents on the conversation's channel, for the takeover card (several agents only).
-    private IReadOnlyList<AgentAvatarStackItem> ChannelAgentAvatars => Conversation.ChannelAgents.Count < 2 ? [] :
-        [.. Conversation.ChannelAgents.Select(agent => new AgentAvatarStackItem(agent.Name,
-            AgentLooks.Of(AgentLookup.Look(agent.Id, agent.Name, AgentsState.Agents))))];
+    // The face of the agent that wrote a message: the one whose answer made an AI reply, else its author, else the chat's agent.
+    private string? MessageAgentLook(ConvMessage message) =>
+        (message.AnsweredBy is [{ } answered] ? AgentLookup.Look(answered.Id, answered.Name, AgentsState.Agents, answered.Avatar) : null)
+        ?? AgentLookup.Look(message.Author?.Id, message.Author?.Name, AgentsState.Agents)
+        ?? AgentLook ?? AiAgentMascot;
 
-    private IReadOnlyList<AgentAvatarStackItem> MessageAgentAvatars(ConvMessage message) => message.AgentsInvolved.Count < 2 ? [] :
-        [.. message.AgentsInvolved.Select(agent => new AgentAvatarStackItem(agent.Name,
+    // The agents on the number, for the takeover card (several agents only).
+    private IReadOnlyList<AgentAvatarStackItem> ChannelAgentAvatars => !Conversation.HasAgentTeam ? [] :
+        [.. Conversation.Agents.Select(agent => new AgentAvatarStackItem(agent.Name,
             AgentLooks.Of(AgentLookup.Look(agent.Id, agent.Name, AgentsState.Agents))))];
 
     private readonly CancellationTokenSource _lifetime = new();
@@ -899,10 +902,10 @@
     }
 
     // A reply several agents wrote together is corrected for all of them.
-    private bool IsSharedCorrection => _learningMode == LearningMode.Correction && _learningMessage?.AgentsInvolved.Count > 1;
+    private bool IsSharedCorrection => _learningMode == LearningMode.Correction && _learningMessage?.AnsweredBy.Count > 1;
     // The agent that wrote the message; else the conversation's, by the workspace's own name for it when its list has it (the API may only know it by id).
     private string LearningAgent => IsSharedCorrection ? "your agents"
-        : _learningMessage?.AgentsInvolved.FirstOrDefault()?.Name ?? _learningMessage?.Author?.Name
+        : _learningMessage?.AnsweredBy.FirstOrDefault()?.Name ?? _learningMessage?.Author?.Name
         ?? (Conversation.AiAgent is { } agent ? AgentsState.GetAgent(agent.Id)?.Name ?? agent.Name : null) ?? "the AI agent";
     // The same, starting a sentence.
     private string CapitalisedAgent => LearningAgent.Length == 0 ? LearningAgent : char.ToUpperInvariant(LearningAgent[0]) + LearningAgent[1..];

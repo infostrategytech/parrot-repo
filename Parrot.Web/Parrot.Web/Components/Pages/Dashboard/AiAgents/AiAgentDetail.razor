@@ -1377,7 +1377,7 @@ else
         }
         catch (Exception exception) when (AiAgentsState.IsFailure(exception))
         {
-            // The API's own reason when it gave one (another agent already answers there, a currency it can't keep);
+            // The API's own reason when it gave one (a channel in another workspace, a currency it can't keep);
             // the connection only when it didn't.
             _saveError = exception is ApiException { UserMessage: { Length: > 0 } reason } ? reason
                 : "We couldn't save your changes. Check your connection and try again.";

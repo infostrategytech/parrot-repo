@@ -75,6 +75,8 @@ builder.Services.AddSingleton<IAgentOrchestratorClient>(sp => new AgentOrchestra
     sp.GetRequiredService<IServiceTokenFactory>(),
     sp.GetRequiredService<IOptions<OmniAiSettings>>(),
     sp.GetRequiredService<ILogger<AgentOrchestratorClient>>()));
+// Temporary: the workspace's switch for agents sharing a number decides how a message is routed.
+builder.Services.AddSingleton<IMultiAgentSwitchStore, MongoMultiAgentSwitchStore>();
 builder.Services.AddSingleton<IAgentChannelLookup, OmniAiAgentChannelLookup>();
 builder.Services.AddSingleton<IHumanTakeoverStore, MongoHumanTakeoverStore>();
 

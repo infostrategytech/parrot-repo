@@ -81,26 +81,27 @@ public class ConversationItem
 
     /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
     public InboxPersonDto? ChannelAgent { get; set; }
-    public IReadOnlyList<InboxPersonDto> ChannelAgents { get; set; } = [];
-    public bool HasSharedAgentCoverage => ChannelAgents.Count > 1;
-    // Several agents on the channel are named, not "Your agents" (designer, 23 November 2026): "Tobi and Kora",
-    // "Tobi and 2 others", as the messages they reply with say it.
-    public string AgentNames => ChannelAgents.Count switch
-    {
-        0 => "Your agents",
-        1 => ChannelAgents[0].Name,
-        2 => $"{ChannelAgents[0].Name} and {ChannelAgents[1].Name}",
-        var count => $"{ChannelAgents[0].Name} and {count - 1} others",
-    };
-    public string SharedAgentStatus => ReplyLocked ? $"{AgentNames} are replying" : $"{AgentNames} are paused";
-    /// <summary>The list's short form, as a single agent's: "Tobi and Kora · Replying".</summary>
-    public string SharedAgentLine => $"{AgentNames} · {(ReplyLocked ? "Replying" : "Paused")}";
+
+    /// <summary>Every live agent switched on for this conversation's number, in the AI service's order.</summary>
+    public IReadOnlyList<InboxPersonDto> Agents { get; set; } = [];
+
+    /// <summary>Several agents answer here, through the AI service's super agent: the screens name them together.</summary>
+    public bool HasAgentTeam => Agents.Count > 1;
+
+    /// <summary>"Nia and 2 others", or the one agent's name.</summary>
+    public string TeamName => AgentTeam.Names(Agents.Select(a => a.Name).ToList());
+
+    /// <summary>The agents are named together, unless one of them is waiting on the team: then that one is.</summary>
+    public bool RepliesAsTeam => HasAgentTeam && !NeedsAnswer;
+
+    /// <summary>Who the screens say is replying here: "Nia and 2 others", or one agent's name.</summary>
+    public string ReplyingName => RepliesAsTeam ? TeamName : AiAgent?.Name ?? ChannelAgent?.Name ?? "the AI agent";
 
     /// <summary>An AI agent owns this conversation, so the AI controls apply.</summary>
-    public bool HasAiAgent => (AiAgent is not null || HasSharedAgentCoverage) && AiState is not null;
+    public bool HasAiAgent => AiAgent is not null && AiState is not null;
 
     /// <summary>An agent is connected to this conversation's channel (whether or not it is currently handling it).</summary>
-    public bool HasChannelAgent => ChannelAgent is not null || ChannelAgents.Count > 0;
+    public bool HasChannelAgent => ChannelAgent is not null;
 
     /// <summary>Customer replies are held while the AI agent is responding.</summary>
     public bool ReplyLocked => AiState == global::Parrot.Web.Components.Pages.Dashboard.Conversations.AiState.Active;
@@ -137,7 +138,6 @@ public class ConvMessage
 
     public MessageKind Kind { get; set; } = MessageKind.Customer;
     public InboxPersonDto? Author { get; set; }
-    public IReadOnlyList<InboxPersonDto> AgentsInvolved { get; set; } = [];
     public InboxAttachmentDto? Attachment { get; set; }
     public IReadOnlyList<InboxMediaDto> Attachments { get; set; } = [];
     public bool KnowledgeUpdated { get; set; }
@@ -145,4 +145,10 @@ public class ConvMessage
     public string? Answer { get; set; }
     /// <summary>The message this one replies to (quotes), or null.</summary>
     public InboxQuoteDto? ReplyTo { get; set; }
+
+    /// <summary>The agents the AI service asked for this AI reply, when several helped write it, in its order.</summary>
+    public IReadOnlyList<InboxReplyAgentDto> Agents { get; set; } = [];
+
+    /// <summary>Those whose answers made the reply: the reply is theirs.</summary>
+    public IReadOnlyList<InboxReplyAgentDto> AnsweredBy => Agents.Where(a => a.Status == "answered").ToList();
 }

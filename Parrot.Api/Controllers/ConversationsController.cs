@@ -26,9 +26,18 @@ namespace Parrot.Api.Controllers;
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
-    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache,
+    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache, MultiAgentSwitch multiAgent,
     IAiOperationsService operations, IAppLogger<ConversationsController> logger) : ControllerBase
 {
+    // The AI service's agents for the workspace, shared for 30 s: they rarely change, and every inbox read needs them.
+    private async Task<T> CachedAsync<T>(string key, Func<Task<T>> read) where T : class
+    {
+        if (cache.TryGetValue(key, out T? cached) && cached is not null) return cached;
+        T fresh = await read();
+        cache.Set(key, fresh, TimeSpan.FromSeconds(30));
+        return fresh;
+    }
+
     // The workspace owns the conversations; what has been read, what is pinned
     // or set aside, and who wrote a note, belong to the person signed in.
     private string Owner => User.WorkspaceId()
@@ -73,28 +82,28 @@ public sealed class ConversationsController(IConversationStore store, IConversat
         IReadOnlyDictionary<(Guid, string), int> unread = await reads.CountUnreadAsync(Owner, Reader,
             rows.Select(c => (c.ConnectionId, c.Sender)).ToList(), cancellationToken);
 
-        // One call to the AI service returns every live agent mapped to its channel platform.
+        // One call to the AI service returns every live agent: by connection when several agents can share one
+        // (the workspace's MultiAgentSwitch, temporary), otherwise by channel platform, as before.
         // The result is cached per workspace for 30 s; agents rarely change and the cache stays fresh enough.
         // If the AI service is unreachable the inbox degrades gracefully: no channel agent shown.
-        IReadOnlyDictionary<string, ConversationAgentRef> agentByChannel;
+        bool sharesChannels = await multiAgent.IsOnAsync(Owner, cancellationToken);
+        IReadOnlyDictionary<string, ConversationAgentRef> agentByChannel = new Dictionary<string, ConversationAgentRef>();
+        IReadOnlyDictionary<Guid, IReadOnlyList<ConversationAgentRef>> agentsByConnection = new Dictionary<Guid, IReadOnlyList<ConversationAgentRef>>();
         try
         {
-            string cacheKey = $"channel_agents:{Owner}";
-            if (!cache.TryGetValue(cacheKey, out IReadOnlyDictionary<string, ConversationAgentRef>? cached) || cached is null)
-            {
-                cached = await orchestrator.GetChannelAgentMapAsync(Owner, cancellationToken);
-                cache.Set(cacheKey, cached, TimeSpan.FromSeconds(30));
-            }
-            agentByChannel = cached;
+            if (sharesChannels)
+                agentsByConnection = await CachedAsync($"connection_agents:{Owner}", () => orchestrator.GetConnectionAgentsAsync(Owner, cancellationToken));
+            else
+                agentByChannel = await CachedAsync($"channel_agents:{Owner}", () => orchestrator.GetChannelAgentMapAsync(Owner, cancellationToken));
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "channel_agents.unavailable OwnerId={OwnerId} — inbox degrades: no channel agent shown", Owner);
-            agentByChannel = new Dictionary<string, ConversationAgentRef>();
         }
 
         // The orchestrator names its live agents; Parrot's own agent list may not know the one that asked.
         Dictionary<string, ConversationAgentRef> liveAgents = agentByChannel.Values
+            .Concat(agentsByConnection.Values.SelectMany(agents => agents))
             .DistinctBy(a => a.Id, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(a => a.Id, StringComparer.OrdinalIgnoreCase);
 
@@ -109,13 +118,18 @@ public sealed class ConversationsController(IConversationStore store, IConversat
                 marks.TryGetValue((c.ConnectionId, c.Sender), out ConversationFlags? mark);
                 questions.TryGetValue((c.ConnectionId, c.Sender), out ConversationQuestions? open);
                 bool hasActiveTakeover = activeTakeovers.ContainsKey((c.ConnectionId, c.Sender));
-                ConversationAgentRef? channelAgent = agentByChannel.GetValueOrDefault(c.Channel);
+                IReadOnlyList<ConversationAgentRef> onNumber = sharesChannels
+                    ? agentsByConnection.GetValueOrDefault(c.ConnectionId) ?? []
+                    : agentByChannel.GetValueOrDefault(c.Channel) is { } only ? [only] : [];
+                // The first of them, for a web app from before agents could share a channel.
+                ConversationAgentRef? channelAgent = onNumber.FirstOrDefault();
                 return c with
                 {
                     UnreadCount = unread.GetValueOrDefault((c.ConnectionId, c.Sender)),
                     Pinned = mark?.Pinned ?? false,
                     MarkedUnread = mark?.MarkedUnread ?? false,
                     ChannelAgent = channelAgent,
+                    Agents = onNumber,
                     ControlUntil = activeTakeovers.TryGetValue((c.ConnectionId, c.Sender), out DateTime? until) ? until : null,
                     AiState = hasActiveTakeover ? "handoff" : channelAgent is not null ? "active" : null,
                     NeedsAnswer = open?.NeedsAnswer ?? false,
@@ -215,6 +229,10 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
         MessagePage page = await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken);
+        // The agents asked for each AI reply show only while the workspace has agents sharing numbers; off, a reply shows
+        // as the conversation's one agent, as before.
+        if (!await multiAgent.IsOnAsync(Owner, cancellationToken))
+            page = page with { Messages = [.. page.Messages.Select(m => m.Agents is null ? m : m with { Agents = null })] };
 
         // The newest page also carries the agents' open questions here, for the people who can answer them.
         if (before is null && HttpContext.WorkspaceAccess().Can(WorkspacePermissions.ConversationsTakeOver))

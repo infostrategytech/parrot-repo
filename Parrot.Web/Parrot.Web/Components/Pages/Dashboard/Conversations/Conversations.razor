@@ -213,7 +213,7 @@
                                          OnTogglePin="() => TogglePinAsync(conversation)"
                                          OnToggleUnread="() => ToggleMarkedUnreadAsync(conversation)"
                                          AgentLook="@AgentLookup.Look(conversation.AiAgent?.Id, conversation.AiAgent?.Name, AgentSetup.Agents)"
-                                         ChannelLooks="@ChannelLooks(conversation)" />
+                                         TeamLooks="@TeamLooks(conversation)" />
                     }
 
                     @if (_more)
@@ -287,7 +287,7 @@
                     <ActionMenu Label="More actions" Glyph="IconName.RiMore2Fill">
                         @if (_selected.HasChannelAgent && _selected.AiState != AiState.Active)
                         {
-                            <ActionMenuItem Label="@ResponseControl.ReturnWords(_selected, _selected.AiAgent?.Name ?? _selected.ChannelAgent?.Name ?? "the AI agent")" Glyph="IconName.RiRobot3Fill"
+                            <ActionMenuItem Label="@ResponseControl.ReturnWords(_selected, _selected.ReplyingName)" Glyph="IconName.RiRobot3Fill"
                                             OnClick="() => ActAsync(conversation => Client.ReturnToAiAsync(conversation.ConnectionId, conversation.Sender, _lifetime.Token))" />
                         }
                         <ActionMenuItem Label="@(_selected.Pinned ? "Unpin" : "Pin to top")" Glyph="IconName.RiPushpin2Fill"
@@ -308,6 +308,7 @@
                                           OnLoadOlder="LoadOlderAsync" OnSent="RefreshAsync" OnChanged="RefreshAsync"
                                           OnCustomerDetails="OpenCustomerDetailsAsync" FocusMessageId="@FocusMessage"
                                           AgentLook="@AgentLookup.Look(_selected.AiAgent?.Id, _selected.AiAgent?.Name, AgentSetup.Agents)"
+                                          TeamLooks="@TeamLooks(_selected)"
                                           OnOpenTask="OpenTaskAsync" />
                 </div>
 
@@ -388,9 +389,9 @@
     private ElementReference _customerPanel;
     private bool _customerFocusPending;
 
-    // The faces of the agents on a conversation's channel, in its order (several agents: the list and the chip).
-    private IReadOnlyList<string?> ChannelLooks(ConversationItem conversation) => conversation.ChannelAgents.Count < 2 ? []
-        : [.. conversation.ChannelAgents.Select(agent => AgentLookup.Look(agent.Id, agent.Name, AgentSetup.Agents))];
+    // Every agent on the conversation's number, by its look in the Inbox.
+    private IReadOnlyList<string> TeamLooks(ConversationItem conversation) =>
+        conversation.Agents.Select(a => AgentLookup.Look(a.Id, a.Name, AgentSetup.Agents)).OfType<string>().ToList();
 
     private static readonly (InboxScope Value, string Label)[] ScopeOptions =
         [(InboxScope.All, "All"), (InboxScope.Unread, "Unread"), (InboxScope.NeedsYou, "Needs you")];

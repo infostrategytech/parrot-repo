@@ -1,0 +1,7 @@
+.reply-agents__list { display: grid; gap: var(--spacing-md); margin: 0; padding: 0; list-style: none; }
+.reply-agents__agent { display: flex; gap: var(--spacing-sm); align-items: flex-start; }
+.reply-agents__face { display: grid; flex: none; width: var(--spacing-2xl); height: var(--spacing-2xl); }
+.reply-agents__words { display: grid; gap: var(--spacing-2xs); min-width: 0; }
+.reply-agents__words ::deep p { margin: 0; color: var(--colors-text-primary); overflow-wrap: anywhere; }
+.reply-agents__label { color: var(--colors-text-muted); }
+.reply-agents__words ::deep .reply-agents__missing { color: var(--colors-text-muted); }

@@ -122,7 +122,7 @@
             {
                 <Button Variant="ButtonVariant.Secondary" Size="ButtonSize.Small" Busy="@Drafting" disabled="@Drafting" @onclick="OnDraft">
                     <IconLeft><Icon Name="IconName.RiSparklingFill" /></IconLeft>
-                    <ChildContent>@(Drafting ? "Drafting" : Conversation.HasSharedAgentCoverage ? "Draft a reply" : $"Draft with {Conversation.AiAgent!.Name}")</ChildContent>
+                    <ChildContent>@(Drafting ? "Drafting" : Conversation.HasAgentTeam ? "Draft a reply" : $"Draft with {Conversation.AiAgent!.Name}")</ChildContent>
                 </Button>
             }
 

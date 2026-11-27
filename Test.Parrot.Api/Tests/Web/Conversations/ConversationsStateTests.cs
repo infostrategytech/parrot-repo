@@ -18,6 +18,47 @@ public sealed class ConversationsStateTests
     private static ConversationSummary Row() => new(Connection, "2348012345678", "Ada", "Do you deliver to Ibadan?", DateTime.UtcNow);
 
     [Fact]
+    public void Merge_AnAiReplySeveralAgentsHelpedWith_KeepsThemAndWhichOnesAnswered()
+    {
+        ConversationItem item = new() { Id = "c1" };
+        ConversationMessage reply = new("outgoing:w:r1", "It left Ikeja, and the sneakers are N21,000.", true, "read", At)
+        {
+            Kind = "ai",
+            Agents = [new ReplyAgent("agt_tobi", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered"),
+                      new ReplyAgent("agt_kora", "Kora", null, "How much?", "N21,000.", "answered"),
+                      new ReplyAgent("agt_ada", "Ada", null, "Any discount?", "", "timed_out")],
+        };
+
+        ConversationsState.Merge(item, [JsonSerializer.Deserialize<InboxMessageDto>(JsonSerializer.Serialize(reply, Web), Web)!]);
+
+        ConvMessage message = Assert.Single(item.Messages);
+        Assert.Equal(["Tobi", "Kora", "Ada"], message.Agents.Select(a => a.Name));
+        Assert.Equal(["Tobi", "Kora"], message.AnsweredBy.Select(a => a.Name));
+        Assert.Equal(("Any discount?", "", "timed_out"), (message.Agents[2].Question, message.Agents[2].Answer, message.Agents[2].Status));
+    }
+
+    [Fact]
+    public void Apply_ARowWithSeveralAgentsOnItsNumber_KeepsThemAllInOrder()
+    {
+        ConversationsState state = new();
+        ConversationAgentRef nia = new("agt_nia", "Nia", "Ember"), tobi = new("agt_tobi", "Tobi");
+
+        state.Apply([ThroughTheWire(Row() with { ChannelAgent = nia, Agents = [nia, tobi] })]);
+
+        Assert.Equal(["Nia", "Tobi"], Assert.Single(state.Conversations).Agents.Select(a => a.Name));
+    }
+
+    [Fact]
+    public void Apply_ARowFromAnApiBeforeSharedChannels_HasItsOneChannelAgent()
+    {
+        ConversationsState state = new();
+
+        state.Apply([ThroughTheWire(Row() with { ChannelAgent = new ConversationAgentRef("agt_tolu", "Tolu"), Agents = [] })]);
+
+        Assert.Equal(["Tolu"], Assert.Single(state.Conversations).Agents.Select(a => a.Name));
+    }
+
+    [Fact]
     public void Apply_ARowWithAnOpenQuestion_ShowsItNeedsAnAnswerAndWhichAgentAsked()
     {
         ConversationsState state = new();
@@ -61,23 +102,41 @@ public sealed class ConversationsStateTests
         Assert.Equal("Cunha", item.AiAgent?.Name);
     }
 
-    // Several agents on one number are named together; none of them is "the" agent of the chat.
+    // Several agents on one number are named together, and the team can still take over from them, even from a row
+    // that names no single channel agent.
     [Fact]
     public void Apply_ARowWithSeveralAgentsOnItsNumber_ShowsThemTogether()
     {
         ConversationsState state = new();
-        InboxConversationDto row = ThroughTheWire(Row() with { AiState = "active" }) with
-        {
-            ChannelAgents = [new InboxPersonDto("agent-cunha", "Cunha"), new InboxPersonDto("agent-tolu", "Tolu")],
-        };
 
-        state.Apply([row]);
+        state.Apply([ThroughTheWire(Row() with
+        {
+            AiState = "active", Agents = [new ConversationAgentRef("agent-cunha", "Cunha"), new ConversationAgentRef("agent-tolu", "Tolu")],
+        })]);
 
         ConversationItem item = Assert.Single(state.Conversations);
         Assert.True(item.HasChannelAgent);
-        Assert.True(item.HasSharedAgentCoverage);
-        Assert.Equal("Cunha and Tolu", item.AgentNames);
-        Assert.Null(item.AiAgent);
+        Assert.True(item.HasAiAgent);
+        Assert.True(item.RepliesAsTeam);
+        Assert.Equal("Cunha and Tolu", item.ReplyingName);
+    }
+
+    // A pushed copy of a reply carries no agents; the ones an earlier read gave it stay.
+    [Fact]
+    public void Merge_ALaterCopyOfAReplyWithoutItsAgents_KeepsTheAgentsAlreadyKnown()
+    {
+        ConversationItem item = new() { Id = "c1" };
+        ConversationMessage reply = new("outgoing:w:r1", "It left Ikeja.", true, "sent", At)
+        {
+            Kind = "ai", Agents = [new ReplyAgent("agt_tobi", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered")],
+        };
+        ConversationsState.Merge(item, [JsonSerializer.Deserialize<InboxMessageDto>(JsonSerializer.Serialize(reply, Web), Web)!]);
+
+        ConversationsState.Merge(item, [new InboxMessageDto("outgoing:w:r1", "It left Ikeja.", true, "read", At) { Kind = "ai" }]);
+
+        ConvMessage message = Assert.Single(item.Messages);
+        Assert.Equal("read", message.Status);
+        Assert.Equal(["Tobi"], message.Agents.Select(a => a.Name));
     }
 
     // Once the question closes, the next list read takes the flag away.

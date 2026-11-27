@@ -7,7 +7,8 @@ namespace Parrot.Infrastructure.Agents;
 
 public sealed class EfAgentChannelLookup(IDbContextFactory<ApplicationDbContext> factory) : IAgentChannelLookup
 {
-    public async Task<bool> IsAgentLiveAsync(string workspaceId, string channel, CancellationToken ct)
+    // Parrot's own agents are kept by channel kind, so the connection doesn't narrow it.
+    public async Task<bool> IsAgentLiveAsync(string workspaceId, string channel, Guid? connectionId, CancellationToken ct)
     {
         await using ApplicationDbContext db = await factory.CreateDbContextAsync(ct);
         List<Agent> live = await db.Agents

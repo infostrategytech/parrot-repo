@@ -93,4 +93,9 @@ public abstract class MessageDocument
     // older documents (which predate this field) remain readable without change.
     [BsonIgnoreIfNull]
     public bool? IsAiReply { get; set; }
+
+    // The agents the AI service's super agent asked for this reply, when it wrote it from several (three at most).
+    // Left out for every other message, and for an AI reply one agent wrote alone.
+    [BsonIgnoreIfNull]
+    public List<ReplyContributor>? Contributors { get; set; }
 }

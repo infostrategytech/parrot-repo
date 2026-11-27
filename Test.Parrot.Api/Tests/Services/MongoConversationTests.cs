@@ -22,6 +22,40 @@ public class MongoConversationTests
     }
 
     [MongoFact]
+    public async Task RealMongoKeepsTheAgentsThatHelpedOnThatOwnersReplyOnly()
+    {
+        MongoClient client = new(Environment.GetEnvironmentVariable("PARROT_TEST_MONGO"));
+        string database = "parrot_test_" + Guid.NewGuid().ToString("N");
+        IOptions<MongoDbSettings> settings = Options.Create(new MongoDbSettings { Database = database, Collection = "messages" });
+        try
+        {
+            MongoConversationStore store = new(client, settings);
+            Guid connection = Guid.NewGuid(), request = Guid.NewGuid();
+            WhatsAppMessageDocument reply = new()
+            {
+                MessageId = ConversationService.RequestKey("owner", request), OwnerUserId = "owner", ConnectionId = connection,
+                Platform = MessagingPlatform.WhatsApp, ExternalAccountId = "456", ChannelId = "123", ChannelDisplayName = "123",
+                From = "2348012345678", Type = "text", TextBody = "It left Ikeja.", Timestamp = "1790589123",
+                ReceivedAt = DateTime.UtcNow, Outgoing = true, SendStatus = "accepted", IsAiReply = true,
+            };
+            await store.ReserveAsync(reply, default);
+            List<ReplyContributor> helpers =
+                [new ReplyContributor { AgentId = "agt_1", Name = "Tobi", Avatar = "Nova", Question = "Where is it?", Answer = "It left Ikeja.", Status = "answered" }];
+
+            // The same request id under another owner names a different reply, so it changes nothing here.
+            await store.SetContributorsAsync("other", request, [new ReplyContributor { AgentId = "agt_x", Name = "X", Question = "", Answer = "", Status = "answered" }], default);
+            await store.SetContributorsAsync("owner", request, helpers, default);
+
+            ConversationMessage read = Assert.Single((await store.ReadAsync("owner", connection, reply.From, null, default)).Messages);
+            Assert.Equal([new ReplyAgent("agt_1", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered")], read.Agents);
+        }
+        finally
+        {
+            await client.DropDatabaseAsync(database);
+        }
+    }
+
+    [MongoFact]
     public async Task RealMongoDeduplicatesIncomingAndOutgoingAndIsolatesHistory()
     {
         var client = new MongoClient(Environment.GetEnvironmentVariable("PARROT_TEST_MONGO"));

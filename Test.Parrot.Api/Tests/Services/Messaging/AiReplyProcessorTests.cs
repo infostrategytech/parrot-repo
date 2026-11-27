@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -281,6 +282,91 @@ public class AiReplyProcessorTests
         await processor.ProcessAsync(request, default);
     }
 
+    // The AI service's super agent names the agents it asked, with what each was asked and answered.
+    private const string TwoHelpers = """
+        [{"agentId":"agt_01JC","name":"Tracking","avatar":"tr","useCase":"tracking","input":"Where is ORD-1041?",
+          "output":"Your parcel ORD-1041 left Ikeja this morning.","status":"answered","latencyMs":812.0},
+         {"agentId":"agt_01JB","name":"Sales","avatar":null,"useCase":null,"input":"How much are the blue sneakers?",
+          "output":"","status":"timed_out","latencyMs":null}]
+        """;
+
+    private static AiReplyRequested WithHelpers(string contributors) => new()
+    {
+        WorkspaceId = ValidWorkspace, ConnectionId = ValidConnection,
+        Recipient = ValidRecipient, RequestId = ValidRequest, Text = ValidText,
+        Contributors = JsonDocument.Parse(contributors).RootElement.Clone(),
+    };
+
+    [Fact]
+    public async Task ProcessAsync_WithTheAgentsThatHelped_KeepsThemWithTheReply()
+    {
+        ConversationService service = WhatsAppService(out _, out FakeStore store, out _);
+
+        await MakeProcessor(new ScopeFactory(service)).ProcessAsync(WithHelpers(TwoHelpers), default);
+
+        List<ReplyContributor> kept = store.Sent[ConversationService.RequestKey(ValidWorkspace, ValidRequest)].Contributors!;
+        Assert.Equal(2, kept.Count);
+        Assert.Equal(("agt_01JC", "Tracking", "tr"), (kept[0].AgentId, kept[0].Name, kept[0].Avatar));
+        Assert.Equal(("Where is ORD-1041?", "Your parcel ORD-1041 left Ikeja this morning.", "answered"), (kept[0].Question, kept[0].Answer, kept[0].Status));
+        Assert.Equal(("Sales", null, "", "timed_out"), (kept[1].Name, kept[1].Avatar, kept[1].Answer, kept[1].Status));
+    }
+
+    [Theory]
+    [InlineData("\"not a list\"")]
+    [InlineData("""[{"agentId":7,"name":["Tracking"],"input":{"a":1},"status":true}]""")]
+    [InlineData("""[{"name":"No id"},{"agentId":"agt_1"}]""")]
+    public async Task ProcessAsync_WithHelpersItCantRead_StillSendsTheReplyAndKeepsNone(string contributors)
+    {
+        ConversationService service = WhatsAppService(out Mock<IWhatsAppSender> sender, out FakeStore store, out _);
+
+        await MakeProcessor(new ScopeFactory(service)).ProcessAsync(WithHelpers(contributors), default);
+
+        sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), ValidText, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Null(store.Sent[ConversationService.RequestKey(ValidWorkspace, ValidRequest)].Contributors);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_KeepsAtMostThreeHelpersWithTheirWordsCutTo1500Characters()
+    {
+        ConversationService service = WhatsAppService(out _, out FakeStore store, out _);
+        string longWords = new('a', 2000);
+        string five = "[" + string.Join(",", Enumerable.Range(1, 5).Select(i =>
+            $$"""{"agentId":"agt_{{i}}","name":"Agent {{i}}","input":"{{longWords}}","output":"{{longWords}}","status":"answered"}""")) + "]";
+
+        await MakeProcessor(new ScopeFactory(service)).ProcessAsync(WithHelpers(five), default);
+
+        List<ReplyContributor> kept = store.Sent[ConversationService.RequestKey(ValidWorkspace, ValidRequest)].Contributors!;
+        Assert.Equal(["agt_1", "agt_2", "agt_3"], kept.Select(c => c.AgentId));
+        Assert.All(kept, c => Assert.Equal((1500, 1500), (c.Question.Length, c.Answer.Length)));
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WhenTheHelpersCantBeKept_TheReplyStillCountsAsSentAndIsAnnouncedOnce()
+    {
+        RecordingPublisher published = new();
+        ConversationService service = WhatsAppService(out Mock<IWhatsAppSender> sender, out FakeStore store, out _, published);
+        store.ContributorsFailure = new IOException("Mongo is down");
+
+        await MakeProcessor(new ScopeFactory(service)).ProcessAsync(WithHelpers(TwoHelpers), default);
+
+        sender.Verify(x => x.SendAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>(), ValidText, It.IsAny<CancellationToken>()), Times.Once);
+        Assert.Single(published.Published);
+    }
+
+    [Fact]
+    public async Task ProcessAsync_WithoutHelpers_KeepsNoneAsBefore()
+    {
+        ConversationService service = WhatsAppService(out _, out FakeStore store, out _);
+
+        await MakeProcessor(new ScopeFactory(service)).ProcessAsync(new AiReplyRequested
+        {
+            WorkspaceId = ValidWorkspace, ConnectionId = ValidConnection, Recipient = ValidRecipient, RequestId = ValidRequest, Text = ValidText,
+        }, default);
+
+        Assert.Null(store.Sent[ConversationService.RequestKey(ValidWorkspace, ValidRequest)].Contributors);
+        Assert.Equal(0, store.ContributorWrites);
+    }
+
     private static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 4];
 
     private static AiReplyRequested WithPhotos(params (string Url, string? Caption)[] photos) => new()
@@ -437,6 +523,17 @@ public class AiReplyProcessorTests
 
         public Task<bool> FailPendingAsync(string id, CancellationToken ct) =>
             Task.FromResult(false);
+
+        public Exception? ContributorsFailure { get; set; }
+        public int ContributorWrites { get; private set; }
+
+        public Task SetContributorsAsync(string owner, Guid request, IReadOnlyList<ReplyContributor> contributors, CancellationToken ct)
+        {
+            ContributorWrites++;
+            if (ContributorsFailure is not null) throw ContributorsFailure;
+            if (Sent.TryGetValue(ConversationService.RequestKey(owner, request), out MessageDocument? doc)) doc.Contributors = [.. contributors];
+            return Task.CompletedTask;
+        }
     }
 
     private sealed class FakeSequence : IConversationSequence

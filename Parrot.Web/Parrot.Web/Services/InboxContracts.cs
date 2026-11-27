@@ -47,8 +47,8 @@ public sealed record InboxConversationDto(Guid ConnectionId, string Sender, stri
     public InboxCustomerDto? Customer { get; init; }
     /// <summary>The live agent covering this conversation's channel. Null when no agent is connected to it.</summary>
     public InboxPersonDto? ChannelAgent { get; init; }
-    /// <summary>Agents eligible to reply on this channel. Null on older providers; keep the single-agent display.</summary>
-    public IReadOnlyList<InboxPersonDto>? ChannelAgents { get; init; }
+    /// <summary>Every live agent switched on for this conversation's number. Empty or missing on older APIs: ChannelAgent then.</summary>
+    public List<InboxPersonDto>? Agents { get; init; }
 }
 
 /// <summary>Unread customer messages across every conversation and channel.</summary>
@@ -90,8 +90,6 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
     /// <summary>customer, ai, human, note, system or ai_question. Null is read from Outgoing.</summary>
     public string? Kind { get; init; }
     public InboxPersonDto? Author { get; init; }
-    /// <summary>Agents actually called for this AI reply, not the channel roster or the service that sent it.</summary>
-    public IReadOnlyList<InboxPersonDto>? AgentsInvolved { get; init; }
     public InboxAttachmentDto? Attachment { get; init; }
     /// <summary>The files the customer sent with this message: pictures, stickers, GIFs, video, audio and documents.</summary>
     public IReadOnlyList<InboxMediaDto>? Attachments { get; init; }
@@ -102,7 +100,15 @@ public sealed record InboxMessageDto(string Id, string Text, bool Outgoing, stri
     public string? Answer { get; init; }
     /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
     public InboxQuoteDto? ReplyTo { get; init; }
+    /// <summary>The agents the AI service asked for this AI reply, when several helped write it. Null otherwise and on older APIs.</summary>
+    public List<InboxReplyAgentDto>? Agents { get; init; }
 }
+
+/// <summary>
+/// An agent asked for one AI reply: what it was asked, what it answered (empty when it didn't), and its status
+/// (answered, failed or timed_out). Avatar is the AI service's look key, when it gave one.
+/// </summary>
+public sealed record InboxReplyAgentDto(string Id, string Name, string? Avatar, string Question, string Answer, string Status);
 
 /// <summary>
 /// A quoted message, shown above a reply. Id is the quoted message's InboxMessageDto.Id, null when it is not

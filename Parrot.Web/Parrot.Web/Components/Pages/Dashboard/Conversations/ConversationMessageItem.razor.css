@@ -430,3 +430,4 @@ a.message-file:hover { background: var(--colors-interaction-hover); border-color
 
 /* The agent's own face on its bubbles, the size of the people's avatars (designer, 15 November 2026). */
 .message-bubble__ai-face { display: grid; flex: 0 0 auto; width: var(--spacing-3xl); height: var(--spacing-3xl); }
+.message-bubble__ai-faces { display: flex; flex: 0 0 auto; align-items: flex-start; }

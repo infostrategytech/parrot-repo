@@ -66,11 +66,11 @@ else
     <article class="message-bubble @DirectionClass @KindClass @(_highlighted ? "is-highlighted" : null)" @ref="_element" @ondblclick:stopPropagation>
         @if (Message.Kind == MessageKind.Ai)
         {
-            @if (AgentAvatars.Count > 1)
+            @if (Message.Agents.Count > 0)
             {
-                <AgentAvatarStack Items="AgentAvatars" Group />
+                <span class="message-bubble__ai-faces"><ReplyAgentsPopover Agents="Message.Agents" Looks="ReplyLooks" /></span>
             }
-            else if (AgentLook is { } look)
+            else if ((AgentLook ?? AgentMascot) is { } look)
             {
                 <span class="message-bubble__ai-face"><Parrot.Web.Components.Pages.Dashboard.AiAgents.AgentFace Look="@look" /></span>
             }
@@ -267,11 +267,13 @@ else
     [Parameter, EditorRequired] public string AuthorName { get; set; } = "";
     [Parameter, EditorRequired] public string AuthorSeed { get; set; } = "";
     /// <summary>The agent's saved look ("look:pip:violet" or a mascot name). When set, shown instead of the robot icon on AI messages.</summary>
+    [Parameter] public string? AgentMascot { get; set; }
     /// <summary>The corrections and answers that teach the AI can be saved.</summary>
     [Parameter] public bool CanTeach { get; set; }
     /// <summary>The conversation agent's saved look, for its bubbles.</summary>
     [Parameter] public string? AgentLook { get; set; }
-    [Parameter] public IReadOnlyList<AgentAvatarStackItem> AgentAvatars { get; set; } = [];
+    /// <summary>The look of each agent asked for this AI reply, in Message.Agents' order: shown in place of the chat agent's.</summary>
+    [Parameter] public IReadOnlyList<string> ReplyLooks { get; set; } = [];
     [Parameter] public EventCallback<ConvMessage> OnCorrect { get; set; }
     [Parameter] public EventCallback<ConvMessage> OnDeleteNote { get; set; }
     [Parameter] public EventCallback OnCustomerDetails { get; set; }
@@ -337,13 +339,12 @@ else
         _ => "is-customer"
     };
 
+    // An AI reply several agents helped write is theirs: "Tobi and Kora", or the one that answered.
     private string AuthorLabel => Message.Kind == MessageKind.Customer
         ? CustomerName
-        // Several agents: their names beside the group avatar (designer, 23 November 2026), not a generic line.
-        : Message.Kind == MessageKind.Ai && Message.AgentsInvolved.Count == 2 ? $"{Message.AgentsInvolved[0].Name} and {Message.AgentsInvolved[1].Name}"
-        : Message.Kind == MessageKind.Ai && Message.AgentsInvolved.Count > 2 ? $"{Message.AgentsInvolved[0].Name} and {Message.AgentsInvolved.Count - 1} others"
-        : Message.Kind == MessageKind.Ai && Message.AgentsInvolved.FirstOrDefault() is { } agent ? agent.Name
-        : Message.Author?.Name ?? AuthorName;
+        : Message.Kind == MessageKind.Ai && Message.AnsweredBy is { Count: > 0 } answered
+            ? AgentTeam.Names(answered.Select(a => a.Name).ToList())
+            : Message.Author?.Name ?? AuthorName;
     private string AvatarSeed => Message.Kind == MessageKind.Customer
         ? CustomerSeed
         : Message.Author?.Id ?? AuthorSeed;

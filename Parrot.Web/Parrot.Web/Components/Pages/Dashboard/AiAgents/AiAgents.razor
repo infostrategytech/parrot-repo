@@ -7,6 +7,8 @@
 @inject ToastService Toasts
 @inject AgentGate AgentGate
 @inject IAiOperationsFeed Feed
+@inject MultiAgentSwitchClient MultiAgent
+@inject ILogger<AiAgents> Logger
 @inject IBusinessKnowledge Knowledge
 @inject IAgentCapabilities AgentCapabilities
 @inject Parrot.Web.Components.Pages.Dashboard.TeachAi.TeachAiState TeachAi
@@ -252,7 +254,12 @@
 
     private List<AiAgent> LiveAgents => AiAgentsState.Agents.Where(a => a.IsActive && !a.IsDraft).ToList();
 
-    private AgentToday Totals => AgentToday.Sum(LiveAgents.Select(agent => Feed.Today(agent)));
+    // With agents sharing numbers, one reply counts for each agent that answered in it, so adding agents up would count
+    // it more than once.
+    private bool _sharesNumbers;
+    private AgentToday Totals => _sharesNumbers
+        ? Feed.WorkspaceToday()
+        : AgentToday.Sum(LiveAgents.Select(agent => Feed.Today(agent)));
 
     private IReadOnlyList<WaitingQuestion> Waiting => Feed.Waiting(AiAgentsState.Agents);
 
@@ -295,7 +302,17 @@
         TeachAi.Changed += OnTeachAiChanged;
         Intro.Changed += OnIntroChanged;
         AiAgentsState.Changed += OnAgentsChanged;
-        await Task.WhenAll(AiAgentsState.LoadAsync(), LoadKnowledgeAsync());
+        await Task.WhenAll(AiAgentsState.LoadAsync(), LoadKnowledgeAsync(), LoadSharingAsync());
+    }
+
+    // Unread, the header adds the agents' days up, as with one agent per number.
+    private async Task LoadSharingAsync()
+    {
+        try { _sharesNumbers = (await MultiAgent.GetAsync()).IsOn; }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            Logger.LogWarning(exception, "multi_agent_switch.read_failed");
+        }
     }
 
     // The agents or their figures changed, possibly off the circuit's thread

@@ -4,8 +4,8 @@ using Parrot.Domain.Enums;
 
 namespace Parrot.Application.Conversations;
 
-/// <summary>An agent that covers this conversation's channel (id and display name).</summary>
-public sealed record ConversationAgentRef(string Id, string Name);
+/// <summary>An agent that covers this conversation's channel: id, display name and, when the AI service gave one, its avatar key.</summary>
+public sealed record ConversationAgentRef(string Id, string Name, string? Avatar = null);
 
 public record ConversationSummary(Guid ConnectionId, string Sender, string Name, string Preview, DateTime UpdatedAt)
 {
@@ -14,6 +14,12 @@ public record ConversationSummary(Guid ConnectionId, string Sender, string Name,
 
     /// <summary>The live agent covering this conversation's channel, or null when no agent is connected to it.</summary>
     public ConversationAgentRef? ChannelAgent { get; init; }
+
+    /// <summary>
+    /// Every live agent switched on for this conversation's number, in the AI service's order; empty when none is.
+    /// One at most until several agents can share a channel (OmniAi:MultiAgentEnabled).
+    /// </summary>
+    public IReadOnlyList<ConversationAgentRef> Agents { get; init; } = [];
 
     /// <summary>Customer messages the signed-in user has not read. Zero for a read conversation.</summary>
     public int UnreadCount { get; init; }
@@ -61,7 +67,19 @@ public record ConversationMessage(string Id, string Text, bool Outgoing, string 
 
     /// <summary>The message this one replies to (quotes), or null when it quotes nothing.</summary>
     public MessageQuote? ReplyTo { get; init; }
+
+    /// <summary>
+    /// The agents the AI service asked for this AI reply, in its order, when several helped write it; null otherwise.
+    /// Only those with status answered shaped the text.
+    /// </summary>
+    public IReadOnlyList<ReplyAgent>? Agents { get; init; }
 }
+
+/// <summary>
+/// An agent asked for one AI reply: what it was asked, what it answered (empty when it didn't), and its status
+/// (answered, failed or timed_out). Avatar is the AI service's look key, when it gave one.
+/// </summary>
+public sealed record ReplyAgent(string Id, string Name, string? Avatar, string Question, string Answer, string Status);
 
 /// <summary>
 /// A quoted message, as shown above a reply. <see cref="Id"/> is the quoted message's
@@ -215,6 +233,10 @@ public interface IConversationStore
     /// which case its outcome is the worker's to record and must not be overwritten.
     /// </summary>
     Task<bool> FailPendingAsync(string id, CancellationToken ct);
+
+    /// <summary>Keeps the agents that helped write the owner's AI reply sent under this request id, with that reply.</summary>
+    Task SetContributorsAsync(string owner, Guid request, IReadOnlyList<ReplyContributor> contributors, CancellationToken ct) =>
+        Task.CompletedTask;
 }
 
 // When a reply was sent, found by the wamid Meta gave it: for delivery latency

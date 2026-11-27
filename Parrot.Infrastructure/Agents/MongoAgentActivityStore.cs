@@ -168,6 +168,9 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
         public string? AgentId { get; set; }
 
         [BsonIgnoreIfNull]
+        public List<ContributorDocument>? Contributors { get; set; }
+
+        [BsonIgnoreIfNull]
         public string? Decision { get; set; }
 
         [BsonIgnoreIfNull]
@@ -235,6 +238,7 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
             ConversationKey = record.ConversationKey,
             TurnId = record.TurnId,
             AgentId = record.AgentId,
+            Contributors = record.Contributors?.Select(c => new ContributorDocument { AgentId = c.AgentId, Status = c.Status }).ToList(),
             Decision = record.Decision,
             Confidence = record.Confidence,
             Status = record.Status,
@@ -265,6 +269,7 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
             ConversationKey = ConversationKey,
             TurnId = TurnId,
             AgentId = AgentId,
+            Contributors = Contributors?.Select(c => new TurnContributor(c.AgentId, c.Status)).ToList(),
             Decision = Decision,
             Confidence = Confidence,
             Status = Status,
@@ -286,5 +291,13 @@ public sealed class MongoAgentActivityStore : IAgentActivityStore
             ResolvedBy = ResolvedBy,
             Instruction = Instruction,
         };
+    }
+
+    [BsonIgnoreExtraElements]
+    public sealed class ContributorDocument
+    {
+        public string AgentId { get; set; } = string.Empty;
+
+        public string Status { get; set; } = string.Empty;
     }
 }

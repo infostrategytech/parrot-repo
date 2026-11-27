@@ -95,6 +95,28 @@ public class MongoAgentActivityStoreTests
         });
     }
 
+    // The Agents page counts a team reply for each agent that answered in it, so the agents asked are read back as stored.
+    [MongoFact]
+    public async Task ATeamRepliesAgentsAreKeptAndATurnWithoutThemReadsAsNone()
+    {
+        await WithStore(async store =>
+        {
+            AgentActivityRecord team = Turn("owner-a", "turn_1", T0);
+            await store.InsertAsync(new AgentActivityRecord
+            {
+                OwnerUserId = team.OwnerUserId, Type = team.Type, EventKey = team.EventKey, TurnId = team.TurnId, Status = team.Status,
+                OccurredAt = team.OccurredAt, Payload = team.Payload, AgentId = "agt_super",
+                Contributors = [new TurnContributor("agt_tobi", "answered"), new TurnContributor("agt_kora", "timed_out")],
+            });
+            await store.InsertAsync(Turn("owner-a", "turn_2", T0.AddMinutes(1)));
+
+            IReadOnlyList<AgentActivityRecord> turns = await store.ListAsync("owner-a", [AgentActivityTypes.TurnCompleted], T0.AddHours(-1), T0.AddHours(1));
+
+            Assert.Equal([new TurnContributor("agt_tobi", "answered"), new TurnContributor("agt_kora", "timed_out")], turns[0].Contributors);
+            Assert.Null(turns[1].Contributors);
+        });
+    }
+
     // The decision feeds the day's reply-time figure: recorded once, and only on the workspace's own approval.
     [MongoFact]
     public async Task MarkApprovalDecidedAsync_RecordsTheWorkspacesDecisionOnceAndOnlyOnce()

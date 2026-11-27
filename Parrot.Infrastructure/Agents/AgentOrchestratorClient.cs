@@ -34,6 +34,10 @@ public sealed class AgentOrchestratorClient(
 
     private const string Unavailable = "The AI service could not be reached. Try again in a moment.";
 
+    // A list page, and how many are read at most: 2,000 agents or channel links.
+    private const int PageSize = 100;
+    private const int MaxPages = 20;
+
     // The orchestrator's 409 when the agent is mid-reply in the conversation: the request is recorded and applied after.
     private const string ConversationBusyCode = "CONVERSATION_BUSY";
 
@@ -102,6 +106,47 @@ public sealed class AgentOrchestratorClient(
                 map[channel.Platform.ToLowerInvariant()] = new ConversationAgentRef(agent.AgentId, agent.Name);
         }
         return map;
+    }
+
+    public async Task<IReadOnlyDictionary<Guid, IReadOnlyList<ConversationAgentRef>>> GetConnectionAgentsAsync(
+        string ownerUserId, CancellationToken cancellationToken = default)
+    {
+        if (!settings.Value.Enabled || http.BaseAddress is null)
+            return new Dictionary<Guid, IReadOnlyList<ConversationAgentRef>>();
+
+        List<AgentItemWire> agents = await ListAllAsync<AgentItemWire>("api/v1/agents", ownerUserId, cancellationToken);
+        List<ChannelItemWire> channels = await ListAllAsync<ChannelItemWire>("api/v1/channels", ownerUserId, cancellationToken);
+        Dictionary<string, AgentItemWire> liveById = agents.Where(a => a.IsLive).ToDictionary(a => a.AgentId);
+
+        return channels
+            .Where(c => c.Enabled && c.ConnectionId is not null && liveById.ContainsKey(c.AgentId))
+            .GroupBy(c => c.ConnectionId!.Value)
+            .ToDictionary(
+                connection => connection.Key,
+                connection => (IReadOnlyList<ConversationAgentRef>)connection
+                    .Select(c => liveById[c.AgentId])
+                    .DistinctBy(a => a.AgentId)
+                    .Select(a => new ConversationAgentRef(a.AgentId, a.Name, a.Avatar))
+                    .ToList());
+    }
+
+    // Every page of a cursor list ({items, next_cursor}): a workspace with many links spans several. Bounded, so a
+    // cursor that never ends can't hold a message up.
+    private async Task<List<T>> ListAllAsync<T>(string path, string ownerUserId, CancellationToken cancellationToken)
+    {
+        List<T> all = [];
+        string? cursor = null;
+        int pages = 0;
+        do
+        {
+            PageWire<T> page = await SendAsync<PageWire<T>>(HttpMethod.Get,
+                cursor is null ? $"{path}?limit={PageSize}" : $"{path}?limit={PageSize}&cursor={Uri.EscapeDataString(cursor)}",
+                ownerUserId, null, cancellationToken);
+            all.AddRange(page.Items);
+            cursor = page.NextCursor;
+        }
+        while (cursor is not null && ++pages < MaxPages);
+        return all;
     }
 
     private async Task<T> SendAsync<T>(HttpMethod method, string path, string ownerUserId, object? body, CancellationToken cancellationToken)
@@ -221,7 +266,8 @@ public sealed class AgentOrchestratorClient(
     private sealed record AgentItemWire(
         [property: JsonPropertyName("agent_id")] string AgentId,
         [property: JsonPropertyName("name")] string Name,
-        [property: JsonPropertyName("is_live")] bool IsLive);
+        [property: JsonPropertyName("is_live")] bool IsLive,
+        [property: JsonPropertyName("avatar")] string? Avatar = null);
 
     private sealed record ChannelListWire(
         [property: JsonPropertyName("items")] List<ChannelItemWire> Items);
@@ -229,5 +275,10 @@ public sealed class AgentOrchestratorClient(
     private sealed record ChannelItemWire(
         [property: JsonPropertyName("agent_id")] string AgentId,
         [property: JsonPropertyName("platform")] string Platform,
-        [property: JsonPropertyName("enabled")] bool Enabled);
+        [property: JsonPropertyName("enabled")] bool Enabled,
+        [property: JsonPropertyName("connection_id")] Guid? ConnectionId = null);
+
+    private sealed record PageWire<T>(
+        [property: JsonPropertyName("items")] List<T> Items,
+        [property: JsonPropertyName("next_cursor")] string? NextCursor);
 }

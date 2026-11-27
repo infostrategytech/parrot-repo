@@ -50,9 +50,9 @@ public class ConversationsState
             // An approval the server still holds open stays, whatever the AI state; one only pushed keeps the rule above.
             if (summary.PendingApproval is { } approval) item.PendingApproval = new PendingApprovalInfo(approval.ApprovalId, approval.Tool, approval.Reason);
             // The agents on the number are what let the team take over and hand back.
-            item.ChannelAgents = KnownAgents(summary.ChannelAgents);
-            item.ChannelAgent = summary.ChannelAgent ?? (item.ChannelAgents.Count == 1 ? item.ChannelAgents[0] : null);
-            item.AiAgent = summary.AiAgent ?? (!item.HasSharedAgentCoverage ? item.ChannelAgent : null);
+            item.Agents = KnownAgents(summary.Agents) is { Count: > 0 } agents ? agents : summary.ChannelAgent is { } only ? [only] : [];
+            item.ChannelAgent = summary.ChannelAgent ?? item.Agents.FirstOrDefault();
+            item.AiAgent = summary.AiAgent ?? item.ChannelAgent;
             item.Assignee = summary.Assignee;
             item.ControlUntil = summary.ControlUntil;
             item.NeedsAnswer = summary.NeedsAnswer ?? false;
@@ -115,15 +115,14 @@ public class ConversationsState
                     _ => message.Outgoing ? MessageKind.Human : MessageKind.Customer,
                 },
                 Author = message.Author,
-                AgentsInvolved = message.Kind != "ai" ? [] : message.AgentsInvolved is { } involved
-                    ? KnownAgents(involved)
-                    : unique.GetValueOrDefault(message.Id)?.AgentsInvolved ?? [],
                 Attachment = message.Attachment,
                 Attachments = message.Attachments ?? [],
                 KnowledgeUpdated = message.LearningStatus == "knowledge_updated",
                 Answered = message.RequestStatus == "answered",
                 Answer = message.Answer,
                 ReplyTo = message.ReplyTo,
+                // A push that carries no agents keeps those an earlier read gave the reply.
+                Agents = message.Kind != "ai" ? [] : message.Agents ?? unique.GetValueOrDefault(message.Id)?.Agents ?? [],
             };
         item.Messages = unique.Values.OrderBy(m => m.ReceivedAt).ThenBy(m => m.Id).ToList();
     }

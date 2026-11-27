@@ -55,6 +55,48 @@ public class AgentEventContractTests
         Assert.Equal(new DateTime(2026, 10, 8, 12, 0, 0, DateTimeKind.Utc), record!.OccurredAt);
         Assert.Null(record.CustomerName);
         Assert.Equal("a1", record.AgentId);
+        Assert.Null(record.Contributors);
+    }
+
+    // A team reply names the hidden super agent; the agents it asked come as ids and status only. They are kept even
+    // when a long reply makes the payload too big to store.
+    [Fact]
+    public void AgentEventEnvelope_ATeamReply_KeepsTheAgentsItAskedAndHowEachDid()
+    {
+        string reply = new('x', AgentActivityMapper.MaxPayloadBytes);
+        string wire = $$$"""
+            {"type":"agent.turn.completed","tenant_id":"owner-1","turn_id":"turn_1","occurred_at":"2026-10-08T12:00:00+00:00",
+             "payload":{"status":"completed","agent_id":"agt_super","reply":"{{{reply}}}","contributors":[
+               {"agent_id":"agt_tobi","status":"answered"},{"status":"answered"},{"agent_id":"agt_kora","status":"TIMED_OUT"},
+               {"agent_id":"agt_nia"},{"agent_id":"agt_fourth","status":"answered"}]}}
+            """;
+
+        AgentEventEnvelope envelope = JsonSerializer.Deserialize<AgentEventEnvelope>(wire, MessageJson.Options)!;
+
+        Assert.True(AgentActivityMapper.TryMap(envelope, DateTime.UtcNow, out AgentActivityRecord? record, out _));
+        Assert.Equal("agt_super", record!.AgentId);
+        Assert.Equal(
+            [new TurnContributor("agt_tobi", "answered"), new TurnContributor("agt_kora", "timed_out"), new TurnContributor("agt_nia", "unknown")],
+            record.Contributors);
+        Assert.Equal("{}", record.Payload);
+    }
+
+    [Theory]
+    [InlineData("[]")]
+    [InlineData("null")]
+    [InlineData("\"agt_tobi\"")]
+    [InlineData("[{\"status\":\"answered\"},7]")]
+    public void AgentEventEnvelope_ContributorsItCannotRead_AreNone(string contributors)
+    {
+        string wire = $$$"""
+            {"type":"agent.turn.completed","tenant_id":"owner-1","turn_id":"turn_1",
+             "payload":{"status":"completed","agent_id":"agt_super","contributors":{{{contributors}}}}}
+            """;
+
+        AgentEventEnvelope envelope = JsonSerializer.Deserialize<AgentEventEnvelope>(wire, MessageJson.Options)!;
+
+        Assert.True(AgentActivityMapper.TryMap(envelope, DateTime.UtcNow, out AgentActivityRecord? record, out _));
+        Assert.Null(record!.Contributors);
     }
 
     [Fact]

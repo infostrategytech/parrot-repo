@@ -20,4 +20,11 @@ public class OmniAiSettings
 
     /// <summary>How long one call may take. An approval decision resumes a whole turn, so this is longer than a webhook's budget.</summary>
     public int TimeoutSeconds { get; set; } = 30;
+
+    /// <summary>
+    /// Every workspace gets a switch for several agents sharing a number (on its Overview), off until it turns it on.
+    /// On by default, so no server setting is needed; false takes the switch away and every workspace answers with one
+    /// agent per number.
+    /// </summary>
+    public bool MultiAgentEnabled { get; set; } = true;
 }

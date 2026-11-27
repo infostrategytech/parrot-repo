@@ -1,0 +1,45 @@
+/* As the Overview's other rows: an icon, the words, one action. */
+.multi-agent-switch {
+  /* Gap in the token set: no measure scale (the words' line length, as the Overview's other rows). */
+  --ds-multi-agent-switch-measure: 42ch;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--spacing-lg);
+  min-width: 0;
+  padding: var(--spacing-2xl);
+  background: var(--colors-surface-card);
+  border: var(--ds-hairline) solid var(--colors-surface-border);
+  border-radius: var(--radius-radius-2xl);
+}
+
+.multi-agent-switch__icon {
+  display: grid;
+  place-items: center;
+  width: var(--spacing-4xl);
+  height: var(--spacing-4xl);
+  color: var(--colors-icon-brand);
+  background: var(--colors-accent-brand-subtle);
+  border-radius: var(--radius-radius-xl);
+}
+
+.multi-agent-switch__content {
+  display: grid;
+  justify-items: start;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.multi-agent-switch__content ::deep h2,
+.multi-agent-switch__content ::deep p { margin: var(--spacing-none); }
+
+.multi-agent-switch__content ::deep p {
+  max-width: var(--ds-multi-agent-switch-measure);
+  color: var(--colors-text-secondary);
+}
+
+/* Tablets: the switch goes under the words, as the other rows' actions do. */
+@media not all and (min-width: 1024px) {
+  .multi-agent-switch { grid-template-columns: auto minmax(0, 1fr); }
+  .multi-agent-switch ::deep > :last-child { grid-column: 2; justify-self: start; }
+}

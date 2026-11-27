@@ -329,7 +329,7 @@ public sealed class InboundMessageProcessor(
         if (stored.Outgoing) return CommsType.TenantToUser;
         if (agentChannelLookup is null || stored.OwnerUserId is null) return CommsType.UserToTenant;
         string channel = stored.Platform.ToString().ToLowerInvariant();
-        bool isLive = await agentChannelLookup.IsAgentLiveAsync(stored.OwnerUserId, channel, ct);
+        bool isLive = await agentChannelLookup.IsAgentLiveAsync(stored.OwnerUserId, channel, stored.ConnectionId, ct);
         if (!isLive) return CommsType.UserToTenant;
         // Agent is live: if a human has taken over this conversation, the message still goes to a human.
         if (humanTakeover is not null && stored.ConnectionId.HasValue && stored.From is not null)
