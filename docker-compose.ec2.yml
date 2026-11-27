@@ -435,8 +435,6 @@ services:
       # channels kept by it (/api/v1/agents). Without these the web app makes session-only agents.
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://omni-ai:8000}
       OmniAi__AgentSetup: ${OMNI_AGENT_SETUP:-true}
-      # Several agents per channel: on only once the AI service has OMNI_MULTI_AGENT_ENABLED on too.
-      OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-false}
       # Products & Services, kept by the catalog service, over the compose network.
       CatalogApi__BaseUrl: http://catalog-api:8080/
     depends_on:

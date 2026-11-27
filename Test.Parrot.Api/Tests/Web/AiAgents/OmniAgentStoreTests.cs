@@ -1,8 +1,6 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using Microsoft.Extensions.Options;
-using Parrot.Application.Integrations;
 using Parrot.Web.Components.Pages.Dashboard.AiAgents;
 using Parrot.Web.Features.Auth.Models;
 using Parrot.Web.Features.Auth.State;
@@ -203,6 +201,29 @@ public class OmniAgentStoreTests
         Assert.Equal("3", f.Omni.Single("DELETE", $"api/v1/channels/{Instagram}").Header("If-Match"));
     }
 
+    // The switch is read on every save, so turning it off on the Overview applies to the next save without a reload.
+    [Fact]
+    public async Task SaveAfterTheSwitchIsTurnedOffChangesLinksByConnectionAlone()
+    {
+        Fixture f = new(sharesChannels: true);
+        f.Omni.On("GET", "api/v1/agents", Page(Agent("agt_1", version: 3)));
+        f.Omni.On("GET", "api/v1/channels", Page(
+            Channel(WhatsApp, "agt_1", "whatsapp", version: 2, enabled: false), Channel(Instagram, "agt_1", "instagram", version: 3)));
+        f.Parrot.On("GET", "api/connections", $$"""[{"id":"{{WhatsApp}}","channel":"whatsapp"},{"id":"{{Instagram}}","channel":"instagram"}]""");
+        f.Omni.On("PATCH", "api/v1/agents/agt_1", Agent("agt_1", version: 4));
+        f.Omni.On("PATCH", $"api/v1/channels/{WhatsApp}", Channel(WhatsApp, "agt_1", "whatsapp", version: 3));
+        f.Omni.On("DELETE", $"api/v1/channels/{Instagram}", $$"""{"connection_id":"{{Instagram}}","agent_id":"agt_1","deleted":true,"version":4}""");
+        AiAgent agent = (await f.Store.ListAsync()).Single();
+        agent.Channels = AgentBuilderCopy.DefaultChannels(["whatsapp"]);
+
+        f.Parrot.On("GET", "api/multi-agent-switch", """{"isOffered":true,"isOn":false}""");
+        await f.Store.SaveAsync(agent);
+
+        Assert.Equal("2", f.Omni.Single("PATCH", $"api/v1/channels/{WhatsApp}").Header("If-Match"));
+        Assert.Equal("3", f.Omni.Single("DELETE", $"api/v1/channels/{Instagram}").Header("If-Match"));
+        Assert.DoesNotContain(f.Omni.Requests, r => r.Path.Contains("/agents/agt_1") && r.Path.StartsWith("api/v1/channels"));
+    }
+
     [Theory]
     [InlineData("CHANNEL_ALREADY_ASSIGNED", "This agent is already on this channel.")]
     [InlineData("AGENT_REQUIRED", "Several agents are on this channel. Say which one.")]
@@ -303,11 +324,14 @@ public class OmniAgentStoreTests
         {
             AuthState auth = new();
             auth.SetUser(new AuthResponse { Token = "session-token", ExpiresAt = DateTime.UtcNow.AddHours(1) });
+            // The workspace's switch for agents sharing a number, as the API answers it.
+            Parrot.On("GET", "api/multi-agent-switch", $$"""{"isOffered":true,"isOn":{{(sharesChannels ? "true" : "false")}}}""");
+            HttpClient parrot = new(Parrot) { BaseAddress = new Uri("http://parrot.test/") };
             Store = new OmniAgentStore(
                 new OmniAiClient(new HttpClient(Omni) { BaseAddress = new Uri("http://omni.test/") }, auth),
-                new HttpClient(Parrot) { BaseAddress = new Uri("http://parrot.test/") },
+                parrot,
                 auth,
-                Options.Create(new OmniAiSettings { MultiAgentEnabled = sharesChannels }));
+                new MultiAgentSwitchClient(parrot, auth));
         }
     }
 }

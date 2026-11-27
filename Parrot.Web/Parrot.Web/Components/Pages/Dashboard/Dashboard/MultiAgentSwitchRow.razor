@@ -1,0 +1,66 @@
+@namespace Parrot.Web.Components.Pages.Dashboard.Dashboard
+@using Parrot.Application.Contracts.Agents
+@using Parrot.Web.Features.Dashboard.AiAgents
+@inject MultiAgentSwitchClient MultiAgent
+@inject AuthState AuthState
+@inject ToastService Toasts
+@inject ILogger<MultiAgentSwitchRow> Logger
+
+@* Temporary, for the live test of agents sharing a number (owner, 27 November 2026): a test workspace's own switch,
+   to turn it off at once if something breaks there and back on once it is fixed. Only the workspaces the server lists
+   for the test have it, and only people who may edit agents see it. Removed with the switch after the test. *@
+@if (_switch is { IsOffered: true } current && CanChange)
+{
+    <article class="multi-agent-switch" aria-labelledby="multi-agent-switch-title">
+        <span class="multi-agent-switch__icon" aria-hidden="true"><Icon Name="IconName.RiGroupFill" Size="IconSize.Lg" /></span>
+        <div class="multi-agent-switch__content">
+            <Typography TextStyle="TextStyle.HeadingH3Semibold" As="h2" id="multi-agent-switch-title">Agents Sharing a Number</Typography>
+            <Typography TextStyle="TextStyle.BodySmallMedium" As="p" Prose>
+                @(current.IsOn
+                    ? "On: several agents can answer on one number. Turn it off to go back to one agent per number straight away."
+                    : "Off: one agent answers on each number. Turn it on to let several agents share a number.")
+            </Typography>
+            @if (_error is not null)
+            {
+                <InlineError Message="@_error" OnDismiss="() => _error = null" />
+            }
+        </div>
+        <Toggle Checked="@current.IsOn" CheckedChanged="SetAsync" Disabled="@_saving" AriaLabel="Agents sharing a number" />
+    </article>
+}
+
+@code {
+    private MultiAgentSwitchResponse? _switch;
+    private bool _saving;
+    private string? _error;
+
+    private bool CanChange => AuthState.CurrentUser?.Can(Parrot.Application.Teams.WorkspacePermissions.AgentsEdit) ?? false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!CanChange) return;
+        try { _switch = await MultiAgent.GetAsync(); }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            // Nothing to switch is shown; the workspace keeps whatever it was set to.
+            Logger.LogWarning(exception, "multi_agent_switch.read_failed");
+        }
+    }
+
+    private async Task SetAsync(bool isOn)
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            _switch = await MultiAgent.SetAsync(isOn);
+            Toasts.Show(isOn ? "Agents can now share a number." : "Back to one agent per number.");
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            _error = isOn ? "Couldn't turn it on. Try again in a moment." : "Couldn't turn it off. Try again in a moment.";
+            Logger.LogWarning(exception, "multi_agent_switch.save_failed IsOn={IsOn}", isOn);
+        }
+        finally { _saving = false; }
+    }
+}

@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
-using Microsoft.Extensions.Options;
-using Parrot.Application.Integrations;
 using Parrot.Web.Components.Pages.Dashboard.AiAgents;
 using Parrot.Web.Features.Auth.State;
 using Parrot.Web.Services;
@@ -14,14 +12,15 @@ namespace Parrot.Web.Features.Dashboard.AiAgents;
 /// (/api/v1/channels). The screens switch channels on by kind (WhatsApp, Instagram); the service
 /// assigns connections, so a kind switched on assigns every connection of that kind the workspace
 /// has (Parrot's /api/connections), and switched off unlinks them.
-/// With OmniAi:MultiAgentEnabled, several agents can answer on one connection, so a link is named by both
+/// With the workspace's switch for agents sharing a number on (temporary, read from the API on every save),
+/// several agents can answer on one connection, so a link is named by both
 /// the connection and the agent, and only this agent's own links are changed. Off, a connection answers
 /// for one agent only: one another agent has is refused before anything is saved, and a link is named by
 /// its connection alone, as the AI service had it before.
 /// A refusal is the service's ApiException, with its own words for the owner, except a channel held
 /// elsewhere: that never says where.
 /// </summary>
-public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthState auth, IOptions<OmniAiSettings> settings) : IAgentStore
+public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthState auth, MultiAgentSwitchClient multiAgent) : IAgentStore
 {
     /// <summary>What the owner is told when the service won't link a channel it says is held elsewhere.</summary>
     public const string ChannelUnavailable = "That channel can't take this agent right now. Try again, and contact support if it keeps happening.";
@@ -33,8 +32,6 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
     private readonly Dictionary<string, int> _versions = [];
     // Names for the refusal while agents can't share a channel.
     private readonly Dictionary<string, string> _names = [];
-
-    private bool SharesChannels => settings.Value.MultiAgentEnabled;
 
     public async Task<IReadOnlyList<AiAgent>> ListAsync(CancellationToken cancellationToken = default)
     {
@@ -73,10 +70,10 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
             await WithoutSayingWhereAsync(() => omni.SendAsync<OmniChannel>(HttpMethod.Post, "api/v1/channels",
                 new AssignChannel(agent.Id, connection.Id), cancellationToken: cancellationToken));
         foreach (OmniChannel channel in plan.ToResume)
-            await omni.SendAsync<OmniChannel>(HttpMethod.Patch, ChannelPath(channel.ConnectionId, agent.Id),
+            await omni.SendAsync<OmniChannel>(HttpMethod.Patch, ChannelPath(channel.ConnectionId, agent.Id, plan.SharesChannels),
                 new ResumeChannel(true), channel.Version, cancellationToken: cancellationToken);
         foreach (OmniChannel channel in plan.ToUnlink)
-            await omni.SendAsync<ChannelDeleted>(HttpMethod.Delete, ChannelPath(channel.ConnectionId, agent.Id), null,
+            await omni.SendAsync<ChannelDeleted>(HttpMethod.Delete, ChannelPath(channel.ConnectionId, agent.Id, plan.SharesChannels), null,
                 channel.Version, cancellationToken: cancellationToken);
     }
 
@@ -100,17 +97,18 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
     private async Task<ChannelPlan> PlanChannelsAsync(string? agentId, AiAgent agent, CancellationToken cancellationToken)
     {
         HashSet<string> wanted = agent.Channels.Where(c => c.IsEnabled).Select(c => c.Key.ToLowerInvariant()).ToHashSet();
+        bool sharesChannels = (await multiAgent.GetAsync(cancellationToken)).IsOn;
         // A new agent has no links yet, and only another agent's links can stop it.
-        List<OmniChannel> assigned = agentId is null && SharesChannels ? [] : await omni.ListAllAsync<OmniChannel>("api/v1/channels", cancellationToken);
+        List<OmniChannel> assigned = agentId is null && sharesChannels ? [] : await omni.ListAllAsync<OmniChannel>("api/v1/channels", cancellationToken);
         List<OmniChannel> own = assigned.Where(c => agentId is not null && c.AgentId == agentId).ToList();
         List<ParrotConnection> connections = wanted.Count == 0 ? [] : await ConnectionsAsync(cancellationToken);
         // The service refuses a second link for the same agent and connection, so there is one at most.
         Dictionary<Guid, OmniChannel> byConnection = own.ToDictionary(c => c.ConnectionId);
 
-        ChannelPlan plan = new();
+        ChannelPlan plan = new() { SharesChannels = sharesChannels };
         foreach (ParrotConnection connection in connections.Where(c => wanted.Contains(c.Channel)))
         {
-            if (!SharesChannels && assigned.FirstOrDefault(c => c.ConnectionId == connection.Id && c.AgentId != agentId) is { } other)
+            if (!sharesChannels && assigned.FirstOrDefault(c => c.ConnectionId == connection.Id && c.AgentId != agentId) is { } other)
                 throw Taken(connection.Channel, other.AgentId);
             if (!byConnection.TryGetValue(connection.Id, out OmniChannel? channel))
                 plan.ToAssign.Add(connection);
@@ -173,12 +171,13 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
     private static string AgentPath(string agentId) => $"api/v1/agents/{Uri.EscapeDataString(agentId)}";
 
     // One agent's link on one connection; the connection alone is refused once several agents share it.
-    private string ChannelPath(Guid connectionId, string agentId) => SharesChannels
+    private static string ChannelPath(Guid connectionId, string agentId, bool sharesChannels) => sharesChannels
         ? $"api/v1/channels/{connectionId}/agents/{Uri.EscapeDataString(agentId)}"
         : $"api/v1/channels/{connectionId}";
 
     private sealed class ChannelPlan
     {
+        public bool SharesChannels { get; init; }
         public List<ParrotConnection> ToAssign { get; } = [];
         public List<OmniChannel> ToResume { get; } = [];
         public List<OmniChannel> ToUnlink { get; } = [];

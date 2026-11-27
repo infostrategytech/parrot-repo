@@ -387,8 +387,6 @@ services:
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # Agents and channels kept by the AI service (/api/v1/agents) instead of Parrot's api/agent.
       OmniAi__AgentSetup: ${OMNI_AGENT_SETUP:-true}
-      # Several agents per channel: on only once the AI service has OMNI_MULTI_AGENT_ENABLED on too.
-      OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-false}
     ports:
       - "5255:8080"
     depends_on:

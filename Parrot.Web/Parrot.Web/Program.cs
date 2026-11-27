@@ -115,6 +115,8 @@ builder.Services.AddScoped<AuroraInterop>();
 builder.Services.AddScoped<ToastService>();
 
 builder.Services.AddScoped<ConversationClient>();
+// Temporary: the workspace's switch for agents sharing a number, for the live test (the Overview, agent settings, the Agents page).
+builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.MultiAgentSwitchClient>();
 builder.Services.AddScoped<CustomerClient>();
 builder.Services.AddScoped<ICustomerLinks, CustomerLinkClient>();
 // No photo-reading service yet; photos are not offered in the import modal until one exists.
@@ -168,10 +170,6 @@ if (builder.Configuration.GetValue<bool>("OmniAi:Enabled"))
     // instead of Parrot's api/agent. Needs OmniAi:BaseUrl and the service on the same signing key.
     if (builder.Configuration.GetValue<bool>("OmniAi:AgentSetup"))
     {
-        // OmniAi:MultiAgentEnabled: several agents per channel, once the AI service has it on too.
-        builder.Services.AddOptions<Parrot.Application.Integrations.OmniAiSettings>()
-            .Bind(builder.Configuration.GetSection(Parrot.Application.Integrations.OmniAiSettings.SectionName))
-            .ValidateOnStart();
         builder.Services.AddScoped<Parrot.Web.Features.Dashboard.AiAgents.IAgentStore, Parrot.Web.Features.Dashboard.AiAgents.OmniAgentStore>();
     }
     else
