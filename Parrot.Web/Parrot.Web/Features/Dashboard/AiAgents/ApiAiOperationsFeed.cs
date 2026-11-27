@@ -64,7 +64,7 @@ public sealed class ApiAiOperationsFeed(HttpClient http, AuthState auth, ILogger
 
     private AgentDay? Day(string agentId, string? channel)
     {
-        var key = Key(agentId, channel);
+        string key = Key(agentId, channel);
         if (_days.TryGetValue(key, out var day)) return day;
         if (_loading.TryAdd(key, 0)) _ = LoadLaterAsync(key);
         return null;
@@ -101,7 +101,7 @@ public sealed class ApiAiOperationsFeed(HttpClient http, AuthState auth, ILogger
         string query = string.Join("&", filters);
         var today = GetAsync<AgentTodayResponse>($"api/ai-operations/today?{query}", cancellationToken);
         var week = GetAsync<List<int>>($"api/ai-operations/week?{query}", cancellationToken);
-        var recent = GetAsync<List<RecentConversationResponse>>($"api/ai-operations/recent?{string.Join("&", filters.Append("limit=20"))}", cancellationToken);
+        Task<List<RecentConversationResponse>> recent = GetAsync<List<RecentConversationResponse>>($"api/ai-operations/recent?{string.Join("&", filters.Append("limit=20"))}", cancellationToken);
         await Task.WhenAll(today, week, recent);
 
         var t = await today;

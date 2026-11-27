@@ -47,7 +47,7 @@ public sealed class OmniAgentStore(OmniAiClient omni, HttpClient parrot, AuthSta
     public async Task<AiAgent> CreateAsync(AiAgent agent, CancellationToken cancellationToken = default)
     {
         var plan = await PlanChannelsAsync(null, agent, cancellationToken);
-        var saved = await WithoutSayingWhereAsync(() => omni.SendAsync<OmniAgent>(HttpMethod.Post, "api/v1/agents",
+        OmniAgent saved = await WithoutSayingWhereAsync(() => omni.SendAsync<OmniAgent>(HttpMethod.Post, "api/v1/agents",
             OmniAgentMapping.ToCreate(agent, plan.ToAssign.Select(c => c.Id)), idempotencyKey: Guid.NewGuid().ToString("N"),
             cancellationToken: cancellationToken));
         Remember(saved);
