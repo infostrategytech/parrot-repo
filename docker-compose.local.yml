@@ -208,6 +208,8 @@ services:
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # Several agents per channel: on only once the AI service has OMNI_MULTI_AGENT_ENABLED on too.
       OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-false}
+      # Temporary: the workspaces (ids, comma-separated) in the live test, each with its own switch on the Overview.
+      OmniAi__MultiAgentTestWorkspaceIds: ${OMNI_MULTI_AGENT_TEST_WORKSPACES:-}
       # The orientation service (talking to the AI about the business, by voice). Empty: not offered.
       OmniAi__OrientationUrl: ${OMNI_ORIENTATION_URL:-}
       # Checkouts (create_cart): the customer pays from the checkout page, through the
@@ -325,6 +327,8 @@ services:
       OmniAi__BaseUrl: ${OMNI_AI_BASE_URL:-http://host.docker.internal:8000}
       # Several agents per channel: on only once the AI service has OMNI_MULTI_AGENT_ENABLED on too.
       OmniAi__MultiAgentEnabled: ${OMNI_MULTI_AGENT_ENABLED:-false}
+      # Temporary: the workspaces (ids, comma-separated) in the live test, each with its own switch on the Overview.
+      OmniAi__MultiAgentTestWorkspaceIds: ${OMNI_MULTI_AGENT_TEST_WORKSPACES:-}
     volumes:
       - api_data_protection_keys:/app/data-protection-keys:ro
     depends_on:

@@ -51,8 +51,9 @@ public sealed class ConversationsControllerTests
     // Live agents by channel, as the orchestrator names them.
     private readonly Dictionary<string, ConversationAgentRef> _channelAgents = [];
 
-    // Live agents switched on for each number, when several agents can share one (OmniAi:MultiAgentEnabled).
+    // Live agents switched on for each number, when several agents can share one.
     private readonly Dictionary<Guid, IReadOnlyList<ConversationAgentRef>> _connectionAgents = [];
+    // The workspace is in the live test of agents sharing a number; this is whether its switch is on.
     private bool _sharesChannels;
 
     private ConversationsController Controller(WorkspaceAccess access)
@@ -77,11 +78,17 @@ public sealed class ConversationsControllerTests
         connections.Setup(c => c.GetByOwnerAndIdAsync(Owner, WhatsApp))
             .ReturnsAsync(new WhatsAppConnection { Id = WhatsApp, WorkspaceId = Owner, Name = "Shop", VerifyTokenEncrypted = "x" });
 
+        Mock<IMultiAgentSwitchStore> switches = new();
+        switches.Setup(s => s.IsOnAsync(Owner, It.IsAny<CancellationToken>())).ReturnsAsync(() => _sharesChannels);
+        MultiAgentSwitch multiAgent = new(switches.Object,
+            Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = true, MultiAgentTestWorkspaceIds = Owner }),
+            Mock.Of<IAppLogger<MultiAgentSwitch>>());
+
         // None of these endpoints send, take notes or read the other channels.
         ConversationsController controller = new(_store.Object, reads.Object, flags.Object, null!, null!,
             new MediaLinks(new EphemeralDataProtectionProvider()), null!, connections.Object, null!, null!, null!,
             takeovers.Object, orchestrator.Object, new MemoryCache(new MemoryCacheOptions()),
-            Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = _sharesChannels }),
+            multiAgent,
             _operations.Object, Mock.Of<IAppLogger<ConversationsController>>());
         DefaultHttpContext http = new()
         {
@@ -222,6 +229,24 @@ public sealed class ConversationsControllerTests
 
         Assert.Equal(["m1", "esc_1", "m2"], thread.Select(m => m.Id));
         Assert.Equal("ai_question", thread[1].Kind);
+    }
+
+    // Switched off, a reply several agents helped write shows as the conversation's one agent, as before.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Messages_AnAiReplysAgents_ShowOnlyWhileTheWorkspaceHasAgentsSharingNumbers(bool isOn)
+    {
+        _sharesChannels = isOn;
+        ThreadHolds(new ConversationMessage("r1", "It left Ikeja.", true, "read", DateTime.UtcNow)
+        {
+            Kind = "ai", Agents = [new ReplyAgent("agt_tobi", "Tobi", "Nova", "Where is it?", "It left Ikeja.", "answered")],
+        });
+
+        ConversationMessage reply = Assert.Single(Thread(await Controller(OwnerAccess()).Messages(WhatsApp, "2348012345678", "cursor", default)));
+
+        Assert.Equal("It left Ikeja.", reply.Text);
+        Assert.Equal(isOn ? ["Tobi"] : null, reply.Agents?.Select(a => a.Name));
     }
 
     [Fact]

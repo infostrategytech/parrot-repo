@@ -26,4 +26,11 @@ public class OmniAiSettings
     /// service's own switch (OMNI_MULTI_AGENT_ENABLED); off, Parrot works as it did with one agent per channel.
     /// </summary>
     public bool MultiAgentEnabled { get; set; }
+
+    /// <summary>
+    /// Temporary, for the live test of agents sharing a number: the workspaces (ids, comma-separated) that get a switch
+    /// for it on their Overview. Each turns it on and off for itself; every other workspace stays on one agent per
+    /// number. Empty: none. Needs MultiAgentEnabled.
+    /// </summary>
+    public string MultiAgentTestWorkspaceIds { get; set; } = "";
 }

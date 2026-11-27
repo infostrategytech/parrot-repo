@@ -77,9 +77,44 @@ public class OmniAiAgentChannelLookupTests
         _orchestrator.Verify(o => o.GetConnectionAgentsAsync(Workspace, It.IsAny<CancellationToken>()), Times.Once);
     }
 
-    private OmniAiAgentChannelLookup Lookup(bool sharesChannels) => new(
-        _orchestrator.Object,
-        new MemoryCache(new MemoryCacheOptions()),
-        Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = sharesChannels }),
-        NullLogger<OmniAiAgentChannelLookup>.Instance);
+    // Only workspaces in the live test have the switch; another's is never read.
+    [Fact]
+    public async Task IsAgentLiveAsync_ForAWorkspaceNotInTheTest_AnswersForTheChannelKindWhateverItsSwitchSays()
+    {
+        _orchestrator.Setup(o => o.GetChannelAgentMapAsync(Workspace, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, ConversationAgentRef> { ["whatsapp"] = Tolu });
+        _switches.Setup(s => s.IsOnAsync(Workspace, It.IsAny<CancellationToken>())).ReturnsAsync(true);
+        OmniAiAgentChannelLookup lookup = Lookup(sharesChannels: true, testWorkspaces: "workspace-2");
+
+        Assert.True(await lookup.IsAgentLiveAsync(Workspace, "whatsapp", Unanswered, CancellationToken.None));
+        _orchestrator.Verify(o => o.GetConnectionAgentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        _switches.Verify(s => s.IsOnAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    // A switch that can't be read is off: messages still route as with one agent per number.
+    [Fact]
+    public async Task IsAgentLiveAsync_WhenTheSwitchCantBeRead_AnswersForTheChannelKind()
+    {
+        _orchestrator.Setup(o => o.GetChannelAgentMapAsync(Workspace, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Dictionary<string, ConversationAgentRef> { ["whatsapp"] = Tolu });
+        OmniAiAgentChannelLookup lookup = Lookup(sharesChannels: true);
+        _switches.Setup(s => s.IsOnAsync(Workspace, It.IsAny<CancellationToken>())).ThrowsAsync(new TimeoutException("MongoDB did not answer."));
+
+        Assert.True(await lookup.IsAgentLiveAsync(Workspace, "whatsapp", Unanswered, CancellationToken.None));
+        _orchestrator.Verify(o => o.GetConnectionAgentsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    private readonly Mock<IMultiAgentSwitchStore> _switches = new();
+
+    // The workspace is in the live test; sharesChannels is whether its switch is on.
+    private OmniAiAgentChannelLookup Lookup(bool sharesChannels, string testWorkspaces = Workspace)
+    {
+        _switches.Setup(s => s.IsOnAsync(Workspace, It.IsAny<CancellationToken>())).ReturnsAsync(sharesChannels);
+        return new OmniAiAgentChannelLookup(
+            _orchestrator.Object,
+            _switches.Object,
+            new MemoryCache(new MemoryCacheOptions()),
+            Options.Create(new OmniAiSettings { Enabled = true, MultiAgentEnabled = true, MultiAgentTestWorkspaceIds = testWorkspaces }),
+            NullLogger<OmniAiAgentChannelLookup>.Instance);
+    }
 }

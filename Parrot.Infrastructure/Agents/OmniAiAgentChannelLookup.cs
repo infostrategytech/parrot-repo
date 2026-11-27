@@ -11,13 +11,15 @@ namespace Parrot.Infrastructure.Agents;
 /// Checks whether an agent is live on a channel by asking the AI service.
 /// Results are cached per workspace for 30 s — agents rarely change and
 /// the cache stays fresh enough for routing decisions.
-/// With OmniAi:MultiAgentEnabled, the answer is for the connection the message came in on: two numbers of one
-/// kind can have different agents, or none. Off, it is for the channel kind, as before.
+/// With the workspace's switch for agents sharing a number on (MultiAgentSwitch, temporary), the answer is for the
+/// connection the message came in on: two numbers of one kind can have different agents, or none. Off, it is for the
+/// channel kind, as before.
 /// Returns false when OmniAi is disabled or unreachable so message processing
 /// degrades gracefully (CommsType = UserToTenant) rather than breaking.
 /// </summary>
 public sealed class OmniAiAgentChannelLookup(
     IAgentOrchestratorClient orchestrator,
+    IMultiAgentSwitchStore switches,
     IMemoryCache cache,
     IOptions<OmniAiSettings> settings,
     ILogger<OmniAiAgentChannelLookup> logger) : IAgentChannelLookup
@@ -26,7 +28,7 @@ public sealed class OmniAiAgentChannelLookup(
 
     public async Task<bool> IsAgentLiveAsync(string workspaceId, string channel, Guid? connectionId, CancellationToken ct)
     {
-        if (settings.Value.MultiAgentEnabled && connectionId is { } connection)
+        if (connectionId is { } connection && await SharesNumbersAsync(workspaceId, ct))
             return await IsLiveOnConnectionAsync(workspaceId, connection, ct);
 
         string cacheKey = $"channel_agents:{workspaceId}";
@@ -50,6 +52,22 @@ public sealed class OmniAiAgentChannelLookup(
             "channel_agent_lookup.result WorkspaceId={WorkspaceId} Channel={Channel} MapKeys=[{MapKeys}] Found={Found} FromCache={FromCache}",
             workspaceId, channel, string.Join(", ", map.Keys), found, fromCache);
         return found;
+    }
+
+    // Read for every message, so turning the switch off takes effect at once. Unread, it counts as off: routing by
+    // channel kind still works for one agent per number.
+    private async Task<bool> SharesNumbersAsync(string workspaceId, CancellationToken ct)
+    {
+        if (!MultiAgentSwitch.IsOffered(settings.Value, workspaceId)) return false;
+        try
+        {
+            return await switches.IsOnAsync(workspaceId, ct);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            logger.LogWarning(ex, "channel_agent_lookup.switch_unavailable WorkspaceId={WorkspaceId} — routing by channel kind", workspaceId);
+            return false;
+        }
     }
 
     private async Task<bool> IsLiveOnConnectionAsync(string workspaceId, Guid connectionId, CancellationToken ct)

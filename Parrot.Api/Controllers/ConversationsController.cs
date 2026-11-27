@@ -3,7 +3,6 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Caching.Memory;
-using Microsoft.Extensions.Options;
 using Parrot.Api.Media;
 using Parrot.Api.Monitoring;
 using Parrot.Api.Security;
@@ -27,7 +26,7 @@ namespace Parrot.Api.Controllers;
 public sealed class ConversationsController(IConversationStore store, IConversationReadStore reads, IConversationFlagStore flags, IConversationNoteStore notes, ChannelReadReceipts channelReads, MediaLinks mediaLinks, ConversationService service,
     IWhatsAppConnectionRepository connections, IFacebookConnectionRepository facebook,
     ITikTokConnectionRepository tikTokConnections, IInstagramConnectionRepository instagram,
-    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache, IOptions<OmniAiSettings> omniAi,
+    IHumanTakeoverStore humanTakeover, IAgentOrchestratorClient orchestrator, IMemoryCache cache, MultiAgentSwitch multiAgent,
     IAiOperationsService operations, IAppLogger<ConversationsController> logger) : ControllerBase
 {
     // The AI service's agents for the workspace, shared for 30 s: they rarely change, and every inbox read needs them.
@@ -84,10 +83,10 @@ public sealed class ConversationsController(IConversationStore store, IConversat
             rows.Select(c => (c.ConnectionId, c.Sender)).ToList(), cancellationToken);
 
         // One call to the AI service returns every live agent: by connection when several agents can share one
-        // (OmniAi:MultiAgentEnabled), otherwise by channel platform, as before.
+        // (the workspace's MultiAgentSwitch, temporary), otherwise by channel platform, as before.
         // The result is cached per workspace for 30 s; agents rarely change and the cache stays fresh enough.
         // If the AI service is unreachable the inbox degrades gracefully: no channel agent shown.
-        bool sharesChannels = omniAi.Value.MultiAgentEnabled;
+        bool sharesChannels = await multiAgent.IsOnAsync(Owner, cancellationToken);
         IReadOnlyDictionary<string, ConversationAgentRef> agentByChannel = new Dictionary<string, ConversationAgentRef>();
         IReadOnlyDictionary<Guid, IReadOnlyList<ConversationAgentRef>> agentsByConnection = new Dictionary<Guid, IReadOnlyList<ConversationAgentRef>>();
         try
@@ -230,6 +229,10 @@ public sealed class ConversationsController(IConversationStore store, IConversat
     {
         await EnsureConnectionOwnedAsync(connectionId, cancellationToken);
         MessagePage page = await store.ReadAsync(Owner, connectionId, sender, before, cancellationToken);
+        // The agents asked for each AI reply show only while the workspace has agents sharing numbers; off, a reply shows
+        // as the conversation's one agent, as before.
+        if (!await multiAgent.IsOnAsync(Owner, cancellationToken))
+            page = page with { Messages = [.. page.Messages.Select(m => m.Agents is null ? m : m with { Agents = null })] };
 
         // The newest page also carries the agents' open questions here, for the people who can answer them.
         if (before is null && HttpContext.WorkspaceAccess().Can(WorkspacePermissions.ConversationsTakeOver))
